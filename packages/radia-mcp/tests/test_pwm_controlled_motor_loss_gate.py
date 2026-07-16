@@ -139,6 +139,28 @@ def _with_artifact_identity(payload: dict) -> dict:
             "loss_solve_generation": "loss-solve-14",
             "harmonic_transform_solve_generation": "loss-solve-14",
         },
+        "iron_loss_coefficient_frequency_basis_identity": {
+            "waveform_frequency_basis_hz": [50.0, 150.0, 250.0],
+            "hysteresis_coefficient_frequency_basis_hz": [50.0, 150.0, 250.0],
+            "eddy_coefficient_frequency_basis_hz": [50.0, 150.0, 250.0],
+            "coefficient_set_generation": "iron-loss-coefficients-15",
+            "hysteresis_coefficient_generation": "iron-loss-coefficients-15",
+            "eddy_coefficient_generation": "iron-loss-coefficients-15",
+            "waveform_solve_generation": "loss-solve-15",
+            "loss_result_solve_generation": "loss-solve-15",
+        },
+        "dq_current_phase_convention_identity": {
+            "source_phase_order": "U-V-W",
+            "dq_transform_phase_order": "U-V-W",
+            "source_q_axis_lead": "q_leads_d_positive_electrical",
+            "result_q_axis_lead": "q_leads_d_positive_electrical",
+            "source_current_angle_deg_electrical": 30.0,
+            "result_current_angle_deg_electrical": 30.0,
+            "electrical_angle_zero_axis": "phase_U_positive_peak",
+            "result_electrical_angle_zero_axis": "phase_U_positive_peak",
+            "current_command_generation": "current-command-15",
+            "result_generation": "current-command-15",
+        },
     }
     return payload
 
@@ -341,5 +363,39 @@ def test_v12_public_loss_harmonic_window_rotor_position_generation_mismatch() ->
         result["checks"][
             "loss_harmonic_window_uses_one_rotor_position_generation"
         ]
+        is False
+    )
+
+
+def test_v13_public_iron_loss_coefficient_frequency_basis_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "iron_loss_coefficient_frequency_basis_identity"
+    ].update(
+        {
+            "hysteresis_coefficient_frequency_basis_hz": [60.0, 180.0, 300.0],
+            "hysteresis_coefficient_generation": "iron-loss-coefficients-14",
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["iron_loss_coefficients_share_waveform_frequency_basis"]
+        is False
+    )
+
+
+def test_v13_public_dq_current_angle_phase_convention_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["dq_current_phase_convention_identity"].update(
+        {
+            "dq_transform_phase_order": "U-W-V",
+            "result_q_axis_lead": "q_lags_d_positive_electrical",
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["dq_currents_share_phase_order_and_q_axis_convention"]
         is False
     )

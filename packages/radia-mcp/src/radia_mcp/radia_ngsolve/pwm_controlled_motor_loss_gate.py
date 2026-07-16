@@ -92,6 +92,8 @@ def pwm_controlled_motor_loss_gate(
     demag_temperature_material_state_ok = True
     torque_angle_basis_identity_ok = True
     loss_harmonic_rotor_window_identity_ok = True
+    iron_loss_coefficient_frequency_basis_identity_ok = True
+    dq_current_phase_convention_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -103,6 +105,8 @@ def pwm_controlled_motor_loss_gate(
         demag_temperature_material_state_ok = False
         torque_angle_basis_identity_ok = False
         loss_harmonic_rotor_window_identity_ok = False
+        iron_loss_coefficient_frequency_basis_identity_ok = False
+        dq_current_phase_convention_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -358,6 +362,113 @@ def pwm_controlled_motor_loss_gate(
                 == loss_solve_generation
             )
 
+        coefficient_basis_value = identity_value.get(
+            "iron_loss_coefficient_frequency_basis_identity"
+        )
+        if coefficient_basis_value is not None:
+            coefficient_basis = (
+                coefficient_basis_value
+                if isinstance(coefficient_basis_value, dict)
+                else {}
+            )
+            try:
+                waveform_frequencies = [
+                    float(value)
+                    for value in coefficient_basis["waveform_frequency_basis_hz"]
+                ]
+                hysteresis_frequencies = [
+                    float(value)
+                    for value in coefficient_basis[
+                        "hysteresis_coefficient_frequency_basis_hz"
+                    ]
+                ]
+                eddy_frequencies = [
+                    float(value)
+                    for value in coefficient_basis[
+                        "eddy_coefficient_frequency_basis_hz"
+                    ]
+                ]
+            except (KeyError, TypeError, ValueError):
+                waveform_frequencies = []
+                hysteresis_frequencies = []
+                eddy_frequencies = []
+            coefficient_generation = str(
+                coefficient_basis.get("coefficient_set_generation", "")
+            )
+            waveform_solve_generation = str(
+                coefficient_basis.get("waveform_solve_generation", "")
+            )
+            iron_loss_coefficient_frequency_basis_identity_ok = (
+                bool(waveform_frequencies)
+                and all(
+                    math.isfinite(value) and value > 0.0
+                    for value in waveform_frequencies
+                    + hysteresis_frequencies
+                    + eddy_frequencies
+                )
+                and all(
+                    right > left
+                    for left, right in zip(
+                        waveform_frequencies, waveform_frequencies[1:]
+                    )
+                )
+                and hysteresis_frequencies == waveform_frequencies
+                and eddy_frequencies == waveform_frequencies
+                and bool(coefficient_generation)
+                and coefficient_basis.get("hysteresis_coefficient_generation")
+                == coefficient_generation
+                and coefficient_basis.get("eddy_coefficient_generation")
+                == coefficient_generation
+                and bool(waveform_solve_generation)
+                and coefficient_basis.get("loss_result_solve_generation")
+                == waveform_solve_generation
+            )
+
+        dq_convention_value = identity_value.get(
+            "dq_current_phase_convention_identity"
+        )
+        if dq_convention_value is not None:
+            dq_convention = (
+                dq_convention_value if isinstance(dq_convention_value, dict) else {}
+            )
+            try:
+                source_angle = float(
+                    dq_convention["source_current_angle_deg_electrical"]
+                )
+                result_angle = float(
+                    dq_convention["result_current_angle_deg_electrical"]
+                )
+            except (KeyError, TypeError, ValueError):
+                source_angle = result_angle = math.nan
+            source_phase_order = str(dq_convention.get("source_phase_order", ""))
+            source_q_axis_lead = str(dq_convention.get("source_q_axis_lead", ""))
+            zero_axis = str(dq_convention.get("electrical_angle_zero_axis", ""))
+            current_generation = str(
+                dq_convention.get("current_command_generation", "")
+            )
+            dq_current_phase_convention_identity_ok = (
+                source_phase_order
+                in {"U-V-W", "U-W-V", "V-U-W", "V-W-U", "W-U-V", "W-V-U"}
+                and dq_convention.get("dq_transform_phase_order")
+                == source_phase_order
+                and source_q_axis_lead
+                in {
+                    "q_leads_d_positive_electrical",
+                    "q_lags_d_positive_electrical",
+                }
+                and dq_convention.get("result_q_axis_lead") == source_q_axis_lead
+                and math.isfinite(source_angle)
+                and math.isfinite(result_angle)
+                and math.isclose(
+                    source_angle, result_angle, rel_tol=0.0, abs_tol=1.0e-12
+                )
+                and bool(zero_axis)
+                and dq_convention.get("result_electrical_angle_zero_axis")
+                == zero_axis
+                and bool(current_generation)
+                and dq_convention.get("result_generation") == current_generation
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -575,6 +686,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "loss_harmonic_window_uses_one_rotor_position_generation": (
             loss_harmonic_rotor_window_identity_ok
+        ),
+        "iron_loss_coefficients_share_waveform_frequency_basis": (
+            iron_loss_coefficient_frequency_basis_identity_ok
+        ),
+        "dq_currents_share_phase_order_and_q_axis_convention": (
+            dq_current_phase_convention_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
