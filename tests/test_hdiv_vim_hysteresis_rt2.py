@@ -38,6 +38,26 @@ def _curved_hex():
     return mesh
 
 
+def _play_material():
+    radius = np.linspace(0.0, 1.5, 31)
+    slope = 1.0/(MU0*80.0)
+    eta = np.asarray([0.0, 0.25])
+    return vim.PlayHysteresisMaterial(
+        2, eta,
+        [(radius, slope*radius), (radius, -0.12*slope*radius)])
+
+
+def _energy_stop_material():
+    eta = np.asarray([0.2, 0.5])
+    tables = [
+        (np.linspace(0.0, radius, 17),
+         np.linspace(0.0, peak, 17))
+        for radius, peak in zip(eta, (2.0e4, 4.0e4))
+    ]
+    return vim.EnergyStopMaterial(
+        eta, tables, alpha=5.0, gamma=0.0, b_max=1.2)
+
+
 def test_rt2_history_uses_quadrature_state_and_restarts():
     mesh = _curved_hex()
     material = _TrackingLinearMaterial()
@@ -69,3 +89,36 @@ def test_rt2_history_uses_quadrature_state_and_restarts():
     assert solver.operator_build_count == 1
     assert continued["_charge_gram"] is first["_charge_gram"]
     assert continued["charge_gram_wall_s"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("material_factory", "expected_model", "expected_level"),
+    [
+        (_play_material, "simplified-play", 3),
+        (_energy_stop_material, "b-input-energy-stop", 4),
+    ],
+)
+def test_curved_rt2_production_hysteresis_models_reuse_quadrature_state(
+        material_factory, expected_model, expected_level):
+    """Actual Play/EnergyStop models run through the curved RT2 solver."""
+    mesh = _curved_hex()
+    material = material_factory()
+    with ng.TaskManager():
+        solver = vim.HDivSolver(mesh, order=2, curve_order=2)
+        first = solver.SolveHysteresis(
+            [[0.0, 0.0, 1.0e4]], material=material,
+            tol=1.0e-10, maxit=500, nl_tol=1.0e-7)
+        continued = solver.SolveHysteresis(
+            [[0.0, 0.0, -5.0e3]], material=material,
+            initial_state=first["state"],
+            tol=1.0e-10, maxit=500, nl_tol=1.0e-7)
+
+    assert first["order"] == continued["order"] == 2
+    assert first["state_layout"] == continued["state_layout"] == "quadrature"
+    assert first["state_points"] > first["n_el"]
+    assert first["permanent_magnet_model"] == expected_model
+    assert first["permanent_magnet_level"] == expected_level
+    assert continued["operator_reused"] is True
+    assert solver.operator_build_count == 1
+    assert continued["charge_gram_wall_s"] == 0.0
+    assert np.isfinite(continued["state"]["material_states"]).all()
