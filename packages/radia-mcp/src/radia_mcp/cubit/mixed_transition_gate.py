@@ -364,6 +364,74 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         )
     )
 
+    webcut_sideset_value = summary.get("webcut_sideset_topology_identity")
+    webcut_sideset_present = webcut_sideset_value is not None
+    webcut_sideset = (
+        webcut_sideset_value if isinstance(webcut_sideset_value, Mapping) else {}
+    )
+    try:
+        final_geometry_sequence = int(
+            webcut_sideset.get("final_geometry_operation_sequence")
+        )
+        sideset_capture_sequence = int(
+            webcut_sideset.get("sideset_capture_after_operation_sequence")
+        )
+        sideset_surface_ids = [
+            int(value) for value in webcut_sideset.get("sideset_surface_ids", [])
+        ]
+        resolved_surface_ids = [
+            int(value) for value in webcut_sideset.get("resolved_surface_ids", [])
+        ]
+    except (TypeError, ValueError):
+        final_geometry_sequence = -1
+        sideset_capture_sequence = -2
+        sideset_surface_ids = []
+        resolved_surface_ids = []
+    sideset_connectivity_digest = str(
+        webcut_sideset.get("sideset_connectivity_sha256") or ""
+    )
+    webcut_sideset_ok = not webcut_sideset_present or (
+        final_geometry_sequence >= 0
+        and sideset_capture_sequence >= final_geometry_sequence
+        and bool(webcut_sideset.get("final_geometry_generation"))
+        and webcut_sideset.get("sideset_geometry_generation")
+        == webcut_sideset.get("final_geometry_generation")
+        and bool(webcut_sideset.get("final_topology_generation"))
+        and webcut_sideset.get("sideset_topology_generation")
+        == webcut_sideset.get("final_topology_generation")
+        and bool(sideset_surface_ids)
+        and len(set(sideset_surface_ids)) == len(sideset_surface_ids)
+        and resolved_surface_ids == sideset_surface_ids
+        and len(sideset_connectivity_digest) == 64
+        and webcut_sideset.get("resolved_connectivity_sha256")
+        == sideset_connectivity_digest
+    )
+
+    curved_node_value = summary.get("high_order_curved_node_identity")
+    curved_node_present = curved_node_value is not None
+    curved_node = curved_node_value if isinstance(curved_node_value, Mapping) else {}
+    try:
+        export_order = int(curved_node.get("export_order"))
+        edge_node_count = int(curved_node.get("high_order_edge_node_count"))
+        face_node_count = int(curved_node.get("high_order_face_node_count"))
+    except (TypeError, ValueError):
+        export_order = 0
+        edge_node_count = 0
+        face_node_count = 0
+    curved_node_ok = not curved_node_present or (
+        export_order == 2
+        and bool(curved_node.get("final_mesh_generation"))
+        and curved_node.get("edge_node_mesh_generation")
+        == curved_node.get("final_mesh_generation")
+        and curved_node.get("face_node_mesh_generation")
+        == curved_node.get("final_mesh_generation")
+        and bool(curved_node.get("curving_generation"))
+        and curved_node.get("export_curving_generation")
+        == curved_node.get("curving_generation")
+        and edge_node_count > 0
+        and face_node_count > 0
+    )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -387,6 +455,10 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             face_orientation_ok
         ),
         "mesh_manifest_matches_live_cad_identity": live_cad_ok,
+        "sidesets_follow_final_webcut_topology": webcut_sideset_ok,
+        "high_order_export_nodes_match_current_mesh_and_curving_generation": (
+            curved_node_ok
+        ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
             quality_minima[family] >= threshold for family in ("hex", "pyramid", "tet")
@@ -718,6 +790,81 @@ def cubit_mixed_transition_source_gate(
         and sculpt.get("global_aggregation_generation")
         == sculpt.get("rank_manifest_generation")
     )
+
+    sideset_manifest_value = summary.get("headless_sideset_manifest_identity")
+    sideset_manifest_present = sideset_manifest_value is not None
+    sideset_manifest = (
+        sideset_manifest_value
+        if isinstance(sideset_manifest_value, Mapping)
+        else {}
+    )
+    try:
+        final_webcut_sequence = int(
+            sideset_manifest.get("final_webcut_operation_sequence")
+        )
+        manifest_capture_sequence = int(
+            sideset_manifest.get("manifest_capture_after_operation_sequence")
+        )
+        manifest_surface_ids = [
+            int(value) for value in sideset_manifest.get("manifest_surface_ids", [])
+        ]
+        live_surface_ids = [
+            int(value) for value in sideset_manifest.get("live_surface_ids", [])
+        ]
+    except (TypeError, ValueError):
+        final_webcut_sequence = -1
+        manifest_capture_sequence = -2
+        manifest_surface_ids = []
+        live_surface_ids = []
+    manifest_connectivity_digest = str(
+        sideset_manifest.get("manifest_connectivity_sha256") or ""
+    )
+    sideset_manifest_ok = not sideset_manifest_present or (
+        bool(sideset_manifest.get("batch_invocation_id"))
+        and sideset_manifest.get("manifest_invocation_id")
+        == sideset_manifest.get("batch_invocation_id")
+        and final_webcut_sequence >= 0
+        and manifest_capture_sequence >= final_webcut_sequence
+        and bool(sideset_manifest.get("final_topology_generation"))
+        and sideset_manifest.get("manifest_topology_generation")
+        == sideset_manifest.get("final_topology_generation")
+        and bool(manifest_surface_ids)
+        and len(set(manifest_surface_ids)) == len(manifest_surface_ids)
+        and live_surface_ids == manifest_surface_ids
+        and len(manifest_connectivity_digest) == 64
+        and sideset_manifest.get("live_connectivity_sha256")
+        == manifest_connectivity_digest
+    )
+
+    high_order_export_value = summary.get("netgen_high_order_export_identity")
+    high_order_export_present = high_order_export_value is not None
+    high_order_export = (
+        high_order_export_value
+        if isinstance(high_order_export_value, Mapping)
+        else {}
+    )
+    try:
+        netgen_export_order = int(high_order_export.get("export_order"))
+        higher_order_node_count = int(
+            high_order_export.get("higher_order_node_count")
+        )
+    except (TypeError, ValueError):
+        netgen_export_order = 0
+        higher_order_node_count = 0
+    netgen_export_digest = str(
+        high_order_export.get("netgen_export_sha256") or ""
+    )
+    high_order_export_ok = not high_order_export_present or (
+        netgen_export_order == 2
+        and bool(high_order_export.get("final_mesh_generation"))
+        and high_order_export.get("higher_order_node_mesh_generation")
+        == high_order_export.get("final_mesh_generation")
+        and bool(high_order_export.get("active_model_generation"))
+        and high_order_export.get("export_model_generation")
+        == high_order_export.get("active_model_generation")
+        and higher_order_node_count > 0
+        and len(netgen_export_digest) == 64
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -786,6 +933,12 @@ def cubit_mixed_transition_source_gate(
         "quality_report_follows_final_smoothing_generation": quality_generation_ok,
         "block_material_map_matches_final_mesh_generation": block_material_ok,
         "parallel_sculpt_waits_for_every_rank_artifact": sculpt_ok,
+        "headless_sideset_manifest_follows_final_webcut_topology": (
+            sideset_manifest_ok
+        ),
+        "netgen_high_order_nodes_match_current_mesh_and_model_generation": (
+            high_order_export_ok
+        ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),

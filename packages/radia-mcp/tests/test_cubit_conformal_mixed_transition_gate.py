@@ -556,6 +556,54 @@ def _with_v11_ownership(row: dict) -> dict:
     return row
 
 
+def _with_v12_topology_generation_identity(row: dict) -> dict:
+    row = _with_v11_ownership(row)
+    row["webcut_sideset_topology_identity"] = {
+        "final_geometry_operation_sequence": 9,
+        "sideset_capture_after_operation_sequence": 9,
+        "final_geometry_generation": "geometry-generation-44",
+        "sideset_geometry_generation": "geometry-generation-44",
+        "final_topology_generation": "topology-generation-44",
+        "sideset_topology_generation": "topology-generation-44",
+        "sideset_surface_ids": [21, 22],
+        "resolved_surface_ids": [21, 22],
+        "sideset_connectivity_sha256": "7" * 64,
+        "resolved_connectivity_sha256": "7" * 64,
+    }
+    row["high_order_curved_node_identity"] = {
+        "export_order": 2,
+        "final_mesh_generation": "mesh-generation-44",
+        "edge_node_mesh_generation": "mesh-generation-44",
+        "face_node_mesh_generation": "mesh-generation-44",
+        "curving_generation": "curving-generation-44",
+        "export_curving_generation": "curving-generation-44",
+        "high_order_edge_node_count": 48,
+        "high_order_face_node_count": 36,
+    }
+    row["headless_sideset_manifest_identity"] = {
+        "batch_invocation_id": "batch-invocation-44",
+        "manifest_invocation_id": "batch-invocation-44",
+        "final_webcut_operation_sequence": 9,
+        "manifest_capture_after_operation_sequence": 9,
+        "final_topology_generation": "topology-generation-44",
+        "manifest_topology_generation": "topology-generation-44",
+        "manifest_surface_ids": [21, 22],
+        "live_surface_ids": [21, 22],
+        "manifest_connectivity_sha256": "8" * 64,
+        "live_connectivity_sha256": "8" * 64,
+    }
+    row["netgen_high_order_export_identity"] = {
+        "export_order": 2,
+        "final_mesh_generation": "mesh-generation-44",
+        "higher_order_node_mesh_generation": "mesh-generation-44",
+        "export_model_generation": "model-generation-44",
+        "active_model_generation": "model-generation-44",
+        "higher_order_node_count": 84,
+        "netgen_export_sha256": "9" * 64,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -611,3 +659,71 @@ def test_generalization_v11_source(case_id: str):
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"][expected] is False
+
+
+def test_v12_public_hex_sideset_after_webcut_topology_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["webcut_sideset_topology_identity"].update(
+        {
+            "sideset_topology_generation": "topology-generation-43",
+            "sideset_connectivity_sha256": "a" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sidesets_follow_final_webcut_topology"] is False
+
+
+def test_v12_public_high_order_export_curved_node_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["high_order_curved_node_identity"].update(
+        {
+            "edge_node_mesh_generation": "mesh-generation-43",
+            "face_node_mesh_generation": "mesh-generation-43",
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "high_order_export_nodes_match_current_mesh_and_curving_generation"
+        ]
+        is False
+    )
+
+
+def test_v12_source_hex_sideset_after_webcut_topology_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["headless_sideset_manifest_identity"].update(
+        {
+            "manifest_capture_after_operation_sequence": 8,
+            "manifest_topology_generation": "topology-generation-43",
+            "manifest_connectivity_sha256": "b" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "headless_sideset_manifest_follows_final_webcut_topology"
+        ]
+        is False
+    )
+
+
+def test_v12_source_high_order_export_curved_node_generation_mismatch():
+    row = _with_v12_topology_generation_identity(summary())
+    row["netgen_high_order_export_identity"].update(
+        {
+            "higher_order_node_mesh_generation": "mesh-generation-43",
+            "export_model_generation": "model-generation-43",
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "netgen_high_order_nodes_match_current_mesh_and_model_generation"
+        ]
+        is False
+    )
