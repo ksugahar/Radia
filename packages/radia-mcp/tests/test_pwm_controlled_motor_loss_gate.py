@@ -161,6 +161,33 @@ def _with_artifact_identity(payload: dict) -> dict:
             "current_command_generation": "current-command-15",
             "result_generation": "current-command-15",
         },
+        "torque_average_period_angle_basis_identity": {
+            "pole_pairs": 4,
+            "torque_sample_angle_basis": "electrical",
+            "integration_window_angle_basis": "electrical",
+            "reported_window_angle_basis": "electrical",
+            "window_start_deg": 0.0,
+            "window_end_deg": 360.0,
+            "reported_window_span_deg": 360.0,
+            "equivalent_mechanical_span_deg": 90.0,
+            "sample_period_generation": "torque-period-16",
+            "integration_period_generation": "torque-period-16",
+            "result_period_generation": "torque-period-16",
+        },
+        "lamination_stacking_factor_loss_conductivity_identity": {
+            "material_generation": "lamination-material-16",
+            "stacking_factor_material_generation": "lamination-material-16",
+            "loss_material_generation": "lamination-material-16",
+            "stacking_factor": 0.95,
+            "geometric_lamination_volume_m3": 1.0e-3,
+            "effective_magnetic_volume_m3": 9.5e-4,
+            "volume_stacking_factor_application_count": 1,
+            "conductivity_basis": "lamination_effective_cross_section",
+            "eddy_loss_conductivity_basis": "lamination_effective_cross_section",
+            "conductivity_stacking_factor_application_count": 1,
+            "solve_generation": "loss-solve-16",
+            "loss_result_solve_generation": "loss-solve-16",
+        },
     }
     return payload
 
@@ -397,5 +424,45 @@ def test_v13_public_dq_current_angle_phase_convention_mismatch() -> None:
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["dq_currents_share_phase_order_and_q_axis_convention"]
+        is False
+    )
+
+
+def test_v14_public_torque_average_electrical_mechanical_period_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["torque_average_period_angle_basis_identity"].update(
+        {
+            "reported_window_angle_basis": "mechanical",
+            "equivalent_mechanical_span_deg": 360.0,
+            "result_period_generation": "torque-period-15",
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "torque_average_uses_one_electrical_or_mechanical_period_basis"
+        ]
+        is False
+    )
+
+
+def test_v14_public_lamination_stacking_factor_loss_conductivity_basis_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "lamination_stacking_factor_loss_conductivity_identity"
+    ].update(
+        {
+            "eddy_loss_conductivity_basis": "bulk_material_cross_section",
+            "conductivity_stacking_factor_application_count": 0,
+            "loss_result_solve_generation": "loss-solve-15",
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "lamination_loss_uses_consistent_stacking_factor_and_conductivity_basis"
+        ]
         is False
     )

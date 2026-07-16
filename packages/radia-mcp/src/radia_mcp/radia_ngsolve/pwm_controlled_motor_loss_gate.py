@@ -94,6 +94,8 @@ def pwm_controlled_motor_loss_gate(
     loss_harmonic_rotor_window_identity_ok = True
     iron_loss_coefficient_frequency_basis_identity_ok = True
     dq_current_phase_convention_identity_ok = True
+    torque_average_period_angle_basis_identity_ok = True
+    lamination_stacking_factor_loss_conductivity_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -107,6 +109,8 @@ def pwm_controlled_motor_loss_gate(
         loss_harmonic_rotor_window_identity_ok = False
         iron_loss_coefficient_frequency_basis_identity_ok = False
         dq_current_phase_convention_identity_ok = False
+        torque_average_period_angle_basis_identity_ok = False
+        lamination_stacking_factor_loss_conductivity_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -469,6 +473,130 @@ def pwm_controlled_motor_loss_gate(
                 and dq_convention.get("result_generation") == current_generation
             )
 
+        torque_period_value = identity_value.get(
+            "torque_average_period_angle_basis_identity"
+        )
+        if torque_period_value is not None:
+            torque_period = (
+                torque_period_value
+                if isinstance(torque_period_value, dict)
+                else {}
+            )
+            try:
+                pole_pairs = int(torque_period.get("pole_pairs"))
+                start_deg = float(torque_period.get("window_start_deg"))
+                end_deg = float(torque_period.get("window_end_deg"))
+                reported_span_deg = float(
+                    torque_period.get("reported_window_span_deg")
+                )
+                equivalent_mechanical_span_deg = float(
+                    torque_period.get("equivalent_mechanical_span_deg")
+                )
+            except (TypeError, ValueError):
+                pole_pairs = 0
+                start_deg = end_deg = reported_span_deg = math.nan
+                equivalent_mechanical_span_deg = math.nan
+            sample_basis = str(
+                torque_period.get("torque_sample_angle_basis", "")
+            )
+            period_generation = str(
+                torque_period.get("sample_period_generation", "")
+            )
+            span_deg = end_deg - start_deg
+            expected_mechanical_span = (
+                span_deg / pole_pairs
+                if sample_basis == "electrical" and pole_pairs > 0
+                else span_deg
+            )
+            torque_average_period_angle_basis_identity_ok = (
+                pole_pairs > 0
+                and sample_basis in {"electrical", "mechanical"}
+                and torque_period.get("integration_window_angle_basis")
+                == sample_basis
+                and torque_period.get("reported_window_angle_basis")
+                == sample_basis
+                and all(
+                    math.isfinite(value)
+                    for value in (
+                        start_deg,
+                        end_deg,
+                        reported_span_deg,
+                        equivalent_mechanical_span_deg,
+                    )
+                )
+                and span_deg > 0.0
+                and math.isclose(
+                    reported_span_deg, span_deg, rel_tol=0.0, abs_tol=1.0e-12
+                )
+                and math.isclose(
+                    equivalent_mechanical_span_deg,
+                    expected_mechanical_span,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-12,
+                )
+                and bool(period_generation)
+                and torque_period.get("integration_period_generation")
+                == period_generation
+                and torque_period.get("result_period_generation")
+                == period_generation
+            )
+
+        lamination_value = identity_value.get(
+            "lamination_stacking_factor_loss_conductivity_identity"
+        )
+        if lamination_value is not None:
+            lamination = lamination_value if isinstance(lamination_value, dict) else {}
+            try:
+                stacking_factor = float(lamination.get("stacking_factor"))
+                geometric_volume = float(
+                    lamination.get("geometric_lamination_volume_m3")
+                )
+                effective_volume = float(
+                    lamination.get("effective_magnetic_volume_m3")
+                )
+                volume_application_count = int(
+                    lamination.get("volume_stacking_factor_application_count")
+                )
+                conductivity_application_count = int(
+                    lamination.get(
+                        "conductivity_stacking_factor_application_count"
+                    )
+                )
+            except (TypeError, ValueError):
+                stacking_factor = geometric_volume = effective_volume = math.nan
+                volume_application_count = conductivity_application_count = -1
+            material_generation = str(
+                lamination.get("material_generation", "")
+            )
+            solve_generation = str(lamination.get("solve_generation", ""))
+            conductivity_basis = str(lamination.get("conductivity_basis", ""))
+            lamination_stacking_factor_loss_conductivity_identity_ok = (
+                math.isfinite(stacking_factor)
+                and 0.0 < stacking_factor <= 1.0
+                and math.isfinite(geometric_volume)
+                and geometric_volume > 0.0
+                and math.isfinite(effective_volume)
+                and math.isclose(
+                    effective_volume,
+                    geometric_volume * stacking_factor,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-15,
+                )
+                and volume_application_count == 1
+                and conductivity_application_count == 1
+                and conductivity_basis == "lamination_effective_cross_section"
+                and lamination.get("eddy_loss_conductivity_basis")
+                == conductivity_basis
+                and bool(material_generation)
+                and lamination.get("stacking_factor_material_generation")
+                == material_generation
+                and lamination.get("loss_material_generation")
+                == material_generation
+                and bool(solve_generation)
+                and lamination.get("loss_result_solve_generation")
+                == solve_generation
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -692,6 +820,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "dq_currents_share_phase_order_and_q_axis_convention": (
             dq_current_phase_convention_identity_ok
+        ),
+        "torque_average_uses_one_electrical_or_mechanical_period_basis": (
+            torque_average_period_angle_basis_identity_ok
+        ),
+        "lamination_loss_uses_consistent_stacking_factor_and_conductivity_basis": (
+            lamination_stacking_factor_loss_conductivity_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
