@@ -32,6 +32,17 @@ def _summary() -> dict:
         "fit_point_count": 683,
         "fit_window_start_s": 1.0 / 60.0,
         "fit_window_stop_s": 3.0 / 60.0,
+        "phasor_fit_frequency_hz": 60.0,
+        "current_role_contract": {
+            "source_delivery_current_phasor_rms_a": "source_delivery_into_network",
+            "primary_current_phasor_rms_a": "transformer_primary_absorption",
+            "secondary_current_phasor_rms_a": "transformer_secondary_delivery_to_load",
+        },
+        "phasor_current_roles": {
+            "source_delivery_current_phasor_rms_a": "source_delivery_into_network",
+            "primary_current_phasor_rms_a": "transformer_primary_absorption",
+            "secondary_current_phasor_rms_a": "transformer_secondary_delivery_to_load",
+        },
         "source_voltage_phasor_rms_v": _pair(complex(source_voltage)),
         "primary_voltage_phasor_rms_v": _pair(complex(primary_voltage)),
         "secondary_voltage_phasor_rms_v": _pair(complex(secondary_voltage)),
@@ -210,3 +221,33 @@ def test_generalization_v6_public(case_id: str) -> None:
             "positive"
         ]["fit_window_stop_s"]
     assert ideal_transformer_identity_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_phasor_source_frequency_mismatch",
+        "v7_public_current_role_power_false_closure",
+    ],
+)
+def test_generalization_v7_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    positive = bad["metrics"]["positive"]
+    if case_id == "v7_public_phasor_source_frequency_mismatch":
+        positive["phasor_fit_frequency_hz"] = 61.0
+    else:
+        roles = positive["phasor_current_roles"]
+        roles["source_delivery_current_phasor_rms_a"], roles[
+            "secondary_current_phasor_rms_a"
+        ] = (
+            roles["secondary_current_phasor_rms_a"],
+            roles["source_delivery_current_phasor_rms_a"],
+        )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    expected_check = (
+        "phasor_fit_frequency_matches_source_contract"
+        if case_id == "v7_public_phasor_source_frequency_mismatch"
+        else "current_phasor_roles_match_terminal_contract"
+    )
+    assert result["checks"][expected_check] is False
