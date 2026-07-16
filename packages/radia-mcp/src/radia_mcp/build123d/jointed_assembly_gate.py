@@ -326,6 +326,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     boolean_final_shape_report_identity_ok = True
     step_geometry_unit_scale_identity_ok = True
     selector_cache_shape_identity_ok = True
+    step_assembly_placement_unit_identity_ok = True
+    brep_serialization_tolerance_kernel_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -341,6 +343,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         boolean_final_shape_report_identity_ok = False
         step_geometry_unit_scale_identity_ok = False
         selector_cache_shape_identity_ok = False
+        step_assembly_placement_unit_identity_ok = False
+        brep_serialization_tolerance_kernel_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -734,6 +738,71 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and list(selector_cache.get("selected_face_ids") or []) == list(selector_cache.get("live_face_ids") or [])
                 and bool(selector_cache.get("selected_face_ids"))
             )
+
+        placement_unit = replay_identity_value.get(
+            "step_assembly_placement_unit_identity"
+        )
+        if placement_unit is not None:
+            placement_unit = placement_unit if isinstance(placement_unit, Mapping) else {}
+            units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            geometry_unit = str(placement_unit.get("part_geometry_length_unit", "")).strip()
+            placement_translation_unit = str(
+                placement_unit.get("placement_translation_unit", "")
+            ).strip()
+            generation = str(placement_unit.get("step_import_generation", "")).strip()
+            transform_digest = str(
+                placement_unit.get("placement_transform_sha256", "")
+            ).lower()
+            try:
+                geometry_scale = float(placement_unit.get("part_geometry_scale_to_m"))
+                placement_scale = float(
+                    placement_unit.get("placement_translation_scale_to_m")
+                )
+            except (TypeError, ValueError):
+                geometry_scale = math.nan
+                placement_scale = math.nan
+            expected_scale = units.get(geometry_unit)
+            step_assembly_placement_unit_identity_ok = (
+                expected_scale is not None
+                and placement_translation_unit == geometry_unit
+                and math.isclose(geometry_scale, expected_scale, rel_tol=0.0, abs_tol=0.0)
+                and math.isclose(placement_scale, geometry_scale, rel_tol=0.0, abs_tol=0.0)
+                and bool(generation)
+                and placement_unit.get("part_geometry_generation") == generation
+                and placement_unit.get("placement_metadata_generation") == generation
+                and len(transform_digest) == 64
+                and all(character in "0123456789abcdef" for character in transform_digest)
+                and placement_unit.get("applied_transform_sha256") == transform_digest
+            )
+
+        brep_cache = replay_identity_value.get(
+            "brep_serialization_tolerance_kernel_identity"
+        )
+        if brep_cache is not None:
+            brep_cache = brep_cache if isinstance(brep_cache, Mapping) else {}
+            kernel_generation = str(
+                brep_cache.get("active_kernel_generation", "")
+            ).strip()
+            shape_digest = str(brep_cache.get("shape_sha256", "")).lower()
+            try:
+                modeling_tolerance = float(brep_cache.get("modeling_tolerance_value"))
+                cache_tolerance = float(brep_cache.get("cache_tolerance_value"))
+            except (TypeError, ValueError):
+                modeling_tolerance = math.nan
+                cache_tolerance = math.nan
+            brep_serialization_tolerance_kernel_identity_ok = (
+                bool(str(brep_cache.get("cache_generation", "")).strip())
+                and bool(kernel_generation)
+                and brep_cache.get("serialization_kernel_generation") == kernel_generation
+                and brep_cache.get("modeling_tolerance_unit") == "m"
+                and brep_cache.get("cache_tolerance_unit") == "m"
+                and math.isfinite(modeling_tolerance)
+                and modeling_tolerance > 0.0
+                and math.isclose(cache_tolerance, modeling_tolerance, rel_tol=0.0, abs_tol=0.0)
+                and len(shape_digest) == 64
+                and all(character in "0123456789abcdef" for character in shape_digest)
+                and brep_cache.get("cached_shape_sha256") == shape_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -786,6 +855,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "step_geometry_and_metadata_share_one_length_unit": step_geometry_unit_scale_identity_ok,
         "selector_cache_belongs_to_active_shape_generation": selector_cache_shape_identity_ok,
+        "step_assembly_placement_uses_current_unit_transform_generation": (
+            step_assembly_placement_unit_identity_ok
+        ),
+        "brep_cache_uses_current_kernel_tolerance_and_shape": (
+            brep_serialization_tolerance_kernel_identity_ok
+        ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,
