@@ -27,10 +27,13 @@ def motion_table_coordinate_gate(
     rt = [float(value) for value in rotation_times_s]
     rr = [[float(value) for value in row] for row in rotation_vectors]
     frame = str(coordinate_frame_id).strip()
+    frame_key = frame.casefold().replace("-", "_").replace(" ", "_")
+    electrical_angle_alias = "electrical" in frame_key and "angle" in frame_key
     finite = all(math.isfinite(value) for value in tt + rt)
     finite = finite and all(math.isfinite(value) for row in tr + rr for value in row)
     checks = {
         "coordinate_frame_recorded": bool(frame),
+        "rotation_frame_is_not_an_electrical_angle_alias": not electrical_angle_alias,
         "translation_unit_supported": translation_unit in {"m", "mm"},
         "rotation_unit_supported": rotation_unit in {"rad", "deg"},
         "cumulative_displacement_semantics": motion_semantics == "cumulative_displacement",
@@ -62,7 +65,8 @@ def motion_table_coordinate_gate(
         "checks": checks,
         "lesson": (
             "Keep translation and rotation time axes independent, record the coordinate frame, "
-            "units, and cumulative-versus-incremental semantics, and never invent synchronized "
-            "rows before interpolation or solver handoff."
+            "units, and cumulative-versus-incremental semantics. A geometric rotation table uses "
+            "mechanical angle; reject an electrical-angle frame even when periodic endpoints agree, "
+            "and never invent synchronized rows before interpolation or solver handoff."
         ),
     }
