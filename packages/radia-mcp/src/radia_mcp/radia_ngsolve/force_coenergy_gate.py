@@ -35,11 +35,15 @@ def force_coenergy_displacement_gate(
     mesh_family_ok = True
     displacement_unit_ok = True
     force_frame_ok = True
+    force_normalization_ok = True
+    force_body_selection_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
         displacement_unit_ok = False
         force_frame_ok = False
+        force_normalization_ok = False
+        force_body_selection_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -105,6 +109,44 @@ def force_coenergy_displacement_gate(
                 == [float(value) for value in derivative_axis]
                 and force_frame.get("reflection_applied") is True
             )
+        normalization = artifact_identity.get("force_normalization")
+        if normalization is not None:
+            force_normalization_ok = (
+                isinstance(normalization, dict)
+                and normalization.get("formulation") == "axisymmetric"
+                and normalization.get("solver_result_scope") == "total_3d_force"
+                and normalization.get("reported_result_scope")
+                == normalization.get("solver_result_scope")
+                and normalization.get("revolution_factor_application_count") == 0
+            )
+        selection = artifact_identity.get("force_body_selection")
+        if selection is not None:
+            target_groups = (
+                selection.get("target_group_ids")
+                if isinstance(selection, dict)
+                else None
+            )
+            selected_groups = (
+                selection.get("weighted_stress_selected_group_ids")
+                if isinstance(selection, dict)
+                else None
+            )
+            roles = selection.get("material_roles") if isinstance(selection, dict) else None
+            excluded_air = (
+                selection.get("excluded_air_group_ids")
+                if isinstance(selection, dict)
+                else None
+            )
+            force_body_selection_ok = (
+                isinstance(selection, dict)
+                and target_groups == [1]
+                and selected_groups == target_groups
+                and isinstance(roles, dict)
+                and roles.get("1") == "magnetic_body"
+                and excluded_air == [0]
+                and roles.get("0") == "air"
+                and bool(selection.get("selection_generation"))
+            )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -149,6 +191,8 @@ def force_coenergy_displacement_gate(
         "coenergy_stencil_uses_one_mesh_family_generation": mesh_family_ok,
         "displacement_axis_uses_one_si_unit": displacement_unit_ok,
         "force_vectors_share_transformed_frame": force_frame_ok,
+        "axisymmetric_force_is_already_total_3d": force_normalization_ok,
+        "weighted_stress_selects_only_target_magnetic_body": force_body_selection_ok,
     }
     return {
         "policy": "force_coenergy_displacement_gate_v1",
