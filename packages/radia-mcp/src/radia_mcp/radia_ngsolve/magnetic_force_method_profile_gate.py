@@ -113,6 +113,8 @@ def magnetic_force_method_profile_gate(
     demag_branch_interpolation_ok = True
     linear_motor_thrust_phase_identity_ok = True
     demag_recoil_temperature_identity_ok = True
+    bem_demag_surface_normal_generation_identity_ok = True
+    cogging_torque_periodic_sector_symmetry_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -124,6 +126,8 @@ def magnetic_force_method_profile_gate(
         demag_branch_interpolation_ok = False
         linear_motor_thrust_phase_identity_ok = False
         demag_recoil_temperature_identity_ok = False
+        bem_demag_surface_normal_generation_identity_ok = False
+        cogging_torque_periodic_sector_symmetry_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -384,6 +388,73 @@ def magnetic_force_method_profile_gate(
                 and all(character in "0123456789abcdef" for character in recoil_digest)
             )
 
+        normal_value = identity_value.get(
+            "bem_demag_surface_normal_generation_identity"
+        )
+        if normal_value is not None:
+            normal_identity = normal_value if isinstance(normal_value, Mapping) else {}
+            mesh_generation = str(
+                normal_identity.get("active_surface_mesh_generation", "")
+            )
+            normal_digest = str(
+                normal_identity.get("surface_normal_sha256", "")
+            ).lower()
+            kernel_digest = str(
+                normal_identity.get("demag_kernel_normal_sha256", "")
+            ).lower()
+            bem_demag_surface_normal_generation_identity_ok = (
+                bool(mesh_generation)
+                and normal_identity.get("surface_element_generation")
+                == mesh_generation
+                and normal_identity.get("surface_normal_generation")
+                == mesh_generation
+                and normal_identity.get("demag_evaluation_surface_generation")
+                == mesh_generation
+                and normal_identity.get("normal_orientation") == "outward"
+                and normal_identity.get("demag_kernel_normal_orientation")
+                == "outward"
+                and len(normal_digest) == len(kernel_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in normal_digest + kernel_digest
+                )
+                and kernel_digest == normal_digest
+            )
+
+        symmetry_value = identity_value.get(
+            "cogging_torque_periodic_sector_symmetry_identity"
+        )
+        if symmetry_value is not None:
+            symmetry = symmetry_value if isinstance(symmetry_value, Mapping) else {}
+            sector_count = symmetry.get("active_periodic_sector_count")
+            result_sector_count = symmetry.get("torque_result_periodic_sector_count")
+            try:
+                multiplier = float(symmetry["symmetry_multiplier"])
+            except (KeyError, TypeError, ValueError):
+                multiplier = math.nan
+            topology_generation = str(
+                symmetry.get("periodic_topology_generation", "")
+            )
+            cogging_torque_periodic_sector_symmetry_identity_ok = (
+                type(sector_count) is int
+                and sector_count > 0
+                and result_sector_count == sector_count
+                and math.isfinite(multiplier)
+                and math.isclose(
+                    multiplier,
+                    float(sector_count),
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-12,
+                )
+                and symmetry.get("sector_torque_scope") == "one_periodic_sector"
+                and symmetry.get("reported_torque_scope") == "full_machine"
+                and bool(topology_generation)
+                and symmetry.get("torque_result_topology_generation")
+                == topology_generation
+                and symmetry.get("multiplier_topology_generation")
+                == topology_generation
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -471,6 +542,12 @@ def magnetic_force_method_profile_gate(
         ),
         "demag_recoil_line_matches_evaluation_temperature_generation": (
             demag_recoil_temperature_identity_ok
+        ),
+        "bem_demag_normals_match_current_surface_mesh_generation": (
+            bem_demag_surface_normal_generation_identity_ok
+        ),
+        "cogging_torque_symmetry_multiplier_matches_periodic_sector": (
+            cogging_torque_periodic_sector_symmetry_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
