@@ -241,6 +241,66 @@ def _noise_density_band_identity_ok(positive: Mapping[str, object]) -> bool:
         and bool(grid_generation)
         and contract.get("band_integration_grid_generation") == grid_generation
     )
+
+
+def _steady_cycle_average_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get("steady_cycle_average_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("settled_cycle_generation_id") or "")
+    try:
+        first_settled = int(contract.get("first_settled_cycle_index"))
+        average_cycle = int(contract.get("average_window_cycle_index"))
+        period_count = int(contract.get("average_window_period_count"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and contract.get("waveform_cycle_generation_id") == generation
+        and contract.get("average_window_cycle_generation_id") == generation
+        and first_settled >= 0
+        and average_cycle >= first_settled
+        and period_count >= 1
+    )
+
+
+def _monte_carlo_parameter_seed_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("monte_carlo_parameter_seed_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    parameter_order = contract.get("parameter_order")
+    statistics_order = contract.get("statistics_parameter_order")
+    if (
+        not isinstance(parameter_order, Sequence)
+        or isinstance(parameter_order, (str, bytes))
+        or not isinstance(statistics_order, Sequence)
+        or isinstance(statistics_order, (str, bytes))
+    ):
+        return False
+    names = [str(name) for name in parameter_order]
+    replayed_names = [str(name) for name in statistics_order]
+    generation = str(contract.get("seed_schedule_generation_id") or "")
+    seed_map_digest = str(contract.get("parameter_seed_map_sha256") or "")
+    return (
+        bool(names)
+        and len(set(names)) == len(names)
+        and replayed_names == names
+        and contract.get("seed_policy") == "one_seed_per_named_parameter"
+        and bool(generation)
+        and contract.get("statistics_seed_schedule_generation_id") == generation
+        and len(seed_map_digest) == 64
+        and all(character in "0123456789abcdef" for character in seed_map_digest)
+        and contract.get("statistics_parameter_seed_map_sha256")
+        == seed_map_digest
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -519,6 +579,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "noise_density_and_band_limits_share_frequency_units": (
             _noise_density_band_identity_ok(positive)
+        ),
+        "switched_averages_use_a_settled_cycle_generation": (
+            _steady_cycle_average_identity_ok(positive)
+        ),
+        "monte_carlo_statistics_preserve_named_parameter_seed_order": (
+            _monte_carlo_parameter_seed_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
