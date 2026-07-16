@@ -63,6 +63,146 @@ def _opposed_transition_face_orientation_ok(identity: object) -> bool:
     )
 
 
+def _periodic_hex_node_pair_transform_frame_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    source_nodes = list(identity.get("source_node_ids") or [])
+    target_nodes = list(identity.get("target_node_ids") or [])
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    transform_generation = str(
+        identity.get("periodic_transform_generation") or ""
+    )
+    transform_digest = str(identity.get("transform_matrix_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("node_pair_mesh_generation") == mesh_generation
+        and identity.get("periodic_transform_frame_mesh_generation")
+        == mesh_generation
+        and bool(transform_generation)
+        and identity.get("node_pair_periodic_transform_generation")
+        == transform_generation
+        and bool(source_nodes)
+        and len(source_nodes) == len(target_nodes)
+        and len(set(source_nodes)) == len(source_nodes)
+        and len(set(target_nodes)) == len(target_nodes)
+        and list(identity.get("paired_source_node_ids") or []) == source_nodes
+        and list(identity.get("paired_target_node_ids") or []) == target_nodes
+        and identity.get("coordinate_frame") == "global_cartesian"
+        and identity.get("node_pair_coordinate_frame")
+        == identity.get("coordinate_frame")
+        and len(transform_digest) == 64
+        and all(character in "0123456789abcdef" for character in transform_digest)
+        and identity.get("applied_transform_matrix_sha256") == transform_digest
+    )
+
+
+def _pyramid_transition_face_diagonal_convention_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    pyramid_faces = list(identity.get("pyramid_face_ids") or [])
+    convention = str(identity.get("diagonal_convention") or "")
+    mesh_generation = str(identity.get("transition_mesh_generation") or "")
+    connectivity_digest = str(
+        identity.get("transition_face_connectivity_sha256") or ""
+    )
+    return (
+        bool(mesh_generation)
+        and identity.get("tet_neighbor_mesh_generation") == mesh_generation
+        and identity.get("hex_neighbor_mesh_generation") == mesh_generation
+        and bool(pyramid_faces)
+        and len(set(pyramid_faces)) == len(pyramid_faces)
+        and list(identity.get("tet_neighbor_face_ids") or []) == pyramid_faces
+        and list(identity.get("hex_neighbor_face_ids") or []) == pyramid_faces
+        and convention == "canonical_node_0_to_2"
+        and identity.get("tet_neighbor_diagonal_convention") == convention
+        and identity.get("hex_neighbor_diagonal_convention") == convention
+        and len(connectivity_digest) == 64
+        and all(
+            character in "0123456789abcdef" for character in connectivity_digest
+        )
+        and identity.get("neighbor_face_connectivity_sha256")
+        == connectivity_digest
+    )
+
+
+def _block_attribute_material_id_merge_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        block_ids = [int(value) for value in identity.get("block_ids", [])]
+        material_ids = [int(value) for value in identity.get("material_ids", [])]
+        attribute_block_ids = [
+            int(value) for value in identity.get("block_attribute_block_ids", [])
+        ]
+        exported_material_ids = [
+            int(value) for value in identity.get("exported_material_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    merge_generation = str(identity.get("final_merge_generation") or "")
+    map_digest = str(identity.get("block_material_map_sha256") or "")
+    return (
+        bool(merge_generation)
+        and identity.get("block_attribute_merge_generation") == merge_generation
+        and identity.get("material_id_map_merge_generation") == merge_generation
+        and bool(block_ids)
+        and len(block_ids) == len(material_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and len(set(material_ids)) == len(material_ids)
+        and all(value > 0 for value in block_ids + material_ids)
+        and attribute_block_ids == block_ids
+        and exported_material_ids == material_ids
+        and len(map_digest) == 64
+        and all(character in "0123456789abcdef" for character in map_digest)
+        and identity.get("exported_block_material_map_sha256") == map_digest
+    )
+
+
+def _high_order_exodus_node_permutation_export_order_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        element_order = int(identity.get("element_order", 0))
+        source_order = [int(value) for value in identity.get("source_node_order", [])]
+        permutation = [int(value) for value in identity.get("permutation_table", [])]
+        written_order = [int(value) for value in identity.get("written_node_order", [])]
+    except (TypeError, ValueError):
+        return False
+    export_generation = str(identity.get("export_order_generation") or "")
+    permutation_digest = str(identity.get("node_permutation_sha256") or "")
+    expected_written_order = (
+        [source_order[index - 1] for index in permutation]
+        if permutation
+        and len(source_order) == len(permutation)
+        and sorted(permutation) == list(range(1, len(permutation) + 1))
+        else []
+    )
+    return (
+        bool(export_generation)
+        and identity.get("permutation_table_export_order_generation")
+        == export_generation
+        and identity.get("writer_export_order_generation") == export_generation
+        and element_order >= 2
+        and bool(source_order)
+        and len(set(source_order)) == len(source_order)
+        and written_order == expected_written_order
+        and len(permutation_digest) == 64
+        and all(
+            character in "0123456789abcdef" for character in permutation_digest
+        )
+        and identity.get("written_node_permutation_sha256")
+        == permutation_digest
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -658,6 +798,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         and transition_jacobian.get("jacobian_parent_orientation_sha256")
         == transition_jacobian.get("parent_orientation_sha256")
     )
+    periodic_hex_node_pair_transform_frame_ok = (
+        _periodic_hex_node_pair_transform_frame_ok(
+            summary.get("periodic_hex_node_pair_transform_frame_identity")
+        )
+    )
+    pyramid_transition_face_diagonal_convention_ok = (
+        _pyramid_transition_face_diagonal_convention_ok(
+            summary.get("pyramid_transition_face_diagonal_convention_identity")
+        )
+    )
 
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
@@ -707,6 +857,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         ),
         "transition_jacobian_uses_current_parent_orientation": (
             transition_jacobian_ok
+        ),
+        "periodic_hex_node_pairs_use_current_transform_frame": (
+            periodic_hex_node_pair_transform_frame_ok
+        ),
+        "pyramid_transition_neighbors_share_one_face_diagonal_convention": (
+            pyramid_transition_face_diagonal_convention_ok
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -1293,6 +1449,14 @@ def cubit_mixed_transition_source_gate(
         and sideset_normal.get("exported_normal_ownership_sha256")
         == sideset_normal.get("normal_ownership_sha256")
     )
+    block_attribute_material_id_merge_ok = _block_attribute_material_id_merge_ok(
+        summary.get("block_attribute_material_id_merge_identity")
+    )
+    high_order_exodus_node_permutation_export_order_ok = (
+        _high_order_exodus_node_permutation_export_order_ok(
+            summary.get("high_order_exodus_node_permutation_export_order_identity")
+        )
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -1379,6 +1543,12 @@ def cubit_mixed_transition_source_gate(
         ),
         "journal_entity_ids_follow_final_imprint_generation": journal_imprint_ok,
         "exodus_sideset_normals_follow_current_topology": sideset_normal_ok,
+        "block_material_attributes_follow_final_merge_generation": (
+            block_attribute_material_id_merge_ok
+        ),
+        "high_order_exodus_nodes_use_current_export_order_permutation": (
+            high_order_exodus_node_permutation_export_order_ok
+        ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),
