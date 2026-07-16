@@ -3507,6 +3507,150 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    boolean_unit_generation_evidence_present = any(
+        row.get("boolean_tolerance_model_length_unit_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+
+    def boolean_tolerance_model_length_unit_generation_identity(row):
+        value = row.get(
+            "boolean_tolerance_model_length_unit_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3, "um": 1.0e-6}
+        generation = str(value.get("model_length_unit_generation", "")).strip()
+        unit = str(value.get("model_length_unit", "")).strip()
+        digest = str(value.get("boolean_tolerance_sha256", "")).lower()
+        try:
+            tolerance_value = float(value.get("boolean_tolerance_value"))
+            tolerance_si = float(value.get("boolean_tolerance_si_m"))
+            result_tolerance_si = float(
+                value.get("boolean_result_tolerance_si_m")
+            )
+        except (TypeError, ValueError):
+            return None
+        expected_scale = units.get(unit)
+        if (
+            not generation
+            or value.get("boolean_tolerance_unit_generation") != generation
+            or value.get("boolean_result_unit_generation") != generation
+            or expected_scale is None
+            or value.get("tolerance_length_unit") != unit
+            or value.get("boolean_result_length_unit") != unit
+            or not math.isfinite(tolerance_value)
+            or tolerance_value <= 0.0
+            or not math.isclose(
+                tolerance_value * expected_scale,
+                tolerance_si,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-30,
+            )
+            or not math.isclose(
+                result_tolerance_si,
+                tolerance_si,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-30,
+            )
+            or not valid_sha256(digest)
+            or value.get("boolean_result_tolerance_sha256") != digest
+        ):
+            return None
+        return generation, unit, tolerance_si, digest
+
+    reference_boolean_unit_generations = {
+        str(row.get("name", "")): (
+            boolean_tolerance_model_length_unit_generation_identity(row)
+        )
+        for row in reference
+    }
+    boolean_unit_generation_identity_ok = not (
+        boolean_unit_generation_evidence_present
+    )
+    if boolean_unit_generation_evidence_present:
+        boolean_unit_generation_identity_ok = bool(
+            reference_boolean_unit_generations
+        ) and all(
+            value is not None
+            for value in reference_boolean_unit_generations.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_unit_generation_identity_ok = (
+                boolean_unit_generation_identity_ok
+                and all(
+                    boolean_tolerance_model_length_unit_generation_identity(row)
+                    == reference_boolean_unit_generations.get(
+                        str(row.get("name", ""))
+                    )
+                    for row in rows
+                )
+            )
+
+    assembly_density_evidence_present = any(
+        row.get("assembly_center_of_mass_part_density_mapping_identity")
+        is not None
+        for row in identity_rows
+    )
+
+    def assembly_center_of_mass_part_density_mapping_identity(row):
+        value = row.get("assembly_center_of_mass_part_density_mapping_identity")
+        if not isinstance(value, dict):
+            return None
+        generation = str(
+            value.get("assembly_configuration_generation", "")
+        ).strip()
+        names = [str(name) for name in value.get("part_names", [])]
+        density_names = [
+            str(name) for name in value.get("density_part_names", [])
+        ]
+        digest = str(value.get("density_mapping_sha256", "")).lower()
+        try:
+            densities = [
+                float(number) for number in value.get("part_densities_kg_m3", [])
+            ]
+            used_densities = [
+                float(number)
+                for number in value.get(
+                    "center_of_mass_density_values_kg_m3", []
+                )
+            ]
+        except (TypeError, ValueError):
+            return None
+        if (
+            not generation
+            or value.get("part_density_mapping_generation") != generation
+            or value.get("center_of_mass_configuration_generation") != generation
+            or not names
+            or len(names) != len(densities)
+            or len(set(names)) != len(names)
+            or density_names != names
+            or not all(math.isfinite(number) and number > 0.0 for number in densities)
+            or used_densities != densities
+            or not valid_sha256(digest)
+            or value.get("center_of_mass_density_mapping_sha256") != digest
+        ):
+            return None
+        return generation, tuple(names), tuple(densities), digest
+
+    reference_assembly_density_maps = {
+        str(row.get("name", "")): (
+            assembly_center_of_mass_part_density_mapping_identity(row)
+        )
+        for row in reference
+    }
+    assembly_density_identity_ok = not assembly_density_evidence_present
+    if assembly_density_evidence_present:
+        assembly_density_identity_ok = bool(reference_assembly_density_maps) and all(
+            value is not None for value in reference_assembly_density_maps.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_density_identity_ok = assembly_density_identity_ok and all(
+                assembly_center_of_mass_part_density_mapping_identity(row)
+                == reference_assembly_density_maps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3590,6 +3734,12 @@ def shape_mass_property_crosscheck_summary(
         "loft_sections_use_current_seam_normalized_correspondence": (
             loft_seam_identity_ok
         ),
+        "boolean_tolerance_uses_current_model_length_unit_generation": (
+            boolean_unit_generation_identity_ok
+        ),
+        "assembly_center_of_mass_uses_current_part_density_mapping": (
+            assembly_density_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3630,6 +3780,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("mass and inertia properties do not use the final world placement frame")
     if not checks["loft_sections_use_current_seam_normalized_correspondence"]:
         issues.append("loft wire correspondence predates seam normalization")
+    if not checks["boolean_tolerance_uses_current_model_length_unit_generation"]:
+        issues.append("boolean tolerance predates the active model length-unit generation")
+    if not checks["assembly_center_of_mass_uses_current_part_density_mapping"]:
+        issues.append("assembly center of mass uses a stale part-density mapping")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]

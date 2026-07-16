@@ -332,6 +332,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     brep_surface_parameter_orientation_identity_ok = True
     step_assembly_child_parent_unit_identity_ok = True
     selector_normal_world_frame_identity_ok = True
+    step_occurrence_hierarchy_identity_ok = True
+    brep_edge_tolerance_shape_fix_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -351,6 +353,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         brep_serialization_tolerance_kernel_identity_ok = False
         step_color_label_topology_identity_ok = False
         brep_surface_parameter_orientation_identity_ok = False
+        step_occurrence_hierarchy_identity_ok = False
+        brep_edge_tolerance_shape_fix_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -960,6 +964,121 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and all(character in "0123456789abcdef" for character in digest)
                 and selector_frame.get("evaluated_normal_table_sha256") == digest
             )
+
+        occurrence_hierarchy = replay_identity_value.get(
+            "step_occurrence_name_color_hierarchy_identity"
+        )
+        if occurrence_hierarchy is not None:
+            occurrence_hierarchy = (
+                occurrence_hierarchy
+                if isinstance(occurrence_hierarchy, Mapping)
+                else {}
+            )
+            import_generation = str(
+                occurrence_hierarchy.get("step_import_generation", "")
+            ).strip()
+            hierarchy_generation = str(
+                occurrence_hierarchy.get("assembly_hierarchy_generation", "")
+            ).strip()
+            occurrence_ids = list(occurrence_hierarchy.get("occurrence_ids") or [])
+            names = list(occurrence_hierarchy.get("occurrence_names") or [])
+            colors = list(
+                occurrence_hierarchy.get("occurrence_colors_rgb") or []
+            )
+            parent_paths = list(
+                occurrence_hierarchy.get("occurrence_parent_paths") or []
+            )
+            digest = str(
+                occurrence_hierarchy.get("hierarchy_metadata_sha256", "")
+            ).lower()
+            try:
+                colors_ok = all(
+                    len(color) == 3
+                    and all(
+                        math.isfinite(float(channel))
+                        and 0.0 <= float(channel) <= 1.0
+                        for channel in color
+                    )
+                    for color in colors
+                )
+            except (TypeError, ValueError):
+                colors_ok = False
+            step_occurrence_hierarchy_identity_ok = (
+                bool(import_generation)
+                and occurrence_hierarchy.get(
+                    "occurrence_metadata_import_generation"
+                )
+                == import_generation
+                and bool(hierarchy_generation)
+                and occurrence_hierarchy.get("occurrence_hierarchy_generation")
+                == hierarchy_generation
+                and bool(occurrence_ids)
+                and len(set(occurrence_ids)) == len(occurrence_ids)
+                and list(occurrence_hierarchy.get("metadata_occurrence_ids") or [])
+                == occurrence_ids
+                and len(names) == len(colors) == len(parent_paths) == len(occurrence_ids)
+                and all(str(name).strip() for name in names)
+                and all(str(path).strip() for path in parent_paths)
+                and colors_ok
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and occurrence_hierarchy.get("imported_hierarchy_metadata_sha256")
+                == digest
+            )
+
+        edge_tolerance = replay_identity_value.get(
+            "brep_edge_tolerance_shape_fix_topology_identity"
+        )
+        if edge_tolerance is not None:
+            edge_tolerance = (
+                edge_tolerance if isinstance(edge_tolerance, Mapping) else {}
+            )
+            shape_fix_generation = str(
+                edge_tolerance.get("shape_fix_generation", "")
+            ).strip()
+            topology_digest = str(
+                edge_tolerance.get("topology_sha256", "")
+            ).lower()
+            try:
+                edge_ids = [int(value) for value in edge_tolerance.get("edge_ids", [])]
+                tolerance_edge_ids = [
+                    int(value)
+                    for value in edge_tolerance.get("edge_tolerance_edge_ids", [])
+                ]
+                tolerances = [
+                    float(value)
+                    for value in edge_tolerance.get("edge_tolerances_m", [])
+                ]
+                topology_edge_count = int(
+                    edge_tolerance.get("topology_edge_count", -1)
+                )
+            except (TypeError, ValueError):
+                edge_ids = []
+                tolerance_edge_ids = []
+                tolerances = []
+                topology_edge_count = -1
+            brep_edge_tolerance_shape_fix_identity_ok = (
+                bool(shape_fix_generation)
+                and edge_tolerance.get("edge_tolerance_shape_fix_generation")
+                == shape_fix_generation
+                and edge_tolerance.get("topology_digest_shape_fix_generation")
+                == shape_fix_generation
+                and bool(edge_ids)
+                and len(set(edge_ids)) == len(edge_ids)
+                and tolerance_edge_ids == edge_ids
+                and len(tolerances) == len(edge_ids) == topology_edge_count
+                and all(
+                    math.isfinite(tolerance) and tolerance > 0.0
+                    for tolerance in tolerances
+                )
+                and len(topology_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in topology_digest
+                )
+                and edge_tolerance.get("edge_tolerance_topology_sha256")
+                == topology_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -1029,6 +1148,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "selector_normals_use_final_world_placement_frame": (
             selector_normal_world_frame_identity_ok
+        ),
+        "step_occurrence_metadata_uses_current_assembly_hierarchy": (
+            step_occurrence_hierarchy_identity_ok
+        ),
+        "brep_edge_tolerances_follow_final_shape_fix_topology": (
+            brep_edge_tolerance_shape_fix_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
