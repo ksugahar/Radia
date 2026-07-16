@@ -1489,26 +1489,32 @@ def _extract_bnd_only_inline(vol_mesh, bnd_label):
         old_to_new[old] = ngmesh_new.Add(
             ngm.MeshPoint(ngm.Pnt(p[0], p[1], p[2])))
 
-    coords_np = np.array([vol_mesh.vertices[v].point for v in sorted(used_vtx)])
-    wp_centroid = coords_np.mean(axis=0)
-
-    n_flipped = 0
+    # Collect triangles, then make the winding GLOBALLY consistent +
+    # outward via face-BFS + per-component signed volume.  The old
+    # per-triangle centroid test actively BROKE genus-1 workpieces: the
+    # bore-wall outward normal points TOWARD the centroid, so the whole
+    # inner wall got flipped (199 directed-edge conflicts on the
+    # Takahashi tube), the double-layer operator was corrupted, and P_wp
+    # came out 37.9 kW instead of 22.5 kW (references 17.0-17.7 kW) --
+    # the dominant share of the known x2 over-estimate (2026-07-17).
+    from surface_mesh_extract import orient_surface_triangles
+    order_vtx = sorted(used_vtx)
+    compact = {v: i for i, v in enumerate(order_vtx)}
+    tri_rows = []
     for el in vol_mesh.Elements(BND):
         if el.index not in target_indices:
             continue
-        verts_new = [old_to_new[v.nr] for v in el.vertices]
-        pts = np.array([vol_mesh.vertices[v.nr].point for v in el.vertices])
-        if len(verts_new) >= 3:
-            e1 = pts[1] - pts[0]; e2 = pts[2] - pts[0]
-            n = np.cross(e1, e2)
-            tri_center = pts.mean(axis=0)
-            if np.dot(n, tri_center - wp_centroid) < 0:
-                verts_new = [verts_new[0], verts_new[2], verts_new[1]]
-                n_flipped += 1
-        ngmesh_new.Add(ngm.Element2D(1, verts_new))
+        tri_rows.append([compact[v.nr] for v in el.vertices])
+    pts_used = np.array([vol_mesh.vertices[v].point for v in order_vtx])
+    tri_oriented, stats = orient_surface_triangles(pts_used, tri_rows)
+    for t in tri_oriented:
+        ngmesh_new.Add(ngm.Element2D(
+            1, [old_to_new[order_vtx[int(c)]] for c in t]))
     progress("BEM",
-        f"oriented {n_flipped} triangles outward from wp centroid "
-        f"{list(wp_centroid)}")
+        f"winding: {stats['n_flips']} flips, "
+        f"{stats['components_flipped']}/{stats['n_components']} components "
+        f"reversed, conflicts {stats['conflicts_before']} -> "
+        f"{stats['conflicts_after']}")
     return Mesh(ngmesh_new)
 
 

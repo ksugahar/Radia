@@ -15,6 +15,112 @@ Consumers:
 from __future__ import annotations
 
 
+def orient_surface_triangles(points, tris):
+    """Make a triangulated surface's winding globally consistent + outward.
+
+    Two passes per connected component:
+      1. face-BFS flip propagation: every interior edge must be listed in
+         opposite directions by its two triangles (manifold orientation);
+      2. outward normalisation: if the component's signed volume
+         (divergence theorem, sum of p0.(p1 x p2)/6) is negative, flip
+         the whole component.
+
+    WHY (2026-07-17, Takahashi genus-1 workpiece): the surface extractors
+    returned triangles whose winding was NOT globally consistent -- the
+    old per-triangle "centroid-outward" heuristic in the hole extractor
+    actively CREATES the inconsistency on a genus-1 tube (the bore-wall
+    outward normal points TOWARD the centroid, so the whole inner wall
+    was flipped; 199 directed-edge conflicts measured).  The inconsistent
+    winding corrupts the double-layer operator of the scalar BIE + SIBC:
+    on Takahashi 7 kHz / mu_r=100 it inflated P_wp from 22.5 kW
+    (consistent winding) to 37.9 kW vs the 17.0-17.7 kW FEM references
+    -- the dominant share of the known x2 over-estimate.  On already-
+    consistent meshes (Netgen/OCC output; the analytic sphere benchmark,
+    0.3%) this is a no-op (0 flips).
+
+    Args:
+        points: (nv, 3) float array of vertex coordinates.
+        tris: (nt, 3) int array of vertex indices (any winding).
+
+    Returns:
+        (tris_oriented, stats) -- a NEW (nt, 3) int64 array and a dict
+        with n_flips / n_components / components_flipped /
+        conflicts_before / conflicts_after.  For a closed manifold
+        surface conflicts_after is always 0.
+    """
+    import numpy as np
+    from collections import defaultdict, deque
+
+    pts = np.asarray(points, dtype=float)
+    tris = np.array(tris, dtype=np.int64, copy=True)
+    nt = len(tris)
+
+    def _directed_conflicts(tt):
+        seen_dir = {}
+        n = 0
+        for t in tt:
+            for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                key = (int(a), int(b))
+                if key in seen_dir:
+                    n += 1
+                seen_dir[key] = True
+        return n
+
+    conflicts_before = _directed_conflicts(tris)
+
+    e2t = defaultdict(list)
+    for ti, t in enumerate(tris):
+        for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            e2t[(min(a, b), max(a, b))].append(ti)
+
+    def _has_dir(t, a, b):
+        return any(t[k] == a and t[(k + 1) % 3] == b for k in range(3))
+
+    seen = set()
+    n_flips = 0
+    components = []
+    for seed in range(nt):
+        if seed in seen:
+            continue
+        comp = [seed]
+        seen.add(seed)
+        dq = deque([seed])
+        while dq:
+            ti = dq.popleft()
+            t = tris[ti]
+            for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                for tj in e2t[(min(a, b), max(a, b))]:
+                    if tj == ti or tj in seen:
+                        continue
+                    if _has_dir(tris[tj], a, b):
+                        tris[tj][1], tris[tj][2] = tris[tj][2], tris[tj][1]
+                        n_flips += 1
+                    seen.add(tj)
+                    comp.append(tj)
+                    dq.append(tj)
+        components.append(comp)
+
+    comps_flipped = 0
+    for comp in components:
+        v6 = 0.0
+        for ti in comp:
+            t = tris[ti]
+            v6 += float(np.dot(pts[t[0]], np.cross(pts[t[1]], pts[t[2]])))
+        if v6 < 0.0:
+            for ti in comp:
+                tris[ti][1], tris[ti][2] = tris[ti][2], tris[ti][1]
+            comps_flipped += 1
+
+    stats = {
+        "n_flips": int(n_flips),
+        "n_components": len(components),
+        "components_flipped": int(comps_flipped),
+        "conflicts_before": int(conflicts_before),
+        "conflicts_after": int(_directed_conflicts(tris)),
+    }
+    return tris, stats
+
+
 def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
                                     return_vertex_map=False):
     """Extract a clean 2D surface mesh containing only boundary elements
@@ -82,8 +188,8 @@ def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
             f"adjacent boundary elements. The .vol export is "
             f"inconsistent — re-run the Cubit .jou and re-export.")
 
-    # Add boundary elements (and their vertices) for the filtered set.
-    old_to_new = {}
+    # Pass 1: collect the filtered triangles (old vertex ids) + labels.
+    kept = []                        # (fd_idx, [old vertex nrs])
     for el in vol_mesh.Elements(BND):
         if keep_dom > 0:
             fd = vol_mesh.ngmesh.FaceDescriptor(el.index + 1)
@@ -93,15 +199,32 @@ def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
         fd_idx = label_to_fd.get(lbl)
         if fd_idx is None:
             continue
+        kept.append((fd_idx, [v.nr for v in el.vertices]))
+
+    # Pass 2: make the winding globally consistent + outward BEFORE
+    # emitting (the BND winding of a .vol is not globally consistent, and
+    # an inconsistent double-layer operator inflated Takahashi P_wp by
+    # ~70% -- see orient_surface_triangles).
+    import numpy as np
+    tri_old = np.array([verts for _fd, verts in kept], dtype=np.int64)
+    used = sorted({int(v) for t in tri_old for v in t})
+    old_to_compact = {v: i for i, v in enumerate(used)}
+    pts_used = np.array([vol_mesh.vertices[v].point for v in used])
+    tri_compact = np.vectorize(old_to_compact.get)(tri_old)
+    tri_oriented, _stats = orient_surface_triangles(pts_used, tri_compact)
+
+    old_to_new = {}
+    compact_to_old = {i: v for v, i in old_to_compact.items()}
+    for (fd_idx, _verts), t_or in zip(kept, tri_oriented):
         new_verts = []
-        for v in el.vertices:
-            if v.nr not in old_to_new:
-                pt = vol_mesh.vertices[v.nr].point
-                old_to_new[v.nr] = ngmesh_new.Add(
+        for ci in t_or:
+            old_nr = compact_to_old[int(ci)]
+            if old_nr not in old_to_new:
+                pt = vol_mesh.vertices[old_nr].point
+                old_to_new[old_nr] = ngmesh_new.Add(
                     ngm.MeshPoint(ngm.Pnt(pt[0], pt[1], pt[2])))
-            new_verts.append(old_to_new[v.nr])
-        se = ngm.Element2D(fd_idx, new_verts)
-        ngmesh_new.Add(se)
+            new_verts.append(old_to_new[old_nr])
+        ngmesh_new.Add(ngm.Element2D(fd_idx, new_verts))
 
     surf_mesh = Mesh(ngmesh_new)
     if return_vertex_map:
