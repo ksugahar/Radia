@@ -86,11 +86,15 @@ def pwm_controlled_motor_loss_gate(
     restart_phase_origin_ok = True
     angle_convention_ok = True
     loss_normalization_ok = True
+    dq_phase_order_ok = True
+    torque_ripple_aggregation_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
         angle_convention_ok = False
         loss_normalization_ok = False
+        dq_phase_order_ok = False
+        torque_ripple_aggregation_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -149,6 +153,54 @@ def pwm_controlled_motor_loss_gate(
                 and isinstance(loss_normalization.get("phase_count"), int)
                 and loss_normalization["phase_count"] >= 2
                 and loss_normalization.get("per_phase_to_total_applied") is True
+            )
+        phase_order = identity_value.get("dq_phase_order")
+        if phase_order is not None:
+            winding_order = (
+                phase_order.get("winding_connection_phase_order")
+                if isinstance(phase_order, dict)
+                else None
+            )
+            current_order = (
+                phase_order.get("current_table_phase_order")
+                if isinstance(phase_order, dict)
+                else None
+            )
+            transform_order = (
+                phase_order.get("abc_to_dq_input_phase_order")
+                if isinstance(phase_order, dict)
+                else None
+            )
+            dq_phase_order_ok = (
+                isinstance(phase_order, dict)
+                and isinstance(winding_order, list)
+                and len(winding_order) == 3
+                and all(isinstance(name, str) and name for name in winding_order)
+                and len(set(winding_order)) == 3
+                and current_order == winding_order
+                and transform_order == winding_order
+                and bool(phase_order.get("phase_order_generation"))
+            )
+        aggregation = identity_value.get("torque_ripple_aggregation")
+        if aggregation is not None:
+            try:
+                start = int(aggregation["cycle_start_sample"])
+                end = int(aggregation["cycle_end_sample_exclusive"])
+                exported_count = int(aggregation["exported_sample_count"])
+                aggregation_count = int(aggregation["aggregation_sample_count"])
+            except (KeyError, TypeError, ValueError):
+                start = end = exported_count = aggregation_count = -1
+            unique_cycle_count = end - start
+            torque_ripple_aggregation_ok = (
+                isinstance(aggregation, dict)
+                and start >= 0
+                and unique_cycle_count >= 3
+                and exported_count == unique_cycle_count + 1
+                and aggregation_count == unique_cycle_count
+                and aggregation.get("repeated_cycle_endpoint_present") is True
+                and aggregation.get("repeated_endpoint_removed_before_aggregation")
+                is True
+                and aggregation.get("cycle_generation") == torque_generation
             )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
@@ -353,6 +405,10 @@ def pwm_controlled_motor_loss_gate(
         "restart_segments_preserve_phase_origin": restart_phase_origin_ok,
         "torque_and_dq_tables_share_transformed_angle_basis": angle_convention_ok,
         "loss_components_share_total_machine_scope": loss_normalization_ok,
+        "abc_to_dq_phase_order_matches_winding_connection": dq_phase_order_ok,
+        "torque_ripple_aggregation_excludes_repeated_cycle_endpoint": (
+            torque_ripple_aggregation_ok
+        ),
     }
     tail_torque = torque_nm[tail_start:]
     tail_torque_mean = sum(tail_torque) / len(tail_torque)
@@ -389,6 +445,8 @@ def pwm_controlled_motor_loss_gate(
             "matching only an integrated loss cannot prove sample identity. "
             "treat row zero as the aggregate summary: eddy aggregate reconstructs from "
             "positive-frequency bins, while hysteresis and combined iron loss can remain "
-            "aggregate-only. Exclude R/L ratios when their denominator current is near zero."
+            "aggregate-only. Bind abc-to-dq input ordering to the winding connection and "
+            "remove a repeated periodic endpoint before mean/ripple aggregation. Exclude R/L "
+            "ratios when their denominator current is near zero."
         ),
     }
