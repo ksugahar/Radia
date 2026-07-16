@@ -127,3 +127,24 @@ def test_ih_designspec_exposes_wp_flags_for_weak_bem_only():
     for m in (METHOD_BEMA_BEM_STRONG, METHOD_PEEC_FEM_KELVIN):
         vis = IHDesignSpec(method=m).visible_fields()
         assert "wp_loop_dof" not in vis and "wp_phi_inc" not in vis, m
+
+
+@pytest.mark.parametrize("legacy,expected", [(False, "off"), (True, "on")])
+def test_ih_designspec_preserves_boolean_loop_dof_constructor(legacy, expected):
+    spec = IHDesignSpec(
+        method=METHOD_PEEC_BEM,
+        peec_step="coil.step",
+        wp_vol="workpiece.vol",
+        wp_loop_dof=legacy,
+    )
+    assert spec.wp_loop_dof == expected
+    cmd = spec.build_command(python="python", panels_dir=_PANELS)
+    assert cmd[cmd.index("--wp-loop-dof") + 1] == expected
+
+
+def test_ih_designspec_hides_explicit_topology_modes_when_inapplicable():
+    esim = IHDesignSpec(method=METHOD_PEEC_BEM, impedance_model="Nonlinear ESIM")
+    p2 = IHDesignSpec(method=METHOD_PEEC_BEM, fes_order=2)
+    for spec in (esim, p2):
+        assert "wp_loop_dof" not in spec.visible_fields()
+        assert "wp_phi_inc" not in spec.visible_fields()

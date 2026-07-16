@@ -254,6 +254,8 @@ def _with_artifact_identity(payload: dict) -> dict:
             "torque_map_electrical_angle_origin": "rotor_d_axis",
             "q_axis_sign": 1,
             "torque_map_q_axis_sign": 1,
+            "q_axis_convention": "q_leads_d_positive_electrical",
+            "torque_map_q_axis_convention": "q_leads_d_positive_electrical",
             "park_matrix_sha256": "1" * 64,
             "torque_map_park_matrix_sha256": "1" * 64,
         },
@@ -265,10 +267,11 @@ def _with_artifact_identity(payload: dict) -> dict:
             "electrical_power_window_cycle_generation": "steady-cycle-19",
             "mechanical_power_window_cycle_generation": "steady-cycle-19",
             "loss_power_window_cycle_generation": "steady-cycle-19",
-            "window_start_sample": 401,
-            "window_end_sample": 800,
-            "electrical_power_window": [401, 800],
-            "mechanical_power_window": [401, 800],
+            "window_start_sample": 75,
+            "window_end_sample": 100,
+            "electrical_power_window": [75, 100],
+            "mechanical_power_window": [75, 100],
+            "loss_power_window": [75, 100],
             "power_window_sha256": "2" * 64,
             "efficiency_power_window_sha256": "2" * 64,
         },
@@ -676,5 +679,43 @@ def test_v17_public_efficiency_map_power_averaging_window_generation_mismatch() 
         result["checks"][
             "efficiency_map_powers_share_current_steady_cycle_window"
         ]
+        is False
+    )
+
+
+def test_v17_public_map_identities_reject_nonintegral_or_boolean_signs() -> None:
+    payload = _with_artifact_identity(_payload())
+    identity = payload["artifact_identity"]
+    identity["dq_torque_map_park_transform_angle_sign_identity"][
+        "q_axis_sign"
+    ] = True
+    window = identity["efficiency_map_power_averaging_window_identity"]
+    window["window_start_sample"] = 75.5
+    window["electrical_power_window"] = [75.5, 100]
+    window["mechanical_power_window"] = [75.5, 100]
+    window["loss_power_window"] = [75.5, 100]
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["dq_torque_map_uses_current_park_angle_and_q_axis_sign"] is False
+    assert (
+        result["checks"][
+            "efficiency_map_powers_share_current_steady_cycle_window"
+        ]
+        is False
+    )
+
+
+def test_v17_public_torque_map_binds_to_canonical_park_and_q_axis() -> None:
+    payload = _with_artifact_identity(_payload())
+    identity = payload["artifact_identity"]
+    torque_map = identity["dq_torque_map_park_transform_angle_sign_identity"]
+    torque_map["q_axis_sign"] = -1
+    torque_map["torque_map_q_axis_sign"] = -1
+    torque_map["q_axis_convention"] = "q_lags_d_positive_electrical"
+    torque_map["torque_map_q_axis_convention"] = "q_lags_d_positive_electrical"
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["dq_torque_map_uses_current_park_angle_and_q_axis_sign"]
         is False
     )

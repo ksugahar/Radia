@@ -144,7 +144,7 @@ class IHDesignSpec:
     # Weak-BIE topology controls. "auto" applies each extension when its
     # mathematical and solver prerequisites hold; explicit modes remain
     # available for reproducibility and fail-fast validation.
-    wp_loop_dof: str = "auto"
+    wp_loop_dof: str | bool = "auto"
     wp_phi_inc: str = "auto"
 
     impedance_model: str = "Linear SIBC"
@@ -186,6 +186,16 @@ class IHDesignSpec:
     csv_output: str = ""
     vtu_prefix: str = ""
 
+    def __post_init__(self) -> None:
+        # Preserve the bool constructor contract shipped before the controls
+        # became three-state notebook dropdowns.
+        if isinstance(self.wp_loop_dof, bool):
+            self.wp_loop_dof = "on" if self.wp_loop_dof else "off"
+        if self.wp_loop_dof not in {"auto", "on", "off"}:
+            raise ValueError("wp_loop_dof must be auto, on, or off")
+        if self.wp_phi_inc not in {"auto", "path", "poisson"}:
+            raise ValueError("wp_phi_inc must be auto, path, or poisson")
+
     def impedance_model_cli(self) -> str:
         return "esim" if self.impedance_model.startswith("Nonlinear ESIM") else "sibc"
 
@@ -224,10 +234,6 @@ class IHDesignSpec:
                 "wp_material", "wp_sigma", "mu_r", "half_thickness",
                 "impedance_model", "fes_order",
             })
-            if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
-                # calc_inductance weak path only (strong / FEM-Kelvin /
-                # FEM-full do not take these flags).
-                fields.update({"wp_loop_dof", "wp_phi_inc"})
             if self.impedance_model_cli() == "esim":
                 fields.update({
                     "bh_file", "esim_max_iter", "esim_per_panel",

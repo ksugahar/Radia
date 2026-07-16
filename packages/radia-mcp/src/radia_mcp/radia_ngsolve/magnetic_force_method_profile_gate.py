@@ -818,11 +818,22 @@ def magnetic_force_method_profile_gate(
             transform_digest = str(
                 demag_tensor.get("body_to_global_transform_sha256", "")
             ).lower()
+            try:
+                transform_determinant = float(
+                    demag_tensor.get("body_to_global_transform_determinant")
+                )
+                orthogonality_error = float(
+                    demag_tensor.get("body_to_global_transform_orthogonality_error")
+                )
+            except (TypeError, ValueError):
+                transform_determinant = orthogonality_error = math.nan
             bem_demag_tensor_coordinate_basis_generation_identity_ok = (
                 bool(placement_generation)
                 and demag_tensor.get("surface_mesh_body_placement_generation")
                 == placement_generation
                 and bool(tensor_generation)
+                and demag_tensor.get("force_demag_tensor_generation")
+                == tensor_generation
                 and demag_tensor.get("demag_tensor_body_placement_generation")
                 == placement_generation
                 and demag_tensor.get("body_coordinate_basis")
@@ -832,6 +843,11 @@ def magnetic_force_method_profile_gate(
                 and demag_tensor.get("body_basis_handedness") == "right_handed"
                 and demag_tensor.get("tensor_basis_handedness")
                 == demag_tensor.get("body_basis_handedness")
+                and math.isclose(
+                    transform_determinant, 1.0, rel_tol=0.0, abs_tol=1.0e-12
+                )
+                and math.isfinite(orthogonality_error)
+                and 0.0 <= orthogonality_error <= 1.0e-12
                 and len(transform_digest) == 64
                 and all(
                     character in "0123456789abcdef"
@@ -867,8 +883,20 @@ def magnetic_force_method_profile_gate(
                     bearing_phase.get("force_harmonic_phase_origin_deg")
                 )
                 slot_pitch = float(bearing_phase.get("slot_pitch_deg"))
+                harmonic_order = int(bearing_phase.get("force_harmonic_order"))
             except (TypeError, ValueError):
                 rotor_origin = harmonic_origin = slot_pitch = math.nan
+                harmonic_order = -1
+            slot_count = (
+                360.0 / slot_pitch
+                if math.isfinite(slot_pitch) and slot_pitch > 0.0
+                else math.nan
+            )
+            phase_delta = (
+                math.remainder(harmonic_origin - rotor_origin, 360.0)
+                if math.isfinite(rotor_origin) and math.isfinite(harmonic_origin)
+                else math.nan
+            )
             magnetic_bearing_force_harmonic_phase_origin_identity_ok = (
                 bool(harmonic_generation)
                 and bearing_phase.get("force_sample_harmonic_generation")
@@ -881,9 +909,24 @@ def magnetic_force_method_profile_gate(
                     for value in (rotor_origin, harmonic_origin, slot_pitch)
                 )
                 and slot_pitch > 0.0
+                and math.isfinite(slot_count)
                 and math.isclose(
-                    harmonic_origin, rotor_origin, rel_tol=0.0, abs_tol=1.0e-12
+                    slot_count, round(slot_count), rel_tol=0.0, abs_tol=1.0e-12
                 )
+                and type(bearing_phase.get("force_harmonic_order")) is int
+                and harmonic_order > 0
+                and bearing_phase.get("force_sample_harmonic_order")
+                == harmonic_order
+                and math.isclose(
+                    phase_delta, 0.0, rel_tol=0.0, abs_tol=1.0e-12
+                )
+                and bearing_phase.get("rotor_angle_basis") == "mechanical_deg"
+                and bearing_phase.get("force_harmonic_angle_basis")
+                == bearing_phase.get("rotor_angle_basis")
+                and bearing_phase.get("fourier_sign_convention")
+                == "exp(-j*n*theta)"
+                and bearing_phase.get("force_harmonic_fourier_sign_convention")
+                == bearing_phase.get("fourier_sign_convention")
                 and bearing_phase.get("phase_origin_convention") == "rotor_d_axis"
                 and bearing_phase.get("force_harmonic_phase_origin_convention")
                 == bearing_phase.get("phase_origin_convention")
