@@ -108,6 +108,7 @@ PARAM_JA = {
 
     # --- HDiv-VIM (calc_accel_hdiv) ---
     "ima": {"ja": "IMA 対称性", "physics": "'+x-z'=1/4モデル。符号: 平行=+, 垂直=-"},
+    "hdiv_order": {"ja": "HDiv 次数", "physics": "1=RT1, 2=RT2"},
     "unit_scale": {"ja": "座標スケール", "physics": "Cubit座標→メートル。0.001=mm→m"},
     "unit-scale": {"ja": "座標スケール", "physics": ""},
 
@@ -148,6 +149,14 @@ PARAM_JA = {
     "n-targets": {"ja": "軸方向ターゲット点数", "physics": ""},
     "nphi": {"ja": "等高線 方位サンプル数", "physics": "ワイヤ抽出の方位方向サンプル数"},
     "nz": {"ja": "等高線 軸方向サンプル数", "physics": "ワイヤ抽出の軸方向サンプル数"},
+}
+
+# Parameters such as ``--order`` have panel-specific meanings.  Apply these
+# overrides after the generic CLI-name metadata above.
+PANEL_PARAM_JA = {
+    "motor_hdiv_reduced": {
+        "order": {"ja": "HDiv 次数", "physics": "1=RT1, 2=RT2"},
+    },
 }
 
 
@@ -320,6 +329,11 @@ def build_registry():
             continue
 
         params = _extract_argparse_from_file(script_path)
+        panel_param_ja = PANEL_PARAM_JA.get(panel_id, {})
+        for param in params:
+            override = panel_param_ja.get(param["name"])
+            if override is not None:
+                param.update(override)
 
         registry["panels"][panel_id] = {
             "script": meta["script"],
