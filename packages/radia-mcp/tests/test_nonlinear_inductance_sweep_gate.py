@@ -96,6 +96,33 @@ def _with_v9_bindings(summary):
     return summary
 
 
+def _with_v10_bindings(summary):
+    summary = _with_v9_bindings(summary)
+    for row in summary["runs"]:
+        row["sparameter_reference_impedance"] = {
+            "port_order": ["primary", "secondary"],
+            "solver_reference_impedance_ohm_complex": [
+                [50.0, 0.0],
+                [50.0, 0.0],
+            ],
+            "comparison_reference_impedance_ohm_complex": [
+                [50.0, 0.0],
+                [50.0, 0.0],
+            ],
+            "renormalization_applied": False,
+            "reference_impedance_generation": "zref-42",
+        }
+        row["frequency_axis_identity"] = {
+            "numeric_axis_unit": "GHz",
+            "metadata_axis_unit": "GHz",
+            "scale_to_hz": 1.0e9,
+            "normalized_axis_unit": "Hz",
+            "normalization_applied_once": True,
+            "frequency_axis_generation": "frequency-grid-42",
+        }
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -302,6 +329,40 @@ def test_v9_public_energy_loss_unit_scale_mismatch():
     assert (
         result["runs"][0]["checks"][
             "stored_energy_and_loss_series_share_si_basis"
+        ]
+        is False
+    )
+
+
+def test_v10_public_sparameter_reference_impedance_mismatch():
+    bad = _with_v10_bindings(_summary())
+    bad["runs"][0]["sparameter_reference_impedance"].update(
+        {
+            "comparison_reference_impedance_ohm_complex": [
+                [50.0, 0.0],
+                [75.0, 10.0],
+            ],
+            "renormalization_applied": False,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameters_share_complex_reference_impedance_or_renormalization"
+        ]
+        is False
+    )
+
+
+def test_v10_public_frequency_axis_unit_metadata_mismatch():
+    bad = _with_v10_bindings(_summary())
+    bad["runs"][0]["frequency_axis_identity"]["metadata_axis_unit"] = "Hz"
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "frequency_axis_unit_and_hz_scale_share_identity"
         ]
         is False
     )
