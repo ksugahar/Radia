@@ -141,15 +141,15 @@ material = vim.EnergyStopMaterial(
 )
 
 with ng.TaskManager():
-    result = vim.SolveHysteresis(
-        pm_mesh,
+    solver = vim.HDivSolver(pm_mesh, order=2)
+    result = solver.SolveHysteresis(
         applied_field_steps,  # 3-vectors or NGSolve CoefficientFunctions
         material=material,
         initial_b_path=manufacturing_B_history,
     )
     # Continue without replaying or hiding the constitutive history.
-    continued = vim.SolveHysteresis(
-        pm_mesh, next_steps, material=material, initial_state=result["state"]
+    continued = solver.SolveHysteresis(
+        next_steps, material=material, initial_state=result["state"]
     )
 
 H_demag = vim.FieldFromSolution(continued, observation_points)
@@ -186,17 +186,19 @@ iron = vim.CoupledBody(iron_mesh, "iron", bh_table=bh_table, order=2)
 
 with ng.TaskManager():
     coupled_history = vim.SolveCoupledHysteresis(
-        pm, [iron], applied_field_steps,
+        [pm], [iron], applied_field_steps,
     )
 
 H = vim.FieldFromCoupledHysteresis(coupled_history, observation_points)
 ```
 
-At every physical field step, each outer PM trial restarts from the same
-previously committed constitutive state.  The trial state is accepted only
-after the PM/iron coefficient fixed point converges, so block iterations cannot
-advance the hysteresis history multiple times.  The PM and iron ChargeGrams are
-built once and reused across outer iterations and history steps.
+At every physical field step, each outer PM trial restarts from that PM's same
+previously committed constitutive state.  All trial states are accepted
+together only after the global PM/iron coefficient fixed point converges, so
+block iterations cannot advance any hysteresis history multiple times.  Each
+body owns one `HDivSolver`; its ChargeGram is built once and reused across
+outer iterations and history steps.  Add further independently meshed
+`CoupledHistoryBody` objects to the first list for segmented stateful magnets.
 
 For level 3, construct `vim.PlayHysteresisMaterial(K, eta, f_k_tables)` and
 pass it as `material=` to the same `SolveHysteresis` stepping API.  It retains

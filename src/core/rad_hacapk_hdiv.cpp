@@ -5496,6 +5496,7 @@ void RadHACApKChargeGram::ConfigureMassMatrix(
     }
     m_operatorNFace = n_face;
     m_operatorMassConfigured = true;
+    m_operatorMassIsGeometry = false;
 }
 
 void RadHACApKChargeGram::ConfigureGeometryMassMatrix(
@@ -5530,6 +5531,25 @@ void RadHACApKChargeGram::ConfigureGeometryMassMatrix(
     }
     m_operatorNFace = n_face;
     m_operatorGeometryMassConfigured = true;
+    m_operatorMassIsGeometry = (
+        m_operatorMassConfigured &&
+        m_operatorMassI == m_operatorGeometryMassI &&
+        m_operatorMassJ == m_operatorGeometryMassJ &&
+        m_operatorMassV == m_operatorGeometryMassV);
+}
+
+bool RadHACApKChargeGram::RestoreGeometryMassMatrix()
+{
+    if (!m_operatorGeometryMassConfigured)
+        throw std::runtime_error(
+            "RestoreGeometryMassMatrix: geometry mass matrix is not configured");
+    if (m_operatorMassIsGeometry)
+        return false;
+    ConfigureMassMatrix(
+        m_operatorGeometryMassI, m_operatorGeometryMassJ,
+        m_operatorGeometryMassV, m_operatorNFace);
+    m_operatorMassIsGeometry = true;
+    return true;
 }
 
 std::vector<double> RadHACApKChargeGram::ApplyConfiguredDemag(
