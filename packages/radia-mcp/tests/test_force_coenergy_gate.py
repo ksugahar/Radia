@@ -198,6 +198,31 @@ def _artifact_identity(sample_count):
             "perturbed_field_sha256": "7" * 64,
             "force_perturbed_field_sha256": "7" * 64,
         },
+        "axisymmetric_weighted_stress_force_mask_mesh_identity": {
+            "force_mesh_generation": "axisym-mesh-19",
+            "mask_solve_mesh_generation": "axisym-mesh-19",
+            "weighted_stress_integral_mesh_generation": "axisym-mesh-19",
+            "mask_solution_generation": "mask-solve-19",
+            "force_mask_solution_generation": "mask-solve-19",
+            "axisymmetric_measure": "two_pi_r_dr_dz",
+            "force_integral_measure": "two_pi_r_dr_dz",
+            "mask_field_sha256": "1" * 64,
+            "force_mask_field_sha256": "1" * 64,
+        },
+        "lorentz_force_current_density_out_of_plane_orientation_identity": {
+            "field_solve_generation": "planar-solve-19",
+            "current_density_field_solve_generation": "planar-solve-19",
+            "lorentz_force_field_solve_generation": "planar-solve-19",
+            "coordinate_plane": "xy",
+            "out_of_plane_axis": "+z",
+            "current_density_component": "Jz",
+            "current_density_positive_axis": "+z",
+            "lorentz_cross_product": "J_cross_B",
+            "orientation_sign": 1,
+            "force_orientation_sign": 1,
+            "current_density_sha256": "2" * 64,
+            "force_current_density_sha256": "2" * 64,
+        },
     }
 
 
@@ -622,6 +647,52 @@ def test_v16_public_virtual_displacement_force_geometry_field_generation_mismatc
     assert (
         result["checks"][
             "virtual_displacement_force_uses_paired_geometry_field_generations"
+        ]
+        is False
+    )
+
+
+def test_v17_public_axisymmetric_weighted_stress_force_mask_mesh_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["axisymmetric_weighted_stress_force_mask_mesh_identity"].update(
+        {
+            "mask_solve_mesh_generation": "axisym-mesh-18",
+            "force_mask_solution_generation": "mask-solve-18",
+            "force_mask_field_sha256": "5" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "axisymmetric_weighted_stress_force_uses_current_mask_mesh"
+        ]
+        is False
+    )
+
+
+def test_v17_public_lorentz_force_current_density_out_of_plane_orientation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity[
+        "lorentz_force_current_density_out_of_plane_orientation_identity"
+    ].update(
+        {
+            "current_density_positive_axis": "-z",
+            "force_orientation_sign": -1,
+            "force_current_density_sha256": "5" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "planar_lorentz_force_uses_current_jz_out_of_plane_orientation"
         ]
         is False
     )

@@ -49,6 +49,8 @@ def force_coenergy_displacement_gate(
     axisymmetric_coil_voltage_measure_identity_ok = True
     nonlinear_energy_coenergy_bh_iteration_identity_ok = True
     virtual_displacement_force_geometry_field_identity_ok = True
+    axisymmetric_weighted_stress_force_mask_mesh_identity_ok = True
+    lorentz_current_density_orientation_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -68,6 +70,8 @@ def force_coenergy_displacement_gate(
         axisymmetric_coil_voltage_measure_identity_ok = False
         nonlinear_energy_coenergy_bh_iteration_identity_ok = False
         virtual_displacement_force_geometry_field_identity_ok = False
+        axisymmetric_weighted_stress_force_mask_mesh_identity_ok = False
+        lorentz_current_density_orientation_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -736,6 +740,98 @@ def force_coenergy_displacement_gate(
                 == perturbed_digest
             )
 
+        axisymmetric_mask = artifact_identity.get(
+            "axisymmetric_weighted_stress_force_mask_mesh_identity"
+        )
+        if axisymmetric_mask is not None:
+            mesh_generation = (
+                axisymmetric_mask.get("force_mesh_generation")
+                if isinstance(axisymmetric_mask, dict)
+                else None
+            )
+            mask_solution_generation = (
+                axisymmetric_mask.get("mask_solution_generation")
+                if isinstance(axisymmetric_mask, dict)
+                else None
+            )
+            mask_digest = str(
+                axisymmetric_mask.get("mask_field_sha256", "")
+                if isinstance(axisymmetric_mask, dict)
+                else ""
+            ).lower()
+            axisymmetric_weighted_stress_force_mask_mesh_identity_ok = (
+                isinstance(axisymmetric_mask, dict)
+                and bool(mesh_generation)
+                and axisymmetric_mask.get("mask_solve_mesh_generation")
+                == mesh_generation
+                and axisymmetric_mask.get(
+                    "weighted_stress_integral_mesh_generation"
+                )
+                == mesh_generation
+                and bool(mask_solution_generation)
+                and axisymmetric_mask.get("force_mask_solution_generation")
+                == mask_solution_generation
+                and axisymmetric_mask.get("axisymmetric_measure")
+                == "two_pi_r_dr_dz"
+                and axisymmetric_mask.get("force_integral_measure")
+                == axisymmetric_mask.get("axisymmetric_measure")
+                and len(mask_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in mask_digest
+                )
+                and str(
+                    axisymmetric_mask.get("force_mask_field_sha256", "")
+                ).lower()
+                == mask_digest
+            )
+
+        lorentz_orientation = artifact_identity.get(
+            "lorentz_force_current_density_out_of_plane_orientation_identity"
+        )
+        if lorentz_orientation is not None:
+            solve_generation = (
+                lorentz_orientation.get("field_solve_generation")
+                if isinstance(lorentz_orientation, dict)
+                else None
+            )
+            current_digest = str(
+                lorentz_orientation.get("current_density_sha256", "")
+                if isinstance(lorentz_orientation, dict)
+                else ""
+            ).lower()
+            orientation_sign = (
+                lorentz_orientation.get("orientation_sign")
+                if isinstance(lorentz_orientation, dict)
+                else None
+            )
+            lorentz_current_density_orientation_identity_ok = (
+                isinstance(lorentz_orientation, dict)
+                and bool(solve_generation)
+                and lorentz_orientation.get(
+                    "current_density_field_solve_generation"
+                )
+                == solve_generation
+                and lorentz_orientation.get("lorentz_force_field_solve_generation")
+                == solve_generation
+                and lorentz_orientation.get("coordinate_plane") == "xy"
+                and lorentz_orientation.get("out_of_plane_axis") == "+z"
+                and lorentz_orientation.get("current_density_component") == "Jz"
+                and lorentz_orientation.get("current_density_positive_axis") == "+z"
+                and lorentz_orientation.get("lorentz_cross_product") == "J_cross_B"
+                and orientation_sign == 1
+                and lorentz_orientation.get("force_orientation_sign")
+                == orientation_sign
+                and len(current_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in current_digest
+                )
+                and str(
+                    lorentz_orientation.get("force_current_density_sha256", "")
+                ).lower()
+                == current_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -816,6 +912,12 @@ def force_coenergy_displacement_gate(
         ),
         "virtual_displacement_force_uses_paired_geometry_field_generations": (
             virtual_displacement_force_geometry_field_identity_ok
+        ),
+        "axisymmetric_weighted_stress_force_uses_current_mask_mesh": (
+            axisymmetric_weighted_stress_force_mask_mesh_identity_ok
+        ),
+        "planar_lorentz_force_uses_current_jz_out_of_plane_orientation": (
+            lorentz_current_density_orientation_identity_ok
         ),
     }
     return {
