@@ -441,6 +441,40 @@ def _with_v16_identity(summary):
     return summary
 
 
+def _with_v17_identity(summary):
+    summary = _with_v16_identity(summary)
+    summary["cq_frequency_contour_radius_damping_generation_identity"] = {
+        "frequency_sampling_generation": "cq-frequency-sampling-19",
+        "transfer_sample_frequency_generation": "cq-frequency-sampling-19",
+        "contour_metadata_frequency_generation": "cq-frequency-sampling-19",
+        "inverse_transform_frequency_generation": "cq-frequency-sampling-19",
+        "time_step_s": 2.5e-4,
+        "transfer_sample_time_step_s": 2.5e-4,
+        "sample_count": 512,
+        "transfer_sample_count": 512,
+        "contour_radius": 0.985,
+        "inverse_transform_contour_radius": 0.985,
+        "damping_factor": 0.97,
+        "inverse_transform_damping_factor": 0.97,
+        "contour_metadata_sha256": "5" * 64,
+        "inverse_transform_contour_metadata_sha256": "5" * 64,
+    }
+    summary["hmatrix_aca_pivot_cluster_permutation_generation_identity"] = {
+        "cluster_tree_generation": "cluster-tree-19",
+        "source_cluster_permutation_generation": "cluster-permutation-19",
+        "target_cluster_permutation_generation": "cluster-permutation-19",
+        "aca_source_cluster_permutation_generation": "cluster-permutation-19",
+        "aca_target_cluster_permutation_generation": "cluster-permutation-19",
+        "row_pivot_global_ids": [11, 17, 23],
+        "aca_row_pivot_global_ids": [11, 17, 23],
+        "column_pivot_global_ids": [5, 13, 29],
+        "aca_column_pivot_global_ids": [5, 13, 29],
+        "cluster_permutation_sha256": "6" * 64,
+        "aca_cluster_permutation_sha256": "6" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -753,6 +787,53 @@ def test_v16_public_fembem_trace_matrix_boundary_node_generation_mismatch():
     assert (
         result["checks"][
             "fembem_trace_matrix_uses_current_boundary_node_generation"
+        ]
+        is False
+    )
+
+
+def test_accepts_v17_cq_contour_and_hmatrix_aca_pivot_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v17_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v17_public_cq_frequency_contour_radius_damping_generation_mismatch():
+    bad = _with_v17_identity(_summary())
+    bad["cq_frequency_contour_radius_damping_generation_identity"].update(
+        {
+            "contour_metadata_frequency_generation": "cq-frequency-sampling-18",
+            "inverse_transform_frequency_generation": "cq-frequency-sampling-18",
+            "inverse_transform_contour_radius": 0.96,
+            "inverse_transform_damping_factor": 0.92,
+            "inverse_transform_contour_metadata_sha256": "9" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cq_inverse_transform_uses_current_frequency_contour_metadata"
+        ]
+        is False
+    )
+
+
+def test_v17_public_hmatrix_aca_pivot_cluster_permutation_generation_mismatch():
+    bad = _with_v17_identity(_summary())
+    bad["hmatrix_aca_pivot_cluster_permutation_generation_identity"].update(
+        {
+            "aca_source_cluster_permutation_generation": "cluster-permutation-18",
+            "aca_target_cluster_permutation_generation": "cluster-permutation-18",
+            "aca_row_pivot_global_ids": [17, 11, 23],
+            "aca_column_pivot_global_ids": [13, 5, 29],
+            "aca_cluster_permutation_sha256": "9" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hmatrix_aca_pivots_use_current_cluster_permutation"
         ]
         is False
     )
