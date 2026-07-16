@@ -221,6 +221,10 @@ class IHDesignSpec:
                 "wp_material", "wp_sigma", "mu_r", "half_thickness",
                 "impedance_model", "fes_order",
             })
+            if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
+                # calc_inductance weak path only (strong / FEM-Kelvin /
+                # FEM-full do not take these flags).
+                fields.update({"wp_loop_dof", "wp_phi_inc"})
             if self.impedance_model_cli() == "esim":
                 fields.update({
                     "bh_file", "esim_max_iter", "esim_per_panel",
@@ -413,9 +417,10 @@ class IHDesignSpec:
         ]
         if coil_solver == "peec":
             cmd += ["--peec-n-peri", str(self.peec_n_peri)]
-        cmd += ["--wp-phi-inc", self.wp_phi_inc]
         if self.wp_loop_dof:
             cmd.append("--wp-loop-dof")
+        if self.wp_phi_inc != "path":
+            cmd += ["--wp-phi-inc", self.wp_phi_inc]
         self._append_esim_args(cmd, include_anderson=True, kelvin=False)
         return cmd
 
