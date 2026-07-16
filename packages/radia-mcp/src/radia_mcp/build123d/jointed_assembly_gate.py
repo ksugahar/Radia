@@ -302,6 +302,64 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     connections = summary.get("joint_connections") or []
     execution = summary.get("external_execution") or {}
     timing = summary.get("timing_breakdown_s") or {}
+    replay_identity_value = summary.get("replay_identity")
+    replay_identity_present = isinstance(replay_identity_value, Mapping)
+    commit_identity_ok = True
+    kernel_version_identity_ok = True
+    if replay_identity_value is not None and not replay_identity_present:
+        commit_identity_ok = False
+        kernel_version_identity_ok = False
+    elif replay_identity_present:
+        source_commit = str(replay_identity_value.get("source_commit", "")).lower()
+        replayed_commit = str(
+            replay_identity_value.get("replayed_source_commit", "")
+        ).lower()
+        artifacts = replay_identity_value.get("cad_artifacts") or []
+        kernel = replay_identity_value.get("external_kernel") or {}
+        artifact_rows_valid = isinstance(artifacts, list) and all(
+            isinstance(row, Mapping) for row in artifacts
+        )
+        artifact_names = (
+            [str(row.get("name", "")).strip() for row in artifacts]
+            if artifact_rows_valid
+            else []
+        )
+        valid_commit = (
+            len(source_commit) == 40
+            and all(character in "0123456789abcdef" for character in source_commit)
+            and source_commit == replayed_commit
+        )
+        commit_identity_ok = (
+            valid_commit
+            and artifact_rows_valid
+            and bool(artifacts)
+            and all(artifact_names)
+            and len(set(artifact_names)) == len(artifact_names)
+            and all(
+                row.get("fresh") is True
+                and len(str(row.get("sha256", "")).lower()) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in str(row.get("sha256", "")).lower()
+                )
+                and str(row.get("source_commit", "")).lower() == source_commit
+                for row in artifacts
+            )
+        )
+        kernel_valid = isinstance(kernel, Mapping)
+        claimed_version = (
+            str(kernel.get("claimed_version", "")).strip() if kernel_valid else ""
+        )
+        replay_versions = [
+            str(value).strip() for value in (kernel.get("replay_versions") or [])
+        ] if kernel_valid else []
+        kernel_version_identity_ok = (
+            kernel_valid
+            and bool(str(kernel.get("name", "")).strip())
+            and bool(claimed_version)
+            and len(replay_versions) >= 2
+            and all(version == claimed_version for version in replay_versions)
+        )
     joint_names = {
         str(name)
         for row in components
@@ -332,6 +390,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         and execution.get("gui_daemon_enabled") is False,
         "fresh_result_and_owned_process_cleanup": execution.get("result_artifact_fresh") is True
         and int(execution.get("owned_processes_remaining", -1)) == 0,
+        "neutral_cad_artifacts_bind_current_source_commit": commit_identity_ok,
+        "external_kernel_versions_are_replay_invariant": kernel_version_identity_ok,
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,
@@ -339,11 +399,13 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         and all(float(value) >= 0.0 for value in timing.values()),
     }
     issues = [name for name, ok in checks.items() if not ok]
+    warnings = [] if replay_identity_present else ["replay_identity_not_recorded"]
     return {
         "policy": "build123d_jointed_assembly_source_replay_gate_v1",
         "status": "ok" if not issues else "needs_attention",
         "checks": checks,
         "issues": issues,
+        "warnings": warnings,
         "joint_names": sorted(joint_names),
         "connection_endpoints": sorted(connection_endpoints),
         "notes": [
