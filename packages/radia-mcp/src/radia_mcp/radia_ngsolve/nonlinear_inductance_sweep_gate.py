@@ -188,6 +188,75 @@ def _energy_loss_basis_is_si(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _sparameter_reference_impedance_is_bound(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("sparameter_reference_impedance")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    ports = identity.get("port_order")
+    solver_values = identity.get("solver_reference_impedance_ohm_complex")
+    comparison_values = identity.get(
+        "comparison_reference_impedance_ohm_complex"
+    )
+    if (
+        not isinstance(ports, list)
+        or not ports
+        or len(set(ports)) != len(ports)
+        or not isinstance(solver_values, list)
+        or not isinstance(comparison_values, list)
+        or not (len(solver_values) == len(comparison_values) == len(ports))
+    ):
+        return False
+    try:
+        solver = [complex(float(value[0]), float(value[1])) for value in solver_values]
+        comparison = [
+            complex(float(value[0]), float(value[1]))
+            for value in comparison_values
+        ]
+    except (IndexError, TypeError, ValueError):
+        return False
+    if not all(
+        math.isfinite(value.real) and math.isfinite(value.imag)
+        for value in solver + comparison
+    ):
+        return False
+    same_reference = solver == comparison
+    return (
+        bool(identity.get("reference_impedance_generation"))
+        and (
+            same_reference
+            and identity.get("renormalization_applied") is False
+            or not same_reference
+            and identity.get("renormalization_applied") is True
+            and identity.get("renormalized_port_order") == ports
+            and bool(identity.get("renormalization_generation"))
+        )
+    )
+
+
+def _frequency_axis_unit_is_bound(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("frequency_axis_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    unit = str(identity.get("numeric_axis_unit", ""))
+    scales = {"Hz": 1.0, "kHz": 1.0e3, "MHz": 1.0e6, "GHz": 1.0e9}
+    try:
+        scale = float(identity.get("scale_to_hz"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        unit in scales
+        and identity.get("metadata_axis_unit") == unit
+        and math.isclose(scale, scales[unit], rel_tol=0.0, abs_tol=0.0)
+        and identity.get("normalized_axis_unit") == "Hz"
+        and identity.get("normalization_applied_once") is True
+        and bool(identity.get("frequency_axis_generation"))
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -357,6 +426,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "stored_energy_and_loss_series_share_si_basis": (
                 _energy_loss_basis_is_si(raw)
+            ),
+            "sparameters_share_complex_reference_impedance_or_renormalization": (
+                _sparameter_reference_impedance_is_bound(raw)
+            ),
+            "frequency_axis_unit_and_hz_scale_share_identity": (
+                _frequency_axis_unit_is_bound(raw)
             ),
         }
         row = {
