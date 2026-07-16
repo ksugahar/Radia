@@ -153,6 +153,41 @@ def _matrix_sweep_generations_match(raw: Mapping[str, Any]) -> bool:
     return all(values) and len(set(values)) == 1
 
 
+def _matrix_port_orders_match(raw: Mapping[str, Any]) -> bool:
+    order = raw.get("matrix_port_order")
+    if order is None:
+        return True
+    if not isinstance(order, Mapping):
+        return False
+    names = (
+        "run_current",
+        "flux_linkage",
+        "apparent_rows",
+        "apparent_columns",
+        "incremental_rows",
+        "incremental_columns",
+    )
+    values = [order.get(name) for name in names]
+    return (
+        all(isinstance(value, list) for value in values)
+        and all(value == ["primary", "secondary"] for value in values)
+    )
+
+
+def _energy_loss_basis_is_si(raw: Mapping[str, Any]) -> bool:
+    basis = raw.get("energy_loss_basis")
+    if basis is None:
+        return True
+    return (
+        isinstance(basis, Mapping)
+        and basis.get("stored_energy_unit") == "J"
+        and basis.get("coenergy_unit") == "J"
+        and basis.get("loss_series_unit") == "J"
+        and basis.get("loss_series_scale_to_J") == 1.0
+        and basis.get("shared_accumulation_basis") == "J"
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -316,6 +351,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "inductance_matrices_share_solve_sweep_generation": (
                 _matrix_sweep_generations_match(raw)
+            ),
+            "matrix_rows_columns_and_vectors_share_port_order": (
+                _matrix_port_orders_match(raw)
+            ),
+            "stored_energy_and_loss_series_share_si_basis": (
+                _energy_loss_basis_is_si(raw)
             ),
         }
         row = {

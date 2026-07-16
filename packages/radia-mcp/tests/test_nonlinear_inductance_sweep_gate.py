@@ -75,6 +75,27 @@ def _with_v8_generations(summary):
     return summary
 
 
+def _with_v9_bindings(summary):
+    summary = _with_v8_generations(summary)
+    for row in summary["runs"]:
+        row["matrix_port_order"] = {
+            "run_current": ["primary", "secondary"],
+            "flux_linkage": ["primary", "secondary"],
+            "apparent_rows": ["primary", "secondary"],
+            "apparent_columns": ["primary", "secondary"],
+            "incremental_rows": ["primary", "secondary"],
+            "incremental_columns": ["primary", "secondary"],
+        }
+        row["energy_loss_basis"] = {
+            "stored_energy_unit": "J",
+            "coenergy_unit": "J",
+            "loss_series_unit": "J",
+            "loss_series_scale_to_J": 1.0,
+            "shared_accumulation_basis": "J",
+        }
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -249,3 +270,38 @@ def test_v8_public_energy_history_restart_offset_lost():
     result = nonlinear_inductance_sweep_gate(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["restart_energy_history_offsets_are_continuous"] is False
+
+
+def test_v9_public_inductance_matrix_port_order_permuted():
+    bad = _with_v9_bindings(_summary())
+    bad["runs"][0]["matrix_port_order"].update(
+        {
+            "incremental_rows": ["secondary", "primary"],
+            "incremental_columns": ["secondary", "primary"],
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_run_identities_and_matrices_close"] is False
+    assert (
+        result["runs"][0]["checks"][
+            "matrix_rows_columns_and_vectors_share_port_order"
+        ]
+        is False
+    )
+
+
+def test_v9_public_energy_loss_unit_scale_mismatch():
+    bad = _with_v9_bindings(_summary())
+    bad["runs"][0]["energy_loss_basis"].update(
+        {"loss_series_unit": "nJ", "loss_series_scale_to_J": 1.0}
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_run_identities_and_matrices_close"] is False
+    assert (
+        result["runs"][0]["checks"][
+            "stored_energy_and_loss_series_share_si_basis"
+        ]
+        is False
+    )
