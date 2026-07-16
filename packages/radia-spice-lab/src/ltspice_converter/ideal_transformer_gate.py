@@ -650,6 +650,119 @@ def _fourier_phase_reference_time_origin_identity_ok(
     )
 
 
+def _ac_group_delay_phase_unwrap_grid_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "ac_group_delay_phase_unwrap_frequency_grid_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    sequences = (
+        contract.get("frequency_hz"),
+        contract.get("phase_unwrapped_rad"),
+        contract.get("group_delay_s"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in sequences
+    ):
+        return False
+    try:
+        frequencies = [_finite(value, "frequency_hz", positive=True) for value in sequences[0]]
+        phases = [_finite(value, "phase_unwrapped_rad") for value in sequences[1]]
+        delays = [_finite(value, "group_delay_s") for value in sequences[2]]
+        anchor = _finite(
+            contract.get("phase_unwrap_branch_anchor_rad"),
+            "phase_unwrap_branch_anchor_rad",
+        )
+        delay_anchor = _finite(
+            contract.get("group_delay_phase_unwrap_branch_anchor_rad"),
+            "group_delay_phase_unwrap_branch_anchor_rad",
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("frequency_grid_generation_id") or "")
+    digest = str(contract.get("frequency_grid_sha256") or "")
+    computed_delays = [
+        -(right_phase - left_phase) / (2.0 * math.pi * (right_f - left_f))
+        for left_f, right_f, left_phase, right_phase in zip(
+            frequencies, frequencies[1:], phases, phases[1:]
+        )
+    ]
+    return (
+        bool(str(contract.get("ac_sweep_generation_id") or ""))
+        and bool(generation)
+        and contract.get("phase_sample_frequency_grid_generation_id") == generation
+        and contract.get("phase_unwrap_frequency_grid_generation_id") == generation
+        and contract.get("group_delay_frequency_grid_generation_id") == generation
+        and len(frequencies) >= 2
+        and len(phases) == len(frequencies)
+        and len(delays) == len(frequencies) - 1
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and all(
+            math.isclose(reported, computed, rel_tol=1.0e-8, abs_tol=1.0e-15)
+            for reported, computed in zip(delays, computed_delays)
+        )
+        and math.isclose(delay_anchor, anchor, rel_tol=0.0, abs_tol=1.0e-15)
+        and contract.get("phase_unwrap_method") == "continuous_minimum_jump"
+        and contract.get("group_delay_phase_unwrap_method")
+        == "continuous_minimum_jump"
+        and _is_sha256(digest)
+        and contract.get("phase_unwrap_frequency_grid_sha256") == digest
+    )
+
+
+def _transient_rms_average_event_window_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("transient_rms_average_event_window_generation_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        start = _finite(contract.get("window_start_s"), "window_start_s")
+        rms_start = _finite(contract.get("rms_window_start_s"), "rms_window_start_s")
+        average_start = _finite(
+            contract.get("average_window_start_s"), "average_window_start_s"
+        )
+        end = _finite(contract.get("window_end_s"), "window_end_s", positive=True)
+        rms_end = _finite(contract.get("rms_window_end_s"), "rms_window_end_s")
+        average_end = _finite(
+            contract.get("average_window_end_s"), "average_window_end_s"
+        )
+    except (TypeError, ValueError):
+        return False
+    event_generation = str(contract.get("switching_event_generation_id") or "")
+    start_event = str(contract.get("window_start_event_id") or "")
+    end_event = str(contract.get("window_end_event_id") or "")
+    digest = str(contract.get("event_table_sha256") or "")
+    return (
+        bool(str(contract.get("transient_generation_id") or ""))
+        and bool(event_generation)
+        and contract.get("rms_window_event_generation_id") == event_generation
+        and contract.get("average_window_event_generation_id") == event_generation
+        and bool(start_event)
+        and contract.get("rms_window_start_event_id") == start_event
+        and contract.get("average_window_start_event_id") == start_event
+        and bool(end_event)
+        and end_event != start_event
+        and contract.get("rms_window_end_event_id") == end_event
+        and contract.get("average_window_end_event_id") == end_event
+        and start < end
+        and math.isclose(rms_start, start, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isclose(average_start, start, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isclose(rms_end, end, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isclose(average_end, end, rel_tol=0.0, abs_tol=1.0e-18)
+        and _is_sha256(digest)
+        and contract.get("rms_event_table_sha256") == digest
+        and contract.get("average_event_table_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -964,6 +1077,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "fourier_harmonic_phases_share_reference_time_origin": (
             _fourier_phase_reference_time_origin_identity_ok(positive)
+        ),
+        "ac_group_delay_uses_current_phase_unwrap_frequency_grid": (
+            _ac_group_delay_phase_unwrap_grid_identity_ok(positive)
+        ),
+        "transient_rms_and_average_share_switching_event_window": (
+            _transient_rms_average_event_window_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }

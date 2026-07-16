@@ -539,6 +539,49 @@ def _with_v16_measure_and_fourier_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v17_group_delay_and_event_window_identity(summary: dict) -> dict:
+    summary = _with_v16_measure_and_fourier_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["ac_group_delay_phase_unwrap_frequency_grid_generation_identity"] = {
+        "ac_sweep_generation_id": "ac-sweep-49",
+        "frequency_grid_generation_id": "ac-grid-49",
+        "phase_sample_frequency_grid_generation_id": "ac-grid-49",
+        "phase_unwrap_frequency_grid_generation_id": "ac-grid-49",
+        "group_delay_frequency_grid_generation_id": "ac-grid-49",
+        "frequency_hz": [1000.0, 2000.0, 3000.0],
+        "phase_unwrapped_rad": [-0.0628318530718, -0.125663706144, -0.188495559215],
+        "group_delay_s": [1.0e-5, 1.0e-5],
+        "phase_unwrap_branch_anchor_rad": 0.0,
+        "group_delay_phase_unwrap_branch_anchor_rad": 0.0,
+        "phase_unwrap_method": "continuous_minimum_jump",
+        "group_delay_phase_unwrap_method": "continuous_minimum_jump",
+        "frequency_grid_sha256": "a" * 64,
+        "phase_unwrap_frequency_grid_sha256": "a" * 64,
+    }
+    positive["transient_rms_average_event_window_generation_identity"] = {
+        "transient_generation_id": "transient-49",
+        "switching_event_generation_id": "switching-events-49",
+        "rms_window_event_generation_id": "switching-events-49",
+        "average_window_event_generation_id": "switching-events-49",
+        "window_start_event_id": "settled-cycle-start-49",
+        "rms_window_start_event_id": "settled-cycle-start-49",
+        "average_window_start_event_id": "settled-cycle-start-49",
+        "window_end_event_id": "settled-cycle-end-49",
+        "rms_window_end_event_id": "settled-cycle-end-49",
+        "average_window_end_event_id": "settled-cycle-end-49",
+        "window_start_s": 8.0e-3,
+        "rms_window_start_s": 8.0e-3,
+        "average_window_start_s": 8.0e-3,
+        "window_end_s": 9.0e-3,
+        "rms_window_end_s": 9.0e-3,
+        "average_window_end_s": 9.0e-3,
+        "event_table_sha256": "b" * 64,
+        "rms_event_table_sha256": "b" * 64,
+        "average_event_table_sha256": "b" * 64,
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -830,6 +873,55 @@ def test_v16_public_fourier_harmonic_phase_reference_time_origin_mismatch() -> N
     assert (
         result["checks"][
             "fourier_harmonic_phases_share_reference_time_origin"
+        ]
+        is False
+    )
+
+
+def test_accepts_v17_group_delay_and_event_window_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v17_group_delay_and_event_window_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v17_public_ac_group_delay_phase_unwrap_frequency_grid_generation_mismatch() -> None:
+    bad = _with_v17_group_delay_and_event_window_identity(_summary())
+    bad["metrics"]["positive"][
+        "ac_group_delay_phase_unwrap_frequency_grid_generation_identity"
+    ].update(
+        {
+            "phase_unwrap_frequency_grid_generation_id": "ac-grid-48",
+            "group_delay_phase_unwrap_branch_anchor_rad": 2.0 * math.pi,
+            "group_delay_phase_unwrap_method": "previous_grid_branch",
+            "phase_unwrap_frequency_grid_sha256": "c" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["ac_group_delay_uses_current_phase_unwrap_frequency_grid"]
+        is False
+    )
+
+
+def test_v17_public_transient_rms_average_event_window_generation_mismatch() -> None:
+    bad = _with_v17_group_delay_and_event_window_identity(_summary())
+    bad["metrics"]["positive"][
+        "transient_rms_average_event_window_generation_identity"
+    ].update(
+        {
+            "average_window_event_generation_id": "switching-events-48",
+            "average_window_start_event_id": "settled-cycle-start-48",
+            "average_window_start_s": 7.0e-3,
+            "average_event_table_sha256": "c" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "transient_rms_and_average_share_switching_event_window"
         ]
         is False
     )
