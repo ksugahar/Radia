@@ -501,6 +501,44 @@ def _with_v15_fft_and_sample_filter_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v16_measure_and_fourier_identity(summary: dict) -> dict:
+    summary = _with_v15_fft_and_sample_filter_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["measure_crossing_interpolation_time_grid_generation_identity"] = {
+        "transient_generation_id": "transient-48",
+        "measure_generation_id": "transient-48",
+        "accepted_step_grid_generation_id": "accepted-grid-48",
+        "interpolation_grid_generation_id": "accepted-grid-48",
+        "crossing_bracket_grid_generation_id": "accepted-grid-48",
+        "crossing_ordinal": 3,
+        "crossing_direction": "rising",
+        "interpolation_method": "linear",
+        "crossing_time_s": 2.5e-6,
+        "reported_crossing_time_s": 2.5e-6,
+        "bracket_sample_indices": [120, 121],
+        "interpolation_bracket_sample_indices": [120, 121],
+        "accepted_step_grid_sha256": "1" * 64,
+        "interpolation_grid_sha256": "1" * 64,
+    }
+    positive["fourier_harmonic_phase_reference_time_origin_identity"] = {
+        "waveform_generation_id": "waveform-48",
+        "fourier_result_waveform_generation_id": "waveform-48",
+        "harmonic_table_waveform_generation_id": "waveform-48",
+        "fundamental_frequency_hz": 1000.0,
+        "harmonic_number": 3,
+        "phase_basis": "cosine",
+        "reported_phase_basis": "cosine",
+        "reference_time_origin_s": 1.0e-3,
+        "fourier_reference_time_origin_s": 1.0e-3,
+        "comparison_reference_time_origin_s": 1.0e-3,
+        "reference_time_origin_convention": "absolute_transient_time",
+        "comparison_time_origin_convention": "absolute_transient_time",
+        "waveform_time_axis_sha256": "2" * 64,
+        "fourier_time_axis_sha256": "2" * 64,
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -746,6 +784,52 @@ def test_v15_public_monte_carlo_percentile_sample_filter_generation_mismatch() -
     assert (
         result["checks"][
             "monte_carlo_percentiles_use_current_filtered_sample_set"
+        ]
+        is False
+    )
+
+
+def test_accepts_v16_measure_grid_and_fourier_time_origin_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v16_measure_and_fourier_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v16_public_measure_crossing_interpolation_time_grid_generation_mismatch() -> None:
+    bad = _with_v16_measure_and_fourier_identity(_summary())
+    bad["metrics"]["positive"][
+        "measure_crossing_interpolation_time_grid_generation_identity"
+    ].update(
+        {
+            "interpolation_grid_generation_id": "accepted-grid-47",
+            "crossing_bracket_grid_generation_id": "accepted-grid-47",
+            "interpolation_bracket_sample_indices": [119, 120],
+            "reported_crossing_time_s": 2.49e-6,
+            "interpolation_grid_sha256": "5" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["measure_crossings_use_current_accepted_step_grid"] is False
+
+
+def test_v16_public_fourier_harmonic_phase_reference_time_origin_mismatch() -> None:
+    bad = _with_v16_measure_and_fourier_identity(_summary())
+    bad["metrics"]["positive"][
+        "fourier_harmonic_phase_reference_time_origin_identity"
+    ].update(
+        {
+            "comparison_reference_time_origin_s": 0.0,
+            "comparison_time_origin_convention": "window_relative_time",
+            "fourier_time_axis_sha256": "5" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "fourier_harmonic_phases_share_reference_time_origin"
         ]
         is False
     )
