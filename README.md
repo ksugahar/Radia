@@ -79,7 +79,7 @@ Radia is organized as a layered CAE stack, not as one monolithic solver. The rep
 | Applications | Keep application examples concrete: induction heating, MagLev, electromagnets, printed circuit boards, and motors. |
 | Interfaces | Provide GUIs only for application-level workflows. Generic reusable capabilities should stay as Python APIs, notebooks, CLI tools, and MCP servers. |
 
-The practical rules are simple: follow NGSolve's Python API style when extending finite-element workflows; use pybind11 for C++ functionality exposed to Python; avoid reinventing public ecosystem tools; and implement multiple independent methods for the same model whenever that enables cross-validation. The `radia-mcp` servers are part of this policy: they let agents drive the workflow, collect lessons from validation, and keep the repository's knowledge executable rather than only descriptive.
+The practical rules are simple: follow NGSolve's Python API style when extending finite-element workflows; use pybind11 for C++ functionality exposed to Python; avoid reinventing public ecosystem tools; and implement multiple independent methods for the same model whenever that enables cross-validation. NGSolve is the source of truth for finite-element orientation, local/global DOF transforms, Piola mappings, curved geometry, quadrature, weak-form assembly, and `CoefficientFunction` / `GridFunction` evaluation. Radia implements the missing electromagnetic method and C++ kernels; it does not reimplement that FE plumbing in Python. The `radia-mcp` servers are part of this policy: they let agents drive the workflow, collect lessons from validation, and keep the repository's knowledge executable rather than only descriptive.
 
 ## 🚀 Mission: The Design Tool for Open-Space Magnetics
 

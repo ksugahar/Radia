@@ -373,7 +373,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                     ho_far_factor=None, tol=1e-8, maxit=4000,
                     nl_maxit=200, nl_tol=1e-3,
                     initial_b_path=None, initial_state=None, order=1,
-                    state_quadrature_order=None):
+                    state_quadrature_order=None, _prepared_operator=None):
     """Quasi-static B-input hysteresis stepping on the HDiv-VIM charge Gram.
 
     The charge-Gram H-matrix is built ONCE (chi-free geometry) and reused by
@@ -477,14 +477,41 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     t_total = time.perf_counter()
     _clear_cpp_solve_timings()
     _gp = _resolve_gram_params(gram_eps=gram_eps, far_quad=far_quad, ho_far_factor=ho_far_factor)
-    fes = ng.HDiv(mesh, order=order)
-    t_before_gram = time.perf_counter()
-    B, H, M_mass = build_charge_gram(fes, eps=_gp["eps"], leafsize=leaf, eta=eta,
-                                     far_quad=_gp["far_quad"], ho_far_factor=_gp["ho_far_factor"],
-                                     nonlinear=True)
-    charge_gram_wall_s = time.perf_counter() - t_before_gram
-    Mm = sp.csr_matrix(M_mass)
-    Bc = sp.csr_matrix(B)
+    curve_order = int(mesh.GetCurveOrder())
+    cache_contract = dict(
+        mesh=mesh, order=order, curve_order=curve_order,
+        vertex_counts=frozenset(_vtx), nu0=float(nu0),
+        gram_eps=float(_gp["eps"]), leaf=int(leaf), eta=float(eta),
+        far_quad=int(_gp["far_quad"]),
+        ho_far_factor=float(_gp["ho_far_factor"]),
+        operator_kind="hysteresis",
+    )
+    operator_reused = _prepared_operator is not None
+    if operator_reused:
+        if not isinstance(_prepared_operator, dict):
+            raise TypeError(
+                "vim.SolveHysteresis: _prepared_operator must come from SolveHysteresis")
+        for key, value in cache_contract.items():
+            cached = _prepared_operator.get(key)
+            matches = (cached is value) if key == "mesh" else (cached == value)
+            if not matches:
+                raise ValueError(
+                    "vim.SolveHysteresis: prepared operator mismatch for %s "
+                    "(cached=%r, requested=%r)" % (key, cached, value))
+        fes = _prepared_operator["fes"]
+        H = _prepared_operator["charge_gram"]
+        n_charge = int(_prepared_operator["n_charge"])
+        charge_gram_wall_s = 0.0
+    else:
+        fes = ng.HDiv(mesh, order=order)
+        t_before_gram = time.perf_counter()
+        B, H, M_mass = build_charge_gram(
+            fes, eps=_gp["eps"], leafsize=leaf, eta=eta,
+            far_quad=_gp["far_quad"], ho_far_factor=_gp["ho_far_factor"],
+            nonlinear=True)
+        charge_gram_wall_s = time.perf_counter() - t_before_gram
+        n_charge = int(B.shape[0])
+        Mm = sp.csr_matrix(M_mass)
     n_face = fes.ndof
     n_el = mesh.GetNE(ng.VOL)
 
@@ -548,7 +575,11 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     # separate nu0-weighted BilinearForm we pass the ALREADY-BUILT M_mass with the scalar
     # inv_chi = nu0 (the same system; PCG is invariant under the preconditioner's scale,
     # and factoring M_mass itself shares the persistent factor with any other M_mass user).
-    _configure_cpp_mass(H, Mm, int(n_face))
+    if not operator_reused:
+        _configure_cpp_mass(H, Mm, int(n_face))
+        _prepared_operator = dict(
+            cache_contract, fes=fes, charge_gram=H,
+            n_face=int(n_face), n_el=int(n_el), n_charge=int(n_charge))
 
     def _solve_W0(rhs, x0=None):
         res = _h_solve_mass_riesz(
@@ -564,7 +595,8 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     # FACTOR WARMUP: the persistent mass-Riesz PARDISO factor of the constant mass is
     # built here (a zero-RHS solve converges in 0 CG iterations), so the one-time
     # analyze+factor lands in t_setup_s instead of the first step's t_step_s.
-    _solve_W0(np.zeros(n_face))
+    if not operator_reused:
+        _solve_W0(np.zeros(n_face))
 
     def _M_el(m):
         return _state_to_element(_M_state(m))
@@ -714,10 +746,11 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     gfM.vec.FV().NumPy()[:] = np.asarray(m, dtype=float)
     out = dict(
         steps=steps_out,
-        ndof=int(n_face), n_el=int(n_el), n_charge=int(Bc.shape[0]),
-        gfM=gfM, order=order, curve_order=(2 if int(mesh.GetCurveOrder()) >= 2 else None),
+        ndof=int(n_face), n_el=int(n_el), n_charge=int(n_charge),
+        gfM=gfM, order=order, curve_order=(2 if curve_order >= 2 else None),
         state_layout=state_layout, state_points=int(n_state_points),
         state_quadrature_order=quadrature_order,
+        prepared_operator_reused=bool(operator_reused),
         nu0=float(nu0),
         t_setup_s=float(t_setup_s),
         charge_gram_wall_s=float(charge_gram_wall_s),
@@ -737,6 +770,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         ),
     )
     out["_charge_gram"] = H
+    out["_prepared_operator"] = _prepared_operator
     out["_m_coefficients"] = np.ascontiguousarray(m, dtype=np.float64)
     from ._field_batch import _materialize_field_evaluator
     _materialize_field_evaluator(out)

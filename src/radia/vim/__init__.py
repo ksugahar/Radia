@@ -34,6 +34,9 @@ Public API (NGSolve-aligned validated solve primitives):
   SolveCoupled([CoupledBody(...), ...])
       -> block Gauss-Seidel coupling for independent linear-recoil PM and linear/nonlinear
          iron spaces.  Each geometry-only ChargeGram is built once and reused.
+  SolveCoupledHysteresis(CoupledHistoryBody(...), bodies, h_steps)
+      -> stateful EnergyStop/Play PM plus independent linear/nonlinear bodies.  Each outer
+         trial restarts from the committed history; only the converged all-body state commits.
 
 Permanent-magnet levels are canonical: (1) MagnetizationSource fixed/given M,
 (2) Solve with recoil mu_r+B_r, (3) PlayHysteresisMaterial, and
@@ -81,7 +84,10 @@ from ._field_batch import (  # noqa: F401  (batch exterior field of the RT1/RT2 
 from ._magnetization_source import MagnetizationSource  # noqa: F401
 from ._coupled import (  # noqa: F401
     CoupledBody,
+    CoupledHistoryBody,
+    field_from_coupled_hysteresis as _field_from_coupled_hysteresis_impl,
     field_from_coupled_solution as _field_from_coupled_solution_impl,
+    solve_coupled_hysteresis as _solve_coupled_hysteresis_impl,
     solve_coupled as _solve_coupled_impl,
 )
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
@@ -146,6 +152,16 @@ def FieldFromCoupledSolution(*args, **kwargs):
     return _field_from_coupled_solution_impl(*args, **kwargs)
 
 
+def SolveCoupledHysteresis(*args, **kwargs):
+    """Stateful PM plus independently meshed linear/nonlinear HDiv bodies."""
+    return _solve_coupled_hysteresis_impl(*args, **kwargs)
+
+
+def FieldFromCoupledHysteresis(*args, **kwargs):
+    """Batch final field summed over a SolveCoupledHysteresis result."""
+    return _field_from_coupled_hysteresis_impl(*args, **kwargs)
+
+
 for _new, _old in [
     (Solve, _solve_impl),
     (ChargeGram, _charge_gram_impl),
@@ -156,6 +172,8 @@ for _new, _old in [
     (FieldCoefficientFromSolution, _field_coefficient_from_solution_impl),
     (SolveCoupled, _solve_coupled_impl),
     (FieldFromCoupledSolution, _field_from_coupled_solution_impl),
+    (SolveCoupledHysteresis, _solve_coupled_hysteresis_impl),
+    (FieldFromCoupledHysteresis, _field_from_coupled_hysteresis_impl),
 ]:
     _new.__signature__ = _inspect.signature(_old)
 
@@ -168,6 +186,7 @@ __all__ = [
     "SolveHysteresis", "EnergyStopMaterial", "PlayHysteresisMaterial",
     "FieldFromSolution", "FieldCoefficientFromSolution", "MagnetizationSource",
     "CoupledBody", "SolveCoupled", "FieldFromCoupledSolution",
+    "CoupledHistoryBody", "SolveCoupledHysteresis", "FieldFromCoupledHysteresis",
     "HDivCapability", "hdiv_capabilities",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]

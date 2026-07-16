@@ -165,9 +165,31 @@ arbitrary prescribed NGSolve applied field.  RT1 keeps one committed
 constitutive state per element.  RT2 stores and updates state on an NGSolve
 `IntegrationRuleSpace` and returns the constitutive source through the matching
 weak-form transpose; the public step result remains element-averaged for a
-stable reporting contract.  A mutually coupled evolving EnergyStop PM plus
-nonlinear soft-iron history iteration remains separate open work; the live
-`SolveCoupled` contract covers linear-recoil PM bodies, not stateful PM history.
+stable reporting contract.
+
+For a stateful EnergyStop/Play magnet interacting with nonlinear iron, use the
+history-specific block contract:
+
+```python
+pm = vim.CoupledHistoryBody(
+    pm_mesh, "pm", material, order=2,
+    initial_b_path=manufacturing_B_history,
+)
+iron = vim.CoupledBody(iron_mesh, "iron", bh_table=bh_table, order=2)
+
+with ng.TaskManager():
+    coupled_history = vim.SolveCoupledHysteresis(
+        pm, [iron], applied_field_steps,
+    )
+
+H = vim.FieldFromCoupledHysteresis(coupled_history, observation_points)
+```
+
+At every physical field step, each outer PM trial restarts from the same
+previously committed constitutive state.  The trial state is accepted only
+after the PM/iron coefficient fixed point converges, so block iterations cannot
+advance the hysteresis history multiple times.  The PM and iron ChargeGrams are
+built once and reused across outer iterations and history steps.
 
 For level 3, construct `vim.PlayHysteresisMaterial(K, eta, f_k_tables)` and
 pass it as `material=` to the same `SolveHysteresis` stepping API.  It retains

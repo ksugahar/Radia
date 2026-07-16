@@ -85,6 +85,11 @@ production checklist, not a migration archive.
   CoefficientFunctions exchange body fields, each ChargeGram is built once,
   and nonconvergence is fail-loud.  This is also the production segmented-PM
   path for normal-discontinuous `B_r`.
+- `vim.CoupledHistoryBody` and `vim.SolveCoupledHysteresis` couple one stateful
+  EnergyStop/Play PM to independent linear/nonlinear HDiv bodies.  Every outer
+  trial starts from the same committed history state; only the converged
+  all-body trial commits.  The history and ordinary-body ChargeGrams are cached
+  across outer iterations and physical history steps.
 
 ## Release Gate
 
@@ -118,8 +123,3 @@ Before release or `mdx`/`hibino` deployment:
 - extend force/energy tests around motor workflows;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
 - continue mdx scaling measurements for charge-Gram build and solve time.
-- add a mutually coupled evolving EnergyStop-PM/nonlinear-soft-iron history
-  iteration; the
-  current EnergyStop path covers PM self-demagnetization under prescribed
-  NGSolve applied fields.  `SolveCoupled` covers linear-recoil PM + nonlinear
-  iron, while `MagnetizationSource` remains fixed-M coupling.

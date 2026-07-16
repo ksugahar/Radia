@@ -20,6 +20,13 @@ def test_ngsolve_style_hdiv_vim_names_are_public():
         "EnergyStopMaterial",
         "PlayHysteresisMaterial",
         "MagnetizationSource",
+        "FieldCoefficientFromSolution",
+        "CoupledBody",
+        "SolveCoupled",
+        "FieldFromCoupledSolution",
+        "CoupledHistoryBody",
+        "SolveCoupledHysteresis",
+        "FieldFromCoupledHysteresis",
     ):
         assert callable(getattr(vim, name))
         assert name in vim.__all__
