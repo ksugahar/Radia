@@ -1,7 +1,7 @@
 """calc_accel_hdiv.solve_hdiv for the FEEC HDiv-VIM panel path.
 
 The accelerator-magnet HDiv-VIM panel drives radia.vim.MeshSoftIron + rad.Solve, which
-routes a mesh-backed TET soft iron to HDiv-VIM RT1.  The HDiv-VIM is KELVIN-less / iron-only / TET-only, so the .vol
+routes a mesh-backed pure TET/HEX/WEDGE soft iron to HDiv-VIM RT1 or RT2.  The HDiv-VIM is KELVIN-less and iron-only, so the .vol
 must contain only the 'yoke' volume material, and IMA symmetry is not supported there.
 
 Locks:
@@ -82,16 +82,19 @@ def _linear_mat():
     return EMMaterial(name="linear", sigma=2e6, mu_r=MU_R, bh_curve=None)
 
 
-def test_hdiv_panel_magnetizes(tmp_path, coil_script):
+@pytest.mark.parametrize("hdiv_order", [1, 2])
+def test_hdiv_panel_magnetizes(tmp_path, coil_script, hdiv_order):
     """The hdiv backend solves the iron-only yoke + coil: converged, HDiv-VIM, and the iron is actually
     magnetised by the coil (M_avg large -- the coil-bug-fix guard)."""
     from calc_accel_hdiv import solve_hdiv
     vol = _iron_only_yoke_vol(tmp_path / "yoke.vol")
     rh = solve_hdiv(coil_script=coil_script, vol_file=vol, mat=_linear_mat(),
-                   demag_backend="hdiv", solver=0, tol=1e-7, max_iter=800)
+                   demag_backend="hdiv", solver=0, tol=1e-7, max_iter=800,
+                   hdiv_order=hdiv_order)
     assert "error" not in rh, rh
     assert rh["converged"]
     assert rh["demag_backend"] == "hdiv" and rh["solver"] == "HDiv-VIM"
+    assert rh["hdiv_order"] == hdiv_order
     mz_h = rh["M_avg"][2]
     # coil-bug-fix guard: the iron must actually be magnetised by the coil (not ~0)
     assert abs(mz_h) > 1e4, f"hdiv M_avg_z={mz_h:.1f} too small -- coil field missing?"

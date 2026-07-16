@@ -69,6 +69,15 @@ def test_hdiv_solver_choice_argparse():
         assert rc == 0, f"argparse rejected solver {solver_id}:\n{err}"
 
 
+def test_hdiv_fes_order_reaches_cli():
+    spec = _hdiv_spec()
+    spec.fes_order = 2
+    cmd = spec.build_command(python=sys.executable)
+    assert cmd[cmd.index("--hdiv-order") + 1] == "2"
+    rc, err = _argparse_dry_run(cmd)
+    assert rc == 0, err
+
+
 def test_hdiv_ima_passthrough():
     spec = _hdiv_spec()
     spec.ima = "+x-z"

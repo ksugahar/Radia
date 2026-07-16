@@ -18,15 +18,16 @@ class _Element:
 
 
 class _Mesh:
-    def __init__(self, dim, n_vertices=None):
+    def __init__(self, dim, n_vertices=None, curve_order=1):
         self.dim = dim
         self._elements = [] if n_vertices is None else [_Element(n_vertices)]
+        self._curve_order = curve_order
 
     def Elements(self, _kind):
         return self._elements
 
     def GetCurveOrder(self):
-        return 1
+        return self._curve_order
 
 
 class _FES:
@@ -116,3 +117,30 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         "materialize_mass": True,
         "build_hmatrix": True,
     }]
+
+
+def test_chargegram_curved_tet_matches_mesh_geometry_by_default(monkeypatch):
+    calls = []
+    basis = {
+        "B": "B", "M_mass": "M", "M_mass_ngsolve": "M_ng",
+        "cell_nodes": [], "face_nodes": [], "cell_vertices": [],
+        "face_vertices": [], "n_el": 1, "host": [], "kind": [], "expo": [],
+    }
+
+    def fake_curved(_fes, quad, *, materialize_mass):
+        calls.append((quad, materialize_mass))
+        return basis
+
+    monkeypatch.setattr(V, "_charge_basis_curved", fake_curved)
+    monkeypatch.setattr(
+        V, "_curved_outer_rules",
+        lambda _order: ((([[0.0, 0.0, 0.0]], [1.0])),
+                        (([[0.0, 0.0]], [1.0]))))
+    monkeypatch.setattr(V, "_g01", lambda _order: ([0.0], [1.0]))
+    monkeypatch.setattr(V._rp, "_ChargeGramHMatrix", lambda **_kwargs: "G")
+    monkeypatch.setattr(V, "_configure_cpp_operator", lambda *args: args)
+
+    result = V.build_charge_gram(_FES(_Mesh(3, 4, curve_order=2)))
+
+    assert calls == [(3, True)]
+    assert result == ("B", "G", "M", "M_ng")

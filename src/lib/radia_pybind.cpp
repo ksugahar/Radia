@@ -3506,6 +3506,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          I32Array charge_host_a, I32Array charge_kind_a, I32Array charge_expo_a,
                          F64Array sym_tet_pts_a, F64Array sym_tet_w_a,
                          F64Array sym_tri_pts_a, F64Array sym_tri_w_a,
+                         F64Array field_tri_pts_a, F64Array field_tri_w_a,
                          F64Array gl_out_a, F64Array gw_out_a,
                          F64Array gl_in_a, F64Array gw_in_a,
                          F64Array far_tet_pts_a, F64Array far_tet_w_a,
@@ -3523,6 +3524,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  auto sym_tet_w = to_1d_vector<double>(sym_tet_w_a, "sym_tet_w");
                  auto sym_tri_pts = to_1d_vector<double>(sym_tri_pts_a, "sym_tri_pts");
                  auto sym_tri_w = to_1d_vector<double>(sym_tri_w_a, "sym_tri_w");
+                 auto field_tri_pts = to_1d_vector<double>(field_tri_pts_a, "field_tri_pts");
+                 auto field_tri_w = to_1d_vector<double>(field_tri_w_a, "field_tri_w");
                  auto gl_out = to_1d_vector<double>(gl_out_a, "gl_out");
                  auto gw_out = to_1d_vector<double>(gw_out_a, "gw_out");
                  auto gl_in = to_1d_vector<double>(gl_in_a, "gl_in");
@@ -3539,6 +3542,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
                          std::move(sym_tet_pts), std::move(sym_tet_w),
                          std::move(sym_tri_pts), std::move(sym_tri_w),
+                         std::move(field_tri_pts), std::move(field_tri_w),
                          std::move(gl_out), std::move(gw_out),
                          std::move(gl_in), std::move(gw_in),
                          std::move(far_tet_pts), std::move(far_tet_w),
@@ -3551,6 +3555,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("n_el"), py::arg("n_bf"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
              py::arg("sym_tet_pts"), py::arg("sym_tet_w"), py::arg("sym_tri_pts"), py::arg("sym_tri_w"),
+             py::arg("field_tri_pts"), py::arg("field_tri_w"),
              py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
              py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,

@@ -34,7 +34,7 @@ Public API (NGSolve-aligned validated solve primitives):
 Permanent-magnet levels are canonical: (1) MagnetizationSource fixed/given M,
 (2) Solve with recoil mu_r+B_r, (3) PlayHysteresisMaterial, and
 (4) EnergyStopMaterial.  They are physical model levels, not compatibility aliases.
-  MeshSoftIron(mesh, mu_r=/bh_table=) / VolSoftIron(path, mu_r=/bh_table=)
+  MeshSoftIron(mesh, mu_r=/bh_table=, order=1|2) / VolSoftIron(path, mu_r=/bh_table=, order=1|2)
       -> method-layer constructors for mesh-backed Radia soft iron.  For ordinary user code prefer the
          user-intent API `rad.SoftIron(geometry, mu_r=...).solve(...)`.  When `rad.Solve(..., image=...)`
           is used on a MeshSoftIron, `rad.Fld(iron, ...)` evaluates the solved RT field and its reflected

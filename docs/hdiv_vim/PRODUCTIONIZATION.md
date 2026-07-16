@@ -111,3 +111,7 @@ Before release or `mdx`/`hibino` deployment:
   NGSolve applied fields, while MagnetizationSource remains fixed-M coupling.
 - add mutually coupled multi-body linear-recoil PM blocks for segmented magnets
   with normal-discontinuous `B_r`.
+- promote `SolveHysteresis` from RT1 element-average constitutive states to an
+  RT2 quadrature-point state/update path before advertising high-order Play or
+  EnergyStop magnets; merely changing the HDiv space order would under-resolve
+  the material history.

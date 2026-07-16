@@ -173,7 +173,7 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
 def solve_hdiv(coil_script="", vol_file="",
               mat=None, ima="", solver=0,
               max_iter=100, tol=1e-3, relax=0.0,
-              msh_output="", demag_backend="hdiv"):
+              msh_output="", demag_backend="hdiv", hdiv_order=1):
     """HDiv-VIM solver: Netgen .vol mesh -> MeshSoftIron -> rad.Solve.
 
     Args:
@@ -194,6 +194,7 @@ def solve_hdiv(coil_script="", vol_file="",
             The 'hdiv' backend is KELVIN-LESS and iron-only: the .vol must
             contain ONLY the 'yoke' volume material (no air / kelvin elements),
             and IMA symmetry is not supported there yet (both -> fail-loud).
+        hdiv_order: HDiv finite-element order, 1 (RT1) or 2 (RT2).
 
     Returns:
         dict with B_center, n_elem, ndof, iterations, converged, etc.
@@ -281,7 +282,7 @@ def solve_hdiv(coil_script="", vol_file="",
 
     # --- FEEC HDiv-VIM backend (radia.vim) -- the only backend exposed by this panel.  KELVIN-less, IRON-ONLY:
     # the VIM solves the WHOLE registered mesh as iron, so the .vol must contain ONLY 'yoke' volume
-    # elements (no air / kelvin).  This panel currently exposes the TET / RT1 lane only.
+    # elements (no air / kelvin).  Production supports one pure TET / HEX / WEDGE topology.
     if demag_backend != "hdiv":
         return {"error": "demag_backend=%r is not available in this panel. Use demag_backend='hdiv' "
                          "(the FEEC HDiv-VIM)."
@@ -292,22 +293,28 @@ def solve_hdiv(coil_script="", vol_file="",
         return {"error": "the HDiv-VIM needs an IRON-ONLY .vol (it is KELVIN-less; air/kelvin regions "
                          "are not used).  This .vol has %d non-'yoke' volume elements (materials %s).  "
                          "Export the yoke block alone." % (n_nonyoke, sorted(set(mesh.GetMaterials())))}
-    if n_hex or n_wedge:
-        return {"error": "the HDiv-VIM panel requires a TET-only .vol (RT1 tetrahedral HDiv space).  "
-                         "This mesh has %d hex and %d wedge elements; use a tet yoke export for this "
-                         "panel or a newer HDiv-capable notebook path." % (n_hex, n_wedge)}
+    if sum(count > 0 for count in (n_tet, n_hex, n_wedge)) != 1:
+        return {"error": "the HDiv-VIM panel requires one pure TET, HEX, or WEDGE topology; "
+                         "mixed 3D meshes require HDiv pyramid transition elements.  "
+                         "This mesh has %d tet, %d hex, and %d wedge elements."
+                         % (n_tet, n_hex, n_wedge)}
+    hdiv_order = int(hdiv_order)
+    if hdiv_order not in (1, 2):
+        return {"error": "hdiv_order must be 1 (RT1) or 2 (RT2)"}
     if ima:
-        return {"error": "IMA/image symmetry is not exposed by this TET-only panel. Run the full tet "
+        return {"error": "IMA/image symmetry is not exposed by this panel yet. Run the full "
                          "HDiv-VIM model with --ima empty."}
     import radia.vim as _vim
     if is_linear:
-        iron = _vim.MeshSoftIron(mesh, mu_r=float(mu_r))
+        iron = _vim.MeshSoftIron(mesh, mu_r=float(mu_r), order=hdiv_order)
         _log(f"MAT:linear mu_r={mu_r} (HDiv-VIM)")
     else:
-        iron = _vim.MeshSoftIron(mesh, bh_table=bh_data)
+        iron = _vim.MeshSoftIron(mesh, bh_table=bh_data, order=hdiv_order)
         _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
     model = rad.ObjCnt([iron, coil_container])
-    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM RT1/tet), tol={tol}, maxiter={max_iter}")
+    topology = "tet" if n_tet else ("hex" if n_hex else "wedge")
+    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM RT{hdiv_order}/{topology}), "
+         f"tol={tol}, maxiter={max_iter}")
     t_solve_start = time.perf_counter()
     with _TM():
         res = rad.Solve(model, tol, max_iter, solver, demag_backend="hdiv")
@@ -357,6 +364,7 @@ def solve_hdiv(coil_script="", vol_file="",
         "ndof": n_dof,
         "solver": solver_label,
         "demag_backend": demag_backend,
+        "hdiv_order": hdiv_order,
         "ima": ima,
         "iterations": n_iter,
         "residual": residual,
@@ -491,6 +499,8 @@ def build_argparser():
                         choices=["hdiv"],
                         help="Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an "
                              "iron-only .vol, does not support IMA symmetry yet).")
+    parser.add_argument("--hdiv-order", type=int, choices=[1, 2], default=1,
+                        help="HDiv finite-element order: 1=RT1, 2=RT2")
     parser.add_argument("--max-iter", type=int, default=100,
                         help="Max nonlinear iterations")
     parser.add_argument("--tol", type=float, default=1e-3,
@@ -519,6 +529,7 @@ def main():
             relax=args.relax,
             msh_output=args.msh_output,
             demag_backend=args.demag_backend,
+            hdiv_order=args.hdiv_order,
         )
 
     calc_main(run, parser)

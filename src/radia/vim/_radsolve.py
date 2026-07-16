@@ -18,9 +18,10 @@ magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 Element types: HDiv-VIM is RT1/RT2 on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
 radia's soft-iron demag route.  rad.Solve's 'auto' split
 (:func:`is_hdiv_eligible`) dispatches a mesh-backed TET / HEX / WEDGE iron to the HDiv-VIM
-(:func:`radia.vim.Solve`, order=1), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
-reflected-block QuadBlockHex/Wedge(mask); validated 2026-07-04 -- a reduced 1/2,1/4,1/8 model reproduces
-the full model to ~1e-4).  A MIXED / pyramid mesh-backed iron is not yet HDiv-covered and fails loud
+(:func:`radia.vim.Solve`, order=1 or 2), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
+reflected-block QuadBlockHex/Wedge(mask)).  On a genuinely reflection-matched full/reduced mesh, the
+material solve and reconstructed field obey the roundoff contract; ordinary non-matching mesh comparisons
+also contain discretization error.  A MIXED / pyramid mesh-backed iron is not yet HDiv-covered and fails loud
 instead of falling back.  The per-element write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge,
 so all three round-trip ``ObjSetM`` /
 ``rad.Fld``.  If ``image=`` is used, dispatch also materializes the mirror-image polyhedra after the
@@ -99,7 +100,8 @@ def field_solution_for(handle):
     return _FIELD_SOLUTIONS.get(handle)
 
 
-def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, verbose=False):
+def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, verbose=False,
+                        order=1):
     """Build a soft-iron Radia container from an NGSolve ``mesh`` AND register it so
     ``rad.Solve`` can dispatch the FEEC HDiv-VIM backend.
 
@@ -107,7 +109,7 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
 
     TET, HEX, and WEDGE meshes all build a container.  The 'auto' backend routes pure
-    TET / HEX / WEDGE meshes to HDiv-VIM (order=1); mixed / pyramid meshes fail loud until
+    TET / HEX / WEDGE meshes to HDiv-VIM (order=1 or 2); mixed / pyramid meshes fail loud until
     HDiv coverage is added.  The per-element ObjTetrahedron / ObjHexahedron / ObjWedge
     round-trips ``ObjSetM`` + ``rad.Fld``.
     """
@@ -115,6 +117,10 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     if (mu_r is None) == (bh_table is None):
         raise ValueError("vim.MeshSoftIron: give exactly one of mu_r (linear) or bh_table (nonlinear)")
     vertices = _mesh_element_vertices(mesh, material_filter=material_filter)
+    order = int(order)
+    from ._capabilities import validate_hdiv_configuration
+    validate_hdiv_configuration(
+        mesh.dim, {len(element) for element in vertices}, order, mesh.GetCurveOrder())
     handles = netgen_mesh_to_radia(mesh, material={'magnetization': [0.0, 0.0, 0.0]},
                                    combine=False, verbose=verbose, material_filter=material_filter,
                                    allow_hex=True, allow_wedge=True)
@@ -129,13 +135,14 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
         rad.MatApl(h, mat)
     cont = rad.ObjCnt(handles)
     register_container(cont, handles)
-    _DEMAG_REGISTRY[cont] = dict(mesh=mesh, mu_r=mu_r, bh_table=bh_table,
+    _DEMAG_REGISTRY[cont] = dict(mesh=mesh, mu_r=mu_r, bh_table=bh_table, order=order,
                                   handles=list(handles), vertices=vertices, image_handles=[],
                                   field_solution_keys=[], field_container=None, field_top_container=None)
     return cont
 
 
-def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None, verbose=False):
+def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None, verbose=False,
+                       order=1):
     """Build a soft-iron Radia container from a netgen ``.vol`` FILE -- the canonical, correctly
     oriented geometry interchange for the HDiv-VIM demag backend.
 
@@ -143,14 +150,14 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
     ``ngmesh.Save``).  Loading via NGSolve lets netgen own the mesh topology + face orientation,
     which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
     breaks the HDiv surface charge).  Pure TET / HEX / WEDGE irons solve on the registered mesh by
-    default (FEEC HDiv-VIM, order=1); mixed / pyramid mesh-backed irons fail loud until HDiv coverage
+    default (FEEC HDiv-VIM, order=1 or 2); mixed / pyramid mesh-backed irons fail loud until HDiv coverage
     is added.  Exactly one of ``mu_r`` (linear) or ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
     (Caller opens ``with ng.TaskManager():``.)
     """
     import ngsolve as ng
     mesh = ng.Mesh(str(vol_path))
     return soft_iron_from_mesh(mesh, mu_r=mu_r, bh_table=bh_table,
-                               material_filter=material_filter, verbose=verbose)
+                               material_filter=material_filter, verbose=verbose, order=order)
 
 
 def is_registered(top):
@@ -243,7 +250,9 @@ def dispatch(top, *solve_args, **solve_kwargs):
     else:
         H_ext = ngsolve.CoefficientFunction((0.0, 0.0, 0.0))
 
-    res = Solve(mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"], image=image)
+    res = Solve(
+        mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"],
+        image=image, order=reg["order"])
 
     M = res["M"]
     handles = reg["handles"]

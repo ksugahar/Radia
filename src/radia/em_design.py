@@ -72,7 +72,7 @@ class EMDesignSpec:
         elif self.method == METHOD_HDIV:
             fields.update({
                 "vol", "coil_script", "material", "sigma", "mu_r",
-                "bh_file", "hys_file", "ima", "hdiv_solver",
+                "bh_file", "hys_file", "fes_order", "ima", "hdiv_solver",
                 "demag_backend", "max_iter", "tol", "relax",
             })
         elif self.method == METHOD_KELVIN_BENCH:
@@ -148,6 +148,7 @@ class EMDesignSpec:
             calc_script("calc_accel_hdiv.py", panels_dir),
             "--coil-script", self.coil_script,
             "--solver", str(self.hdiv_solver),
+            "--hdiv-order", str(self.fes_order),
             "--demag-backend", self.demag_backend,
             "--max-iter", str(self.max_iter),
             "--tol", str(self.tol),

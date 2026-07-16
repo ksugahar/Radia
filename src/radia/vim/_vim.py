@@ -1247,6 +1247,10 @@ def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far
     cb = _charge_basis_wedge(fes, materialize_mass=materialize_mass)
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n); gli, gwi = _g01(glin_n)
+    field_tri_rule = ng.IntegrationRule(ng.ET.TRIG, 5)
+    field_tri_pts = np.asarray(
+        [(ip.point[0], ip.point[1]) for ip in field_tri_rule], dtype=float)
+    field_tri_w = np.asarray([ip.weight for ip in field_tri_rule], dtype=float)
     G = _rp._ChargeGramHMatrix(
         wedge_cell_nodes=cb["cell_nodes"], face_nodes=cb["face_nodes"], face_type=cb["face_type"],
         n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),
@@ -1254,6 +1258,7 @@ def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far
         charge_expo=_i32_buffer(cb["expo"]),
         sym_tet_pts=_f64_buffer(_SYM5_TET[0]), sym_tet_w=_f64_buffer(_SYM5_TET[1]),
         sym_tri_pts=_f64_buffer(_SYM5_TRI[0]), sym_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        field_tri_pts=_f64_buffer(field_tri_pts), field_tri_w=_f64_buffer(field_tri_w),
         gl_out=_f64_buffer(glo), gw_out=_f64_buffer(gwo),
         gl_in=_f64_buffer(gli), gw_in=_f64_buffer(gwi),
         far_tet_pts=_f64_buffer(_SYM5_TET[0]), far_tet_w=_f64_buffer(_SYM5_TET[1]),
@@ -1299,9 +1304,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
 
-    curve_order (None=flat, or 2=isoparametric P2): when set, build the CURVED charge Gram on the
-    mesh.Curve(curve_order) geometry -- curved charge map B (reference-frame change-of-basis) + the C++ curved
-    Duffy Gram (curve_gauss = the inner Gauss-Legendre pts/dim, 8 for the production rule).  curve_order helps
+    For TET, curve_order=None matches the mesh, 0 forces the flat diagnostic path, and 2 selects the
+    isoparametric-P2 curved charge Gram.  HEX/WEDGE always read the active geometry through GetTrafo, so their
+    flat/curved route is automatic.  The TET curved path uses a reference-frame charge map B and the C++ Duffy
+    Gram (curve_gauss = the inner Gauss-Legendre pts/dim, 8 for the production rule).  Matching by default
+    prevents callers such as the history solver from combining a curved NGSolve mass matrix with a straight
+    TET charge Gram.  curve_order helps
     near-surface FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the demag FACTOR (which is
     curving-insensitive on a sphere, ~3e-5 in the de-risk sweep).  Only P2
     (curve_order=2) is wired; the mesh MUST already be mesh.Curve(2)'d by the caller.
@@ -1320,6 +1328,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     p = int(fes.globalorder)
     _vtypes = _volume_vertex_counts(mesh)
     validate_hdiv_configuration(mesh.dim, _vtypes, p, mesh.GetCurveOrder())
+    if mesh.dim == 3 and _vtypes == {4}:
+        if curve_order is None:
+            mesh_curve_order = int(mesh.GetCurveOrder())
+            curve_order = mesh_curve_order if mesh_curve_order >= 2 else None
+        elif int(curve_order) == 0:
+            curve_order = None
     if curve_order is not None and int(curve_order) > 0 and mesh.GetCurveOrder() < int(curve_order):
         raise ValueError(
             "vim.ChargeGram: curve_order=%d requires mesh geometry order >= %d; got %d."

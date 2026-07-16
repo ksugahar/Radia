@@ -21,7 +21,7 @@ import numpy as np
 import ngsolve as ng
 import radia
 
-from radia.vim import ChargeGram, FieldFromSolution, Solve
+from radia.vim import ChargeGram, FieldFromSolution, MagnetizationSource, Solve
 
 
 def _sha256(path: Path) -> str:
@@ -42,6 +42,20 @@ def _jsonable(value):
     if isinstance(value, (list, tuple)):
         return [_jsonable(item) for item in value]
     return value
+
+
+def _ngsolve_surface_field(source, mesh, points, *, intorder=12):
+    """Independent exterior H from the projected M.n boundary charge."""
+    normal = ng.specialcf.normal(3)
+    position = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    sigma = ng.InnerProduct(source.magnetization, normal)
+    values = []
+    for point in np.asarray(points, dtype=float):
+        delta = ng.CoefficientFunction(tuple(float(value) for value in point)) - position
+        radius = ng.sqrt(ng.InnerProduct(delta, delta))
+        integrand = sigma * delta / (4.0*np.pi*radius**3)
+        values.append(ng.Integrate(integrand, mesh, ng.BND, order=intorder))
+    return np.asarray(values, dtype=float)
 
 
 def _run(path: Path, topology: str, solve: bool) -> dict:
@@ -112,6 +126,25 @@ def _run(path: Path, topology: str, solve: bool) -> dict:
         field = np.asarray(FieldFromSolution(result, points, algorithm="direct"))
         record["field_eval_2_points_s"] = time.perf_counter() - field_t0
         record["field_finite"] = bool(np.isfinite(field).all())
+
+        prescribed = ng.CoefficientFunction((1.0e5, 2.0e5, 3.0e5))
+        with ng.TaskManager():
+            source = MagnetizationSource(
+                mesh, prescribed, order=2, curve_order=2, curve_gauss=8)
+            field_reference = _ngsolve_surface_field(source, mesh, points)
+        source_field = source.Field(points, algorithm="direct")
+        reference_scale = np.maximum(np.linalg.norm(field_reference, axis=1), 1.0)
+        reference_error = np.linalg.norm(source_field-field_reference, axis=1) / reference_scale
+        record.update({
+            "prescribed_source_kind": source.stats["field_evaluator"]["source_kind"],
+            "prescribed_projection_relative_residual": source.stats["projection_relative_residual"],
+            "prescribed_field_ngsolve_reference_relative_error_max": float(reference_error.max()),
+            "prescribed_field_ngsolve_reference_pass": bool(reference_error.max() < 1.0e-5),
+        })
+        if not record["prescribed_field_ngsolve_reference_pass"]:
+            raise RuntimeError(
+                f"{topology} curved RT2 prescribed-source field differs from the independent "
+                f"NGSolve surface integral by {reference_error.max():.3e}")
     return record
 
 
