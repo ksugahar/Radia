@@ -517,6 +517,95 @@ def _moving_mesh_field_transfer_frame_identity_ok(
     )
 
 
+def _segregated_block_variable_scaling_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("segregated_block_residual_variable_scaling_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    block_names = identity.get("block_names")
+    residual_names = identity.get("residual_block_names")
+    scaling_names = identity.get("variable_scaling_block_names")
+    scaling_values = identity.get("variable_scaling_values")
+    residual_scaling_values = identity.get("residual_variable_scaling_values")
+    if not all(
+        isinstance(values, list)
+        for values in (
+            block_names,
+            residual_names,
+            scaling_names,
+            scaling_values,
+            residual_scaling_values,
+        )
+    ):
+        return False
+    try:
+        scales = [float(value) for value in scaling_values]
+        residual_scales = [float(value) for value in residual_scaling_values]
+    except (TypeError, ValueError):
+        return False
+    solve_generation = str(identity.get("solver_generation") or "")
+    sequence_generation = str(identity.get("block_sequence_generation") or "")
+    digest = str(identity.get("variable_scaling_sha256") or "")
+    return (
+        bool(solve_generation)
+        and identity.get("block_residual_solver_generation") == solve_generation
+        and identity.get("variable_scaling_solver_generation") == solve_generation
+        and bool(sequence_generation)
+        and identity.get("residual_block_sequence_generation")
+        == sequence_generation
+        and identity.get("variable_scaling_block_sequence_generation")
+        == sequence_generation
+        and bool(block_names)
+        and len(set(block_names)) == len(block_names)
+        and residual_names == block_names
+        and scaling_names == block_names
+        and len(scales) == len(block_names)
+        and all(math.isfinite(value) and value > 0.0 for value in scales)
+        and residual_scales == scales
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("residual_variable_scaling_sha256") == digest
+    )
+
+
+def _modal_port_power_surface_orientation_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "modal_port_power_normalization_surface_orientation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    mode_generation = str(identity.get("port_mode_generation") or "")
+    surface_generation = str(identity.get("integration_surface_mesh_generation") or "")
+    surface_digest = str(identity.get("surface_triangle_sha256") or "")
+    return (
+        bool(mode_generation)
+        and identity.get("modal_amplitude_port_mode_generation") == mode_generation
+        and identity.get("power_normalization_port_mode_generation")
+        == mode_generation
+        and bool(surface_generation)
+        and identity.get("power_normalization_surface_mesh_generation")
+        == surface_generation
+        and identity.get("surface_orientation_mesh_generation")
+        == surface_generation
+        and identity.get("power_normalization") == "unit_forward_power"
+        and identity.get("modal_amplitude_normalization")
+        == "unit_forward_power"
+        and identity.get("surface_orientation") == "outward_from_domain"
+        and identity.get("power_flux_normal_sign") == 1
+        and len(surface_digest) == 64
+        and all(character in "0123456789abcdef" for character in surface_digest)
+        and identity.get("power_normalization_surface_triangle_sha256")
+        == surface_digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -649,6 +738,12 @@ def rotational_eddy_brake_energy_gate(
     )
     moving_mesh_field_transfer_frame_identity_ok = (
         _moving_mesh_field_transfer_frame_identity_ok(summary)
+    )
+    segregated_block_variable_scaling_identity_ok = (
+        _segregated_block_variable_scaling_identity_ok(summary)
+    )
+    modal_port_power_surface_orientation_identity_ok = (
+        _modal_port_power_surface_orientation_identity_ok(summary)
     )
     all_cardinalities = True
     all_times_increase = True
@@ -868,6 +963,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "moving_mesh_field_transfer_uses_one_coordinate_frame": (
             moving_mesh_field_transfer_frame_identity_ok
+        ),
+        "segregated_block_residuals_use_current_variable_scaling": (
+            segregated_block_variable_scaling_identity_ok
+        ),
+        "modal_port_power_uses_current_surface_orientation": (
+            modal_port_power_surface_orientation_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
