@@ -159,3 +159,36 @@ def test_generalization_v6_public(case_id):
     else:
         bad["crosscheck"]["max_regularized_objective_relative_error"] = 1.0e-2
     assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_alpha_path_row_permutation",
+        "v7_public_gradient_false_pass_tiny_step",
+    ],
+)
+def test_generalization_v7_public(case_id):
+    bad = copy.deepcopy(_summary())
+    row_ids = [f"alpha-row-{index}" for index in range(6)]
+    bad["path"].update(
+        {
+            "alpha_row_ids": row_ids,
+            "solution_row_ids": row_ids.copy(),
+            "residual_row_ids": row_ids.copy(),
+            "gradient_check_step_sizes": [1.0e-6] * 6,
+            "gradient_check_parameter_scales": [1.0] * 6,
+            "gradient_check_objective_pair_deltas": [1.0e-6] * 6,
+        }
+    )
+    if case_id == "v7_public_alpha_path_row_permutation":
+        bad["path"]["solution_row_ids"][2:4] = reversed(
+            bad["path"]["solution_row_ids"][2:4]
+        )
+        bad["path"]["residual_row_ids"][2:4] = reversed(
+            bad["path"]["residual_row_ids"][2:4]
+        )
+    else:
+        bad["path"]["gradient_check_step_sizes"][3] = 1.0e-320
+        bad["path"]["gradient_check_objective_pair_deltas"][3] = 0.0
+    assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"

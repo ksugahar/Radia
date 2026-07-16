@@ -117,6 +117,10 @@ def regularized_trace_inverse_path_gate(
         right + tolerances["monotonicity_tolerance"] >= left
         for left, right in zip(weighted_residuals, weighted_residuals[1:])
     )
+    row_identity_ok = _optional_row_identity_is_aligned(path, len(alphas))
+    gradient_resolution_ok = _optional_gradient_check_is_resolved(
+        path, len(alphas)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -147,6 +151,8 @@ def regularized_trace_inverse_path_gate(
         "finite_difference_gradients_close": (
             max(gradient_errors) <= tolerances["max_gradient_check_absolute_error"]
         ),
+        "alpha_path_row_identity_is_aligned": row_identity_ok,
+        "finite_difference_steps_are_numerically_resolved": gradient_resolution_ok,
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
             _integer(reported_lcurve, "selected_index") == lcurve["selected_index"]
@@ -233,6 +239,58 @@ def _finite_float(parent: Mapping[str, Any], key: str) -> float:
     if not math.isfinite(value):
         raise ValueError(f"{key} must be finite")
     return value
+
+
+def _optional_row_identity_is_aligned(
+    path: Mapping[str, Any], expected_length: int
+) -> bool:
+    names = ("alpha_row_ids", "solution_row_ids", "residual_row_ids")
+    if not any(name in path for name in names):
+        return True
+    rows = []
+    for name in names:
+        value = path.get(name)
+        if (
+            not isinstance(value, Sequence)
+            or isinstance(value, (str, bytes))
+            or len(value) != expected_length
+        ):
+            return False
+        row = [str(item).strip() for item in value]
+        if not all(row) or len(set(row)) != expected_length:
+            return False
+        rows.append(row)
+    return rows[0] == rows[1] == rows[2]
+
+
+def _optional_gradient_check_is_resolved(
+    path: Mapping[str, Any], expected_length: int
+) -> bool:
+    names = (
+        "gradient_check_step_sizes",
+        "gradient_check_parameter_scales",
+        "gradient_check_objective_pair_deltas",
+    )
+    if not any(name in path for name in names):
+        return True
+    try:
+        steps, scales, objective_deltas = (
+            _float_list(path, name) for name in names
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    if any(
+        len(row) != expected_length
+        for row in (steps, scales, objective_deltas)
+    ):
+        return False
+    resolution = math.sqrt(math.ulp(1.0))
+    return all(
+        scale > 0.0
+        and step >= resolution * max(scale, 1.0)
+        and abs(objective_delta) > 0.0
+        for step, scale, objective_delta in zip(steps, scales, objective_deltas)
+    )
 
 
 def _integer(parent: Mapping[str, Any], key: str) -> int:
