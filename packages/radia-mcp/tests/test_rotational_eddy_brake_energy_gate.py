@@ -424,6 +424,38 @@ def _with_v13_transform_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v14_mode_ale_identity(summary: dict) -> dict:
+    summary = _with_v13_transform_identity(summary)
+    summary["eigenmode_mass_inner_product_identity"] = {
+        "eigensolve_generation": "eigensolve-46",
+        "mode_vector_generation": "eigensolve-46",
+        "mode_mesh_generation": "mesh-46",
+        "mass_matrix_mesh_generation": "mesh-46",
+        "eigensolve_mass_matrix_generation": "mass-matrix-46",
+        "normalization_mass_matrix_generation": "mass-matrix-46",
+        "normalization_kind": "mass_inner_product",
+        "reference_normalization_kind": "mass_inner_product",
+        "mode_vector_sha256": "a" * 64,
+        "normalized_mode_vector_sha256": "a" * 64,
+    }
+    summary["ale_material_derivative_time_level_identity"] = {
+        "ale_solve_generation": "ale-solve-46",
+        "field_solve_generation": "ale-solve-46",
+        "mesh_velocity_solve_generation": "ale-solve-46",
+        "accepted_time_level_generation": "time-level-46",
+        "field_time_level_generation": "time-level-46",
+        "mesh_velocity_time_level_generation": "time-level-46",
+        "material_derivative_time_level_generation": "time-level-46",
+        "accepted_time_index": 128,
+        "field_time_index": 128,
+        "mesh_velocity_time_index": 128,
+        "material_derivative_time_index": 128,
+        "accepted_time_grid_sha256": "b" * 64,
+        "mesh_velocity_time_grid_sha256": "b" * 64,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -537,3 +569,41 @@ def test_v13_public_time_harmonic_complex_field_phasor_sign_mismatch() -> None:
     result = gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"]["harmonic_fields_share_one_complex_time_convention"] is False
+
+
+def test_v14_public_eigenmode_mass_inner_product_normalization_generation_mismatch() -> None:
+    summary = _with_v14_mode_ale_identity(copy.deepcopy(_summary()))
+    summary["eigenmode_mass_inner_product_identity"].update(
+        {
+            "mass_matrix_mesh_generation": "mesh-45",
+            "normalization_mass_matrix_generation": "mass-matrix-45",
+            "reference_normalization_kind": "euclidean_l2",
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "eigenmodes_use_current_mass_inner_product_normalization"
+        ]
+        is False
+    )
+
+
+def test_v14_public_ale_mesh_velocity_material_time_level_mismatch() -> None:
+    summary = _with_v14_mode_ale_identity(copy.deepcopy(_summary()))
+    summary["ale_material_derivative_time_level_identity"].update(
+        {
+            "mesh_velocity_time_level_generation": "time-level-45",
+            "mesh_velocity_time_index": 127,
+            "mesh_velocity_time_grid_sha256": "e" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "ale_material_derivative_uses_current_mesh_velocity_time_level"
+        ]
+        is False
+    )

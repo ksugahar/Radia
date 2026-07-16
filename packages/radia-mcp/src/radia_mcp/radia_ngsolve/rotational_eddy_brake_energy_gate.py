@@ -331,6 +331,74 @@ def _time_harmonic_phasor_convention_identity_ok(summary: dict[str, Any]) -> boo
     )
 
 
+def _eigenmode_mass_inner_product_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get("eigenmode_mass_inner_product_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    eigensolve_generation = str(identity.get("eigensolve_generation") or "")
+    mesh_generation = str(identity.get("mode_mesh_generation") or "")
+    mass_generation = str(
+        identity.get("eigensolve_mass_matrix_generation") or ""
+    )
+    mode_digest = str(identity.get("mode_vector_sha256") or "")
+    return (
+        bool(eigensolve_generation)
+        and identity.get("mode_vector_generation") == eigensolve_generation
+        and bool(mesh_generation)
+        and identity.get("mass_matrix_mesh_generation") == mesh_generation
+        and bool(mass_generation)
+        and identity.get("normalization_mass_matrix_generation")
+        == mass_generation
+        and identity.get("normalization_kind") == "mass_inner_product"
+        and identity.get("reference_normalization_kind")
+        == "mass_inner_product"
+        and len(mode_digest) == 64
+        and all(character in "0123456789abcdef" for character in mode_digest)
+        and identity.get("normalized_mode_vector_sha256") == mode_digest
+    )
+
+
+def _ale_material_derivative_time_level_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("ale_material_derivative_time_level_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    solve_generation = str(identity.get("ale_solve_generation") or "")
+    time_generation = str(
+        identity.get("accepted_time_level_generation") or ""
+    )
+    time_digest = str(identity.get("accepted_time_grid_sha256") or "")
+    try:
+        accepted_index = int(identity.get("accepted_time_index"))
+        field_index = int(identity.get("field_time_index"))
+        velocity_index = int(identity.get("mesh_velocity_time_index"))
+        derivative_index = int(identity.get("material_derivative_time_index"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(solve_generation)
+        and identity.get("field_solve_generation") == solve_generation
+        and identity.get("mesh_velocity_solve_generation") == solve_generation
+        and bool(time_generation)
+        and identity.get("field_time_level_generation") == time_generation
+        and identity.get("mesh_velocity_time_level_generation") == time_generation
+        and identity.get("material_derivative_time_level_generation")
+        == time_generation
+        and accepted_index >= 0
+        and field_index == accepted_index
+        and velocity_index == accepted_index
+        and derivative_index == accepted_index
+        and len(time_digest) == 64
+        and all(character in "0123456789abcdef" for character in time_digest)
+        and identity.get("mesh_velocity_time_grid_sha256") == time_digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -445,6 +513,12 @@ def rotational_eddy_brake_energy_gate(
     )
     time_harmonic_phasor_convention_identity_ok = (
         _time_harmonic_phasor_convention_identity_ok(summary)
+    )
+    eigenmode_mass_inner_product_identity_ok = (
+        _eigenmode_mass_inner_product_identity_ok(summary)
+    )
+    ale_material_derivative_time_level_identity_ok = (
+        _ale_material_derivative_time_level_identity_ok(summary)
     )
     all_cardinalities = True
     all_times_increase = True
@@ -646,6 +720,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "harmonic_fields_share_one_complex_time_convention": (
             time_harmonic_phasor_convention_identity_ok
+        ),
+        "eigenmodes_use_current_mass_inner_product_normalization": (
+            eigenmode_mass_inner_product_identity_ok
+        ),
+        "ale_material_derivative_uses_current_mesh_velocity_time_level": (
+            ale_material_derivative_time_level_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
