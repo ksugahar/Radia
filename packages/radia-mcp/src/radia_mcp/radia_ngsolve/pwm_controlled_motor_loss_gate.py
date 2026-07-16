@@ -115,6 +115,21 @@ def pwm_controlled_motor_loss_gate(
         "time_series.power_components_w",
         rows=count,
     )
+    component_time_value = time_series.get("component_time_s")
+    component_time_axes: list[list[float]] | None = None
+    component_time_alignment_error = 0.0
+    if component_time_value is not None:
+        component_time_axes = _matrix(
+            component_time_value,
+            "time_series.component_time_s",
+            rows=len(power_components[0]),
+            columns=count,
+        )
+        component_time_alignment_error = max(
+            abs(component_time_axes[component][index] - time_s[index])
+            for component in range(len(component_time_axes))
+            for index in range(count)
+        )
 
     frequencies = _vector(
         loss_spectrum.get("frequency_hz"),
@@ -248,6 +263,9 @@ def pwm_controlled_motor_loss_gate(
         <= max_angle_speed_integral_relative_error,
         "circuit_power_total_matches_component_sum": power_sum_relative
         <= max_power_sum_relative_error,
+        "power_component_time_axes_match_common_axis_knotwise": (
+            component_time_axes is None or component_time_alignment_error <= 1.0e-12
+        ),
         "loss_total_columns_match_component_sums": loss_total_residual
         <= max_loss_identity_relative_error,
         "eddy_aggregate_matches_harmonic_bin_sum": eddy_reconstruction
@@ -279,6 +297,7 @@ def pwm_controlled_motor_loss_gate(
             "tail_control_tracking_rms_relative_errors": tracking_errors,
             "angle_speed_integral_relative_error": angle_integral_relative,
             "circuit_power_sum_global_relative_error": power_sum_relative,
+            "power_component_time_axis_maximum_absolute_error_s": component_time_alignment_error,
             "loss_total_column_relative_error": loss_total_residual,
             "eddy_harmonic_reconstruction_relative_error": eddy_reconstruction,
             "aggregate_iron_decomposition_relative_error": aggregate_iron_decomposition,
@@ -290,6 +309,8 @@ def pwm_controlled_motor_loss_gate(
         "lesson": (
             "Gate PWM motor results with three-phase KCL, tail current-command tracking, "
             "integrated speed/angle, and power-column closure. In harmonic-loss tables, "
+            "bind every time-domain power/loss component to the common time axis knot by knot; "
+            "matching only an integrated loss cannot prove sample identity. "
             "treat row zero as the aggregate summary: eddy aggregate reconstructs from "
             "positive-frequency bins, while hysteresis and combined iron loss can remain "
             "aggregate-only. Exclude R/L ratios when their denominator current is near zero."

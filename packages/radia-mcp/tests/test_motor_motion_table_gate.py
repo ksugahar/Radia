@@ -36,3 +36,13 @@ def test_motion_table_mcp_dispatches_json():
     ))
     assert result["status"] == "ok"
     assert result["policy"] == "motion_table_coordinate_gate_v1"
+
+
+def test_generalization_v7_public_electrical_mechanical_angle_alias():
+    result = motion_table_coordinate_gate(
+        [0.0, 0.008], [[0, 0, 0], [0, 0, 0]],
+        [0.0, 0.004, 0.008], [[0, 0, 0], [0, 0, 180], [0, 0, 360]],
+        coordinate_frame_id="stator_electrical_angle_deg_interpreted_as_rotor_mechanical",
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["rotation_frame_is_not_an_electrical_angle_alias"] is False
