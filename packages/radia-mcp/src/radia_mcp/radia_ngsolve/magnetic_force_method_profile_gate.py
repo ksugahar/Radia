@@ -115,6 +115,8 @@ def magnetic_force_method_profile_gate(
     demag_recoil_temperature_identity_ok = True
     bem_demag_surface_normal_generation_identity_ok = True
     cogging_torque_periodic_sector_symmetry_identity_ok = True
+    bem_self_term_solid_angle_orientation_identity_ok = True
+    demag_energy_force_displacement_length_unit_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -128,6 +130,8 @@ def magnetic_force_method_profile_gate(
         demag_recoil_temperature_identity_ok = False
         bem_demag_surface_normal_generation_identity_ok = False
         cogging_torque_periodic_sector_symmetry_identity_ok = False
+        bem_self_term_solid_angle_orientation_identity_ok = False
+        demag_energy_force_displacement_length_unit_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -455,6 +459,101 @@ def magnetic_force_method_profile_gate(
                 == topology_generation
             )
 
+        self_term_value = identity_value.get(
+            "bem_self_term_solid_angle_orientation_identity"
+        )
+        if self_term_value is not None:
+            self_term = self_term_value if isinstance(self_term_value, Mapping) else {}
+            mesh_generation = str(
+                self_term.get("active_surface_mesh_generation", "")
+            )
+            orientation = str(self_term.get("panel_orientation", ""))
+            sign_convention = str(
+                self_term.get("solid_angle_sign_convention", "")
+            )
+            orientation_digest = str(
+                self_term.get("panel_orientation_sha256", "")
+            ).lower()
+            bem_self_term_solid_angle_orientation_identity_ok = (
+                bool(mesh_generation)
+                and self_term.get("panel_generation") == mesh_generation
+                and self_term.get("panel_orientation_generation")
+                == mesh_generation
+                and self_term.get("self_term_orientation_generation")
+                == mesh_generation
+                and orientation in {"outward", "inward"}
+                and self_term.get("self_term_solid_angle_orientation")
+                == orientation
+                and sign_convention in {"outward_positive", "inward_positive"}
+                and self_term.get("self_term_sign_convention") == sign_convention
+                and len(orientation_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in orientation_digest
+                )
+                and self_term.get("self_term_orientation_sha256")
+                == orientation_digest
+            )
+
+        displacement_unit_value = identity_value.get(
+            "demag_energy_force_displacement_length_unit_identity"
+        )
+        if displacement_unit_value is not None:
+            displacement_unit = (
+                displacement_unit_value
+                if isinstance(displacement_unit_value, Mapping)
+                else {}
+            )
+            length_units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            numeric_unit = str(
+                displacement_unit.get("displacement_length_unit", "")
+            )
+            derivative_unit = str(
+                displacement_unit.get("force_derivative_length_unit", "")
+            )
+            try:
+                numeric_scale = float(
+                    displacement_unit.get("displacement_scale_to_m")
+                )
+                derivative_scale = float(
+                    displacement_unit.get("force_derivative_scale_to_m")
+                )
+            except (TypeError, ValueError):
+                numeric_scale = derivative_scale = math.nan
+            displacement_generation = str(
+                displacement_unit.get("displacement_generation", "")
+            )
+            grid_digest = str(
+                displacement_unit.get("displacement_grid_sha256", "")
+            ).lower()
+            expected_scale = length_units.get(numeric_unit)
+            demag_energy_force_displacement_length_unit_identity_ok = (
+                bool(str(displacement_unit.get("energy_generation", "")))
+                and bool(displacement_generation)
+                and displacement_unit.get(
+                    "force_derivative_displacement_generation"
+                )
+                == displacement_generation
+                and displacement_unit.get("energy_unit") == "J"
+                and displacement_unit.get("force_unit") == "N"
+                and expected_scale is not None
+                and derivative_unit == numeric_unit
+                and math.isclose(
+                    numeric_scale, expected_scale, rel_tol=0.0, abs_tol=0.0
+                )
+                and math.isclose(
+                    derivative_scale, numeric_scale, rel_tol=0.0, abs_tol=0.0
+                )
+                and len(grid_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in grid_digest
+                )
+                and displacement_unit.get("force_derivative_grid_sha256")
+                == grid_digest
+                and displacement_unit.get("force_from_energy_convention")
+                == "negative_energy_gradient"
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -548,6 +647,12 @@ def magnetic_force_method_profile_gate(
         ),
         "cogging_torque_symmetry_multiplier_matches_periodic_sector": (
             cogging_torque_periodic_sector_symmetry_identity_ok
+        ),
+        "bem_self_term_solid_angle_matches_panel_orientation_generation": (
+            bem_self_term_solid_angle_orientation_identity_ok
+        ),
+        "demag_energy_force_derivative_uses_one_displacement_length_unit": (
+            demag_energy_force_displacement_length_unit_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]

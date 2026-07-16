@@ -131,6 +131,32 @@ def _with_artifact_identity(summary: dict) -> dict:
             "torque_result_topology_generation": "periodic-topology-15",
             "multiplier_topology_generation": "periodic-topology-15",
         },
+        "bem_self_term_solid_angle_orientation_identity": {
+            "active_surface_mesh_generation": "surface-mesh-16",
+            "panel_generation": "surface-mesh-16",
+            "panel_orientation_generation": "surface-mesh-16",
+            "self_term_orientation_generation": "surface-mesh-16",
+            "panel_orientation": "outward",
+            "self_term_solid_angle_orientation": "outward",
+            "solid_angle_sign_convention": "outward_positive",
+            "self_term_sign_convention": "outward_positive",
+            "panel_orientation_sha256": "a" * 64,
+            "self_term_orientation_sha256": "a" * 64,
+        },
+        "demag_energy_force_displacement_length_unit_identity": {
+            "energy_generation": "demag-energy-16",
+            "displacement_generation": "displacement-grid-16",
+            "force_derivative_displacement_generation": "displacement-grid-16",
+            "energy_unit": "J",
+            "force_unit": "N",
+            "displacement_length_unit": "m",
+            "displacement_scale_to_m": 1.0,
+            "force_derivative_length_unit": "m",
+            "force_derivative_scale_to_m": 1.0,
+            "displacement_grid_sha256": "b" * 64,
+            "force_derivative_grid_sha256": "b" * 64,
+            "force_from_energy_convention": "negative_energy_gradient",
+        },
     }
     return summary
 
@@ -460,6 +486,49 @@ def test_v13_public_cogging_torque_periodic_sector_symmetry_multiplier_mismatch(
     assert (
         result["checks"][
             "cogging_torque_symmetry_multiplier_matches_periodic_sector"
+        ]
+        is False
+    )
+
+
+def test_v14_public_bem_self_term_solid_angle_orientation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "bem_self_term_solid_angle_orientation_identity"
+    ].update(
+        {
+            "self_term_solid_angle_orientation": "inward",
+            "self_term_sign_convention": "inward_positive",
+            "self_term_orientation_generation": "surface-mesh-15",
+            "self_term_orientation_sha256": "d" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "bem_self_term_solid_angle_matches_panel_orientation_generation"
+        ]
+        is False
+    )
+
+
+def test_v14_public_demag_energy_force_displacement_length_unit_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "demag_energy_force_displacement_length_unit_identity"
+    ].update(
+        {
+            "force_derivative_length_unit": "mm",
+            "force_derivative_scale_to_m": 1.0e-3,
+            "force_derivative_displacement_generation": "displacement-grid-15",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "demag_energy_force_derivative_uses_one_displacement_length_unit"
         ]
         is False
     )
