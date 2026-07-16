@@ -103,6 +103,55 @@ def _artifact_generations_ok(rows: list[dict[str, Any]]) -> bool:
     return True
 
 
+def _artifact_coordinate_frames_ok(rows: list[dict[str, Any]]) -> bool:
+    evidence_present = ["artifact_coordinate_frames" in row for row in rows]
+    if not any(evidence_present):
+        return True
+    if not all(evidence_present):
+        return False
+    observed: set[str] = set()
+    base_keys = {
+        "time_s",
+        "angular_velocity_rad_s",
+        "braking_torque_nm",
+        "joule_loss_w",
+    }
+    for row in rows:
+        frames = row.get("artifact_coordinate_frames")
+        if not isinstance(frames, dict):
+            return False
+        required = set(base_keys)
+        if "magnetic_energy_j" in row or "field_energy_time_s" in row:
+            required.update({"magnetic_energy_j", "field_energy_time_s"})
+        values = [frames.get(name) for name in required]
+        if not all(isinstance(value, str) and value for value in values):
+            return False
+        observed.update(values)
+    return len(observed) == 1
+
+
+def _convergence_provenance_ok(summary: dict[str, Any]) -> bool:
+    if "convergence_provenance" not in summary:
+        return True
+    provenance = summary.get("convergence_provenance")
+    if not isinstance(provenance, dict):
+        return False
+    try:
+        residual = float(provenance.get("terminal_relative_residual"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(provenance.get("solution_generation"))
+        and bool(provenance.get("result_iteration_generation"))
+        and provenance.get("convergence_table_iteration_generation")
+        == provenance.get("result_iteration_generation")
+        and provenance.get("terminal_state") == "converged"
+        and math.isfinite(residual)
+        and residual >= 0.0
+        and residual <= 1.0e-6
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -198,6 +247,10 @@ def rotational_eddy_brake_energy_gate(
 
     parsed = [_parse_replay(row) for row in replays]
     artifact_generations_ok = _artifact_generations_ok([*replays, energy_row])
+    artifact_coordinate_frames_ok = _artifact_coordinate_frames_ok(
+        [*replays, energy_row]
+    )
+    convergence_provenance_ok = _convergence_provenance_ok(summary)
     all_cardinalities = True
     all_times_increase = True
     nonnegative_dissipation = True
@@ -375,6 +428,8 @@ def rotational_eddy_brake_energy_gate(
         "fresh_replay_fields_match": max(replay_field_errors, default=math.inf)
         <= float(maximum_replay_error_over_span),
         "artifact_series_share_their_solve_generation": artifact_generations_ok,
+        "artifact_series_share_one_coordinate_frame": artifact_coordinate_frames_ok,
+        "convergence_table_matches_result_iteration": convergence_provenance_ok,
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
         and field_time_alignment,

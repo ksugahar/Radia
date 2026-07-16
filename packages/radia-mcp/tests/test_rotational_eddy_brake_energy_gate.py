@@ -21,6 +21,7 @@ def _summary() -> dict:
     torque = [inertia * rate * value for value in omega]
     joule = [force * speed for force, speed in zip(torque, omega, strict=True)]
     generation = "solve-generation-42"
+    frame = "laboratory-frame-generation-7"
 
     def replay(label: str) -> dict:
         return {
@@ -35,6 +36,12 @@ def _summary() -> dict:
                 "angular_velocity_rad_s": generation,
                 "braking_torque_nm": generation,
                 "joule_loss_w": generation,
+            },
+            "artifact_coordinate_frames": {
+                "time_s": frame,
+                "angular_velocity_rad_s": frame,
+                "braking_torque_nm": frame,
+                "joule_loss_w": frame,
             },
         }
 
@@ -83,6 +90,14 @@ def _summary() -> dict:
                 "field_energy_time_s": generation,
                 "magnetic_energy_j": generation,
             },
+            "artifact_coordinate_frames": {
+                "time_s": frame,
+                "angular_velocity_rad_s": frame,
+                "braking_torque_nm": frame,
+                "joule_loss_w": frame,
+                "field_energy_time_s": frame,
+                "magnetic_energy_j": frame,
+            },
             "restart_boundaries": [
                 {
                     "left_index": boundary,
@@ -95,6 +110,13 @@ def _summary() -> dict:
                     "accumulated_joule_offset_after_j": accumulated_joule,
                 }
             ],
+        },
+        "convergence_provenance": {
+            "solution_generation": "solution-generation-42",
+            "result_iteration_generation": "nonlinear-iteration-8",
+            "convergence_table_iteration_generation": "nonlinear-iteration-8",
+            "terminal_state": "converged",
+            "terminal_relative_residual": 2.0e-9,
         },
         "timing_breakdown_s": {
             "attach": 0.1,
@@ -283,6 +305,30 @@ def test_generalization_v8_public(case_id: str) -> None:
             "joule_loss_w"
         ] = "solve-generation-41"
         expected_check = "artifact_series_share_their_solve_generation"
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected_check] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_public_torque_energy_coordinate_frame_mismatch",
+        "v9_public_convergence_table_prior_nonlinear_iteration",
+    ],
+)
+def test_generalization_v9_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v9_public_torque_energy_coordinate_frame_mismatch":
+        summary["energy_replay"]["artifact_coordinate_frames"][
+            "braking_torque_nm"
+        ] = "rotor-local-frame-generation-7"
+        expected_check = "artifact_series_share_one_coordinate_frame"
+    else:
+        summary["convergence_provenance"][
+            "convergence_table_iteration_generation"
+        ] = "nonlinear-iteration-7"
+        expected_check = "convergence_table_matches_result_iteration"
     result = gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"][expected_check] is False
