@@ -5,6 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.16 - Genus-aware BEM-SIBC induction heating
+
+Released 2026-07-17.
+
+- Fixed workpiece surface winding before scalar BIE assembly, including
+  genus-1 inner walls where centroid-based orientation is invalid.
+- Added Euler/genus diagnostics and a one-DOF cohomology extension for the
+  flux-linked shorted-turn current, locked against the analytic ring circuit.
+- Added the surface-Poisson incident-potential reconstruction with a fail-loud
+  tangential-gradient residual gate and exact batched incident-field inputs.
+- Corrected strong-coupling terminal-current scaling and routed volume coil
+  meshes through the validated surface extractor before HDivSurface assembly.
+- Exposed the loop-current and incident-potential controls through the IH
+  notebook workbench, command builder, and generated panel registry.
+
 ## 4.95.15 - Complete RT2 HDiv-VIM production paths
 
 Released 2026-07-16.
