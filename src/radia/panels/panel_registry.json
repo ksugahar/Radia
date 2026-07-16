@@ -765,6 +765,19 @@
           "help": "Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an iron-only .vol, does not support IMA symmetry yet)."
         },
         {
+          "cli": "--hdiv-order",
+          "name": "hdiv_order",
+          "type": "int",
+          "choices": [
+            1,
+            2
+          ],
+          "default": 1,
+          "help": "HDiv finite-element order: 1=RT1, 2=RT2",
+          "ja": "HDiv 次数",
+          "physics": "1=RT1, 2=RT2"
+        },
+        {
           "cli": "--max-iter",
           "name": "max_iter",
           "type": "int",
@@ -1951,6 +1964,19 @@
           "help": "charge-Gram admissibility parameter",
           "ja": "H行列許容係数",
           "physics": "Charge Gram H行列の幾何学的admissibility係数"
+        },
+        {
+          "cli": "--order",
+          "name": "order",
+          "type": "int",
+          "choices": [
+            1,
+            2
+          ],
+          "default": 1,
+          "help": "HDiv order: RT1 or RT2",
+          "ja": "HDiv 次数",
+          "physics": "1=RT1, 2=RT2"
         }
       ]
     }
