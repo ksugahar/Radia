@@ -153,6 +153,16 @@ class IHDesignSpec:
     # not a panel knob.
     wp_loop_dof: str | bool = "auto"
 
+    # calc_inductance weak-path workpiece extensions (genus-1 ring/tube
+    # workpieces, Takahashi-validated 2026-07-17): the solved shorted-turn
+    # loop DOF (--wp-loop-dof; needs the "Dense LU (small)" solver preset
+    # = intree-dense backend, linear SIBC, order 1) and the surface-Poisson
+    # incident potential (--wp-phi-inc poisson; wall-free, ~25x faster).
+    # Invalid combinations are reported by calc_inductance's fail-fast
+    # guards -- the panel passes the flags through verbatim.
+    wp_loop_dof: bool = False
+    wp_phi_inc: str = "path"
+
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
     esim_max_iter: int = 30
