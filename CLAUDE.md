@@ -1526,6 +1526,24 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### NGSolve-Native Discretization Policy (2026-07-16)
+
+**POLICY**: Radia owns the missing electromagnetic method; NGSolve owns finite-
+element plumbing.  Treat NGSolve as the source of truth for element orientation,
+local/global DOF transforms, Piola mappings, curved geometry, quadrature,
+weak-form assembly, and `CoefficientFunction` / `GridFunction` evaluation.
+
+- Prefer NGSolve spaces, forms, mapped evaluations, and grid functions over a
+  Python reconstruction of physical high-order basis values.
+- Never assume `CalcShape` plus `GetDofNrs` is the complete physical transform
+  for HDiv/HCurl HEX, WEDGE, curved, or high-order elements; NGSolve may apply
+  additional local DOF orientation transforms.
+- A Radia C++ reference-element kernel is appropriate when it implements the
+  new physical method, but it must take NGSolve-owned geometry/space data and be
+  checked independently against an NGSolve weak form or grid-function value.
+- Python FE callers own `with ngsolve.TaskManager():`; C++ kernels follow the
+  TaskManager self-wrap policy below.
+
 ### Reduce Proprietary API Surface — Plumbing to netgen/ngsolve, Methods Stay (2026-06-19)
 
 **POLICY**: Extend "Complement NGSolve" to the **API surface itself**:

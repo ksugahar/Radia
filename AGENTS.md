@@ -94,6 +94,28 @@ one generic GUI.
   knowledge, support autonomous validation / self-learning, and should reflect
   the same layer boundaries as the source tree.
 
+### NGSolve-Native Discretization Policy (2026-07-16)
+
+**POLICY**: Let NGSolve own finite-element plumbing.  Radia supplies the
+electromagnetic method, open-boundary operator, constitutive model, and coupling;
+NGSolve remains the source of truth for element orientation, local/global DOF
+transforms, Piola maps, curved geometry, quadrature, weak-form assembly, and
+`CoefficientFunction` / `GridFunction` evaluation.
+
+- Build FE loads and couplings with NGSolve spaces, forms, grid functions, and
+  mapped evaluation APIs.  Do not reconstruct high-order physical basis values
+  from `CalcShape` and `GetDofNrs` in Python when NGSolve can evaluate or assemble
+  the same quantity.
+- This is especially strict for HDiv/HCurl HEX, WEDGE, curved, and high-order
+  elements: their orientation and element transformations include NGSolve-owned
+  local DOF transforms that are not a public Python reimplementation contract.
+- Hand-derived reference-element algebra is allowed inside a tested Radia C++
+  kernel when it is the new physical method itself.  Its Python boundary must
+  still consume NGSolve meshes/spaces and be cross-checked against an independent
+  NGSolve weak-form or `GridFunction` evaluation.
+- Keep the caller-owned `with ngsolve.TaskManager():` convention for Python FE
+  work; C++ kernels use the repository's TaskManager self-wrap policy.
+
 ### MATLAB Agentic Stack Policy (2026-07-06)
 
 **POLICY**: Use MathWorks' official MATLAB MCP Server as the MATLAB execution

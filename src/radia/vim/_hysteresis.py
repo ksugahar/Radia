@@ -1,7 +1,8 @@
-"""B-input hysteresis stepping for the HDiv-VIM (RT1) charge-Gram demag solve.
+"""B-input hysteresis stepping for the HDiv-VIM charge-Gram demag solve.
 
 Quasi-static hysteresis = MANY solves on ONE fixed geometry with an evolving
-per-element material state.  The charge Gram G (and hence the demag operator
+material state.  RT1 uses one state per element; RT2 uses physical volume
+quadrature points.  The charge Gram G (and hence the demag operator
 N = B^T G B) is chi-free geometry, so the HACApK H-matrix is built ONCE and
 every step / nonlinear iteration reuses it -- the per-step cost is the W-CG
 solve chain only.  This module wires B-input hysteresis models into that
@@ -10,7 +11,7 @@ vector Stop model whose shape tables are monotone, whose state lies in fixed
 balls |s_k| <= eta_k, and whose batched trial/commit kernels run in C++.
 
 Material protocol (duck-typed, FUNCTIONAL, and BATCHED -- one call evaluates
-every element, so numpy research models vectorize across elements):
+every constitutive state point):
 
     state0()             -> flat committed state (S,) for ONE evaluation point
     forward(B, states)   -> H (n,3) from flux densities B (n,3) and committed
@@ -23,8 +24,8 @@ every element, so numpy research models vectorize across elements):
                             the Hantila contraction requirement derives from
                             this bound)
 
-The B-input constitutive relation is inverted POINTWISE per element (batched
-across elements): solve
+The B-input constitutive relation is inverted POINTWISE at the constitutive
+state points: solve
 
     B = mu0 * (forward(B, states) + M)
 
@@ -39,10 +40,11 @@ solves the SPD system
 
     ( W(nu0) + N ) m^{k+1} = M_mass h_ext + INT (nu0 M^k - H_mat(M^k)) . v dx
 
-whose LHS is CONSTANT across iterations AND steps (assembled once).  The
-material law is evaluated as a ONE POINT PER ELEMENT closure: M^k and
-H_mat(M^k) are the ELEMENT-AVERAGED fields (elementwise constant), so the
-fixed point satisfies the constitutive equation in the element-averaged sense
+whose LHS is CONSTANT across iterations AND steps (assembled once).  RT1 uses
+the historical ONE POINT PER ELEMENT closure.  RT2 evaluates the material at
+volume quadrature points and returns it through the matching weighted transpose
+of the physical Piola evaluation map.  The RT1 fixed point satisfies the
+constitutive equation in the element-averaged sense
 
     INT H_mat(M_avg).v + N m = M_mass h_ext - nu0 INT (m - M_avg).v dx
 
@@ -79,6 +81,7 @@ from ._solve import (_f64, _h_solve_mass_riesz, _resolve_gram_params,
                      _clear_cpp_solve_timings, _capture_cpp_solve_timings,
                      _configure_cpp_mass)
 from ._vim import build_charge_gram
+from ._capabilities import validate_hdiv_configuration
 
 MU0 = 4.0e-7 * np.pi
 
@@ -296,12 +299,82 @@ def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=200):
         % (maxit, worst, float(np.linalg.norm(M[worst]))))
 
 
+class _QuadratureCoupling:
+    """NGSolve-native RT2 state evaluation and weak-load projection."""
+
+    def __init__(self, fes, integration_order):
+        from ngsolve.comp import IntegrationRuleSpace
+
+        self.fes = fes
+        self.mesh = fes.mesh
+        self.integration_order = int(integration_order)
+        self.m_field = ng.GridFunction(fes)
+        self.scalar_space = IntegrationRuleSpace(
+            self.mesh, order=self.integration_order)
+        self.source_space = ng.VectorValued(self.scalar_space, dim=3)
+        self.measure = ng.dx(intrules=self.scalar_space.GetIntegrationRules())
+        self.source_field = ng.GridFunction(self.source_space)
+        self.sample_field = ng.GridFunction(self.source_space)
+        self.npoints = int(self.scalar_space.ndof)
+        if self.npoints == 0:
+            raise RuntimeError("vim.SolveHysteresis: empty RT2 integration-rule space")
+
+        trial = self.source_space.TrialFunction()
+        test = fes.TestFunction()
+        self.source_to_hdiv = ng.BilinearForm(
+            trialspace=self.source_space, testspace=fes)
+        self.source_to_hdiv += ng.InnerProduct(trial, test) * self.measure
+        self.source_to_hdiv.Assemble()
+
+        l2 = ng.L2(self.mesh, order=0)
+        l2_test = l2.TestFunction()
+        self.to_element = []
+        for component in range(3):
+            form = ng.BilinearForm(trialspace=self.source_space, testspace=l2)
+            form += trial[component] * l2_test * self.measure
+            form.Assemble()
+            self.to_element.append(form.mat)
+
+    def evaluate_magnetization(self, coefficients):
+        self.m_field.vec.FV().NumPy()[:] = np.asarray(coefficients, dtype=float)
+        self.sample_field.Interpolate(self.m_field)
+        return self._values(self.sample_field)
+
+    def evaluate_coefficient(self, coefficient):
+        self.sample_field.Interpolate(coefficient)
+        return self._values(self.sample_field)
+
+    def _values(self, field):
+        return np.asarray(field.vec.FV().NumPy(), dtype=float).reshape(3, self.npoints).T.copy()
+
+    def _set_values(self, field, values):
+        values = np.asarray(values, dtype=float).reshape(self.npoints, 3)
+        field.vec.FV().NumPy()[:] = values.T.ravel()
+
+    def weak_load(self, values):
+        self._set_values(self.source_field, values)
+        load = self.source_to_hdiv.mat.CreateColVector()
+        self.source_to_hdiv.mat.Mult(self.source_field.vec, load)
+        return np.asarray(load.FV().NumPy(), dtype=float).copy()
+
+    def element_average(self, values, volumes):
+        self._set_values(self.source_field, values)
+        averaged = np.empty((len(volumes), 3), dtype=float)
+        for component, matrix in enumerate(self.to_element):
+            integral = matrix.CreateColVector()
+            matrix.Mult(self.source_field.vec, integral)
+            averaged[:, component] = np.asarray(
+                integral.FV().NumPy(), dtype=float) / volumes
+        return averaged
+
+
 def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                     nu0=None, gram_eps=None, leaf=32, eta=2.0, far_quad=None,
                     ho_far_factor=None, tol=1e-8, maxit=4000,
                     nl_maxit=200, nl_tol=1e-3,
-                    initial_b_path=None, initial_state=None):
-    """Quasi-static B-input hysteresis stepping on the RT1 HDiv-VIM charge Gram.
+                    initial_b_path=None, initial_state=None, order=1,
+                    state_quadrature_order=None):
+    """Quasi-static B-input hysteresis stepping on the HDiv-VIM charge Gram.
 
     The charge-Gram H-matrix is built ONCE (chi-free geometry) and reused by
     every step and every nonlinear iteration; each step runs the Hantila
@@ -336,6 +409,11 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     initial_state : optional state dict returned by an earlier call.  Restarts
               material history, RT coefficients, B cache, and convergence
               scale without hidden mutable material state.
+    order   : HDiv order 1 or 2.  RT1 retains one constitutive state per element;
+              RT2 stores state at physical volume quadrature points and returns
+              its nonlinear source through the matching weighted weak load.
+    state_quadrature_order : NGSolve ``IntegrationRuleSpace`` order for RT2.
+              The production default is 3 and is recorded in the restart state.
 
     Returns dict with `steps` = per-step records (M (n_el,3), B, H, M_avg,
     B_avg, H_avg, iters, cg_iters, rel_step, t_step_s) + build info (ndof,
@@ -353,6 +431,11 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         raise ValueError(
             "vim.SolveHysteresis supports a pure-TET (4-vertex), pure-HEX (8-vertex), or "
             "pure-WEDGE (6-vertex) mesh; got vertex counts %s." % sorted(_vtx))
+    order = int(order)
+    validate_hdiv_configuration(mesh.dim, _vtx, order, mesh.GetCurveOrder())
+    if state_quadrature_order is not None and order != 2:
+        raise ValueError(
+            "vim.SolveHysteresis: state_quadrature_order is an RT2-only setting")
     if (play is None) == (material is None):
         raise ValueError("vim.SolveHysteresis: provide EXACTLY ONE of play=(K, eta, f_k_tables) "
                          "or material=<duck-typed B-input material>")
@@ -394,7 +477,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     t_total = time.perf_counter()
     _clear_cpp_solve_timings()
     _gp = _resolve_gram_params(gram_eps=gram_eps, far_quad=far_quad, ho_far_factor=ho_far_factor)
-    fes = ng.HDiv(mesh, order=1)
+    fes = ng.HDiv(mesh, order=order)
     t_before_gram = time.perf_counter()
     B, H, M_mass = build_charge_gram(fes, eps=_gp["eps"], leafsize=leaf, eta=eta,
                                      far_quad=_gp["far_quad"], ho_far_factor=_gp["ho_far_factor"],
@@ -407,28 +490,59 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
 
     uf = fes.TrialFunction()
     vf = fes.TestFunction()
-    l2 = ng.L2(mesh, order=0)
     vol_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True), float)
     w_el = vol_el / float(np.sum(vol_el))
+    if order == 1:
+        l2 = ng.L2(mesh, order=0)
+        assert l2.ndof == n_el
+        wl2 = l2.TestFunction()
+        blocks = []
+        for component in range(3):
+            form = ng.BilinearForm(trialspace=fes, testspace=l2)
+            form += uf[component] * wl2 * ng.dx(bonus_intorder=4)
+            form.Assemble()
+            row, col, value = form.mat.COO()
+            blocks.append(sp.csr_matrix(
+                (_f64(value), (np.asarray(row), np.asarray(col))),
+                shape=(l2.ndof, n_face)))
+        P = sp.vstack(blocks).tocsr()
+        PT = P.T.tocsr()
+        n_state_points = n_el
+        state_layout = "element-average"
+        quadrature_order = None
+        state_points = None
 
-    # Mixed element-integral matrix P (built once): row c*n_el + e holds INT_e u_c dx, so both
-    # per-iteration material couplings are sparse mat-vecs instead of NGSolve assembly calls --
-    # the element average M_el = (P m)/vol and the polarization load P^T s (exact, since the
-    # lagged source is constant per element).  bonus_intorder=4 sets the quadrature to order
-    # 1+0+4 = 5, the ng.Integrate default this replaces (matches to <=2e-14 on warped hexes);
-    # L2(order=0) dof numbering is the element numbering, which the vstack layout relies on.
-    assert l2.ndof == n_el
-    wl2 = l2.TestFunction()
-    _P_blocks = []
-    for _c in range(3):
-        _blf = ng.BilinearForm(trialspace=fes, testspace=l2)
-        _blf += uf[_c] * wl2 * ng.dx(bonus_intorder=4)
-        _blf.Assemble()
-        _pr, _pc, _pv = _blf.mat.COO()
-        _P_blocks.append(sp.csr_matrix((_f64(_pv), (np.asarray(_pr), np.asarray(_pc))),
-                                       shape=(l2.ndof, n_face)))
-    P = sp.vstack(_P_blocks).tocsr()
-    PT = P.T.tocsr()
+        def _M_state(m_coefficients):
+            return (P @ m_coefficients).reshape(3, n_el).T / vol_el[:, None]
+
+        def _state_to_element(values):
+            return np.asarray(values, dtype=float)
+
+        def _polarization_load(values):
+            return PT @ np.asarray(values, dtype=float).T.ravel()
+    else:
+        quadrature_order = (3 if state_quadrature_order is None
+                            else int(state_quadrature_order))
+        if quadrature_order < 3:
+            raise ValueError(
+                "vim.SolveHysteresis: RT2 state_quadrature_order must be >= 3")
+        coupling = _QuadratureCoupling(fes, quadrature_order)
+        n_state_points = coupling.npoints
+        constant_average = coupling.element_average(
+            np.ones((n_state_points, 3), dtype=float), vol_el)
+        if not np.allclose(constant_average, 1.0, rtol=1.0e-12, atol=1.0e-12):
+            raise RuntimeError(
+                "vim.SolveHysteresis: RT2 integration-rule measure does not match the mesh volume")
+        state_layout = "quadrature"
+
+        def _M_state(m_coefficients):
+            return coupling.evaluate_magnetization(m_coefficients)
+
+        def _state_to_element(values):
+            return coupling.element_average(values, vol_el)
+
+        def _polarization_load(values):
+            return coupling.weak_load(values)
 
     # CONSTANT SPD LHS: nu0*M_mass + N.  The mass is uniform, so instead of assembling a
     # separate nu0-weighted BilinearForm we pass the ALREADY-BUILT M_mass with the scalar
@@ -453,17 +567,17 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     _solve_W0(np.zeros(n_face))
 
     def _M_el(m):
-        return (P @ m).reshape(3, n_el).T / vol_el[:, None]
+        return _state_to_element(_M_state(m))
 
-    def _polarization_rhs(rhs_src, s_el):
-        return rhs_src + PT @ s_el.T.ravel()
+    def _polarization_rhs(rhs_src, s_state):
+        return rhs_src + _polarization_load(s_state)
 
     state0 = np.asarray(material.state0(), dtype=float)
     if state0.ndim != 1 or state0.size == 0 or not np.all(np.isfinite(state0)):
         raise ValueError("vim.SolveHysteresis: material.state0() must be a finite non-empty 1D array")
-    states = np.tile(state0[None, :], (n_el, 1))
-    B_cache = None                      # previous converged B per element (None until the first solve)
-    s_el = np.zeros((n_el, 3))          # lagged polarization source nu0*M - H_mat(M)
+    states = np.tile(state0[None, :], (n_state_points, 1))
+    B_cache = None                      # previous converged B at each material state point
+    s_state = np.zeros((n_state_points, 3))
     m = np.zeros(n_face)
     m_scale = 0.0                       # running max ||m|| -> uniform absolute stop across the cycle
 
@@ -473,10 +587,10 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                 not np.all(np.isfinite(b_path)):
             raise ValueError("vim.SolveHysteresis: initial_b_path must be a finite (n_init,3) array in T")
         for b_init in b_path:
-            B_trial = np.repeat(b_init[None, :], n_el, axis=0)
+            B_trial = np.repeat(b_init[None, :], n_state_points, axis=0)
             states = np.asarray(material.commit(B_trial, states), dtype=float)
-        B_cache = np.repeat(b_path[-1][None, :], n_el, axis=0)
-        s_el = -np.asarray(material.forward(B_cache, states), dtype=float)
+        B_cache = np.repeat(b_path[-1][None, :], n_state_points, axis=0)
+        s_state = -np.asarray(material.forward(B_cache, states), dtype=float)
     elif initial_state is not None:
         if not isinstance(initial_state, dict):
             raise ValueError("vim.SolveHysteresis: initial_state must be the returned state dict")
@@ -486,22 +600,27 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
             B_cache = np.asarray(initial_state["B"], dtype=float).copy()
         except KeyError as exc:
             raise ValueError("vim.SolveHysteresis: initial_state is missing %s" % exc) from exc
-        if states.shape != (n_el, state0.size):
+        expected_layout = initial_state.get("state_layout", "element-average")
+        if expected_layout != state_layout:
+            raise ValueError(
+                "vim.SolveHysteresis: initial state layout %r does not match %r"
+                % (expected_layout, state_layout))
+        if states.shape != (n_state_points, state0.size):
             raise ValueError("vim.SolveHysteresis: initial material_states shape %s, expected %s" %
-                             (states.shape, (n_el, state0.size)))
+                             (states.shape, (n_state_points, state0.size)))
         if m.shape != (n_face,):
             raise ValueError("vim.SolveHysteresis: initial m_coefficients shape %s, expected %s" %
                              (m.shape, (n_face,)))
-        if B_cache.shape != (n_el, 3):
+        if B_cache.shape != (n_state_points, 3):
             raise ValueError("vim.SolveHysteresis: initial B shape %s, expected %s" %
-                             (B_cache.shape, (n_el, 3)))
+                             (B_cache.shape, (n_state_points, 3)))
         if not (np.all(np.isfinite(states)) and np.all(np.isfinite(m)) and
                 np.all(np.isfinite(B_cache))):
             raise ValueError("vim.SolveHysteresis: initial_state arrays must be finite")
         m_scale = max(float(initial_state.get("m_scale", 0.0)), float(np.linalg.norm(m)))
-        M_initial = _M_el(m)
+        M_initial = _M_state(m)
         H_initial = np.asarray(material.forward(B_cache, states), dtype=float)
-        s_el = nu0 * M_initial - H_initial
+        s_state = nu0 * M_initial - H_initial
     t_setup_s = time.perf_counter() - t_total
 
     steps_out = []
@@ -512,12 +631,16 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         source.Assemble()
         rhs_src = np.asarray(source.vec.FV().NumPy(), dtype=float).copy()
         if h_uniform is not None:
-            Hext_el = np.repeat(h_uniform[None, :], n_el, axis=0)
+            Hext_state = np.repeat(h_uniform[None, :], n_state_points, axis=0)
         else:
-            Hext_el = np.column_stack([
-                np.asarray(ng.Integrate(h_cf[c], mesh, element_wise=True), dtype=float)
-                for c in range(3)
-            ]) / vol_el[:, None]
+            if state_layout == "quadrature":
+                Hext_state = coupling.evaluate_coefficient(h_cf)
+            else:
+                Hext_state = np.column_stack([
+                    np.asarray(ng.Integrate(h_cf[c], mesh, element_wise=True), dtype=float)
+                    for c in range(3)
+                ]) / vol_el[:, None]
+        Hext_el = _state_to_element(Hext_state)
         Hext_avg = np.asarray((w_el[:, None] * Hext_el).sum(axis=0), dtype=float)
 
         cg_total = 0
@@ -527,18 +650,21 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         nit = 0
         d_prev = None
         for it in range(int(nl_maxit)):
-            m_new, cg_it = _solve_W0(_polarization_rhs(rhs_src, s_el), x0=m)
+            m_new, cg_it = _solve_W0(_polarization_rhs(rhs_src, s_state), x0=m)
             cg_total += cg_it
             d_now = float(np.linalg.norm(m_new - m))
             m = m_new
             m_scale = max(m_scale, float(np.linalg.norm(m_new)))
             rel = d_now / (m_scale + 1e-30)
-            M_el = _M_el(m)
+            M_state = _M_state(m)
+            M_el = _state_to_element(M_state)
             # material update (BATCHED): pointwise B-inversion from the COMMITTED states ->
             # full-vector H_mat (recoil anti-parallel H/M is representable).
-            B0 = MU0 * (M_el + Hext_el) if B_cache is None else B_cache
-            B_cache, H_el = _solve_pointwise_B(material, states, M_el, B0)
-            s_el = nu0 * M_el - H_el
+            B0 = MU0 * (M_state + Hext_state) if B_cache is None else B_cache
+            B_cache, H_state = _solve_pointwise_B(material, states, M_state, B0)
+            s_state = nu0 * M_state - H_state
+            B_el = _state_to_element(B_cache)
+            H_el = _state_to_element(H_state)
             nit = it + 1
             if it > 0 and rel < nl_tol:
                 # Contraction-corrected acceptance: the Cauchy increment under-estimates the
@@ -576,9 +702,9 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         steps_out.append(dict(
             h_applied=Hext_avg.copy(), h_applied_avg=Hext_avg.copy(),
             h_applied_is_uniform=bool(h_uniform is not None),
-            M=M_el.copy(), B=B_cache.copy(), H=H_el.copy(),
+            M=M_el.copy(), B=B_el.copy(), H=H_el.copy(),
             M_avg=np.asarray((w_el[:, None] * M_el).sum(axis=0), float),
-            B_avg=np.asarray((w_el[:, None] * B_cache).sum(axis=0), float),
+            B_avg=np.asarray((w_el[:, None] * B_el).sum(axis=0), float),
             H_avg=np.asarray((w_el[:, None] * H_el).sum(axis=0), float),
             iters=int(nit), cg_iters=int(cg_total), rel_step=float(rel),
             t_step_s=time.perf_counter() - t_step,
@@ -589,7 +715,9 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     out = dict(
         steps=steps_out,
         ndof=int(n_face), n_el=int(n_el), n_charge=int(Bc.shape[0]),
-        gfM=gfM, order=1, curve_order=(2 if int(mesh.GetCurveOrder()) >= 2 else None),
+        gfM=gfM, order=order, curve_order=(2 if int(mesh.GetCurveOrder()) >= 2 else None),
+        state_layout=state_layout, state_points=int(n_state_points),
+        state_quadrature_order=quadrature_order,
         nu0=float(nu0),
         t_setup_s=float(t_setup_s),
         charge_gram_wall_s=float(charge_gram_wall_s),
@@ -604,6 +732,8 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
             m_coefficients=np.asarray(m, dtype=float).copy(),
             B=np.asarray(B_cache, dtype=float).copy(),
             m_scale=float(m_scale),
+            state_layout=state_layout,
+            state_quadrature_order=quadrature_order,
         ),
     )
     out["_charge_gram"] = H
