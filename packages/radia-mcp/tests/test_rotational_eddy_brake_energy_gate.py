@@ -509,6 +509,40 @@ def _with_v16_nonlinear_ale_frame_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v17_block_scaling_port_identity(summary: dict) -> dict:
+    summary = _with_v16_nonlinear_ale_frame_identity(summary)
+    summary["segregated_block_residual_variable_scaling_identity"] = {
+        "solver_generation": "segregated-solve-51",
+        "block_residual_solver_generation": "segregated-solve-51",
+        "variable_scaling_solver_generation": "segregated-solve-51",
+        "block_sequence_generation": "block-sequence-51",
+        "residual_block_sequence_generation": "block-sequence-51",
+        "variable_scaling_block_sequence_generation": "block-sequence-51",
+        "block_names": ["magnetic", "thermal"],
+        "residual_block_names": ["magnetic", "thermal"],
+        "variable_scaling_block_names": ["magnetic", "thermal"],
+        "variable_scaling_values": [1.0, 300.0],
+        "residual_variable_scaling_values": [1.0, 300.0],
+        "variable_scaling_sha256": "1" * 64,
+        "residual_variable_scaling_sha256": "1" * 64,
+    }
+    summary["modal_port_power_normalization_surface_orientation_identity"] = {
+        "port_mode_generation": "port-mode-51",
+        "modal_amplitude_port_mode_generation": "port-mode-51",
+        "power_normalization_port_mode_generation": "port-mode-51",
+        "integration_surface_mesh_generation": "port-surface-51",
+        "power_normalization_surface_mesh_generation": "port-surface-51",
+        "surface_orientation_mesh_generation": "port-surface-51",
+        "power_normalization": "unit_forward_power",
+        "modal_amplitude_normalization": "unit_forward_power",
+        "surface_orientation": "outward_from_domain",
+        "power_flux_normal_sign": 1,
+        "surface_triangle_sha256": "2" * 64,
+        "power_normalization_surface_triangle_sha256": "2" * 64,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -741,5 +775,49 @@ def test_v16_public_moving_mesh_field_transfer_material_spatial_frame_mismatch()
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["moving_mesh_field_transfer_uses_one_coordinate_frame"]
+        is False
+    )
+
+
+def test_v17_public_positive_block_scaling_and_port_surface_identity() -> None:
+    result = gate(_with_v17_block_scaling_port_identity(copy.deepcopy(_summary())))
+    assert result["status"] == "ok"
+
+
+def test_v17_public_segregated_solver_block_residual_variable_scaling_generation_mismatch() -> None:
+    summary = _with_v17_block_scaling_port_identity(copy.deepcopy(_summary()))
+    summary["segregated_block_residual_variable_scaling_identity"].update(
+        {
+            "variable_scaling_solver_generation": "segregated-solve-50",
+            "variable_scaling_block_sequence_generation": "block-sequence-50",
+            "residual_variable_scaling_values": [1.0, 293.15],
+            "residual_variable_scaling_sha256": "5" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "segregated_block_residuals_use_current_variable_scaling"
+        ]
+        is False
+    )
+
+
+def test_v17_public_modal_port_power_normalization_surface_orientation_generation_mismatch() -> None:
+    summary = _with_v17_block_scaling_port_identity(copy.deepcopy(_summary()))
+    summary["modal_port_power_normalization_surface_orientation_identity"].update(
+        {
+            "power_normalization_surface_mesh_generation": "port-surface-50",
+            "surface_orientation_mesh_generation": "port-surface-50",
+            "surface_orientation": "inward_to_domain",
+            "power_flux_normal_sign": -1,
+            "power_normalization_surface_triangle_sha256": "5" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["modal_port_power_uses_current_surface_orientation"]
         is False
     )
