@@ -54,6 +54,15 @@ def _public() -> tuple[list[dict], dict[str, list[dict]]]:
                 "generation": "assembly-generation-42",
                 "child_revisions": copy.deepcopy(child_revisions),
             }
+            row["mass_property_frame_identity"] = {
+                "frame_id": "assembly-global-frame-42",
+                "transform_generation": "assembly-transform-42",
+            }
+            row["topology_identity"] = {
+                "brep_revision": revision,
+                "brep_sha256": digest,
+                "face_adjacency_sha256": ("1" if name == "frame" else "2") * 64,
+            }
     return reference, {"external_cad": measured}
 
 
@@ -127,6 +136,21 @@ def _source() -> dict:
                     },
                 ],
             },
+            "topology_replay_identity": {
+                "source_topology_sha256": "3" * 64,
+                "imports": [
+                    {"mode": "noheal", "topology_sha256": "3" * 64},
+                    {"mode": "heal", "topology_sha256": "3" * 64},
+                ],
+            },
+            "unit_conversion_identity": {
+                "source_geometry_unit": "mm",
+                "target_geometry_unit": "m",
+                "length_scale_to_target": 0.001,
+                "external_measurement_stage": "after_unit_conversion",
+                "external_volume_unit": "m^3",
+                "declared_volume_scale_to_target": 1.0,
+            },
         },
     }
 
@@ -188,6 +212,66 @@ def test_generalization_v8_source(case_id: str) -> None:
             }
         )
         expected = "external_kernel_session_generation_is_continuous"
+    result = json.loads(
+        build123d_jointed_assembly_source_replay_gate(json.dumps(row))
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_public_center_of_mass_reference_frame_mismatch",
+        "v9_public_face_adjacency_before_fillet",
+    ],
+)
+def test_generalization_v9_public(case_id: str) -> None:
+    reference, measured = _public()
+    rows = measured["external_cad"]
+    if case_id == "v9_public_center_of_mass_reference_frame_mismatch":
+        rows[0]["mass_property_frame_identity"].update(
+            {
+                "frame_id": "component-local-frame",
+                "transform_generation": "component-transform-9",
+            }
+        )
+        expected = "mass_property_centers_share_reference_frames"
+    else:
+        rows[0]["topology_identity"].update(
+            {
+                "brep_revision": "brep-frame-41",
+                "face_adjacency_sha256": "4" * 64,
+            }
+        )
+        expected = "face_adjacency_matches_current_brep_revision"
+    result = _public_result(reference, measured)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_source_import_heal_topology_digest_omitted",
+        "v9_source_external_volume_before_unit_conversion",
+    ],
+)
+def test_generalization_v9_source(case_id: str) -> None:
+    row = _source()
+    identity = row["replay_identity"]
+    if case_id == "v9_source_import_heal_topology_digest_omitted":
+        identity["topology_replay_identity"]["imports"][1].pop("topology_sha256")
+        expected = "heal_and_noheal_imports_record_topology_identity"
+    else:
+        identity["unit_conversion_identity"].update(
+            {
+                "external_measurement_stage": "before_unit_conversion",
+                "external_volume_unit": "mm^3",
+                "declared_volume_scale_to_target": 1.0e-9,
+            }
+        )
+        expected = "external_volume_is_measured_after_unit_conversion"
     result = json.loads(
         build123d_jointed_assembly_source_replay_gate(json.dumps(row))
     )
