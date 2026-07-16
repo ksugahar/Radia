@@ -477,6 +477,59 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         == transition_orientation.get("transition_generation")
         and _opposed_transition_face_orientation_ok(transition_orientation)
     )
+    high_order_hex_order = summary.get(
+        "high_order_hex_curved_node_ordering_identity"
+    )
+    high_order_hex_order_ok = high_order_hex_order is None or (
+        isinstance(high_order_hex_order, Mapping)
+        and bool(high_order_hex_order.get("high_order_mesh_generation"))
+        and bool(high_order_hex_order.get("curved_geometry_generation"))
+        and high_order_hex_order.get("element_geometry_generation")
+        == high_order_hex_order.get("curved_geometry_generation")
+        and high_order_hex_order.get("element_type") == "hex20_serendipity"
+        and high_order_hex_order.get("export_element_type")
+        == high_order_hex_order.get("element_type")
+        and high_order_hex_order.get("node_ordering_convention")
+        == "cubit_hex20"
+        and high_order_hex_order.get("export_node_ordering_convention")
+        == high_order_hex_order.get("node_ordering_convention")
+        and len(list(high_order_hex_order.get("canonical_node_ids") or [])) == 20
+        and list(high_order_hex_order.get("export_node_ids") or [])
+        == list(high_order_hex_order.get("canonical_node_ids") or [])
+        and len(
+            str(high_order_hex_order.get("canonical_node_order_sha256") or "")
+        )
+        == 64
+        and high_order_hex_order.get("export_node_order_sha256")
+        == high_order_hex_order.get("canonical_node_order_sha256")
+    )
+    sideset_normal = summary.get("sideset_outward_normal_merge_identity")
+    sideset_face_ids = (
+        list(sideset_normal.get("sideset_face_ids") or [])
+        if isinstance(sideset_normal, Mapping)
+        else []
+    )
+    outward_signs = (
+        list(sideset_normal.get("outward_normal_signs") or [])
+        if isinstance(sideset_normal, Mapping)
+        else []
+    )
+    sideset_normal_ok = sideset_normal is None or (
+        isinstance(sideset_normal, Mapping)
+        and bool(sideset_normal.get("final_merge_generation"))
+        and sideset_normal.get("sideset_topology_generation")
+        == sideset_normal.get("final_merge_generation")
+        and sideset_normal.get("normal_owner_topology_generation")
+        == sideset_normal.get("final_merge_generation")
+        and bool(sideset_face_ids)
+        and len(set(sideset_face_ids)) == len(sideset_face_ids)
+        and list(sideset_normal.get("normal_owner_face_ids") or [])
+        == sideset_face_ids
+        and list(sideset_normal.get("resolved_owner_volume_ids") or [])
+        == list(sideset_normal.get("owner_volume_ids") or [])
+        and len(outward_signs) == len(sideset_face_ids)
+        and all(int(sign) == 1 for sign in outward_signs)
+    )
 
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
@@ -508,6 +561,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "hex_block_materials_follow_final_imprint_topology": block_material_ok,
         "pyramid_hex_transition_faces_have_opposed_orientation": (
             transition_orientation_ok
+        ),
+        "curved_high_order_hex_uses_canonical_node_ordering": (
+            high_order_hex_order_ok
+        ),
+        "merged_sideset_normals_follow_final_topology_owners": (
+            sideset_normal_ok
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -941,6 +1000,59 @@ def cubit_mixed_transition_source_gate(
         == export_orientation.get("export_generation")
         and _opposed_transition_face_orientation_ok(export_orientation)
     )
+    journal_id_map = summary.get("journal_entity_id_map_reset_identity")
+    requested_entity_ids = (
+        list(journal_id_map.get("requested_entity_ids") or [])
+        if isinstance(journal_id_map, Mapping)
+        else []
+    )
+    journal_id_map_ok = journal_id_map is None or (
+        isinstance(journal_id_map, Mapping)
+        and bool(journal_id_map.get("reset_generation"))
+        and journal_id_map.get("journal_replay_reset_generation")
+        == journal_id_map.get("reset_generation")
+        and journal_id_map.get("entity_id_map_reset_generation")
+        == journal_id_map.get("reset_generation")
+        and bool(requested_entity_ids)
+        and len(list(journal_id_map.get("entity_kinds") or []))
+        == len(requested_entity_ids)
+        and list(journal_id_map.get("resolved_entity_ids") or [])
+        == requested_entity_ids
+        and len(str(journal_id_map.get("entity_id_map_sha256") or "")) == 64
+        and journal_id_map.get("resolved_entity_id_map_sha256")
+        == journal_id_map.get("entity_id_map_sha256")
+    )
+    exodus_id_width = summary.get("exodus_entity_id_width_identity")
+    try:
+        declared_id_width = int(
+            exodus_id_width.get("declared_entity_id_width_bits", 0)
+        ) if isinstance(exodus_id_width, Mapping) else 0
+        decoder_id_width = int(
+            exodus_id_width.get("decoder_entity_id_width_bits", 0)
+        ) if isinstance(exodus_id_width, Mapping) else 0
+        maximum_entity_id = int(
+            exodus_id_width.get("maximum_entity_id", -1)
+        ) if isinstance(exodus_id_width, Mapping) else -1
+        decoded_maximum_entity_id = int(
+            exodus_id_width.get("decoded_maximum_entity_id", -1)
+        ) if isinstance(exodus_id_width, Mapping) else -1
+    except (TypeError, ValueError):
+        declared_id_width = decoder_id_width = 0
+        maximum_entity_id = decoded_maximum_entity_id = -1
+    exodus_id_width_ok = exodus_id_width is None or (
+        isinstance(exodus_id_width, Mapping)
+        and bool(exodus_id_width.get("export_generation"))
+        and exodus_id_width.get("decoder_export_generation")
+        == exodus_id_width.get("export_generation")
+        and declared_id_width == 64
+        and decoder_id_width == declared_id_width
+        and exodus_id_width.get("integer_storage_type") == "int64"
+        and maximum_entity_id > 2**31 - 1
+        and decoded_maximum_entity_id == maximum_entity_id
+        and len(str(exodus_id_width.get("entity_id_stream_sha256") or "")) == 64
+        and exodus_id_width.get("decoded_entity_id_stream_sha256")
+        == exodus_id_width.get("entity_id_stream_sha256")
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -1017,6 +1129,8 @@ def cubit_mixed_transition_source_gate(
         ),
         "headless_block_material_manifest_follows_final_imprint": headless_block_ok,
         "mesh_export_transition_faces_have_opposed_orientation": export_orientation_ok,
+        "journal_entity_ids_follow_current_reset_generation": journal_id_map_ok,
+        "exodus_decoder_preserves_declared_64bit_entity_ids": exodus_id_width_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),

@@ -628,6 +628,55 @@ def _with_v13_block_orientation_identity(row: dict) -> dict:
     return row
 
 
+def _with_v14_high_order_id_width_identity(row: dict) -> dict:
+    row = _with_v13_block_orientation_identity(row)
+    row["high_order_hex_curved_node_ordering_identity"] = {
+        "high_order_mesh_generation": "high-order-mesh-46",
+        "curved_geometry_generation": "curved-geometry-46",
+        "element_geometry_generation": "curved-geometry-46",
+        "element_type": "hex20_serendipity",
+        "export_element_type": "hex20_serendipity",
+        "node_ordering_convention": "cubit_hex20",
+        "export_node_ordering_convention": "cubit_hex20",
+        "canonical_node_ids": list(range(101, 121)),
+        "export_node_ids": list(range(101, 121)),
+        "canonical_node_order_sha256": "a" * 64,
+        "export_node_order_sha256": "a" * 64,
+    }
+    row["sideset_outward_normal_merge_identity"] = {
+        "final_merge_generation": "merge-generation-46",
+        "sideset_topology_generation": "merge-generation-46",
+        "normal_owner_topology_generation": "merge-generation-46",
+        "sideset_face_ids": [201, 202, 203],
+        "normal_owner_face_ids": [201, 202, 203],
+        "owner_volume_ids": [1, 1, 2],
+        "resolved_owner_volume_ids": [1, 1, 2],
+        "outward_normal_signs": [1, 1, 1],
+    }
+    row["journal_entity_id_map_reset_identity"] = {
+        "reset_generation": "reset-generation-46",
+        "journal_replay_reset_generation": "reset-generation-46",
+        "entity_id_map_reset_generation": "reset-generation-46",
+        "entity_kinds": ["volume", "surface", "curve"],
+        "requested_entity_ids": [1, 7, 19],
+        "resolved_entity_ids": [1, 7, 19],
+        "entity_id_map_sha256": "b" * 64,
+        "resolved_entity_id_map_sha256": "b" * 64,
+    }
+    row["exodus_entity_id_width_identity"] = {
+        "export_generation": "exodus-export-46",
+        "decoder_export_generation": "exodus-export-46",
+        "declared_entity_id_width_bits": 64,
+        "decoder_entity_id_width_bits": 64,
+        "integer_storage_type": "int64",
+        "maximum_entity_id": 4294967311,
+        "decoded_maximum_entity_id": 4294967311,
+        "entity_id_stream_sha256": "c" * 64,
+        "decoded_entity_id_stream_sha256": "c" * 64,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -783,3 +832,62 @@ def test_v13_source_pyramid_transition_face_orientation_mismatch():
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["mesh_export_transition_faces_have_opposed_orientation"] is False
+
+
+def test_v14_public_high_order_hex_curved_node_ordering_mismatch():
+    row = _with_v14_high_order_id_width_identity(summary())
+    export_ids = list(range(101, 121))
+    export_ids[8], export_ids[9] = export_ids[9], export_ids[8]
+    row["high_order_hex_curved_node_ordering_identity"].update(
+        {
+            "export_node_ordering_convention": "vtk_quadratic_hex",
+            "export_node_ids": export_ids,
+            "export_node_order_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["curved_high_order_hex_uses_canonical_node_ordering"] is False
+
+
+def test_v14_public_sideset_outward_normal_after_merge_generation_mismatch():
+    row = _with_v14_high_order_id_width_identity(summary())
+    row["sideset_outward_normal_merge_identity"].update(
+        {
+            "normal_owner_topology_generation": "merge-generation-45",
+            "resolved_owner_volume_ids": [2, 1, 2],
+            "outward_normal_signs": [-1, 1, 1],
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["merged_sideset_normals_follow_final_topology_owners"] is False
+
+
+def test_v14_source_journal_entity_id_map_previous_reset_generation():
+    row = _with_v14_high_order_id_width_identity(summary())
+    row["journal_entity_id_map_reset_identity"].update(
+        {
+            "entity_id_map_reset_generation": "reset-generation-45",
+            "resolved_entity_ids": [2, 8, 20],
+            "resolved_entity_id_map_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal_entity_ids_follow_current_reset_generation"] is False
+
+
+def test_v14_source_exodus_64bit_entity_id_width_truncation():
+    row = _with_v14_high_order_id_width_identity(summary())
+    row["exodus_entity_id_width_identity"].update(
+        {
+            "decoder_entity_id_width_bits": 32,
+            "integer_storage_type": "int32",
+            "decoded_maximum_entity_id": 15,
+            "decoded_entity_id_stream_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_decoder_preserves_declared_64bit_entity_ids"] is False
