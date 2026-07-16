@@ -20,6 +20,7 @@ def _summary() -> dict:
     omega = [100.0 * math.exp(-rate * value) for value in times]
     torque = [inertia * rate * value for value in omega]
     joule = [force * speed for force, speed in zip(torque, omega, strict=True)]
+    generation = "solve-generation-42"
 
     def replay(label: str) -> dict:
         return {
@@ -29,7 +30,21 @@ def _summary() -> dict:
             "angular_velocity_rad_s": list(omega),
             "braking_torque_nm": list(torque),
             "joule_loss_w": list(joule),
+            "artifact_generations": {
+                "time_s": generation,
+                "angular_velocity_rad_s": generation,
+                "braking_torque_nm": generation,
+                "joule_loss_w": generation,
+            },
         }
+
+    boundary = 100
+    accumulated_joule = sum(
+        0.5 * (joule[index] + joule[index + 1])
+        * (times[index + 1] - times[index])
+        for index in range(boundary)
+    )
+    stored_energy = 0.5 * inertia * omega[boundary] ** 2 + 0.3
 
     return {
         "contract": {
@@ -60,6 +75,26 @@ def _summary() -> dict:
             **replay("energy"),
             "field_energy_time_s": list(times),
             "magnetic_energy_j": [0.3 for _ in times],
+            "artifact_generations": {
+                "time_s": generation,
+                "angular_velocity_rad_s": generation,
+                "braking_torque_nm": generation,
+                "joule_loss_w": generation,
+                "field_energy_time_s": generation,
+                "magnetic_energy_j": generation,
+            },
+            "restart_boundaries": [
+                {
+                    "left_index": boundary,
+                    "right_index": boundary + 1,
+                    "generation_before": generation,
+                    "generation_after": "solve-generation-42-restart-1",
+                    "stored_energy_before_j": stored_energy,
+                    "stored_energy_after_j": stored_energy,
+                    "accumulated_joule_before_j": accumulated_joule,
+                    "accumulated_joule_offset_after_j": accumulated_joule,
+                }
+            ],
         },
         "timing_breakdown_s": {
             "attach": 0.1,
@@ -227,3 +262,27 @@ def test_generalization_v7_public(case_id: str) -> None:
         for index in range(60, 140):
             summary["energy_replay"]["field_energy_time_s"][index] += 0.0125
     assert gate(summary)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v8_public_restart_energy_baseline_reset",
+        "v8_public_loss_history_prior_solve_generation",
+    ],
+)
+def test_generalization_v8_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v8_public_restart_energy_baseline_reset":
+        summary["energy_replay"]["restart_boundaries"][0][
+            "accumulated_joule_offset_after_j"
+        ] = 0.0
+        expected_check = "restart_energy_offsets_are_continuous"
+    else:
+        summary["energy_replay"]["artifact_generations"][
+            "joule_loss_w"
+        ] = "solve-generation-41"
+        expected_check = "artifact_series_share_their_solve_generation"
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected_check] is False

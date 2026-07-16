@@ -76,6 +76,83 @@ def _parse_replay(row: Any) -> dict[str, Any]:
     return parsed
 
 
+def _artifact_generations_ok(rows: list[dict[str, Any]]) -> bool:
+    evidence_present = ["artifact_generations" in row for row in rows]
+    if not any(evidence_present):
+        return True
+    if not all(evidence_present):
+        return False
+    base_keys = {
+        "time_s",
+        "angular_velocity_rad_s",
+        "braking_torque_nm",
+        "joule_loss_w",
+    }
+    for row in rows:
+        generations = row.get("artifact_generations")
+        if not isinstance(generations, dict):
+            return False
+        required = set(base_keys)
+        if "magnetic_energy_j" in row or "field_energy_time_s" in row:
+            required.update({"magnetic_energy_j", "field_energy_time_s"})
+        values = [generations.get(name) for name in required]
+        if not all(isinstance(value, str) and value for value in values):
+            return False
+        if len(set(values)) != 1:
+            return False
+    return True
+
+
+def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
+    if "restart_boundaries" not in row:
+        return True
+    boundaries = row.get("restart_boundaries")
+    if not isinstance(boundaries, list) or not boundaries:
+        return False
+    for boundary in boundaries:
+        if not isinstance(boundary, dict):
+            return False
+        left = boundary.get("left_index")
+        right = boundary.get("right_index")
+        if (
+            not isinstance(left, int)
+            or not isinstance(right, int)
+            or left < 0
+            or right != left + 1
+            or right >= sample_count
+        ):
+            return False
+        if not all(
+            isinstance(boundary.get(name), str) and boundary.get(name)
+            for name in ("generation_before", "generation_after")
+        ):
+            return False
+        try:
+            stored_before = float(boundary["stored_energy_before_j"])
+            stored_after = float(boundary["stored_energy_after_j"])
+            accumulated_before = float(boundary["accumulated_joule_before_j"])
+            accumulated_after = float(boundary["accumulated_joule_offset_after_j"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if not all(
+            math.isfinite(value)
+            for value in (
+                stored_before,
+                stored_after,
+                accumulated_before,
+                accumulated_after,
+            )
+        ):
+            return False
+        if abs(accumulated_after - accumulated_before) > 1.0e-12 * max(
+            abs(accumulated_before), 1.0
+        ):
+            return False
+        if abs(stored_after - stored_before) > 0.1 * max(abs(stored_before), 1.0e-15):
+            return False
+    return True
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -120,6 +197,7 @@ def rotational_eddy_brake_energy_gate(
     inertia_error = abs(reported_inertia - analytic_inertia) / analytic_inertia
 
     parsed = [_parse_replay(row) for row in replays]
+    artifact_generations_ok = _artifact_generations_ok([*replays, energy_row])
     all_cardinalities = True
     all_times_increase = True
     nonnegative_dissipation = True
@@ -222,6 +300,9 @@ def rotational_eddy_brake_energy_gate(
         len({len(value) for key, value in energy.items() if isinstance(value, list)}) == 1
         and len(field_time) == len(magnetic_energy) >= 2
     )
+    restart_energy_offsets_ok = _restart_energy_offsets_ok(
+        energy_row, len(energy_times)
+    )
     maximum_field_energy_time_misalignment_s_observed = (
         max(
             abs(field_sample - primary_sample)
@@ -293,6 +374,8 @@ def rotational_eddy_brake_energy_gate(
         <= 1.0e-12,
         "fresh_replay_fields_match": max(replay_field_errors, default=math.inf)
         <= float(maximum_replay_error_over_span),
+        "artifact_series_share_their_solve_generation": artifact_generations_ok,
+        "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
         and field_time_alignment,
         "field_energy_history_is_nonnegative_and_has_no_isolated_jump": min(
