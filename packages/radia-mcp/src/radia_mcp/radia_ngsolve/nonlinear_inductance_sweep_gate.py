@@ -618,6 +618,106 @@ def _fft_window_coherent_gain_is_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _sparameter_complex_impedance_renormalization_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("sparameter_complex_impedance_renormalization_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        source_impedance = complex(
+            float(identity["source_reference_impedance_real_ohm"]),
+            float(identity["source_reference_impedance_imag_ohm"]),
+        )
+        target_impedance = complex(
+            float(identity["target_reference_impedance_real_ohm"]),
+            float(identity["target_reference_impedance_imag_ohm"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    calibration_generation = str(
+        identity.get("port_calibration_generation", "")
+    ).strip()
+    transform_generation = str(
+        identity.get("renormalization_transform_generation", "")
+    ).strip()
+    transform_digest = str(
+        identity.get("renormalization_transform_sha256", "")
+    ).lower()
+    result_digest = str(
+        identity.get("result_renormalization_transform_sha256", "")
+    ).lower()
+    return (
+        bool(calibration_generation)
+        and identity.get("sparameter_result_port_calibration_generation")
+        == calibration_generation
+        and identity.get("renormalization_port_calibration_generation")
+        == calibration_generation
+        and identity.get("source_reference_impedance_basis") == "complex_ohm"
+        and identity.get("renormalization_reference_impedance_basis")
+        == "complex_ohm"
+        and all(
+            math.isfinite(value)
+            for value in (
+                source_impedance.real,
+                source_impedance.imag,
+                target_impedance.real,
+                target_impedance.imag,
+            )
+        )
+        and source_impedance.real > 0.0
+        and target_impedance.real > 0.0
+        and bool(transform_generation)
+        and identity.get("result_renormalization_transform_generation")
+        == transform_generation
+        and len(transform_digest) == len(result_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in transform_digest + result_digest
+        )
+        and result_digest == transform_digest
+    )
+
+
+def _farfield_polarization_basis_transform_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("farfield_polarization_basis_transform_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    solve_generation = str(identity.get("farfield_solve_generation", "")).strip()
+    transform_generation = str(
+        identity.get("basis_transform_generation", "")
+    ).strip()
+    transform_digest = str(identity.get("basis_transform_sha256", "")).lower()
+    result_digest = str(
+        identity.get("comparison_basis_transform_sha256", "")
+    ).lower()
+    return (
+        bool(solve_generation)
+        and identity.get("farfield_result_generation") == solve_generation
+        and identity.get("source_polarization_basis") == "spherical_theta_phi"
+        and identity.get("comparison_polarization_basis")
+        in {"ludwig_1", "ludwig_2", "ludwig_3"}
+        and identity.get("basis_transform_applied") is True
+        and bool(transform_generation)
+        and identity.get("comparison_transform_generation") == transform_generation
+        and identity.get("angular_coordinate_frame") == "global_spherical"
+        and identity.get("comparison_angular_coordinate_frame")
+        == identity.get("angular_coordinate_frame")
+        and len(transform_digest) == len(result_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in transform_digest + result_digest
+        )
+        and result_digest == transform_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -823,6 +923,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "fft_window_uses_current_coherent_gain_correction": (
                 _fft_window_coherent_gain_is_current(raw)
+            ),
+            "sparameter_renormalization_uses_current_complex_impedance_calibration": (
+                _sparameter_complex_impedance_renormalization_is_current(raw)
+            ),
+            "farfield_comparison_uses_explicit_current_polarization_transform": (
+                _farfield_polarization_basis_transform_is_current(raw)
             ),
         }
         row = {
