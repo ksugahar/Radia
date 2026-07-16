@@ -80,6 +80,50 @@ def pwm_controlled_motor_loss_gate(
     if not isinstance(time_series, dict) or not isinstance(loss_spectrum, dict):
         raise ValueError("time_series and loss_spectrum objects are required")
 
+    identity_value = payload.get("artifact_identity")
+    identity_present = isinstance(identity_value, dict)
+    cycle_generation_ok = True
+    restart_phase_origin_ok = True
+    if identity_value is not None and not identity_present:
+        cycle_generation_ok = False
+        restart_phase_origin_ok = False
+    elif identity_present:
+        torque_generation = str(identity_value.get("torque_cycle_generation", ""))
+        loss_generation = str(identity_value.get("loss_cycle_generation", ""))
+        cycle_generation_ok = (
+            bool(torque_generation) and torque_generation == loss_generation
+        )
+        segments = identity_value.get("waveform_segments")
+        if not isinstance(segments, list) or not segments:
+            restart_phase_origin_ok = False
+        else:
+            phase_origins = []
+            previous_end = -math.inf
+            for segment in segments:
+                if not isinstance(segment, dict):
+                    restart_phase_origin_ok = False
+                    break
+                try:
+                    phase_origin = float(segment["phase_origin_deg"])
+                    start = float(segment["start_time_s"])
+                    end = float(segment["end_time_s"])
+                except (KeyError, TypeError, ValueError):
+                    restart_phase_origin_ok = False
+                    break
+                if not all(math.isfinite(value) for value in (phase_origin, start, end)):
+                    restart_phase_origin_ok = False
+                    break
+                if not str(segment.get("segment_id", "")) or end < start or start < previous_end:
+                    restart_phase_origin_ok = False
+                    break
+                phase_origins.append(phase_origin)
+                previous_end = end
+            restart_phase_origin_ok = (
+                restart_phase_origin_ok
+                and bool(phase_origins)
+                and len(set(phase_origins)) == 1
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -278,6 +322,8 @@ def pwm_controlled_motor_loss_gate(
             "ratio_diagnostic_policy"
         )
         == "exclude_ratio_when_denominator_current_is_below_floor",
+        "torque_and_loss_share_periodic_cycle_generation": cycle_generation_ok,
+        "restart_segments_preserve_phase_origin": restart_phase_origin_ok,
     }
     tail_torque = torque_nm[tail_start:]
     tail_torque_mean = sum(tail_torque) / len(tail_torque)
@@ -289,6 +335,7 @@ def pwm_controlled_motor_loss_gate(
         "status": "ok" if all(checks.values()) else "needs_attention",
         "checks": checks,
         "issues": [name for name, ok in checks.items() if not ok],
+        "warnings": [] if identity_present else ["artifact_identity_not_recorded"],
         "metrics": {
             "time_row_count": count,
             "loss_row_count": loss_count,
