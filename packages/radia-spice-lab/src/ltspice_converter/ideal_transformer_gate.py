@@ -183,6 +183,64 @@ def _ac_frequency_interpolation_contract_ok(
     )
 
 
+def _transient_energy_window_event_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("transient_energy_window_event_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        energy_index = int(contract.get("energy_window_start_event_index"))
+        reference_index = int(contract.get("reference_window_start_event_index"))
+        energy_duration = float(contract.get("energy_window_duration_s"))
+        reference_duration = float(contract.get("reference_window_duration_s"))
+    except (TypeError, ValueError):
+        return False
+    event_generation = str(contract.get("event_detection_generation") or "")
+    return (
+        bool(str(contract.get("event_type") or ""))
+        and energy_index >= 0
+        and reference_index == energy_index
+        and math.isfinite(energy_duration)
+        and energy_duration > 0.0
+        and math.isclose(
+            reference_duration, energy_duration, rel_tol=0.0, abs_tol=0.0
+        )
+        and bool(event_generation)
+        and contract.get("energy_window_event_generation") == event_generation
+        and contract.get("reference_window_event_generation") == event_generation
+    )
+
+
+def _noise_density_band_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get("noise_density_band_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    scales = {"Hz": 1.0, "kHz": 1.0e3, "MHz": 1.0e6, "GHz": 1.0e9}
+    numerical_unit = str(contract.get("numerical_frequency_unit") or "")
+    band_unit = str(contract.get("band_limit_unit") or "")
+    try:
+        numerical_scale = float(contract.get("numerical_frequency_scale_to_hz"))
+        band_scale = float(contract.get("band_limit_scale_to_hz"))
+    except (TypeError, ValueError):
+        return False
+    grid_generation = str(contract.get("frequency_grid_generation") or "")
+    return (
+        contract.get("noise_density_unit") == "V/sqrt(Hz)"
+        and numerical_unit in scales
+        and band_unit in scales
+        and math.isclose(
+            numerical_scale, scales[numerical_unit], rel_tol=0.0, abs_tol=0.0
+        )
+        and math.isclose(band_scale, scales[band_unit], rel_tol=0.0, abs_tol=0.0)
+        and contract.get("integrated_noise_unit") == "V_rms"
+        and bool(grid_generation)
+        and contract.get("band_integration_grid_generation") == grid_generation
+    )
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -455,6 +513,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "ac_traces_share_frequency_interpolation_coordinate": (
             _ac_frequency_interpolation_contract_ok(positive)
+        ),
+        "transient_energy_windows_share_switching_event_phase": (
+            _transient_energy_window_event_identity_ok(positive)
+        ),
+        "noise_density_and_band_limits_share_frequency_units": (
+            _noise_density_band_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
