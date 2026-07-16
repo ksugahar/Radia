@@ -7,10 +7,8 @@ the physical eddy current contains a NET circulating component -- the
 shorted transformer turn.  The scalar BIE's surface current
 ``J_s = n x (-grad_s phi)`` with a single-valued phi carries ZERO net
 current through any cut of the surface, so that component and its Lenz
-screening are unrepresentable: on the Takahashi tube (7 kHz, mu_r=100)
-the plain solver over-estimated H_t by +11 % and P_wp by +27-32 % even
-after the winding fix, while matching the analytic genus-0 sphere
-benchmark to 0.3 %.
+screening are unrepresentable.  The plain scalar solver therefore needs
+a cohomology extension whenever source flux links the surface handle.
 
 Extension (one extra scalar DOF alpha = the net toroidal current):
 
@@ -50,9 +48,8 @@ Validation
   amplitude and ~0.2 deg in phase at two mesh resolutions; the frozen
   (alpha = 0) sub-system reproduces the production ScalarBIESIBCSolver
   solve to machine precision (same operators, same gauge).
-* Takahashi tube (7 kHz, 6700 A, mu_r=100): P_wp 21.5 -> 18.4 kW and
-  H_t 50.1 -> 46.3 kA/m against the 17.0-17.7 kW / 46.1 kA/m FEM A-V and
-  impedance-BC references (H_t to 0.5 %).
+* The frozen (alpha = 0) subsystem reproduces the production
+  ``ScalarBIESIBCSolver`` solve to machine precision.
 
 Scope / limitations (fail-loud, not silent)
 ===========================================

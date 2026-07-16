@@ -58,6 +58,10 @@ PARAM_JA = {
     "coil_sigma": {"ja": "コイル導電率", "physics": "コイル抵抗 R = L/(sigma*A) の計算用"},
     "coil-sigma": {"ja": "コイル導電率", "physics": "コイル抵抗計算用 [S/m]"},
     "workpiece": {"ja": "ワークピース境界", "physics": "加熱対象の表面ラベル (prefix match)"},
+    "wp_loop_dof": {"ja": "ループ電流自由度", "physics": "種数1ワークピースの短絡周回電流とLenz遮蔽を解く"},
+    "wp-loop-dof": {"ja": "ループ電流自由度", "physics": "種数1ワークピースの短絡周回電流とLenz遮蔽を解く"},
+    "wp_phi_inc": {"ja": "入射スカラーポテンシャル", "physics": "path=経路積分, poisson=表面Poisson射影"},
+    "wp-phi-inc": {"ja": "入射スカラーポテンシャル", "physics": "path=経路積分, poisson=表面Poisson射影"},
 
     # --- Impedance model ---
     "impedance_model": {"ja": "インピーダンスモデル", "physics": "esim=非線形セル問題, dowell=解析式, sibc=線形"},

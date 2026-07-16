@@ -1618,127 +1618,42 @@ Refs: ``docs/peec/VOLUME_PEEC_DESIGN.md``,
 ``docs/esim/R_MISMATCH_PEEC_VS_BEMA.md``,
 ``validation_test/bem/test_coil_bem_a_impedance_efie.py``.
 
-## Strong coupling (--coupling-mode strong): status + known P_wp limit
+## Strong coupling and genus-1 workpieces
 
-Both coil solvers have an iterative self-consistent coupling path since
-2026-07-15 (``--coupling-mode strong``): BEM-A coil ->
-``radia.bem_coupled_solver.CoupledBEMSolver`` (per-DOF EFIE back-reaction),
-PEEC coil -> ``radia.peec_coupled_bem_solver.CoupledPEECBEMSolver``
-(per-filament back-EMF into the loop bundle; EXPERIMENTAL flag in output).
+Both coil solvers expose an iterative self-consistent path through
+``--coupling-mode strong``: BEM-A uses
+``radia.bem_coupled_solver.CoupledBEMSolver`` and PEEC uses
+``radia.peec_coupled_bem_solver.CoupledPEECBEMSolver``.  The BEM-A
+solver is normalized to unit terminal current, so the driver scales
+fields by ``I`` and dissipation by ``I^2``.  The scaling contract is
+locked by ``test_strong_output_scales_with_terminal_current``.
 
-**Current scaling (fixed 2026-07-16)**: ``CoupledBEMSolver`` drives the
-coil EFIE at UNIT terminal current (its ``solve()`` takes no current);
-the strong driver now rescales P_wp ~ I^2 and H_t ~ I to ``--current``.
-Before the fix, a 6700 A Takahashi run reported P_wp = 8.3e-4 W /
-H_t = 9.84 A/m (1 A-drive values, I^2 = 4.5e7x low) while delta_L came
-out sane (+1.53 nH) and masked the bug.  Regression:
-``test_strong_output_scales_with_terminal_current`` (BEM-A + PEEC).
+Surface winding must be globally consistent before assembling the
+double-layer operator.  ``surface_mesh_extract.orient_surface_triangles``
+uses face-BFS propagation and signed-volume normalization, including
+the inner wall of a genus-1 tube where a centroid heuristic is invalid.
 
-**MEASURED LIMIT (Takahashi 7 kHz coarse wp, 2026-07-16): strong coupling
-does NOT close the ~2x P_wp over-estimate.**  Scaled strong P_wp ~= 35-37
-kW ~= weak 38.2 kW, still ~2x the validated references (Radia FEM A-V
-17.7 kW, impedance-BC general FEM 17.0 kW); H_t dropped only ~4-5 %
-(65.9 vs 69.0 kA/m weak, references ~46 kA/m).  The coupled interaction
-itself works (delta_L = +1.53 nH, same sign as full-FEM), but the
-coil-current redistribution is a percent-level effect here -- so the x1.5
-H_t / x2 P_wp bias is NOT "missing coil re-solve": it lives in the
-WORKPIECE-side scalar-BIE-SIBC H_t evaluation shared by weak AND strong
-(and by both coil solvers).  Outputs carry a ``P_wp_caveat`` key.
+A single-valued scalar potential cannot carry net current through a
+surface cut.  For a flux-linked genus-1 workpiece, enable
+``--wp-loop-dof`` to add the harmonic shorted-turn current.  The
+extension is closed by Faraday's law and is locked by the analytic
+shorted-ring golden plus a frozen-subsystem equivalence check.  It
+requires weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
+and ``--h1-order 1``.  The output records ``wp_loop_alpha_A`` and replaces
+the genus caveat with ``P_wp_note``.
 
-**ROOT CAUSE RESOLVED IN TWO PARTS (2026-07-16/17).**  Elimination chain:
-the mu_r-swept analytic sphere benchmark (closed form: H_t = (3/2) H0
-sin(theta) / |1 + gamma/a|, gamma = Z_s/(j omega mu_0)) cleared the
-BIE+SIBC core (0.3 % on H_t, ~1 % on P at mu_r = 1/10/100, incl. the
-mu_r=100 screening 1/1.58); the incident-potential branch-cut wall is
-real but worth only ~5 %; then the 4-way decomposition (winding x
-incident) on the production solver pinned the split:
+``--wp-phi-inc poisson`` replaces path integration with a
+Laplace-Beltrami projection of the exact vertex incident field.  It uses
+one batched field evaluation, is winding invariant, and fails loud when
+``||grad_S psi + H_t,inc|| / ||H_t,inc||`` exceeds 10 percent.  It works
+with both coil sources on the weak P1 path and composes with
+``--wp-loop-dof``.  The analytic icosphere tests cover uniform fields,
+complex linearity, winding invariance, and the non-gradient failure gate.
 
-    winding        incident        H_t [kA/m]   P_wp [kW]
-    inconsistent   path-integral      66.4        37.9   <- before
-    consistent     path-integral      51.2        22.5   <- FIXED (shipped)
-    consistent     psi-Poisson        50.1        21.5
-    references (FEM A-V / impedance-BC)  46.1     17.0-17.7
-
-**Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
-The hole extractor's per-triangle "centroid-outward" flip is wrong on a
-genus-1 tube (the bore-wall outward normal points TOWARD the centroid),
-so it flipped the entire inner wall -- 199 directed-edge conflicts --
-corrupting the double-layer operator.  Fixed by
-``surface_mesh_extract.orient_surface_triangles`` (face-BFS flip
-propagation + per-component signed-volume outward), wired into BOTH
-extractors.  No-op on consistent meshes (sphere benchmark unchanged).
-Takahashi weak now returns 22.5 kW / 51.2 kA/m.
-
-**Part 2 (was +27-32 % on P_wp, +11 % on H_t): genus-1 missing loop
-current -- SOLVED by ``radia.bem_loop_extension`` (2026-07-17).**
-chi = V - E + F = 0 -> genus 1; the coil flux links the bore, and the
-BIE's ``J_s = n x (-grad phi)`` with single-valued phi carries ZERO net
-current through any cut -- the shorted-turn eddy current and its Lenz
-screening are unrepresentable.  The extension adds ONE DOF alpha (the
-net toroidal current): ``phi = phi_u + alpha Theta`` with Theta the
-potential of a unit mid-wall ring (ray-cast from the homology cut, same
-class -> single-valued on the cut-open mesh, verified +-1 jump), alpha
-column = ``SL(gamma M^-1 K(Theta) - q_Theta)`` (the membrane term
-cancels against Theta's own identity), closed by Faraday on the cut
-loop.  BEM operators stay on the CLOSED mesh (assembling on the open
-mesh poisons the regular quadrature via coincident duplicated vertices).
-Validated: analytic shorted ring |alpha|/|I| = 0.983 / phase 0.2 deg,
-frozen(alpha=0) == plain production solve exactly
-(``validation_test/bem/test_loop_extension_ring.py``); Takahashi
-P_wp 21.5 -> **18.4 kW**, H_t 50.1 -> **46.3 kA/m** vs 17.0-17.7 kW /
-46.1 kA/m references (H_t to 0.5 %).  Entry points:
-``radia.bem_loop_extension.solve_loop_extended(solver, phi_inc, Z_s,
-omega, A_inc_fn)`` and the CLI flag ``calc_inductance.py --wp-loop-dof``
-(weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
-``--h1-order 1``; works with BOTH coil sources -- surface panels or PEEC
-filaments via the exact ``A_from_filaments``).  With the flag, P_wp /
-H_t are replaced by the loop-extended values, the Telegen delta_L keeps
-the plain-phi convention, the genus ``P_wp_caveat`` becomes a
-``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
-a built-in frozen-vs-plain cross-check refuses to report on operator
-mismatch.  Measured CLI end-to-end on Takahashi: path incident
-22.50 -> **19.29 kW** / 51.2 -> **47.4 kA/m** (alpha = 5603 A);
-psi-Poisson incident 21.50 -> **18.41 kW** / 50.1 -> **46.32 kA/m**
-(alpha = 5018 A, H_t to 0.5% of the 46.1 kA/m reference).
-
-**psi-Poisson incident -- CLI-wired as ``--wp-phi-inc poisson``
-(2026-07-17).**  Replaces the axis-ray + horizontal-ray path
-integration of phi_inc with a surface-Poisson (Laplace-Beltrami)
-projection of the EXACT vertex H_inc
-(``radia.bem_sibc_solver.compute_phi_inc_surface_poisson``): mean-zero
-psi with ``int grad_S psi . grad_S v = -int H_t,inc . grad_S v``, so
-the branch-cut wall a spanning-path integral drags across the surface
-disappears and the reconstruction is L2-optimal.  Also ~25x faster
-(one batched H evaluation instead of per-vertex quadrature rays:
-Takahashi 65.6 s -> 2.6 s).  Fail-loud gate: if
-``||grad_S psi + H_t,inc|| / ||H_t,inc|| > 10%`` (measured 2.8% on
-Takahashi, <1% on smooth genus-0; O(1) when the coil current pierces
-the surface so psi does not exist) it raises -- no silent fallback.
-Works with both coil sources (BEM-A panels / PEEC filaments); requires
-weak coupling + ``--h1-order 1``; composes with ``--wp-loop-dof``.
-Goldens: ``tests/test_phi_inc_poisson.py`` (icosphere: uniform field
-recovers psi = -H0 z to <2%, rotational Killing field fires the gate,
-winding-invariance, complex linearity).
-
-Full resolution chain (all CLI-selectable now): 38.2 kW (winding bug)
--> 22.5 (winding fix, default) -> 19.3 kW (--wp-loop-dof) ->
-**18.4 kW** (--wp-loop-dof --wp-phi-inc poisson) vs 17.0-17.7 kW
-references.
-
-Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
-+ ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
-WARNING for genus >= 1 and emits ``wp_euler_chi`` / ``wp_genus`` +
-``P_wp_caveat`` in the JSON (genus-conditional; genus-0 gets NO caveat,
-backed by the sphere benchmark).
-
-Implication for method choice: the DEFAULT weak/strong BEM on a
-genus >= 1 flux-linked workpiece still over-estimates P_wp by ~+30 %
-(was x2.2 before the winding fix) -- fine for trends/design iteration.
-For reference-grade absolute heating on a genus-1 workpiece, pass
-``--wp-loop-dof --wp-phi-inc poisson --wp-bem-backend intree-dense``
-(Takahashi: +4-8 % on P_wp, 0.5 % on H_t vs FEM A-V / impedance-BC),
-or use FEM A-V (``calc_fem_coilmesh.py``).  genus-0 workpieces carry
-no such caveat (sphere benchmark 0.3 %).
+Every weak or strong run records ``wp_euler_chi`` and ``wp_genus``.
+Without the loop extension, a flux-linked genus-1 result carries
+``P_wp_caveat`` because strong coil re-solving does not add the missing
+workpiece cohomology mode.
 
 ## When to use this
 

@@ -41,8 +41,7 @@ def step_to_coil_vol(step_path, vol_path, maxh=0.012,
         tetrahedra -- the common Cubit-export shape.  Used by the
         regression test for the volume-coil-vol failure class (a raw
         ``Mesh(coil.vol)`` handed to HDivSurface picks up extra null
-        modes and the EFIE saddle LU goes singular; keiko gapped_torus
-        2026-05-12, Takahashi coil_only.vol 2026-07-16).
+        modes and the EFIE saddle LU goes singular).
 
     Returns
     -------

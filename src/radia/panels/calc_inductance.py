@@ -623,13 +623,9 @@ def _wp_genus_check(wp_mesh, tag="BEM"):
     potential BIE (J_s = n x -grad phi, single-valued phi) carries ZERO net
     current through any cut of the surface, so on a handle that links the
     coil flux the physical shorted-turn eddy current -- and its Lenz
-    screening -- is unrepresentable.  Measured on the Takahashi tube
-    (genus 1, 7 kHz, mu_r=100), AFTER the winding-consistency fix removed
-    the dominant error: P_wp +27-32% / H_t +11% vs the FEM A-V and
-    impedance-BC references, while the SAME solver matches the analytic
-    genus-0 sphere benchmark to 0.3% (mu_r 1..100).  L / delta_L remain
-    usable; reference-grade absolute P_wp needs FEM A-V until the
-    cohomology loop-DOF extension lands.
+    screening -- is unrepresentable.  The analytic genus-0 sphere locks
+    the simply connected path; flux-linked genus-1 heating needs the
+    explicit loop-DOF extension.
     """
     from radia.bem_sibc_solver import surface_euler_characteristic
     chi = surface_euler_characteristic(wp_mesh)
@@ -640,9 +636,9 @@ def _wp_genus_check(wp_mesh, tag="BEM"):
             f"e.g. a tube/ring).  The scalar-potential BIE cannot carry a net "
             f"circulating (shorted-turn) eddy current on the handle, so its "
             f"Lenz screening is LOST: H_t / P_wp are over-estimated when the "
-            f"coil flux links the handle (Takahashi, post-winding-fix: "
-            f"P_wp +27-32%, H_t +11% vs FEM).  L / delta_L remain usable.  "
-            f"For reference-grade heating use FEM A-V (calc_fem_coilmesh.py).")
+            f"coil flux links the handle.  L / delta_L remain usable.  "
+            f"Use --wp-loop-dof on the supported weak-coupling path for "
+            f"absolute heating.")
     return chi, genus
 
 
@@ -650,14 +646,10 @@ _GENUS_P_WP_CAVEAT = (
     "workpiece surface genus >= 1 (Euler chi != 2): the scalar-potential "
     "BIE cannot represent the net circulating (shorted-turn) eddy current "
     "on the handle, so its Lenz screening is missing and H_t / P_wp are "
-    "over-estimated when the coil flux links the handle.  Measured on the "
-    "Takahashi tube AFTER the winding-consistency fix (2026-07-17): "
-    "P_wp +27-32% / H_t +11% vs the FEM A-V and impedance-BC references "
-    "(22.5 kW / 51.2 kA/m vs 17.0-17.7 kW / 46.1 kA/m); the same solver "
-    "matches the analytic genus-0 sphere benchmark to 0.3%.  delta_L is "
-    "unaffected.  For reference-grade absolute heating use FEM A-V until "
-    "the cohomology loop-DOF extension lands (prototype validated on the "
-    "analytic shorted ring to 2-3%).")
+    "over-estimated when the coil flux links the handle.  delta_L is "
+    "unaffected.  On the supported weak-coupling path, use --wp-loop-dof "
+    "to add the missing cohomology mode; the extension is locked by the "
+    "analytic shorted-ring golden.")
 
 
 def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
@@ -738,10 +730,9 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
 
 
 # Fail-loud bound on the surface-Poisson tangential-gradient residual
-# ||grad_S psi + H_t,inc|| / ||H_t,inc||.  Measured ~3% on the Takahashi
-# tube (7 kHz, 2955 vertices) and <1% on smooth genus-0 benches; a coil
-# current piercing the workpiece surface (psi does not exist) or a broken
-# incident-H evaluation lands O(1) -- 10% separates the two regimes.
+# ||grad_S psi + H_t,inc|| / ||H_t,inc||.  A coil current piercing the
+# workpiece surface (psi does not exist) or a broken incident-H evaluation
+# produces an O(1) residual; 10% is the fail-loud contract.
 _PHI_INC_POISSON_MAX_RESIDUAL = 0.10
 
 
@@ -1646,12 +1637,9 @@ def _extract_bnd_only_inline(vol_mesh, bnd_label):
 
     # Collect triangles, then make the winding GLOBALLY consistent +
     # outward via face-BFS + per-component signed volume.  The old
-    # per-triangle centroid test actively BROKE genus-1 workpieces: the
+    # per-triangle centroid test breaks genus-1 workpieces: the
     # bore-wall outward normal points TOWARD the centroid, so the whole
-    # inner wall got flipped (199 directed-edge conflicts on the
-    # Takahashi tube), the double-layer operator was corrupted, and P_wp
-    # came out 37.9 kW instead of 22.5 kW (references 17.0-17.7 kW) --
-    # the dominant share of the known x2 over-estimate (2026-07-17).
+    # inner wall is flipped and the double-layer operator is corrupted.
     from surface_mesh_extract import orient_surface_triangles
     order_vtx = sorted(used_vtx)
     compact = {v: i for i, v in enumerate(order_vtx)}
@@ -1745,10 +1733,9 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["P_wp_note"] = (
             "genus-1 loop DOF active: the net shorted-turn eddy current "
             "(wp_loop_alpha_A) is solved and its Lenz screening is included "
-            "in P_wp / H_t (Takahashi CLI validation: 19.3 kW / 47.4 kA/m "
-            "with the default path phi_inc, 18.4 kW / 46.3 kA/m with "
-            "--wp-phi-inc poisson, vs 17.0-17.7 kW / 46.1 kA/m FEM "
-            "references).  delta_L keeps the plain-solve phi convention.")
+            "in P_wp / H_t.  delta_L keeps the plain-solve phi convention; "
+            "the loop extension is locked by the analytic shorted-ring "
+            "golden.")
     elif out["wp_genus"] != 0:
         out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
@@ -1825,10 +1812,8 @@ def _solve_workpiece_strong_coupled(args):
     # Use the SAME loader as the vacuum BEM-A path: it validates the
     # source/sink labels AND converts a volume .vol to the pure surface
     # mesh HDivSurface needs.  Loading Mesh(args.coil_vol) directly here
-    # reproduced the known 2026-05-12 failure (keiko gapped_torus) on the
-    # Takahashi coil_only.vol (volume tets): HDivSurface picked up 11,595
-    # extra null modes (n_J 17,799 instead of 6,204), the coupled saddle
-    # LU went singular, and the solve died with NaNs (2026-07-16).
+    # reproduces a singular coupled saddle on volume-tet inputs because
+    # HDivSurface also sees the volume modes.
     coil_mesh = _build_bema_coil_mesh(args)
     # Same fail-loud source/sink check as the vacuum BEM-A path: the coupled
     # solver drives the coil EFIE from these labels, so a shortcut placement
@@ -2076,15 +2061,12 @@ def _assemble_strong_output(args, coil_data, strong):
     out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
-    # Topology context + genus-conditional P_wp caveat (root cause found
-    # 2026-07-16): the scalar BIE matches the analytic genus-0 sphere
-    # benchmark to 0.3% (mu_r 1..100), but on a genus>=1 workpiece it
+    # Topology context + genus-conditional P_wp caveat: the scalar BIE is
+    # locked by the analytic genus-0 sphere, but on a genus>=1 workpiece it
     # cannot carry the net shorted-turn eddy current on the handle, so its
     # Lenz screening is lost and P_wp / H_t are over-estimated when the
-    # coil flux links the handle (Takahashi tube: H_t x1.44, P_wp x2.2 vs
-    # FEM).  Strong coupling does NOT remove this (coil-current
-    # redistribution is percent-level); it is a workpiece-side missing
-    # loop DOF, shared by weak AND strong and by both coil solvers.
+    # coil flux links the handle.  Strong coupling does not add that
+    # workpiece-side loop DOF.
     out["wp_euler_chi"] = int(strong.get("wp_euler_chi", 2))
     out["wp_genus"] = int(strong.get("wp_genus", 0))
     if out["wp_genus"] != 0:
@@ -2610,10 +2592,7 @@ def build_argparser():
                              "(radia.bem_loop_extension).  Recovers the "
                              "Lenz screening a single-valued potential "
                              "cannot represent on a ring/tube workpiece "
-                             "whose bore links the coil flux (Takahashi "
-                             "7 kHz: P_wp 22.5 -> 19.3 kW, or -> 18.4 kW "
-                             "combined with --wp-phi-inc poisson, vs "
-                             "17.0-17.7 kW FEM references).  "
+                             "whose bore links the coil flux.  "
                              "Requires: weak coupling, "
                              "linear SIBC (--impedance-model sibc), "
                              "--wp-bem-backend intree-dense, --h1-order 1, "
@@ -2633,11 +2612,7 @@ def build_argparser():
                              "instead of per-vertex quadrature rays).  "
                              "Fails loud when grad_S psi misses H_t,inc "
                              "by > 10% (e.g. coil current piercing the "
-                             "surface).  Takahashi 7 kHz CLI: residual "
-                             "2.8%, t_phi 65.6 s -> 2.6 s, P_wp 22.5 -> "
-                             "21.5 kW alone, -> 18.4 kW combined with "
-                             "--wp-loop-dof (vs 17.0-17.7 kW FEM "
-                             "references, H_t 46.3 vs 46.1 kA/m).  "
+                             "surface).  "
                              "Requires weak coupling and --h1-order 1.")
 
     # ----- Excitation -----

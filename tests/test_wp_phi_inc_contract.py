@@ -19,6 +19,8 @@ for p in (_PANELS, _REPO / "validation_test" / "panels"):
         sys.path.insert(0, str(p))
 
 import calc_inductance as ci
+from radia.ih_design import IHDesignSpec, METHOD_PEEC_BEM
+from radia.ih_notebook import IH_NOTEBOOK_FIELD_ORDER
 
 
 def _args(extra):
@@ -55,7 +57,24 @@ def test_early_guards_fail_fast(extra, frag):
 
 
 def test_composes_with_loop_dof_flags():
-    """--wp-phi-inc poisson + --wp-loop-dof parse together (the measured
-    Takahashi combination)."""
+    """--wp-phi-inc poisson + --wp-loop-dof parse together."""
     ns = _args(["--wp-loop-dof", "--wp-bem-backend", "intree-dense"])
     assert ns.wp_phi_inc == "poisson" and ns.wp_loop_dof is True
+
+
+def test_notebook_designspec_exposes_and_emits_both_controls():
+    spec = IHDesignSpec(
+        method=METHOD_PEEC_BEM,
+        peec_step="coil.step",
+        wp_vol="workpiece.vol",
+        solver="Dense LU (small)",
+        fes_order=1,
+        wp_phi_inc="poisson",
+        wp_loop_dof=True,
+    )
+
+    assert {"wp_phi_inc", "wp_loop_dof"} <= spec.visible_fields()
+    assert {"wp_phi_inc", "wp_loop_dof"} <= set(IH_NOTEBOOK_FIELD_ORDER)
+    cmd = spec.build_command(python="python", panels_dir=_PANELS)
+    assert cmd[cmd.index("--wp-phi-inc") + 1] == "poisson"
+    assert "--wp-loop-dof" in cmd

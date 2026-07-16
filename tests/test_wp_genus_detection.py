@@ -1,9 +1,7 @@
 """Unit tests: workpiece surface genus detection for the scalar BIE + SIBC.
 
-Background (2026-07-16, Takahashi 7 kHz): the scalar-potential BIE matches
-the analytic genus-0 sphere SIBC benchmark to 0.3% (mu_r 1..100), but on
-the genus-1 Takahashi tube it over-estimated H_t x1.44 / P_wp x2.2 vs the
-FEM A-V and impedance-BC references.  Root cause: the BIE surface current
+The analytic genus-0 sphere locks the simply connected scalar-potential
+BIE path.  On a flux-linked genus-1 tube the BIE surface current
 ``J_s = n x (-grad phi)`` with single-valued phi carries ZERO net current
 through any cut of the surface, so the physical shorted-turn eddy current
 on a flux-linked handle -- and its Lenz screening -- is unrepresentable.
@@ -88,9 +86,8 @@ def test_torus_grid_resolution_invariant():
         assert chi == 0, f"nu={nu} nv={nv} gave chi={chi}"
 
 
-def test_takahashi_measured_counts():
-    """Lock the arithmetic on the real incident's counts:
-    V=2955, E=8865, F=5910 -> chi=0 -> genus 1 (the Takahashi tube)."""
+def test_genus_one_regression_counts():
+    """Lock the Euler arithmetic for a genus-1 production-size mesh."""
     V, E, F = 2955, 8865, 5910
     chi = V - E + F
     assert chi == 0

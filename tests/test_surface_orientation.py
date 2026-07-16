@@ -1,13 +1,11 @@
 """Unit tests: orient_surface_triangles (global winding consistency).
 
-Background (2026-07-17, Takahashi genus-1 workpiece): the hole extractor's
-old per-triangle "centroid-outward" flip actively CREATED an inconsistent
+The hole extractor's old per-triangle "centroid-outward" flip actively
+created an inconsistent
 winding on a genus-1 tube (the bore-wall outward normal points TOWARD the
-centroid, so the whole inner wall was flipped -- 199 directed-edge
-conflicts).  The inconsistent winding corrupts the scalar BIE's
-double-layer operator: Takahashi 7 kHz / mu_r=100 gave P_wp = 37.9 kW
-instead of 22.5 kW (references 17.0-17.7 kW) -- the dominant share of the
-known x2 heating over-estimate.  ``orient_surface_triangles`` replaces the
+centroid, so the whole inner wall is flipped).  The inconsistent winding
+corrupts the scalar BIE's double-layer operator.
+``orient_surface_triangles`` replaces the
 heuristic with face-BFS flip propagation + per-component signed-volume
 outward normalisation.
 """
