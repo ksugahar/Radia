@@ -1645,44 +1645,53 @@ H_t / x2 P_wp bias is NOT "missing coil re-solve": it lives in the
 WORKPIECE-side scalar-BIE-SIBC H_t evaluation shared by weak AND strong
 (and by both coil solvers).  Outputs carry a ``P_wp_caveat`` key.
 
-**ROOT CAUSE FOUND (2026-07-16, same day): the workpiece is genus 1 and
-the scalar BIE cannot carry a shorted-turn eddy current.**  The
-mu_r-swept analytic sphere benchmark (closed form: H_t = (3/2) H0
+**ROOT CAUSE RESOLVED IN TWO PARTS (2026-07-16/17).**  Elimination chain:
+the mu_r-swept analytic sphere benchmark (closed form: H_t = (3/2) H0
 sin(theta) / |1 + gamma/a|, gamma = Z_s/(j omega mu_0)) cleared the
-BIE+SIBC core: 0.3 % on H_t and ~1 % on P at mu_r = 1 / 10 / 100,
-including the full mu_r=100 screening factor 1/1.58.  The incident
-potential's branch-cut wall (the path-integral phi_inc jumps where its
-single-valuedising cut crosses a workpiece that pierces the coil bore;
-measured 871 % grad-consistency error in the band just below the coil
-plane) is REAL but moved P_wp by only ~5 % when fixed by a
-surface-Poisson reconstruction (grad_s psi = -H_t,inc, 3 % consistency).
-The dominant error is topological: the Takahashi workpiece surface has
-Euler characteristic chi = V - E + F = 2955 - 8865 + 5910 = **0, i.e.
-genus 1 (a tube)**.  The coil flux links the bore, so the physical eddy
-current contains a NET circulating (shorted-transformer-turn) component
--- but the BIE's ``J_s = n x (-grad phi)`` with single-valued phi carries
-ZERO net current through any cut, so that component and its Lenz
-screening are unrepresentable.  Result: H_t x1.44 (66.4 vs 46.1 kA/m),
-P_wp x2.2 (38 vs 17 kW).  FEM A-V represents it naturally -> 17.7 kW is
-the truth.  mu_r = 1 "agreeing by luck" fits too (different screening
-share).
+BIE+SIBC core (0.3 % on H_t, ~1 % on P at mu_r = 1/10/100, incl. the
+mu_r=100 screening 1/1.58); the incident-potential branch-cut wall is
+real but worth only ~5 %; then the 4-way decomposition (winding x
+incident) on the production solver pinned the split:
 
-Detection is now built in: ``bem_sibc_solver.surface_euler_characteristic``
+    winding        incident        H_t [kA/m]   P_wp [kW]
+    inconsistent   path-integral      66.4        37.9   <- before
+    consistent     path-integral      51.2        22.5   <- FIXED (shipped)
+    consistent     psi-Poisson        50.1        21.5
+    references (FEM A-V / impedance-BC)  46.1     17.0-17.7
+
+**Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
+The hole extractor's per-triangle "centroid-outward" flip is wrong on a
+genus-1 tube (the bore-wall outward normal points TOWARD the centroid),
+so it flipped the entire inner wall -- 199 directed-edge conflicts --
+corrupting the double-layer operator.  Fixed by
+``surface_mesh_extract.orient_surface_triangles`` (face-BFS flip
+propagation + per-component signed-volume outward), wired into BOTH
+extractors.  No-op on consistent meshes (sphere benchmark unchanged).
+Takahashi weak now returns 22.5 kW / 51.2 kA/m.
+
+**Part 2 (remaining +27-32 % on P_wp, +11 % on H_t): genus-1 missing
+loop current.**  chi = V - E + F = 0 -> genus 1; the coil flux links the
+bore, and the BIE's ``J_s = n x (-grad phi)`` with single-valued phi
+carries ZERO net current through any cut -- the shorted-turn eddy
+current and its Lenz screening are unrepresentable.  The loop-DOF
+extension (cut-open mesh + a Theta carrier field + Faraday closure;
+membrane term cancels analytically against Theta's own exterior
+identity, alpha column = SL(gamma M^-1 K Theta - q_Theta)) is PROTOTYPED
+and validated on the analytic thin-wire shorted ring: net current to
+2-3 %, phase 0.3 deg, at two mesh resolutions.  Takahashi integration
+is follow-up work (the same prototype exposed the winding bug).
+
+Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
 + ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
 WARNING for genus >= 1 and emits ``wp_euler_chi`` / ``wp_genus`` +
-``P_wp_caveat`` in the JSON (genus-conditional: a genus-0 workpiece gets
-NO caveat, backed by the sphere benchmark).
+``P_wp_caveat`` in the JSON (genus-conditional; genus-0 gets NO caveat,
+backed by the sphere benchmark).
 
-Implication for method choice: for absolute workpiece heating on a
-genus >= 1 (ring/tube) workpiece whose bore links the coil flux, use FEM
-A-V (``calc_fem_coilmesh.py``); BEM weak/strong remain fine for L,
-R_coil, delta_L, trends, and for genus-0 workpieces.  Fix lane (open):
-add cohomology loop DOFs to the scalar BIE -- H_t = -grad_s phi + sum_k
-alpha_k h_k with harmonic-1-form basis h_k on the handles (the
-``radia.cohomology`` engine already computes surface cuts/loops
-gmsh-free) and close alpha_k with the Faraday EMF condition
-``loop-integral of Z_s (n x H_t) . dl = -j omega Phi_linked`` (Phi_linked
-includes the scattered flux via the single-layer potential).
+Implication for method choice: after the winding fix, BEM weak/strong on
+a genus >= 1 flux-linked workpiece over-estimates P_wp by ~+30 % (was
+x2.2) -- fine for trends/design iteration; use FEM A-V
+(``calc_fem_coilmesh.py``) for reference-grade absolute heating until
+the loop-DOF extension lands.  genus-0 workpieces carry no such caveat.
 
 ## When to use this
 
