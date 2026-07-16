@@ -160,6 +160,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_tolerance_norm_identity_ok = (
         _optional_hmatrix_low_rank_tolerance_norm_basis_is_aligned(summary)
     )
+    complex_symmetry_residual_identity_ok = (
+        _optional_complex_operator_symmetry_residual_norm_is_aligned(summary)
+    )
+    hmatrix_diameter_metric_identity_ok = (
+        _optional_hmatrix_admissibility_diameter_metric_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -231,6 +237,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_low_rank_acceptance_uses_calibrated_norm_basis": (
             hmatrix_tolerance_norm_identity_ok
+        ),
+        "complex_operator_residual_uses_transpose_symmetry_class": (
+            complex_symmetry_residual_identity_ok
+        ),
+        "hmatrix_admissibility_uses_one_cluster_diameter_metric": (
+            hmatrix_diameter_metric_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -757,6 +769,85 @@ def _optional_hmatrix_low_rank_tolerance_norm_basis_is_aligned(
         == tolerance_generation
         and _is_sha256(dense_digest)
         and source_digest == dense_digest
+    )
+
+
+def _optional_complex_operator_symmetry_residual_norm_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("complex_operator_symmetry_residual_norm_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        residual_norm = _finite_float(value, "residual_norm")
+        reported_norm = _finite_float(value, "reported_residual_norm")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("operator_generation", "")).strip()
+    operator_digest = str(value.get("operator_metadata_sha256", "")).lower()
+    residual_digest = str(
+        value.get("residual_operator_metadata_sha256", "")
+    ).lower()
+    return (
+        bool(generation)
+        and value.get("assembled_operator_generation") == generation
+        and value.get("residual_operator_generation") == generation
+        and value.get("operator_symmetry_class") == "complex_symmetric"
+        and value.get("assembly_symmetry_check") == "transpose"
+        and value.get("residual_symmetry_check") == "transpose"
+        and value.get("hermitian_symmetry_check_applied") is False
+        and value.get("residual_norm_basis") == "complex_euclidean"
+        and value.get("reported_residual_norm_basis") == "complex_euclidean"
+        and residual_norm >= 0.0
+        and _close(reported_norm, residual_norm)
+        and _is_sha256(operator_digest)
+        and residual_digest == operator_digest
+    )
+
+
+def _optional_hmatrix_admissibility_diameter_metric_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("hmatrix_admissibility_cluster_diameter_metric_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        source_diameter = _finite_float(value, "source_cluster_diameter")
+        target_diameter = _finite_float(value, "target_cluster_diameter")
+        separation = _finite_float(value, "cluster_separation")
+        eta = _finite_float(value, "admissibility_eta")
+    except (KeyError, TypeError, ValueError):
+        return False
+    tree_generation = str(value.get("cluster_tree_generation", "")).strip()
+    threshold_generation = str(
+        value.get("threshold_calibration_generation", "")
+    ).strip()
+    diameter_metric = str(value.get("diameter_metric", "")).strip()
+    geometry_digest = str(value.get("cluster_geometry_sha256", "")).lower()
+    result_digest = str(
+        value.get("admissibility_geometry_sha256", "")
+    ).lower()
+    expected_admissible = max(source_diameter, target_diameter) <= eta * separation
+    return (
+        bool(tree_generation)
+        and value.get("source_cluster_generation") == tree_generation
+        and value.get("target_cluster_generation") == tree_generation
+        and diameter_metric in {"euclidean_l2", "infinity_linf"}
+        and value.get("admissibility_diameter_metric") == diameter_metric
+        and value.get("threshold_calibration_diameter_metric") == diameter_metric
+        and source_diameter >= 0.0
+        and target_diameter >= 0.0
+        and separation > 0.0
+        and eta > 0.0
+        and value.get("admissible") is expected_admissible
+        and bool(threshold_generation)
+        and value.get("acceptance_threshold_generation") == threshold_generation
+        and _is_sha256(geometry_digest)
+        and result_digest == geometry_digest
     )
 
 

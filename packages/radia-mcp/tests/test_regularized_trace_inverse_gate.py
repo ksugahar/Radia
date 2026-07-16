@@ -370,6 +370,38 @@ def _with_v14_identity(summary):
         "dense_block_sha256": "2" * 64,
         "accepted_block_source_sha256": "2" * 64,
     }
+    summary["complex_operator_symmetry_residual_norm_identity"] = {
+        "operator_generation": "complex-operator-17",
+        "assembled_operator_generation": "complex-operator-17",
+        "residual_operator_generation": "complex-operator-17",
+        "operator_symmetry_class": "complex_symmetric",
+        "assembly_symmetry_check": "transpose",
+        "residual_symmetry_check": "transpose",
+        "hermitian_symmetry_check_applied": False,
+        "residual_norm_basis": "complex_euclidean",
+        "reported_residual_norm_basis": "complex_euclidean",
+        "residual_norm": 8.0e-8,
+        "reported_residual_norm": 8.0e-8,
+        "operator_metadata_sha256": "1" * 64,
+        "residual_operator_metadata_sha256": "1" * 64,
+    }
+    summary["hmatrix_admissibility_cluster_diameter_metric_identity"] = {
+        "cluster_tree_generation": "cluster-tree-17",
+        "source_cluster_generation": "cluster-tree-17",
+        "target_cluster_generation": "cluster-tree-17",
+        "diameter_metric": "euclidean_l2",
+        "admissibility_diameter_metric": "euclidean_l2",
+        "threshold_calibration_diameter_metric": "euclidean_l2",
+        "source_cluster_diameter": 0.2,
+        "target_cluster_diameter": 0.1,
+        "cluster_separation": 1.0,
+        "admissibility_eta": 0.5,
+        "admissible": True,
+        "threshold_calibration_generation": "admissibility-17",
+        "acceptance_threshold_generation": "admissibility-17",
+        "cluster_geometry_sha256": "2" * 64,
+        "admissibility_geometry_sha256": "2" * 64,
+    }
     return summary
 
 
@@ -601,6 +633,44 @@ def test_v14_public_hmatrix_low_rank_tolerance_norm_basis_mismatch():
     assert (
         result["checks"][
             "hmatrix_low_rank_acceptance_uses_calibrated_norm_basis"
+        ]
+        is False
+    )
+
+
+def test_v15_public_complex_symmetric_hermitian_residual_norm_mismatch():
+    bad = _with_v14_identity(_summary())
+    bad["complex_operator_symmetry_residual_norm_identity"].update(
+        {
+            "residual_symmetry_check": "conjugate_transpose",
+            "hermitian_symmetry_check_applied": True,
+            "residual_operator_metadata_sha256": "5" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "complex_operator_residual_uses_transpose_symmetry_class"
+        ]
+        is False
+    )
+
+
+def test_v15_public_hmatrix_admissibility_cluster_diameter_metric_mismatch():
+    bad = _with_v14_identity(_summary())
+    bad["hmatrix_admissibility_cluster_diameter_metric_identity"].update(
+        {
+            "admissibility_diameter_metric": "infinity_linf",
+            "acceptance_threshold_generation": "admissibility-16",
+            "admissibility_geometry_sha256": "5" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hmatrix_admissibility_uses_one_cluster_diameter_metric"
         ]
         is False
     )
