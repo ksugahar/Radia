@@ -3213,6 +3213,110 @@ def shape_mass_property_crosscheck_summary(
                 compound_label_topology_identity(row) == reference_label_topologies.get(str(row.get("name", ""))) for row in rows
             )
 
+    mass_unit_evidence_present = any(
+        row.get("center_of_mass_density_length_unit_identity") is not None
+        for row in identity_rows
+    )
+
+    def center_of_mass_density_length_unit_identity(row):
+        value = row.get("center_of_mass_density_length_unit_identity")
+        if not isinstance(value, dict):
+            return None
+        length_units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+        geometry_unit = str(value.get("geometry_length_unit", "")).strip()
+        center_unit = str(value.get("center_of_mass_length_unit", "")).strip()
+        volume_unit = str(value.get("volume_length_unit", "")).strip()
+        generation = str(value.get("mass_property_generation", "")).strip()
+        try:
+            geometry_scale = float(value.get("geometry_length_scale_to_m"))
+            center_scale = float(value.get("center_of_mass_length_scale_to_m"))
+            volume_scale = float(value.get("volume_length_scale_to_m"))
+            density_scale = float(value.get("density_scale_to_kg_per_m3"))
+        except (TypeError, ValueError):
+            return None
+        expected_scale = length_units.get(geometry_unit)
+        if (
+            expected_scale is None
+            or center_unit != geometry_unit
+            or volume_unit != geometry_unit
+            or not math.isclose(geometry_scale, expected_scale, rel_tol=0.0, abs_tol=0.0)
+            or not math.isclose(center_scale, geometry_scale, rel_tol=0.0, abs_tol=0.0)
+            or not math.isclose(volume_scale, geometry_scale, rel_tol=0.0, abs_tol=0.0)
+            or value.get("density_unit") != "kg/m^3"
+            or not math.isclose(density_scale, 1.0, rel_tol=0.0, abs_tol=0.0)
+            or value.get("reported_mass_unit") != "kg"
+            or not generation
+            or value.get("geometry_generation") != generation
+            or value.get("density_generation") != generation
+        ):
+            return None
+        return generation, geometry_unit, geometry_scale
+
+    reference_mass_units = {
+        str(row.get("name", "")): center_of_mass_density_length_unit_identity(row)
+        for row in reference
+    }
+    mass_unit_identity_ok = not mass_unit_evidence_present
+    if mass_unit_evidence_present:
+        mass_unit_identity_ok = bool(reference_mass_units) and all(
+            value is not None for value in reference_mass_units.values()
+        )
+        for _, rows in normalized_sets:
+            mass_unit_identity_ok = mass_unit_identity_ok and all(
+                center_of_mass_density_length_unit_identity(row)
+                == reference_mass_units.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    periodic_selector_evidence_present = any(
+        row.get("periodic_face_selector_fillet_topology_identity") is not None
+        for row in identity_rows
+    )
+
+    def periodic_face_selector_fillet_topology_identity(row):
+        value = row.get("periodic_face_selector_fillet_topology_identity")
+        if not isinstance(value, dict):
+            return None
+        fillet_generation = str(value.get("final_fillet_generation", "")).strip()
+        topology_generation = str(value.get("final_topology_generation", "")).strip()
+        source_ids = list(value.get("source_face_ids") or [])
+        selected_source_ids = list(value.get("selected_source_face_ids") or [])
+        target_ids = list(value.get("target_face_ids") or [])
+        selected_target_ids = list(value.get("selected_target_face_ids") or [])
+        digest = str(value.get("final_shape_sha256", "")).lower()
+        if (
+            not fillet_generation
+            or not topology_generation
+            or value.get("selector_topology_generation") != topology_generation
+            or value.get("periodic_pair_topology_generation") != topology_generation
+            or not source_ids
+            or not target_ids
+            or len(set(source_ids)) != len(source_ids)
+            or len(set(target_ids)) != len(target_ids)
+            or selected_source_ids != source_ids
+            or selected_target_ids != target_ids
+            or not valid_sha256(digest)
+            or value.get("selector_parent_shape_sha256") != digest
+        ):
+            return None
+        return fillet_generation, topology_generation, tuple(source_ids), tuple(target_ids), digest
+
+    reference_periodic_selectors = {
+        str(row.get("name", "")): periodic_face_selector_fillet_topology_identity(row)
+        for row in reference
+    }
+    periodic_selector_identity_ok = not periodic_selector_evidence_present
+    if periodic_selector_evidence_present:
+        periodic_selector_identity_ok = bool(reference_periodic_selectors) and all(
+            value is not None for value in reference_periodic_selectors.values()
+        )
+        for _, rows in normalized_sets:
+            periodic_selector_identity_ok = periodic_selector_identity_ok and all(
+                periodic_face_selector_fillet_topology_identity(row)
+                == reference_periodic_selectors.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3282,6 +3386,8 @@ def shape_mass_property_crosscheck_summary(
         ),
         "tessellated_area_uses_one_length_unit_tolerance": tessellation_unit_identity_ok,
         "compound_labels_resolve_on_final_boolean_topology": label_topology_identity_ok,
+        "center_of_mass_density_and_volume_share_length_unit_covariance": mass_unit_identity_ok,
+        "periodic_face_selectors_follow_final_fillet_topology": periodic_selector_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3310,6 +3416,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("assembly mass properties are not expressed in the final placement frame")
     if not checks["boolean_validity_topology_and_mass_share_final_healed_shape"]:
         issues.append("boolean validity, topology, and mass belong to different heal generations")
+    if not checks["center_of_mass_density_and_volume_share_length_unit_covariance"]:
+        issues.append("center of mass, density, volume, and mass use inconsistent unit covariance")
+    if not checks["periodic_face_selectors_follow_final_fillet_topology"]:
+        issues.append("periodic face selectors belong to a pre-fillet topology")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
