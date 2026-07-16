@@ -624,11 +624,12 @@ def _wp_genus_check(wp_mesh, tag="BEM"):
     current through any cut of the surface, so on a handle that links the
     coil flux the physical shorted-turn eddy current -- and its Lenz
     screening -- is unrepresentable.  Measured on the Takahashi tube
-    (genus 1, 7 kHz, mu_r=100): H_t x1.44 / P_wp x2.2 vs the FEM A-V and
+    (genus 1, 7 kHz, mu_r=100), AFTER the winding-consistency fix removed
+    the dominant error: P_wp +27-32% / H_t +11% vs the FEM A-V and
     impedance-BC references, while the SAME solver matches the analytic
     genus-0 sphere benchmark to 0.3% (mu_r 1..100).  L / delta_L remain
-    usable; absolute P_wp needs FEM A-V until the cohomology loop-DOF
-    extension lands.
+    usable; reference-grade absolute P_wp needs FEM A-V until the
+    cohomology loop-DOF extension lands.
     """
     from radia.bem_sibc_solver import surface_euler_characteristic
     chi = surface_euler_characteristic(wp_mesh)
@@ -639,9 +640,9 @@ def _wp_genus_check(wp_mesh, tag="BEM"):
             f"e.g. a tube/ring).  The scalar-potential BIE cannot carry a net "
             f"circulating (shorted-turn) eddy current on the handle, so its "
             f"Lenz screening is LOST: H_t / P_wp are over-estimated when the "
-            f"coil flux links the handle (Takahashi: H_t x1.44, P_wp x2.2 vs "
-            f"FEM).  L / delta_L remain usable.  For absolute heating use FEM "
-            f"A-V (calc_fem_coilmesh.py).")
+            f"coil flux links the handle (Takahashi, post-winding-fix: "
+            f"P_wp +27-32%, H_t +11% vs FEM).  L / delta_L remain usable.  "
+            f"For reference-grade heating use FEM A-V (calc_fem_coilmesh.py).")
     return chi, genus
 
 
@@ -649,11 +650,14 @@ _GENUS_P_WP_CAVEAT = (
     "workpiece surface genus >= 1 (Euler chi != 2): the scalar-potential "
     "BIE cannot represent the net circulating (shorted-turn) eddy current "
     "on the handle, so its Lenz screening is missing and H_t / P_wp are "
-    "over-estimated when the coil flux links the handle (measured on the "
-    "Takahashi tube: H_t x1.44, P_wp x2.2 vs FEM A-V / impedance-BC "
-    "references; the same solver matches the analytic genus-0 sphere "
-    "benchmark to 0.3%).  delta_L is unaffected.  Use FEM A-V for "
-    "absolute heating until the cohomology loop-DOF extension lands.")
+    "over-estimated when the coil flux links the handle.  Measured on the "
+    "Takahashi tube AFTER the winding-consistency fix (2026-07-17): "
+    "P_wp +27-32% / H_t +11% vs the FEM A-V and impedance-BC references "
+    "(22.5 kW / 51.2 kA/m vs 17.0-17.7 kW / 46.1 kA/m); the same solver "
+    "matches the analytic genus-0 sphere benchmark to 0.3%.  delta_L is "
+    "unaffected.  For reference-grade absolute heating use FEM A-V until "
+    "the cohomology loop-DOF extension lands (prototype validated on the "
+    "analytic shorted ring to 2-3%).")
 
 
 def _solve_workpiece_weak_coupled(args, coil_data):
