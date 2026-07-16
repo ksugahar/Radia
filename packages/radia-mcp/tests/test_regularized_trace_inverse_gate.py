@@ -211,6 +211,27 @@ def _with_v8_generations(summary):
     return summary
 
 
+def _with_v9_bindings(summary):
+    summary = _with_v8_generations(summary)
+    count = len(summary["path"]["alphas"])
+    summary["path"].update(
+        {
+            "objective_quadrature_generation_ids": [
+                "boundary-quadrature-42" for _ in range(count)
+            ],
+            "gradient_quadrature_generation_ids": [
+                "boundary-quadrature-42" for _ in range(count)
+            ],
+        }
+    )
+    summary["lcurve"]["curvature_parameterization"] = {
+        "path_coordinate": "log10_alpha",
+        "curvature_coordinate": "log10_alpha",
+        "coordinate_transform_recorded": True,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -230,3 +251,32 @@ def test_v8_public_regularization_restart_row_reuse():
     result = regularized_trace_inverse_path_gate(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["solution_rows_share_regularization_run_generation"] is False
+
+
+def test_v9_public_gradient_quadrature_generation_mismatch():
+    bad = _with_v9_bindings(_summary())
+    bad["path"]["gradient_quadrature_generation_ids"][3] = (
+        "boundary-quadrature-41"
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["gradient_uses_current_boundary_quadrature_generation"]
+        is False
+    )
+
+
+def test_v9_public_regularization_curvature_parameterization_mismatch():
+    bad = _with_v9_bindings(_summary())
+    bad["lcurve"]["curvature_parameterization"].update(
+        {
+            "curvature_coordinate": "natural_log_alpha",
+            "coordinate_transform_recorded": False,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["lcurve_curvature_uses_recorded_path_parameterization"]
+        is False
+    )
