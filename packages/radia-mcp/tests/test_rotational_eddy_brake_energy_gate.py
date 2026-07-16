@@ -482,6 +482,33 @@ def _with_v15_reference_jacobian_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v16_nonlinear_ale_frame_identity(summary: dict) -> dict:
+    summary = _with_v15_reference_jacobian_identity(summary)
+    summary["nonlinear_residual_tangent_iteration_identity"] = {
+        "nonlinear_solve_generation": "nonlinear-solve-50",
+        "residual_solve_generation": "nonlinear-solve-50",
+        "tangent_solve_generation": "nonlinear-solve-50",
+        "material_state_solve_generation": "nonlinear-solve-50",
+        "residual_iteration": 12,
+        "tangent_iteration": 12,
+        "material_state_iteration": 12,
+        "material_state_sha256": "6" * 64,
+        "tangent_material_state_sha256": "6" * 64,
+    }
+    summary["moving_mesh_field_transfer_frame_identity"] = {
+        "mesh_motion_generation": "ale-motion-50",
+        "source_mesh_motion_generation": "ale-motion-50",
+        "target_mesh_motion_generation": "ale-motion-50",
+        "field_transfer_mesh_motion_generation": "ale-motion-50",
+        "source_coordinate_frame": "material",
+        "target_coordinate_frame": "material",
+        "field_transfer_coordinate_frame": "material",
+        "coordinate_map_sha256": "7" * 64,
+        "field_transfer_coordinate_map_sha256": "7" * 64,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -671,5 +698,48 @@ def test_v15_public_deformed_domain_integral_geometry_jacobian_generation_mismat
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["deformed_domain_integral_uses_current_geometry_jacobian"]
+        is False
+    )
+
+
+def test_v16_public_positive_nonlinear_and_moving_mesh_frame_identity() -> None:
+    result = gate(_with_v16_nonlinear_ale_frame_identity(copy.deepcopy(_summary())))
+    assert result["status"] == "ok"
+    assert result["checks"]["nonlinear_residual_and_tangent_share_material_iteration"]
+    assert result["checks"]["moving_mesh_field_transfer_uses_one_coordinate_frame"]
+
+
+def test_v16_public_nonlinear_residual_tangent_iteration_generation_mismatch() -> None:
+    summary = _with_v16_nonlinear_ale_frame_identity(copy.deepcopy(_summary()))
+    summary["nonlinear_residual_tangent_iteration_identity"].update(
+        {
+            "tangent_solve_generation": "nonlinear-solve-49",
+            "tangent_iteration": 11,
+            "tangent_material_state_sha256": "a" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "nonlinear_residual_and_tangent_share_material_iteration"
+        ]
+        is False
+    )
+
+
+def test_v16_public_moving_mesh_field_transfer_material_spatial_frame_mismatch() -> None:
+    summary = _with_v16_nonlinear_ale_frame_identity(copy.deepcopy(_summary()))
+    summary["moving_mesh_field_transfer_frame_identity"].update(
+        {
+            "target_mesh_motion_generation": "ale-motion-49",
+            "target_coordinate_frame": "spatial",
+            "field_transfer_coordinate_map_sha256": "a" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["moving_mesh_field_transfer_uses_one_coordinate_frame"]
         is False
     )
