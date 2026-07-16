@@ -47,6 +47,23 @@ def _with_artifact_identity(summary: dict) -> dict:
             "geometry_revision": "geometry-12",
             "generated_at_utc": "2026-07-16T04:59:30Z",
         },
+        "coordinate_system_binding": {
+            "force_component_frame_id": "global-cartesian",
+            "demag_metric_frame_id": "global-cartesian",
+            "common_frame_id": "global-cartesian",
+            "geometry_rotation_revision": "rotation-12",
+            "force_transform_revision": "rotation-12",
+            "demag_transform_revision": "rotation-12",
+        },
+        "force_normalization": {
+            "comparison_basis": "total_3d",
+            "profile_bases": {
+                "moving_body_element_force": "total_3d",
+                "closed_surface_maxwell_stress_force": "total_3d",
+                "independent_closed_surface_force": "total_3d",
+            },
+            "per_length_to_total_applied": True,
+        },
     }
     return summary
 
@@ -205,3 +222,31 @@ def test_v8_public_demag_reference_older_than_geometry() -> None:
     result = magnetic_force_method_profile_gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"]["demag_reference_matches_current_geometry_revision"] is False
+
+
+def test_v9_public_force_demag_coordinate_system_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["coordinate_system_binding"].update(
+        {
+            "force_component_frame_id": "rotor-local-reflected",
+            "force_transform_revision": "rotation-11",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["force_and_demag_share_transformed_coordinate_system"]
+        is False
+    )
+
+
+def test_v9_public_force_normalization_per_length_vs_total() -> None:
+    summary = _with_artifact_identity(_summary())
+    normalization = summary["artifact_identity"]["force_normalization"]
+    normalization["profile_bases"]["moving_body_element_force"] = (
+        "per_axial_length"
+    )
+    normalization["per_length_to_total_applied"] = False
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["force_profiles_share_total_3d_normalization"] is False
