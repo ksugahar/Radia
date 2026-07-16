@@ -232,6 +232,35 @@ def _with_v9_bindings(summary):
     return summary
 
 
+def _with_v10_identity(summary):
+    summary = _with_v9_bindings(summary)
+    summary["design_variable_identity"] = {
+        "design_variable_ids": ["thickness", "density", "damping"],
+        "adjoint_gradient_design_variable_ids": [
+            "thickness",
+            "density",
+            "damping",
+        ],
+        "finite_difference_design_variable_ids": [
+            "thickness",
+            "density",
+            "damping",
+        ],
+        "design_generation": "design-42",
+        "adjoint_gradient_design_generation": "design-42",
+        "finite_difference_design_generation": "design-42",
+    }
+    summary["convolution_quadrature_identity"] = {
+        "time_grid_step_s": 1.0e-4,
+        "weight_generation_step_s": 1.0e-4,
+        "time_grid_method": "BDF2",
+        "weight_generation_method": "BDF2",
+        "time_grid_generation": "time-grid-42",
+        "weight_time_grid_generation": "time-grid-42",
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -280,3 +309,34 @@ def test_v9_public_regularization_curvature_parameterization_mismatch():
         result["checks"]["lcurve_curvature_uses_recorded_path_parameterization"]
         is False
     )
+
+
+def test_v10_public_adjoint_gradient_design_order_mismatch():
+    bad = _with_v10_identity(_summary())
+    bad["design_variable_identity"]["finite_difference_design_variable_ids"] = [
+        "density",
+        "thickness",
+        "damping",
+    ]
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "adjoint_and_finite_difference_share_design_variable_order"
+        ]
+        is False
+    )
+
+
+def test_v10_public_cq_weights_time_step_method_mismatch():
+    bad = _with_v10_identity(_summary())
+    bad["convolution_quadrature_identity"].update(
+        {
+            "weight_generation_step_s": 2.0e-4,
+            "weight_generation_method": "BDF1",
+            "weight_time_grid_generation": "time-grid-41",
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["cq_weights_match_current_time_grid_and_method"] is False
