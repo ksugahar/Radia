@@ -32,6 +32,57 @@ def _relative_error(actual: complex | float, expected: complex | float) -> float
     return float(abs(actual - expected) / max(abs(expected), 1.0e-300))
 
 
+def _phasor_replay_generations_ok(positive: Mapping[str, object]) -> bool:
+    evidence = positive.get("phasor_replay_evidence")
+    if evidence is None:
+        return True
+    if (
+        not isinstance(evidence, Sequence)
+        or isinstance(evidence, (str, bytes))
+        or len(evidence) < 2
+    ):
+        return False
+    rows = [row for row in evidence if isinstance(row, Mapping)]
+    return len(rows) == len(evidence) and all(
+        bool(row.get("fit_id"))
+        and bool(row.get("raw_generation_id"))
+        and row.get("trace_group_generation_id") == row.get("raw_generation_id")
+        and len(str(row.get("scalar_phasor_digest") or "")) == 64
+        for row in rows
+    )
+
+
+def _fit_window_stays_in_one_segment(
+    positive: Mapping[str, object], fit_start: float, fit_stop: float
+) -> bool:
+    contract = positive.get("fit_window_segment_contract")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("fit_run_generation_id") or "")
+    sample_generations = contract.get("sample_run_generation_ids")
+    restarts = contract.get("restart_discontinuities_s")
+    if (
+        not generation
+        or not isinstance(sample_generations, Sequence)
+        or isinstance(sample_generations, (str, bytes))
+        or not sample_generations
+        or not isinstance(restarts, Sequence)
+        or isinstance(restarts, (str, bytes))
+        or any(str(item) != generation for item in sample_generations)
+    ):
+        return False
+    try:
+        restart_times = [float(value) for value in restarts]
+    except (TypeError, ValueError):
+        return False
+    return all(
+        math.isfinite(value) and not (fit_start < value < fit_stop)
+        for value in restart_times
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -287,6 +338,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         "phasor_fit_frequency_matches_source_contract": fit_frequency_matches_source,
         "current_phasor_roles_match_terminal_contract": current_roles_match_contract,
         "positive_phasor_replay_is_deterministic": replay_error <= 1.0e-12,
+        "phasor_replays_bind_each_fit_to_one_raw_generation": (
+            _phasor_replay_generations_ok(positive)
+        ),
+        "phasor_fit_window_does_not_cross_a_restart_segment": (
+            _fit_window_stays_in_one_segment(positive, fit_start, fit_stop)
+        ),
         "exactly_four_timing_stages": timing_ok,
     }
     return {
@@ -310,5 +367,6 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
             "The load reflected to the primary is N^2*R_load; include source resistance in the analytic RMS reference.",
             "Turns-ratio agreement alone is insufficient: require instantaneous and complex-power conservation plus deterministic replay.",
             "When phasor frequency or terminal-current role metadata is supplied, bind it to the source and sign contract before accepting scalar power closure.",
+            "A matching scalar phasor is not replay evidence when its fitted traces mix RAW generations or cross a transient restart.",
         ],
     }
