@@ -42,6 +42,24 @@ def summary() -> dict:
             "pyramid": {"scaled_jacobian": {"count": 1, "min": 1.0}},
             "tet": {"scaled_jacobian": {"count": 10, "min": 0.3826}},
         },
+        "mesh_identity": {
+            "generation": "mesh-generation-42",
+            "sha256": "d" * 64,
+        },
+        "quality_report_identity": {
+            "mesh_generation": "mesh-generation-42",
+            "mesh_sha256": "d" * 64,
+            "report_sha256": "e" * 64,
+        },
+        "boundary_sets": [
+            {
+                "name": "interface",
+                "mesh_generation": "mesh-generation-42",
+                "mesh_sha256": "d" * 64,
+                "entity_ids": [7],
+                "connectivity_sha256": "f" * 64,
+            }
+        ],
         "interface_surfaces": [
             {
                 "surface_id": 7,
@@ -112,6 +130,34 @@ def summary() -> dict:
             "pinned_source_model_sha256": "c" * 64,
             "replayed_journal_sha256": "a" * 64,
             "replayed_source_model_sha256": "c" * 64,
+        },
+        "export_manifest": {
+            "invocation_id": "batch-invocation-42",
+            "model_generation": "model-generation-42",
+            "artifacts": [
+                {
+                    "name": "mixed.msh",
+                    "sha256": "b" * 64,
+                    "model_generation": "model-generation-42",
+                    "invocation_id": "batch-invocation-42",
+                },
+                {
+                    "name": "mixed.vol",
+                    "sha256": "c" * 64,
+                    "model_generation": "model-generation-42",
+                    "invocation_id": "batch-invocation-42",
+                },
+            ],
+        },
+        "batch_invocation": {
+            "invocation_id": "batch-invocation-42",
+            "process_start_utc": "2026-07-16T02:00:00Z",
+            "log": {
+                "invocation_id": "batch-invocation-42",
+                "process_start_utc": "2026-07-16T02:00:00Z",
+                "sha256": "1" * 64,
+            },
+            "exports_invocation_id": "batch-invocation-42",
         },
         "timing_breakdown_s": {
             "source_replay": 0.2,
@@ -244,3 +290,52 @@ def test_source_gate_rejects_duplicate_export_artifact_names(duplicate_location:
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["all_required_export_artifacts_are_fresh"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v8_public_quality_report_older_than_mesh",
+        "v8_public_sideset_generation_mixed_after_remesh",
+    ],
+)
+def test_generalization_v8_public(case_id: str):
+    row = summary()
+    if case_id == "v8_public_quality_report_older_than_mesh":
+        row["quality_report_identity"]["mesh_generation"] = "mesh-generation-41"
+        row["quality_report_identity"]["mesh_sha256"] = "2" * 64
+        expected = "quality_report_matches_current_mesh_generation"
+    else:
+        row["boundary_sets"][0]["mesh_generation"] = "mesh-generation-41"
+        row["boundary_sets"][0]["mesh_sha256"] = "2" * 64
+        expected = "boundary_sets_match_current_mesh_generation"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v8_source_export_manifest_mixed_generations",
+        "v8_source_batch_log_prior_invocation_identity",
+    ],
+)
+def test_generalization_v8_source(case_id: str):
+    row = summary()
+    if case_id == "v8_source_export_manifest_mixed_generations":
+        row["export_manifest"]["artifacts"][1][
+            "model_generation"
+        ] = "model-generation-41"
+        expected = "export_manifest_uses_one_model_and_invocation_generation"
+    else:
+        row["batch_invocation"]["log"].update(
+            {
+                "invocation_id": "batch-invocation-41",
+                "process_start_utc": "2026-07-16T01:00:00Z",
+            }
+        )
+        expected = "batch_log_and_exports_share_invocation_identity"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False

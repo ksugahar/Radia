@@ -135,6 +135,48 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
     transition = per_volume[transition_id]
     export = _mapping(summary.get("gmsh_export"), "gmsh_export")
 
+    mesh_identity_value = summary.get("mesh_identity")
+    quality_identity_value = summary.get("quality_report_identity")
+    mesh_quality_identity_present = (
+        mesh_identity_value is not None or quality_identity_value is not None
+    )
+    mesh_identity = (
+        mesh_identity_value if isinstance(mesh_identity_value, Mapping) else {}
+    )
+    quality_identity = (
+        quality_identity_value
+        if isinstance(quality_identity_value, Mapping)
+        else {}
+    )
+    mesh_quality_identity_ok = not mesh_quality_identity_present or (
+        bool(mesh_identity.get("generation"))
+        and len(str(mesh_identity.get("sha256") or "")) == 64
+        and quality_identity.get("mesh_generation") == mesh_identity.get("generation")
+        and quality_identity.get("mesh_sha256") == mesh_identity.get("sha256")
+        and len(str(quality_identity.get("report_sha256") or "")) == 64
+    )
+
+    boundary_sets_value = summary.get("boundary_sets")
+    boundary_sets_present = boundary_sets_value is not None
+    boundary_sets_ok = True
+    if boundary_sets_present:
+        try:
+            boundary_sets = _rows(boundary_sets_value, "boundary_sets")
+        except ValueError:
+            boundary_sets = []
+        boundary_sets_ok = (
+            bool(boundary_sets)
+            and bool(mesh_identity.get("generation"))
+            and all(
+                bool(row.get("name"))
+                and row.get("mesh_generation") == mesh_identity.get("generation")
+                and row.get("mesh_sha256") == mesh_identity.get("sha256")
+                and bool(list(row.get("entity_ids") or []))
+                and len(str(row.get("connectivity_sha256") or "")) == 64
+                for row in boundary_sets
+            )
+        )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -147,6 +189,8 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "quality_count_matches_topology": all(
             quality_counts[family] == totals[family] for family in ("hex", "pyramid", "tet")
         ),
+        "quality_report_matches_current_mesh_generation": mesh_quality_identity_ok,
+        "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
             quality_minima[family] >= threshold for family in ("hex", "pyramid", "tet")
         ),
@@ -289,6 +333,60 @@ def cubit_mixed_transition_source_gate(
             and pinned_model == replayed_model
             and pinned_journal == str(summary.get("source_sha256", ""))
         )
+
+    export_manifest_value = summary.get("export_manifest")
+    export_manifest_present = export_manifest_value is not None
+    export_manifest_ok = True
+    if export_manifest_present:
+        export_manifest = (
+            export_manifest_value
+            if isinstance(export_manifest_value, Mapping)
+            else {}
+        )
+        try:
+            manifest_artifacts = _rows(
+                export_manifest.get("artifacts"), "export_manifest.artifacts"
+            )
+        except ValueError:
+            manifest_artifacts = []
+        invocation_id = str(export_manifest.get("invocation_id") or "")
+        model_generation = str(export_manifest.get("model_generation") or "")
+        names = [str(row.get("name") or "") for row in manifest_artifacts]
+        export_manifest_ok = (
+            bool(invocation_id)
+            and bool(model_generation)
+            and bool(manifest_artifacts)
+            and len(set(names)) == len(names)
+            and all(names)
+            and all(
+                row.get("invocation_id") == invocation_id
+                and row.get("model_generation") == model_generation
+                and len(str(row.get("sha256") or "")) == 64
+                for row in manifest_artifacts
+            )
+        )
+
+    batch_invocation_value = summary.get("batch_invocation")
+    batch_invocation_present = batch_invocation_value is not None
+    batch_invocation_ok = True
+    if batch_invocation_present:
+        batch_invocation = (
+            batch_invocation_value
+            if isinstance(batch_invocation_value, Mapping)
+            else {}
+        )
+        batch_log_value = batch_invocation.get("log")
+        batch_log = batch_log_value if isinstance(batch_log_value, Mapping) else {}
+        invocation_id = str(batch_invocation.get("invocation_id") or "")
+        process_start = str(batch_invocation.get("process_start_utc") or "")
+        batch_invocation_ok = (
+            bool(invocation_id)
+            and bool(process_start)
+            and batch_log.get("invocation_id") == invocation_id
+            and batch_log.get("process_start_utc") == process_start
+            and len(str(batch_log.get("sha256") or "")) == 64
+            and batch_invocation.get("exports_invocation_id") == invocation_id
+        )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -349,6 +447,8 @@ def cubit_mixed_transition_source_gate(
         "fresh_artifact_and_no_owned_process_leak": process.get("result_artifact_fresh") is True
         and int(process.get("owned_processes_remaining", -1)) == 0,
         "all_required_export_artifacts_are_fresh": export_artifacts_ok,
+        "export_manifest_uses_one_model_and_invocation_generation": export_manifest_ok,
+        "batch_log_and_exports_share_invocation_identity": batch_invocation_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),
