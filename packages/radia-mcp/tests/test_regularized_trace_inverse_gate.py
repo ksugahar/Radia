@@ -405,6 +405,42 @@ def _with_v14_identity(summary):
     return summary
 
 
+def _with_v16_identity(summary):
+    summary = _with_v14_identity(summary)
+    summary["cq_convolution_weight_ztransform_branch_order_identity"] = {
+        "cq_scheme_generation": "cq-scheme-18",
+        "convolution_weight_generation": "cq-scheme-18",
+        "transfer_sample_generation": "cq-scheme-18",
+        "z_transform_branch": "principal",
+        "convolution_weight_z_transform_branch": "principal",
+        "transfer_sample_z_transform_branch": "principal",
+        "multistep_method": "bdf2",
+        "convolution_weight_multistep_method": "bdf2",
+        "transfer_sample_multistep_method": "bdf2",
+        "multistep_order": 2,
+        "convolution_weight_multistep_order": 2,
+        "transfer_sample_multistep_order": 2,
+        "scheme_metadata_sha256": "1" * 64,
+        "convolution_weight_scheme_metadata_sha256": "1" * 64,
+        "transfer_sample_scheme_metadata_sha256": "1" * 64,
+    }
+    summary["fembem_trace_matrix_boundary_node_generation_identity"] = {
+        "volume_mesh_generation": "vol-mesh-18",
+        "boundary_node_generation": "boundary-nodes-18",
+        "fem_operator_boundary_node_generation": "boundary-nodes-18",
+        "bem_operator_boundary_node_generation": "boundary-nodes-18",
+        "trace_matrix_boundary_node_generation": "boundary-nodes-18",
+        "boundary_node_count": 42,
+        "trace_matrix_row_count": 42,
+        "trace_matrix_nonzero_count": 42,
+        "boundary_node_ids_sha256": "2" * 64,
+        "fem_boundary_node_ids_sha256": "2" * 64,
+        "bem_boundary_node_ids_sha256": "2" * 64,
+        "trace_matrix_boundary_node_ids_sha256": "2" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -671,6 +707,52 @@ def test_v15_public_hmatrix_admissibility_cluster_diameter_metric_mismatch():
     assert (
         result["checks"][
             "hmatrix_admissibility_uses_one_cluster_diameter_metric"
+        ]
+        is False
+    )
+
+
+def test_accepts_v16_cq_weight_and_trace_boundary_node_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v16_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v16_public_cq_convolution_weight_ztransform_branch_order_mismatch():
+    bad = _with_v16_identity(_summary())
+    bad["cq_convolution_weight_ztransform_branch_order_identity"].update(
+        {
+            "convolution_weight_generation": "cq-scheme-17",
+            "convolution_weight_z_transform_branch": "negative_real_cut",
+            "convolution_weight_multistep_method": "bdf1",
+            "convolution_weight_multistep_order": 1,
+            "convolution_weight_scheme_metadata_sha256": "5" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cq_convolution_weights_share_ztransform_branch_and_multistep_order"
+        ]
+        is False
+    )
+
+
+def test_v16_public_fembem_trace_matrix_boundary_node_generation_mismatch():
+    bad = _with_v16_identity(_summary())
+    bad["fembem_trace_matrix_boundary_node_generation_identity"].update(
+        {
+            "trace_matrix_boundary_node_generation": "boundary-nodes-17",
+            "trace_matrix_row_count": 41,
+            "trace_matrix_nonzero_count": 41,
+            "trace_matrix_boundary_node_ids_sha256": "5" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "fembem_trace_matrix_uses_current_boundary_node_generation"
         ]
         is False
     )

@@ -166,6 +166,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_diameter_metric_identity_ok = (
         _optional_hmatrix_admissibility_diameter_metric_is_aligned(summary)
     )
+    cq_weight_branch_order_identity_ok = (
+        _optional_cq_convolution_weight_branch_order_is_aligned(summary)
+    )
+    trace_boundary_node_generation_identity_ok = (
+        _optional_fembem_trace_boundary_node_generation_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -243,6 +249,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_admissibility_uses_one_cluster_diameter_metric": (
             hmatrix_diameter_metric_identity_ok
+        ),
+        "cq_convolution_weights_share_ztransform_branch_and_multistep_order": (
+            cq_weight_branch_order_identity_ok
+        ),
+        "fembem_trace_matrix_uses_current_boundary_node_generation": (
+            trace_boundary_node_generation_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -848,6 +860,93 @@ def _optional_hmatrix_admissibility_diameter_metric_is_aligned(
         and value.get("acceptance_threshold_generation") == threshold_generation
         and _is_sha256(geometry_digest)
         and result_digest == geometry_digest
+    )
+
+
+def _optional_cq_convolution_weight_branch_order_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("cq_convolution_weight_ztransform_branch_order_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        order = _positive_integer(value, "multistep_order")
+        weight_order = _positive_integer(
+            value, "convolution_weight_multistep_order"
+        )
+        sample_order = _positive_integer(
+            value, "transfer_sample_multistep_order"
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_scheme_generation", "")).strip()
+    branch = str(value.get("z_transform_branch", "")).strip()
+    method = str(value.get("multistep_method", "")).strip().lower()
+    scheme_digest = str(value.get("scheme_metadata_sha256", "")).lower()
+    weight_digest = str(
+        value.get("convolution_weight_scheme_metadata_sha256", "")
+    ).lower()
+    sample_digest = str(
+        value.get("transfer_sample_scheme_metadata_sha256", "")
+    ).lower()
+    return (
+        bool(generation)
+        and value.get("convolution_weight_generation") == generation
+        and value.get("transfer_sample_generation") == generation
+        and branch in {"principal", "continuous_outgoing"}
+        and value.get("convolution_weight_z_transform_branch") == branch
+        and value.get("transfer_sample_z_transform_branch") == branch
+        and method in {"bdf1", "bdf2"}
+        and str(value.get("convolution_weight_multistep_method", "")).lower()
+        == method
+        and str(value.get("transfer_sample_multistep_method", "")).lower()
+        == method
+        and order in {1, 2}
+        and weight_order == order
+        and sample_order == order
+        and ((method == "bdf1" and order == 1) or (method == "bdf2" and order == 2))
+        and _is_sha256(scheme_digest)
+        and weight_digest == scheme_digest
+        and sample_digest == scheme_digest
+    )
+
+
+def _optional_fembem_trace_boundary_node_generation_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("fembem_trace_matrix_boundary_node_generation_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        boundary_nodes = _positive_integer(value, "boundary_node_count")
+        trace_rows = _positive_integer(value, "trace_matrix_row_count")
+        trace_nnz = _positive_integer(value, "trace_matrix_nonzero_count")
+    except (KeyError, TypeError, ValueError):
+        return False
+    mesh_generation = str(value.get("volume_mesh_generation", "")).strip()
+    node_generation = str(value.get("boundary_node_generation", "")).strip()
+    node_digest = str(value.get("boundary_node_ids_sha256", "")).lower()
+    fem_digest = str(value.get("fem_boundary_node_ids_sha256", "")).lower()
+    bem_digest = str(value.get("bem_boundary_node_ids_sha256", "")).lower()
+    trace_digest = str(
+        value.get("trace_matrix_boundary_node_ids_sha256", "")
+    ).lower()
+    return (
+        bool(mesh_generation)
+        and bool(node_generation)
+        and value.get("fem_operator_boundary_node_generation") == node_generation
+        and value.get("bem_operator_boundary_node_generation") == node_generation
+        and value.get("trace_matrix_boundary_node_generation") == node_generation
+        and trace_rows == boundary_nodes
+        and trace_nnz == boundary_nodes
+        and _is_sha256(node_digest)
+        and fem_digest == node_digest
+        and bem_digest == node_digest
+        and trace_digest == node_digest
     )
 
 
