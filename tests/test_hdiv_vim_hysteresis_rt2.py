@@ -60,8 +60,10 @@ def test_rt2_history_uses_quadrature_state_and_restarts():
         continued = vim.SolveHysteresis(
             mesh, [[0.0, 0.0, 1.0e4]], material=material, order=2,
             initial_state=first["state"], tol=1.0e-10, maxit=500,
-            nl_tol=1.0e-8)
+            nl_tol=1.0e-8, _prepared_operator=first["_prepared_operator"])
 
     assert continued["state"]["material_states"].shape == states.shape
     assert continued["state"]["state_layout"] == "quadrature"
-
+    assert continued["prepared_operator_reused"] is True
+    assert continued["_charge_gram"] is first["_charge_gram"]
+    assert continued["charge_gram_wall_s"] == 0.0
