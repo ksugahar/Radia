@@ -124,6 +124,12 @@ def regularized_trace_inverse_path_gate(
     gradient_generation_ok, solution_run_generation_ok = (
         _optional_generation_ids_are_aligned(path, len(alphas))
     )
+    quadrature_generation_ok = _optional_quadrature_generation_ids_are_aligned(
+        path, len(alphas)
+    )
+    curvature_parameterization_ok = (
+        _optional_curvature_parameterization_is_aligned(reported_lcurve)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -159,6 +165,12 @@ def regularized_trace_inverse_path_gate(
         "gradient_uses_current_parameter_generation": gradient_generation_ok,
         "solution_rows_share_regularization_run_generation": (
             solution_run_generation_ok
+        ),
+        "gradient_uses_current_boundary_quadrature_generation": (
+            quadrature_generation_ok
+        ),
+        "lcurve_curvature_uses_recorded_path_parameterization": (
+            curvature_parameterization_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -329,6 +341,45 @@ def _optional_generation_ids_are_aligned(
             rows.append(row)
         results.append(len(rows) == 2 and rows[0] == rows[1])
     return results[0], results[1]
+
+
+def _optional_quadrature_generation_ids_are_aligned(
+    path: Mapping[str, Any], expected_length: int
+) -> bool:
+    names = (
+        "objective_quadrature_generation_ids",
+        "gradient_quadrature_generation_ids",
+    )
+    if not any(name in path for name in names):
+        return True
+    rows = []
+    for name in names:
+        value = path.get(name)
+        if (
+            not isinstance(value, Sequence)
+            or isinstance(value, (str, bytes))
+            or len(value) != expected_length
+        ):
+            return False
+        row = [str(item).strip() for item in value]
+        if not all(row):
+            return False
+        rows.append(row)
+    return rows[0] == rows[1]
+
+
+def _optional_curvature_parameterization_is_aligned(
+    reported_lcurve: Mapping[str, Any],
+) -> bool:
+    value = reported_lcurve.get("curvature_parameterization")
+    if value is None:
+        return True
+    return (
+        isinstance(value, Mapping)
+        and value.get("path_coordinate") == "log10_alpha"
+        and value.get("curvature_coordinate") == "log10_alpha"
+        and value.get("coordinate_transform_recorded") is True
+    )
 
 
 def _integer(parent: Mapping[str, Any], key: str) -> int:
