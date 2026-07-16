@@ -70,7 +70,7 @@ def solve_motor_hdiv_reduced(
 
 def build_argparser():
     parser = argparse.ArgumentParser(
-        description="Planar RT1/RT2 HDiv-VIM reduced reluctance-motor sweep")
+        description="Planar BDM1/BDM2 HDiv-VIM reduced reluctance-motor sweep")
     parser.add_argument("--vol", required=True, help="rotor-only 2D Netgen .vol mesh")
     parser.add_argument("--mu-r", type=float, default=1000.0,
                         help="linear rotor relative permeability")
@@ -92,7 +92,7 @@ def build_argparser():
     parser.add_argument("--eta", type=float, default=2.0,
                         help="charge-Gram admissibility parameter")
     parser.add_argument("--order", type=int, choices=(1, 2), default=1,
-                        help="HDiv order: RT1 or RT2")
+                        help="HDiv order: BDM1 or BDM2")
     return parser
 
 

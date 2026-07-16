@@ -19,7 +19,7 @@ The solver behind `planar_vim_motor.ipynb` is the promoted 2D layer in `radia.vi
 `validation_test/feec/test_hdiv_vim_2d_solve.py`.
 
 The production reduced reluctance-motor API is `radia.motor_hdiv.HDivReducedMotor`.
-It keeps the rotor mesh in a local frame, builds the symmetric RT1 charge Gram
+It keeps the rotor mesh in a local frame, builds the symmetric BDM1 charge Gram
 once, and reuses it over a mechanical-angle sweep.  The public torque contract
 compares the air-gap Maxwell stress, the magnetization-volume coupling, and the
 fixed-current coenergy derivative.  The notebook panel exposes the same path as

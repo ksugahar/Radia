@@ -92,18 +92,18 @@ def test_prescribed_source_geometry_only_path_covers_production_3d_elements():
         return (0.6*x-0.3, 0.4*y-0.2, 0.2*z-0.1)
 
     cases = [
-        ("tet-rt2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, None, "analytic-tet-rt2"),
-        ("tet-curved", _box_mesh(-0.3, 0.3, maxh=0.35), 1, 2, "curved-element-exact-rt1"),
-        ("tet-curved-rt2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, 2,
-         "curved-element-exact-rt2"),
-        ("hex-rt1", MakeStructured3DMesh(
-            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-rt1"),
-        ("hex-curved-rt2", MakeStructured3DMesh(
-            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-rt2"),
-        ("wedge-rt1", MakeStructured3DMesh(
-            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-rt1"),
-        ("wedge-curved-rt2", MakeStructured3DMesh(
-            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-rt2"),
+        ("tet-bdm2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, None, "analytic-tet-bdm2"),
+        ("tet-curved", _box_mesh(-0.3, 0.3, maxh=0.35), 1, 2, "curved-element-exact-bdm1"),
+        ("tet-curved-bdm2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, 2,
+         "curved-element-exact-bdm2"),
+        ("hex-bdm1", MakeStructured3DMesh(
+            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-bdm1"),
+        ("hex-curved-bdm2", MakeStructured3DMesh(
+            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-bdm2"),
+        ("wedge-bdm1", MakeStructured3DMesh(
+            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-bdm1"),
+        ("wedge-curved-bdm2", MakeStructured3DMesh(
+            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-bdm2"),
     ]
     prescribed = ng.CoefficientFunction((1.0e5, 2.0e5, 3.0e5))
     for name, mesh, order, curve_order, expected_kind in cases:

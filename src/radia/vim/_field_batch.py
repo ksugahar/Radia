@@ -1,12 +1,12 @@
-"""Persistent C++ field evaluator for HDiv RT1/RT2 solutions.
+"""Persistent C++ field evaluator for HDiv BDM1/BDM2 solutions.
 
 The solved HDiv field needs neither a piecewise-constant magnetization collapse
 nor internal-face sources:
 M is linear per tet (NGSolve HDiv order=1 on tets = full (P1)^3, BDM1-type), so
 
     * internal faces carry NO charge (HDiv conformity: M.n continuous),
-    * RT1 tetrahedra use linear boundary charge and constant volume charge,
-    * RT2 tetrahedra use quadratic boundary charge and linear volume charge,
+    * BDM1 tetrahedra use linear boundary charge and constant volume charge,
+    * BDM2 tetrahedra use quadratic boundary charge and linear volume charge,
 
 and both pieces have closed forms in the C++ TET production kernel.  HEX and
 WEDGE use their tensor-product or prism-polynomial charge bases and mapped
@@ -15,7 +15,7 @@ materialization stores the immutable C++ source evaluator in the result.  Its
 NumPy-buffer API performs no per-call source packing, evaluates all IMA terms in
 one TaskManager region, and selects a quadrupole treecode for sufficiently large
 target-source work.  Flat tet leaves retain the analytic kernel; curved tet
-leaves retain P2 geometry and integrate the RT1/RT2 charge polynomial directly.
+leaves retain P2 geometry and integrate the BDM1/BDM2 charge polynomial directly.
 """
 import time
 
@@ -40,7 +40,7 @@ def _create_field_evaluator(gram, coefficients, order):
         _FIELD_TREE_MIN_SOURCES, _FIELD_TREE_AUTO_MIN_WORK,
         _FIELD_TREE_RELATIVE_TOLERANCE, _FIELD_TREE_PROBE_COUNT)
     stats = dict(evaluator.stats())
-    stats["source_kind"] = "%s-rt%d" % (
+    stats["source_kind"] = "%s-bdm%d" % (
         stats.pop("source_representation"), int(order))
     stats["build_wall_s"] = time.perf_counter()-started
     return evaluator, stats
@@ -78,7 +78,7 @@ def _materialize_field_evaluator(res):
 
 def field_from_solution(res, points, algorithm="auto"):
     """Demagnetizing field H_demag (A/m) of a solved HDiv-VIM magnetization at
-    ``points`` (N,3), evaluated from the RT1/RT2 solution directly -- no per-element
+    ``points`` (N,3), evaluated from the BDM1/BDM2 solution directly -- no per-element
     constant-M collapse, hence none of the near-surface piecewise-constant ripple of
     ``rad.Fld`` on the write-back elements (the O(h) bumps measured at standoff ~
     element size disappear identically; see the module docstring).
@@ -115,7 +115,7 @@ def field_coefficient_from_solution(res, algorithm="direct"):
 
 
 def magnetization_from_solution(res, points):
-    """Evaluate the RT1 magnetization inside the solved mesh, zero outside."""
+    """Evaluate the BDM1 magnetization inside the solved mesh, zero outside."""
     import ngsolve as ng
 
     gfM = res.get("gfM") if isinstance(res, dict) else None

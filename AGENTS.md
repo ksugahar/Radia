@@ -1267,12 +1267,12 @@ NGSolve mesh/FES concepts, HDiv flux continuity, and Radia's charge-Gram /
 HACApK acceleration path. Retired collocation demag names are not supported as
 public backends.
 
-Element-order scope is fail-loud. RT1 is the full production route for
-TET/HEX/WEDGE, planar 2D, IMA, and `rad.Fld` reconstruction. RT2 is a public
-flat pure-TET material/operator route (`Solve`, `ChargeGram`,
-`DemagOperator`). Curved geometry uses RT1 on an isoparametric P2 mesh;
-curved RT2 and RT2 HEX/WEDGE/2D/IMA/field paths stay rejected until their own
-accuracy and compute-host performance gates pass.
+NGSolve family selection is explicit in documentation: `HDiv(mesh, order=p)`
+is BDM, while Raviart--Thomas requires `HDiv(mesh, order=p, RT=True)`.
+Radia's established `vim.Solve`, `PlanarDemagBody`, `MagnetizationSource`,
+charge-Gram, nonlinear, IMA, and `rad.Fld` production paths use BDM1/BDM2.
+Do not call these RT1/RT2.  The actual RT family is an explicit comparison or
+research path until separately promoted.
 
 ### Unified Field Computation Architecture
 
@@ -1649,7 +1649,7 @@ PR: https://github.com/NGSolve/netgen/pull/232 (historical reference)
 ### NGSolve Recommended Configuration
 
 ```python
-fes = HDiv(mesh, order=2)  # Best accuracy
+fes = HDiv(mesh, order=2)  # BDM2 (NGSolve default)
 B_gf = GridFunction(fes)
 B_gf.Set(rad.RadiaField(radia_obj, 'b'))  # C++ CoefficientFunction in _radia_pybind.pyd
 ```

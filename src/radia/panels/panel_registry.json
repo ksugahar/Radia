@@ -1855,7 +1855,7 @@
       "function": "run",
       "ja_name": "HDiv-VIM 縮約リラクタンスモータ",
       "ja_description": "回転子のみの2D .volで対称HDiv-VIM Gramを一度だけ構築し、固定子等価MMFに対する回転角スイープ、Maxwell応力、磁化体積トルク、共エネルギー差分を照合する。radia_motorパネルの'HDiv Reduced'モード。",
-      "method": "Planar RT1 HDiv-VIM reduced reluctance motor with cached symmetric charge Gram and three-way torque check",
+      "method": "Planar BDM1 HDiv-VIM reduced reluctance motor with cached symmetric charge Gram and three-way torque check",
       "command_builder": "radia.motor_design:MotorDesignSpec.build_command",
       "params": [
         {

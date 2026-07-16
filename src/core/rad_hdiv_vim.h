@@ -1,4 +1,4 @@
-/* rad_hdiv_vim.h -- analytic charge-potential kernels for the RT1 HDiv-VIM.
+/* rad_hdiv_vim.h -- analytic charge-potential kernels for the BDM1 HDiv-VIM.
  *
  * Mesh topology, HDiv spaces, and charge maps are supplied by NGSolve.  This
  * header contains only the geometry kernels used by the production Coulomb

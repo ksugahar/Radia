@@ -1,4 +1,4 @@
-"""Planar (2D) HDiv-VIM soft-iron demag layer -- RT1/Q2 and RT2/Q3 motor cross-sections.
+"""Planar (2D) HDiv-VIM soft-iron demag layer -- BDM1/Q2 and BDM2/Q3 motor cross-sections.
 
 The C++ 2D log-kernel charge Gram (``build_charge_gram`` auto-routes ``HDiv(mesh2d, order=1|2)``:
 charges = -div M on tri/quad cells + M.n on boundary edges, kernel -ln(r)/(2 pi)) supplies the
@@ -36,19 +36,24 @@ from radia.planar_materials import law_from_table as _law_from_table
 MU0 = 4e-7 * np.pi
 
 class PlanarDemagBody:
-    """One planar soft-iron body on the matrix-free C++ 2D charge Gram."""
+    """One planar soft-iron body on the matrix-free C++ 2D charge Gram.
+
+    ``rt=True`` selects NGSolve's Raviart--Thomas family explicitly.  The
+    default remains the historical NGSolve/BDM path for API compatibility.
+    """
 
     def __init__(self, mesh, order=1, eta=2.0, cg_tol=1e-10, cg_maxit=5000,
-                 image_masks=None, image_signs=None):
+                 image_masks=None, image_signs=None, rt=False):
         if mesh.dim != 2:
             raise ValueError("PlanarDemagBody: mesh.dim must be 2 (got %d)" % mesh.dim)
         self.mesh = mesh
         self.order = int(order)
+        self.rt = bool(rt)
         self.geometry_order = max(1, int(mesh.GetCurveOrder()))
         validate_hdiv_configuration(
             2, {len(el.vertices) for el in mesh.Elements(ng.VOL)},
             self.order, self.geometry_order)
-        self.fes = ng.HDiv(mesh, order=self.order)
+        self.fes = ng.HDiv(mesh, order=self.order, RT=self.rt)
         self._bonus_intorder = 2*self.geometry_order
         self.B, self.G, self.Mm = build_charge_gram(
             self.fes, eta=eta, image_masks=image_masks, image_signs=image_signs)

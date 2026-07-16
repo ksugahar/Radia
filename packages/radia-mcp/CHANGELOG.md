@@ -41,7 +41,7 @@ crystallized as its own package.
 
 ## [1.4.9] - 2026-07-16
 
-- **Mapped RT2 HDiv-VIM**: documented the supported 2D, tetrahedral,
+- **Mapped BDM2 HDiv-VIM**: documented the supported 2D, tetrahedral,
   hexahedral, and wedge order/geometry combinations and the curved-mesh
   compute-host validation route.
 - **Validation-learning gates**: retained counterfactual evidence and added
@@ -57,7 +57,7 @@ crystallized as its own package.
 
 - **HDiv-VIM production stack**: documented the fixed/given magnetization,
   linear-recoil permanent-magnet, native energy-stop hysteresis, persistent
-  matrix, field-evaluator, RT2, and IMA interfaces with focused knowledge tests.
+  matrix, field-evaluator, BDM2, and IMA interfaces with focused knowledge tests.
 
 ## [1.4.5] - 2026-07-13
 

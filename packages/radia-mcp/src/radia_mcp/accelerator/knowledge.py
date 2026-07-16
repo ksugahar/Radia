@@ -909,7 +909,7 @@ fem_scoff_study; committed results edge_focusing_fem_results.json):
 ## Engine cross-check: FEEC HDiv-VIM -- and the REVISED error budget (2026-07-13)
 The SAME chain re-run with the field engine swapped to the FEEC HDiv-VIM (hdiv_scoff_study:
 radia.vim.MeshSoftIron on an IRON-ONLY tet mesh -- no air discretization, exact open boundary --
-rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld):
+rad.Solve auto dispatch BDM1, mid-plane map by ONE batch rad.Fld):
   - dK_in agrees with reduced-Omega to 0.8 pct at MATCHED edge-mesh density (+0.06839 vs
     +0.06896); absolute-dK scatter across engines/meshes is ~+-3 pct (finer HDiv edge mesh
     gives +0.07085); dK_in/model stays 0.92-0.95 in EVERY configuration.
@@ -921,8 +921,8 @@ rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld):
     overpredicts the vertical edge focusing by ~5 pct for this geometry -- the EFFECTIVE edge
     angle is a magnet-specific quantity that this measurement chain extracts.
   - FRINGE-SHAPE MESH SENSITIVITY: DIAGNOSED AND CURED.  The historical culprit was the
-    piecewise-constant-M write-back field, not the RT1 solve.  Production `rad.Fld` now redirects
-    solved HDiv objects to the full RT1 C++ charge evaluator, so write-back elements are metadata,
+    piecewise-constant-M write-back field, not the BDM1 solve.  Production `rad.Fld` now redirects
+    solved HDiv objects to the full BDM1 C++ charge evaluator, so write-back elements are metadata,
     not the field oracle.  The immutable evaluator is built at solve time, reuses analytic tet
     near kernels / hex-wedge charge clouds, and batches NumPy observations under TaskManager.
     Large non-IMA maps may use its direct-probed treecode; IMA stays exact-direct.  Gap-face

@@ -1,4 +1,6 @@
-"""Measure the public pure-TET RT1/RT2 material path on mdx or hibino.
+"""Measure the public pure-TET BDM1/BDM2 material path on mdx or hibino.
+
+The filename is retained as a legacy validation entry point.
 
 This is a validation benchmark, not a pytest test.  It uses the same mesh for
 both orders at each size and records external wall time, solver stage timings,

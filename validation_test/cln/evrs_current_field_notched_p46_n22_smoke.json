@@ -1,0 +1,133 @@
+{
+  "schema": "radia.validation.evrs_current_field_compare.v1",
+  "generated_at_utc": "2026-07-16T13:39:29.742541+00:00",
+  "validation_host": "lab",
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "note": "LAB/desktop smoke only.  The parent solve uses the dimensionless (K + shift M) HCurl model; timings are not benchmark data.",
+  "configuration": {
+    "geometry": "notched-box",
+    "orders": [
+      4,
+      6
+    ],
+    "krylov_steps": [
+      22
+    ],
+    "reference_order": 6,
+    "shifts": [
+      1.0
+    ],
+    "maxh": 2.0,
+    "sigma": 58000000.0,
+    "intorder": 2,
+    "corner_radius": 0.35,
+    "condense_from": 7,
+    "rtol": 1e-10
+  },
+  "cases": [
+    {
+      "kind": "full-reference",
+      "order": 6,
+      "krylov_steps": null,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 3557,
+      "compression_ratio": 1.0,
+      "current_samples": 136,
+      "max_relative_current_l2": 0.0,
+      "max_relative_energy_norm": 0.0,
+      "max_relative_joule_loss_error": 0.0,
+      "max_corner_relative_current_l2": 0.0,
+      "max_corner_peak_magnitude_relative_error": 0.0,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 4,
+      "krylov_steps": 22,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 1252,
+      "active_dofs": 1252,
+      "rank": 44,
+      "compression_ratio": 0.03514376996805112,
+      "response_seconds_lab_smoke": 20.686261099996045,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 0.2101477286893953,
+          "relative_energy_norm": 0.2101477286893953,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 4.0486240546665205e-11,
+          "relative_joule_loss_error": 0.15445519662840457,
+          "corner_relative_current_l2": 0.15665650329778755,
+          "corner_peak_magnitude_relative_error": 0.13872902808229415
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 0.11375108649978803,
+          "relative_energy_norm": 0.11375108649978803,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 9.313712476962181e-11,
+          "relative_joule_loss_error": 0.051121111240849934,
+          "corner_relative_current_l2": 0.0913190115177649,
+          "corner_peak_magnitude_relative_error": 0.11928308066123557
+        }
+      ],
+      "max_relative_current_l2": 0.2101477286893953,
+      "max_relative_energy_norm": 0.2101477286893953,
+      "max_relative_joule_loss_error": 0.15445519662840457,
+      "max_corner_relative_current_l2": 0.15665650329778755,
+      "max_corner_peak_magnitude_relative_error": 0.13872902808229415,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 6,
+      "krylov_steps": 22,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 44,
+      "compression_ratio": 0.012369974697779028,
+      "response_seconds_lab_smoke": 41.32740790001117,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 1.605009714912421e-06,
+          "relative_energy_norm": 1.605009714912421e-06,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 3.5069561165997164e-11,
+          "relative_joule_loss_error": 8.435216612791457e-08,
+          "corner_relative_current_l2": 1.1123932187584044e-06,
+          "corner_peak_magnitude_relative_error": 9.454098955618898e-07
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 9.437804702750012e-07,
+          "relative_energy_norm": 9.437804702750012e-07,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 8.860741679840991e-11,
+          "relative_joule_loss_error": 1.76052672030628e-08,
+          "corner_relative_current_l2": 7.224660233004704e-07,
+          "corner_peak_magnitude_relative_error": 7.126984130930735e-07
+        }
+      ],
+      "max_relative_current_l2": 1.605009714912421e-06,
+      "max_relative_energy_norm": 1.605009714912421e-06,
+      "max_relative_joule_loss_error": 8.435216612791457e-08,
+      "max_corner_relative_current_l2": 1.1123932187584044e-06,
+      "max_corner_peak_magnitude_relative_error": 9.454098955618898e-07,
+      "corner_sample_count": 50
+    }
+  ]
+}

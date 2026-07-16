@@ -72,7 +72,7 @@ def validate_hdiv_configuration(dimension: int, vertex_counts, hdiv_order: int,
     geometry_order = max(1, int(geometry_order))
     if geometry_order not in capability.geometry_orders:
         raise ValueError(
-            "HDiv-VIM does not support geometry order %d for %dD %s RT%d; supported geometry orders are %s. "
+            "HDiv-VIM does not support geometry order %d for %dD %s BDM%d; supported geometry orders are %s. "
             "Geometry and field orders are independent Piola-FEM choices, not an automatic p+1 rule."
             % (geometry_order, capability.dimension, capability.topology,
                capability.hdiv_order, capability.geometry_orders))

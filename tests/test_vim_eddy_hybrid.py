@@ -1,0 +1,2070 @@
+import numpy as np
+import pytest
+
+import radia.vim as vim
+
+
+def test_surface_omega_basis_builds_tangential_current():
+    points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    weights = np.array([0.5, 0.5])
+    normals = np.array([[0.0, 0.0, 2.0], [0.0, 0.0, 3.0]])
+    grad_omega = np.array([
+        [[1.0, 0.0, 5.0], [1.0, 0.0, -2.0]],
+    ])
+
+    basis = vim.SurfaceOmegaBasis(points, weights, normals, grad_omega, names=["omega_x"])
+
+    assert basis.kind == "surface"
+    assert basis.names == ("omega_x",)
+    np.testing.assert_allclose(
+        basis.modes[0],
+        np.array([[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]]),
+    )
+    np.testing.assert_allclose(basis.mass_matrix(), [[1.0]])
+
+
+def test_block_krylov_basis_respects_free_dofs_and_metric_orthonormality():
+    k = np.diag([2.0, 3.0, 5.0])
+    m = np.diag([1.0, 2.0, 4.0])
+    ports = np.array([
+        [1.0, 0.0],
+        [1.0, 1.0],
+        [1.0, 2.0],
+    ])
+    free = np.array([True, False, True])
+
+    basis = vim.BlockKrylovBasis(k, m, ports, steps=2, free_dofs=free)
+
+    assert isinstance(basis, vim.EVRSBasis)
+    assert isinstance(basis, vim.ResponseBasis)
+    assert np.array_equal(basis.active_dofs, [0, 2])
+    assert np.allclose(basis.vectors[1, :], 0.0)
+    gram = basis.vectors.conj().T @ m @ basis.vectors
+    np.testing.assert_allclose(gram, np.eye(basis.rank), atol=1.0e-12)
+    assert basis.diagnostics() == {
+        "ndof": 3,
+        "active_dofs": 2,
+        "rank": basis.rank,
+        "port_visible_dofs": basis.rank,
+        "eddy_visible_dofs": basis.rank,
+        "compression_ratio": basis.rank / 3,
+        "inactive_dofs": 1,
+        "port_invisible_dofs": 2 - basis.rank,
+        "eddy_invisible_dofs": 2 - basis.rank,
+        "eliminated_dofs": 3 - basis.rank,
+        "port_count": 2,
+        "krylov_steps": 2,
+        "construction": "block-krylov",
+        "parent_space": "HCurl",
+    }
+
+
+def test_evrs_tmethod_algebra_preserves_derham_gauge_and_ports():
+    curl_map = np.array([
+        [1.0, -1.0, 0.0],
+        [-1.0, 1.0, 0.0],
+    ])
+    div_map = np.array([[1.0, 1.0]])
+    grad_map = np.array([[1.0], [1.0], [0.0]])
+    evrs_map = np.array([
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [0.0, 1.0],
+    ])
+    resistance_current = np.array([[2.0, 0.25], [0.25, 3.0]])
+    inductance_current = np.array([[5.0, 0.5], [0.5, 7.0]])
+    port_current = np.array([[1.0, 0.0], [0.0, 2.0]])
+
+    result = vim.EVRSTMethodAlgebra(
+        curl_map,
+        div_map,
+        grad_map,
+        evrs_map,
+        resistance_current,
+        inductance_current,
+        port_current,
+        backend="python",
+    )
+
+    current_evrs = curl_map @ evrs_map
+    np.testing.assert_allclose(result["current_evrs"], current_evrs)
+    np.testing.assert_allclose(
+        result["resistance_t"],
+        curl_map.T @ resistance_current @ curl_map,
+    )
+    np.testing.assert_allclose(
+        result["resistance_evrs"],
+        current_evrs.T @ resistance_current @ current_evrs,
+    )
+    np.testing.assert_allclose(
+        result["port_evrs"],
+        evrs_map.T @ curl_map.T @ port_current,
+    )
+    info = result["diagnostics"]
+    assert info["div_curl_norm"] == pytest.approx(0.0)
+    assert info["div_evrs_norm"] == pytest.approx(0.0)
+    assert info["resistance_gauge_norm"] == pytest.approx(0.0)
+    assert info["inductance_gauge_norm"] == pytest.approx(0.0)
+    assert info["port_gauge_norm"] == pytest.approx(0.0)
+    assert info["evrs_resistance_galerkin_residual"] == pytest.approx(0.0)
+    assert info["evrs_inductance_galerkin_residual"] == pytest.approx(0.0)
+
+    try:
+        cpp_result = vim.EVRSTMethodAlgebra(
+            curl_map,
+            div_map,
+            grad_map,
+            evrs_map,
+            resistance_current,
+            inductance_current,
+            port_current,
+            backend="cpp",
+        )
+    except RuntimeError:
+        cpp_result = None
+    if cpp_result is not None:
+        for key in (
+            "current_evrs",
+            "resistance_t",
+            "inductance_t",
+            "resistance_evrs",
+            "inductance_evrs",
+            "port_t",
+            "port_evrs",
+        ):
+            np.testing.assert_allclose(cpp_result[key], result[key])
+        for key, value in result["diagnostics"].items():
+            assert cpp_result["diagnostics"][key] == pytest.approx(value)
+
+
+def test_hybrid_vim_mixes_t_volume_and_surface_omega_sibc_blocks():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        weights=np.array([0.25, 0.25]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+        ]),
+        names=["T_loop"],
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]),
+        weights=np.array([0.5, 0.5]),
+        normals=np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([
+            [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+        ]),
+        names=["Omega_skin"],
+    )
+    sigma = 5.8e7
+
+    system = vim.AssembleHybridVIM(volume, surface, sigma=sigma, kernel_epsilon=0.2)
+
+    assert system.basis_names == ("T_loop", "Omega_skin")
+    assert system.blocks["volume"] == (0, 1)
+    assert system.blocks["surface"] == (1, 2)
+    np.testing.assert_allclose(system.resistance, system.resistance.conj().T)
+    np.testing.assert_allclose(system.inductance, system.inductance.conj().T)
+    np.testing.assert_allclose(system.surface_mass, system.surface_mass.conj().T)
+    np.testing.assert_allclose(system.resistance[0, 0], 0.5 / sigma)
+    np.testing.assert_allclose(system.resistance[1, 1], 0.0)
+    np.testing.assert_allclose(system.surface_mass[1, 1], 1.0)
+    assert system.inductance[0, 0].real > 0.0
+    assert system.inductance[1, 1].real > 0.0
+    assert abs(system.inductance[0, 1]) > 0.0
+
+    omega = 2.0 * np.pi * 10_000.0
+    zs = vim.SkinImpedance(1j * omega, sigma)
+    z = system.impedance(1j * omega, surface_impedance=zs)
+    q = np.array([1.0 - 0.3j, 0.4 + 0.2j])
+    dissipated = np.vdot(q, z @ q).real
+    assert dissipated > 0.0
+    assert system.n_modes == 2
+
+    port_rhs = np.eye(2)
+    admittance = system.port_admittance(1j * omega, port_rhs, surface_impedance=zs)
+    np.testing.assert_allclose(
+        admittance,
+        vim.ReducedPortAdmittance(system, 1j * omega, port_rhs, surface_impedance=zs),
+    )
+    port_impedance = vim.ReducedPortImpedance(
+        system,
+        1j * omega,
+        port_rhs,
+        surface_impedance=zs,
+    )
+    np.testing.assert_allclose(port_impedance @ admittance, np.eye(2), atol=1.0e-10)
+
+    rhs_v = vim.ExternalVectorPotentialRHS(volume, [1.0, 0.0, 0.0])
+    rhs_s = vim.ExternalVectorPotentialRHS(surface, [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(rhs_v, [0.5])
+    np.testing.assert_allclose(rhs_s, [-1.0])
+
+
+def test_hybrid_vim_accepts_custom_bem_interaction_backend():
+    basis = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0]],
+        ]),
+        names=["jx", "jy"],
+    )
+
+    def fake_bem(left, right):
+        assert left is basis
+        assert right is basis
+        return np.array([[2.0, 0.25], [0.25, 3.0]])
+
+    system = vim.AssembleHybridVIM(basis, sigma=2.0, interaction=fake_bem)
+
+    np.testing.assert_allclose(
+        system.inductance,
+        np.array([[2.0, 0.25], [0.25, 3.0]]),
+    )
+
+
+def test_explicit_sampled_laplace_interaction_matches_default_backend():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        weights=np.array([0.25, 0.25]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        ]),
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]),
+        weights=np.array([0.5, 0.5]),
+        normals=np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([
+            [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]],
+        ]),
+    )
+
+    default = vim.AssembleHybridVIM(volume, surface, sigma=2.0, kernel_epsilon=0.2)
+    explicit = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=2.0,
+        interaction=vim.SampledLaplaceInteraction(kernel_epsilon=0.2),
+    )
+
+    np.testing.assert_allclose(explicit.inductance, default.inductance)
+    np.testing.assert_allclose(explicit.resistance, default.resistance)
+    np.testing.assert_allclose(explicit.surface_mass, default.surface_mass)
+    assert explicit.interaction_backend == "sampled-laplace"
+    info = explicit.diagnostics()
+    assert info["interaction_backend"] == "sampled-laplace"
+    assert info["passive_blocks"] is True
+    assert info["inductance_hermitian_error"] == pytest.approx(0.0)
+    assert info["blocks"] == {"volume": [0, 1], "surface": [1, 2]}
+
+
+def test_reduced_interaction_matrix_backend_wires_bem_blocks():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        weights=np.array([0.5, 0.5]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+        ]),
+        names=["T0", "T1"],
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]),
+        weights=np.array([0.5, 0.5]),
+        normals=np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([
+            [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+        ]),
+        names=["Omega0"],
+    )
+    reduced_bem = np.array([
+        [2.0, 0.1, -0.2],
+        [0.1, 3.0, 0.4],
+        [-0.2, 0.4, 5.0],
+    ])
+    backend = vim.ReducedInteractionMatrix(
+        (volume, surface),
+        reduced_bem,
+        name="mock-reduced-bem",
+    )
+
+    system = vim.AssembleHybridVIM(volume, surface, sigma=5.0, interaction=backend)
+
+    np.testing.assert_allclose(system.inductance, reduced_bem)
+    assert system.interaction_backend == "mock-reduced-bem"
+    assert system.diagnostics()["interaction_backend"] == "mock-reduced-bem"
+    assert system.blocks["volume"] == (0, 2)
+    assert system.blocks["surface"] == (2, 3)
+    np.testing.assert_allclose(system.resistance[:2, :2], np.eye(2) / 5.0)
+    np.testing.assert_allclose(system.surface_mass[2:, 2:], [[1.0]])
+
+
+def test_interaction_backend_only_needs_upper_triangular_blocks():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["T0"],
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 1.0, 0.0]]),
+        weights=np.array([1.0]),
+        normals=np.array([[0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([[[0.0, 1.0, 0.0]]]),
+        names=["Omega0"],
+    )
+    calls = []
+
+    def backend(left, right):
+        calls.append((left.names, right.names))
+        assert not (left is surface and right is volume)
+        if left is volume and right is volume:
+            return np.array([[2.0]])
+        if left is volume and right is surface:
+            return np.array([[0.5]])
+        if left is surface and right is surface:
+            return np.array([[3.0]])
+        raise AssertionError("unexpected block request")
+
+    system = vim.AssembleHybridVIM(volume, surface, sigma=1.0, interaction=backend)
+
+    assert calls == [
+        (("T0",), ("T0",)),
+        (("T0",), ("Omega0",)),
+        (("Omega0",), ("Omega0",)),
+    ]
+    np.testing.assert_allclose(system.inductance, [[2.0, 0.5], [0.5, 3.0]])
+
+
+def test_hybrid_vim_impedance_is_positive_real_for_passive_blocks():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        weights=np.array([0.5, 0.5]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+        ]),
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]),
+        weights=np.array([0.5, 0.5]),
+        normals=np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([
+            [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+        ]),
+    )
+    passive_l = np.array([
+        [3.0, 0.2, 0.1],
+        [0.2, 2.0, 0.3],
+        [0.1, 0.3, 4.0],
+    ])
+    backend = vim.ReducedInteractionMatrix((volume, surface), passive_l)
+    system = vim.AssembleHybridVIM(volume, surface, sigma=5.0, interaction=backend)
+    z = system.impedance(0.2 + 1.3j, surface_impedance=0.7 + 0.9j)
+
+    rng = np.random.default_rng(4)
+    for _ in range(20):
+        q = rng.normal(size=3) + 1j * rng.normal(size=3)
+        assert np.vdot(q, z @ q).real > 0.0
+
+
+def test_magnetization_current_coupling_matches_biot_savart_orientation():
+    current = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([2.0]),
+        current_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["jx"],
+    )
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[0.0, 1.0, 0.0]]),
+        weights=np.array([3.0]),
+        magnetization_modes=np.array([[[0.0, 0.0, 1.0]]]),
+        names=["mz"],
+    )
+
+    fields = vim.CurrentMagneticFluxDensitySamples(
+        current,
+        magnetization.points,
+        kernel_epsilon=0.0,
+    )
+    expected_bz = vim.MU0 / (4.0 * np.pi) * 2.0
+    np.testing.assert_allclose(fields[0, 0], [0.0, 0.0, expected_bz])
+
+    coupling = vim.MagnetizationCurrentCoupling(
+        magnetization,
+        current,
+        kernel_epsilon=0.0,
+    )
+    np.testing.assert_allclose(coupling, [[3.0 * expected_bz]])
+
+
+def test_magnetization_current_coupling_accepts_surface_omega_current():
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([2.0]),
+        normals=np.array([[0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["omega_x"],
+    )
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[1.0, 0.0, 0.0]]),
+        weights=np.array([1.5]),
+        magnetization_modes=np.array([[[0.0, 0.0, -1.0]]]),
+        names=["minus_mz"],
+    )
+
+    # K = n x grad(Omega) = e_y.  At x=e_x, e_y x e_x = -e_z.
+    coupling = vim.MagnetizationCurrentCoupling(
+        magnetization,
+        surface,
+        kernel_epsilon=0.0,
+    )
+
+    expected = 1.5 * vim.MU0 / (4.0 * np.pi) * 2.0
+    np.testing.assert_allclose(coupling, [[expected]])
+
+
+def test_coupled_hdiv_evrs_system_names_rectangular_mixed_block():
+    eddy = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([2.0]),
+        current_modes=np.array([
+            [[0.0, 1.0, 0.0]],
+            [[0.0, 0.0, 1.0]],
+        ]),
+        names=["EVRS0", "EVRS1"],
+    )
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[1.0, 0.0, 0.0]]),
+        weights=np.array([3.0]),
+        magnetization_modes=np.array([[[0.0, 0.0, -1.0]]]),
+        names=["HDivM0"],
+    )
+    eddy_system = vim.AssembleHybridVIM(eddy, sigma=4.0, kernel_epsilon=0.5)
+
+    coupled = vim.CoupleHDivMagnetizationToEVRS(
+        magnetization,
+        eddy,
+        eddy_system=eddy_system,
+    )
+
+    assert isinstance(coupled, vim.CoupledHDivEVRSSystem)
+    assert coupled.n_hdiv_modes == 1
+    assert coupled.n_evrs_modes == 2
+    np.testing.assert_allclose(coupled.coupling, [[6.0e-7, 0.0]], atol=1.0e-18)
+    info = coupled.diagnostics()
+    assert info["hdiv_modes"] == 1
+    assert info["evrs_modes"] == 2
+    assert info["hdiv_mmm_modes"] == 1
+    assert info["hcurl_vim_modes"] == 2
+    assert info["has_eddy_system"] is True
+    assert info["has_shared_material_model"] is False
+    assert info["coupling_frobenius_norm"] > 0.0
+
+    material_model = vim.SharedMeshMaterialModel(
+        mesh="shared-ngsolve-mesh",
+        magnetic_regions="iron",
+        conductive_regions=("conductor",),
+        mu={"iron": vim.MU0 * 1000.0},
+        sigma={"conductor": 5.8e7},
+    )
+    production_named = vim.CoupleHCurlVIMWithHDivMMM(
+        magnetization,
+        eddy,
+        eddy_system=eddy_system,
+        material_model=material_model,
+    )
+
+    assert isinstance(production_named, vim.HCurlVIMHDivMMMSystem)
+    assert production_named.material_model is material_model
+    assert production_named.n_hdiv_mmm_modes == 1
+    assert production_named.n_hcurl_vim_modes == 2
+    assert production_named.diagnostics()["has_shared_material_model"] is True
+    assert production_named.diagnostics()["has_shared_mesh_material_model"] is True
+    assert material_model.hdiv_mmm_coefficient() == {"iron": vim.MU0 * 1000.0}
+    assert material_model.hcurl_vim_coefficient() == {"conductor": 5.8e7}
+    assert material_model.diagnostics()["magnetic_region_count"] == 1
+    assert material_model.diagnostics()["conductive_region_count"] == 1
+    np.testing.assert_allclose(
+        production_named.mixed_energy(np.array([2.0]), np.array([3.0, 5.0])),
+        36.0e-7,
+        atol=1.0e-18,
+    )
+
+
+def test_eddy_bubble_hcurl_basis_is_vim_and_hdiv_mmm_ready():
+    response = vim.EVRSBasis(
+        vectors=np.eye(2),
+        active_dofs=np.array([0, 1]),
+        port_count=1,
+        krylov_steps=1,
+    )
+    current = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0]],
+        ]),
+        names=["j0", "j1"],
+    )
+    free = np.ones(2, dtype=bool)
+    policy = vim.EddyDofPolicy(
+        free=free,
+        sibc_surface=np.zeros(2, dtype=bool),
+        surface_candidate=np.zeros(2, dtype=bool),
+        loop_bridge=np.zeros(2, dtype=bool),
+        local_bubble=np.zeros(2, dtype=bool),
+        interface=np.zeros(2, dtype=bool),
+        wirebasket=np.zeros(2, dtype=bool),
+    )
+    bubbling = vim.EddyBubbleReduction(policy, evrs_rank=2, surface_modes=0)
+    basis = vim.EddyBubbleHCurlBasis(response, current, bubbling)
+
+    assert basis.n_modes == 2
+    assert basis.eddy_basis is current
+    system = basis.assemble_vim(sigma=5.8e7, kernel_epsilon=0.2)
+    assert isinstance(system, vim.HybridVIMSystem)
+    assert system.n_modes == 2
+
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[0.0, 0.0, 1.0]]),
+        weights=np.array([1.0]),
+        magnetization_modes=np.array([[[0.0, 1.0, 0.0]]]),
+        names=["m0"],
+    )
+    coupled = vim.CoupleEddyBubbleHCurlBasisWithHDivMMM(
+        magnetization,
+        basis,
+        eddy_system=system,
+        kernel_epsilon=0.2,
+    )
+    assert isinstance(coupled, vim.HCurlVIMHDivMMMSystem)
+    assert coupled.eddy_basis is current
+    info = basis.diagnostics()
+    assert info["kind"] == "EddyBubbleHCurlBasis"
+    assert info["modes"] == 2
+    assert info["eddy_bubbling"]["rule"] == "topology-aware-eddy-bubbling"
+
+
+def test_hdiv_mmm_couples_to_hybrid_vim_volume_and_surface_blocks():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["bulk"],
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 1.0, 0.0]]),
+        weights=np.array([2.0]),
+        normals=np.array([[0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["skin"],
+    )
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[1.0, 0.0, 0.0]]),
+        weights=np.array([1.5]),
+        magnetization_modes=np.array([[[0.0, 0.0, 1.0]]]),
+        names=["m0"],
+    )
+    eddy_system = vim.AssembleHybridVIM(volume, surface, sigma=5.8e7, kernel_epsilon=0.2)
+
+    coupled = vim.CoupleHybridVIMWithHDivMMM(
+        magnetization,
+        eddy_system,
+        (volume, surface),
+        kernel_epsilon=0.2,
+    )
+
+    assert isinstance(coupled, vim.CoupledHDivHybridVIMSystem)
+    assert coupled.n_hdiv_mmm_modes == 1
+    assert coupled.n_hcurl_vim_modes == eddy_system.n_modes
+    assert coupled.coupling.shape == (1, eddy_system.n_modes)
+    op = coupled.mixed_operator(np.array([[2.0]]), 1j * 100.0, surface_impedance=0.3)
+    assert op.shape == (1 + eddy_system.n_modes, 1 + eddy_system.n_modes)
+    info = coupled.diagnostics()
+    assert info["eddy_basis_count"] == 2
+    assert info["hybrid_blocks"] == eddy_system.diagnostics()["blocks"]
+
+
+def test_shared_mesh_material_model_validates_positive_scalar_coefficients():
+    model = vim.SharedMeshMaterialModel(
+        mesh="mesh",
+        magnetic_regions=("iron", "air"),
+        conductive_regions="coil",
+        nu=2.0,
+        sigma=5.8e7,
+    )
+
+    assert model.has_reluctivity is True
+    assert model.has_magnetic_law is True
+    assert model.has_conductivity is True
+    assert model.hdiv_mmm_coefficient() == 2.0
+    assert model.hcurl_vim_coefficient() == 5.8e7
+
+    with pytest.raises(ValueError, match="sigma"):
+        vim.SharedMeshMaterialModel(mesh="mesh", sigma=0.0)
+
+
+def test_hcurl_vim_hdiv_mmm_system_solves_mixed_block_and_schur():
+    eddy = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([
+            [[1.0, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0]],
+        ]),
+        names=["j0", "j1"],
+    )
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        magnetization_modes=np.array([[[0.0, 0.0, 1.0]]]),
+        names=["m0"],
+    )
+    eddy_system = vim.HybridVIMSystem(
+        resistance=np.diag([2.0, 3.0]),
+        inductance=np.diag([0.5, 0.25]),
+        surface_mass=np.zeros((2, 2)),
+        basis_names=("j0", "j1"),
+        blocks={"eddy": (0, 2)},
+    )
+    coupled = vim.HCurlVIMHDivMMMSystem(
+        magnetization_basis=magnetization,
+        eddy_basis=eddy,
+        coupling=np.array([[0.5, -0.25]]),
+        eddy_system=eddy_system,
+    )
+
+    magnetic = np.array([[4.0]])
+    expected_eddy = np.diag([3.0, 3.5])
+    expected = np.array([
+        [4.0, 0.5, -0.25],
+        [0.5, 3.0, 0.0],
+        [-0.25, 0.0, 3.5],
+    ])
+
+    np.testing.assert_allclose(coupled.eddy_impedance(2.0), expected_eddy)
+    np.testing.assert_allclose(coupled.mixed_operator(magnetic, 2.0), expected)
+
+    rhs = np.array([1.0, 0.2, -0.1])
+    solved = coupled.solve(
+        magnetic,
+        2.0,
+        magnetic_rhs=np.array([rhs[0]]),
+        eddy_rhs=rhs[1:],
+        return_operator=True,
+    )
+    np.testing.assert_allclose(solved["operator"], expected)
+    np.testing.assert_allclose(
+        solved["solution"].ravel(),
+        np.linalg.solve(expected, rhs),
+    )
+
+    k = np.array([[0.5, -0.25]])
+    np.testing.assert_allclose(
+        coupled.schur_magnetic_operator(magnetic, 2.0),
+        magnetic - k @ np.linalg.solve(expected_eddy, k.T),
+    )
+    np.testing.assert_allclose(
+        coupled.schur_eddy_operator(magnetic, 2.0),
+        expected_eddy - k.T @ np.linalg.solve(magnetic, k),
+    )
+
+    eddy_ports = np.array([[1.0, 0.0], [0.0, 1.0]])
+    ports = np.vstack([np.zeros((1, 2)), eddy_ports])
+    np.testing.assert_allclose(
+        coupled.port_admittance(magnetic, 2.0, eddy_ports),
+        ports.T @ np.linalg.solve(expected, ports),
+    )
+
+
+def test_hybrid_vim_named_block_schur_matches_igte_mixed_galerkin_formula():
+    system = vim.HybridVIMSystem(
+        resistance=np.array([
+            [4.0, 0.5],
+            [0.5, 3.0],
+        ]),
+        inductance=np.array([
+            [1.0, 0.25],
+            [0.25, 0.75],
+        ]),
+        surface_mass=np.array([
+            [0.0, 0.0],
+            [0.0, 2.0],
+        ]),
+        basis_names=("bulk", "surface"),
+        blocks={"bulk": (0, 1), "surface": (1, 2)},
+    )
+    s = 2.0
+    zs = 5.0
+    z = system.impedance(s, surface_impedance=zs)
+
+    np.testing.assert_allclose(system.block_matrix("bulk", "surface", s, surface_impedance=zs), z[:1, 1:])
+    np.testing.assert_allclose(
+        system.schur_complement("surface", "bulk", s, surface_impedance=zs),
+        z[1:, 1:] - z[1:, :1] @ np.linalg.solve(z[:1, :1], z[:1, 1:]),
+    )
+    np.testing.assert_allclose(
+        system.schur_complement("bulk", "surface", s, surface_impedance=zs),
+        z[:1, :1] - z[:1, 1:] @ np.linalg.solve(z[1:, 1:], z[1:, :1]),
+    )
+    np.testing.assert_allclose(
+        system.block_rhs(
+            bulk=np.array([[1.0, 2.0]]),
+            surface=np.array([[3.0, 4.0]]),
+        ),
+        np.array([[1.0, 2.0], [3.0, 4.0]]),
+    )
+    np.testing.assert_allclose(
+        system.block_rhs(surface=np.array([5.0])),
+        np.array([0.0, 5.0]),
+    )
+    with pytest.raises(KeyError):
+        system.block_slice("missing")
+    with pytest.raises(ValueError):
+        system.block_rhs(bulk=np.ones((2, 1)))
+    with pytest.raises(ValueError):
+        system.block_rhs(bulk=np.ones((1, 1)), surface=np.ones((1, 2)))
+
+
+def test_hybrid_vim_multi_block_schur_eliminates_evrs_keeps_bridge_and_surface():
+    r = np.diag([4.0, 2.0, 3.0, 1.5])
+    l = np.array([
+        [2.0, 0.1, 0.2, -0.1],
+        [0.1, 3.0, 0.25, 0.15],
+        [0.2, 0.25, 2.5, -0.05],
+        [-0.1, 0.15, -0.05, 1.25],
+    ])
+    sm = np.diag([0.0, 0.0, 0.0, 2.0])
+    system = vim.HybridVIMSystem(
+        resistance=r,
+        inductance=l,
+        surface_mass=sm,
+        basis_names=("evrs", "bridge0", "bridge1", "surface"),
+        blocks={"volume": (0, 1), "volume1": (1, 3), "surface": (3, 4)},
+    )
+    s = 0.2 + 1.0j
+    zs = 0.7 + 0.3j
+    z = system.impedance(s, surface_impedance=zs)
+    keep = system.block_indices(("volume1", "surface"))
+    elim = system.block_indices("volume")
+
+    np.testing.assert_array_equal(keep, np.array([1, 2, 3]))
+    np.testing.assert_allclose(
+        system.block_matrix_blocks(("volume1", "surface"), "volume", s, surface_impedance=zs),
+        z[np.ix_(keep, elim)],
+    )
+    np.testing.assert_allclose(
+        system.schur_complement_blocks(("volume1", "surface"), "volume", s, surface_impedance=zs),
+        z[np.ix_(keep, keep)] - z[np.ix_(keep, elim)] @ np.linalg.solve(
+            z[np.ix_(elim, elim)],
+            z[np.ix_(elim, keep)],
+        ),
+    )
+    np.testing.assert_allclose(
+        system.schur_complement_blocks("surface", ("volume", "volume1"), s, surface_impedance=zs),
+        z[3:, 3:] - z[3:, :3] @ np.linalg.solve(z[:3, :3], z[:3, 3:]),
+    )
+    with pytest.raises(ValueError):
+        system.block_indices(("volume", "volume"))
+    with pytest.raises(ValueError):
+        system.schur_complement_blocks(("volume", "surface"), "surface", s)
+
+
+def test_sibc_tail_and_schur_termination_match_digest_asymptote():
+    s = 1j * 2.0 * np.pi * 1.0e6
+    sigma = 5.8e7
+    surface = 2.0 * np.pi * 0.005
+    k_sibc = surface * np.sqrt(sigma / vim.MU0)
+
+    np.testing.assert_allclose(
+        vim.SIBCAdmittanceTail(s, surface, sigma),
+        k_sibc / np.sqrt(s),
+    )
+
+    d = 2.0 * np.pi * 1.0e3
+    z = vim.SIBCSchurTerminationImpedance(s, k_sibc, d=d)
+    y = vim.SIBCSchurTerminationAdmittance(s, k_sibc, d=d)
+    np.testing.assert_allclose(y, 1.0 / z)
+    np.testing.assert_allclose(
+        y / (k_sibc / np.sqrt(s)),
+        s / (s + d),
+    )
+
+
+def test_cpp_hybrid_vim_schur_kernel_matches_numpy_when_available():
+    radia_cpp = pytest.importorskip("radia._radia_pybind")
+    func = getattr(radia_cpp, "_HybridVIMSchurComplement", None)
+    if func is None:
+        pytest.skip("_HybridVIMSchurComplement is not available in this binary")
+
+    kk = np.array([[4.0 + 0.5j, 0.25], [0.25, 3.0 + 0.1j]], dtype=np.complex128)
+    ke = np.array([[0.5 - 0.2j], [-0.25 + 0.1j]], dtype=np.complex128)
+    ek = ke.conj().T
+    ee = np.array([[2.0 + 1.0j]], dtype=np.complex128)
+
+    np.testing.assert_allclose(
+        func(kk, ke, ek, ee),
+        kk - ke @ np.linalg.solve(ee, ek),
+    )
+
+
+def test_cpp_hybrid_vim_solve_kernel_matches_numpy_when_available():
+    radia_cpp = pytest.importorskip("radia._radia_pybind")
+    func = getattr(radia_cpp, "_HybridVIMSolve", None)
+    if func is None:
+        pytest.skip("_HybridVIMSolve is not available in this binary")
+
+    matrix = np.array(
+        [[4.0 + 0.5j, 0.25 - 0.1j], [0.25 + 0.1j, 3.0 + 0.2j]],
+        dtype=np.complex128,
+    )
+    rhs = np.array([[1.0, 0.0 - 0.5j], [0.25j, 2.0]], dtype=np.complex128)
+    np.testing.assert_allclose(func(matrix, rhs), np.linalg.solve(matrix, rhs))
+
+
+def test_hybrid_vim_public_names_are_exported():
+    for name in (
+        "SampledMagnetizationBasis",
+        "VolumeCurrentBasis",
+        "MagnetizationBasis",
+        "SurfaceOmegaBasis",
+        "EddyTracePolynomialDim",
+        "EddyParentOrderLedger",
+        "EddyFaceTopology",
+        "EddyConductorGraphEdge",
+        "EddyConductorCycle",
+        "EddyConductorGraph",
+        "EddyMeshTopology",
+        "EddyDofPolicy",
+        "EddyReductionPlan",
+        "EddyBubbleDecomposition",
+        "EddyBubbleHCurlBasis",
+        "EddyBubbleReduction",
+        "ClassifyNgsolveEddyTopology",
+        "NgsolveEddyDofPolicy",
+        "NgsolveEddyBubbleReduction",
+        "NgsolveEddyBubbleHCurlBasis",
+        "NgsolveBridgeCycleCurrentBasis",
+        "NgsolveVolumeCurrentBasis",
+        "NgsolveMagnetizationBasis",
+        "NgsolveHDivMagnetizationBasis",
+        "HDivMultipolePortSet",
+        "PlanarHarmonicPortSet",
+        "NgsolveHDivRegularSolidHarmonicPorts",
+        "NgsolvePlanarHarmonicPorts",
+        "NgsolveHDivExternalFieldRHS",
+        "HDivMMMReducedModel",
+        "NgsolveHDivMMMReduction",
+        "NgsolveHDivMMMResponseReduction",
+        "NgsolveBDMHDivMMMResponseReduction",
+        "PlanarHDivMMMReducedSolution",
+        "PlanarHDivMMMReducedModel",
+        "NgsolvePlanarHDivMMMResponseReduction",
+        "NgsolveHCurlCurlBasis",
+        "NgsolveSurfaceOmegaBasis",
+        "NgsolveMatrixToDense",
+        "NgsolveVectorToArray",
+        "NgsolveCouplingDofMasks",
+        "NgsolveBlockKrylovBasis",
+        "NgsolveOperatorBlockKrylovBasis",
+        "NgsolveStaticCondensedBlockKrylovBasis",
+        "EVRSBasis",
+        "BlockKrylovBasis",
+        "SampledLaplaceInteraction",
+        "ReducedInteractionMatrix",
+        "CurrentMagneticFluxDensitySamples",
+        "MagnetizationCurrentCoupling",
+        "EVRSTMethodAlgebra",
+        "ReducedPortAdmittance",
+        "ReducedPortImpedance",
+        "SharedMeshMaterialModel",
+        "CoupledHDivEVRSSystem",
+        "CoupledHDivHybridVIMSystem",
+        "HCurlVIMHDivMMMSolution",
+        "HCurlVIMHDivMMMSystem",
+        "CoupleHDivMagnetizationToEVRS",
+        "CoupleHCurlVIMWithHDivMMM",
+        "CoupleHybridVIMWithHDivMMM",
+        "CoupleEddyBubbleHCurlBasisWithHDivMMM",
+        "AssembleHybridVIM",
+        "TopologyAwareHybridVIM",
+        "NgsolveTopologyAwareHybridVIM",
+        "NgsolveEddyBubbleHybridVIM",
+        "NgsolveHCurlVIMHDivMMM",
+        "NgsolveBDMEddyBubbleVIM",
+        "SkinImpedance",
+        "SIBCAdmittanceTail",
+        "SIBCSchurTerminationImpedance",
+        "SIBCSchurTerminationAdmittance",
+        "ExternalVectorPotentialRHS",
+    ):
+        assert callable(getattr(vim, name))
+        assert name in vim.__all__
+
+
+def test_eddy_parent_order_ledger_keeps_p_symbolic_not_empirical():
+    assert vim.EddyTracePolynomialDim(0) == 1
+    assert vim.EddyTracePolynomialDim(2) == 6
+    assert vim.EddyTracePolynomialDim(2, face_family="tensor") == 9
+
+    ledger = vim.EddyParentOrderLedger(
+        bulk_degree=4,
+        bridge_trace_degree=0,
+        surface_current_degree=2,
+    )
+    assert ledger.required_parent_order == 4
+    assert ledger.surface_omega_degree == 3
+    assert ledger.bridge_trace_dim == 1
+    assert not ledger.is_parent_order_admissible(3)
+    assert ledger.is_parent_order_admissible(4)
+    assert ledger.is_parent_order_admissible(6)
+
+    info = ledger.diagnostics(
+        parent_order=6,
+        evrs_rank=24,
+        cycle_rank=7,
+        surface_modes=3,
+    )
+    assert info["parent_order_admissible"] is True
+    assert info["parent_order_excess"] == 2
+    assert info["estimated_reduced_modes"] == 24 + 7 + 3
+
+    enriched_bridge = vim.EddyParentOrderLedger(
+        bulk_degree=4,
+        bridge_trace_degree=2,
+        surface_current_degree=2,
+    )
+    assert enriched_bridge.required_parent_order == 4
+    assert enriched_bridge.bridge_modes(cycle_rank=7) == 7 * 6
+    assert (
+        enriched_bridge.estimated_reduced_modes(
+            evrs_rank=24,
+            cycle_rank=7,
+            surface_modes=3,
+            non_sibc_trace_modes=5,
+        )
+        == 24 + 7 * 6 + 3 + 5
+    )
+
+    high_order_bridge = vim.EddyParentOrderLedger(
+        bulk_degree=4,
+        bridge_trace_degree=6,
+        surface_current_degree=2,
+    )
+    assert high_order_bridge.required_parent_order == 6
+
+    with pytest.raises(ValueError):
+        vim.EddyTracePolynomialDim(-1)
+    with pytest.raises(ValueError):
+        vim.EddyTracePolynomialDim(1, face_family="hexagonal")
+
+
+def test_ngsolve_sampling_bridge_builds_hybrid_vim_on_unit_box():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+
+    volume = vim.NgsolveVolumeCurrentBasis(
+        mesh,
+        (
+            ng.CoefficientFunction((1.0, 0.0, 0.0)),
+            ng.CoefficientFunction((0.0, 1.0, 0.0)),
+        ),
+        intorder=1,
+        materials="cond",
+        names=["jx", "jy"],
+    )
+    surface = vim.NgsolveSurfaceOmegaBasis(
+        mesh,
+        (ng.CoefficientFunction((0.0, 1.0, 0.0)),),
+        intorder=1,
+        boundaries="skin",
+        names=["omega_y"],
+    )
+
+    assert volume.n_samples > 0
+    assert surface.n_samples > 0
+    np.testing.assert_allclose(volume.weights.sum(), 1.0, rtol=1.0e-12)
+    np.testing.assert_allclose(volume.mass_matrix(), np.eye(2), atol=1.0e-12)
+    assert surface.mass_matrix()[0, 0].real > 0.0
+
+    system = vim.AssembleHybridVIM(volume, surface, sigma=5.8e7, kernel_epsilon=0.1)
+    assert system.impedance(1j * 100.0, surface_impedance=vim.SkinImpedance(1j * 100.0, 5.8e7)).shape == (3, 3)
+
+
+def test_ngsolve_eddy_topology_classifies_skin_faces_and_loop_bridges():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=0.8))
+
+    topology = vim.ClassifyNgsolveEddyTopology(mesh, conductive_materials="cond")
+    info = topology.diagnostics()
+
+    assert isinstance(topology, vim.EddyMeshTopology)
+    assert info["conductive_element_count"] > 0
+    assert info["conductive_component_count"] == 1
+    assert info["surface_face_count"] > 0
+    assert info["loop_bridge_face_count"] > 0
+    assert info["conductor_exterior_face_count"] == info["surface_face_count"]
+    assert info["conductor_conductor_face_count"] == info["loop_bridge_face_count"]
+    assert "conductor-exterior" in info["roles"]
+    assert "conductor-conductor" in info["roles"]
+    assert all(face.requires_surface_basis for face in topology.surface_faces)
+    assert all(face.requires_loop_bridge for face in topology.loop_bridge_faces)
+    graph = topology.conductor_graph()
+    graph_info = graph.diagnostics()
+    assert isinstance(graph, vim.EddyConductorGraph)
+    assert graph_info["node_count"] == info["conductive_element_count"]
+    assert graph_info["edge_count"] == info["loop_bridge_face_count"]
+    assert graph_info["cycle_rank"] == info["conductive_graph_cycle_rank"]
+    assert graph_info["fundamental_cycle_count"] == graph_info["cycle_rank"]
+    assert all(isinstance(cycle, vim.EddyConductorCycle) for cycle in graph.cycle_basis())
+    cycle_edges = graph.cycle_edge_matrix()
+    assert cycle_edges.shape == (graph_info["cycle_rank"], graph_info["edge_count"])
+    assert np.all(np.isin(cycle_edges, (-1.0, 0.0, 1.0)))
+    assert np.all(np.count_nonzero(cycle_edges, axis=1) >= 3)
+
+
+def test_eddy_topology_keeps_insulator_faces_out_of_sibc_set():
+    topology = vim.EddyMeshTopology(
+        faces=(
+            vim.EddyFaceTopology(
+                face_nr=1,
+                role="conductor-air",
+                volume_elements=(1, 2),
+                volume_materials=("cond", "air"),
+            ),
+            vim.EddyFaceTopology(
+                face_nr=2,
+                role="conductor-exterior",
+                volume_elements=(1,),
+                volume_materials=("cond",),
+                boundary_labels=("skin",),
+            ),
+            vim.EddyFaceTopology(
+                face_nr=3,
+                role="conductor-insulator",
+                volume_elements=(1, 3),
+                volume_materials=("cond", "ceramic"),
+            ),
+            vim.EddyFaceTopology(
+                face_nr=4,
+                role="conductor-conductor",
+                volume_elements=(1, 4),
+                volume_materials=("cond", "cond"),
+            ),
+        ),
+        conductive_materials=("cond",),
+        air_materials=("air", "vacuum"),
+    )
+
+    assert [face.face_nr for face in topology.surface_faces] == [1, 2, 3]
+    assert [face.face_nr for face in topology.sibc_faces] == [1, 2]
+    assert [face.face_nr for face in topology.non_sibc_trace_faces] == [3]
+    assert [face.face_nr for face in topology.loop_bridge_faces] == [4]
+    assert not topology.faces_by_role("conductor-insulator")[0].is_sibc_face
+    assert not topology.faces_by_role("conductor-insulator")[0].can_sibc_terminate
+    info = topology.diagnostics()
+    assert info["surface_face_count"] == 3
+    assert info["sibc_face_count"] == 2
+    assert info["non_sibc_trace_face_count"] == 1
+    assert info["conductor_insulator_face_count"] == 1
+
+
+def test_eddy_dof_policy_excludes_non_sibc_trace_from_ordinary_evrs():
+    free = np.ones(8, dtype=bool)
+    sibc = np.zeros(8, dtype=bool)
+    surface = np.zeros(8, dtype=bool)
+    bridge = np.zeros(8, dtype=bool)
+    sibc[[0, 1]] = True
+    surface[[0, 1, 2, 3]] = True
+    bridge[[4, 5]] = True
+
+    policy = vim.EddyDofPolicy(
+        free=free,
+        sibc_surface=sibc,
+        surface_candidate=surface,
+        loop_bridge=bridge,
+        local_bubble=np.zeros(8, dtype=bool),
+        interface=np.zeros(8, dtype=bool),
+        wirebasket=np.zeros(8, dtype=bool),
+    )
+
+    np.testing.assert_array_equal(
+        policy.non_sibc_trace,
+        np.array([False, False, True, True, False, False, False, False]),
+    )
+    np.testing.assert_array_equal(
+        policy.ordinary_evrs_candidate,
+        np.array([False, False, False, False, False, False, True, True]),
+    )
+    info = policy.diagnostics()
+    assert info["sibc_surface_only_dofs"] == 2
+    assert info["non_sibc_trace_dofs"] == 2
+    assert info["loop_bridge_dofs"] == 2
+    assert info["ordinary_evrs_candidate_dofs"] == 2
+    assert info["partitioned_free_dofs"] == 8
+
+    plan = policy.reduction_plan(evrs_rank=3, surface_modes=2, loop_bridge_modes=1)
+    plan_info = plan.diagnostics()
+    assert plan_info["non_sibc_trace_dofs"] == 2
+    assert plan_info["non_sibc_trace_modes"] == 2
+    assert plan_info["ordinary_evrs_candidate_dofs"] == 2
+    assert plan_info["estimated_reduced_modes"] == 1 + 2 + 3 + 2
+
+    bubbling = vim.EddyBubbleReduction(
+        policy,
+        evrs_rank=3,
+        surface_modes=2,
+        loop_bridge_modes=1,
+        bridge_strategy="cycle-basis",
+        parent_order=4,
+        parent_order_ledger=vim.EddyParentOrderLedger(
+            bulk_degree=3,
+            bridge_trace_degree=0,
+            surface_current_degree=1,
+        ),
+    )
+    bubble_info = bubbling.diagnostics()
+    assert isinstance(bubbling, vim.EddyBubbleDecomposition)
+    assert bubble_info["rule"] == "topology-aware-eddy-bubbling"
+    assert bubble_info["classes"]["sibc_surface"] == 2
+    assert bubble_info["classes"]["non_sibc_trace"] == 2
+    assert bubble_info["classes"]["loop_bridge"] == 2
+    assert bubble_info["classes"]["ordinary_bulk_eddy_bubble"] == 2
+    assert bubble_info["parent_order"] == 4
+    assert bubble_info["parent_order_ledger"]["required_parent_order"] == 3
+    assert bubble_info["parent_order_ledger"]["parent_order_excess"] == 1
+    np.testing.assert_array_equal(bubbling.eddy_bubble_candidate, policy.ordinary_evrs_candidate)
+    np.testing.assert_array_equal(
+        bubbling.structural_keep,
+        policy.topology_protected | policy.sibc_surface_only | policy.non_sibc_trace,
+    )
+
+
+def test_ngsolve_eddy_dof_policy_marks_sibc_surface_and_loop_bridge_dofs():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=0.8))
+    fes = ng.HCurl(mesh, order=3, nograds=True)
+    topology = vim.ClassifyNgsolveEddyTopology(mesh, conductive_materials="cond")
+    policy = vim.NgsolveEddyDofPolicy(mesh, fes, topology)
+    info = policy.diagnostics()
+
+    assert isinstance(policy, vim.EddyDofPolicy)
+    assert info["free_dofs"] == fes.ndof
+    assert info["sibc_surface_dofs"] > 0
+    assert info["loop_bridge_dofs"] > 0
+    assert info["ordinary_evrs_candidate_dofs"] > 0
+    assert info["partitioned_free_dofs"] == info["free_dofs"]
+    assert np.count_nonzero(policy.topology_protected & policy.sibc_surface_only) == 0
+    assert np.count_nonzero(policy.topology_protected & policy.ordinary_evrs_candidate) == 0
+    assert np.count_nonzero(policy.sibc_surface_only & policy.ordinary_evrs_candidate) == 0
+    np.testing.assert_array_equal(
+        policy.free,
+        (
+            policy.topology_protected
+            | policy.sibc_surface_only
+            | policy.non_sibc_trace
+            | policy.ordinary_evrs_candidate
+        ),
+    )
+
+    plan = policy.reduction_plan(evrs_rank=12, surface_modes=3)
+    plan_info = plan.diagnostics()
+    assert isinstance(plan, vim.EddyReductionPlan)
+    assert plan_info["loop_bridge_keep_dofs"] == info["loop_bridge_dofs"]
+    assert plan_info["sibc_surface_trace_dofs"] == info["sibc_surface_dofs"]
+    assert plan_info["ordinary_evrs_candidate_dofs"] == info["ordinary_evrs_candidate_dofs"]
+    assert plan_info["estimated_reduced_modes"] == info["loop_bridge_dofs"] + 12 + 3
+    assert plan_info["estimated_reduction_ratio"] < 1.0
+
+    graph = topology.conductor_graph()
+    cycle_plan = policy.reduction_plan(
+        evrs_rank=12,
+        surface_modes=3,
+        loop_bridge_modes=graph.cycle_rank,
+        bridge_strategy="cycle-basis",
+    )
+    cycle_info = cycle_plan.diagnostics()
+    assert cycle_info["loop_bridge_reduced_modes"] == graph.cycle_rank
+    assert cycle_info["loop_bridge_reduction_strategy"] == "cycle-basis"
+    assert cycle_info["estimated_reduced_modes"] == graph.cycle_rank + 12 + 3
+    assert cycle_info["estimated_reduced_modes"] < plan_info["estimated_reduced_modes"]
+
+    bubbling = vim.NgsolveEddyBubbleReduction(
+        mesh,
+        fes,
+        topology,
+        evrs_rank=12,
+        surface_modes=3,
+        loop_bridge_modes=graph.cycle_rank,
+        bridge_strategy="cycle-basis",
+        parent_order_ledger=vim.EddyParentOrderLedger(
+            bulk_degree=2,
+            bridge_trace_degree=0,
+            surface_current_degree=1,
+        ),
+    )
+    bubble_info = bubbling.diagnostics()
+    assert bubble_info["conductor_graph"]["cycle_rank"] == graph.cycle_rank
+    assert bubble_info["classes"]["ordinary_bulk_eddy_bubble"] == info["ordinary_evrs_candidate_dofs"]
+    assert bubble_info["plan"]["estimated_reduced_modes"] == graph.cycle_rank + 12 + 3
+    assert bubble_info["parent_order"] == 3
+    assert bubble_info["parent_order_ledger"]["parent_order_admissible"] is True
+
+
+def test_ngsolve_bridge_cycle_current_basis_feeds_hybrid_vim():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=0.8))
+    topology = vim.ClassifyNgsolveEddyTopology(mesh, conductive_materials="cond")
+    graph = topology.conductor_graph()
+
+    bridge = vim.NgsolveBridgeCycleCurrentBasis(mesh, topology)
+
+    assert bridge.kind == "volume"
+    assert bridge.n_modes == graph.cycle_rank
+    assert bridge.n_samples == graph.edge_count
+    assert np.all(bridge.weights > 0.0)
+    assert np.count_nonzero(bridge.modes) > 0
+    assert bridge.mass_matrix().shape == (graph.cycle_rank, graph.cycle_rank)
+    assert np.min(np.linalg.eigvalsh(bridge.mass_matrix().real)) > 0.0
+
+    system = vim.AssembleHybridVIM(bridge, sigma=5.8e7, kernel_epsilon=0.1)
+    assert system.n_modes == graph.cycle_rank
+    assert system.diagnostics()["passive_blocks"] is True
+
+
+def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=0.8))
+    fes = ng.HCurl(mesh, order=2, nograds=True)
+    vectors = np.zeros((fes.ndof, 2))
+    vectors[0, 0] = 1.0
+    vectors[1, 1] = 1.0
+
+    built = vim.NgsolveTopologyAwareHybridVIM(
+        mesh,
+        fes,
+        vectors,
+        (
+            ng.CoefficientFunction((1.0, 0.0, 0.0)),
+            ng.CoefficientFunction((0.0, 1.0, 0.0)),
+        ),
+        sigma=5.8e7,
+        conductive_materials="cond",
+        surface_boundaries="skin",
+        intorder=1,
+        kernel_epsilon=0.1,
+        port_vector_potentials=(
+            np.array([1.0, 0.0, 0.0]),
+            np.array([0.0, 1.0, 0.0]),
+        ),
+    )
+
+    assert isinstance(built, vim.TopologyAwareHybridVIM)
+    assert built.system.blocks.keys() == {"volume", "volume1", "surface"}
+    assert built.volume_basis.n_modes == 2
+    assert built.bridge_cycle_basis.n_modes == built.conductor_graph.cycle_rank
+    assert built.surface_basis.n_modes == 2
+    assert built.system.n_modes == 2 + built.conductor_graph.cycle_rank + 2
+    assert built.rhs.shape == (built.system.n_modes, 2)
+    info = built.diagnostics()
+    assert info["system"]["passive_blocks"] is True
+    assert info["reduction_plan"]["loop_bridge_reduction_strategy"] == "cycle-basis"
+    assert info["reduction_plan"]["estimated_reduced_modes"] == built.system.n_modes
+
+    fes_hdiv = ng.HDiv(mesh, order=1)
+    hdiv_vectors = np.zeros((fes_hdiv.ndof, 1))
+    hdiv_vectors[0, 0] = 1.0
+    magnetization = vim.NgsolveHDivMagnetizationBasis(
+        mesh,
+        fes_hdiv,
+        hdiv_vectors,
+        intorder=1,
+        materials="cond",
+        names=["M0"],
+    )
+    coupled = built.couple_hdiv_mmm(magnetization, kernel_epsilon=0.1)
+    assert isinstance(coupled, vim.CoupledHDivHybridVIMSystem)
+    assert coupled.n_hcurl_vim_modes == built.system.n_modes
+    assert coupled.diagnostics()["eddy_basis_count"] == 3
+
+
+def test_ngsolve_eddy_bubble_hcurl_basis_builder_feeds_vim_and_hdiv_mmm():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+
+    fes = ng.HCurl(mesh, order=2, nograds=True)
+    u, v = fes.TnT()
+    stiffness = ng.BilinearForm(fes)
+    stiffness += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    port = ng.LinearForm(fes)
+    port += ng.CoefficientFunction((-ng.y, ng.x, 0.0)) * v * ng.dx
+
+    with ng.TaskManager():
+        stiffness.Assemble()
+        mass.Assemble()
+        port.Assemble()
+
+    eddy_basis = vim.NgsolveEddyBubbleHCurlBasis(
+        mesh,
+        fes,
+        stiffness,
+        mass,
+        port,
+        steps=2,
+        conductive_materials="cond",
+        response_backend="dense",
+        intorder=1,
+        parent_order_ledger=vim.EddyParentOrderLedger(
+            bulk_degree=2,
+            bridge_trace_degree=0,
+            surface_current_degree=1,
+        ),
+    )
+
+    assert isinstance(eddy_basis, vim.EddyBubbleHCurlBasis)
+    assert eddy_basis.current_basis.n_modes == eddy_basis.response_basis.rank
+    assert eddy_basis.eddy_bubbling.diagnostics()["plan"]["evrs_rank"] == eddy_basis.rank
+    eddy_system = eddy_basis.assemble_vim(sigma=5.8e7, kernel_epsilon=0.1)
+    assert eddy_system.n_modes == eddy_basis.n_modes
+
+    fes_hdiv = ng.HDiv(mesh, order=1)
+    hdiv_vectors = np.zeros((fes_hdiv.ndof, 1))
+    hdiv_vectors[0, 0] = 1.0
+    magnetization = vim.NgsolveHDivMagnetizationBasis(
+        mesh,
+        fes_hdiv,
+        hdiv_vectors,
+        intorder=1,
+        materials="cond",
+        names=["M0"],
+    )
+    coupled = eddy_basis.couple_hdiv_mmm(
+        magnetization,
+        eddy_system=eddy_system,
+        kernel_epsilon=0.1,
+    )
+    assert isinstance(coupled, vim.HCurlVIMHDivMMMSystem)
+    assert coupled.n_hcurl_vim_modes == eddy_basis.n_modes
+    assert coupled.n_hdiv_mmm_modes == 1
+    assert coupled.diagnostics()["has_eddy_system"] is True
+
+
+def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+
+    fes = ng.HCurl(mesh, order=2, nograds=True)
+    u, v = fes.TnT()
+    stiffness = ng.BilinearForm(fes)
+    stiffness += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    port = ng.LinearForm(fes)
+    port += ng.CoefficientFunction((-ng.y, ng.x, 0.0)) * v * ng.dx
+
+    with ng.TaskManager():
+        stiffness.Assemble()
+        mass.Assemble()
+        port.Assemble()
+
+    surface_modes = (ng.CoefficientFunction((1.0, 0.0, 0.0)),)
+    hybrid = vim.NgsolveEddyBubbleHybridVIM(
+        mesh,
+        fes,
+        stiffness,
+        mass,
+        port,
+        surface_modes,
+        steps=2,
+        sigma=5.8e7,
+        conductive_materials="cond",
+        response_backend="dense",
+        intorder=1,
+        parent_order_ledger=vim.EddyParentOrderLedger(
+            bulk_degree=2,
+            bridge_trace_degree=0,
+            surface_current_degree=1,
+        ),
+    )
+    assert isinstance(hybrid, vim.TopologyAwareHybridVIM)
+    assert hybrid.volume_basis.n_modes == 2
+    assert hybrid.surface_basis.n_modes == 1
+    assert hybrid.system.n_modes == (
+        hybrid.volume_basis.n_modes
+        + hybrid.bridge_cycle_basis.n_modes
+        + hybrid.surface_basis.n_modes
+    )
+
+    fes_hdiv = ng.HDiv(mesh, order=1)
+    hdiv_vectors = np.zeros((fes_hdiv.ndof, 1))
+    hdiv_vectors[0, 0] = 1.0
+    with ng.TaskManager():
+        hdiv_reduction = vim.NgsolveHDivMMMReduction(
+            mesh,
+            fes_hdiv,
+            hdiv_vectors,
+            mu_r=1001.0,
+            external_fields=(ng.CoefficientFunction((1.0, 0.0, 0.0)),),
+            intorder=1,
+            materials="cond",
+            names=["M0"],
+            demag_eps=1.0e-10,
+        )
+    assert isinstance(hdiv_reduction, vim.HDivMMMReducedModel)
+    np.testing.assert_allclose(
+        hdiv_reduction.magnetic_operator,
+        hdiv_reduction.mass / 1000.0 + hdiv_reduction.demag,
+    )
+    assert np.linalg.norm(hdiv_reduction.demag) > 0.0
+    assert hdiv_reduction.magnetic_rhs.shape == (1, 1)
+    swept_rhs = hdiv_reduction.external_field_rhs(
+        ng.CoefficientFunction((0.0, 1.0, 0.0))
+    )
+    assert swept_rhs.shape == (1, 1)
+
+    def swirl_vector_potential(points):
+        points = np.asarray(points)
+        return np.column_stack(
+            (-points[:, 1], points[:, 0], np.zeros(points.shape[0]))
+        )
+
+    mixed = vim.NgsolveBDMEddyBubbleVIM(
+        mesh,
+        fes,
+        stiffness,
+        mass,
+        port,
+        surface_modes,
+        hdiv_order=1,
+        mu_r=1001.0,
+        external_fields=(ng.CoefficientFunction((1.0, 0.0, 0.0)),),
+        hdiv_max_modes=1,
+        magnetic_materials="cond",
+        steps=2,
+        sigma=5.8e7,
+        conductive_materials="cond",
+        response_backend="dense",
+        intorder=1,
+        port_vector_potentials=(swirl_vector_potential,),
+        coupling_kernel_epsilon=0.1,
+    )
+    assert isinstance(mixed, vim.CoupledHDivHybridVIMSystem)
+    assert mixed.n_hdiv_mmm_modes == 1
+    assert mixed.n_hcurl_vim_modes == hybrid.system.n_modes
+    op = mixed.mixed_operator(None, 1j * 100.0, surface_impedance=0.1)
+    assert op.shape == (1 + hybrid.system.n_modes, 1 + hybrid.system.n_modes)
+    assert mixed.diagnostics()["has_eddy_rhs"] is True
+    assert mixed.diagnostics()["has_response_basis"] is True
+    assert mixed.diagnostics()["has_hdiv_reduction"] is True
+    assert mixed.hdiv_reduction.parent_family == "BDM"
+    assert mixed.hdiv_reduction.parent_order == 1
+
+    solved = mixed.solve_frequency(100.0)
+    assert isinstance(solved, vim.HCurlVIMHDivMMMSolution)
+    assert solved.parent_t_coefficients.shape == (fes.ndof, 1)
+    assert solved.parent_magnetization_coefficients.shape == (
+        mixed.hdiv_reduction.parent_ndof,
+        1,
+    )
+    assert solved.sampled_magnetization.shape[0] == 1
+    assert solved.current_samples("volume").shape[0] == 1
+    assert solved.current_samples("surface").shape[0] == 1
+    np.testing.assert_allclose(
+        solved.current_samples("bulk"),
+        solved.current_samples("volume"),
+    )
+    np.testing.assert_allclose(
+        solved.current_samples("bridge"),
+        solved.current_samples("volume1"),
+    )
+    np.testing.assert_allclose(
+        solved.current_samples("sibc"),
+        solved.current_samples("surface"),
+    )
+    assert solved.average_joule_loss[0] >= 0.0
+    assert solved.residual_relative_norm < 1.0e-10
+    target = np.array([[2.0, 2.0, 2.0]])
+    total_field = solved.eddy_flux_density(target)
+    block_field = sum(
+        solved.eddy_flux_density(target, block=name)
+        for name in solved.eddy_block_names
+    )
+    assert total_field.shape == (1, 1, 3)
+    assert np.all(np.isfinite(total_field))
+    np.testing.assert_allclose(total_field, block_field)
+    np.testing.assert_allclose(
+        solved.eddy_flux_density(target, block="bridge"),
+        solved.eddy_flux_density(target, block="volume1"),
+    )
+
+
+def test_ngsolve_hdiv_mmm_response_reduction_uses_multipole_training_ports():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("body")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+    ports = vim.NgsolveHDivRegularSolidHarmonicPorts(mesh, max_degree=2)
+
+    assert isinstance(ports, vim.HDivMultipolePortSet)
+    assert ports.count == 8
+    assert ports.diagnostics()["degree_counts"] == {"1": 3, "2": 5}
+    with ng.TaskManager():
+        reduced = vim.NgsolveBDMHDivMMMResponseReduction(
+            mesh,
+            order=1,
+            mu_r=1001.0,
+            external_fields=(
+                ng.CoefficientFunction((1.0, 0.0, 0.0)),
+                ng.CoefficientFunction((0.0, 1.0, 0.0)),
+            ),
+            training_fields=ports,
+            materials="body",
+            max_modes=2,
+            solve_tol=1.0e-9,
+            demag_eps=1.0e-7,
+        )
+
+    generation = reduced.diagnostics()["basis_generation"]
+    assert reduced.parent_ndof == reduced.fes.ndof
+    assert reduced.diagnostics()["parent_family"] == "BDM"
+    assert reduced.diagnostics()["parent_order"] == 1
+    assert reduced.n_modes == 2
+    assert reduced.magnetic_rhs.shape == (2, 2)
+    assert generation["construction"] == "hdiv-mmm-response-energy-pod"
+    assert generation["snapshot_backend"] == "radia-cpp-mass-riesz-cg"
+    assert generation["snapshot_port_count"] == 10
+    assert generation["physical_rhs_columns"] == 2
+    assert generation["training_port_count"] == 8
+    assert generation["protected_physical_modes"] == 2
+    assert generation["training_response_modes"] == 6
+    assert generation["available_modes"] == 8
+    assert generation["discarded_modes"] == 8
+    assert generation["dependent_training_ports"] == ["rsh_l1_x", "rsh_l1_y"]
+    assert generation["max_snapshot_relative_residual"] < 2.0e-8
+    assert max(generation["response_relative_energy_errors"][:2]) < 1.0e-8
+    assert generation["max_response_relative_energy_error"] > 0.5
+    assert (
+        generation["pod_truncation_curve"][1][
+            "max_physical_response_relative_energy_error"
+        ]
+        < 1.0e-8
+    )
+    assert generation["energy_orthonormality_error"] < 1.0e-10
+    np.testing.assert_allclose(
+        reduced.magnetic_operator,
+        np.eye(reduced.n_modes),
+        atol=1.0e-9,
+    )
+
+
+def test_ngsolve_regular_solid_harmonic_ports_are_divergence_free():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+    ports = vim.NgsolveHDivRegularSolidHarmonicPorts(mesh, max_degree=3)
+    fes = ng.HDiv(mesh, order=2)
+    divergence_energies = []
+    for field in ports.fields:
+        projected = ng.GridFunction(fes)
+        projected.Set(field)
+        divergence_energies.append(
+            float(ng.Integrate(ng.div(projected) ** 2, mesh))
+        )
+
+    assert ports.count == 15
+    assert ports.diagnostics()["degree_counts"] == {"1": 3, "2": 5, "3": 7}
+    assert max(divergence_energies) < 1.0e-20
+
+
+def test_ngsolve_planar_hdiv_response_reduction_preserves_corner_visible_fields():
+    ng = pytest.importorskip("ngsolve")
+    geom2d = pytest.importorskip("netgen.geom2d")
+
+    geometry = geom2d.SplineGeometry()
+    coordinates = ((0, 0), (1, 0), (1, 0.4), (0.4, 0.4), (0.4, 1), (0, 1))
+    points = [geometry.AppendPoint(*point) for point in coordinates]
+    for index in range(len(points)):
+        geometry.Append(
+            ["line", points[index], points[(index + 1) % len(points)]],
+            leftdomain=1,
+            rightdomain=0,
+        )
+    geometry.SetMaterial(1, "body")
+    mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.35))
+    ports = vim.NgsolvePlanarHarmonicPorts(mesh, max_degree=2)
+
+    assert isinstance(ports, vim.PlanarHarmonicPortSet)
+    assert ports.count == 4
+    assert ports.diagnostics()["degree_counts"] == {"1": 2, "2": 2}
+    with ng.TaskManager():
+        model = vim.NgsolvePlanarHDivMMMResponseReduction(
+            mesh,
+            mu_r=1001.0,
+            order=1,
+            external_fields=(
+                ng.CoefficientFunction((1.0, 0.0)),
+                ng.CoefficientFunction((0.0, 1.0)),
+            ),
+            training_fields=ports,
+            cg_tol=1.0e-10,
+        )
+        solution = model.solve()
+
+    generation = model.basis_generation
+    assert isinstance(model, vim.PlanarHDivMMMReducedModel)
+    assert isinstance(solution, vim.PlanarHDivMMMReducedSolution)
+    assert model.body.rt is False
+    assert model.diagnostics()["parent_family"] == "BDM"
+    assert model.n_modes == 4
+    assert generation["protected_physical_modes"] == 2
+    assert generation["training_response_modes"] == 2
+    assert generation["dependent_training_ports"] == [
+        "ph_l1_cos",
+        "ph_l1_sin",
+    ]
+    assert generation["max_snapshot_relative_residual"] < 1.0e-8
+    assert generation["max_response_relative_energy_error"] < 1.0e-8
+    assert solution.parent_coefficients.shape == (model.parent_ndof, 2)
+    assert solution.residual_relative_norm < 1.0e-12
+    np.testing.assert_allclose(
+        model.magnetic_operator,
+        np.eye(model.n_modes),
+        atol=1.0e-9,
+    )
+
+    degree_three = vim.NgsolvePlanarHarmonicPorts(mesh, max_degree=3)
+    with pytest.raises(ValueError, match="order must be at least"):
+        vim.NgsolvePlanarHDivMMMResponseReduction(
+            mesh,
+            mu_r=1001.0,
+            body=model.body,
+            external_fields=ng.CoefficientFunction((1.0, 0.0)),
+            training_fields=degree_three,
+        )
+
+
+def test_ngsolve_hcurl_curl_basis_samples_t_method_current():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+    fes = ng.HCurl(mesh, order=1, nograds=True)
+    vectors = np.zeros((fes.ndof, 1))
+    vectors[0, 0] = 1.0
+
+    basis = vim.NgsolveHCurlCurlBasis(
+        mesh,
+        fes,
+        vectors,
+        intorder=1,
+        materials="cond",
+        names=["curl_T0"],
+    )
+
+    assert basis.kind == "volume"
+    assert basis.n_modes == 1
+    assert basis.mass_matrix()[0, 0].real > 0.0
+
+
+def test_ngsolve_hdiv_magnetization_basis_couples_to_hcurl_current_basis():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("body")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+
+    fes_hdiv = ng.HDiv(mesh, order=1)
+    hdiv_vectors = np.zeros((fes_hdiv.ndof, 1))
+    hdiv_vectors[0, 0] = 1.0
+    magnetization = vim.NgsolveHDivMagnetizationBasis(
+        mesh,
+        fes_hdiv,
+        hdiv_vectors,
+        intorder=1,
+        materials="body",
+        names=["M0"],
+    )
+
+    fes_hcurl = ng.HCurl(mesh, order=1, nograds=True)
+    hcurl_vectors = np.zeros((fes_hcurl.ndof, 1))
+    hcurl_vectors[0, 0] = 1.0
+    current = vim.NgsolveHCurlCurlBasis(
+        mesh,
+        fes_hcurl,
+        hcurl_vectors,
+        intorder=1,
+        materials="body",
+        names=["curl_T0"],
+    )
+
+    assert magnetization.n_modes == 1
+    assert magnetization.mass_matrix()[0, 0].real > 0.0
+    coupling = vim.MagnetizationCurrentCoupling(
+        magnetization,
+        current,
+        kernel_epsilon=0.1,
+    )
+    assert coupling.shape == (1, 1)
+    assert np.all(np.isfinite(coupling))
+
+
+def test_ngsolve_coupling_masks_identify_local_static_condensation_dofs():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=3.0))
+    fes = ng.HCurl(mesh, order=4, nograds=True)
+
+    masks = vim.NgsolveCouplingDofMasks(fes)
+
+    assert masks["local"].sum() > 0
+    assert masks["local_bubble"].sum() == masks["local"].sum()
+    assert masks["keep"].sum() == sum(fes.FreeDofs(True))
+    assert masks["keep"].sum() + masks["local_bubble"].sum() == sum(fes.FreeDofs(False))
+
+
+def test_ngsolve_block_krylov_response_feeds_hcurl_t_vim():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    for face in box.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+
+    fes = ng.HCurl(mesh, order=1, nograds=True)
+    u, v = fes.TnT()
+    stiffness = ng.BilinearForm(fes)
+    stiffness += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    port = ng.LinearForm(fes)
+    port += ng.CoefficientFunction((-ng.y, ng.x, 0.0)) * v * ng.dx
+
+    with ng.TaskManager():
+        stiffness.Assemble()
+        mass.Assemble()
+        port.Assemble()
+
+    response = vim.NgsolveBlockKrylovBasis(
+        stiffness,
+        mass.mat,
+        port,
+        steps=2,
+        free_dofs=fes.FreeDofs(),
+    )
+    operator_response = vim.NgsolveOperatorBlockKrylovBasis(
+        stiffness,
+        mass,
+        port,
+        steps=2,
+        free_dofs=fes.FreeDofs(),
+    )
+    assert 1 <= response.rank <= 2
+    assert operator_response.rank == response.rank
+
+    dense_mass = vim.NgsolveMatrixToDense(mass)
+    np.testing.assert_allclose(
+        response.vectors.conj().T @ dense_mass @ response.vectors,
+        np.eye(response.rank),
+        atol=1.0e-11,
+    )
+    np.testing.assert_allclose(
+        operator_response.vectors.conj().T @ dense_mass @ operator_response.vectors,
+        np.eye(operator_response.rank),
+        atol=1.0e-11,
+    )
+    assert vim.NgsolveVectorToArray(port).shape == (fes.ndof,)
+
+    volume = vim.NgsolveHCurlCurlBasis(
+        mesh,
+        fes,
+        response.vectors,
+        intorder=1,
+        materials="cond",
+        names=[f"T_resp{i}" for i in range(response.rank)],
+    )
+    surface = vim.NgsolveSurfaceOmegaBasis(
+        mesh,
+        (ng.CoefficientFunction((0.0, 1.0, 0.0)),),
+        intorder=1,
+        boundaries="skin",
+        names=["Omega_skin"],
+    )
+
+    assert volume.n_modes == response.rank
+    assert volume.mass_matrix().trace().real > 0.0
+
+    system = vim.AssembleHybridVIM(volume, surface, sigma=5.8e7, kernel_epsilon=0.1)
+    assert system.impedance(
+        1j * 100.0,
+        surface_impedance=vim.SkinImpedance(1j * 100.0, 5.8e7),
+    ).shape == (response.rank + 1, response.rank + 1)
+
+    aext = np.column_stack(
+        (
+            -volume.points[:, 1],
+            volume.points[:, 0],
+            np.zeros(volume.n_samples),
+        )
+    )
+    rhs = vim.ExternalVectorPotentialRHS(volume, aext)
+    assert rhs.shape == (response.rank,)
+    assert np.all(np.isfinite(rhs))
+
+
+def test_ngsolve_static_condensed_basis_matches_full_parent_response():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=3.0))
+    fes = ng.HCurl(mesh, order=3, nograds=True)
+    u, v = fes.TnT()
+    stiffness_full = ng.BilinearForm(fes)
+    stiffness_full += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    stiffness_condensed = ng.BilinearForm(fes, condense=True)
+    stiffness_condensed += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    port = ng.LinearForm(fes)
+    port += ng.CoefficientFunction((-ng.y, ng.x, 0.0)) * v * ng.dx
+
+    with ng.TaskManager():
+        stiffness_full.Assemble()
+        stiffness_condensed.Assemble()
+        mass.Assemble()
+        port.Assemble()
+
+    full = vim.NgsolveBlockKrylovBasis(
+        stiffness_full,
+        mass,
+        port,
+        steps=2,
+        free_dofs=fes.FreeDofs(False),
+    )
+    condensed = vim.NgsolveStaticCondensedBlockKrylovBasis(
+        stiffness_condensed,
+        mass,
+        port,
+        steps=2,
+        free_dofs=fes.FreeDofs(True),
+    )
+    dense_mass = vim.NgsolveMatrixToDense(mass)
+
+    assert full.rank == condensed.rank
+    np.testing.assert_allclose(
+        condensed.vectors.conj().T @ dense_mass @ condensed.vectors,
+        np.eye(condensed.rank),
+        atol=1.0e-11,
+    )
+    overlap = full.vectors.conj().T @ dense_mass @ condensed.vectors
+    np.testing.assert_allclose(np.abs(overlap), np.eye(full.rank), atol=1.0e-10)
+    assert condensed.diagnostics()["inactive_dofs"] > 0
+
+
+@pytest.mark.parametrize("order", [3, 4])
+def test_high_order_hcurl_space_reduces_to_low_rank_external_response(order):
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=3.0))
+
+    fes = ng.HCurl(mesh, order=order, nograds=True)
+    u, v = fes.TnT()
+    stiffness = ng.BilinearForm(fes)
+    stiffness += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    port = ng.LinearForm(fes)
+    port += ng.CoefficientFunction((-ng.y, ng.x, 0.0)) * v * ng.dx
+
+    with ng.TaskManager():
+        stiffness.Assemble()
+        mass.Assemble()
+        port.Assemble()
+
+    response = vim.NgsolveBlockKrylovBasis(
+        stiffness,
+        mass,
+        port,
+        steps=2,
+        free_dofs=fes.FreeDofs(),
+    )
+
+    min_active_dofs = 200 if order == 3 else 400
+    assert sum(fes.FreeDofs()) >= min_active_dofs
+    assert response.rank == 2
+    assert response.rank < 0.02 * fes.ndof
+
+    volume = vim.NgsolveHCurlCurlBasis(
+        mesh,
+        fes,
+        response.vectors,
+        intorder=1,
+        materials="cond",
+    )
+    assert volume.n_modes == response.rank
+    assert volume.mass_matrix().trace().real > 0.0
+
+
+def test_order6_hcurl_parent_space_compresses_aggressively():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=3.0))
+
+    fes = ng.HCurl(mesh, order=6, nograds=True)
+    u, v = fes.TnT()
+    stiffness = ng.BilinearForm(fes)
+    stiffness += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    ports = []
+    for cf in (
+        ng.CoefficientFunction((-ng.y, ng.x, 0.0)),
+        ng.CoefficientFunction((0.0, -ng.z, ng.y)),
+    ):
+        port = ng.LinearForm(fes)
+        port += cf * v * ng.dx
+        ports.append(port)
+
+    with ng.TaskManager():
+        stiffness.Assemble()
+        mass.Assemble()
+        for port in ports:
+            port.Assemble()
+
+    response = vim.NgsolveBlockKrylovBasis(
+        stiffness,
+        mass,
+        ports,
+        steps=3,
+        free_dofs=fes.FreeDofs(),
+        rtol=1.0e-10,
+    )
+    info = response.diagnostics()
+
+    assert isinstance(response, vim.EVRSBasis)
+    assert info["active_dofs"] >= 1_200
+    assert info["rank"] == 6
+    assert info["compression_ratio"] < 0.005
+    assert info["eliminated_dofs"] > 1_200
+    assert info["port_count"] == 2
+    assert info["krylov_steps"] == 3
+    assert info["construction"] == "ngsolve-dense-block-krylov"
+
+
+def test_order8_hcurl_static_condensation_then_eliminates_eddy_bubbles():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=3.0))
+
+    fes = ng.HCurl(mesh, order=8, nograds=True)
+    u, v = fes.TnT()
+    stiffness = ng.BilinearForm(fes, condense=True)
+    stiffness += ng.curl(u) * ng.curl(v) * ng.dx + 0.05 * u * v * ng.dx
+    mass = ng.BilinearForm(fes)
+    mass += u * v * ng.dx
+    ports = []
+    for cf in (
+        ng.CoefficientFunction((-ng.y, ng.x, 0.0)),
+        ng.CoefficientFunction((0.0, -ng.z, ng.y)),
+    ):
+        port = ng.LinearForm(fes)
+        port += cf * v * ng.dx
+        ports.append(port)
+
+    with ng.TaskManager():
+        stiffness.Assemble()
+        mass.Assemble()
+        for port in ports:
+            port.Assemble()
+
+    response = vim.NgsolveStaticCondensedBlockKrylovBasis(
+        stiffness,
+        mass,
+        ports,
+        steps=3,
+        free_dofs=fes.FreeDofs(True),
+        rtol=1.0e-10,
+    )
+    info = response.diagnostics()
+
+    assert isinstance(response, vim.EVRSBasis)
+    assert info["ndof"] >= 2_600
+    assert info["active_dofs"] <= 1_100
+    assert info["inactive_dofs"] >= 1_500
+    assert info["rank"] == 6
+    assert info["eddy_visible_dofs"] == 6
+    assert info["compression_ratio"] < 0.0025
+    assert info["eddy_invisible_dofs"] > 1_000
+    assert info["port_count"] == 2
+    assert info["krylov_steps"] == 3
+    assert info["construction"] == "ngsolve-static-condensed-block-krylov"
