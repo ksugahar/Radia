@@ -1023,7 +1023,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # selectable.
     phi_inc_mode = "poisson" if basis_order == 1 else "path"
     progress("BEM", f"phi_inc from coil ({coil_data['source_type']}, "
-                    f"mode={phi_inc_mode})")
+                    f"mode={phi_inc_mode}, requested={phi_inc_req})")
     t0 = time.perf_counter()
     phi_inc_grad_residual = None
     if phi_inc_mode == "poisson":
