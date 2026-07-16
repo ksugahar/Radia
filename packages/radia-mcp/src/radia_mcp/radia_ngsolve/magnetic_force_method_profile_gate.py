@@ -121,6 +121,8 @@ def magnetic_force_method_profile_gate(
     force_torque_reference_origin_length_unit_identity_ok = True
     bem_solid_angle_surface_winding_identity_ok = True
     maglev_stiffness_force_displacement_generation_identity_ok = True
+    bem_demag_tensor_coordinate_basis_generation_identity_ok = True
+    magnetic_bearing_force_harmonic_phase_origin_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -140,6 +142,8 @@ def magnetic_force_method_profile_gate(
         force_torque_reference_origin_length_unit_identity_ok = False
         bem_solid_angle_surface_winding_identity_ok = False
         maglev_stiffness_force_displacement_generation_identity_ok = False
+        bem_demag_tensor_coordinate_basis_generation_identity_ok = False
+        magnetic_bearing_force_harmonic_phase_origin_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -796,6 +800,103 @@ def magnetic_force_method_profile_gate(
                 == force_digest
             )
 
+        demag_tensor_value = identity_value.get(
+            "bem_demag_tensor_coordinate_basis_generation_identity"
+        )
+        if demag_tensor_value is not None:
+            demag_tensor = (
+                demag_tensor_value
+                if isinstance(demag_tensor_value, Mapping)
+                else {}
+            )
+            placement_generation = str(
+                demag_tensor.get("body_placement_generation", "")
+            )
+            tensor_generation = str(
+                demag_tensor.get("demag_tensor_generation", "")
+            )
+            transform_digest = str(
+                demag_tensor.get("body_to_global_transform_sha256", "")
+            ).lower()
+            bem_demag_tensor_coordinate_basis_generation_identity_ok = (
+                bool(placement_generation)
+                and demag_tensor.get("surface_mesh_body_placement_generation")
+                == placement_generation
+                and bool(tensor_generation)
+                and demag_tensor.get("demag_tensor_body_placement_generation")
+                == placement_generation
+                and demag_tensor.get("body_coordinate_basis")
+                == "body-local-current"
+                and demag_tensor.get("tensor_coordinate_basis")
+                == demag_tensor.get("body_coordinate_basis")
+                and demag_tensor.get("body_basis_handedness") == "right_handed"
+                and demag_tensor.get("tensor_basis_handedness")
+                == demag_tensor.get("body_basis_handedness")
+                and len(transform_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in transform_digest
+                )
+                and str(
+                    demag_tensor.get("tensor_basis_transform_sha256", "")
+                ).lower()
+                == transform_digest
+            )
+
+        bearing_phase_value = identity_value.get(
+            "magnetic_bearing_force_harmonic_phase_origin_identity"
+        )
+        if bearing_phase_value is not None:
+            bearing_phase = (
+                bearing_phase_value
+                if isinstance(bearing_phase_value, Mapping)
+                else {}
+            )
+            harmonic_generation = str(
+                bearing_phase.get("force_harmonic_generation", "")
+            )
+            angle_generation = str(
+                bearing_phase.get("rotor_angle_generation", "")
+            )
+            angle_digest = str(
+                bearing_phase.get("rotor_angle_sha256", "")
+            ).lower()
+            try:
+                rotor_origin = float(bearing_phase.get("rotor_phase_origin_deg"))
+                harmonic_origin = float(
+                    bearing_phase.get("force_harmonic_phase_origin_deg")
+                )
+                slot_pitch = float(bearing_phase.get("slot_pitch_deg"))
+            except (TypeError, ValueError):
+                rotor_origin = harmonic_origin = slot_pitch = math.nan
+            magnetic_bearing_force_harmonic_phase_origin_identity_ok = (
+                bool(harmonic_generation)
+                and bearing_phase.get("force_sample_harmonic_generation")
+                == harmonic_generation
+                and bool(angle_generation)
+                and bearing_phase.get("force_sample_rotor_angle_generation")
+                == angle_generation
+                and all(
+                    math.isfinite(value)
+                    for value in (rotor_origin, harmonic_origin, slot_pitch)
+                )
+                and slot_pitch > 0.0
+                and math.isclose(
+                    harmonic_origin, rotor_origin, rel_tol=0.0, abs_tol=1.0e-12
+                )
+                and bearing_phase.get("phase_origin_convention") == "rotor_d_axis"
+                and bearing_phase.get("force_harmonic_phase_origin_convention")
+                == bearing_phase.get("phase_origin_convention")
+                and len(angle_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in angle_digest
+                )
+                and str(
+                    bearing_phase.get("harmonic_input_angle_sha256", "")
+                ).lower()
+                == angle_digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -907,6 +1008,12 @@ def magnetic_force_method_profile_gate(
         ),
         "maglev_stiffness_uses_one_force_displacement_perturbation_generation": (
             maglev_stiffness_force_displacement_generation_identity_ok
+        ),
+        "bem_demag_tensor_uses_current_body_placement_coordinate_basis": (
+            bem_demag_tensor_coordinate_basis_generation_identity_ok
+        ),
+        "magnetic_bearing_force_harmonics_share_rotor_phase_origin": (
+            magnetic_bearing_force_harmonic_phase_origin_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
