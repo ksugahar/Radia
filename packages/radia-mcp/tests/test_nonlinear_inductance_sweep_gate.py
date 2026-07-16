@@ -47,6 +47,34 @@ def _summary():
     return {"runs": runs}
 
 
+def _with_v8_generations(summary):
+    for row in summary["runs"]:
+        row.update(
+            {
+                "solve_sweep_generation": "nonlinear-sweep-42",
+                "apparent_matrix_sweep_generation": "nonlinear-sweep-42",
+                "incremental_matrix_sweep_generation": "nonlinear-sweep-42",
+            }
+        )
+    summary["energy_history_segments"] = [
+        {
+            "segment_generation": "segment-1",
+            "start_run_index": 0,
+            "end_run_index": 3,
+            "coenergy_offset_in_J": 0.0,
+            "coenergy_offset_out_J": 1.25,
+        },
+        {
+            "segment_generation": "segment-2",
+            "start_run_index": 4,
+            "end_run_index": 7,
+            "coenergy_offset_in_J": 1.25,
+            "coenergy_offset_out_J": 4.0,
+        },
+    ]
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -194,3 +222,30 @@ def test_generalization_v7_public(case_id):
     else:
         bad["runs"][0]["artifact_units"]["coenergy"] = "mJ"
     assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
+
+
+def test_accepts_v8_sweep_generation_and_restart_offset_chain():
+    result = nonlinear_inductance_sweep_gate(_with_v8_generations(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v8_public_inductance_matrix_prior_sweep_generation():
+    bad = _with_v8_generations(_summary())
+    bad["runs"][0]["incremental_matrix_sweep_generation"] = "nonlinear-sweep-41"
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_run_identities_and_matrices_close"] is False
+    assert (
+        result["runs"][0]["checks"][
+            "inductance_matrices_share_solve_sweep_generation"
+        ]
+        is False
+    )
+
+
+def test_v8_public_energy_history_restart_offset_lost():
+    bad = _with_v8_generations(_summary())
+    bad["energy_history_segments"][1]["coenergy_offset_in_J"] = 0.0
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["restart_energy_history_offsets_are_continuous"] is False
