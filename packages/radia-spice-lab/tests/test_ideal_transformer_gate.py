@@ -329,6 +329,28 @@ def _with_v9_phasor_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v10_power_and_frequency_identity(summary: dict) -> dict:
+    summary = _with_v9_phasor_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["power_sign_convention"] = {
+        "source_power_role": "delivered_positive",
+        "passive_power_role": "absorbed_positive",
+        "source_current_reference": "leaving_positive_terminal",
+        "passive_current_reference": "entering_positive_terminal",
+        "balance_equation": "source_delivered_equals_passive_absorbed",
+        "recorded_sign_transform": "none",
+    }
+    positive["ac_frequency_interpolation_contract"] = {
+        "source_frequency_coordinate": "log10_hz",
+        "target_frequency_coordinate": "log10_hz",
+        "interpolation_coordinate": "log10_hz",
+        "frequency_unit": "Hz",
+        "source_grid_generation": "ac-grid-42",
+        "interpolated_trace_source_grid_generation": "ac-grid-42",
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -350,5 +372,34 @@ def test_v9_public_phase_unwrap_branch_sign_alias() -> None:
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["phase_replay_preserves_unwrap_branch_orientation"]
+        is False
+    )
+
+
+def test_v10_public_source_power_passive_sign_mismatch() -> None:
+    bad = _with_v10_power_and_frequency_identity(_summary())
+    bad["metrics"]["positive"]["power_sign_convention"][
+        "source_current_reference"
+    ] = "entering_positive_terminal"
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["source_and_passive_power_use_recorded_sign_conventions"]
+        is False
+    )
+
+
+def test_v10_public_ac_frequency_interpolation_scale_mismatch() -> None:
+    bad = _with_v10_power_and_frequency_identity(_summary())
+    bad["metrics"]["positive"]["ac_frequency_interpolation_contract"].update(
+        {
+            "source_frequency_coordinate": "linear_hz",
+            "interpolated_trace_source_grid_generation": "ac-grid-41",
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["ac_traces_share_frequency_interpolation_coordinate"]
         is False
     )

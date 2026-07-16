@@ -140,6 +140,49 @@ def _phase_unwrap_contract_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _power_sign_convention_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get("power_sign_convention")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    return (
+        contract.get("source_power_role") == "delivered_positive"
+        and contract.get("passive_power_role") == "absorbed_positive"
+        and contract.get("source_current_reference")
+        == "leaving_positive_terminal"
+        and contract.get("passive_current_reference")
+        == "entering_positive_terminal"
+        and contract.get("balance_equation")
+        == "source_delivered_equals_passive_absorbed"
+        and contract.get("recorded_sign_transform") == "none"
+    )
+
+
+def _ac_frequency_interpolation_contract_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("ac_frequency_interpolation_contract")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    source_coordinate = str(contract.get("source_frequency_coordinate") or "")
+    target_coordinate = str(contract.get("target_frequency_coordinate") or "")
+    interpolation_coordinate = str(contract.get("interpolation_coordinate") or "")
+    source_generation = str(contract.get("source_grid_generation") or "")
+    trace_generation = str(
+        contract.get("interpolated_trace_source_grid_generation") or ""
+    )
+    return (
+        source_coordinate in {"linear_hz", "log10_hz", "natural_log_hz"}
+        and source_coordinate == target_coordinate == interpolation_coordinate
+        and contract.get("frequency_unit") == "Hz"
+        and bool(source_generation)
+        and trace_generation == source_generation
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -406,6 +449,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "phase_replay_preserves_unwrap_branch_orientation": (
             _phase_unwrap_contract_ok(positive)
+        ),
+        "source_and_passive_power_use_recorded_sign_conventions": (
+            _power_sign_convention_ok(positive)
+        ),
+        "ac_traces_share_frequency_interpolation_coordinate": (
+            _ac_frequency_interpolation_contract_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
