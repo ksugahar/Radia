@@ -860,6 +860,41 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         f"wp nv={wp_mesh.nv} ne(BND)={wp_mesh.GetNE(BND)} ({t_wp_mesh:.1f}s)")
     wp_chi, wp_genus = _wp_genus_check(wp_mesh)
 
+    # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
+    # early-guarded in run_inductance and _apply_wp_loop_dof enforces
+    # genus-1; "auto" applies exactly when the supported mathematical and
+    # solver prerequisites hold and otherwise records why it skipped.
+    wp_loop_req = getattr(args, "wp_loop_dof", "auto")
+    wp_loop_skip = None
+    if wp_loop_req == "on":
+        wp_loop_apply = True
+    elif wp_loop_req == "off":
+        wp_loop_apply, wp_loop_skip = False, "explicitly off"
+    elif wp_genus != 1:
+        wp_loop_apply = False
+        wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
+                        f"to genus-1 only; genus-0 needs none)")
+    elif args.impedance_model != "sibc":
+        wp_loop_apply = False
+        wp_loop_skip = ("ESIM impedance model (the Karl loop is not "
+                        "integrated with the loop DOF; pass "
+                        "--impedance-model sibc for the loop-extended "
+                        "solve)")
+    elif args.wp_bem_backend != "intree-dense":
+        wp_loop_apply = False
+        wp_loop_skip = ("the HACApK backend exposes no dense SL/DL for "
+                        "the loop column (pass --wp-bem-backend "
+                        "intree-dense)")
+    elif basis_order != 1:
+        wp_loop_apply = False
+        wp_loop_skip = "P1 nodal path only (pass --h1-order 1)"
+    else:
+        wp_loop_apply = True
+    if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
+        progress("BEM",
+            f"loop-DOF auto: SKIPPED on a genus-{wp_genus} workpiece -- "
+            f"{wp_loop_skip}.  The genus P_wp_caveat applies.")
+
     # 2. ESIM prerequisite check (Karl iteration needs a BH curve).
     if args.impedance_model == "esim" and not args.bh_file:
         raise ValueError(
@@ -949,9 +984,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     else:
         obs = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
                          for i in range(wp_mesh.nv)])
-    phi_inc_mode = getattr(args, "wp_phi_inc", "path")
+    phi_inc_req = getattr(args, "wp_phi_inc", "auto")
+    if phi_inc_req == "auto":
+        # poisson needs the P1 vertex-nodal DOF layout; the Lagrange-P2
+        # path keeps the validated path integration.
+        phi_inc_mode = "poisson" if basis_order == 1 else "path"
+    else:
+        phi_inc_mode = phi_inc_req
     progress("BEM", f"phi_inc from coil ({coil_data['source_type']}, "
-                    f"mode={phi_inc_mode})")
+                    f"mode={phi_inc_mode}, requested={phi_inc_req})")
     t0 = time.perf_counter()
     phi_inc_grad_residual = None
     if phi_inc_mode == "poisson":
@@ -1072,7 +1113,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
 
         if esim_solver is None:
             progress("BEM", f"BIE ({t_iter:.1f}s)")
-            if getattr(args, "wp_loop_dof", False):
+            if wp_loop_apply:
                 res_bem, loop_meta = _apply_wp_loop_dof(
                     args, bem, phi_inc, Z_s_wp, omega, coil_data,
                     res_bem, wp_genus, wp_chi)
@@ -1562,6 +1603,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_mesh_nv": int(wp_mesh.nv),
         "wp_euler_chi": int(wp_chi),
         "wp_genus": int(wp_genus),
+        "wp_loop_dof_mode": wp_loop_req,
+        "wp_loop_dof_skip_reason": wp_loop_skip,
         **(loop_meta or {}),
         "wp_mesh_n_tris": int(wp_mesh.GetNE(BND)),
         "wp_ndof": int(bem.ndof),
@@ -1722,6 +1765,9 @@ def _assemble_full_output(args, coil_data, wp_data):
     # DOF is active (--wp-loop-dof), which solves that current explicitly.
     out["wp_euler_chi"] = int(wp_data.get("wp_euler_chi", 2))
     out["wp_genus"] = int(wp_data.get("wp_genus", 0))
+    out["wp_loop_dof_mode"] = wp_data.get("wp_loop_dof_mode", "auto")
+    if wp_data.get("wp_loop_dof_skip_reason"):
+        out["wp_loop_dof_skip_reason"] = wp_data["wp_loop_dof_skip_reason"]
     if wp_data.get("wp_loop_dof"):
         out["wp_loop_dof"] = True
         out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
@@ -2322,10 +2368,13 @@ def run_inductance(args):
                          "proximity-aware strong coupling remains unsupported.",
             }
 
-    # Loop-DOF extension: fail fast on unsupported combinations BEFORE the
-    # expensive coil solve (the genus check itself needs the wp mesh and
-    # lives in the weak workpiece path).
-    if args.wp_loop_dof:
+    # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
+    # combinations BEFORE the expensive coil solve (the genus check itself
+    # needs the wp mesh and lives in the weak workpiece path).  The
+    # default "auto" never errors here -- it resolves inside the weak
+    # driver (apply when genus-1 + prerequisites hold, else skip with
+    # wp_loop_dof_skip_reason).
+    if args.wp_loop_dof == "on":
         if args.coupling_mode != "weak":
             return {"status": "error",
                     "error": "--wp-loop-dof is a weak-coupling workpiece "
@@ -2350,9 +2399,12 @@ def run_inductance(args):
                     "error": "--wp-loop-dof supports the P1 nodal path only "
                              "(--h1-order 1)."}
 
-    # Surface-Poisson phi_inc: fail fast on unsupported combinations
-    # BEFORE the expensive coil solve (same policy as --wp-loop-dof).
-    if getattr(args, "wp_phi_inc", "path") == "poisson":
+    # Surface-Poisson phi_inc: an EXPLICIT "poisson" fails fast on
+    # unsupported combinations BEFORE the expensive coil solve (same
+    # policy as --wp-loop-dof).  "auto" resolves inside the weak driver
+    # (poisson on the P1 nodal path, path otherwise) and never errors
+    # here.
+    if getattr(args, "wp_phi_inc", "auto") == "poisson":
         if args.coupling_mode != "weak":
             return {"status": "error",
                     "error": "--wp-phi-inc poisson is wired into the "
@@ -2586,34 +2638,41 @@ def build_argparser():
                         choices=["hacapk", "intree-dense"])
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
     parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
-    parser.add_argument("--wp-loop-dof", action="store_true",
-                        help="Add the genus-1 loop DOF (net shorted-turn "
-                             "eddy current) to the workpiece scalar BIE "
+    parser.add_argument("--wp-loop-dof", nargs="?", const="on",
+                        default="auto", choices=["auto", "on", "off"],
+                        help="Genus-1 loop DOF (net shorted-turn eddy "
+                             "current) for the workpiece scalar BIE "
                              "(radia.bem_loop_extension).  Recovers the "
                              "Lenz screening a single-valued potential "
                              "cannot represent on a ring/tube workpiece "
                              "whose bore links the coil flux.  "
-                             "Requires: weak coupling, "
-                             "linear SIBC (--impedance-model sibc), "
-                             "--wp-bem-backend intree-dense, --h1-order 1, "
-                             "and a genus-1 workpiece (raises otherwise).  "
-                             "delta_L (Telegen) keeps the plain-solve phi.")
-    parser.add_argument("--wp-phi-inc", default="path",
-                        choices=["path", "poisson"],
+                             "auto (default): apply on a genus-1 workpiece "
+                             "when the prerequisites hold (weak coupling, "
+                             "linear SIBC, --wp-bem-backend intree-dense, "
+                             "--h1-order 1); otherwise skip and report "
+                             "wp_loop_dof_skip_reason (genus-1 skips also "
+                             "keep the P_wp_caveat).  "
+                             "on (= bare --wp-loop-dof): require it -- "
+                             "unmet prerequisites or genus != 1 fail "
+                             "loud.  off: plain solver (genus-1 caveat "
+                             "applies).  delta_L (Telegen) keeps the "
+                             "plain-solve phi convention.")
+    parser.add_argument("--wp-phi-inc", default="auto",
+                        choices=["auto", "path", "poisson"],
                         help="Workpiece incident-potential reconstruction.  "
-                             "path (default): axis-ray + horizontal-ray "
-                             "path integration of H_inc (validated "
-                             "production route; accumulates local H errors "
-                             "into a branch-cut wall on the surface).  "
                              "poisson: surface-Poisson (Laplace-Beltrami) "
                              "projection of the exact vertex H_inc -- "
                              "wall-free, L2-optimal tangential gradient, "
                              "and much faster (one batched H evaluation "
-                             "instead of per-vertex quadrature rays).  "
-                             "Fails loud when grad_S psi misses H_t,inc "
+                             "instead of per-vertex quadrature rays); "
+                             "fails loud when grad_S psi misses H_t,inc "
                              "by > 10% (e.g. coil current piercing the "
-                             "surface).  "
-                             "Requires weak coupling and --h1-order 1.")
+                             "surface).  path: legacy axis-ray + "
+                             "horizontal-ray path integration (accumulates "
+                             "local H errors into a branch-cut wall on "
+                             "the surface).  auto (default): poisson on "
+                             "the weak P1 nodal path, path otherwise "
+                             "(--h1-order 2 / strong driver).")
 
     # ----- Excitation -----
     parser.add_argument("--frequency", type=float, required=True,

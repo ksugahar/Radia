@@ -2,8 +2,8 @@
 
 The reconstruction math is locked by tests/test_phi_inc_poisson.py
 (icosphere goldens); here we pin the CLI wiring: argparse accepts the
-mode, the default stays "path", and unsupported combinations fail fast
-BEFORE any expensive solve.
+mode, the default stays synchronized with the panel, and unsupported
+combinations fail fast BEFORE any expensive solve.
 """
 from __future__ import annotations
 
@@ -36,11 +36,11 @@ def _args(extra):
 def test_argparse_accepts_mode():
     ns = _args([])
     assert ns.wp_phi_inc == "poisson"
-    # default is the validated path-integration route
+    # default is auto (poisson on the weak P1 path, path otherwise)
     p = ci.build_argparser()
     ns0 = p.parse_args(["--coil-solver", "peec", "--coil-step", "c.step",
                         "--frequency", "7000"])
-    assert ns0.wp_phi_inc == "path"
+    assert ns0.wp_phi_inc == "auto"
 
 
 @pytest.mark.parametrize("extra,frag", [
@@ -59,7 +59,7 @@ def test_early_guards_fail_fast(extra, frag):
 def test_composes_with_loop_dof_flags():
     """--wp-phi-inc poisson + --wp-loop-dof parse together."""
     ns = _args(["--wp-loop-dof", "--wp-bem-backend", "intree-dense"])
-    assert ns.wp_phi_inc == "poisson" and ns.wp_loop_dof is True
+    assert ns.wp_phi_inc == "poisson" and ns.wp_loop_dof == "on"
 
 
 def test_ih_designspec_roundtrips_wp_flags():
@@ -85,22 +85,31 @@ def test_ih_designspec_roundtrips_wp_flags():
 
     spec = IHDesignSpec(method=METHOD_BEMA_BEM, coil_vol="c.vol",
                         wp_vol="w.vol", solver="Dense LU (small)",
-                        wp_loop_dof=True, wp_phi_inc="poisson")
+                        wp_loop_dof="on", wp_phi_inc="poisson")
     cmd = spec.build_command()
-    assert "--wp-loop-dof" in cmd
+    assert cmd[cmd.index("--wp-loop-dof") + 1] == "on"
     assert cmd[cmd.index("--wp-phi-inc") + 1] == "poisson"
     ns = ci.build_argparser().parse_args(_calc_argv(cmd))
-    assert ns.wp_loop_dof is True
+    assert ns.wp_loop_dof == "on"
     assert ns.wp_phi_inc == "poisson"
     assert ns.wp_bem_backend == "intree-dense"
 
-    # defaults stay off: no flag churn on the validated production argv
+    # Panel and CLI defaults agree, with no redundant flag churn.
     base = IHDesignSpec(method=METHOD_BEMA_BEM, coil_vol="c.vol",
                         wp_vol="w.vol", solver="Dense LU (small)")
+    assert base.wp_loop_dof == "auto" and base.wp_phi_inc == "auto"
     cmd0 = base.build_command()
     assert "--wp-loop-dof" not in cmd0 and "--wp-phi-inc" not in cmd0
     ns0 = ci.build_argparser().parse_args(_calc_argv(cmd0))
-    assert ns0.wp_loop_dof is False and ns0.wp_phi_inc == "path"
+    assert ns0.wp_loop_dof == "auto" and ns0.wp_phi_inc == "auto"
+
+    # forcing the legacy behavior stays expressible and round-trips
+    legacy = IHDesignSpec(method=METHOD_BEMA_BEM, coil_vol="c.vol",
+                          wp_vol="w.vol", solver="Dense LU (small)",
+                          wp_loop_dof="off", wp_phi_inc="path")
+    cmdl = legacy.build_command()
+    nsl = ci.build_argparser().parse_args(_calc_argv(cmdl))
+    assert nsl.wp_loop_dof == "off" and nsl.wp_phi_inc == "path"
 
 
 def test_ih_designspec_exposes_wp_flags_for_weak_bem_only():

@@ -141,8 +141,11 @@ class IHDesignSpec:
     wp_sigma: str = "5.0e6"
     mu_r: str = "100"
     half_thickness: str = "0.0125"
-    wp_loop_dof: bool = False
-    wp_phi_inc: str = "path"
+    # Weak-BIE topology controls. "auto" applies each extension when its
+    # mathematical and solver prerequisites hold; explicit modes remain
+    # available for reproducibility and fail-fast validation.
+    wp_loop_dof: str = "auto"
+    wp_phi_inc: str = "auto"
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
@@ -417,9 +420,9 @@ class IHDesignSpec:
         ]
         if coil_solver == "peec":
             cmd += ["--peec-n-peri", str(self.peec_n_peri)]
-        if self.wp_loop_dof:
-            cmd.append("--wp-loop-dof")
-        if self.wp_phi_inc != "path":
+        if self.wp_loop_dof != "auto":
+            cmd += ["--wp-loop-dof", self.wp_loop_dof]
+        if self.wp_phi_inc != "auto":
             cmd += ["--wp-phi-inc", self.wp_phi_inc]
         self._append_esim_args(cmd, include_anderson=True, kelvin=False)
         return cmd

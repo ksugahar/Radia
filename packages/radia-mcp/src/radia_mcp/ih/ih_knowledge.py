@@ -1634,9 +1634,9 @@ uses face-BFS propagation and signed-volume normalization, including
 the inner wall of a genus-1 tube where a centroid heuristic is invalid.
 
 A single-valued scalar potential cannot carry net current through a
-surface cut.  For a flux-linked genus-1 workpiece, enable
-``--wp-loop-dof`` to add the harmonic shorted-turn current.  The
-extension is closed by Faraday's law and is locked by the analytic
+surface cut.  For a flux-linked genus-1 workpiece, the loop extension
+adds the harmonic shorted-turn current.  The extension is closed by
+Faraday's law and is locked by the analytic
 shorted-ring golden plus a frozen-subsystem equivalence check.  It
 requires weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
 and ``--h1-order 1``.  The output records ``wp_loop_alpha_A`` and replaces
@@ -1649,6 +1649,15 @@ one batched field evaluation, is winding invariant, and fails loud when
 with both coil sources on the weak P1 path and composes with
 ``--wp-loop-dof``.  The analytic icosphere tests cover uniform fields,
 complex linearity, winding invariance, and the non-gradient failure gate.
+
+Both controls default to ``auto``.  ``--wp-phi-inc auto`` selects the
+surface-Poisson route on the weak P1 nodal path and the path route
+otherwise.  ``--wp-loop-dof auto`` applies the loop extension to a
+genus-1 workpiece when its prerequisites hold; otherwise the output
+records ``wp_loop_dof_skip_reason``.  A bare ``--wp-loop-dof`` means
+``on`` and keeps fail-fast prerequisite checks, while ``off`` requests
+the single-valued legacy solve.  The notebook workbench exposes both
+modes in its Workpiece section.
 
 Every weak or strong run records ``wp_euler_chi`` and ``wp_genus``.
 Without the loop extension, a flux-linked genus-1 result carries
