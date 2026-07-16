@@ -280,8 +280,7 @@ def test_strong_wp_hacapk_matches_dense(tmp_path):
 
     CoupledBEMSolver's workpiece BIE gained an O(N log N) intree-HACApK
     backend (--wp-bem-backend hacapk, the default) so the coupled solve
-    scales past the ~12k-tri dense-assembly wall (e.g. the 20k-tri
-    Takahashi workpiece).  On the demo it must agree with the dense path
+    scales past the dense-assembly wall.  On the demo it must agree with the dense path
     (--wp-bem-backend intree-dense) to within the ACA compression accuracy.
     """
     from _bema_coil_vol_helper import coil_vol_for
@@ -379,11 +378,9 @@ def test_strong_coil_hacapk_matches_dense(tmp_path):
 def test_strong_accepts_volume_coil_vol(tmp_path):
     """A VOLUME coil .vol (tets present, the common Cubit export) must run.
 
-    Regression for the Takahashi coil_only.vol failure (2026-07-16, same
-    class as keiko gapped_torus 2026-05-12): the strong driver loaded
+    Regression for the volume-coil input failure: the strong driver loaded
     ``Mesh(args.coil_vol)`` raw, so on a volume .vol HDivSurface picked up
-    thousands of extra null modes (n_J 17,799 instead of 6,204 on
-    Takahashi), the coupled saddle LU went singular, and the solve died
+    thousands of extra null modes, the coupled saddle LU went singular, and the solve died
     with "array must not contain infs or NaNs".  The driver now routes
     through ``_build_bema_coil_mesh`` (label validation + volume->surface
     extraction), the same loader as the vacuum BEM-A path.

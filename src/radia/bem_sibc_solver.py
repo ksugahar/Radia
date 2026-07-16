@@ -985,17 +985,12 @@ def surface_euler_characteristic(mesh):
     current is ``J_s = n x (-grad_s phi)`` with a SINGLE-VALUED phi, so
     the net current through ANY cut of the surface is identically zero.
     On a genus-0 workpiece that is exact.  On a genus >= 1 workpiece whose
-    handle links the coil flux (e.g. the Takahashi tube: the coil flux
-    threads the bore), the physical eddy current contains a NET
+    handle links the coil flux, the physical eddy current contains a NET
     circulating (shorted-transformer-turn) component that this
     representation CANNOT express -- its Lenz screening is lost and the
-    solver over-estimates H_t / P_wp.  Measured on Takahashi 7 kHz
-    (2026-07-16, workpiece chi = 0): H_t 66.4 kA/m vs FEM 46.1 (x1.44),
-    P_wp 38 kW vs 17 kW (x2.2), while the SAME solver matches the
-    analytic mu_r-swept sphere (genus 0) benchmark to 0.3%.  Fixing the
-    incident potential's branch-cut wall (surface-Poisson reconstruction,
-    3% field consistency) moved P_wp by only ~5% -- the missing loop
-    degree of freedom is the dominant error.
+    solver can over-estimate H_t / P_wp.  The genus-0 path is locked by
+    the analytic permeability-swept sphere benchmark; genus-1 heating
+    requires the explicit loop degree of freedom.
 
     Callers should compute this on the extracted workpiece surface and
     fail loud / caveat the output for ``chi != 2``.  The proper fix is a
@@ -1040,8 +1035,7 @@ def compute_phi_inc_surface_poisson(points, tris, H_vertices,
     spanning-path integral accumulates local H errors into a branch-cut
     wall through the surface, while the Poisson projection distributes
     them L2-optimally -- and it needs ONE batched H evaluation at the
-    vertices instead of per-vertex quadrature rays (Takahashi wp, 2955
-    vertices x 4136 coil panels: 65 s path integration -> < 1 s here).
+    vertices instead of per-vertex quadrature rays.
 
     Validity: the incident H must be a surface gradient, i.e. zero
     circulation of H_t around every surface loop.  A coil whose
@@ -1051,11 +1045,9 @@ def compute_phi_inc_surface_poisson(points, tris, H_vertices,
     the returned residual is O(1) and the ``max_grad_residual`` gate
     fires -- there is no silent fallback.
 
-    Measured on the Takahashi tube (7 kHz, mu_r=100, intree-dense P1,
-    2026-07-17): grad-consistency residual ~3%; drives the same
-    ``(1/2 M - DL + gamma SL M^-1 K) phi = M phi_inc`` system via the
-    validated interior-identity RHS form ``M @ psi`` (identity residual
-    ~1% with the exact q_inc).
+    The result drives the same
+    ``(1/2 M - DL + gamma SL M^-1 K) phi = M phi_inc`` system through
+    the interior-identity RHS form ``M @ psi``.
 
     Args:
         points: (nv, 3) surface vertex coordinates [m].  Must be the

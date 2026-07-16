@@ -65,6 +65,16 @@ IH_FIELD_SPECS = (
     NotebookFieldSpec("mu_r", "mu_r", section="Workpiece"),
     NotebookFieldSpec("half_thickness", "SIBC half t", section="Workpiece"),
     NotebookFieldSpec(
+        "wp_phi_inc",
+        "Incident phi",
+        "dropdown",
+        ("path", "poisson"),
+        "Workpiece",
+    ),
+    NotebookFieldSpec(
+        "wp_loop_dof", "Loop current DOF", "checkbox", section="Workpiece"
+    ),
+    NotebookFieldSpec(
         "impedance_model",
         "Impedance",
         "dropdown",

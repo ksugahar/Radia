@@ -12,11 +12,9 @@ recover the net circulating current alpha to a few percent, and its
 frozen (alpha = 0) sub-solve must reproduce the plain production
 ScalarBIESIBCSolver solve exactly (same operators, same gauge).
 
-This is the promoted lock of the C:\\temp loop_bie_poc2 validation
-(2026-07-17): coarse and finer meshes gave |alpha|/|I| = 0.982-0.983 and
-frozen/production match = 1.0000; on the Takahashi genus-1 tube the same
-machinery moved P_wp from 21.5 kW to 18.4 kW and H_t from 50.1 to
-46.3 kA/m against 17.0-17.7 kW / 46.1 kA/m FEM references.
+The coarse and finer analytic-ring meshes gave |alpha|/|I| = 0.982-0.983
+and frozen/production match = 1.0000.  These stored values are the durable
+regression band for the promoted loop extension.
 """
 from __future__ import annotations
 

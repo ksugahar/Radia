@@ -25,18 +25,14 @@ def orient_surface_triangles(points, tris):
          (divergence theorem, sum of p0.(p1 x p2)/6) is negative, flip
          the whole component.
 
-    WHY (2026-07-17, Takahashi genus-1 workpiece): the surface extractors
-    returned triangles whose winding was NOT globally consistent -- the
+    Surface extractors can return triangles whose winding is not globally
+    consistent.  The
     old per-triangle "centroid-outward" heuristic in the hole extractor
     actively CREATES the inconsistency on a genus-1 tube (the bore-wall
-    outward normal points TOWARD the centroid, so the whole inner wall
-    was flipped; 199 directed-edge conflicts measured).  The inconsistent
-    winding corrupts the double-layer operator of the scalar BIE + SIBC:
-    on Takahashi 7 kHz / mu_r=100 it inflated P_wp from 22.5 kW
-    (consistent winding) to 37.9 kW vs the 17.0-17.7 kW FEM references
-    -- the dominant share of the known x2 over-estimate.  On already-
-    consistent meshes (Netgen/OCC output; the analytic sphere benchmark,
-    0.3%) this is a no-op (0 flips).
+    outward normal points toward the centroid, so the whole inner wall is
+    flipped).  The inconsistent winding corrupts the double-layer
+    operator of the scalar BIE + SIBC.  On already-consistent meshes this
+    is a no-op.
 
     Args:
         points: (nv, 3) float array of vertex coordinates.
@@ -203,8 +199,8 @@ def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
 
     # Pass 2: make the winding globally consistent + outward BEFORE
     # emitting (the BND winding of a .vol is not globally consistent, and
-    # an inconsistent double-layer operator inflated Takahashi P_wp by
-    # ~70% -- see orient_surface_triangles).
+    # an inconsistent winding corrupts the double-layer operator -- see
+    # orient_surface_triangles).
     import numpy as np
     tri_old = np.array([verts for _fd, verts in kept], dtype=np.int64)
     used = sorted({int(v) for t in tri_old for v in t})
