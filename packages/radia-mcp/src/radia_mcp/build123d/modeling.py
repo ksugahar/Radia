@@ -2820,6 +2820,71 @@ def shape_mass_property_crosscheck_summary(
                 )
             )
 
+    frame_evidence_present = any(
+        row.get("mass_property_frame_identity") is not None for row in identity_rows
+    )
+
+    def frame_identity(row):
+        value = row.get("mass_property_frame_identity")
+        if not isinstance(value, dict):
+            return None
+        frame_id = str(value.get("frame_id", "")).strip()
+        transform_generation = str(value.get("transform_generation", "")).strip()
+        return (frame_id, transform_generation) if frame_id and transform_generation else None
+
+    reference_frames = {
+        str(row.get("name", "")): frame_identity(row) for row in reference
+    }
+    frame_identity_ok = not frame_evidence_present
+    if frame_evidence_present:
+        frame_identity_ok = bool(reference_frames) and all(
+            value is not None for value in reference_frames.values()
+        )
+        for _, rows in normalized_sets:
+            frame_identity_ok = frame_identity_ok and all(
+                frame_identity(row)
+                == reference_frames.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    topology_evidence_present = any(
+        row.get("topology_identity") is not None for row in identity_rows
+    )
+
+    def topology_identity(row):
+        value = row.get("topology_identity")
+        brep = row.get("brep_identity")
+        if not isinstance(value, dict) or not isinstance(brep, dict):
+            return None
+        adjacency_digest = str(value.get("face_adjacency_sha256", "")).lower()
+        identity = (
+            str(value.get("brep_revision", "")),
+            str(value.get("brep_sha256", "")).lower(),
+            adjacency_digest,
+        )
+        if (
+            identity[0] != str(brep.get("revision", ""))
+            or identity[1] != str(brep.get("sha256", "")).lower()
+            or len(adjacency_digest) != 64
+        ):
+            return None
+        return identity
+
+    reference_topology = {
+        str(row.get("name", "")): topology_identity(row) for row in reference
+    }
+    topology_identity_ok = not topology_evidence_present
+    if topology_evidence_present:
+        topology_identity_ok = bool(reference_topology) and all(
+            value is not None for value in reference_topology.values()
+        )
+        for _, rows in normalized_sets:
+            topology_identity_ok = topology_identity_ok and all(
+                topology_identity(row)
+                == reference_topology.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -2869,6 +2934,8 @@ def shape_mass_property_crosscheck_summary(
         "all_sources_preserve_named_shape_identity": not failed_identity_gates,
         "mass_properties_bind_current_brep_revision": revision_identity_ok,
         "assembly_children_match_reference_revision_map": assembly_identity_ok,
+        "mass_property_centers_share_reference_frames": frame_identity_ok,
+        "face_adjacency_matches_current_brep_revision": topology_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -2881,6 +2948,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("at least one mass-property row belongs to a different BREP revision")
     if not checks["assembly_children_match_reference_revision_map"]:
         issues.append("assembly child revisions differ across rows or from the reference")
+    if not checks["mass_property_centers_share_reference_frames"]:
+        issues.append("mass-property centers use a different reference frame")
+    if not checks["face_adjacency_matches_current_brep_revision"]:
+        issues.append("face adjacency belongs to another BREP revision")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
