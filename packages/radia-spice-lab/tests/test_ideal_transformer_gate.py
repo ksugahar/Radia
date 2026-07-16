@@ -377,6 +377,29 @@ def _with_v11_transient_and_noise_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v12_cycle_and_seed_identity(summary: dict) -> dict:
+    summary = _with_v11_transient_and_noise_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["steady_cycle_average_identity"] = {
+        "settled_cycle_generation_id": "steady-cycles-44",
+        "waveform_cycle_generation_id": "steady-cycles-44",
+        "average_window_cycle_generation_id": "steady-cycles-44",
+        "first_settled_cycle_index": 18,
+        "average_window_cycle_index": 20,
+        "average_window_period_count": 1,
+    }
+    positive["monte_carlo_parameter_seed_identity"] = {
+        "parameter_order": ["RPRI", "RLOAD", "CSTRAY"],
+        "statistics_parameter_order": ["RPRI", "RLOAD", "CSTRAY"],
+        "seed_policy": "one_seed_per_named_parameter",
+        "seed_schedule_generation_id": "mc-seeds-44",
+        "statistics_seed_schedule_generation_id": "mc-seeds-44",
+        "parameter_seed_map_sha256": "d" * 64,
+        "statistics_parameter_seed_map_sha256": "d" * 64,
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -457,6 +480,37 @@ def test_v11_public_noise_density_integrated_band_unit_mismatch() -> None:
     assert (
         result["checks"][
             "noise_density_and_band_limits_share_frequency_units"
+        ]
+        is False
+    )
+
+
+def test_v12_public_switched_average_steady_cycle_generation_mismatch() -> None:
+    bad = _with_v12_cycle_and_seed_identity(_summary())
+    bad["metrics"]["positive"]["steady_cycle_average_identity"].update(
+        {
+            "average_window_cycle_generation_id": "steady-cycles-43",
+            "average_window_cycle_index": 12,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["switched_averages_use_a_settled_cycle_generation"]
+        is False
+    )
+
+
+def test_v12_public_monte_carlo_seed_parameter_order_mismatch() -> None:
+    bad = _with_v12_cycle_and_seed_identity(_summary())
+    bad["metrics"]["positive"]["monte_carlo_parameter_seed_identity"][
+        "statistics_parameter_order"
+    ] = ["CSTRAY", "RLOAD", "RPRI"]
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "monte_carlo_statistics_preserve_named_parameter_seed_order"
         ]
         is False
     )
