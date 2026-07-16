@@ -521,3 +521,93 @@ def test_generalization_v10_source(case_id: str):
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"][expected] is False
+
+
+def _with_v11_ownership(row: dict) -> dict:
+    row["high_order_shared_face_orientation_identity"] = {
+        "mesh_generation": "mesh-generation-43",
+        "left_face_node_ids": [1, 2, 3, 4, 5, 6, 7, 8],
+        "right_face_node_ids": [1, 4, 3, 2, 8, 7, 6, 5],
+        "left_element_generation": "mesh-generation-43",
+        "right_element_generation": "mesh-generation-43",
+    }
+    row["live_cad_mesh_identity"] = {
+        "live_cad_sha256": "1" * 64,
+        "mesh_source_cad_sha256": "1" * 64,
+        "live_cad_generation": "cad-generation-43",
+        "mesh_source_cad_generation": "cad-generation-43",
+        "live_cad_volume": 12.5,
+        "mesh_reference_cad_volume": 12.5,
+    }
+    row["block_material_map_identity"] = {
+        "final_mesh_generation": "mesh-generation-43",
+        "material_map_mesh_generation": "mesh-generation-43",
+        "block_table_sha256": "2" * 64,
+        "material_map_block_table_sha256": "2" * 64,
+        "unmapped_block_ids": [],
+    }
+    row["parallel_sculpt_completion_identity"] = {
+        "expected_rank_count": 4,
+        "finalized_rank_ids": [0, 1, 2, 3],
+        "rank_artifact_sha256": ["3" * 64, "4" * 64, "5" * 64, "6" * 64],
+        "rank_manifest_generation": "sculpt-generation-43",
+        "global_aggregation_generation": "sculpt-generation-43",
+    }
+    return row
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v11_public_high_order_hex_shared_face_orientation_mismatch",
+        "v11_public_mesh_volume_live_cad_digest_mismatch",
+    ],
+)
+def test_generalization_v11_public(case_id: str):
+    row = _with_v11_ownership(summary())
+    if case_id == "v11_public_high_order_hex_shared_face_orientation_mismatch":
+        row["high_order_shared_face_orientation_identity"][
+            "right_face_node_ids"
+        ] = [1, 2, 3, 4, 5, 6, 7, 8]
+        expected = "high_order_hex_shared_faces_have_reciprocal_orientation"
+    else:
+        row["live_cad_mesh_identity"].update(
+            {
+                "mesh_source_cad_sha256": "7" * 64,
+                "mesh_source_cad_generation": "cad-generation-42",
+            }
+        )
+        expected = "mesh_manifest_matches_live_cad_identity"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v11_source_block_material_map_previous_export_generation",
+        "v11_source_parallel_sculpt_partial_rank_artifact_aggregated",
+    ],
+)
+def test_generalization_v11_source(case_id: str):
+    row = _with_v11_ownership(summary())
+    if case_id == "v11_source_block_material_map_previous_export_generation":
+        row["block_material_map_identity"].update(
+            {
+                "material_map_mesh_generation": "mesh-generation-42",
+                "material_map_block_table_sha256": "8" * 64,
+            }
+        )
+        expected = "block_material_map_matches_final_mesh_generation"
+    else:
+        row["parallel_sculpt_completion_identity"].update(
+            {
+                "finalized_rank_ids": [0, 1, 3],
+                "rank_artifact_sha256": ["3" * 64, "4" * 64, "6" * 64],
+            }
+        )
+        expected = "parallel_sculpt_waits_for_every_rank_artifact"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False

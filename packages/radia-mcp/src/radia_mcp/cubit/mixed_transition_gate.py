@@ -300,6 +300,70 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             == coordinate_scale.get("coordinate_scale_generation")
         )
 
+    face_orientation_value = summary.get(
+        "high_order_shared_face_orientation_identity"
+    )
+    face_orientation_present = face_orientation_value is not None
+    face_orientation = (
+        face_orientation_value if isinstance(face_orientation_value, Mapping) else {}
+    )
+    try:
+        left_face = [int(value) for value in face_orientation.get("left_face_node_ids", [])]
+        right_face = [
+            int(value) for value in face_orientation.get("right_face_node_ids", [])
+        ]
+    except (TypeError, ValueError):
+        left_face = []
+        right_face = []
+    reciprocal_face = (
+        [
+            left_face[0],
+            left_face[3],
+            left_face[2],
+            left_face[1],
+            left_face[7],
+            left_face[6],
+            left_face[5],
+            left_face[4],
+        ]
+        if len(left_face) == 8
+        else []
+    )
+    face_orientation_ok = not face_orientation_present or (
+        bool(face_orientation.get("mesh_generation"))
+        and face_orientation.get("left_element_generation")
+        == face_orientation.get("mesh_generation")
+        and face_orientation.get("right_element_generation")
+        == face_orientation.get("mesh_generation")
+        and len(left_face) == 8
+        and len(set(left_face)) == 8
+        and set(right_face) == set(left_face)
+        and right_face == reciprocal_face
+    )
+
+    live_cad_value = summary.get("live_cad_mesh_identity")
+    live_cad_present = live_cad_value is not None
+    live_cad = live_cad_value if isinstance(live_cad_value, Mapping) else {}
+    try:
+        live_volume = float(live_cad.get("live_cad_volume"))
+        mesh_reference_volume = float(live_cad.get("mesh_reference_cad_volume"))
+    except (TypeError, ValueError):
+        live_volume = math.nan
+        mesh_reference_volume = math.nan
+    live_digest = str(live_cad.get("live_cad_sha256") or "")
+    live_cad_ok = not live_cad_present or (
+        len(live_digest) == 64
+        and live_cad.get("mesh_source_cad_sha256") == live_digest
+        and bool(live_cad.get("live_cad_generation"))
+        and live_cad.get("mesh_source_cad_generation")
+        == live_cad.get("live_cad_generation")
+        and math.isfinite(live_volume)
+        and live_volume > 0.0
+        and math.isclose(
+            mesh_reference_volume, live_volume, rel_tol=1.0e-6, abs_tol=1.0e-12
+        )
+    )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -319,6 +383,10 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             signed_jacobian_ok
         ),
         "mesh_coordinates_and_volume_use_one_length_scale": coordinate_scale_ok,
+        "high_order_hex_shared_faces_have_reciprocal_orientation": (
+            face_orientation_ok
+        ),
+        "mesh_manifest_matches_live_cad_identity": live_cad_ok,
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
             quality_minima[family] >= threshold for family in ("hex", "pyramid", "tet")
@@ -612,6 +680,44 @@ def cubit_mixed_transition_source_gate(
         and final_smoothing_sequence >= 0
         and report_sequence >= final_smoothing_sequence
     )
+
+    block_material_value = summary.get("block_material_map_identity")
+    block_material_present = block_material_value is not None
+    block_material = (
+        block_material_value if isinstance(block_material_value, Mapping) else {}
+    )
+    block_digest = str(block_material.get("block_table_sha256") or "")
+    unmapped_blocks = block_material.get("unmapped_block_ids")
+    block_material_ok = not block_material_present or (
+        bool(block_material.get("final_mesh_generation"))
+        and block_material.get("material_map_mesh_generation")
+        == block_material.get("final_mesh_generation")
+        and len(block_digest) == 64
+        and block_material.get("material_map_block_table_sha256") == block_digest
+        and isinstance(unmapped_blocks, list)
+        and not unmapped_blocks
+    )
+
+    sculpt_value = summary.get("parallel_sculpt_completion_identity")
+    sculpt_present = sculpt_value is not None
+    sculpt = sculpt_value if isinstance(sculpt_value, Mapping) else {}
+    try:
+        expected_ranks = int(sculpt.get("expected_rank_count"))
+        finalized_ranks = [int(value) for value in sculpt.get("finalized_rank_ids", [])]
+    except (TypeError, ValueError):
+        expected_ranks = 0
+        finalized_ranks = []
+    rank_digests = sculpt.get("rank_artifact_sha256")
+    sculpt_ok = not sculpt_present or (
+        expected_ranks > 0
+        and finalized_ranks == list(range(expected_ranks))
+        and isinstance(rank_digests, list)
+        and len(rank_digests) == expected_ranks
+        and all(len(str(value)) == 64 for value in rank_digests)
+        and bool(sculpt.get("rank_manifest_generation"))
+        and sculpt.get("global_aggregation_generation")
+        == sculpt.get("rank_manifest_generation")
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -678,6 +784,8 @@ def cubit_mixed_transition_source_gate(
         "length_scale_is_applied_exactly_once": length_scale_ok,
         "exodus_sidesets_follow_connectivity_permutation": exodus_connectivity_ok,
         "quality_report_follows_final_smoothing_generation": quality_generation_ok,
+        "block_material_map_matches_final_mesh_generation": block_material_ok,
+        "parallel_sculpt_waits_for_every_rank_artifact": sculpt_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),
