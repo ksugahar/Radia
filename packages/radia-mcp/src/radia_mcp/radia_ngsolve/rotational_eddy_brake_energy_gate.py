@@ -462,6 +462,61 @@ def _deformed_domain_integral_jacobian_identity_ok(
     )
 
 
+def _nonlinear_residual_tangent_iteration_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("nonlinear_residual_tangent_iteration_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("nonlinear_solve_generation") or "")
+    material_digest = str(identity.get("material_state_sha256") or "")
+    try:
+        residual_iteration = int(identity.get("residual_iteration"))
+        tangent_iteration = int(identity.get("tangent_iteration"))
+        material_iteration = int(identity.get("material_state_iteration"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and identity.get("residual_solve_generation") == generation
+        and identity.get("tangent_solve_generation") == generation
+        and identity.get("material_state_solve_generation") == generation
+        and residual_iteration >= 0
+        and tangent_iteration == residual_iteration
+        and material_iteration == residual_iteration
+        and len(material_digest) == 64
+        and all(character in "0123456789abcdef" for character in material_digest)
+        and identity.get("tangent_material_state_sha256") == material_digest
+    )
+
+
+def _moving_mesh_field_transfer_frame_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("moving_mesh_field_transfer_frame_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("mesh_motion_generation") or "")
+    frame = str(identity.get("source_coordinate_frame") or "")
+    map_digest = str(identity.get("coordinate_map_sha256") or "")
+    return (
+        bool(generation)
+        and identity.get("source_mesh_motion_generation") == generation
+        and identity.get("target_mesh_motion_generation") == generation
+        and identity.get("field_transfer_mesh_motion_generation") == generation
+        and frame in {"material", "spatial"}
+        and identity.get("target_coordinate_frame") == frame
+        and identity.get("field_transfer_coordinate_frame") == frame
+        and len(map_digest) == 64
+        and all(character in "0123456789abcdef" for character in map_digest)
+        and identity.get("field_transfer_coordinate_map_sha256") == map_digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -588,6 +643,12 @@ def rotational_eddy_brake_energy_gate(
     )
     deformed_domain_integral_jacobian_identity_ok = (
         _deformed_domain_integral_jacobian_identity_ok(summary)
+    )
+    nonlinear_residual_tangent_iteration_identity_ok = (
+        _nonlinear_residual_tangent_iteration_identity_ok(summary)
+    )
+    moving_mesh_field_transfer_frame_identity_ok = (
+        _moving_mesh_field_transfer_frame_identity_ok(summary)
     )
     all_cardinalities = True
     all_times_increase = True
@@ -801,6 +862,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "deformed_domain_integral_uses_current_geometry_jacobian": (
             deformed_domain_integral_jacobian_identity_ok
+        ),
+        "nonlinear_residual_and_tangent_share_material_iteration": (
+            nonlinear_residual_tangent_iteration_identity_ok
+        ),
+        "moving_mesh_field_transfer_uses_one_coordinate_frame": (
+            moving_mesh_field_transfer_frame_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
