@@ -143,3 +143,15 @@ def test_generalization_v6_public(case_id: str) -> None:
     else:
         summary["force_unit"] = "N/m"
     assert magnetic_force_method_profile_gate(summary)["status"] == "needs_attention"
+
+
+def test_v7_public_position_grid_unit_shadowing() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["artifact_position_units"] = {
+        "primary_positions": "m",
+        "closed_surface_positions": "m",
+        "independent_replay_positions": "mm",
+    }
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["artifact_position_units_match_common_grid"] is False
