@@ -263,12 +263,8 @@ if "Solve" in globals():
         if registered:
             from radia.vim import _radsolve
             if not _radsolve.is_hdiv_eligible(top):
-                if _radsolve.registered_iron_count(top) > 1:
-                    raise ValueError(
-                        "rad.Solve(auto): multiple mesh-backed soft irons in one container are not supported "
-                        "by the HDiv-VIM yet -- solve each iron separately.")
                 raise ValueError(
-                    "rad.Solve(auto): this mesh-backed soft iron is not HDiv-VIM eligible yet "
+                    "rad.Solve(auto): every mesh-backed soft iron must be HDiv-VIM eligible "
                     "(pure tet/hex/wedge only).")
             return _radsolve.dispatch(*args, **kwargs)      # auto tet/hex/wedge / explicit hdiv -> FEEC HDiv-VIM
         if backend == "hdiv":
@@ -282,12 +278,13 @@ if "Solve" in globals():
 if "Fld" in globals():
     _cpp_Fld = globals()["Fld"]
 
-    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv RT1 field dispatch)
+    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv RT1/RT2 field dispatch)
         """Evaluate Radia fields.
 
-        A solved mesh-backed HDiv-VIM object is evaluated from its full RT1
-        polynomial by the C++ charge-field kernel.  Other Radia objects call
-        the ordinary C++ ``Fld`` unchanged.
+        Solved mesh-backed HDiv-VIM objects are evaluated from their full
+        RT1/RT2 fields by persistent C++ charge-field kernels.  A multi-body
+        container sums every registered body plus its ordinary Radia sources.
+        Other Radia objects call the ordinary C++ ``Fld`` unchanged.
         """
         try:
             from radia.vim import _radsolve
@@ -304,23 +301,32 @@ if "Fld" in globals():
             pts = _np.asarray(points, dtype=float)
             single = pts.ndim == 1
             pts2 = pts.reshape(-1, 3)
-            result = record["result"]
-            h_iron = field_from_solution(result, pts2)
+            results = record.get("results")
+            if results is None:
+                results = (record["result"],)
+            h_iron = field_from_solution(results[0], pts2)
+            for result in results[1:]:
+                h_iron = h_iron + field_from_solution(result, pts2)
             source_obj = record.get("source_object")
             if field_type in ("h", "hx", "hy", "hz"):
                 value = h_iron
                 if source_obj is not None:
                     value = value + _np.asarray(_cpp_Fld(source_obj, "h", pts2), float).reshape(-1, 3)
             elif field_type in ("b", "bx", "by", "bz"):
-                value = (4.0e-7 * _np.pi) * (h_iron + magnetization_from_solution(result, pts2))
+                magnetization = magnetization_from_solution(results[0], pts2)
+                for result in results[1:]:
+                    magnetization = magnetization + magnetization_from_solution(result, pts2)
+                value = (4.0e-7 * _np.pi) * (h_iron + magnetization)
                 if source_obj is not None:
                     value = value + _np.asarray(_cpp_Fld(source_obj, "b", pts2), float).reshape(-1, 3)
             elif field_type == "m":
-                value = magnetization_from_solution(result, pts2)
+                value = magnetization_from_solution(results[0], pts2)
+                for result in results[1:]:
+                    value = value + magnetization_from_solution(result, pts2)
             else:
                 raise NotImplementedError(
                     "rad.Fld on an HDiv-VIM solution supports b/h/m and Cartesian components; "
-                    f"{field_type!r} has no RT1 field contract"
+                    f"{field_type!r} has no RT1/RT2 field contract"
                 )
             if len(field_type) == 2 and field_type[1] in "xyz":
                 value = value[:, "xyz".index(field_type[1])]
