@@ -320,6 +320,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     unit_conversion_identity_ok = True
     boolean_clean_identity_ok = True
     tessellation_identity_ok = True
+    step_export_tolerance_identity_ok = True
+    assembly_replacement_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -329,6 +331,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         unit_conversion_identity_ok = False
         boolean_clean_identity_ok = False
         tessellation_identity_ok = False
+        step_export_tolerance_identity_ok = False
+        assembly_replacement_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -522,6 +526,103 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and 0.0 < angular_tolerance <= math.pi
                 and bool(tessellation.get("tessellation_generation"))
             )
+
+        tolerance_value = replay_identity_value.get(
+            "step_export_tolerance_identity"
+        )
+        if tolerance_value is not None:
+            tolerance_identity = (
+                tolerance_value if isinstance(tolerance_value, Mapping) else {}
+            )
+            try:
+                sewing_tolerance = float(
+                    tolerance_identity.get("sewing_tolerance")
+                )
+                brep_tolerance = float(tolerance_identity.get("brep_tolerance"))
+            except (TypeError, ValueError):
+                sewing_tolerance = math.nan
+                brep_tolerance = math.nan
+            current_session = str(
+                kernel.get("claimed_session_generation", "")
+            ).strip()
+            boolean_identity = (
+                boolean_value if isinstance(boolean_value, Mapping) else {}
+            )
+            current_shape = str(
+                boolean_identity.get("shape_generation", "")
+            ).strip()
+            export_digest = str(
+                tolerance_identity.get("export_artifact_sha256", "")
+            ).lower()
+            step_export_tolerance_identity_ok = (
+                bool(current_session)
+                and tolerance_identity.get("kernel_session_generation")
+                == current_session
+                and tolerance_identity.get("tolerance_kernel_session_generation")
+                == current_session
+                and bool(current_shape)
+                and tolerance_identity.get("shape_generation") == current_shape
+                and tolerance_identity.get("tolerance_shape_generation")
+                == current_shape
+                and math.isfinite(sewing_tolerance)
+                and sewing_tolerance > 0.0
+                and math.isfinite(brep_tolerance)
+                and brep_tolerance > 0.0
+                and len(export_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in export_digest
+                )
+            )
+
+        replacement_value = replay_identity_value.get(
+            "assembly_replacement_identity"
+        )
+        if replacement_value is not None:
+            replacement = (
+                replacement_value if isinstance(replacement_value, Mapping) else {}
+            )
+            assembly_generation = str(
+                replacement.get("assembly_generation", "")
+            ).strip()
+            replacement_rows = replacement.get("components")
+            rows_valid = isinstance(replacement_rows, list) and bool(replacement_rows) and all(
+                isinstance(row, Mapping) for row in replacement_rows
+            )
+            slot_ids = (
+                [str(row.get("slot_id", "")).strip() for row in replacement_rows]
+                if rows_valid
+                else []
+            )
+
+            def valid_digest(value: object) -> bool:
+                digest = str(value or "").lower()
+                return len(digest) == 64 and all(
+                    character in "0123456789abcdef" for character in digest
+                )
+
+            assembly_replacement_identity_ok = (
+                bool(assembly_generation)
+                and rows_valid
+                and all(slot_ids)
+                and len(set(slot_ids)) == len(slot_ids)
+                and all(
+                    bool(str(row.get("replacement_generation", "")).strip())
+                    and bool(str(row.get("removed_instance_uuid", "")).strip())
+                    and bool(str(row.get("current_instance_uuid", "")).strip())
+                    and row.get("removed_instance_uuid")
+                    != row.get("current_instance_uuid")
+                    and valid_digest(row.get("removed_shape_sha256"))
+                    and valid_digest(row.get("current_shape_sha256"))
+                    and row.get("removed_shape_sha256")
+                    != row.get("current_shape_sha256")
+                    and row.get("placement_shape_sha256")
+                    == row.get("current_shape_sha256")
+                    and row.get("placement_assembly_generation")
+                    == assembly_generation
+                    for row in replacement_rows
+                )
+            )
     joint_names = {
         str(name)
         for row in components
@@ -560,6 +661,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         "external_volume_is_measured_after_unit_conversion": unit_conversion_identity_ok,
         "boolean_export_follows_shape_clean_identity": boolean_clean_identity_ok,
         "tessellation_tolerances_belong_to_current_shape": tessellation_identity_ok,
+        "step_export_tolerances_belong_to_current_kernel_and_shape": (
+            step_export_tolerance_identity_ok
+        ),
+        "replacement_rotates_instance_uuid_and_rebinds_placement": (
+            assembly_replacement_identity_ok
+        ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,

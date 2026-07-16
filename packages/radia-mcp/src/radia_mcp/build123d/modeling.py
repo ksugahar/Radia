@@ -2959,6 +2959,103 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    healing_evidence_present = any(
+        row.get("shape_healing_identity") is not None for row in identity_rows
+    )
+
+    def valid_sha256(value):
+        digest = str(value or "").lower()
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    def shape_healing_identity(row):
+        value = row.get("shape_healing_identity")
+        if not isinstance(value, dict):
+            return None
+        pre_heal = str(value.get("pre_heal_brep_sha256", "")).lower()
+        healed = str(value.get("healed_brep_sha256", "")).lower()
+        final = str(value.get("final_brep_sha256", "")).lower()
+        mass_property = str(value.get("mass_property_brep_sha256", "")).lower()
+        generation = str(value.get("final_shape_generation", "")).strip()
+        mass_generation = str(
+            value.get("mass_property_shape_generation", "")
+        ).strip()
+        if (
+            not all(valid_sha256(digest) for digest in (pre_heal, healed, final))
+            or pre_heal == healed
+            or healed != final
+            or mass_property != final
+            or not generation
+            or mass_generation != generation
+        ):
+            return None
+        return final, generation
+
+    reference_healing = {
+        str(row.get("name", "")): shape_healing_identity(row) for row in reference
+    }
+    shape_healing_identity_ok = not healing_evidence_present
+    if healing_evidence_present:
+        shape_healing_identity_ok = bool(reference_healing) and all(
+            value is not None for value in reference_healing.values()
+        )
+        for _, rows in normalized_sets:
+            shape_healing_identity_ok = shape_healing_identity_ok and all(
+                shape_healing_identity(row)
+                == reference_healing.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    inertia_evidence_present = any(
+        row.get("inertia_tensor_identity") is not None for row in identity_rows
+    )
+
+    def inertia_tensor_identity(row):
+        value = row.get("inertia_tensor_identity")
+        frame = frame_identity(row)
+        placement = placement_transform_identity(row)
+        if not isinstance(value, dict) or frame is None or placement is None:
+            return None
+        tensor_frame = str(value.get("tensor_frame_id", "")).strip()
+        center_frame = str(value.get("center_of_mass_frame_id", "")).strip()
+        tensor_generation = str(
+            value.get("tensor_transform_generation", "")
+        ).strip()
+        final_generation = str(
+            value.get("final_placement_transform_generation", "")
+        ).strip()
+        try:
+            determinant = float(value.get("mirror_transform_determinant"))
+        except (TypeError, ValueError):
+            return None
+        if (
+            tensor_frame != center_frame
+            or tensor_frame != frame[0]
+            or tensor_generation != final_generation
+            or tensor_generation != placement[1]
+            or value.get("mirror_transform_applied") is not True
+            or not math.isclose(determinant, -1.0, rel_tol=0.0, abs_tol=1.0e-12)
+            or value.get("tensor_basis_handedness") != "right_handed"
+        ):
+            return None
+        return tensor_frame, tensor_generation, determinant
+
+    reference_inertia = {
+        str(row.get("name", "")): inertia_tensor_identity(row) for row in reference
+    }
+    inertia_tensor_identity_ok = not inertia_evidence_present
+    if inertia_evidence_present:
+        inertia_tensor_identity_ok = bool(reference_inertia) and all(
+            value is not None for value in reference_inertia.values()
+        )
+        for _, rows in normalized_sets:
+            inertia_tensor_identity_ok = inertia_tensor_identity_ok and all(
+                inertia_tensor_identity(row)
+                == reference_inertia.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3016,6 +3113,10 @@ def shape_mass_property_crosscheck_summary(
         "center_of_mass_uses_final_placement_transform": (
             placement_transform_identity_ok
         ),
+        "mass_properties_follow_final_healed_brep": shape_healing_identity_ok,
+        "mirrored_inertia_tensor_uses_final_global_frame": (
+            inertia_tensor_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3036,6 +3137,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("compound volume is not bound to the physical union topology")
     if not checks["center_of_mass_uses_final_placement_transform"]:
         issues.append("center of mass belongs to a previous placement transform")
+    if not checks["mass_properties_follow_final_healed_brep"]:
+        issues.append("mass properties belong to the pre-heal or another BREP generation")
+    if not checks["mirrored_inertia_tensor_uses_final_global_frame"]:
+        issues.append("mirrored inertia tensor is not expressed in the final global frame")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
