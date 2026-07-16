@@ -81,6 +81,20 @@ def _with_artifact_identity(summary: dict) -> dict:
             "geometry_rotation_revision": "rotation-12",
             "remanence_transform_revision": "rotation-12",
         },
+        "force_surface_body_ownership": {
+            "target_body_id": "moving-magnet",
+            "enclosed_body_ids": ["moving-magnet"],
+            "surface_selection_generation": "force-surface-13",
+            "force_integration_generation": "force-surface-13",
+            "compensating_body_force_allowed": False,
+        },
+        "demag_branch_interpolation": {
+            "operating_point_branch": "descending",
+            "interpolation_source_branch": "descending",
+            "branch_state_generation": "branch-state-13",
+            "interpolation_state_generation": "branch-state-13",
+            "bracketing_sample_ids": ["desc-17", "desc-18"],
+        },
     }
     return summary
 
@@ -302,6 +316,38 @@ def test_v10_public_remanence_vector_material_frame_mismatch() -> None:
     assert (
         result["checks"][
             "remanence_vector_is_transformed_from_material_to_assembly_frame"
+        ]
+        is False
+    )
+
+
+def test_v11_public_force_surface_extra_magnet_compensated() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["force_surface_body_ownership"].update(
+        {
+            "enclosed_body_ids": ["moving-magnet", "fixed-magnet"],
+            "compensating_body_force_allowed": True,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["force_surface_encloses_only_target_body"] is False
+
+
+def test_v11_public_demag_operating_point_branch_interpolation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["demag_branch_interpolation"].update(
+        {
+            "interpolation_source_branch": "ascending",
+            "interpolation_state_generation": "branch-state-12",
+            "bracketing_sample_ids": ["asc-17", "asc-18"],
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "demag_operating_point_uses_active_branch_interpolation"
         ]
         is False
     )
