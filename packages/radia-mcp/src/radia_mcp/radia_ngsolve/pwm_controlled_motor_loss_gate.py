@@ -98,6 +98,8 @@ def pwm_controlled_motor_loss_gate(
     lamination_stacking_factor_loss_conductivity_identity_ok = True
     dq_park_transform_power_invariant_scaling_identity_ok = True
     demag_recoil_temperature_operating_point_identity_ok = True
+    torque_ripple_fft_angle_endpoint_generation_identity_ok = True
+    iron_loss_spatial_harmonic_mesh_volume_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -115,6 +117,8 @@ def pwm_controlled_motor_loss_gate(
         lamination_stacking_factor_loss_conductivity_identity_ok = False
         dq_park_transform_power_invariant_scaling_identity_ok = False
         demag_recoil_temperature_operating_point_identity_ok = False
+        torque_ripple_fft_angle_endpoint_generation_identity_ok = False
+        iron_loss_spatial_harmonic_mesh_volume_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -719,6 +723,87 @@ def pwm_controlled_motor_loss_gate(
                 == recoil_digest
             )
 
+        torque_fft_value = identity_value.get(
+            "torque_ripple_fft_angle_endpoint_generation_identity"
+        )
+        if torque_fft_value is not None:
+            torque_fft = torque_fft_value if isinstance(torque_fft_value, dict) else {}
+            solve_generation = str(torque_fft.get("torque_solve_generation", ""))
+            resampling_generation = str(
+                torque_fft.get("angle_resampling_generation", "")
+            )
+            angle_digest = str(torque_fft.get("resampled_angle_sha256", "")).lower()
+            try:
+                pole_pairs = int(torque_fft.get("pole_pairs"))
+                start_deg = float(torque_fft.get("periodic_start_deg"))
+                end_deg = float(torque_fft.get("periodic_end_deg"))
+            except (TypeError, ValueError):
+                pole_pairs = 0
+                start_deg = end_deg = math.nan
+            torque_ripple_fft_angle_endpoint_generation_identity_ok = (
+                bool(solve_generation)
+                and torque_fft.get("torque_sample_generation") == solve_generation
+                and bool(resampling_generation)
+                and torque_fft.get("fft_endpoint_resampling_generation")
+                == resampling_generation
+                and torque_fft.get("sample_angle_basis") == "electrical"
+                and torque_fft.get("fft_endpoint_angle_basis") == "electrical"
+                and pole_pairs > 0
+                and math.isfinite(start_deg)
+                and math.isfinite(end_deg)
+                and math.isclose(
+                    end_deg - start_deg, 360.0, rel_tol=0.0, abs_tol=1.0e-12
+                )
+                and torque_fft.get("duplicate_endpoint_removed") is True
+                and len(angle_digest) == 64
+                and all(character in "0123456789abcdef" for character in angle_digest)
+                and str(torque_fft.get("fft_angle_sha256", "")).lower()
+                == angle_digest
+            )
+
+        loss_volume_value = identity_value.get(
+            "iron_loss_spatial_harmonic_mesh_volume_identity"
+        )
+        if loss_volume_value is not None:
+            loss_volume = (
+                loss_volume_value if isinstance(loss_volume_value, dict) else {}
+            )
+            solve_generation = str(loss_volume.get("loss_solve_generation", ""))
+            mesh_generation = str(loss_volume.get("field_mesh_generation", ""))
+            topology_generation = str(
+                loss_volume.get("adaptive_mesh_topology_generation", "")
+            )
+            loss_ids = loss_volume.get("loss_element_ids")
+            volume_ids = loss_volume.get("volume_weight_element_ids")
+            volume_digest = str(
+                loss_volume.get("element_volume_sha256", "")
+            ).lower()
+            iron_loss_spatial_harmonic_mesh_volume_identity_ok = (
+                bool(solve_generation)
+                and loss_volume.get("spatial_harmonic_result_generation")
+                == solve_generation
+                and bool(mesh_generation)
+                and loss_volume.get("loss_density_mesh_generation")
+                == mesh_generation
+                and loss_volume.get("element_volume_mesh_generation")
+                == mesh_generation
+                and bool(topology_generation)
+                and loss_volume.get("volume_weight_topology_generation")
+                == topology_generation
+                and isinstance(loss_ids, list)
+                and bool(loss_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in loss_ids
+                )
+                and len(set(loss_ids)) == len(loss_ids)
+                and volume_ids == loss_ids
+                and len(volume_digest) == 64
+                and all(character in "0123456789abcdef" for character in volume_digest)
+                and str(loss_volume.get("loss_volume_weight_sha256", "")).lower()
+                == volume_digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -954,6 +1039,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "demag_operating_point_uses_current_recoil_temperature_state": (
             demag_recoil_temperature_operating_point_identity_ok
+        ),
+        "torque_ripple_fft_uses_current_electrical_angle_resampling": (
+            torque_ripple_fft_angle_endpoint_generation_identity_ok
+        ),
+        "iron_loss_spatial_harmonics_use_current_mesh_volume_weights": (
+            iron_loss_spatial_harmonic_mesh_volume_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]

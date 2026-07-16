@@ -217,6 +217,33 @@ def _with_artifact_identity(payload: dict) -> dict:
             "recoil_curve_sha256": "2" * 64,
             "operating_point_recoil_curve_sha256": "2" * 64,
         },
+        "torque_ripple_fft_angle_endpoint_generation_identity": {
+            "torque_solve_generation": "torque-solve-18",
+            "torque_sample_generation": "torque-solve-18",
+            "angle_resampling_generation": "resample-18",
+            "fft_endpoint_resampling_generation": "resample-18",
+            "sample_angle_basis": "electrical",
+            "fft_endpoint_angle_basis": "electrical",
+            "pole_pairs": 4,
+            "periodic_start_deg": 0.0,
+            "periodic_end_deg": 360.0,
+            "duplicate_endpoint_removed": True,
+            "resampled_angle_sha256": "5" * 64,
+            "fft_angle_sha256": "5" * 64,
+        },
+        "iron_loss_spatial_harmonic_mesh_volume_identity": {
+            "loss_solve_generation": "loss-solve-18",
+            "spatial_harmonic_result_generation": "loss-solve-18",
+            "field_mesh_generation": "mesh-18",
+            "loss_density_mesh_generation": "mesh-18",
+            "element_volume_mesh_generation": "mesh-18",
+            "adaptive_mesh_topology_generation": "topology-18",
+            "volume_weight_topology_generation": "topology-18",
+            "loss_element_ids": [101, 102, 103, 104],
+            "volume_weight_element_ids": [101, 102, 103, 104],
+            "element_volume_sha256": "6" * 64,
+            "loss_volume_weight_sha256": "6" * 64,
+        },
     }
     return payload
 
@@ -536,6 +563,49 @@ def test_v15_public_demag_recoil_temperature_operating_point_generation_mismatch
     assert (
         result["checks"][
             "demag_operating_point_uses_current_recoil_temperature_state"
+        ]
+        is False
+    )
+
+
+def test_v16_public_torque_ripple_fft_electrical_angle_endpoint_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "torque_ripple_fft_angle_endpoint_generation_identity"
+    ].update(
+        {
+            "fft_endpoint_resampling_generation": "resample-17",
+            "fft_endpoint_angle_basis": "mechanical",
+            "fft_angle_sha256": "4" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "torque_ripple_fft_uses_current_electrical_angle_resampling"
+        ]
+        is False
+    )
+
+
+def test_v16_public_iron_loss_spatial_harmonic_mesh_volume_weight_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "iron_loss_spatial_harmonic_mesh_volume_identity"
+    ].update(
+        {
+            "element_volume_mesh_generation": "mesh-17",
+            "volume_weight_topology_generation": "topology-17",
+            "volume_weight_element_ids": [101, 102, 103],
+            "loss_volume_weight_sha256": "4" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "iron_loss_spatial_harmonics_use_current_mesh_volume_weights"
         ]
         is False
     )
