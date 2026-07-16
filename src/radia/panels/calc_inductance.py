@@ -737,6 +737,56 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     return res_bem, loop_meta
 
 
+# Fail-loud bound on the surface-Poisson tangential-gradient residual
+# ||grad_S psi + H_t,inc|| / ||H_t,inc||.  Measured ~3% on the Takahashi
+# tube (7 kHz, 2955 vertices) and <1% on smooth genus-0 benches; a coil
+# current piercing the workpiece surface (psi does not exist) or a broken
+# incident-H evaluation lands O(1) -- 10% separates the two regimes.
+_PHI_INC_POISSON_MAX_RESIDUAL = 0.10
+
+
+def _phi_inc_poisson(args, coil_data, wp_mesh, obs):
+    """phi_inc via surface-Poisson projection of the exact vertex H_inc.
+
+    Evaluates the incident H at the workpiece vertices with the coil
+    source's EXACT kernel (finite-segment Biot-Savart for filaments,
+    centroid-quadrature panel Biot-Savart for the BEM-A surface J --
+    the same helpers the Telegen bridge uses), then reconstructs the
+    mean-zero psi with ``radia.bem_sibc_solver.
+    compute_phi_inc_surface_poisson`` (fails loud when H_t,inc is not a
+    surface gradient).  Wall-free replacement for the axis-ray +
+    horizontal-ray path integration, selected by ``--wp-phi-inc
+    poisson``.  Returns ``(psi, grad_residual)``.
+    """
+    from ngsolve import BND
+    from radia.bem_sibc_solver import compute_phi_inc_surface_poisson
+
+    if len(obs) != wp_mesh.nv:
+        raise RuntimeError(
+            f"--wp-phi-inc poisson expects the P1 vertex-nodal DOF path "
+            f"(len(obs)={len(obs)} != wp_mesh.nv={wp_mesh.nv}).")
+
+    if coil_data["source_type"] == "filament":
+        from radia.biot_savart import h_segments_batch
+        H = np.zeros((len(obs), 3), dtype=complex)
+        for fil_segs, Ik in zip(coil_data["paths"], coil_data["I_fil"]):
+            H += complex(Ik) * h_segments_batch(fil_segs, obs)
+    elif coil_data["source_type"] == "surface":
+        coil_Jc = (complex(args.current)
+                   * coil_data["coil_J_per_tri"]).astype(complex)
+        H = _H_from_surface_J_complex(
+            obs, coil_data["coil_centroids"], coil_data["coil_areas"],
+            coil_Jc)
+    else:
+        raise RuntimeError(
+            f"unknown coil source_type {coil_data['source_type']!r}")
+
+    tris = np.array([[v.nr for v in el.vertices]
+                     for el in wp_mesh.Elements(BND)], dtype=np.int64)
+    return compute_phi_inc_surface_poisson(
+        obs, tris, H, max_grad_residual=_PHI_INC_POISSON_MAX_RESIDUAL)
+
+
 def _solve_workpiece_weak_coupled(args, coil_data):
     """Workpiece BEM-SIBC + Telegen ΔL using whichever coil source exists.
 
@@ -908,9 +958,23 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     else:
         obs = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
                          for i in range(wp_mesh.nv)])
-    progress("BEM", f"phi_inc from coil ({coil_data['source_type']})")
+    phi_inc_mode = getattr(args, "wp_phi_inc", "path")
+    progress("BEM", f"phi_inc from coil ({coil_data['source_type']}, "
+                    f"mode={phi_inc_mode})")
     t0 = time.perf_counter()
-    if coil_data["source_type"] == "filament":
+    phi_inc_grad_residual = None
+    if phi_inc_mode == "poisson":
+        # Surface-Poisson reconstruction from the exact vertex H_inc
+        # (wall-free; fails loud when H_t,inc is not a surface
+        # gradient).  Early guards in run_inductance restrict this to
+        # the weak-coupled P1 nodal path.
+        phi_inc, phi_inc_grad_residual = _phi_inc_poisson(
+            args, coil_data, wp_mesh, obs)
+        progress("BEM",
+            f"surface-Poisson psi: grad-consistency residual "
+            f"{phi_inc_grad_residual:.1%} "
+            f"(gate {_PHI_INC_POISSON_MAX_RESIDUAL:.0%})")
+    elif coil_data["source_type"] == "filament":
         # Reverted 2026-05-21: surface-path phi_inc gave P_wp = 1.92 W
         # which is below the weak-coupling lower bound (5.26 W) -- the
         # different gauge convention (phi(ref_vertex on wp) = 0 vs
@@ -1527,6 +1591,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "msh_file": msh_file,
         "qsurf_sol": qsurf_sol_path,
         "qsurf_em_vol": qsurf_vol_path,
+        "wp_phi_inc": phi_inc_mode,
+        "wp_phi_inc_grad_residual": (
+            float(phi_inc_grad_residual)
+            if phi_inc_grad_residual is not None else None),
         "t_wp_mesh_s": t_wp_mesh,
         "t_bem_assembly_s": t_asm,
         "t_phi_inc_s": t_phi,
@@ -1677,9 +1745,10 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["P_wp_note"] = (
             "genus-1 loop DOF active: the net shorted-turn eddy current "
             "(wp_loop_alpha_A) is solved and its Lenz screening is included "
-            "in P_wp / H_t (Takahashi validation: 18.4 kW / 46.3 kA/m vs "
-            "17.0-17.7 kW / 46.1 kA/m FEM references).  delta_L keeps the "
-            "plain-solve phi convention.")
+            "in P_wp / H_t (Takahashi CLI validation: 19.3 kW / 47.4 kA/m "
+            "with the default path phi_inc, 18.4 kW / 46.3 kA/m with "
+            "--wp-phi-inc poisson, vs 17.0-17.7 kW / 46.1 kA/m FEM "
+            "references).  delta_L keeps the plain-solve phi convention.")
     elif out["wp_genus"] != 0:
         out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
@@ -1702,6 +1771,10 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["t_wp_mesh_s"] = wp_data["t_wp_mesh_s"]
     out["t_bem_assembly_s"] = wp_data["t_bem_assembly_s"]
     out["t_phi_inc_s"] = wp_data["t_phi_inc_s"]
+    out["wp_phi_inc"] = wp_data.get("wp_phi_inc", "path")
+    if wp_data.get("wp_phi_inc_grad_residual") is not None:
+        out["wp_phi_inc_grad_residual"] = float(
+            wp_data["wp_phi_inc_grad_residual"])
     out["t_bem_solve_s"] = wp_data["t_bem_solve_s"]
     # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag,
     # esim_per_panel_H_t) — emitted by _solve_workpiece_weak_coupled when
@@ -2295,6 +2368,25 @@ def run_inductance(args):
                     "error": "--wp-loop-dof supports the P1 nodal path only "
                              "(--h1-order 1)."}
 
+    # Surface-Poisson phi_inc: fail fast on unsupported combinations
+    # BEFORE the expensive coil solve (same policy as --wp-loop-dof).
+    if getattr(args, "wp_phi_inc", "path") == "poisson":
+        if args.coupling_mode != "weak":
+            return {"status": "error",
+                    "error": "--wp-phi-inc poisson is wired into the "
+                             "weak-coupling workpiece path only; the strong "
+                             "driver keeps path-integration."}
+        if args.coil_only or not args.vol:
+            return {"status": "error",
+                    "error": "--wp-phi-inc poisson requires a workpiece "
+                             "--vol (phi_inc lives on the workpiece "
+                             "surface)."}
+        if int(args.h1_order) != 1:
+            return {"status": "error",
+                    "error": "--wp-phi-inc poisson supports the P1 nodal "
+                             "path only (--h1-order 1): psi is "
+                             "reconstructed on the extracted vertex mesh."}
+
     # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
     # / PEEC) in TaskManager so it runs in parallel: the helpers were
     # de-wrapped under the "caller wraps, helper does NOT" policy
@@ -2519,12 +2611,34 @@ def build_argparser():
                              "Lenz screening a single-valued potential "
                              "cannot represent on a ring/tube workpiece "
                              "whose bore links the coil flux (Takahashi "
-                             "7 kHz: P_wp 22.5 -> 18.4 kW vs 17.0-17.7 kW "
-                             "FEM references).  Requires: weak coupling, "
+                             "7 kHz: P_wp 22.5 -> 19.3 kW, or -> 18.4 kW "
+                             "combined with --wp-phi-inc poisson, vs "
+                             "17.0-17.7 kW FEM references).  "
+                             "Requires: weak coupling, "
                              "linear SIBC (--impedance-model sibc), "
                              "--wp-bem-backend intree-dense, --h1-order 1, "
                              "and a genus-1 workpiece (raises otherwise).  "
                              "delta_L (Telegen) keeps the plain-solve phi.")
+    parser.add_argument("--wp-phi-inc", default="path",
+                        choices=["path", "poisson"],
+                        help="Workpiece incident-potential reconstruction.  "
+                             "path (default): axis-ray + horizontal-ray "
+                             "path integration of H_inc (validated "
+                             "production route; accumulates local H errors "
+                             "into a branch-cut wall on the surface).  "
+                             "poisson: surface-Poisson (Laplace-Beltrami) "
+                             "projection of the exact vertex H_inc -- "
+                             "wall-free, L2-optimal tangential gradient, "
+                             "and much faster (one batched H evaluation "
+                             "instead of per-vertex quadrature rays).  "
+                             "Fails loud when grad_S psi misses H_t,inc "
+                             "by > 10% (e.g. coil current piercing the "
+                             "surface).  Takahashi 7 kHz CLI: residual "
+                             "2.8%, t_phi 65.6 s -> 2.6 s, P_wp 22.5 -> "
+                             "21.5 kW alone, -> 18.4 kW combined with "
+                             "--wp-loop-dof (vs 17.0-17.7 kW FEM "
+                             "references, H_t 46.3 vs 46.1 kA/m).  "
+                             "Requires weak coupling and --h1-order 1.")
 
     # ----- Excitation -----
     parser.add_argument("--frequency", type=float, required=True,

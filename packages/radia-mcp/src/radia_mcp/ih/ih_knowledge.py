@@ -1696,11 +1696,34 @@ H_t are replaced by the loop-extended values, the Telegen delta_L keeps
 the plain-phi convention, the genus ``P_wp_caveat`` becomes a
 ``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
 a built-in frozen-vs-plain cross-check refuses to report on operator
-mismatch.  Measured CLI end-to-end on Takahashi (path-integral
-incident): 22.50 -> **19.29 kW** / 51.2 -> **47.4 kA/m**
-(alpha = 5603 A).  Full resolution chain: 38.2 kW (winding bug) ->
-22.5 (winding fix) -> 19.3 kW (--wp-loop-dof) [-> 18.4 kW with the
-psi-Poisson incident, not yet CLI-wired] vs 17.0-17.7 kW references.
+mismatch.  Measured CLI end-to-end on Takahashi: path incident
+22.50 -> **19.29 kW** / 51.2 -> **47.4 kA/m** (alpha = 5603 A);
+psi-Poisson incident 21.50 -> **18.41 kW** / 50.1 -> **46.32 kA/m**
+(alpha = 5018 A, H_t to 0.5% of the 46.1 kA/m reference).
+
+**psi-Poisson incident -- CLI-wired as ``--wp-phi-inc poisson``
+(2026-07-17).**  Replaces the axis-ray + horizontal-ray path
+integration of phi_inc with a surface-Poisson (Laplace-Beltrami)
+projection of the EXACT vertex H_inc
+(``radia.bem_sibc_solver.compute_phi_inc_surface_poisson``): mean-zero
+psi with ``int grad_S psi . grad_S v = -int H_t,inc . grad_S v``, so
+the branch-cut wall a spanning-path integral drags across the surface
+disappears and the reconstruction is L2-optimal.  Also ~25x faster
+(one batched H evaluation instead of per-vertex quadrature rays:
+Takahashi 65.6 s -> 2.6 s).  Fail-loud gate: if
+``||grad_S psi + H_t,inc|| / ||H_t,inc|| > 10%`` (measured 2.8% on
+Takahashi, <1% on smooth genus-0; O(1) when the coil current pierces
+the surface so psi does not exist) it raises -- no silent fallback.
+Works with both coil sources (BEM-A panels / PEEC filaments); requires
+weak coupling + ``--h1-order 1``; composes with ``--wp-loop-dof``.
+Goldens: ``tests/test_phi_inc_poisson.py`` (icosphere: uniform field
+recovers psi = -H0 z to <2%, rotational Killing field fires the gate,
+winding-invariance, complex linearity).
+
+Full resolution chain (all CLI-selectable now): 38.2 kW (winding bug)
+-> 22.5 (winding fix, default) -> 19.3 kW (--wp-loop-dof) ->
+**18.4 kW** (--wp-loop-dof --wp-phi-inc poisson) vs 17.0-17.7 kW
+references.
 
 Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
 + ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
@@ -1708,11 +1731,14 @@ WARNING for genus >= 1 and emits ``wp_euler_chi`` / ``wp_genus`` +
 ``P_wp_caveat`` in the JSON (genus-conditional; genus-0 gets NO caveat,
 backed by the sphere benchmark).
 
-Implication for method choice: after the winding fix, BEM weak/strong on
-a genus >= 1 flux-linked workpiece over-estimates P_wp by ~+30 % (was
-x2.2) -- fine for trends/design iteration; use FEM A-V
-(``calc_fem_coilmesh.py``) for reference-grade absolute heating until
-the loop-DOF extension lands.  genus-0 workpieces carry no such caveat.
+Implication for method choice: the DEFAULT weak/strong BEM on a
+genus >= 1 flux-linked workpiece still over-estimates P_wp by ~+30 %
+(was x2.2 before the winding fix) -- fine for trends/design iteration.
+For reference-grade absolute heating on a genus-1 workpiece, pass
+``--wp-loop-dof --wp-phi-inc poisson --wp-bem-backend intree-dense``
+(Takahashi: +4-8 % on P_wp, 0.5 % on H_t vs FEM A-V / impedance-BC),
+or use FEM A-V (``calc_fem_coilmesh.py``).  genus-0 workpieces carry
+no such caveat (sphere benchmark 0.3 %).
 
 ## When to use this
 
