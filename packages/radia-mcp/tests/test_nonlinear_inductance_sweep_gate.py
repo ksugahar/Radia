@@ -123,6 +123,35 @@ def _with_v10_bindings(summary):
     return summary
 
 
+def _with_v11_bindings(summary):
+    summary = _with_v10_bindings(summary)
+    for row in summary["runs"]:
+        row["sparameter_reference_plane_identity"] = {
+            "port_order": ["primary", "secondary"],
+            "original_reference_plane_ids": [
+                "rp-primary-42",
+                "rp-secondary-42",
+            ],
+            "target_reference_plane_ids": ["rp-primary-43", "rp-secondary-43"],
+            "compared_port_mode_reference_plane_ids": [
+                "rp-primary-43",
+                "rp-secondary-43",
+            ],
+            "deembedding_applied": True,
+            "deembedding_generation": "deembed-43",
+            "sparameter_generation": "deembed-43",
+        }
+        row["energy_q_frequency_identity"] = {
+            "q_frequency_hz": 1.0e9,
+            "stored_energy_frequency_hz": 1.0e9,
+            "loss_frequency_hz": 1.0e9,
+            "adaptive_sample_id": "adaptive-f-43",
+            "stored_energy_sample_id": "adaptive-f-43",
+            "loss_sample_id": "adaptive-f-43",
+        }
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -364,5 +393,36 @@ def test_v10_public_frequency_axis_unit_metadata_mismatch():
         result["runs"][0]["checks"][
             "frequency_axis_unit_and_hz_scale_share_identity"
         ]
+        is False
+    )
+
+
+def test_v11_public_sparameter_port_mode_reference_plane_mismatch():
+    bad = _with_v11_bindings(_summary())
+    bad["runs"][0]["sparameter_reference_plane_identity"][
+        "compared_port_mode_reference_plane_ids"
+    ] = ["rp-primary-43", "rp-secondary-42"]
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameter_port_modes_share_deembedded_reference_planes"
+        ]
+        is False
+    )
+
+
+def test_v11_public_energy_q_factor_frequency_sample_mismatch():
+    bad = _with_v11_bindings(_summary())
+    bad["runs"][0]["energy_q_frequency_identity"].update(
+        {
+            "loss_frequency_hz": 1.001e9,
+            "loss_sample_id": "adaptive-f-44",
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"]["energy_and_loss_share_q_frequency_sample"]
         is False
     )

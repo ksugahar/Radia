@@ -257,6 +257,71 @@ def _frequency_axis_unit_is_bound(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _sparameter_reference_planes_are_bound(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("sparameter_reference_plane_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    ports = identity.get("port_order")
+    original = identity.get("original_reference_plane_ids")
+    target = identity.get("target_reference_plane_ids")
+    compared = identity.get("compared_port_mode_reference_plane_ids")
+    if not (
+        isinstance(ports, list)
+        and bool(ports)
+        and len(set(ports)) == len(ports)
+        and isinstance(original, list)
+        and isinstance(target, list)
+        and isinstance(compared, list)
+        and len(original) == len(target) == len(compared) == len(ports)
+        and all(str(value).strip() for value in original + target + compared)
+    ):
+        return False
+    matrix_order = raw.get("matrix_port_order")
+    run_order = (
+        matrix_order.get("run_current")
+        if isinstance(matrix_order, Mapping)
+        else ports
+    )
+    generation = str(identity.get("deembedding_generation", "")).strip()
+    return (
+        run_order == ports
+        and all(left != right for left, right in zip(original, target))
+        and compared == target
+        and identity.get("deembedding_applied") is True
+        and bool(generation)
+        and identity.get("sparameter_generation") == generation
+    )
+
+
+def _energy_q_frequency_sample_is_bound(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("energy_q_frequency_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        frequencies = [
+            float(identity[name])
+            for name in (
+                "q_frequency_hz",
+                "stored_energy_frequency_hz",
+                "loss_frequency_hz",
+            )
+        ]
+    except (KeyError, TypeError, ValueError):
+        return False
+    sample = str(identity.get("adaptive_sample_id", "")).strip()
+    return (
+        all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and len(set(frequencies)) == 1
+        and bool(sample)
+        and identity.get("stored_energy_sample_id") == sample
+        and identity.get("loss_sample_id") == sample
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -432,6 +497,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "frequency_axis_unit_and_hz_scale_share_identity": (
                 _frequency_axis_unit_is_bound(raw)
+            ),
+            "sparameter_port_modes_share_deembedded_reference_planes": (
+                _sparameter_reference_planes_are_bound(raw)
+            ),
+            "energy_and_loss_share_q_frequency_sample": (
+                _energy_q_frequency_sample_is_bound(raw)
             ),
         }
         row = {
