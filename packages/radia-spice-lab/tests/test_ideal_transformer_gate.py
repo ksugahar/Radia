@@ -301,3 +301,54 @@ def test_generalization_v8_public(case_id: str) -> None:
     result = ideal_transformer_identity_gate(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"][expected_check] is False
+
+
+def _with_v9_phasor_identity(summary: dict) -> dict:
+    positive = summary["metrics"]["positive"]
+    names = (
+        "source_voltage_phasor_rms_v",
+        "primary_voltage_phasor_rms_v",
+        "secondary_voltage_phasor_rms_v",
+        "source_delivery_current_phasor_rms_a",
+        "primary_current_phasor_rms_a",
+        "secondary_current_phasor_rms_a",
+    )
+    positive["phasor_basis_contract"] = {
+        "quantity_basis": {name: "rms" for name in names},
+        "normalization_factor_to_rms": {name: 1.0 for name in names},
+        "complex_power_formula": "rms_voltage_times_conjugate_rms_current",
+    }
+    positive["phase_unwrap_contract"] = {
+        "phase_unit": "radian",
+        "branch_period_rad": 2.0 * math.pi,
+        "unwrap_convention": "continuous_signed_phase",
+        "reference_trace": "source_voltage_phasor_rms_v",
+        "fit_branch_sign_digest": "b" * 64,
+        "replay_branch_sign_digest": "b" * 64,
+    }
+    return summary
+
+
+def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
+    bad = _with_v9_phasor_identity(_summary())
+    contract = bad["metrics"]["positive"]["phasor_basis_contract"]
+    contract["quantity_basis"]["source_voltage_phasor_rms_v"] = "peak"
+    contract["normalization_factor_to_rms"][
+        "source_voltage_phasor_rms_v"
+    ] = 2.0**-0.5
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_phasors_share_one_rms_normalization_basis"] is False
+
+
+def test_v9_public_phase_unwrap_branch_sign_alias() -> None:
+    bad = _with_v9_phasor_identity(_summary())
+    bad["metrics"]["positive"]["phase_unwrap_contract"][
+        "replay_branch_sign_digest"
+    ] = "c" * 64
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["phase_replay_preserves_unwrap_branch_orientation"]
+        is False
+    )
