@@ -2746,12 +2746,85 @@ def shape_mass_property_crosscheck_summary(
     if worst_limit < 0:
         raise ValueError("worst_limit must be non-negative")
     reference = list(reference_rows)
+    normalized_sets = [
+        (label, list(rows))
+        for label, rows in _normalize_shape_measurement_sets(measured_sets)
+    ]
+    identity_rows = [*reference]
+    for _, rows in normalized_sets:
+        identity_rows.extend(rows)
+
+    revision_evidence_present = any(
+        row.get("brep_identity") is not None
+        or row.get("mass_property_identity") is not None
+        for row in identity_rows
+    )
+
+    def mass_property_revision_ok(row):
+        brep = row.get("brep_identity")
+        measured = row.get("mass_property_identity")
+        if not isinstance(brep, dict) or not isinstance(measured, dict):
+            return False
+        revision = str(brep.get("revision", "")).strip()
+        digest = str(brep.get("sha256", "")).strip().lower()
+        return (
+            bool(revision)
+            and len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            and measured.get("brep_revision") == revision
+            and str(measured.get("brep_sha256", "")).lower() == digest
+        )
+
+    revision_identity_ok = not revision_evidence_present or all(
+        mass_property_revision_ok(row) for row in identity_rows
+    )
+
+    assembly_evidence_present = any(
+        row.get("assembly_identity") is not None for row in identity_rows
+    )
+
+    def assembly_identity(row):
+        value = row.get("assembly_identity")
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("generation", "")).strip()
+        children = value.get("child_revisions")
+        if not generation or not isinstance(children, dict) or not children:
+            return None
+        normalized = {str(name): str(revision) for name, revision in children.items()}
+        if not all(normalized.values()):
+            return None
+        return generation, normalized
+
+    reference_assembly = {
+        str(row.get("name", "")): assembly_identity(row) for row in reference
+    }
+    assembly_identity_ok = not assembly_evidence_present
+    if assembly_evidence_present:
+        reference_values = list(reference_assembly.values())
+        assembly_identity_ok = (
+            bool(reference_values)
+            and all(value is not None for value in reference_values)
+            and len({repr(value) for value in reference_values}) == 1
+        )
+        for _, rows in normalized_sets:
+            measured_values = [assembly_identity(row) for row in rows]
+            assembly_identity_ok = assembly_identity_ok and (
+                bool(measured_values)
+                and all(value is not None for value in measured_values)
+                and len({repr(value) for value in measured_values}) == 1
+                and all(
+                    assembly_identity(row)
+                    == reference_assembly.get(str(row.get("name", "")))
+                    for row in rows
+                )
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
     identity_gates = []
-    for label, rows in _normalize_shape_measurement_sets(measured_sets):
-        rows_list = list(rows)
+    for label, rows_list in normalized_sets:
         identity_gate = shape_name_identity_gate(
             reference,
             rows_list,
@@ -2794,6 +2867,8 @@ def shape_mass_property_crosscheck_summary(
         "all_reference_shapes_valid": inventory["n_valid"] == inventory["n_shapes"],
         "all_sources_present_and_within_tolerance": not failed_rows,
         "all_sources_preserve_named_shape_identity": not failed_identity_gates,
+        "mass_properties_bind_current_brep_revision": revision_identity_ok,
+        "assembly_children_match_reference_revision_map": assembly_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -2802,6 +2877,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("at least one CAD source row is missing or outside tolerance")
     if not checks["all_sources_preserve_named_shape_identity"]:
         issues.append("at least one CAD source has missing, extra, duplicate, or unnamed shapes")
+    if not checks["mass_properties_bind_current_brep_revision"]:
+        issues.append("at least one mass-property row belongs to a different BREP revision")
+    if not checks["assembly_children_match_reference_revision_map"]:
+        issues.append("assembly child revisions differ across rows or from the reference")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]

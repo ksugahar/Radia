@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from typing import Mapping
 
 
@@ -10,6 +11,13 @@ def _relative_error(measured: float, reference: float) -> float:
     if not math.isfinite(reference) or reference <= 0.0 or not math.isfinite(measured):
         return math.inf
     return abs(measured - reference) / reference
+
+
+def _timestamp(value: object) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
 
 
 def jointed_assembly_step_closure_gate(
@@ -306,9 +314,13 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     replay_identity_present = isinstance(replay_identity_value, Mapping)
     commit_identity_ok = True
     kernel_version_identity_ok = True
+    export_follows_replay_ok = True
+    kernel_session_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
+        export_follows_replay_ok = False
+        kernel_session_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -360,6 +372,54 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
             and len(replay_versions) >= 2
             and all(version == claimed_version for version in replay_versions)
         )
+        replay_started = _timestamp(replay_identity_value.get("source_replay_started_utc"))
+        export_times_present = artifact_rows_valid and any(
+            row.get("export_completed_utc") is not None for row in artifacts
+        )
+        freshness_evidence_present = (
+            replay_identity_value.get("source_replay_started_utc") is not None
+            or export_times_present
+        )
+        export_times = (
+            [_timestamp(row.get("export_completed_utc")) for row in artifacts]
+            if artifact_rows_valid
+            else []
+        )
+        export_follows_replay_ok = not freshness_evidence_present or (
+            replay_started is not None
+            and bool(export_times)
+            and all(value is not None and value >= replay_started for value in export_times)
+        )
+
+        session_evidence_present = kernel_valid and (
+            kernel.get("claimed_session_generation") is not None
+            or kernel.get("replay_sessions") is not None
+        )
+        claimed_session = (
+            str(kernel.get("claimed_session_generation", "")).strip()
+            if kernel_valid
+            else ""
+        )
+        replay_sessions = kernel.get("replay_sessions") if kernel_valid else None
+        session_rows_valid = isinstance(replay_sessions, list) and all(
+            isinstance(row, Mapping) for row in replay_sessions
+        )
+        session_starts = (
+            {str(row.get("process_start_utc", "")).strip() for row in replay_sessions}
+            if session_rows_valid
+            else set()
+        )
+        kernel_session_identity_ok = not session_evidence_present or (
+            bool(claimed_session)
+            and session_rows_valid
+            and len(replay_sessions) >= 2
+            and all(
+                str(row.get("session_generation", "")).strip() == claimed_session
+                for row in replay_sessions
+            )
+            and len(session_starts) == 1
+            and all(session_starts)
+        )
     joint_names = {
         str(name)
         for row in components
@@ -392,6 +452,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         and int(execution.get("owned_processes_remaining", -1)) == 0,
         "neutral_cad_artifacts_bind_current_source_commit": commit_identity_ok,
         "external_kernel_versions_are_replay_invariant": kernel_version_identity_ok,
+        "neutral_cad_export_follows_source_replay": export_follows_replay_ok,
+        "external_kernel_session_generation_is_continuous": kernel_session_identity_ok,
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,
