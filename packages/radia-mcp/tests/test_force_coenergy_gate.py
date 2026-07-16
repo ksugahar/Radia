@@ -37,6 +37,19 @@ def _artifact_identity(sample_count):
             "derivative_axis": [0.0, -1.0, 0.0],
             "reflection_applied": True,
         },
+        "force_normalization": {
+            "formulation": "axisymmetric",
+            "solver_result_scope": "total_3d_force",
+            "reported_result_scope": "total_3d_force",
+            "revolution_factor_application_count": 0,
+        },
+        "force_body_selection": {
+            "target_group_ids": [1],
+            "weighted_stress_selected_group_ids": [1],
+            "material_roles": {"0": "air", "1": "magnetic_body"},
+            "excluded_air_group_ids": [0],
+            "selection_generation": "selection-12",
+        },
     }
 
 
@@ -168,6 +181,35 @@ def test_generalization_v9_public(case_id, failed_check):
         coenergy,
         forces,
         artifact_identity=identity,
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][failed_check] is False
+
+
+@pytest.mark.parametrize(
+    ("case_id", "failed_check"),
+    [
+        (
+            "v10_public_axisymmetric_force_revolution_factor_twice",
+            "axisymmetric_force_is_already_total_3d",
+        ),
+        (
+            "v10_public_force_selection_includes_air_component",
+            "weighted_stress_selects_only_target_magnetic_body",
+        ),
+    ],
+)
+def test_generalization_v10_public(case_id, failed_check):
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    if case_id == "v10_public_axisymmetric_force_revolution_factor_twice":
+        identity["force_normalization"]["revolution_factor_application_count"] = 1
+    else:
+        identity["force_body_selection"][
+            "weighted_stress_selected_group_ids"
+        ] = [0, 1]
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
     )
     assert result["status"] == "needs_attention"
     assert result["checks"][failed_check] is False
