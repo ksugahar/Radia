@@ -43,6 +43,18 @@ def _relative(residual: float, scale: float) -> float:
     return abs(residual) / max(abs(scale), 1.0e-30)
 
 
+def _sample_index(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError("sample indices must be integers")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("sample indices must be integers") from exc
+    if not math.isfinite(parsed) or not parsed.is_integer():
+        raise ValueError("sample indices must be integers")
+    return int(parsed)
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -817,6 +829,15 @@ def pwm_controlled_motor_loss_gate(
                 if isinstance(dq_torque_map_value, dict)
                 else {}
             )
+            canonical_park = identity_value.get(
+                "dq_park_transform_power_invariant_scaling_identity"
+            )
+            canonical_dq = identity_value.get("dq_current_phase_convention_identity")
+            if not isinstance(canonical_park, dict) or not isinstance(
+                canonical_dq, dict
+            ):
+                canonical_park = {}
+                canonical_dq = {}
             map_generation = str(dq_torque_map.get("torque_map_generation", ""))
             park_generation = str(
                 dq_torque_map.get("park_transform_generation", "")
@@ -835,14 +856,33 @@ def pwm_controlled_motor_loss_gate(
                 and dq_torque_map.get("electrical_angle_origin") == "rotor_d_axis"
                 and dq_torque_map.get("torque_map_electrical_angle_origin")
                 == dq_torque_map.get("electrical_angle_origin")
+                and type(q_axis_sign) is int
                 and q_axis_sign in (-1, 1)
                 and dq_torque_map.get("torque_map_q_axis_sign") == q_axis_sign
+                and canonical_dq.get("source_q_axis_lead")
+                in {
+                    "q_leads_d_positive_electrical",
+                    "q_lags_d_positive_electrical",
+                }
+                and dq_torque_map.get("q_axis_convention")
+                == canonical_dq.get("source_q_axis_lead")
+                and dq_torque_map.get("torque_map_q_axis_convention")
+                == dq_torque_map.get("q_axis_convention")
+                and q_axis_sign
+                == (
+                    1
+                    if canonical_dq.get("source_q_axis_lead")
+                    == "q_leads_d_positive_electrical"
+                    else -1
+                )
                 and len(park_digest) == 64
                 and all(character in "0123456789abcdef" for character in park_digest)
                 and str(
                     dq_torque_map.get("torque_map_park_matrix_sha256", "")
                 ).lower()
                 == park_digest
+                and park_digest
+                == str(canonical_park.get("park_transform_sha256", "")).lower()
             )
 
         efficiency_window_value = identity_value.get(
@@ -863,23 +903,41 @@ def pwm_controlled_motor_loss_gate(
             window_digest = str(
                 efficiency_window.get("power_window_sha256", "")
             ).lower()
+            reference_window = identity_value.get("efficiency_average_window")
             try:
-                start = int(efficiency_window.get("window_start_sample"))
-                end = int(efficiency_window.get("window_end_sample"))
+                start = _sample_index(
+                    efficiency_window.get("window_start_sample")
+                )
+                end = _sample_index(efficiency_window.get("window_end_sample"))
                 electrical_window = [
-                    int(value)
+                    _sample_index(value)
                     for value in efficiency_window.get("electrical_power_window", [])
                 ]
                 mechanical_window = [
-                    int(value)
+                    _sample_index(value)
                     for value in efficiency_window.get("mechanical_power_window", [])
                 ]
+                loss_window = [
+                    _sample_index(value)
+                    for value in efficiency_window.get("loss_power_window", [])
+                ]
+                reference_start = _sample_index(
+                    reference_window.get("input_window_start_sample")
+                )
+                reference_end = _sample_index(
+                    reference_window.get("input_window_end_sample_exclusive")
+                )
+                sample_count = len(time_series.get("time_s", []))
             except (TypeError, ValueError):
                 start = end = -1
                 electrical_window = []
                 mechanical_window = []
+                loss_window = []
+                reference_start = reference_end = -1
+                sample_count = -1
             efficiency_map_power_averaging_window_identity_ok = (
-                bool(map_generation)
+                isinstance(reference_window, dict)
+                and bool(map_generation)
                 and efficiency_window.get("electrical_input_power_map_generation")
                 == map_generation
                 and efficiency_window.get("mechanical_output_power_map_generation")
@@ -892,8 +950,11 @@ def pwm_controlled_motor_loss_gate(
                 and efficiency_window.get("loss_power_window_cycle_generation")
                 == cycle_generation
                 and 0 <= start < end
+                and end <= sample_count
+                and [start, end] == [reference_start, reference_end]
                 and electrical_window == [start, end]
                 and mechanical_window == [start, end]
+                and loss_window == [start, end]
                 and len(window_digest) == 64
                 and all(
                     character in "0123456789abcdef" for character in window_digest

@@ -226,11 +226,14 @@ def _with_artifact_identity(summary: dict) -> dict:
             "body_placement_generation": "placement-19",
             "surface_mesh_body_placement_generation": "placement-19",
             "demag_tensor_generation": "demag-tensor-19",
+            "force_demag_tensor_generation": "demag-tensor-19",
             "demag_tensor_body_placement_generation": "placement-19",
             "body_coordinate_basis": "body-local-current",
             "tensor_coordinate_basis": "body-local-current",
             "body_basis_handedness": "right_handed",
             "tensor_basis_handedness": "right_handed",
+            "body_to_global_transform_determinant": 1.0,
+            "body_to_global_transform_orthogonality_error": 0.0,
             "body_to_global_transform_sha256": "1" * 64,
             "tensor_basis_transform_sha256": "1" * 64,
         },
@@ -242,6 +245,12 @@ def _with_artifact_identity(summary: dict) -> dict:
             "rotor_phase_origin_deg": 0.0,
             "force_harmonic_phase_origin_deg": 0.0,
             "slot_pitch_deg": 15.0,
+            "force_harmonic_order": 2,
+            "force_sample_harmonic_order": 2,
+            "rotor_angle_basis": "mechanical_deg",
+            "force_harmonic_angle_basis": "mechanical_deg",
+            "fourier_sign_convention": "exp(-j*n*theta)",
+            "force_harmonic_fourier_sign_convention": "exp(-j*n*theta)",
             "phase_origin_convention": "rotor_d_axis",
             "force_harmonic_phase_origin_convention": "rotor_d_axis",
             "rotor_angle_sha256": "2" * 64,
@@ -739,6 +748,46 @@ def test_v17_public_magnetic_bearing_force_harmonic_phase_origin_mismatch() -> N
     assert (
         result["checks"][
             "magnetic_bearing_force_harmonics_share_rotor_phase_origin"
+        ]
+        is False
+    )
+
+
+def test_v17_public_magnetic_bearing_phase_origin_is_periodic() -> None:
+    summary = _with_artifact_identity(_summary())
+    bearing = summary["artifact_identity"][
+        "magnetic_bearing_force_harmonic_phase_origin_identity"
+    ]
+    bearing["force_harmonic_phase_origin_deg"] = 360.0
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "ok"
+
+
+def test_v17_public_magnetic_bearing_slot_pitch_partitions_revolution() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "magnetic_bearing_force_harmonic_phase_origin_identity"
+    ]["slot_pitch_deg"] = 123.456
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "magnetic_bearing_force_harmonics_share_rotor_phase_origin"
+        ]
+        is False
+    )
+
+
+def test_v17_public_demag_tensor_generation_binds_force_consumer() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "bem_demag_tensor_coordinate_basis_generation_identity"
+    ]["demag_tensor_generation"] = "stale-demag-tensor"
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "bem_demag_tensor_uses_current_body_placement_coordinate_basis"
         ]
         is False
     )

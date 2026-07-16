@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 
 import pytest
 
@@ -301,14 +302,20 @@ def _with_v14_bindings(summary):
             "transform_pair_polarity": [1, 1],
             "pairing_sha256": "1" * 64,
             "transform_pairing_sha256": "1" * 64,
+            "basis_matrix_sha256": "6" * 64,
+            "transform_basis_matrix_sha256": "6" * 64,
         }
         row["nearfield_farfield_phase_center_coordinate_frame_identity"] = {
             "nearfield_result_generation": "nearfield-19",
             "farfield_transform_nearfield_generation": "nearfield-19",
             "phase_center_coordinate_frame_generation": "phase-frame-19",
             "farfield_phase_center_frame_generation": "phase-frame-19",
+            "farfield_result_generation": "farfield-solve-18",
+            "phase_center_farfield_result_generation": "farfield-solve-18",
             "phase_center_coordinate_frame": "global_cartesian",
             "farfield_phase_center_coordinate_frame": "global_cartesian",
+            "phase_center_coordinate_unit": "m",
+            "farfield_phase_center_coordinate_unit": "m",
             "phase_center_coordinates_m": [0.01, -0.02, 0.03],
             "farfield_phase_center_coordinates_m": [0.01, -0.02, 0.03],
             "phase_center_sha256": "2" * 64,
@@ -833,3 +840,47 @@ def test_v17_public_nearfield_farfield_phase_center_coordinate_frame_mismatch():
         ]
         is False
     )
+
+
+def test_v17_public_mixed_mode_identity_rejects_malformed_types() -> None:
+    bad = _with_v14_bindings(_summary())
+    identity = bad["runs"][0]["mixed_mode_sparameter_port_pair_order_identity"]
+    identity["single_ended_port_order"] = [["P1+"], "P1-"]
+    identity["mixed_mode_pair_order"] = [["P1+", "P1-"]]
+    identity["mixed_mode_pair_polarity"] = [True]
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "mixed_mode_sparameters_use_current_port_pair_order_and_polarity"
+        ]
+        is False
+    )
+
+
+def test_v17_public_mixed_mode_pairs_may_use_nonadjacent_port_indices() -> None:
+    summary = _with_v14_bindings(_summary())
+    row = summary["runs"][0]
+    interleaved = ["P1+", "P2+", "P1-", "P2-"]
+    basis = row["mixed_mode_sparameter_basis_identity"]
+    basis["single_ended_port_order"] = interleaved
+    basis["sparameter_port_order"] = interleaved
+    basis["basis_matrix_port_order"] = interleaved
+    row["mixed_mode_sparameter_port_pair_order_identity"][
+        "single_ended_port_order"
+    ] = interleaved
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "ok"
+
+
+def test_v17_public_phase_center_accepts_roundoff_in_global_meters() -> None:
+    summary = _with_v14_bindings(_summary())
+    identity = summary["runs"][0][
+        "nearfield_farfield_phase_center_coordinate_frame_identity"
+    ]
+    identity["farfield_phase_center_coordinates_m"] = [
+        math.nextafter(value, math.inf)
+        for value in identity["phase_center_coordinates_m"]
+    ]
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "ok"

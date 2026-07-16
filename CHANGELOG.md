@@ -18,7 +18,8 @@ Released 2026-07-17.
 - Corrected strong-coupling terminal-current scaling and routed volume coil
   meshes through the validated surface extractor before HDivSurface assembly.
 - Exposed the loop-current and incident-potential controls through the IH
-  notebook workbench, command builder, and generated panel registry.
+  notebook workbench, command builder, and generated panel registry, with
+  automatic topology-aware defaults and explicit legacy modes.
 
 ## 4.95.15 - Complete RT2 HDiv-VIM production paths
 

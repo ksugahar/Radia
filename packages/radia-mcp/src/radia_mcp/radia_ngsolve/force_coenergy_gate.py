@@ -744,6 +744,11 @@ def force_coenergy_displacement_gate(
             "axisymmetric_weighted_stress_force_mask_mesh_identity"
         )
         if axisymmetric_mask is not None:
+            current_mask = artifact_identity.get("weighted_stress_mask_mesh_identity")
+            force_measure = artifact_identity.get("axisymmetric_force_measure_identity")
+            radius_identity = artifact_identity.get(
+                "axisymmetric_force_radius_jacobian_coordinate_identity"
+            )
             mesh_generation = (
                 axisymmetric_mask.get("force_mesh_generation")
                 if isinstance(axisymmetric_mask, dict)
@@ -761,7 +766,12 @@ def force_coenergy_displacement_gate(
             ).lower()
             axisymmetric_weighted_stress_force_mask_mesh_identity_ok = (
                 isinstance(axisymmetric_mask, dict)
+                and isinstance(current_mask, dict)
+                and isinstance(force_measure, dict)
+                and isinstance(radius_identity, dict)
                 and bool(mesh_generation)
+                and mesh_generation
+                == current_mask.get("active_air_mesh_generation")
                 and axisymmetric_mask.get("mask_solve_mesh_generation")
                 == mesh_generation
                 and axisymmetric_mask.get(
@@ -772,9 +782,13 @@ def force_coenergy_displacement_gate(
                 and axisymmetric_mask.get("force_mask_solution_generation")
                 == mask_solution_generation
                 and axisymmetric_mask.get("axisymmetric_measure")
-                == "two_pi_r_dr_dz"
+                == "2*pi*r*dr*dz"
                 and axisymmetric_mask.get("force_integral_measure")
                 == axisymmetric_mask.get("axisymmetric_measure")
+                and axisymmetric_mask.get("axisymmetric_measure")
+                == force_measure.get("integration_measure")
+                and axisymmetric_mask.get("axisymmetric_measure")
+                == radius_identity.get("integration_measure")
                 and len(mask_digest) == 64
                 and all(
                     character in "0123456789abcdef" for character in mask_digest
@@ -783,6 +797,8 @@ def force_coenergy_displacement_gate(
                     axisymmetric_mask.get("force_mask_field_sha256", "")
                 ).lower()
                 == mask_digest
+                and mask_digest
+                == str(current_mask.get("weighted_mask_sha256", "")).lower()
             )
 
         lorentz_orientation = artifact_identity.get(
@@ -804,6 +820,16 @@ def force_coenergy_displacement_gate(
                 if isinstance(lorentz_orientation, dict)
                 else None
             )
+            magnetic_flux_digest = str(
+                lorentz_orientation.get("magnetic_flux_density_sha256", "")
+                if isinstance(lorentz_orientation, dict)
+                else ""
+            ).lower()
+            force_digest = str(
+                lorentz_orientation.get("lorentz_force_sha256", "")
+                if isinstance(lorentz_orientation, dict)
+                else ""
+            ).lower()
             lorentz_current_density_orientation_identity_ok = (
                 isinstance(lorentz_orientation, dict)
                 and bool(solve_generation)
@@ -818,6 +844,15 @@ def force_coenergy_displacement_gate(
                 and lorentz_orientation.get("current_density_component") == "Jz"
                 and lorentz_orientation.get("current_density_positive_axis") == "+z"
                 and lorentz_orientation.get("lorentz_cross_product") == "J_cross_B"
+                and lorentz_orientation.get("coordinate_handedness")
+                == "right_handed"
+                and lorentz_orientation.get("magnetic_flux_density_frame")
+                == "global_cartesian"
+                and lorentz_orientation.get("force_component_frame")
+                == "global_cartesian"
+                and lorentz_orientation.get("force_component_formula")
+                == ["Fx=-Jz*By", "Fy=Jz*Bx", "Fz=0"]
+                and type(orientation_sign) is int
                 and orientation_sign == 1
                 and lorentz_orientation.get("force_orientation_sign")
                 == orientation_sign
@@ -830,6 +865,25 @@ def force_coenergy_displacement_gate(
                     lorentz_orientation.get("force_current_density_sha256", "")
                 ).lower()
                 == current_digest
+                and len(magnetic_flux_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in magnetic_flux_digest
+                )
+                and str(
+                    lorentz_orientation.get(
+                        "force_magnetic_flux_density_sha256", ""
+                    )
+                ).lower()
+                == magnetic_flux_digest
+                and len(force_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in force_digest
+                )
+                and str(
+                    lorentz_orientation.get("result_force_sha256", "")
+                ).lower()
+                == force_digest
             )
 
     finite = all(math.isfinite(value) for value in x + w + force)

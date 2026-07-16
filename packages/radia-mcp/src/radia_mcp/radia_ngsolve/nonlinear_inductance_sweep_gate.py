@@ -724,6 +724,9 @@ def _mixed_mode_sparameter_pair_order_is_current(raw: Mapping[str, Any]) -> bool
         return True
     if not isinstance(identity, Mapping):
         return False
+    basis_identity = raw.get("mixed_mode_sparameter_basis_identity")
+    if not isinstance(basis_identity, Mapping):
+        return False
     calibration_generation = str(
         identity.get("port_calibration_generation", "")
     ).strip()
@@ -731,6 +734,13 @@ def _mixed_mode_sparameter_pair_order_is_current(raw: Mapping[str, Any]) -> bool
     pair_order = identity.get("mixed_mode_pair_order")
     pair_polarity = identity.get("mixed_mode_pair_polarity")
     pairing_digest = str(identity.get("pairing_sha256", "")).lower()
+    basis_digest = str(identity.get("basis_matrix_sha256", "")).lower()
+    paired_ports = (
+        [port for pair in pair_order for port in pair]
+        if isinstance(pair_order, list)
+        and all(isinstance(pair, list) for pair in pair_order)
+        else []
+    )
     return (
         bool(calibration_generation)
         and identity.get("single_ended_result_port_calibration_generation")
@@ -739,20 +749,37 @@ def _mixed_mode_sparameter_pair_order_is_current(raw: Mapping[str, Any]) -> bool
         == calibration_generation
         and isinstance(port_order, list)
         and len(port_order) >= 2
+        and all(
+            isinstance(port, str) and bool(port.strip()) for port in port_order
+        )
         and len(set(port_order)) == len(port_order)
+        and port_order == basis_identity.get("single_ended_port_order")
         and isinstance(pair_order, list)
         and pair_order
-        and all(isinstance(pair, list) and len(pair) == 2 for pair in pair_order)
-        and [port for pair in pair_order for port in pair] == port_order
+        and all(
+            isinstance(pair, list)
+            and len(pair) == 2
+            and all(isinstance(port, str) and bool(port.strip()) for port in pair)
+            for pair in pair_order
+        )
+        and len(paired_ports) == len(port_order)
+        and len(set(paired_ports)) == len(paired_ports)
+        and set(paired_ports) == set(port_order)
         and isinstance(pair_polarity, list)
         and len(pair_polarity) == len(pair_order)
-        and all(value in {-1, 1} for value in pair_polarity)
+        and all(type(value) is int and value in (-1, 1) for value in pair_polarity)
         and identity.get("transform_pair_order") == pair_order
         and identity.get("transform_pair_polarity") == pair_polarity
         and len(pairing_digest) == 64
         and all(character in "0123456789abcdef" for character in pairing_digest)
         and str(identity.get("transform_pairing_sha256", "")).lower()
         == pairing_digest
+        and len(basis_digest) == 64
+        and all(character in "0123456789abcdef" for character in basis_digest)
+        and basis_digest
+        == str(basis_identity.get("basis_matrix_sha256", "")).lower()
+        and str(identity.get("transform_basis_matrix_sha256", "")).lower()
+        == basis_digest
     )
 
 
@@ -764,11 +791,17 @@ def _nearfield_farfield_phase_center_frame_is_current(
         return True
     if not isinstance(identity, Mapping):
         return False
+    farfield_identity = raw.get("farfield_polarization_basis_transform_identity")
+    if not isinstance(farfield_identity, Mapping):
+        return False
     nearfield_generation = str(
         identity.get("nearfield_result_generation", "")
     ).strip()
     frame_generation = str(
         identity.get("phase_center_coordinate_frame_generation", "")
+    ).strip()
+    farfield_generation = str(
+        identity.get("farfield_result_generation", "")
     ).strip()
     coordinates = identity.get("phase_center_coordinates_m")
     transformed_coordinates = identity.get("farfield_phase_center_coordinates_m")
@@ -786,12 +819,24 @@ def _nearfield_farfield_phase_center_frame_is_current(
         and bool(frame_generation)
         and identity.get("farfield_phase_center_frame_generation")
         == frame_generation
+        and bool(farfield_generation)
+        and identity.get("phase_center_farfield_result_generation")
+        == farfield_generation
+        and farfield_generation
+        == farfield_identity.get("farfield_result_generation")
         and identity.get("phase_center_coordinate_frame") == "global_cartesian"
         and identity.get("farfield_phase_center_coordinate_frame")
         == identity.get("phase_center_coordinate_frame")
+        and identity.get("phase_center_coordinate_unit") == "m"
+        and identity.get("farfield_phase_center_coordinate_unit") == "m"
         and len(coordinate_values) == 3
         and all(math.isfinite(value) for value in coordinate_values)
-        and transformed_values == coordinate_values
+        and len(transformed_values) == 3
+        and all(math.isfinite(value) for value in transformed_values)
+        and all(
+            math.isclose(source, result, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for source, result in zip(coordinate_values, transformed_values)
+        )
         and len(phase_digest) == 64
         and all(character in "0123456789abcdef" for character in phase_digest)
         and str(identity.get("farfield_phase_center_sha256", "")).lower()
