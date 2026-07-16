@@ -121,6 +121,9 @@ def regularized_trace_inverse_path_gate(
     gradient_resolution_ok = _optional_gradient_check_is_resolved(
         path, len(alphas)
     )
+    gradient_generation_ok, solution_run_generation_ok = (
+        _optional_generation_ids_are_aligned(path, len(alphas))
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -153,6 +156,10 @@ def regularized_trace_inverse_path_gate(
         ),
         "alpha_path_row_identity_is_aligned": row_identity_ok,
         "finite_difference_steps_are_numerically_resolved": gradient_resolution_ok,
+        "gradient_uses_current_parameter_generation": gradient_generation_ok,
+        "solution_rows_share_regularization_run_generation": (
+            solution_run_generation_ok
+        ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
             _integer(reported_lcurve, "selected_index") == lcurve["selected_index"]
@@ -291,6 +298,37 @@ def _optional_gradient_check_is_resolved(
         and abs(objective_delta) > 0.0
         for step, scale, objective_delta in zip(steps, scales, objective_deltas)
     )
+
+
+def _optional_generation_ids_are_aligned(
+    path: Mapping[str, Any], expected_length: int
+) -> tuple[bool, bool]:
+    pairs = (
+        ("parameter_generation_ids", "gradient_parameter_generation_ids"),
+        ("path_run_generation_ids", "solution_run_generation_ids"),
+    )
+    results = []
+    for left_name, right_name in pairs:
+        if left_name not in path and right_name not in path:
+            results.append(True)
+            continue
+        rows = []
+        for name in (left_name, right_name):
+            value = path.get(name)
+            if (
+                not isinstance(value, Sequence)
+                or isinstance(value, (str, bytes))
+                or len(value) != expected_length
+            ):
+                rows = []
+                break
+            row = [str(item).strip() for item in value]
+            if not all(row):
+                rows = []
+                break
+            rows.append(row)
+        results.append(len(rows) == 2 and rows[0] == rows[1])
+    return results[0], results[1]
 
 
 def _integer(parent: Mapping[str, Any], key: str) -> int:

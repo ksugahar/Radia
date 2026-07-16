@@ -192,3 +192,41 @@ def test_generalization_v7_public(case_id):
         bad["path"]["gradient_check_step_sizes"][3] = 1.0e-320
         bad["path"]["gradient_check_objective_pair_deltas"][3] = 0.0
     assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"
+
+
+def _with_v8_generations(summary):
+    count = len(summary["path"]["alphas"])
+    summary["path"].update(
+        {
+            "parameter_generation_ids": [
+                f"parameter-{index}" for index in range(count)
+            ],
+            "gradient_parameter_generation_ids": [
+                f"parameter-{index}" for index in range(count)
+            ],
+            "path_run_generation_ids": ["regularization-run-42"] * count,
+            "solution_run_generation_ids": ["regularization-run-42"] * count,
+        }
+    )
+    return summary
+
+
+def test_accepts_v8_parameter_and_regularization_run_generations():
+    result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v8_public_gradient_previous_parameter_generation():
+    bad = _with_v8_generations(_summary())
+    bad["path"]["gradient_parameter_generation_ids"][3] = "parameter-2"
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["gradient_uses_current_parameter_generation"] is False
+
+
+def test_v8_public_regularization_restart_row_reuse():
+    bad = _with_v8_generations(_summary())
+    bad["path"]["solution_run_generation_ids"][3] = "regularization-run-41"
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["solution_rows_share_regularization_run_generation"] is False
