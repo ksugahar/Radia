@@ -975,6 +975,55 @@ def telegen_extract_coil_LR(solver, phi_vec, current, omega, Z_s):
 
 
 
+def surface_euler_characteristic(mesh):
+    """Euler characteristic chi = V - E + F of a closed triangulated surface.
+
+    ``chi == 2`` -> genus 0 (sphere-like).  ``chi == 0`` -> genus 1 (torus).
+    ``genus = (2 - chi) / 2`` for a closed orientable surface.
+
+    WHY THIS MATTERS for the scalar BIE + SIBC: the solver's surface
+    current is ``J_s = n x (-grad_s phi)`` with a SINGLE-VALUED phi, so
+    the net current through ANY cut of the surface is identically zero.
+    On a genus-0 workpiece that is exact.  On a genus >= 1 workpiece whose
+    handle links the coil flux (e.g. the Takahashi tube: the coil flux
+    threads the bore), the physical eddy current contains a NET
+    circulating (shorted-transformer-turn) component that this
+    representation CANNOT express -- its Lenz screening is lost and the
+    solver over-estimates H_t / P_wp.  Measured on Takahashi 7 kHz
+    (2026-07-16, workpiece chi = 0): H_t 66.4 kA/m vs FEM 46.1 (x1.44),
+    P_wp 38 kW vs 17 kW (x2.2), while the SAME solver matches the
+    analytic mu_r-swept sphere (genus 0) benchmark to 0.3%.  Fixing the
+    incident potential's branch-cut wall (surface-Poisson reconstruction,
+    3% field consistency) moved P_wp by only ~5% -- the missing loop
+    degree of freedom is the dominant error.
+
+    Callers should compute this on the extracted workpiece surface and
+    fail loud / caveat the output for ``chi != 2``.  The proper fix is a
+    cohomology extension (add harmonic-1-form loop DOFs constrained by the
+    Faraday EMF condition) -- see the radia.cohomology engine.
+
+    Args:
+        mesh: NGSolve surface mesh (or mesh whose BND elements form the
+            closed surface).
+
+    Returns:
+        int Euler characteristic.
+    """
+    from ngsolve import BND
+
+    verts = set()
+    edges = set()
+    n_faces = 0
+    for el in mesh.Elements(BND):
+        vid = [v.nr for v in el.vertices]
+        n_faces += 1
+        verts.update(vid)
+        a, b, c = vid
+        for u, w in ((a, b), (b, c), (c, a)):
+            edges.add((u, w) if u < w else (w, u))
+    return len(verts) - len(edges) + n_faces
+
+
 def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
                               n_quad=30, gap_deg=0):
     """Compute incident scalar magnetic potential from a circular current loop.

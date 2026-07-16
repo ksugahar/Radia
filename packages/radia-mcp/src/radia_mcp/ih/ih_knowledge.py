@@ -1645,19 +1645,44 @@ H_t / x2 P_wp bias is NOT "missing coil re-solve": it lives in the
 WORKPIECE-side scalar-BIE-SIBC H_t evaluation shared by weak AND strong
 (and by both coil solvers).  Outputs carry a ``P_wp_caveat`` key.
 
-Implication for method choice: for absolute workpiece heating on magnetic
-workpieces, use FEM A-V (``calc_fem_coilmesh.py``) until the BIE-SIBC
-H_t path is fixed; BEM weak/strong remain fine for L, R_coil, delta_L,
-and relative/trend studies.  Root-cause lane (open): audit the scalar
-BIE-SIBC formulation against an analytic mu_r-swept SIBC benchmark
-(sphere/plate closed forms in ``radia.analytical_formulas``) and/or a
-P_wp head-to-head vs FEM-Kelvin SIBC on one mesh -- note the historical
-``CoupledBEMSolver`` cross-check validated L only (Cu +0.3 %, steel
-+1.7 %), NEVER P_wp.  Candidate suspects, in order: the phi_inc
-branch-cut path integration on non-bore geometries
-(``compute_phi_inc_from_*`` axis-ray assumption), the Robin
-``gamma SL M^-1 K`` block's mu_r sensitivity, and the H_t extraction
-``|grad_s phi_total|`` convention.
+**ROOT CAUSE FOUND (2026-07-16, same day): the workpiece is genus 1 and
+the scalar BIE cannot carry a shorted-turn eddy current.**  The
+mu_r-swept analytic sphere benchmark (closed form: H_t = (3/2) H0
+sin(theta) / |1 + gamma/a|, gamma = Z_s/(j omega mu_0)) cleared the
+BIE+SIBC core: 0.3 % on H_t and ~1 % on P at mu_r = 1 / 10 / 100,
+including the full mu_r=100 screening factor 1/1.58.  The incident
+potential's branch-cut wall (the path-integral phi_inc jumps where its
+single-valuedising cut crosses a workpiece that pierces the coil bore;
+measured 871 % grad-consistency error in the band just below the coil
+plane) is REAL but moved P_wp by only ~5 % when fixed by a
+surface-Poisson reconstruction (grad_s psi = -H_t,inc, 3 % consistency).
+The dominant error is topological: the Takahashi workpiece surface has
+Euler characteristic chi = V - E + F = 2955 - 8865 + 5910 = **0, i.e.
+genus 1 (a tube)**.  The coil flux links the bore, so the physical eddy
+current contains a NET circulating (shorted-transformer-turn) component
+-- but the BIE's ``J_s = n x (-grad phi)`` with single-valued phi carries
+ZERO net current through any cut, so that component and its Lenz
+screening are unrepresentable.  Result: H_t x1.44 (66.4 vs 46.1 kA/m),
+P_wp x2.2 (38 vs 17 kW).  FEM A-V represents it naturally -> 17.7 kW is
+the truth.  mu_r = 1 "agreeing by luck" fits too (different screening
+share).
+
+Detection is now built in: ``bem_sibc_solver.surface_euler_characteristic``
++ ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
+WARNING for genus >= 1 and emits ``wp_euler_chi`` / ``wp_genus`` +
+``P_wp_caveat`` in the JSON (genus-conditional: a genus-0 workpiece gets
+NO caveat, backed by the sphere benchmark).
+
+Implication for method choice: for absolute workpiece heating on a
+genus >= 1 (ring/tube) workpiece whose bore links the coil flux, use FEM
+A-V (``calc_fem_coilmesh.py``); BEM weak/strong remain fine for L,
+R_coil, delta_L, trends, and for genus-0 workpieces.  Fix lane (open):
+add cohomology loop DOFs to the scalar BIE -- H_t = -grad_s phi + sum_k
+alpha_k h_k with harmonic-1-form basis h_k on the handles (the
+``radia.cohomology`` engine already computes surface cuts/loops
+gmsh-free) and close alpha_k with the Faraday EMF condition
+``loop-integral of Z_s (n x H_t) . dl = -j omega Phi_linked`` (Phi_linked
+includes the scattered flux via the single-layer potential).
 
 ## When to use this
 
