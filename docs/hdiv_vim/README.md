@@ -49,8 +49,8 @@ The spatial field must belong to one physically continuous magnet body.  If
 two segments have a jump in normal magnetization, they require separate HDiv
 spaces to retain the interface charge.  Level 1 already supports this by using
 one `MagnetizationSource` per fixed segment; mutually coupled level-2 recoil
-segments require the multi-body block coupling and must not be approximated as
-one conforming space.
+segments use `vim.SolveCoupled` and must not be approximated as one conforming
+space.
 
 ```python
 with ng.TaskManager():
@@ -61,6 +61,27 @@ with ng.TaskManager():
         H_ext=coil_field,                  # optional; zero is the default
     )
 ```
+
+For a recoil magnet interacting with nonlinear iron, or for segmented recoil
+magnets whose normal magnetization jumps at an interface, give every body its
+own mesh and HDiv space:
+
+```python
+bodies = [
+    vim.CoupledBody(pm_mesh, "pm", mu_r=1.05, B_r=(0, 0, 1.2)),
+    vim.CoupledBody(iron_mesh, "iron", bh_table=bh_table),
+]
+with ng.TaskManager():
+    coupled = vim.SolveCoupled(bodies)
+
+H = vim.FieldFromCoupledSolution(coupled, observation_points)
+```
+
+The block Gauss--Seidel solve builds each geometry-only ChargeGram once, then
+reuses it while persistent C++ field CoefficientFunctions exchange the body
+fields.  Separate spaces preserve interface surface charge.  Failure to reach
+the global coefficient fixed point raises rather than returning a partial
+coupling.
 
 Given or manufactured magnetization distributions use a separate source-owned
 HDiv space:
@@ -137,15 +158,16 @@ modelling the magnetizing fixture.  Reverse-field/unload and restart are locked
 by `validation_test/hysteresis/test_energy_stop_irreversible_pm.py`.
 The returned final state owns the same persistent C++ field evaluator as
 `vim.Solve`, so `FieldFromSolution` evaluates its external demagnetizing field
-without collapsing the RT1 magnetization to element constants.
+without collapsing the RT1/RT2 magnetization to element constants.
 
 This history-dependent path currently solves PM self-demagnetization under an
-arbitrary prescribed NGSolve applied field.  A mutually coupled evolving PM
-plus nonlinear soft-iron block iteration is separate open work; do not describe
-the fixed `MagnetizationSource` coupling as that nonlinear PM model.
-It currently uses RT1 with one committed constitutive state per element.  RT2
-requires states and updates at material quadrature points; an order-only switch
-would not be a valid high-order hysteresis implementation.
+arbitrary prescribed NGSolve applied field.  RT1 keeps one committed
+constitutive state per element.  RT2 stores and updates state on an NGSolve
+`IntegrationRuleSpace` and returns the constitutive source through the matching
+weak-form transpose; the public step result remains element-averaged for a
+stable reporting contract.  A mutually coupled evolving EnergyStop PM plus
+nonlinear soft-iron history iteration remains separate open work; the live
+`SolveCoupled` contract covers linear-recoil PM bodies, not stateful PM history.
 
 For level 3, construct `vim.PlayHysteresisMaterial(K, eta, f_k_tables)` and
 pass it as `material=` to the same `SolveHysteresis` stepping API.  It retains
@@ -186,7 +208,8 @@ records `field_evaluator_stats` and `field_evaluator_build_wall_s`.  IMA stays
 on the direct evaluator in automatic mode so the reduced/full roundoff contract
 is not weakened by different source-tree truncations.
 
-The implementation follows NGSolve's Python-front-end/C++-execution boundary.
+The implementation follows NGSolve's Python-front-end/C++-execution boundary
+and treats NGSolve as the finite-element source of truth.
 Python declares `HDiv`, `L2`, `SurfaceL2`, coefficient functions, and bilinear
 forms and prepares the one-time sparse charge topology.  NGSolve assembles the
 forms in C++; pybind extracts their native sparse matrices directly.  The
@@ -194,6 +217,9 @@ persistent C++ operator then owns B/BT, geometric and material mass matrices,
 the NGSolve `BaseMatrix`, Krylov iterations, and the immutable field source.
 Only vectors and target arrays cross the NumPy boundary; Python and SciPy are
 not in the per-iteration solve or repeated-field path.
+High-order material states use NGSolve mapped interpolation and
+`IntegrationRuleSpace`; Python does not reconstruct HDiv/HCurl orientation,
+Piola maps, or hidden local DOF transforms from `CalcShape` and `GetDofNrs`.
 
 The production 3D solve uses symmetric C++ CG on the SPD `W + B^T G B`
 system.  The public default is `preconditioner="auto"`: linear solves and
