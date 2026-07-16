@@ -174,6 +174,35 @@ def _with_v12_bindings(summary):
     return summary
 
 
+def _with_v13_bindings(summary):
+    summary = _with_v12_bindings(summary)
+    for row in summary["runs"]:
+        row["field_monitor_interpolation_mesh_pass_identity"] = {
+            "active_adaptive_pass_id": "adaptive-pass-15",
+            "field_monitor_adaptive_pass_id": "adaptive-pass-15",
+            "interpolation_weight_adaptive_pass_id": "adaptive-pass-15",
+            "integral_adaptive_pass_id": "adaptive-pass-15",
+            "active_mesh_generation": "adaptive-mesh-15",
+            "field_monitor_mesh_generation": "adaptive-mesh-15",
+            "interpolation_weight_mesh_generation": "adaptive-mesh-15",
+            "interpolation_weight_sha256": "9" * 64,
+            "integral_weight_sha256": "9" * 64,
+        }
+        row["port_deembed_reference_plane_unit_identity"] = {
+            "model_length_unit": "mm",
+            "model_length_scale_to_m": 0.001,
+            "reference_plane_offset_numeric": 2.5,
+            "reference_plane_offset_unit": "mm",
+            "reference_plane_offset_scale_to_m": 0.001,
+            "result_reference_plane_offset_numeric": 2.5,
+            "result_reference_plane_offset_unit": "mm",
+            "result_reference_plane_offset_scale_to_m": 0.001,
+            "port_setup_generation": "port-setup-15",
+            "sparameter_result_generation": "port-setup-15",
+        }
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -482,6 +511,43 @@ def test_v12_public_farfield_realized_gain_power_frequency_sample_mismatch():
     assert (
         result["runs"][0]["checks"][
             "realized_gain_and_accepted_power_share_frequency_sample"
+        ]
+        is False
+    )
+
+
+def test_v13_public_field_monitor_interpolation_mesh_pass_mismatch():
+    bad = _with_v13_bindings(_summary())
+    bad["runs"][0]["field_monitor_interpolation_mesh_pass_identity"].update(
+        {
+            "interpolation_weight_adaptive_pass_id": "adaptive-pass-14",
+            "interpolation_weight_mesh_generation": "adaptive-mesh-14",
+            "interpolation_weight_sha256": "b" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "field_monitor_interpolation_matches_current_mesh_pass"
+        ]
+        is False
+    )
+
+
+def test_v13_public_port_deembed_reference_plane_length_unit_mismatch():
+    bad = _with_v13_bindings(_summary())
+    bad["runs"][0]["port_deembed_reference_plane_unit_identity"].update(
+        {
+            "result_reference_plane_offset_unit": "m",
+            "result_reference_plane_offset_scale_to_m": 1.0,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "port_deembed_reference_plane_uses_explicit_length_unit"
         ]
         is False
     )

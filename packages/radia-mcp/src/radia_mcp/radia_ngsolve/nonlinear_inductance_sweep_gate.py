@@ -373,6 +373,74 @@ def _farfield_gain_power_frequency_sample_is_bound(raw: Mapping[str, Any]) -> bo
     )
 
 
+def _field_monitor_interpolation_matches_mesh_pass(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("field_monitor_interpolation_mesh_pass_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    adaptive_pass = str(identity.get("active_adaptive_pass_id", "")).strip()
+    mesh_generation = str(identity.get("active_mesh_generation", "")).strip()
+    weight_digest = str(identity.get("interpolation_weight_sha256", "")).lower()
+    integral_digest = str(identity.get("integral_weight_sha256", "")).lower()
+    return (
+        bool(adaptive_pass)
+        and identity.get("field_monitor_adaptive_pass_id") == adaptive_pass
+        and identity.get("interpolation_weight_adaptive_pass_id") == adaptive_pass
+        and identity.get("integral_adaptive_pass_id") == adaptive_pass
+        and bool(mesh_generation)
+        and identity.get("field_monitor_mesh_generation") == mesh_generation
+        and identity.get("interpolation_weight_mesh_generation") == mesh_generation
+        and len(weight_digest) == len(integral_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in weight_digest + integral_digest
+        )
+        and integral_digest == weight_digest
+    )
+
+
+def _port_deembed_reference_plane_unit_is_bound(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("port_deembed_reference_plane_unit_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    scales = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3, "um": 1.0e-6}
+    model_unit = str(identity.get("model_length_unit", ""))
+    offset_unit = str(identity.get("reference_plane_offset_unit", ""))
+    result_unit = str(identity.get("result_reference_plane_offset_unit", ""))
+    try:
+        model_scale = float(identity["model_length_scale_to_m"])
+        offset = float(identity["reference_plane_offset_numeric"])
+        offset_scale = float(identity["reference_plane_offset_scale_to_m"])
+        result_offset = float(identity["result_reference_plane_offset_numeric"])
+        result_scale = float(identity["result_reference_plane_offset_scale_to_m"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(identity.get("port_setup_generation", "")).strip()
+    return (
+        model_unit in scales
+        and offset_unit in scales
+        and result_unit in scales
+        and math.isclose(model_scale, scales[model_unit], rel_tol=0.0, abs_tol=0.0)
+        and math.isclose(offset_scale, scales[offset_unit], rel_tol=0.0, abs_tol=0.0)
+        and math.isclose(result_scale, scales[result_unit], rel_tol=0.0, abs_tol=0.0)
+        and all(
+            math.isfinite(value)
+            for value in (offset, offset_scale, result_offset, result_scale)
+        )
+        and math.isclose(
+            offset * offset_scale,
+            result_offset * result_scale,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and bool(generation)
+        and identity.get("sparameter_result_generation") == generation
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -560,6 +628,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "realized_gain_and_accepted_power_share_frequency_sample": (
                 _farfield_gain_power_frequency_sample_is_bound(raw)
+            ),
+            "field_monitor_interpolation_matches_current_mesh_pass": (
+                _field_monitor_interpolation_matches_mesh_pass(raw)
+            ),
+            "port_deembed_reference_plane_uses_explicit_length_unit": (
+                _port_deembed_reference_plane_unit_is_bound(raw)
             ),
         }
         row = {
