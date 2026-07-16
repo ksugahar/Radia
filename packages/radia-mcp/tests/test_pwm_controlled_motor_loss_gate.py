@@ -89,3 +89,15 @@ def test_pwm_motor_loss_gate_rejects_unguarded_ratio_outputs() -> None:
 def test_pwm_motor_loss_mcp_tool_dispatches() -> None:
     result = json.loads(mcp_gate(_payload()))
     assert result["status"] == "ok"
+
+
+def test_generalization_v7_public_loss_component_resampling_alias() -> None:
+    payload = _payload()
+    time_s = payload["time_series"]["time_s"]
+    payload["time_series"]["component_time_s"] = [
+        time_s.copy(),
+        [value + 5.0e-5 for value in time_s],
+    ]
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["power_component_time_axes_match_common_axis_knotwise"] is False
