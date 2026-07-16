@@ -222,6 +222,31 @@ def _with_artifact_identity(summary: dict) -> dict:
             "force_sample_sha256": "7" * 64,
             "stiffness_force_sample_sha256": "7" * 64,
         },
+        "bem_demag_tensor_coordinate_basis_generation_identity": {
+            "body_placement_generation": "placement-19",
+            "surface_mesh_body_placement_generation": "placement-19",
+            "demag_tensor_generation": "demag-tensor-19",
+            "demag_tensor_body_placement_generation": "placement-19",
+            "body_coordinate_basis": "body-local-current",
+            "tensor_coordinate_basis": "body-local-current",
+            "body_basis_handedness": "right_handed",
+            "tensor_basis_handedness": "right_handed",
+            "body_to_global_transform_sha256": "1" * 64,
+            "tensor_basis_transform_sha256": "1" * 64,
+        },
+        "magnetic_bearing_force_harmonic_phase_origin_identity": {
+            "force_harmonic_generation": "bearing-harmonic-19",
+            "force_sample_harmonic_generation": "bearing-harmonic-19",
+            "rotor_angle_generation": "rotor-angle-19",
+            "force_sample_rotor_angle_generation": "rotor-angle-19",
+            "rotor_phase_origin_deg": 0.0,
+            "force_harmonic_phase_origin_deg": 0.0,
+            "slot_pitch_deg": 15.0,
+            "phase_origin_convention": "rotor_d_axis",
+            "force_harmonic_phase_origin_convention": "rotor_d_axis",
+            "rotor_angle_sha256": "2" * 64,
+            "harmonic_input_angle_sha256": "2" * 64,
+        },
     }
     return summary
 
@@ -672,6 +697,48 @@ def test_v16_public_maglev_stiffness_force_displacement_reference_generation_mis
     assert (
         result["checks"][
             "maglev_stiffness_uses_one_force_displacement_perturbation_generation"
+        ]
+        is False
+    )
+
+
+def test_v17_public_bem_demag_tensor_coordinate_basis_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "bem_demag_tensor_coordinate_basis_generation_identity"
+    ].update(
+        {
+            "demag_tensor_body_placement_generation": "placement-18",
+            "tensor_coordinate_basis": "body-local-previous",
+            "tensor_basis_transform_sha256": "5" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "bem_demag_tensor_uses_current_body_placement_coordinate_basis"
+        ]
+        is False
+    )
+
+
+def test_v17_public_magnetic_bearing_force_harmonic_phase_origin_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "magnetic_bearing_force_harmonic_phase_origin_identity"
+    ].update(
+        {
+            "force_harmonic_phase_origin_deg": 15.0,
+            "force_harmonic_phase_origin_convention": "next_slot_center",
+            "harmonic_input_angle_sha256": "5" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "magnetic_bearing_force_harmonics_share_rotor_phase_origin"
         ]
         is False
     )
