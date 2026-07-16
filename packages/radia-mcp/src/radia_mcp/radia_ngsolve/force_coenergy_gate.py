@@ -33,9 +33,13 @@ def force_coenergy_displacement_gate(
     identity_present = isinstance(artifact_identity, dict)
     force_snapshot_ok = True
     mesh_family_ok = True
+    displacement_unit_ok = True
+    force_frame_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
+        displacement_unit_ok = False
+        force_frame_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -64,6 +68,43 @@ def force_coenergy_displacement_gate(
             and all(isinstance(value, str) and bool(value) for value in generations)
             and len(set(generations)) == 1
         )
+        displacement_axis = artifact_identity.get("displacement_axis")
+        if displacement_axis is not None:
+            displacement_unit_ok = (
+                isinstance(displacement_axis, dict)
+                and displacement_axis.get("numeric_unit") == "m"
+                and displacement_axis.get("derivative_unit") == "m"
+                and displacement_axis.get("scale_to_si") == 1.0
+            )
+        force_frame = artifact_identity.get("force_frame")
+        if force_frame is not None:
+            direct_axis = (
+                force_frame.get("direct_axis")
+                if isinstance(force_frame, dict)
+                else None
+            )
+            derivative_axis = (
+                force_frame.get("derivative_axis") if isinstance(force_frame, dict) else None
+            )
+            axes_are_finite = (
+                isinstance(direct_axis, list)
+                and isinstance(derivative_axis, list)
+                and len(direct_axis) == len(derivative_axis) == 3
+                and all(
+                    isinstance(value, (int, float)) and math.isfinite(float(value))
+                    for value in direct_axis + derivative_axis
+                )
+            )
+            force_frame_ok = (
+                isinstance(force_frame, dict)
+                and bool(force_frame.get("direct_frame_id"))
+                and force_frame.get("direct_frame_id")
+                == force_frame.get("derivative_frame_id")
+                and axes_are_finite
+                and [float(value) for value in direct_axis]
+                == [float(value) for value in derivative_axis]
+                and force_frame.get("reflection_applied") is True
+            )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -106,6 +147,8 @@ def force_coenergy_displacement_gate(
         "central_virtual_work_matches_direct_force": max_error <= max_central_relative_error,
         "force_and_coenergy_share_load_step_snapshot": force_snapshot_ok,
         "coenergy_stencil_uses_one_mesh_family_generation": mesh_family_ok,
+        "displacement_axis_uses_one_si_unit": displacement_unit_ok,
+        "force_vectors_share_transformed_frame": force_frame_ok,
     }
     return {
         "policy": "force_coenergy_displacement_gate_v1",
