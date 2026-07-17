@@ -214,6 +214,12 @@ def regularized_trace_inverse_path_gate(
     autodiff_tape_identity_ok = (
         _optional_autodiff_tape_identity_is_aligned(summary)
     )
+    fembem_interface_identity_ok = (
+        _optional_fembem_interface_identity_is_aligned(summary)
+    )
+    cq_time_history_identity_ok = (
+        _optional_cq_time_history_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -339,6 +345,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "autodiff_gradients_use_current_tape_variables_mesh_objective_and_primal": (
             autodiff_tape_identity_ok
+        ),
+        "fembem_trace_uses_current_normals_nodes_units_mesh_and_operator": (
+            fembem_interface_identity_ok
+        ),
+        "cq_time_history_uses_current_contour_weights_startup_and_causality_window": (
+            cq_time_history_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1849,6 +1861,174 @@ def _optional_autodiff_tape_identity_is_aligned(summary: Mapping[str, Any]) -> b
         and _is_sha256(gradient_digest)
         and str(value.get("reported_gradient_table_sha256", "")).lower()
         == gradient_digest
+    )
+
+
+def _optional_fembem_interface_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_trace_normal_interface_node_order_unit_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        node_ids = tuple(int(item) for item in value["interface_node_ids"])
+        result_node_ids = tuple(
+            int(item) for item in value["result_interface_node_ids"]
+        )
+        triangles = tuple(
+            tuple(int(item) for item in row) for row in value["boundary_triangles"]
+        )
+        result_triangles = tuple(
+            tuple(int(item) for item in row)
+            for row in value["result_boundary_triangles"]
+        )
+        normals = tuple(
+            tuple(float(item) for item in row) for row in value["outward_normals"]
+        )
+        result_normals = tuple(
+            tuple(float(item) for item in row)
+            for row in value["result_outward_normals"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("coupling_generation", "")).strip()
+    units = value.get("physical_units")
+    mesh_digest = str(value.get("interface_mesh_sha256", "")).lower()
+    operator_digest = str(value.get("coupled_operator_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "trace_coupling_generation",
+                "normal_coupling_generation",
+                "node_order_coupling_generation",
+                "unit_coupling_generation",
+                "operator_coupling_generation",
+                "result_coupling_generation",
+            )
+        )
+        and value.get("trace_orientation") == "volume_to_boundary"
+        and value.get("result_trace_orientation") == value.get("trace_orientation")
+        and value.get("outward_normal_convention") == "exterior_from_volume"
+        and value.get("result_outward_normal_convention")
+        == value.get("outward_normal_convention")
+        and bool(node_ids)
+        and node_ids[0] >= 1
+        and all(left < right for left, right in zip(node_ids, node_ids[1:]))
+        and result_node_ids == node_ids
+        and bool(triangles)
+        and all(
+            len(row) == 3 and len(set(row)) == 3 and all(item in node_ids for item in row)
+            for row in triangles
+        )
+        and result_triangles == triangles
+        and len(normals) == len(triangles)
+        and all(
+            len(row) == 3
+            and all(math.isfinite(item) for item in row)
+            and math.isclose(sum(item * item for item in row), 1.0, abs_tol=1.0e-12)
+            for row in normals
+        )
+        and result_normals == normals
+        and units == {"pressure": "Pa", "normal_velocity": "m/s"}
+        and value.get("result_physical_units") == units
+        and _is_sha256(mesh_digest)
+        and str(value.get("result_interface_mesh_sha256", "")).lower()
+        == mesh_digest
+        and _is_sha256(operator_digest)
+        and str(value.get("result_coupled_operator_sha256", "")).lower()
+        == operator_digest
+    )
+
+
+def _optional_cq_time_history_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_contour_weight_startup_causality_window_result_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        contour = tuple(
+            tuple(float(item) for item in row) for row in value["contour_points_ri"]
+        )
+        result_contour = tuple(
+            tuple(float(item) for item in row)
+            for row in value["result_contour_points_ri"]
+        )
+        weights = tuple(
+            tuple(float(item) for item in row) for row in value["cq_weights_ri"]
+        )
+        result_weights = tuple(
+            tuple(float(item) for item in row)
+            for row in value["result_cq_weights_ri"]
+        )
+        startup = tuple(
+            tuple(float(item) for item in row) for row in value["startup_weights_ri"]
+        )
+        result_startup = tuple(
+            tuple(float(item) for item in row)
+            for row in value["result_startup_weights_ri"]
+        )
+        times = tuple(float(item) for item in value["time_samples_s"])
+        result_times = tuple(float(item) for item in value["result_time_samples_s"])
+        window = tuple(float(item) for item in value["causality_window_s"])
+        result_window = tuple(
+            float(item) for item in value["result_causality_window_s"]
+        )
+        prehistory = float(value["prehistory_norm"])
+        result_prehistory = float(value["result_prehistory_norm"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    digest = str(value.get("cq_result_sha256", "")).lower()
+    complex_rows = contour + weights + startup
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "contour_cq_generation",
+                "weight_cq_generation",
+                "startup_cq_generation",
+                "causality_window_cq_generation",
+                "time_grid_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and value.get("method") == "BDF2"
+        and value.get("result_method") == value.get("method")
+        and len(contour) >= 4
+        and len(weights) == len(contour)
+        and len(startup) == 2
+        and all(
+            len(row) == 2 and all(math.isfinite(item) for item in row)
+            for row in complex_rows
+        )
+        and result_contour == contour
+        and result_weights == weights
+        and result_startup == startup
+        and len(times) == len(contour)
+        and times[0] == 0.0
+        and all(math.isfinite(item) for item in times)
+        and all(left < right for left, right in zip(times, times[1:]))
+        and result_times == times
+        and len(window) == 2
+        and window == (times[0], times[-1])
+        and result_window == window
+        and math.isfinite(prehistory)
+        and prehistory == 0.0
+        and result_prehistory == prehistory
+        and _is_sha256(digest)
+        and str(value.get("reported_cq_result_sha256", "")).lower() == digest
     )
 
 
