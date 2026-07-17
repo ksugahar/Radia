@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -54,7 +55,15 @@ std::vector<Complex> SolveDenseSquare(
         int nrhs) {
     CheckSize(a, n, n, "eliminate_eliminate");
     CheckSize(b, n, nrhs, "schur rhs");
-    const double eps = 1.0e-30;
+    if (n == 0)
+        return b;
+    double matrixScale = 0.0;
+    for (const Complex value : a)
+        matrixScale = std::max(matrixScale, std::abs(value));
+    if (matrixScale == 0.0)
+        throw std::runtime_error("matrix is singular to working precision");
+    const double pivotTolerance = std::numeric_limits<double>::epsilon() *
+                                  static_cast<double>(std::max(1, n)) * matrixScale;
 
     for (int k = 0; k < n; ++k) {
         int pivot = k;
@@ -66,8 +75,8 @@ std::vector<Complex> SolveDenseSquare(
                 pivot = i;
             }
         }
-        if (best <= eps)
-            throw std::runtime_error("eliminate_eliminate is singular to working precision");
+        if (best <= pivotTolerance)
+            throw std::runtime_error("matrix is singular to working precision");
         if (pivot != k) {
             for (int j = 0; j < n; ++j)
                 std::swap(a[static_cast<std::size_t>(k) * n + j],
@@ -107,6 +116,15 @@ std::vector<Complex> SolveDenseSquare(
 void CheckPositive(double value, const char* name) {
     if (!(std::isfinite(value) && value > 0.0))
         throw std::runtime_error(std::string(name) + " must be positive");
+}
+
+void CheckFinite(Complex value, const char* name) {
+    if (!(std::isfinite(value.real()) && std::isfinite(value.imag())))
+        throw std::runtime_error(std::string(name) + " must be finite");
+}
+
+bool IsZero(Complex value) {
+    return value.real() == 0.0 && value.imag() == 0.0;
 }
 
 } // namespace
@@ -157,12 +175,16 @@ std::vector<Complex> DenseSchurComplement(
 }
 
 Complex SkinImpedance(Complex s, double sigma, double mu) {
+    CheckFinite(s, "s");
     CheckPositive(sigma, "sigma");
     CheckPositive(mu, "mu");
     return std::sqrt(mu * s / sigma);
 }
 
 Complex SIBCAdmittanceTail(Complex s, double surface_measure, double sigma, double mu) {
+    CheckFinite(s, "s");
+    if (IsZero(s))
+        throw std::runtime_error("SIBC admittance tail is undefined at s=0");
     CheckPositive(surface_measure, "surface_measure");
     CheckPositive(sigma, "sigma");
     CheckPositive(mu, "mu");
@@ -170,13 +192,28 @@ Complex SIBCAdmittanceTail(Complex s, double surface_measure, double sigma, doub
 }
 
 Complex SIBCSchurTerminationImpedance(Complex s, double k_sibc, double d) {
+    CheckFinite(s, "s");
     CheckPositive(k_sibc, "k_sibc");
     if (!(std::isfinite(d) && d >= 0.0))
         throw std::runtime_error("d must be non-negative");
+    if (IsZero(s)) {
+        if (d == 0.0)
+            return Complex(0.0, 0.0);
+        throw std::runtime_error("SIBC termination impedance has a pole at s=0 when d>0");
+    }
     return (s + d) / (k_sibc * std::sqrt(s));
 }
 
 Complex SIBCSchurTerminationAdmittance(Complex s, double k_sibc, double d) {
+    CheckFinite(s, "s");
+    CheckPositive(k_sibc, "k_sibc");
+    if (!(std::isfinite(d) && d >= 0.0))
+        throw std::runtime_error("d must be non-negative");
+    if (IsZero(s)) {
+        if (d > 0.0)
+            return Complex(0.0, 0.0);
+        throw std::runtime_error("SIBC termination admittance has a pole at s=0 when d=0");
+    }
     return Complex(1.0, 0.0) / SIBCSchurTerminationImpedance(s, k_sibc, d);
 }
 

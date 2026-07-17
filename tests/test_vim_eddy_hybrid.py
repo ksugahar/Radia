@@ -825,6 +825,36 @@ def test_cpp_hybrid_vim_solve_kernel_matches_numpy_when_available():
     rhs = np.array([[1.0, 0.0 - 0.5j], [0.25j, 2.0]], dtype=np.complex128)
     np.testing.assert_allclose(func(matrix, rhs), np.linalg.solve(matrix, rhs))
 
+    scale = 1.0e-40
+    scaled_matrix = scale * np.eye(2, dtype=np.complex128)
+    scaled_rhs = scale * np.array([[1.0], [2.0]], dtype=np.complex128)
+    np.testing.assert_allclose(func(scaled_matrix, scaled_rhs), [[1.0], [2.0]])
+
+
+def test_sibc_dc_limits_fail_loud_instead_of_returning_nan():
+    sigma = 5.8e7
+    assert vim.SkinImpedance(0.0j, sigma) == 0.0j
+    with pytest.raises(ValueError, match="undefined at s=0"):
+        vim.SIBCAdmittanceTail(0.0j, 1.0, sigma)
+    assert vim.SIBCSchurTerminationImpedance(0.0j, 1.0, d=0.0) == 0.0j
+    with pytest.raises(ValueError, match="pole at s=0"):
+        vim.SIBCSchurTerminationImpedance(0.0j, 1.0, d=1.0)
+    assert vim.SIBCSchurTerminationAdmittance(0.0j, 1.0, d=1.0) == 0.0j
+    with pytest.raises(ValueError, match="pole at s=0"):
+        vim.SIBCSchurTerminationAdmittance(0.0j, 1.0, d=0.0)
+
+    radia_cpp = pytest.importorskip("radia._radia_pybind")
+    assert radia_cpp._SkinImpedance(0.0j, sigma, vim.MU0) == 0.0j
+    with pytest.raises(RuntimeError, match="undefined at s=0"):
+        radia_cpp._SIBCAdmittanceTail(0.0j, 1.0, sigma, vim.MU0)
+    assert radia_cpp._SIBCSchurTerminationAdmittance(0.0j, 1.0, 1.0) == 0.0j
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, complex(1.0, np.nan)])
+def test_sibc_helpers_reject_nonfinite_laplace_frequency(bad):
+    with pytest.raises(ValueError, match="s must be finite"):
+        vim.SkinImpedance(bad, 5.8e7)
+
 
 def test_hybrid_vim_public_names_are_exported():
     for name in (
