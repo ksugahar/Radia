@@ -506,6 +506,94 @@ def _axisymmetric_planar_normalization_identity_ok(value):
     )
 
 
+def _nonlinear_minor_loop_force_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("nonlinear_generation", "")).strip()
+    try:
+        state = [float(item) for item in value.get("state_point_am", [])]
+        result_state = [float(item) for item in value.get("result_state_point_am", [])]
+        coenergy = float(value.get("magnetic_coenergy_j"))
+        result_coenergy = float(value.get("result_magnetic_coenergy_j"))
+        force = [float(item) for item in value.get("force_n", [])]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+    except (TypeError, ValueError):
+        return False
+    branch = str(value.get("bh_branch", ""))
+    interpolation = str(value.get("interpolation_rule", ""))
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "branch_nonlinear_generation", "interpolation_nonlinear_generation",
+            "state_nonlinear_generation", "coenergy_nonlinear_generation",
+            "mesh_nonlinear_generation", "force_nonlinear_generation",
+            "result_nonlinear_generation"))
+        and branch in {"ascending-minor-loop", "descending-minor-loop"}
+        and value.get("result_bh_branch") == branch
+        and interpolation == "monotone-cubic-h"
+        and value.get("result_interpolation_rule") == interpolation
+        and len(state) == 2 and all(math.isfinite(item) for item in state)
+        and result_state == state
+        and math.isfinite(coenergy) and coenergy >= 0.0
+        and math.isclose(result_coenergy, coenergy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and len(force) == 2 and all(math.isfinite(item) for item in force)
+        and result_force == force
+        and all(_valid_sha256(value.get(source)) and value.get(result) == value.get(source)
+                for source, result in (
+                    ("bh_table_sha256", "result_bh_table_sha256"),
+                    ("mesh_sha256", "result_mesh_sha256"),
+                    ("solution_sha256", "accepted_solution_sha256")))
+    )
+
+
+def _harmonic_eddy_loss_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("eddy_generation", "")).strip()
+    try:
+        conductivity = float(value.get("conductivity_s_m"))
+        result_conductivity = float(value.get("result_conductivity_s_m"))
+        permeability = float(value.get("relative_permeability"))
+        result_permeability = float(value.get("result_relative_permeability"))
+        frequency = float(value.get("frequency_hz"))
+        result_frequency = float(value.get("result_frequency_hz"))
+        skin_depth = float(value.get("skin_depth_m"))
+        result_skin_depth = float(value.get("result_skin_depth_m"))
+        elements = float(value.get("minimum_elements_per_skin_depth"))
+        result_elements = float(value.get("result_minimum_elements_per_skin_depth"))
+        loss = float(value.get("joule_loss_w"))
+        result_loss = float(value.get("result_joule_loss_w"))
+    except (TypeError, ValueError):
+        return False
+    expected_skin_depth = math.sqrt(
+        2.0 / (2.0 * math.pi * frequency * 4.0e-7 * math.pi * permeability * conductivity)
+    ) if conductivity > 0.0 and permeability > 0.0 and frequency > 0.0 else math.nan
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "phasor_eddy_generation", "conductivity_eddy_generation", "skin_eddy_generation",
+            "frequency_eddy_generation", "loss_eddy_generation", "mesh_eddy_generation",
+            "result_eddy_generation"))
+        and value.get("phasor_convention") == "exp(+jwt)"
+        and value.get("result_phasor_convention") == "exp(+jwt)"
+        and math.isfinite(conductivity) and conductivity > 0.0 and result_conductivity == conductivity
+        and math.isfinite(permeability) and permeability > 0.0 and result_permeability == permeability
+        and math.isfinite(frequency) and frequency > 0.0 and result_frequency == frequency
+        and math.isfinite(skin_depth) and skin_depth > 0.0 and result_skin_depth == skin_depth
+        and math.isclose(skin_depth, expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isfinite(elements) and elements >= 3.0 and result_elements == elements
+        and math.isfinite(loss) and loss >= 0.0 and result_loss == loss
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("loss_result_sha256"))
+        and value.get("accepted_loss_result_sha256") == value.get("loss_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -571,6 +659,8 @@ def force_coenergy_displacement_gate(
     open_boundary_decay_multipole_identity_ok = True
     weighted_stress_tensor_closure_identity_ok = True
     axisymmetric_planar_normalization_identity_ok = True
+    nonlinear_minor_loop_force_identity_ok = True
+    harmonic_eddy_loss_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -610,6 +700,8 @@ def force_coenergy_displacement_gate(
         open_boundary_decay_multipole_identity_ok = False
         weighted_stress_tensor_closure_identity_ok = False
         axisymmetric_planar_normalization_identity_ok = False
+        nonlinear_minor_loop_force_identity_ok = False
+        harmonic_eddy_loss_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2158,6 +2250,16 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        nonlinear_minor_loop_force_identity_ok = _nonlinear_minor_loop_force_identity_ok(
+            artifact_identity.get(
+                "nonlinear_bh_minor_loop_branch_interpolation_state_coenergy_force_generation_identity"
+            )
+        )
+        harmonic_eddy_loss_identity_ok = _harmonic_eddy_loss_identity_ok(
+            artifact_identity.get(
+                "harmonic_eddy_phasor_conductivity_skin_depth_frequency_loss_mesh_generation_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2299,6 +2401,12 @@ def force_coenergy_displacement_gate(
         ),
         "axisymmetric_and_planar_force_share_depth_two_pi_r_coordinates_units_and_mesh": (
             axisymmetric_planar_normalization_identity_ok
+        ),
+        "nonlinear_force_uses_current_minor_loop_branch_interpolation_state_coenergy_and_mesh": (
+            nonlinear_minor_loop_force_identity_ok
+        ),
+        "harmonic_eddy_loss_uses_current_phasor_conductivity_skin_depth_frequency_and_mesh": (
+            harmonic_eddy_loss_identity_ok
         ),
     }
     return {
