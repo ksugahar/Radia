@@ -1645,7 +1645,39 @@ same H^1(S) != 0 topology (there the BIE admits a spurious harmonic
 null-space mode violating B.n=0, closed by one virtual-magnetic-current
 DOF + a one-point constraint; here the representation LACKS the
 harmonic mode, closed by one loop DOF + the Faraday row).  Per handle:
-one extra DOF, one extra condition, in both formulations.  It
+one extra DOF, one extra condition, in both formulations.
+
+**Why the MISSING mode makes the workpiece heat MORE (not less).**
+Counter-intuitive on first sight ("an extra current should add Joule
+heat"), resolved by the PHASE.  The tube is a shorted one-turn
+secondary: ``I_2 = -j omega M I_1 / (R_loop + j omega L_loop)``, whose
+phase lies between quadrature (-90 deg, resistance-dominated) and
+anti-phase (-180 deg, inductance-dominated).  Takahashi measures
+alpha = 5264 A at -174 deg vs the 6700 A drive: within 6 deg of pure
+anti-phase, i.e. deep in the INDUCTANCE-DOMINATED regime where the
+shorted turn is a nearly lossless FLUX CANCELLER.  Since
+``P = 1/2 Re(Z_s) int |H_t|^2`` and
+``|H_inc + H_alpha|^2 = |H_inc|^2 + 2 Re(H_inc . H_alpha*) +
+|H_alpha|^2`` with a large NEGATIVE cross term, the Lenz screening
+removes more surface |H_t|^2 than the mode's own dissipation adds:
+measured H_t 50.06 -> 46.35 kA/m and P 21.51 -> 18.43 kW, with
+``P/P_frozen = 0.857 = (H_t/H_t_frozen)^2`` exactly (P is literally
+the |H_t|^2 integral).  Clamping the mode to zero (single-valued phi)
+is the physics of a tube with an insulating slit around its section:
+the full coil flux swings through the bore unopposed and the surface
+sees the UNSCREENED field -- hence the +15-20% over-estimate.  The
+machine-design intuition "a shorted turn overheats" belongs to the
+OPPOSITE regime (omega L << R_loop, phase near -90 deg, weak screening,
+the turn mostly self-heats); the alpha phase is the regime
+discriminator, and ``test_screening_reduces_H_t`` locks the sign.
+
+Every loop-DOF run now emits the screening diagnostics in the JSON:
+``wp_loop_P_frozen_W`` / ``wp_loop_H_t_frozen_A_per_m`` (the no-mode,
+"slitted-tube" values from the frozen alpha=0 sub-solve),
+``wp_loop_screening_ratio`` (= P_wp / P_frozen; < 1 in the screening
+regime), and ``wp_loop_regime`` ("inductive-screening" for |phase| >=
+135 deg / "mixed" / "resistive-dissipative" below 105 deg), so the
+physics of the correction is auditable per run.  It
 requires linear SIBC, ``--wp-bem-backend intree-dense``, and (on the
 weak path) ``--h1-order 1``; BOTH coupling modes take it -- the weak
 path applies it to its single solve, the strong drivers apply it ONCE
