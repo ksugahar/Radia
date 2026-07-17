@@ -988,8 +988,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # carries the branch-cut-wall limitation documented on
     # compute_phi_inc_from_filaments).  The legacy P1 path-integration
     # route was REMOVED 2026-07-17 once the surface-Poisson
-    # reconstruction was validated end-to-end (Takahashi e2e + icosphere
-    # goldens): a superseded twin with a known wall bias must not stay
+    # reconstruction was covered by analytic goldens and integration
+    # contracts: a superseded twin with a known wall bias must not stay
     # selectable.
     phi_inc_mode = "poisson" if basis_order == 1 else "path"
     progress("BEM", f"phi_inc from coil ({coil_data['source_type']}, "

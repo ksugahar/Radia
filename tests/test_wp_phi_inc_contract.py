@@ -22,7 +22,6 @@ for p in (_PANELS, _REPO / "validation_test" / "panels"):
 
 import calc_inductance as ci
 from radia.ih_design import IHDesignSpec, METHOD_PEEC_BEM
-from radia.ih_notebook import IH_NOTEBOOK_FIELD_ORDER
 
 
 def test_wp_phi_inc_flag_is_gone():
@@ -102,3 +101,26 @@ def test_ih_designspec_exposes_loop_dof_for_weak_bem_only():
     for m in (METHOD_BEMA_BEM_STRONG, METHOD_PEEC_FEM_KELVIN):
         vis = IHDesignSpec(method=m).visible_fields()
         assert "wp_loop_dof" not in vis, m
+
+
+@pytest.mark.parametrize("legacy,expected", [(False, "auto"), (True, "on")])
+def test_ih_designspec_preserves_boolean_loop_dof_constructor(legacy, expected):
+    spec = IHDesignSpec(
+        method=METHOD_PEEC_BEM,
+        peec_step="coil.step",
+        wp_vol="workpiece.vol",
+        wp_loop_dof=legacy,
+    )
+    assert spec.wp_loop_dof == expected
+    cmd = spec.build_command(python="python", panels_dir=_PANELS)
+    if expected == "on":
+        assert cmd[cmd.index("--wp-loop-dof") + 1] == "on"
+    else:
+        assert "--wp-loop-dof" not in cmd
+
+
+def test_ih_designspec_hides_loop_dof_when_inapplicable():
+    esim = IHDesignSpec(method=METHOD_PEEC_BEM, impedance_model="Nonlinear ESIM")
+    p2 = IHDesignSpec(method=METHOD_PEEC_BEM, fes_order=2)
+    for spec in (esim, p2):
+        assert "wp_loop_dof" not in spec.visible_fields()
