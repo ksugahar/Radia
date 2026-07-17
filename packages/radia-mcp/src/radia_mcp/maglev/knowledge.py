@@ -588,11 +588,25 @@ integration, removing duplicate matrix-build work without changing entries.
 `HybridVIMSystem.solve` applies `R + sL + Zs M_surface` through matrix-free
 GMRES.  `matrix_free=False`, `to_dense()`, Schur complements, and mixed
 Galerkin orthogonalization are explicit small-ROM verification or condensation
-paths.  They are not the default production solve path.  For a
-bulk/bridge/SIBC system, HACApK supplies the bulk diagonal while the selected
-VIM/BEM backend supplies the reduced bridge-surface cross blocks.  The full
-system is an H-matrix diagonal plus reduced dense cross blocks; do not claim
-that this change replaced the SIBC cross kernel.
+paths.  They are not the default production solve path.
+
+`HACApKSampledLaplaceInteraction` also removes the former dense cross-block
+remainder.  One stable sampled Laplace H-matrix spans the HCurl volume,
+conductor-cycle bridge, and surface-Omega/SIBC quadrature points; native C++
+component CSR maps project it to every reciprocal reduced cross block in one
+`sum_c B_c^T G B_c` apply.  With `cross_only=True`, the sampled reduced
+diagonal is cancelled and replaced by a selected high-order diagonal operator;
+`diagonal_bases` limits that override to, for example, the HCurl volume basis.
+The production construction uses a full stable scalar Gram plus small reduced
+diagonal corrections.  It does not place partition zeros inside ACA.  A
+projected VIM/BEM implementation can supply the same matrix-free
+`build_operator(bases)` contract, with `operator_scope="full"` or `"cross"`.
+
+Do not extend this statement to HDiv-HCurl isomorphism.  HDiv-MMM keeps a
+separate BDM magnetic-charge Gram; HCurl Eddy Bubble keeps a vector-current
+Gram.  Their Piola maps, physical quantities, and de Rham roles differ.
+HDiv-HCurl coupling is a separate rectangular field operator, not another
+block of the same H-matrix.
 
 Warped or curved non-tet cells use uniform h refinement until both current and
 piecewise-affine geometry residuals pass.  A warped HEX regression reaches

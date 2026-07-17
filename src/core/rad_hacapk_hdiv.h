@@ -46,6 +46,18 @@ public:
                         std::vector<double> measures,
                         std::vector<double> self_energy);
 
+    // SAMPLED LAPLACE mode for hybrid HCurl-VIM/SIBC coupling.  Each
+    // quadrature point is one scalar HACApK charge and the persistent vector
+    // charge map projects the three current components to reduced modes:
+    //   L = mu * sum_c B_c^T G B_c,
+    //   G_ij = w_i w_j / (4*pi*sqrt(|x_i-x_j|^2 + kernel_epsilon^2)).
+    // The H-matrix always stores the stable full Gram.  Hybrid assembly can
+    // replace a reduced diagonal block by adding a small diagonal correction;
+    // imposing same-partition zeros inside ACA is deliberately unsupported.
+    RadHACApKChargeGram(std::vector<double> points,
+                        std::vector<double> weights,
+                        double kernel_epsilon);
+
     // ANALYTIC mode (M2b): the EXACT charge Gram from per-charge GEOMETRY -- matches the independent
     // analytic reference entry-by-entry.  cell_verts [n_el*12] (tets, 4 verts) then
     // face_verts [n_bf*9] (triangles, 3 verts); the n_charge charges are the n_el volume cells
@@ -454,6 +466,8 @@ private:
 
     std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
     int  m_n = 0;
+    bool m_sampledLaplace = false;
+    double m_sampledKernelEpsilon = 0.0;
     // analytic mode (M2b)
     bool m_analytic = false;
     int  m_n_el = 0;

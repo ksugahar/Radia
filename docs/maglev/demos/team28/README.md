@@ -217,11 +217,26 @@ mode matrices are no longer materialized either.  `AssembleHybridVIM` preserves
 these diagonal H-matrix blocks and `HybridVIMSystem.solve` uses GMRES on
 `R + sL + Zs M_surface`.  Explicit `matrix_free=False`, `to_dense()`, Schur,
 and mixed-Galerkin calls remain available as deliberate small-ROM verification
-or condensation paths.  In a bulk/bridge/SIBC system the bulk diagonal is the
-HACApK operator; bridge-surface cross interactions remain the small dense
-blocks returned by the selected VIM/BEM backend.  The assembled operator is
-therefore "HACApK diagonal plus reduced cross blocks", not a claim that the
-SIBC cross kernel itself has been replaced.
+or condensation paths.
+
+`HACApKSampledLaplaceInteraction` closes the former dense cross-block gap.  It
+builds one stable sampled Laplace H-matrix over the volume, conductor-cycle
+bridge, and surface-Omega/SIBC quadrature points, registers the three reduced
+current-component maps once, and applies every reciprocal cross block through
+one `sum_c B_c^T G_HACApK B_c` action.  In the default `cross_only=True`
+composition, the small sampled reduced diagonal is subtracted and replaced by
+the selected high-order diagonal operator.  `diagonal_bases=(volume,)` keeps an
+analytic HCurl volume diagonal while the bridge and SIBC diagonals stay on the
+sampled/BEM route.  This full-Gram-plus-reduced-correction construction avoids
+an ACA-unstable partition-zero H-matrix and leaves no dense cross matrix in the
+production Krylov path.  A projected `ngsolve.bem` backend can use the same
+`build_operator(bases)` / `operator_scope` assembler contract.
+
+This unification stops at the HCurl current space.  HDiv-MMM retains its own
+BDM magnetic-charge Gram and is not inserted into the HCurl current H-matrix.
+HDiv-HCurl coupling remains a separate rectangular field-coupling operator;
+the two Piola maps, physical unknowns, and de Rham roles are not treated as one
+isomorphic H-matrix.
 
 ## Files
 

@@ -244,6 +244,26 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
     m_n = (int)m_meas.size();
 }
 
+RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> points,
+                                         std::vector<double> weights,
+                                         double kernel_epsilon)
+    : m_cent(std::move(points)), m_meas(std::move(weights)),
+      m_sampledLaplace(true), m_sampledKernelEpsilon(kernel_epsilon)
+{
+    m_n = static_cast<int>(m_meas.size());
+    if (m_n < 1 || m_cent.size() != static_cast<size_t>(3 * m_n))
+        throw std::invalid_argument(
+            "sampled Laplace HACApK requires points[n,3] and weights[n]");
+    if (!std::isfinite(m_sampledKernelEpsilon) || m_sampledKernelEpsilon <= 0.0)
+        throw std::invalid_argument("sampled Laplace kernel_epsilon must be positive");
+    for (double value : m_cent)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("sampled Laplace points must be finite");
+    for (double weight : m_meas)
+        if (!std::isfinite(weight) || weight <= 0.0)
+            throw std::invalid_argument("sampled Laplace weights must be positive and finite");
+}
+
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
                                          std::vector<double> face_verts,
                                          int n_el, double near_factor,
@@ -5089,6 +5109,14 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
     if (a < 0 || a >= m_n || b < 0 || b >= m_n)
         throw std::out_of_range("ChargeGram entry index out of range: a=" + std::to_string(a)
                                 + " b=" + std::to_string(b) + " n=" + std::to_string(m_n));
+    if (m_sampledLaplace) {
+        const double dx = m_cent[3 * a] - m_cent[3 * b];
+        const double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
+        const double dz = m_cent[3 * a + 2] - m_cent[3 * b + 2];
+        const double eps2 = m_sampledKernelEpsilon * m_sampledKernelEpsilon;
+        return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI /
+               std::sqrt(dx * dx + dy * dy + dz * dz + eps2);
+    }
     if (m_d2) {
         // 2D planar mode: served block-wise like the hex mode, symmetrized 0.5*(AB + BA).  Each scalar
         // is read BEFORE the next GetHexBlock fetch -- the memo's capacity clear would otherwise leave a
