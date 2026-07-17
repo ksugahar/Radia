@@ -3373,6 +3373,37 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def_property_readonly("target_angle", &ngfem::PlanarHDivFieldCF::TargetAngle);
 
 
+    m.def("_TetHCurlReducedGram",
+          [](F64Array cell_verts_a, I32Array exponents_a,
+             F64Array coefficients_a, int n_modes,
+             F64Array ref_points_a, F64Array ref_weights_a) {
+              auto cell_verts = to_1d_vector<double>(cell_verts_a, "cell_verts");
+              auto exponents_flat = to_1d_vector<int>(exponents_a, "exponents");
+              auto coefficients = to_1d_vector<double>(coefficients_a, "coefficients");
+              auto ref_points = to_1d_vector<double>(ref_points_a, "ref_points");
+              auto ref_weights = to_1d_vector<double>(ref_weights_a, "ref_weights");
+              if (exponents_flat.empty() || exponents_flat.size() % 3 != 0)
+                  throw std::invalid_argument("exponents must have shape (n_monomial,3)");
+              std::vector<std::array<int,3>> exponents(exponents_flat.size()/3);
+              for (size_t i = 0; i < exponents.size(); ++i)
+                  for (int k = 0; k < 3; ++k)
+                      exponents[i][k] = exponents_flat[3*i + static_cast<size_t>(k)];
+              std::vector<double> gram;
+              {
+                  py::gil_scoped_release release;
+                  gram = rad_hdiv::TetHCurlReducedGram(
+                      cell_verts, exponents, coefficients, n_modes,
+                      ref_points, ref_weights);
+              }
+              return to_numpy_2d(gram, n_modes, n_modes);
+          },
+          py::arg("cell_verts"), py::arg("exponents"), py::arg("coefficients"),
+          py::arg("n_modes"), py::arg("ref_points"), py::arg("ref_weights"),
+          "Reduced vector-potential Gram for real HCurl current modes on affine tetrahedra "
+          "with analytic source moments through total degree 18. "
+          "the returned matrix includes 1/(4*pi) but not permeability.");
+
+
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
     // Charges (cell rho + boundary-face sigma) extracted from an HDiv mesh; pass charge
     // centroids/measures + the caller-computed diagonal self-energies.  The
@@ -3581,6 +3612,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          F64Array ref_tri_pts_lo_a, F64Array ref_tri_w_lo_a,
                          double ho_far_factor,
                          I32Array image_masks_a, F64Array image_signs_a,
+                         bool reference_density,
                          double eps, int leaf, double eta, bool build) {
                  auto cell_nodes = to_1d_vector<double>(cell_nodes_a, "cell_nodes");
                  auto face_nodes = to_1d_vector<double>(face_nodes_a, "face_nodes");
@@ -3611,7 +3643,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(curve_gl), std::move(curve_gw),
                          std::move(ref_tet_pts_lo), std::move(ref_tet_w_lo),
                          std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
-                         std::move(image_masks), std::move(image_signs)); },
+                         std::move(image_masks), std::move(image_signs), reference_density); },
                      eps, leaf, eta, build, "curved charge Gram H-matrix build failed");
              }),
              py::arg("cell_nodes"), py::arg("face_nodes"),
@@ -3624,12 +3656,15 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("ref_tri_pts_lo") = F64Array(0), py::arg("ref_tri_w_lo") = F64Array(0),
              py::arg("ho_far_factor") = 1e30,
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
+             py::arg("reference_density") = false,
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "CURVED HIGH-ORDER (isoparametric P2) mode: monomial charges on a mesh.Curve(2) geometry. "
              "cell_nodes [n_el*30] (10 P2 nodes/tet), face_nodes [n_bf*18] (6 P2 nodes/tri); "
              "cell_vertices/face_vertices identify touching hosts for singular Duffy quadrature. "
              "Outer quad = curved P2 map + curved measure; near inner = curved Duffy (curve_gl/gw = nq-pt "
-             "Gauss-Legendre on [0,1]); ref_*_lo + ho_far_factor enable curved low-order far pairs.")
+             "Gauss-Legendre on [0,1]); ref_*_lo + ho_far_factor enable curved low-order far pairs. "
+             "reference_density=True omits curved area/volume measures from both integrals for quantities "
+             "such as K=J*|det(dX/dxi)| whose physical measure is already folded into the coefficients.")
         .def(py::init([](F64Array hex_cell_nodes_a, F64Array quad_face_nodes_a,
                          int n_el, int n_bf,
                          I32Array charge_host_a, I32Array charge_kind_a, I32Array charge_expo_a,

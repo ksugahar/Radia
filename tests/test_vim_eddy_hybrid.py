@@ -4,6 +4,100 @@ import pytest
 import radia.vim as vim
 
 
+def test_team28_skin_depth_gate_selects_volumetric_hcurl():
+    gate = vim.EddySIBCApplicability(
+        frequency_hz=50.0,
+        sigma=3.4e7,
+        characteristic_thickness_m=3.0e-3,
+    )
+
+    assert vim.SkinDepth(50.0, 3.4e7) == pytest.approx(12.206e-3, rel=2.0e-3)
+    assert gate.skin_depth_m == pytest.approx(vim.SkinDepth(50.0, 3.4e7))
+    assert gate.thickness_to_skin_depth == pytest.approx(0.2458, rel=2.0e-3)
+    assert gate.sibc_applicable is False
+    assert gate.selected_model == "volumetric"
+    assert gate.diagnostics()["thickness_separated"] is False
+
+    high_frequency = vim.EddySIBCApplicability(
+        frequency_hz=1.0e6,
+        sigma=3.4e7,
+        characteristic_thickness_m=3.0e-3,
+    )
+    assert high_frequency.thickness_to_skin_depth > 3.0
+    assert high_frequency.sibc_applicable is True
+    assert high_frequency.selected_model == "sibc"
+
+
+def test_empty_surface_basis_keeps_a_volume_only_vim_well_formed():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["bulk"],
+    )
+    surface = vim.SampledCurrentBasis(
+        points=np.zeros((0, 3)),
+        weights=np.zeros(0),
+        modes=np.zeros((0, 0, 3)),
+        kind="surface",
+        names=(),
+    )
+
+    system = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=3.4e7,
+        kernel_epsilon=0.1,
+    )
+    rhs = system.block_rhs(volume=np.array([1.0]), surface=np.zeros(0))
+
+    assert system.n_modes == 1
+    assert system.blocks["surface"] == (1, 1)
+    assert system.block_slice("surface") == slice(1, 1)
+    assert system.solve(1j * 2.0 * np.pi * 50.0, rhs).shape == (1,)
+    assert system.diagnostics()["passive_blocks"] is True
+
+
+def test_hcurl_eddy_cln_model_preserves_vim_response_and_faraday_drive():
+    system = vim.HybridVIMSystem(
+        resistance=np.array([[2.0]]),
+        inductance=np.array([[3.0]]),
+        surface_mass=np.array([[0.0]]),
+        basis_names=("eddy0",),
+        blocks={"volume": (0, 1), "surface": (1, 1)},
+    )
+    port = np.array([[4.0]])
+    model = vim.HCurlEddyCLNFromVIM(system, port)
+    s = 1j * 7.0
+
+    np.testing.assert_allclose(model.port_admittance(s), system.port_admittance(s, port))
+    expected_current = (-s * 4.0) / (2.0 + 3.0 * s)
+    np.testing.assert_allclose(
+        model.solve_vector_potential_drive(s, 1.0),
+        np.array([expected_current]),
+    )
+    state = model.derivative_input_state_space()
+    np.testing.assert_allclose(state["A"], [[-2.0 / 3.0]])
+    np.testing.assert_allclose(state["B"], [[4.0 / 3.0]])
+    np.testing.assert_allclose(state["C"], [[4.0]])
+    np.testing.assert_allclose(state["D"], [[0.0]])
+    assert model.diagnostics()["passive"] is True
+    assert model.diagnostics()["finite_rl_state_space"] is True
+
+
+def test_hcurl_eddy_cln_model_requires_sibc_rationalization_for_state_space():
+    model = vim.HCurlEddyCLNModel(
+        resistance=np.array([[1.0]]),
+        inductance=np.array([[1.0]]),
+        surface_mass=np.array([[2.0]]),
+        port_rhs=np.array([[1.0]]),
+    )
+
+    assert model.has_sibc_termination is True
+    with pytest.raises(ValueError, match="rationalized"):
+        model.derivative_input_state_space()
+
+
 def test_surface_omega_basis_builds_tangential_current():
     points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
     weights = np.array([0.5, 0.5])
@@ -1112,6 +1206,8 @@ def test_sibc_helpers_reject_nonfinite_laplace_frequency(bad):
 
 def test_hybrid_vim_public_names_are_exported():
     for name in (
+        "SkinDepth",
+        "EddySIBCApplicability",
         "SampledMagnetizationBasis",
         "VolumeCurrentBasis",
         "MagnetizationBasis",
@@ -1166,6 +1262,8 @@ def test_hybrid_vim_public_names_are_exported():
         "EVRSTMethodAlgebra",
         "ReducedPortAdmittance",
         "ReducedPortImpedance",
+        "HCurlEddyCLNModel",
+        "HCurlEddyCLNFromVIM",
         "SharedMeshMaterialModel",
         "CoupledHDivEVRSSystem",
         "CoupledHDivHybridVIMSystem",
@@ -1787,6 +1885,34 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
         + hybrid.bridge_cycle_basis.n_modes
         + hybrid.surface_basis.n_modes
     )
+
+    thin_conductor = vim.EddySIBCApplicability(
+        frequency_hz=50.0,
+        sigma=5.8e7,
+        characteristic_thickness_m=1.0e-3,
+    )
+    volumetric_hybrid = vim.NgsolveEddyBubbleHybridVIM(
+        mesh,
+        fes,
+        stiffness,
+        mass,
+        port,
+        surface_modes,
+        steps=2,
+        sigma=5.8e7,
+        conductive_materials="cond",
+        response_backend="dense",
+        intorder=1,
+        sibc_applicability=thin_conductor,
+    )
+    assert volumetric_hybrid.surface_basis.n_modes == 0
+    assert volumetric_hybrid.system.blocks["surface"][0] == (
+        volumetric_hybrid.system.blocks["surface"][1]
+    )
+    assert volumetric_hybrid.diagnostics()["surface_model"] == "volumetric"
+    assert volumetric_hybrid.diagnostics()["sibc_applicability"][
+        "sibc_applicable"
+    ] is False
 
     fes_hdiv = ng.HDiv(mesh, order=1)
     hdiv_vectors = np.zeros((fes_hdiv.ndof, 1))
