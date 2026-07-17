@@ -40,13 +40,58 @@ Public API:
 This is the order-0 (Whitney) realisation; it is the topology engine the T-Omega ``CohomologyCutSolver`` is
 being migrated onto (dropping its Gmsh dependency).
 """
+import math
+
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import scipy.linalg as sla
 import ngsolve as ng
 
-__all__ = ["chain_complex", "betti_numbers", "cohomology", "cohomology_basis", "circulation"]
+__all__ = ["chain_complex", "betti_numbers", "cohomology", "cohomology_basis", "circulation",
+           "surface_chain_complex", "surface_cohomology", "surface_homology_loops"]
+
+
+def _assemble_d0_d1(V, EI, FI, eidx):
+    """Assemble d0=G (E x V) and d1=Curl (F x E) from the canonical
+    sorted-vertex edge/face tables (shared by the tet and the triangle-
+    surface complexes; ``Curl @ G == 0`` by the sorted orientation)."""
+    E, F = len(EI), len(FI)
+    r, c, d = [], [], []
+    for ei, (lo, hi) in enumerate(EI):                         # d0 = G : (G f)[e] = f(hi) - f(lo)
+        r += [ei, ei]; c += [hi, lo]; d += [1.0, -1.0]
+    G = sp.csr_matrix((d, (r, c)), shape=(E, V))
+    r, c, d = [], [], []
+    for fi, (a, b, cc) in enumerate(FI):                       # d1 = Curl : boundary(a<b<c) = +ab +bc -ac
+        for (p, q), s in (((a, b), 1.0), ((b, cc), 1.0), ((a, cc), -1.0)):
+            r.append(fi); c.append(eidx[(p, q)]); d.append(s)
+    Curl = sp.csr_matrix((d, (r, c)), shape=(F, E))
+    return G, Curl
+
+
+def _harmonic_cochains(ctx, maxgen, tol):
+    """Nullspace of the combinatorial Hodge Laplacian L1 = G G^T + Curl^T Curl
+    (shared by ``cohomology`` and ``surface_cohomology``).  Returns
+    ``(b1, harm, vals)``."""
+    G, Curl, eidx, EI, V, E, F = ctx
+    assert abs(Curl @ G).sum() < 1e-9, "Curl.G != 0 -- orientation bug in the chain complex"
+    L1 = (G @ G.T + Curl.T @ Curl).tocsc()
+    k = max(1, min(maxgen, E - 2))
+    # shift-invert just BELOW the (PSD) spectrum: (L1 + 1e-6 I)^-1 is well-conditioned and surfaces the
+    # smallest eigenvalues; the b1 harmonic ones come out ~0, well separated from the first nonzero.
+    # DETERMINISM CONTRACT: fix the Lanczos start vector -- with a random
+    # v0 the (degenerate, b1-dimensional) nullspace basis rotates from
+    # call to call, so downstream generator selection (QR pivoting on
+    # the period matrix) would pick a different -- equivalent but not
+    # identical -- cut each run.
+    v0 = np.full(E, 1.0 / math.sqrt(E))
+    vals, vecs = spla.eigsh(L1, k=k, sigma=-1e-6, which="LM", v0=v0)
+    order = np.argsort(vals)
+    vals, vecs = vals[order], vecs[:, order]
+    sel = vals < tol
+    b1 = int(np.sum(sel))
+    harm = vecs[:, sel] if b1 else np.zeros((E, 0))
+    return b1, harm, vals
 
 
 def chain_complex(mesh):
@@ -71,17 +116,41 @@ def chain_complex(mesh):
             tri = tuple(vs[m] for m in range(4) if m != k)
             if tri not in fidx:
                 fidx[tri] = len(FI); FI.append(tri)
-    E, F = len(EI), len(FI)
-    r, c, d = [], [], []
-    for ei, (lo, hi) in enumerate(EI):                         # d0 = G : (G f)[e] = f(hi) - f(lo)
-        r += [ei, ei]; c += [hi, lo]; d += [1.0, -1.0]
-    G = sp.csr_matrix((d, (r, c)), shape=(E, V))
-    r, c, d = [], [], []
-    for fi, (a, b, cc) in enumerate(FI):                       # d1 = Curl : boundary(a<b<c) = +ab +bc -ac
-        for (p, q), s in (((a, b), 1.0), ((b, cc), 1.0), ((a, cc), -1.0)):
-            r.append(fi); c.append(eidx[(p, q)]); d.append(s)
-    Curl = sp.csr_matrix((d, (r, c)), shape=(F, E))
-    return G, Curl, eidx, EI, V, E, F
+    G, Curl = _assemble_d0_d1(V, EI, FI, eidx)
+    return G, Curl, eidx, EI, V, len(EI), len(FI)
+
+
+def surface_chain_complex(tris, nv=None):
+    """Build d0=G and d1=Curl of a TRIANGULATED SURFACE (pure arrays, no NGSolve mesh).
+
+    The triangle-surface counterpart of ``chain_complex``: C0 = vertices, C1 = edges, C2 = the triangles
+    themselves, in the same canonical sorted-vertex orientation (so ``Curl @ G == 0`` by construction).
+    The complex is combinatorial -- only connectivity enters, no coordinates.  For a CLOSED orientable
+    surface, dim H^1 = b1 = 2 * genus.
+
+    Args:
+        tris: (nt, 3) vertex indices (winding irrelevant -- faces are canonicalised by sorting).
+        nv: vertex-id space size (default ``tris.max() + 1``); pass the mesh vertex count when isolated
+            vertices must keep their ids.
+
+    Returns ``(G, Curl, eidx, EI, V, E, F)`` exactly like ``chain_complex``.
+    """
+    tris = np.asarray(tris, dtype=np.int64)
+    V = int(nv) if nv is not None else int(tris.max()) + 1
+    eidx, EI = {}, []
+    fidx, FI = {}, []
+    for t in tris:
+        vs = sorted(int(v) for v in t)
+        for i in range(3):
+            for j in range(i + 1, 3):
+                key = (vs[i], vs[j])
+                if key not in eidx:
+                    eidx[key] = len(EI); EI.append(key)
+        tri = tuple(vs)
+        if tri not in fidx:
+            fidx[tri] = len(FI); FI.append(tri)
+    G, Curl = _assemble_d0_d1(V, EI, FI, eidx)
+    return G, Curl, eidx, EI, V, len(EI), len(FI)
 
 
 def cohomology(mesh, maxgen=24, tol=1e-4):
@@ -91,19 +160,93 @@ def cohomology(mesh, maxgen=24, tol=1e-4):
     values in the canonical orientation), ``ctx = (G, Curl, eidx, EI, V, E, F)``, ``vals`` the smallest
     eigenvalues (for inspecting the spectral gap).  The CALLER opens ``with ng.TaskManager():`` if desired.
     """
-    G, Curl, eidx, EI, V, E, F = chain_complex(mesh)
-    assert abs(Curl @ G).sum() < 1e-9, "Curl.G != 0 -- orientation bug in the chain complex"
-    L1 = (G @ G.T + Curl.T @ Curl).tocsc()
-    k = max(1, min(maxgen, E - 2))
-    # shift-invert just BELOW the (PSD) spectrum: (L1 + 1e-6 I)^-1 is well-conditioned and surfaces the
-    # smallest eigenvalues; the b1 harmonic ones come out ~0, well separated from the first nonzero.
-    vals, vecs = spla.eigsh(L1, k=k, sigma=-1e-6, which="LM")
-    order = np.argsort(vals)
-    vals, vecs = vals[order], vecs[:, order]
-    sel = vals < tol
-    b1 = int(np.sum(sel))
-    harm = vecs[:, sel] if b1 else np.zeros((E, 0))
-    return b1, harm, (G, Curl, eidx, EI, V, E, F), vals
+    ctx = chain_complex(mesh)
+    b1, harm, vals = _harmonic_cochains(ctx, maxgen, tol)
+    return b1, harm, ctx, vals
+
+
+def surface_cohomology(tris, nv=None, maxgen=24, tol=1e-4):
+    """First cohomology of a triangulated surface (b1 = 2*genus for closed orientable) -- the surface
+    counterpart of ``cohomology``.  Pure numpy/scipy: same combinatorial Hodge-Laplacian nullspace, on the
+    ``surface_chain_complex``.  Returns ``(b1, harm, ctx, vals)``.
+    """
+    ctx = surface_chain_complex(tris, nv)
+    b1, harm, vals = _harmonic_cochains(ctx, maxgen, tol)
+    return b1, harm, ctx, vals
+
+
+def surface_fundamental_cycles(tris, nv=None, maxgen=24, tol=1e-4):
+    """Harmonic periods over ALL cotree fundamental cycles of a triangulated surface, plus an expander.
+
+    Every cotree edge closes a FUNDAMENTAL CYCLE through the spanning tree -- always a simple vertex loop --
+    and its homology class is encoded by its period vector against the harmonic 1-cochain basis (the class
+    map H_1 -> R^b1 is linear, so ANY class-valued function of a cycle -- e.g. geometric winding numbers --
+    is a fixed linear image of its period vector).  This lets a caller classify thousands of candidate
+    cycles in O(b1) each and pick a representative with prescribed class AND good geometry, which a fixed
+    b1-sized generator basis cannot offer (its representatives may all be mixed-class).
+
+    Returns ``(b1, Pi, expand, cotree)``:
+      * ``b1``      : dim H^1 (= 2*genus for a closed orientable surface).
+      * ``Pi``      : (ncotree x b1) periods of the harmonic basis over each fundamental cycle.
+      * ``expand(k) -> [v0, v1, ...]`` : vertex loop (implicitly closed) of fundamental cycle ``k``.
+      * ``cotree``  : the cycles' cotree edge indices into the complex's ``EI``.
+    """
+    b1, harm, ctx, _vals = surface_cohomology(tris, nv, maxgen, tol)
+    V, EI = ctx[4], ctx[3]
+    if b1 == 0:
+        return 0, np.zeros((0, 0)), None, []
+    Pi, cotree = _periods(harm, V, EI)
+
+    # Vertex-parent tree from the (deterministic BFS) spanning forest.
+    _order, parent_edge, _cotree2 = _spanning_tree(V, EI)
+    parent = [None] * V
+    for w in range(V):
+        ei = parent_edge[w]
+        if ei is None:
+            continue
+        lo, hi = EI[ei]
+        parent[w] = lo if w == hi else hi
+
+    def _tree_path(a, b):
+        anc = []
+        u = a
+        while u is not None:
+            anc.append(u)
+            u = parent[u]
+        s = set(anc)
+        pb = []
+        u = b
+        while u not in s:
+            pb.append(u)
+            u = parent[u]
+        return anc[:anc.index(u) + 1] + pb[::-1]
+
+    def expand(k):
+        lo, hi = EI[cotree[int(k)]]
+        return _tree_path(lo, hi)
+
+    return b1, Pi, expand, cotree
+
+
+def surface_homology_loops(tris, nv=None):
+    """Vertex-cycle representatives of a homology-generator basis of a triangulated surface.
+
+    Returns a list of b1 (= 2*genus, closed orientable) vertex loops, each a list of vertex ids that is
+    IMPLICITLY closed (last -> first is a mesh edge).  Generator selection goes through the PERIOD MATRIX of
+    the harmonic 1-cochains (tree gauge + QR pivoting on the cotree periods, ``_periods``) -- independence of
+    the loops is certified by a nonsingular b1 x b1 period matrix, not by a combinatorial dual-tree argument.
+
+    NOTE: the representatives are only guaranteed INDEPENDENT, not class-pure (a genus-1 basis may come out
+    as {toroidal+poloidal, poloidal}).  A caller that needs a PRESCRIBED class (e.g. the pure toroidal cut of
+    the ``radia.bem_loop_extension`` loop DOF) should classify all fundamental cycles via
+    ``surface_fundamental_cycles`` instead.  This is the surface H^1 sibling of the volume
+    ``cohomology_basis`` the T-Omega cut consumes.
+    """
+    b1, Pi, expand, _cotree = surface_fundamental_cycles(tris, nv)
+    if b1 == 0:
+        return []
+    _, _, piv = sla.qr(Pi.T, pivoting=True, mode="economic")   # most-independent cotree rows first
+    return [expand(k) for k in piv[:b1]]
 
 
 def betti_numbers(mesh):
