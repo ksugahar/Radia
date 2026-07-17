@@ -342,6 +342,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     dxf_wire_plane_orientation_layer_generation_identity_ok = True
     step_assembly_product_color_location_generation_identity_ok = True
     sketch_constraint_entity_solver_order_generation_identity_ok = True
+    step_ap242_component_identity_ok = True
+    curved_mesh_export_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -371,6 +373,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         dxf_wire_plane_orientation_layer_generation_identity_ok = False
         step_assembly_product_color_location_generation_identity_ok = False
         sketch_constraint_entity_solver_order_generation_identity_ok = False
+        step_ap242_component_identity_ok = False
+        curved_mesh_export_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -1761,6 +1765,145 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and sketch_constraint.get("replay_constraint_table_sha256")
                 == constraint_digest
             )
+
+        step_ap242 = replay_identity_value.get(
+            "step_ap242_component_transform_name_product_generation_identity"
+        )
+        if step_ap242 is not None:
+            step_ap242 = step_ap242 if isinstance(step_ap242, Mapping) else {}
+            export_generation = str(
+                step_ap242.get("step_export_generation", "")
+            ).strip()
+            assembly_generation = str(
+                step_ap242.get("assembly_generation", "")
+            ).strip()
+            product_ids = [
+                str(item).strip()
+                for item in step_ap242.get("component_product_ids", [])
+            ]
+            decoded_product_ids = [
+                str(item).strip()
+                for item in step_ap242.get("decoded_component_product_ids", [])
+            ]
+            names = [str(item).strip() for item in step_ap242.get("component_names", [])]
+            decoded_names = [
+                str(item).strip()
+                for item in step_ap242.get("decoded_component_names", [])
+            ]
+            transforms = [
+                str(item).lower()
+                for item in step_ap242.get("nested_transform_sha256", [])
+            ]
+            decoded_transforms = [
+                str(item).lower()
+                for item in step_ap242.get("decoded_nested_transform_sha256", [])
+            ]
+            product_digest = str(
+                step_ap242.get("ap242_product_map_sha256", "")
+            ).lower()
+            step_ap242_component_identity_ok = (
+                bool(export_generation)
+                and step_ap242.get("decoder_step_export_generation")
+                == export_generation
+                and bool(assembly_generation)
+                and all(
+                    step_ap242.get(key) == assembly_generation
+                    for key in (
+                        "product_assembly_generation",
+                        "name_assembly_generation",
+                        "transform_assembly_generation",
+                    )
+                )
+                and bool(product_ids)
+                and len(set(product_ids)) == len(product_ids)
+                and all(product_ids)
+                and decoded_product_ids == product_ids
+                and len(names) == len(product_ids)
+                and all(names)
+                and decoded_names == names
+                and len(transforms) == len(product_ids)
+                and all(
+                    len(digest) == 64
+                    and all(character in "0123456789abcdef" for character in digest)
+                    for digest in transforms
+                )
+                and decoded_transforms == transforms
+                and len(product_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in product_digest
+                )
+                and step_ap242.get("decoded_ap242_product_map_sha256")
+                == product_digest
+            )
+
+        curved_mesh = replay_identity_value.get(
+            "curved_mesh_export_edge_chord_surface_label_generation_identity"
+        )
+        if curved_mesh is not None:
+            curved_mesh = curved_mesh if isinstance(curved_mesh, Mapping) else {}
+            shape_generation = str(curved_mesh.get("shape_generation", "")).strip()
+            export_generation = str(
+                curved_mesh.get("mesh_export_generation", "")
+            ).strip()
+            edge_digests = [
+                str(item).lower()
+                for item in curved_mesh.get("edge_curve_sha256", [])
+            ]
+            exported_edge_digests = [
+                str(item).lower()
+                for item in curved_mesh.get("exported_edge_curve_sha256", [])
+            ]
+            labels = [
+                str(item).strip()
+                for item in curved_mesh.get("boundary_surface_labels", [])
+            ]
+            exported_labels = [
+                str(item).strip()
+                for item in curved_mesh.get("exported_boundary_surface_labels", [])
+            ]
+            mesh_digest = str(curved_mesh.get("curved_mesh_sha256", "")).lower()
+            try:
+                chord = float(curved_mesh.get("chordal_tolerance"))
+                evaluated_chord = float(
+                    curved_mesh.get("evaluated_chordal_tolerance")
+                )
+            except (TypeError, ValueError):
+                chord = -1.0
+                evaluated_chord = -2.0
+            length_unit = str(curved_mesh.get("length_unit", "")).strip()
+            curved_mesh_export_identity_ok = (
+                bool(shape_generation)
+                and all(
+                    curved_mesh.get(key) == shape_generation
+                    for key in (
+                        "mesh_shape_generation",
+                        "edge_curve_shape_generation",
+                        "surface_label_shape_generation",
+                    )
+                )
+                and bool(export_generation)
+                and curved_mesh.get("metric_mesh_export_generation")
+                == export_generation
+                and bool(edge_digests)
+                and all(
+                    len(digest) == 64
+                    and all(character in "0123456789abcdef" for character in digest)
+                    for digest in edge_digests
+                )
+                and exported_edge_digests == edge_digests
+                and math.isfinite(chord)
+                and chord > 0.0
+                and math.isclose(evaluated_chord, chord, rel_tol=0.0, abs_tol=1.0e-18)
+                and length_unit in {"m", "cm", "mm"}
+                and curved_mesh.get("evaluated_length_unit") == length_unit
+                and bool(labels)
+                and len(set(labels)) == len(labels)
+                and all(labels)
+                and exported_labels == labels
+                and len(mesh_digest) == 64
+                and all(character in "0123456789abcdef" for character in mesh_digest)
+                and curved_mesh.get("exported_curved_mesh_sha256") == mesh_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -1860,6 +2003,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "sketch_constraints_use_current_entity_ids_and_solver_order": (
             sketch_constraint_entity_solver_order_generation_identity_ok
+        ),
+        "step_ap242_components_use_current_products_names_and_nested_transforms": (
+            step_ap242_component_identity_ok
+        ),
+        "curved_mesh_export_uses_current_edges_chord_and_surface_labels": (
+            curved_mesh_export_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
