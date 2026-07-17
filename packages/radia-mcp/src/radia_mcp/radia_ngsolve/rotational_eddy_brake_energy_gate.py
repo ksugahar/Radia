@@ -1183,6 +1183,120 @@ def _acoustic_structure_trace_impedance_order_frame_generation_identity_ok(
     )
 
 
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
+def _continuation_branch_load_mesh_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "nonlinear_continuation_branch_load_step_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    rows = (
+        identity.get("load_parameters"),
+        identity.get("result_load_parameters"),
+        identity.get("tangent_state_sha256"),
+        identity.get("result_tangent_state_sha256"),
+    )
+    if not all(isinstance(row, list) for row in rows):
+        return False
+    try:
+        loads = [float(value) for value in rows[0]]
+        result_loads = [float(value) for value in rows[1]]
+        tangents = [str(value) for value in rows[2]]
+        result_tangents = [str(value) for value in rows[3]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("solve_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "branch_solve_generation",
+                "load_step_solve_generation",
+                "tangent_state_solve_generation",
+                "adapted_mesh_solve_generation",
+                "result_solve_generation",
+            )
+        )
+        and bool(str(identity.get("branch_id") or ""))
+        and identity.get("result_branch_id") == identity.get("branch_id")
+        and len(loads) >= 2
+        and all(math.isfinite(value) for value in loads)
+        and all(right > left for left, right in zip(loads, loads[1:]))
+        and result_loads == loads
+        and len(tangents) == len(loads)
+        and all(_is_sha256(value) for value in tangents)
+        and result_tangents == tangents
+        and _is_sha256(str(identity.get("adapted_mesh_sha256") or ""))
+        and identity.get("result_mesh_sha256") == identity.get("adapted_mesh_sha256")
+        and _is_sha256(str(identity.get("continuation_table_sha256") or ""))
+        and identity.get("result_continuation_table_sha256")
+        == identity.get("continuation_table_sha256")
+    )
+
+
+def _parametric_sequence_initial_solution_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "parametric_sequence_initial_solution_dataset_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    rows = (
+        identity.get("parameter_names"),
+        identity.get("parameter_rows"),
+        identity.get("result_parameter_rows"),
+        identity.get("initial_solution_sha256"),
+        identity.get("result_initial_solution_sha256"),
+    )
+    if not all(isinstance(row, list) for row in rows):
+        return False
+    try:
+        names = [str(value) for value in rows[0]]
+        parameters = [[float(value) for value in row] for row in rows[1]]
+        result_parameters = [[float(value) for value in row] for row in rows[2]]
+        solutions = [str(value) for value in rows[3]]
+        result_solutions = [str(value) for value in rows[4]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sweep_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "sequence_sweep_generation",
+                "parameter_row_sweep_generation",
+                "initial_solution_sweep_generation",
+                "dataset_sweep_generation",
+                "result_sweep_generation",
+            )
+        )
+        and bool(str(identity.get("sequence_id") or ""))
+        and identity.get("result_sequence_id") == identity.get("sequence_id")
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and bool(parameters)
+        and all(len(row) == len(names) for row in parameters)
+        and all(math.isfinite(value) for row in parameters for value in row)
+        and result_parameters == parameters
+        and len(solutions) == len(parameters)
+        and all(_is_sha256(value) for value in solutions)
+        and result_solutions == solutions
+        and _is_sha256(str(identity.get("dataset_sha256") or ""))
+        and identity.get("result_dataset_sha256") == identity.get("dataset_sha256")
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1584,6 +1698,12 @@ def rotational_eddy_brake_energy_gate(
             _acoustic_structure_trace_impedance_order_frame_generation_identity_ok(
                 summary
             )
+        ),
+        "nonlinear_continuation_result_uses_current_branch_load_tangent_and_mesh": (
+            _continuation_branch_load_mesh_identity_ok(summary)
+        ),
+        "parametric_sequence_uses_current_rows_initial_solutions_and_dataset": (
+            _parametric_sequence_initial_solution_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
