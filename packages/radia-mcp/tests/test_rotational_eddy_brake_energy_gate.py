@@ -1194,3 +1194,106 @@ def test_v21_public_multiphysics_coupling_source_frame_unit_selection_generation
     assert not result["checks"][
         "multiphysics_coupling_uses_current_source_frame_units_and_selection"
     ]
+
+
+def _with_v22_contact_and_acoustic_structure_identity(summary: dict) -> dict:
+    summary = _with_v21_restart_and_coupling_identity(summary)
+    summary["contact_active_set_friction_state_mesh_generation_identity"] = {
+        "contact_generation": "contact-72",
+        "active_set_contact_generation": "contact-72",
+        "friction_state_contact_generation": "contact-72",
+        "slave_mesh_contact_generation": "contact-72",
+        "normal_orientation_contact_generation": "contact-72",
+        "consistent_tangent_contact_generation": "contact-72",
+        "slave_surface_ids": [31, 32],
+        "active_slave_surface_ids": [31, 32],
+        "normal_orientation": "slave_to_master",
+        "active_set_normal_orientation": "slave_to_master",
+        "friction_coefficient": 0.18,
+        "active_set_friction_coefficient": 0.18,
+        "slave_mesh_sha256": "1" * 64,
+        "active_set_slave_mesh_sha256": "1" * 64,
+        "friction_state_sha256": "2" * 64,
+        "active_set_friction_state_sha256": "2" * 64,
+        "consistent_tangent_sha256": "3" * 64,
+        "active_set_consistent_tangent_sha256": "3" * 64,
+    }
+    summary["acoustic_structure_trace_impedance_order_frame_generation_identity"] = {
+        "coupling_generation": "acoustic-structure-72",
+        "pressure_trace_coupling_generation": "acoustic-structure-72",
+        "traction_trace_coupling_generation": "acoustic-structure-72",
+        "normal_frame_coupling_generation": "acoustic-structure-72",
+        "impedance_coupling_generation": "acoustic-structure-72",
+        "interface_mesh_coupling_generation": "acoustic-structure-72",
+        "normal_frame": "acoustic_outward",
+        "traction_normal_frame": "acoustic_outward",
+        "pressure_to_traction_sign": -1,
+        "assembled_pressure_to_traction_sign": -1,
+        "impedance_order": 4,
+        "assembled_impedance_order": 4,
+        "pressure_trace_sha256": "4" * 64,
+        "assembled_pressure_trace_sha256": "4" * 64,
+        "traction_trace_sha256": "5" * 64,
+        "assembled_traction_trace_sha256": "5" * 64,
+        "interface_mesh_sha256": "6" * 64,
+        "assembled_interface_mesh_sha256": "6" * 64,
+    }
+    return summary
+
+
+def test_v22_public_positive_contact_and_acoustic_structure_identity() -> None:
+    result = gate(
+        _with_v22_contact_and_acoustic_structure_identity(copy.deepcopy(_summary()))
+    )
+    assert result["status"] == "ok"
+
+
+def test_v22_public_contact_active_set_friction_state_mesh_generation_mismatch() -> None:
+    summary = _with_v22_contact_and_acoustic_structure_identity(
+        copy.deepcopy(_summary())
+    )
+    summary["contact_active_set_friction_state_mesh_generation_identity"].update(
+        {
+            "active_set_contact_generation": "contact-71",
+            "friction_state_contact_generation": "contact-70",
+            "slave_mesh_contact_generation": "contact-69",
+            "active_slave_surface_ids": [31, 34],
+            "active_set_normal_orientation": "master_to_slave",
+            "active_set_friction_coefficient": 0.24,
+            "active_set_slave_mesh_sha256": "b" * 64,
+            "active_set_friction_state_sha256": "c" * 64,
+            "active_set_consistent_tangent_sha256": "d" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "contact_active_set_uses_current_friction_state_mesh_and_tangent"
+    ]
+
+
+def test_v22_public_acoustic_structure_trace_impedance_order_frame_generation_mismatch() -> None:
+    summary = _with_v22_contact_and_acoustic_structure_identity(
+        copy.deepcopy(_summary())
+    )
+    summary[
+        "acoustic_structure_trace_impedance_order_frame_generation_identity"
+    ].update(
+        {
+            "traction_trace_coupling_generation": "acoustic-structure-71",
+            "normal_frame_coupling_generation": "acoustic-structure-70",
+            "impedance_coupling_generation": "acoustic-structure-69",
+            "interface_mesh_coupling_generation": "acoustic-structure-68",
+            "traction_normal_frame": "structure_outward",
+            "assembled_pressure_to_traction_sign": 1,
+            "assembled_impedance_order": 1,
+            "assembled_pressure_trace_sha256": "e" * 64,
+            "assembled_traction_trace_sha256": "f" * 64,
+            "assembled_interface_mesh_sha256": "0" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "acoustic_structure_trace_uses_current_frame_impedance_and_interface"
+    ]

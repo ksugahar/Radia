@@ -1068,6 +1068,121 @@ def _multiphysics_coupling_source_identity_ok(
     )
 
 
+def _contact_active_set_friction_state_mesh_generation_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "contact_active_set_friction_state_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    surfaces = identity.get("slave_surface_ids")
+    active_surfaces = identity.get("active_slave_surface_ids")
+    if not isinstance(surfaces, list) or not isinstance(active_surfaces, list):
+        return False
+    try:
+        surface_ids = [int(value) for value in surfaces]
+        active_surface_ids = [int(value) for value in active_surfaces]
+        friction = float(identity.get("friction_coefficient"))
+        active_friction = float(identity.get("active_set_friction_coefficient"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("contact_generation") or "")
+    normal = str(identity.get("normal_orientation") or "")
+    digest_pairs = (
+        ("slave_mesh_sha256", "active_set_slave_mesh_sha256"),
+        ("friction_state_sha256", "active_set_friction_state_sha256"),
+        ("consistent_tangent_sha256", "active_set_consistent_tangent_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "active_set_contact_generation",
+                "friction_state_contact_generation",
+                "slave_mesh_contact_generation",
+                "normal_orientation_contact_generation",
+                "consistent_tangent_contact_generation",
+            )
+        )
+        and bool(surface_ids)
+        and all(value > 0 for value in surface_ids)
+        and len(set(surface_ids)) == len(surface_ids)
+        and active_surface_ids == surface_ids
+        and normal in {"slave_to_master", "master_to_slave"}
+        and identity.get("active_set_normal_orientation") == normal
+        and math.isfinite(friction)
+        and friction >= 0.0
+        and math.isclose(active_friction, friction, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(
+            len(str(identity.get(current) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(current) or "")
+            )
+            and identity.get(active) == identity.get(current)
+            for current, active in digest_pairs
+        )
+    )
+
+
+def _acoustic_structure_trace_impedance_order_frame_generation_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "acoustic_structure_trace_impedance_order_frame_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        sign = int(identity.get("pressure_to_traction_sign"))
+        assembled_sign = int(identity.get("assembled_pressure_to_traction_sign"))
+        order = int(identity.get("impedance_order"))
+        assembled_order = int(identity.get("assembled_impedance_order"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("coupling_generation") or "")
+    frame = str(identity.get("normal_frame") or "")
+    digest_pairs = (
+        ("pressure_trace_sha256", "assembled_pressure_trace_sha256"),
+        ("traction_trace_sha256", "assembled_traction_trace_sha256"),
+        ("interface_mesh_sha256", "assembled_interface_mesh_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "pressure_trace_coupling_generation",
+                "traction_trace_coupling_generation",
+                "normal_frame_coupling_generation",
+                "impedance_coupling_generation",
+                "interface_mesh_coupling_generation",
+            )
+        )
+        and frame in {"acoustic_outward", "structure_outward"}
+        and identity.get("traction_normal_frame") == frame
+        and sign in {-1, 1}
+        and assembled_sign == sign
+        and order >= 1
+        and assembled_order == order
+        and all(
+            len(str(identity.get(current) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(current) or "")
+            )
+            and identity.get(assembled) == identity.get(current)
+            for current, assembled in digest_pairs
+        )
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1461,6 +1576,14 @@ def rotational_eddy_brake_energy_gate(
         ),
         "multiphysics_coupling_uses_current_source_frame_units_and_selection": (
             _multiphysics_coupling_source_identity_ok(summary)
+        ),
+        "contact_active_set_uses_current_friction_state_mesh_and_tangent": (
+            _contact_active_set_friction_state_mesh_generation_identity_ok(summary)
+        ),
+        "acoustic_structure_trace_uses_current_frame_impedance_and_interface": (
+            _acoustic_structure_trace_impedance_order_frame_generation_identity_ok(
+                summary
+            )
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
