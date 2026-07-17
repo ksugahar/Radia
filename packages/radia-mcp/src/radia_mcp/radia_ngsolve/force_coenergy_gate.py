@@ -57,6 +57,8 @@ def force_coenergy_displacement_gate(
     sliding_band_periodic_angle_rotor_position_identity_ok = True
     coenergy_torque_angle_difference_remesh_state_identity_ok = True
     axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = True
+    weighted_stress_force_mask_material_mesh_generation_identity_ok = True
+    harmonic_loss_phase_frequency_lamination_generation_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -84,6 +86,8 @@ def force_coenergy_displacement_gate(
         sliding_band_periodic_angle_rotor_position_identity_ok = False
         coenergy_torque_angle_difference_remesh_state_identity_ok = False
         axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = False
+        weighted_stress_force_mask_material_mesh_generation_identity_ok = False
+        harmonic_loss_phase_frequency_lamination_generation_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1280,6 +1284,151 @@ def force_coenergy_displacement_gate(
                 == coordinate_digest
             )
 
+        weighted_force = artifact_identity.get(
+            "weighted_stress_force_mask_material_mesh_generation_identity"
+        )
+        if weighted_force is not None:
+            weighted_force = weighted_force if isinstance(weighted_force, dict) else {}
+            solve_generation = str(
+                weighted_force.get("solve_generation", "")
+            ).strip()
+            try:
+                body_groups = [
+                    int(value) for value in weighted_force.get("body_group_ids", [])
+                ]
+                mask_groups = [
+                    int(value)
+                    for value in weighted_force.get("mask_body_group_ids", [])
+                ]
+                force_values = [
+                    float(value)
+                    for value in weighted_force.get("weighted_force_n", [])
+                ]
+                reported_force = [
+                    float(value)
+                    for value in weighted_force.get("reported_force_n", [])
+                ]
+            except (TypeError, ValueError):
+                body_groups = mask_groups = []
+                force_values = reported_force = []
+            material_labels = [
+                str(value).strip()
+                for value in weighted_force.get("material_labels", [])
+            ]
+            resolved_labels = [
+                str(value).strip()
+                for value in weighted_force.get("resolved_material_labels", [])
+            ]
+            mask_digest = str(
+                weighted_force.get("mask_table_sha256", "")
+            ).lower()
+            field_digest = str(
+                weighted_force.get("mesh_field_sha256", "")
+            ).lower()
+            weighted_stress_force_mask_material_mesh_generation_identity_ok = (
+                bool(solve_generation)
+                and all(
+                    weighted_force.get(key) == solve_generation
+                    for key in (
+                        "weighted_stress_mask_solve_generation",
+                        "material_label_solve_generation",
+                        "mesh_field_solve_generation",
+                        "force_integral_solve_generation",
+                    )
+                )
+                and bool(body_groups)
+                and len(set(body_groups)) == len(body_groups)
+                and mask_groups == body_groups
+                and len(material_labels) == len(body_groups)
+                and all(material_labels)
+                and resolved_labels == material_labels
+                and bool(force_values)
+                and all(math.isfinite(value) for value in force_values)
+                and reported_force == force_values
+                and len(mask_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in mask_digest
+                )
+                and str(weighted_force.get("force_mask_table_sha256", "")).lower()
+                == mask_digest
+                and len(field_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in field_digest
+                )
+                and str(weighted_force.get("force_mesh_field_sha256", "")).lower()
+                == field_digest
+            )
+
+        harmonic_loss = artifact_identity.get(
+            "harmonic_loss_phase_frequency_lamination_generation_identity"
+        )
+        if harmonic_loss is not None:
+            harmonic_loss = harmonic_loss if isinstance(harmonic_loss, dict) else {}
+            generation = str(
+                harmonic_loss.get("analysis_generation", "")
+            ).strip()
+            phase = str(harmonic_loss.get("phase_convention", "")).strip()
+            try:
+                frequency = float(harmonic_loss.get("frequency_hz"))
+                loss_frequency = float(harmonic_loss.get("loss_frequency_hz"))
+                coefficients = [
+                    [float(value) for value in row]
+                    for row in harmonic_loss.get("material_loss_coefficients", [])
+                ]
+                loss_coefficients = [
+                    [float(value) for value in row]
+                    for row in harmonic_loss.get("loss_material_coefficients", [])
+                ]
+            except (TypeError, ValueError):
+                frequency = loss_frequency = math.nan
+                coefficients = loss_coefficients = []
+            orientations = [
+                str(value).strip()
+                for value in harmonic_loss.get("lamination_orientations", [])
+            ]
+            loss_orientations = [
+                str(value).strip()
+                for value in harmonic_loss.get("loss_lamination_orientations", [])
+            ]
+            table_digest = str(
+                harmonic_loss.get("material_loss_table_sha256", "")
+            ).lower()
+            harmonic_loss_phase_frequency_lamination_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    harmonic_loss.get(key) == generation
+                    for key in (
+                        "phase_convention_analysis_generation",
+                        "frequency_analysis_generation",
+                        "lamination_analysis_generation",
+                        "material_loss_analysis_generation",
+                        "loss_result_analysis_generation",
+                    )
+                )
+                and phase in {"exp(+jwt)", "exp(-jwt)"}
+                and harmonic_loss.get("loss_phase_convention") == phase
+                and math.isfinite(frequency)
+                and frequency > 0.0
+                and math.isclose(
+                    loss_frequency, frequency, rel_tol=1.0e-12, abs_tol=1.0e-15
+                )
+                and bool(orientations)
+                and all(orientations)
+                and loss_orientations == orientations
+                and len(coefficients) == len(orientations)
+                and all(
+                    row and all(math.isfinite(value) for value in row)
+                    for row in coefficients
+                )
+                and loss_coefficients == coefficients
+                and len(table_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in table_digest
+                )
+                and str(harmonic_loss.get("loss_material_table_sha256", "")).lower()
+                == table_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -1384,6 +1533,12 @@ def force_coenergy_displacement_gate(
         ),
         "axisymmetric_hodge_radius_weights_use_current_mesh_coordinates": (
             axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok
+        ),
+        "weighted_stress_force_uses_current_mask_materials_and_mesh_field": (
+            weighted_stress_force_mask_material_mesh_generation_identity_ok
+        ),
+        "harmonic_loss_uses_current_phase_frequency_lamination_and_material_data": (
+            harmonic_loss_phase_frequency_lamination_generation_identity_ok
         ),
     }
     return {
