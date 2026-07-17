@@ -1211,6 +1211,141 @@ def _broadband_energy_q_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _mixed_mode_port_metadata_is_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "mixed_mode_pair_impedance_reference_plane_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    result_generation = str(identity.get("result_generation", "")).strip()
+    port_generation = str(identity.get("port_generation", "")).strip()
+    pair_ids = identity.get("pair_ids")
+    polarities = identity.get("pair_polarities")
+    try:
+        differential = [
+            float(value) for value in identity.get("differential_impedances_ohm", [])
+        ]
+        common = [
+            float(value) for value in identity.get("common_impedances_ohm", [])
+        ]
+        planes = [float(value) for value in identity.get("reference_planes_m", [])]
+    except (TypeError, ValueError):
+        differential = common = planes = []
+    digest = str(identity.get("mixed_mode_port_table_sha256", "")).lower()
+    flattened_ports = (
+        [port for pair in pair_ids for port in pair]
+        if isinstance(pair_ids, list)
+        and all(isinstance(pair, list) and len(pair) == 2 for pair in pair_ids)
+        else []
+    )
+    return (
+        bool(result_generation)
+        and identity.get("decoded_result_generation") == result_generation
+        and bool(port_generation)
+        and all(
+            identity.get(key) == port_generation
+            for key in (
+                "pair_map_port_generation",
+                "modal_impedance_port_generation",
+                "polarity_port_generation",
+                "reference_plane_port_generation",
+            )
+        )
+        and bool(flattened_ports)
+        and all(isinstance(value, str) and bool(value.strip()) for value in flattened_ports)
+        and len(set(flattened_ports)) == len(flattened_ports)
+        and identity.get("result_pair_ids") == pair_ids
+        and isinstance(polarities, list)
+        and len(polarities) == len(pair_ids)
+        and all(
+            isinstance(pair, list)
+            and len(pair) == 2
+            and set(pair) == {-1, 1}
+            for pair in polarities
+        )
+        and identity.get("result_pair_polarities") == polarities
+        and len(differential) == len(pair_ids)
+        and all(math.isfinite(value) and value > 0.0 for value in differential)
+        and identity.get("result_differential_impedances_ohm")
+        == identity.get("differential_impedances_ohm")
+        and len(common) == len(pair_ids)
+        and all(math.isfinite(value) and value > 0.0 for value in common)
+        and identity.get("result_common_impedances_ohm")
+        == identity.get("common_impedances_ohm")
+        and len(planes) == len(pair_ids)
+        and all(math.isfinite(value) for value in planes)
+        and identity.get("result_reference_planes_m")
+        == identity.get("reference_planes_m")
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and str(identity.get("result_mixed_mode_port_table_sha256", "")).lower()
+        == digest
+    )
+
+
+def _time_farfield_fft_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "time_farfield_fft_window_phase_center_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    farfield_generation = str(identity.get("farfield_generation", "")).strip()
+    monitor_generation = str(identity.get("monitor_generation", "")).strip()
+    try:
+        times = [float(value) for value in identity.get("time_samples_s", [])]
+        fft_times = [
+            float(value) for value in identity.get("fft_time_samples_s", [])
+        ]
+        window = [float(value) for value in identity.get("window_samples", [])]
+        fft_window = [
+            float(value) for value in identity.get("fft_window_samples", [])
+        ]
+        phase_center = [float(value) for value in identity.get("phase_center_m", [])]
+        result_phase_center = [
+            float(value) for value in identity.get("result_phase_center_m", [])
+        ]
+    except (TypeError, ValueError):
+        times = fft_times = window = fft_window = []
+        phase_center = result_phase_center = []
+    scaling = identity.get("fft_scaling")
+    digest = str(identity.get("time_farfield_input_sha256", "")).lower()
+    return (
+        bool(farfield_generation)
+        and identity.get("result_farfield_generation") == farfield_generation
+        and bool(monitor_generation)
+        and all(
+            identity.get(key) == monitor_generation
+            for key in (
+                "time_grid_monitor_generation",
+                "window_monitor_generation",
+                "fft_scaling_monitor_generation",
+                "phase_center_monitor_generation",
+            )
+        )
+        and len(times) >= 4
+        and all(math.isfinite(value) for value in times)
+        and all(left < right for left, right in zip(times, times[1:]))
+        and fft_times == times
+        and len(window) == len(times)
+        and all(math.isfinite(value) and value >= 0.0 for value in window)
+        and any(value > 0.0 for value in window)
+        and fft_window == window
+        and scaling in {"one_sided_amplitude", "two_sided_amplitude", "power"}
+        and identity.get("result_fft_scaling") == scaling
+        and len(phase_center) == 3
+        and all(math.isfinite(value) for value in phase_center)
+        and result_phase_center == phase_center
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and str(identity.get("result_time_farfield_input_sha256", "")).lower()
+        == digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1446,6 +1581,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "broadband_energy_q_uses_current_port_and_loss_normalization": (
                 _broadband_energy_q_inputs_are_current(raw)
+            ),
+            "mixed_mode_uses_current_pairs_impedances_polarities_and_planes": (
+                _mixed_mode_port_metadata_is_current(raw)
+            ),
+            "time_farfield_fft_uses_current_grid_window_scaling_and_phase_center": (
+                _time_farfield_fft_inputs_are_current(raw)
             ),
         }
         row = {
