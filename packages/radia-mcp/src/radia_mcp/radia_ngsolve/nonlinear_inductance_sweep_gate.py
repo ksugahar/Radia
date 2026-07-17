@@ -2289,6 +2289,151 @@ def _huygens_near_far_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _waveguide_port_mode_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_port_mode_cutoff_normalization_reference_plane_mesh_field_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("port_generation", "")).strip()
+    port_id = str(identity.get("port_id", "")).strip()
+    mode_id = str(identity.get("mode_id", "")).strip()
+    try:
+        cutoff = float(identity.get("cutoff_frequency_hz"))
+        result_cutoff = float(identity.get("result_cutoff_frequency_hz"))
+        frequency = float(identity.get("evaluation_frequency_hz"))
+        result_frequency = float(identity.get("result_evaluation_frequency_hz"))
+        reference_plane = float(identity.get("reference_plane_m"))
+        result_reference_plane = float(identity.get("result_reference_plane_m"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mode_port_generation",
+                "cutoff_port_generation",
+                "normalization_port_generation",
+                "reference_plane_port_generation",
+                "mesh_port_generation",
+                "field_port_generation",
+                "result_port_generation",
+            )
+        )
+        and bool(port_id)
+        and identity.get("result_port_id") == port_id
+        and bool(mode_id)
+        and identity.get("result_mode_id") == mode_id
+        and math.isfinite(cutoff)
+        and cutoff > 0.0
+        and math.isclose(result_cutoff, cutoff, rel_tol=1.0e-12)
+        and math.isfinite(frequency)
+        and frequency > cutoff
+        and math.isclose(result_frequency, frequency, rel_tol=1.0e-12)
+        and identity.get("normalization") == "unit-power-wave"
+        and identity.get("result_normalization") == "unit-power-wave"
+        and math.isfinite(reference_plane)
+        and math.isclose(
+            result_reference_plane, reference_plane, rel_tol=0.0, abs_tol=1.0e-15
+        )
+        and _valid_sha256(identity.get("port_mesh_sha256"))
+        and identity.get("result_port_mesh_sha256")
+        == identity.get("port_mesh_sha256")
+        and _valid_sha256(identity.get("field_eigenvector_sha256"))
+        and identity.get("result_field_eigenvector_sha256")
+        == identity.get("field_eigenvector_sha256")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _wake_impedance_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "wake_impedance_bunch_profile_time_grid_frequency_transform_normalization_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("wake_generation", "")).strip()
+    try:
+        sigma = float(identity.get("bunch_sigma_s"))
+        result_sigma = float(identity.get("result_bunch_sigma_s"))
+        charge = float(identity.get("bunch_charge_c"))
+        result_charge = float(identity.get("result_bunch_charge_c"))
+        times = [float(value) for value in identity.get("time_grid_s", [])]
+        result_times = [
+            float(value) for value in identity.get("result_time_grid_s", [])
+        ]
+        wake = [float(value) for value in identity.get("wake_potential_v_c", [])]
+        result_wake = [
+            float(value) for value in identity.get("result_wake_potential_v_c", [])
+        ]
+        frequencies = [
+            float(value) for value in identity.get("frequency_grid_hz", [])
+        ]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "bunch_wake_generation",
+                "time_wake_generation",
+                "transform_wake_generation",
+                "frequency_wake_generation",
+                "normalization_wake_generation",
+                "mesh_wake_generation",
+                "result_wake_generation",
+            )
+        )
+        and identity.get("bunch_profile") == "gaussian"
+        and identity.get("result_bunch_profile") == "gaussian"
+        and math.isfinite(sigma)
+        and sigma > 0.0
+        and math.isclose(result_sigma, sigma, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isfinite(charge)
+        and charge > 0.0
+        and math.isclose(result_charge, charge, rel_tol=1.0e-12)
+        and len(times) >= 4
+        and len(wake) == len(times)
+        and all(math.isfinite(value) for value in times + wake)
+        and all(left < right for left, right in zip(times, times[1:]))
+        and all(
+            math.isclose(
+                right - left,
+                times[1] - times[0],
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-18,
+            )
+            for left, right in zip(times, times[1:])
+        )
+        and result_times == times
+        and result_wake == wake
+        and identity.get("fft_convention") == "exp-minus-i-omega-t"
+        and identity.get("result_fft_convention") == "exp-minus-i-omega-t"
+        and len(frequencies) >= 2
+        and all(math.isfinite(value) and value >= 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and identity.get("impedance_normalization")
+        == "longitudinal-v-per-coulomb"
+        and identity.get("result_impedance_normalization")
+        == "longitudinal-v-per-coulomb"
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2566,6 +2711,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "near_to_far_results_use_current_huygens_orientation_phase_center_frequency_mesh_and_transform": (
                 _huygens_near_far_inputs_are_current(raw)
+            ),
+            "waveguide_ports_use_current_mode_cutoff_normalization_plane_mesh_field_and_result": (
+                _waveguide_port_mode_inputs_are_current(raw)
+            ),
+            "wake_impedance_uses_current_bunch_time_grid_transform_frequency_normalization_mesh_and_result": (
+                _wake_impedance_inputs_are_current(raw)
             ),
         }
         row = {
