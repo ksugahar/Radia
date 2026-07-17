@@ -716,6 +716,58 @@ def test_v17_public_efficiency_map_power_averaging_window_generation_mismatch() 
     )
 
 
+def test_v18_public_skew_slice_torque_mechanical_phase_offset_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    skew_slice = payload["artifact_identity"][
+        "skew_slice_torque_mechanical_phase_offset_generation_identity"
+    ]
+    skew_slice.update(
+        {
+            "phase_offset_slice_geometry_generation": "skew-geometry-19",
+            "phase_offset_slice_ids": [3, 2, 1],
+            "applied_mechanical_phase_offsets_deg": [2.0, 0.0, -2.0],
+            "averaged_slice_torque_waveform_sha256": [
+                "3" * 64,
+                "2" * 64,
+                "1" * 64,
+            ],
+            "applied_phase_offset_map_sha256": "8" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "skew_torque_average_uses_current_slice_phase_offset_map"
+        ]
+        is False
+    )
+
+
+def test_v18_public_winding_phase_belt_slot_numbering_sequence_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    winding = payload["artifact_identity"][
+        "winding_phase_belt_slot_numbering_sequence_generation_identity"
+    ]
+    winding.update(
+        {
+            "phase_belt_winding_generation": "winding-19",
+            "mmf_slot_numbering_generation": "slot-numbering-19",
+            "phase_belt_slot_numbers": [2, 3, 4, 5, 6, 1],
+            "mmf_phase_sequence": ["C-", "B+", "A-", "C+", "B-", "A+"],
+            "mmf_slot_phase_map_sha256": "8" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "winding_phase_belt_uses_current_slot_numbering_and_sequence"
+        ]
+        is False
+    )
+
+
 def test_v17_public_map_identities_reject_nonintegral_or_boolean_signs() -> None:
     payload = _with_artifact_identity(_payload())
     identity = payload["artifact_identity"]
