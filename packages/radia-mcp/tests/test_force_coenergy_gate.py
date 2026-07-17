@@ -779,3 +779,50 @@ def test_v17_public_axisymmetric_mask_rejects_self_consistent_stale_mesh() -> No
         ]
         is False
     )
+
+
+def test_v18_public_circuit_current_peak_rms_phasor_phase_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["circuit_current_peak_rms_phasor_phase_generation_identity"].update(
+        {
+            "field_response_phasor_generation": "phasor-19",
+            "field_response_amplitude_convention": "peak",
+            "field_response_current_amplitude_a": 14.142135623730951,
+            "field_response_phase_unit": "rad",
+            "field_response_phase_value": 0.5235987755982988,
+            "field_response_current_phasor_sha256": "5" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "circuit_current_and_field_response_share_phasor_convention_generation"
+    ] is False
+
+
+def test_v18_public_incremental_permeability_bh_operating_point_iteration_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity[
+        "incremental_permeability_bh_operating_point_iteration_identity"
+    ].update(
+        {
+            "incremental_permeability_iteration_generation": "iteration-19",
+            "force_sensitivity_iteration_generation": "iteration-19",
+            "incremental_permeability_iteration": 11,
+            "force_sensitivity_iteration": 11,
+            "incremental_permeability_b_t": [1.1, 1.25],
+            "incremental_permeability_operating_point_sha256": "5" * 64,
+            "force_sensitivity_operating_point_sha256": "5" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "incremental_permeability_and_force_use_current_bh_operating_point"
+    ] is False
