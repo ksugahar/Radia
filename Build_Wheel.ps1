@@ -15,7 +15,8 @@
 #   5. Verify with twine check
 #   6. Upload to PyPI (skipped with -DryRun; CI uses Trusted Publishers instead)
 #
-# MKL Policy: MKL DLLs are NOT bundled. Users get them via pip dependency.
+# DLL policy: radia_motor_rom.dll is the public standalone C ABI and is
+# bundled. Third-party runtime DLLs such as MKL are not bundled.
 # ============================================================================
 
 param(
@@ -75,8 +76,8 @@ if (-not $SkipBuild) {
 
     # Clean MKL DLLs from build/lib/radia/ to prevent accidental bundling
     if (Test-Path $BuildLibRadia) {
-        $DLLs = Get-ChildItem -Path $BuildLibRadia -Filter "*.dll" -ErrorAction SilentlyContinue
-        if ($DLLs) {
+        $DLLs = @(Get-ChildItem -Path $BuildLibRadia -Filter "*.dll" -ErrorAction SilentlyContinue)
+        if ($DLLs.Count -gt 0) {
             $DLLs | Remove-Item -Force
             Write-Host "  Removed $($DLLs.Count) DLL(s) from build/lib/radia/" -ForegroundColor Yellow
         }
@@ -138,7 +139,7 @@ if (-not $SkipBuild) {
     Write-Host ""
 
     # ------------------------------------------------------------------------
-    # Step 3: Remove DLLs from wheel (safety check)
+    # Step 3: Remove third-party DLLs from wheel (safety check)
     # ------------------------------------------------------------------------
     Write-Host "[3/6] Checking wheel for bundled DLLs..." -ForegroundColor Cyan
 
@@ -159,16 +160,19 @@ if (-not $SkipBuild) {
     Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
     Remove-Item $ZipPath
 
-    # Remove any DLLs that snuck in
-    $BundledDLLs = Get-ChildItem -Path $TempDir -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue
-    if ($BundledDLLs) {
-        Write-Host "  WARNING: Found bundled DLLs - removing:" -ForegroundColor Yellow
-        foreach ($dll in $BundledDLLs) {
+    # Keep the Radia-owned standalone C ABI, but remove third-party runtime
+    # DLLs (especially MKL) that may have leaked in from a local build tree.
+    $AllowedDllNames = @("radia_motor_rom.dll")
+    $BundledDLLs = @(Get-ChildItem -Path $TempDir -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue)
+    $RemovedDLLs = @($BundledDLLs | Where-Object { $_.Name -notin $AllowedDllNames })
+    if ($RemovedDLLs.Count -gt 0) {
+        Write-Host "  WARNING: Found third-party DLLs - removing:" -ForegroundColor Yellow
+        foreach ($dll in $RemovedDLLs) {
             Write-Host "    - $($dll.Name)" -ForegroundColor Yellow
             Remove-Item $dll.FullName -Force
         }
     } else {
-        Write-Host "  No bundled DLLs found (good)." -ForegroundColor Green
+        Write-Host "  No third-party DLLs found (good)." -ForegroundColor Green
     }
 
     Write-Host ""
@@ -189,10 +193,12 @@ if (-not $SkipBuild) {
         Set-Content -Path $WheelMetaPath.FullName -Value $WheelContent -NoNewline
     }
 
-    # Also fix RECORD file to remove DLL entries if any were removed
+    # Also fix RECORD file to remove entries for DLLs that were removed.
     $RecordPath = Get-ChildItem -Path $TempDir -Filter "RECORD" -Recurse | Select-Object -First 1
-    if ($RecordPath -and $BundledDLLs) {
-        $RecordLines = Get-Content $RecordPath.FullName | Where-Object { $_ -notmatch '\.dll,' }
+    if ($RecordPath -and $RemovedDLLs.Count -gt 0) {
+        $RemovedNames = @($RemovedDLLs | ForEach-Object { [regex]::Escape($_.Name) })
+        $RemovedPattern = '/(' + ($RemovedNames -join '|') + '),'
+        $RecordLines = Get-Content $RecordPath.FullName | Where-Object { $_ -notmatch $RemovedPattern }
         Set-Content -Path $RecordPath.FullName -Value ($RecordLines -join "`n") -NoNewline
     }
 
@@ -255,16 +261,23 @@ $WheelSize = (Get-Item $NewWheelPath).Length
 Write-Host "    Total files: $($AllFiles.Count)" -ForegroundColor White
 Write-Host "    .py files:   $($PyFiles.Count)" -ForegroundColor White
 Write-Host "    .pyd files:  $($PydFiles.Count)" -ForegroundColor White
-Write-Host "    .dll files:  $($DllFiles.Count)" -ForegroundColor $(if ($DllFiles.Count -eq 0) { "Green" } else { "Red" })
+Write-Host "    .dll files:  $($DllFiles.Count)" -ForegroundColor White
 Write-Host "    Wheel size:  $([math]::Round($WheelSize / 1MB, 2)) MB" -ForegroundColor White
 
 Remove-Item -Recurse -Force $InspectTempDir
 
-if ($DllFiles.Count -gt 0) {
+if (-not ($DllFiles | Where-Object { $_.Name -eq "radia_motor_rom.dll" })) {
     Write-Host ""
-    Write-Host "  ERROR: Wheel contains DLL files! MKL policy violation." -ForegroundColor Red
-    Write-Host "  DLLs found:" -ForegroundColor Red
-    foreach ($dll in $DllFiles) { Write-Host "    - $($dll.Name)" -ForegroundColor Red }
+    Write-Host "  ERROR: Wheel is missing radia_motor_rom.dll." -ForegroundColor Red
+    exit 1
+}
+
+$UnexpectedDLLs = @($DllFiles | Where-Object { $_.Name -ne "radia_motor_rom.dll" })
+if ($UnexpectedDLLs.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  ERROR: Wheel contains unexpected third-party DLL files." -ForegroundColor Red
+    Write-Host "  Unexpected DLLs:" -ForegroundColor Red
+    foreach ($dll in $UnexpectedDLLs) { Write-Host "    - $($dll.Name)" -ForegroundColor Red }
     exit 1
 }
 

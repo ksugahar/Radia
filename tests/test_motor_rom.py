@@ -233,6 +233,66 @@ def test_functional_hysteresis_state_is_carried_by_time_domain_rom():
     assert output.hysteresis_loss_W > 0.0
 
 
+class _AcceptedStateHysteresis:
+    def evaluate(self, rotor_angle_rad, generalized_currents_A, committed_state):
+        q = np.asarray(generalized_currents_A, dtype=float).copy()
+        return HysteresisEvaluation(
+            flux_linkage_Wb=1.0e-4 * q,
+            torque_Nm=0.0,
+            stored_energy_J=0.5e-4 * float(q @ q),
+            dissipated_energy_increment_J=0.0,
+            state=(float(rotor_angle_rad), q),
+        )
+
+
+def test_hysteresis_state_is_committed_at_the_accepted_step_state():
+    base = _motor(motion=False)
+    motor = AnglePeriodicMotorROM(
+        base.ports,
+        base.inductance_H,
+        base.resistance_ohm,
+        base.pm_flux_linkage_Wb,
+        inertia_kg_m2=base.inertia_kg_m2,
+        hysteresis_port=_AcceptedStateHysteresis(),
+    )
+    state = motor.initial_state(phase_currents_A=(0.0,))
+    next_state, _ = motor.step(
+        state, MotorROMInput(np.array((100.0,))), 1.0e-3, tolerance=1.0
+    )
+    accepted_angle, accepted_currents = next_state.hysteresis_state
+    assert accepted_angle == pytest.approx(next_state.rotor_angle_rad)
+    np.testing.assert_allclose(
+        accepted_currents, next_state.generalized_currents_A, atol=0.0, rtol=0.0
+    )
+
+
+def test_hysteresis_nonfinite_or_negative_dissipation_fails_loud():
+    class BadHysteresis(_AcceptedStateHysteresis):
+        def evaluate(self, rotor_angle_rad, generalized_currents_A, committed_state):
+            result = super().evaluate(
+                rotor_angle_rad, generalized_currents_A, committed_state
+            )
+            return HysteresisEvaluation(
+                result.flux_linkage_Wb,
+                result.torque_Nm,
+                result.stored_energy_J,
+                -1.0,
+                result.state,
+            )
+
+    base = _motor(motion=False)
+    motor = AnglePeriodicMotorROM(
+        base.ports,
+        base.inductance_H,
+        base.resistance_ohm,
+        base.pm_flux_linkage_Wb,
+        inertia_kg_m2=base.inertia_kg_m2,
+        hysteresis_port=BadHysteresis(),
+    )
+    with pytest.raises(ValueError, match="must be non-negative"):
+        motor.initial_state(phase_currents_A=(0.0,))
+
+
 @dataclass
 class _Hybrid:
     resistance: np.ndarray
