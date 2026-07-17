@@ -321,6 +321,37 @@ def _with_v14_bindings(summary):
             "phase_center_sha256": "2" * 64,
             "farfield_phase_center_sha256": "2" * 64,
         }
+        row[
+            "sparameter_deembed_reference_plane_per_port_generation_identity"
+        ] = {
+            "sparameter_generation": "sparameter-20",
+            "deembedded_result_sparameter_generation": "sparameter-20",
+            "port_generation": "port-20",
+            "reference_plane_port_generation": "port-20",
+            "deembedded_result_port_generation": "port-20",
+            "port_ids": ["P1", "P2"],
+            "reference_plane_port_ids": ["P1", "P2"],
+            "reference_plane_offsets_m": [0.001, 0.002],
+            "applied_reference_plane_offsets_m": [0.001, 0.002],
+            "reference_plane_map_sha256": "5" * 64,
+            "deembedded_reference_plane_map_sha256": "5" * 64,
+        }
+        row["time_domain_port_signal_gate_window_generation_identity"] = {
+            "signal_generation": "port-signal-20",
+            "gate_window_signal_generation": "port-signal-20",
+            "transform_signal_generation": "port-signal-20",
+            "gate_generation": "gate-20",
+            "transform_gate_generation": "gate-20",
+            "signal_sample_start": 0,
+            "signal_sample_end": 1023,
+            "gate_window_start_sample": 120,
+            "gate_window_end_sample": 880,
+            "transform_gate_window": [120, 880],
+            "normalization_basis": "incident_wave_peak",
+            "transform_normalization_basis": "incident_wave_peak",
+            "gate_window_sha256": "6" * 64,
+            "transform_gate_window_sha256": "6" * 64,
+        }
     return summary
 
 
