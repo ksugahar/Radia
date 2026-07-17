@@ -1492,6 +1492,73 @@ def _electrothermal_generation_identity_ok(positive: Mapping[str, object]) -> bo
     )
 
 
+def _monte_carlo_subcircuit_identity_ok(positive: Mapping[str, object]) -> bool:
+    c = positive.get("subcircuit_monte_carlo_seed_model_include_raw_generation_identity")
+    if c is None:
+        return True
+    if not isinstance(c, Mapping):
+        return False
+    try:
+        sample_ids = [int(v) for v in c.get("sample_ids", [])]
+        raw_ids = [int(v) for v in c.get("raw_sample_ids", [])]
+        seeds = [int(v) for v in c.get("random_seeds", [])]
+        raw_seeds = [int(v) for v in c.get("raw_random_seeds", [])]
+    except (TypeError, ValueError):
+        return False
+    g = str(c.get("monte_carlo_generation_id") or "")
+    model = str(c.get("model_include_sha256") or "")
+    params = str(c.get("parameter_override_sha256") or "")
+    table = str(c.get("raw_sample_table_sha256") or "")
+    return (
+        bool(g)
+        and all(c.get(k) == g for k in (
+            "seed_monte_carlo_generation_id", "model_include_monte_carlo_generation_id",
+            "parameter_override_monte_carlo_generation_id", "raw_sample_monte_carlo_generation_id",
+            "statistic_monte_carlo_generation_id"))
+        and bool(sample_ids) and len(set(sample_ids)) == len(sample_ids) and raw_ids == sample_ids
+        and len(seeds) == len(sample_ids) and len(set(seeds)) == len(seeds) and raw_seeds == seeds
+        and _is_sha256(model) and c.get("raw_model_include_sha256") == model
+        and _is_sha256(params) and c.get("raw_parameter_override_sha256") == params
+        and _is_sha256(table) and c.get("statistic_sample_table_sha256") == table
+    )
+
+
+def _behavioral_switch_hysteresis_identity_ok(positive: Mapping[str, object]) -> bool:
+    c = positive.get("behavioral_switch_hysteresis_state_timestep_measure_generation_identity")
+    if c is None:
+        return True
+    if not isinstance(c, Mapping):
+        return False
+    try:
+        states = [int(v) for v in c.get("hysteresis_states", [])]
+        result_states = [int(v) for v in c.get("measure_hysteresis_states", [])]
+        events = [float(v) for v in c.get("event_times_s", [])]
+        result_events = [float(v) for v in c.get("measure_event_times_s", [])]
+        times = [float(v) for v in c.get("accepted_time_s", [])]
+        result_times = [float(v) for v in c.get("measure_time_s", [])]
+        window = [float(v) for v in c.get("measure_window_s", [])]
+        result_window = [float(v) for v in c.get("reported_measure_window_s", [])]
+    except (TypeError, ValueError):
+        return False
+    g = str(c.get("transient_generation_id") or "")
+    digest = str(c.get("measure_table_sha256") or "")
+    return (
+        bool(g)
+        and all(c.get(k) == g for k in (
+            "hysteresis_state_transient_generation_id", "event_history_transient_generation_id",
+            "accepted_timestep_transient_generation_id", "measure_window_transient_generation_id",
+            "measure_result_transient_generation_id"))
+        and bool(states) and all(v in {0, 1} for v in states) and result_states == states
+        and len(events) == len(states) and all(math.isfinite(v) for v in events)
+        and all(a < b for a, b in zip(events, events[1:])) and result_events == events
+        and len(times) >= 2 and all(math.isfinite(v) for v in times)
+        and all(a < b for a, b in zip(times, times[1:])) and result_times == times
+        and len(window) == 2 and times[0] <= window[0] < window[1] <= times[-1]
+        and result_window == window and _is_sha256(digest)
+        and c.get("reported_measure_table_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1842,6 +1909,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "electrothermal_results_use_current_temperature_model_loss_network_and_timestep": (
             _electrothermal_generation_identity_ok(positive)
+        ),
+        "monte_carlo_statistics_use_current_seeds_models_parameters_and_raw_samples": (
+            _monte_carlo_subcircuit_identity_ok(positive)
+        ),
+        "behavioral_switch_measures_use_current_hysteresis_events_timesteps_and_window": (
+            _behavioral_switch_hysteresis_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
