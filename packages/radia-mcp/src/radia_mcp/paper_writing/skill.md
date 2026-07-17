@@ -625,13 +625,22 @@ The main contributions of this paper are:
 
 ---
 
-## 📚 references.bib lab style (2023 Compumag review 由来)
+## 📚 reference.bib lab style (2023 Compumag review 由来)
 
-**経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`public-safe curated corpus`) で references.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
+**ファイル名ポリシー (研究室標準, 2026-07-18)**: 書誌ファイルは
+**`reference.bib`（単数）** に統一する。理由は「単数が正しい英語だから」ではなく、
+paper-writing MCP の引用ツール (`cite_a_claim` の既定 `bib_path`、
+`verify_citation`、`em_submission_gate` の `bib_policy`、`_em_paper_style`) が
+この名前を **既定・強制** するため — ツールに合わせれば変更ゼロで全体が一貫する。
+プロジェクト直下に **1つだけ** 置き、EN/JA 双方の `.tex` から同じ
+`\bibliography{reference}` で参照する（単一ソース）。`references.bib`（複数形）や
+`references-<suffix>.bib`（例: `references-es.bib`）は使わない。
+
+**経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`public-safe curated corpus`) で reference.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
 
 ### Rule 0: `.bib` は毎回外部検索で裏を取る
 
-`references.bib` / `reference.bib` を確認・追加・修正するときは、ローカル
+`reference.bib` を確認・追加・修正するときは、ローカル
 `.bib` や過去原稿を信じてそのまま流用しない。毎回、DOI / publisher page /
 Crossref / 公式リポジトリ / 著者ページなど一次情報に近い source を検索し、
 その文献が **現在の主張に対して適切な引用先か** と、metadata
@@ -683,7 +692,7 @@ author = {Niels K{\"o}ster}     % accent が壊れる可能性
 % → references 欄に同じ論文が二重に
 ```
 
-追加前に `grep "<doi>" references.bib` で重複確認。
+追加前に `grep "<doi>" reference.bib` で重複確認。
 
 ### Rule 2.5: Numbered references follow first citation order
 
