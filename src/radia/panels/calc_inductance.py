@@ -577,21 +577,15 @@ def _solve_coil_bem_a(args):
 
 
 # ======================================================================
-# Surface-current Biot-Savart helpers (mirror compute_phi_inc_from_surface_J
-# but accept complex J -- output complex H -- for Telegen ΔL evaluation
-# in the BEM-A coil case)
+# Surface-current Biot-Savart helper: complex H from complex panel J,
+# for Telegen ΔL evaluation and the poisson phi_inc (BEM-A coil case).
+# Single canonical kernel in radia.bem_sibc_solver -- do not duplicate.
 # ======================================================================
-def _H_from_surface_J_complex(eval_pts, src_centroids, src_areas, src_J_complex):
-    """Vectorised Biot-Savart H from a complex surface-current source.
-
-    H(r) = (1/4π) Σ_t [J_t × (r - c_t)] / |r - c_t|^3 * A_t
-    """
-    dx = eval_pts[:, None, :] - src_centroids[None, :, :]
-    r2 = np.sum(dx * dx, axis=2)
-    r2 = np.maximum(r2, 1e-60)
-    r3_inv = src_areas[None, :] / (r2 * np.sqrt(r2))
-    cross = np.cross(src_J_complex[None, :, :], dx)
-    return INV_4PI * np.sum(cross * r3_inv[..., None], axis=1)
+def _H_from_surface_J_complex(eval_pts, src_centroids, src_areas,
+                              src_J_complex):
+    from radia.bem_sibc_solver import H_from_surface_J_complex
+    return H_from_surface_J_complex(
+        eval_pts, src_centroids, src_areas, src_J_complex)
 
 
 def _delta_L_telegen_phiB_from_surface_J(
@@ -1905,11 +1899,38 @@ def _solve_workpiece_strong_coupled(args):
     # --coil-saddle-solver hacapk_cocr compresses the coil SL to an O(N log N)
     # H-matrix + loop-COCR saddle solve (O(N r) storage, for large coils).
     coil_hacapk = (args.coil_saddle_solver == "hacapk_cocr")
+
+    # Resolve the loop-DOF mode (see --wp-loop-dof): the strong path
+    # applies the extension ONCE on the converged Picard state (the
+    # solver's ``loop_dof`` arg).  "on" was early-guarded in
+    # run_inductance (intree-dense required; solve_loop_extended enforces
+    # genus-1); "auto" applies exactly when it can and records why not.
+    wp_loop_req = getattr(args, "wp_loop_dof", "auto")
+    wp_loop_skip = None
+    if wp_loop_req == "on":
+        wp_loop_apply = True
+    elif wp_genus != 1:
+        wp_loop_apply = False
+        wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
+                        f"to genus-1 only; genus-0 needs none)")
+    elif wp_hacapk:
+        wp_loop_apply = False
+        wp_loop_skip = ("the HACApK backend exposes no dense SL/DL for "
+                        "the loop column (pass --wp-bem-backend "
+                        "intree-dense)")
+    else:
+        wp_loop_apply = True
+    if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
+        progress("COUPLED",
+            f"loop-DOF auto: SKIPPED on a genus-{wp_genus} workpiece -- "
+            f"{wp_loop_skip}.  The genus P_wp_caveat applies.")
+
     progress("COUPLED",
         f"strong coupling: coil {coil_mesh.nv}v / wp {wp_mesh.nv}v, "
         f"f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
         f"coil_backend={'hacapk' if coil_hacapk else 'dense-lu'}, "
         f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
+        f"loop_dof={'on' if wp_loop_apply else 'off'}, "
         f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
         f"relax={args.coupling_relax:g}")
     t0 = time.perf_counter()
@@ -1925,7 +1946,8 @@ def _solve_workpiece_strong_coupled(args):
         Z_s=Z_s, omega=omega,
         max_iter=int(args.coupling_max_iter),
         tol=float(args.coupling_tol),
-        relax=float(args.coupling_relax))
+        relax=float(args.coupling_relax),
+        loop_dof=wp_loop_apply)
     t_solve = time.perf_counter() - t0
 
     # CoupledBEMSolver drives the coil EFIE at UNIT terminal current (its
@@ -1945,6 +1967,9 @@ def _solve_workpiece_strong_coupled(args):
     for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im"):
         if sol.get(key) is not None:
             sol[key] = sol[key] * I_term
+    # The loop current scales like the fields (alpha ~ I).
+    if sol.get("wp_loop_alpha") is not None:
+        sol["wp_loop_alpha"] = complex(sol["wp_loop_alpha"]) * I_term
 
     progress("COUPLED",
         f"converged in {int(sol['iterations'])} iter: "
@@ -1952,11 +1977,21 @@ def _solve_workpiece_strong_coupled(args):
         f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
         f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
         f"@ I={I_term:g} A ({t_solve:.1f}s)")
+    if sol.get("wp_loop_alpha") is not None:
+        import cmath as _cmath
+        progress("COUPLED",
+            f"loop-DOF (converged state): alpha="
+            f"{abs(sol['wp_loop_alpha']):.4g} A (phase "
+            f"{math.degrees(_cmath.phase(sol['wp_loop_alpha'])):+.1f} "
+            f"deg, {sol.get('t_loop_dof_s', 0.0):.1f}s)")
 
     sol["wp_mesh_nv"] = int(wp_mesh.nv)
     sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
     sol["wp_euler_chi"] = int(wp_chi)
     sol["wp_genus"] = int(wp_genus)
+    sol["wp_loop_dof_mode"] = wp_loop_req
+    sol["wp_loop_dof_skip_reason"] = wp_loop_skip
+    sol["wp_loop_dof"] = bool(wp_loop_apply)
     sol["delta_wp_mm"] = float(delta_wp * 1e3)
     sol["t_wp_mesh_s"] = float(t_wp_mesh)
     sol["t_coupled_solve_s"] = float(t_solve)
@@ -2025,10 +2060,32 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     Z_s = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
     wp_hacapk = (args.wp_bem_backend == "hacapk")
 
+    # Loop-DOF resolution (same contract as the BEM-A strong driver).
+    wp_loop_req = getattr(args, "wp_loop_dof", "auto")
+    wp_loop_skip = None
+    if wp_loop_req == "on":
+        wp_loop_apply = True
+    elif wp_genus != 1:
+        wp_loop_apply = False
+        wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
+                        f"to genus-1 only; genus-0 needs none)")
+    elif wp_hacapk:
+        wp_loop_apply = False
+        wp_loop_skip = ("the HACApK backend exposes no dense SL/DL for "
+                        "the loop column (pass --wp-bem-backend "
+                        "intree-dense)")
+    else:
+        wp_loop_apply = True
+    if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
+        progress("COUPLED",
+            f"loop-DOF auto: SKIPPED on a genus-{wp_genus} workpiece -- "
+            f"{wp_loop_skip}.  The genus P_wp_caveat applies.")
+
     progress("COUPLED",
         f"strong PEEC coupling [EXPERIMENTAL]: {len(paths)} filaments / "
         f"wp {wp_mesh.nv}v, f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
         f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
+        f"loop_dof={'on' if wp_loop_apply else 'off'}, "
         f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
         f"relax={args.coupling_relax:g}")
     progress("COUPLED",
@@ -2044,7 +2101,8 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
         Z_s=Z_s, omega=omega, I_port=float(args.current),
         max_iter=int(args.coupling_max_iter),
         tol=float(args.coupling_tol),
-        relax=float(args.coupling_relax))
+        relax=float(args.coupling_relax),
+        loop_dof=wp_loop_apply)
     t_solve = time.perf_counter() - t0
     progress("COUPLED",
         f"converged in {int(sol['iterations'])} iter: "
@@ -2052,15 +2110,27 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
         f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
         f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
         f"({t_solve:.1f}s)")
+    if sol.get("wp_loop_alpha") is not None:
+        import cmath as _cmath
+        progress("COUPLED",
+            f"loop-DOF (converged state): alpha="
+            f"{abs(sol['wp_loop_alpha']):.4g} A (phase "
+            f"{math.degrees(_cmath.phase(sol['wp_loop_alpha'])):+.1f} "
+            f"deg, {sol.get('t_loop_dof_s', 0.0):.1f}s)")
 
     # Context keys expected by _assemble_strong_output (mirror the BEM-A
     # driver).  n_J_coil -> filament count; the coil backend is the PEEC
     # loop-bundle (no H-matrix coil), so coil_hacapk is always False.
+    # (The PEEC solver already runs at the real I_port, so its loop
+    # alpha needs NO current rescale, unlike the BEM-A driver.)
     sol["n_J_coil"] = int(sol["n_filaments"])
     sol["wp_mesh_nv"] = int(wp_mesh.nv)
     sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
     sol["wp_euler_chi"] = int(wp_chi)
     sol["wp_genus"] = int(wp_genus)
+    sol["wp_loop_dof_mode"] = wp_loop_req
+    sol["wp_loop_dof_skip_reason"] = wp_loop_skip
+    sol["wp_loop_dof"] = bool(wp_loop_apply)
     sol["delta_wp_mm"] = float(delta_wp * 1e3)
     sol["t_wp_mesh_s"] = float(t_wp_mesh)
     sol["t_coupled_solve_s"] = float(t_solve)
@@ -2109,14 +2179,32 @@ def _assemble_strong_output(args, coil_data, strong):
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
     # Topology context + genus-conditional P_wp caveat: the scalar BIE is
-    # locked by the analytic genus-0 sphere, but on a genus>=1 workpiece it
-    # cannot carry the net shorted-turn eddy current on the handle, so its
-    # Lenz screening is lost and P_wp / H_t are over-estimated when the
-    # coil flux links the handle.  Strong coupling does not add that
-    # workpiece-side loop DOF.
+    # locked by the analytic genus-0 sphere; on a genus>=1 workpiece the
+    # net shorted-turn eddy current needs the loop-DOF extension, which
+    # the strong drivers apply ONCE on the converged Picard state
+    # (auto/on, dense wp backend) -- mirroring the weak path's caveat /
+    # note split.
     out["wp_euler_chi"] = int(strong.get("wp_euler_chi", 2))
     out["wp_genus"] = int(strong.get("wp_genus", 0))
-    if out["wp_genus"] != 0:
+    out["wp_loop_dof_mode"] = strong.get("wp_loop_dof_mode", "auto")
+    if strong.get("wp_loop_dof_skip_reason"):
+        out["wp_loop_dof_skip_reason"] = strong["wp_loop_dof_skip_reason"]
+    if strong.get("wp_loop_dof") and strong.get("wp_loop_alpha") is not None:
+        import cmath as _cmath
+        alpha = complex(strong["wp_loop_alpha"])
+        out["wp_loop_dof"] = True
+        out["wp_loop_alpha_A"] = float(abs(alpha))
+        out["wp_loop_alpha_deg"] = float(math.degrees(_cmath.phase(alpha)))
+        out["wp_loop_theta_jump"] = float(strong["wp_loop_theta_jump"])
+        out["wp_loop_cut_n_vertices"] = int(
+            strong["wp_loop_cut_n_vertices"])
+        out["t_loop_dof_s"] = float(strong.get("t_loop_dof_s", 0.0))
+        out["P_wp_note"] = (
+            "genus-1 loop DOF active on the converged strong-coupling "
+            "state: the net shorted-turn eddy current (wp_loop_alpha_A) "
+            "is solved and its Lenz screening is included in P_wp / H_t; "
+            "L_total / delta_L keep the plain-solve convention.")
+    elif out["wp_genus"] != 0:
         out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # PEEC filament coil: relabel the coil backend and flag the path as
     # experimental (the strong-loading response has no durable independent
@@ -2371,16 +2459,12 @@ def run_inductance(args):
 
     # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
     # combinations BEFORE the expensive coil solve (the genus check itself
-    # needs the wp mesh and lives in the weak workpiece path).  The
-    # default "auto" never errors here -- it resolves inside the weak
-    # driver (apply when genus-1 + prerequisites hold, else skip with
-    # wp_loop_dof_skip_reason).
+    # needs the wp mesh and lives in the workpiece drivers).  The default
+    # "auto" never errors here -- it resolves inside the weak/strong
+    # drivers (apply when genus-1 + prerequisites hold, else skip with
+    # wp_loop_dof_skip_reason).  Both coupling modes take the extension
+    # (strong applies it once on the converged Picard state).
     if args.wp_loop_dof == "on":
-        if args.coupling_mode != "weak":
-            return {"status": "error",
-                    "error": "--wp-loop-dof is a weak-coupling workpiece "
-                             "extension; strong coupling integration is not "
-                             "implemented yet."}
         if args.coil_only or not args.vol:
             return {"status": "error",
                     "error": "--wp-loop-dof requires a workpiece --vol."}
@@ -2395,7 +2479,7 @@ def run_inductance(args):
                              "--wp-bem-backend intree-dense (the HACApK "
                              "backend does not expose SL/DL for the loop "
                              "column)."}
-        if int(args.h1_order) != 1:
+        if args.coupling_mode == "weak" and int(args.h1_order) != 1:
             return {"status": "error",
                     "error": "--wp-loop-dof supports the P1 nodal path only "
                              "(--h1-order 1)."}

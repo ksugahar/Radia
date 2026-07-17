@@ -237,7 +237,8 @@ class CoupledBEMSolver:
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
                              TaskManager, ds, BND, div)
         from ngsolve.bem import LaplaceSL
-        from radia.bem_sibc_solver import ScalarBIESIBCSolver
+        from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
+                                           SurfacePoissonPhiInc)
         from scipy.sparse import coo_matrix
 
         self.mesh_coil = mesh_coil
@@ -350,13 +351,42 @@ class CoupledBEMSolver:
                 use_intree_hacapk=True, hacapk_aca_eps=float(wp_aca_eps),
                 hacapk_leaf=int(wp_hacapk_leaf), hacapk_eta=float(wp_hacapk_eta))
         else:
-            self.wp_solver = ScalarBIESIBCSolver(mesh_wp, order=wp_order)
+            # In-tree Sauter-Schwab Galerkin dense operators -- the SAME
+            # assembler configuration as the weak path's intree-dense
+            # backend.  (The former default here was the ngsolve.bem
+            # column-matvec dense extraction: O(N^3), ~an hour at 3k DOF,
+            # with a NaN incident on record -- a superseded route, removed
+            # 2026-07-17.)  Dense SL/DL also enables the genus-1
+            # loop-DOF extension (``loop_dof=True`` in ``solve``).
+            self.wp_solver = ScalarBIESIBCSolver(
+                mesh_wp, order=wp_order, assemble_dense=True,
+                use_intree_bem=True, intree_geom_order=1,
+                intree_singular_n_q=6, intree_regular_quad_degree=7)
         self.wp_nodes = np.array(
             [[mesh_wp.vertices[i].point[j] for j in range(3)]
              for i in range(mesh_wp.nv)])
 
+        # Incident-potential reconstruction is basis-determined (same
+        # contract as the weak path): P1 -> surface-Poisson psi from the
+        # exact vertex H_inc, prepared ONCE (the Picard loop re-derives
+        # phi_inc from the updated coil current every iteration, so the
+        # cached stiffness factorization is what makes iterations cheap).
+        # The former per-iteration path integration (two
+        # compute_phi_inc_from_surface_J calls, the dominant per-iteration
+        # cost) was removed 2026-07-17 with the weak path's legacy route.
+        if int(wp_order) != 1:
+            raise ValueError(
+                f"CoupledBEMSolver supports wp_order=1 only (got "
+                f"{wp_order}): the surface-Poisson phi_inc and the "
+                f"scattered-current extraction are P1 vertex-nodal.")
+        from ngsolve import BND as _BND
+        self.wp_tris = np.array(
+            [[v.nr for v in el.vertices] for el in mesh_wp.Elements(_BND)],
+            dtype=np.int64)
+        self._phi_poisson = SurfacePoissonPhiInc(self.wp_nodes, self.wp_tris)
+
     def solve(self, Z_s, omega, max_iter=10, tol=1e-3, relax=0.5,
-              verbose=False):
+              verbose=False, loop_dof=False):
         """Run the iterative coupled solve.
 
         Args:
@@ -381,11 +411,32 @@ class CoupledBEMSolver:
             tol: relative L_total convergence
             relax: under-relaxation (0..1)
 
+            loop_dof: apply the genus-1 loop-DOF extension
+                (``radia.bem_loop_extension.solve_loop_extended``) ONCE on
+                the CONVERGED state: the Picard loop itself runs the plain
+                scalar BIE (whose L_total / Delta_L convention is the
+                validated one), then the shorted-turn current alpha is
+                solved against the converged coil current and the reported
+                ``P_total`` / ``H_t_rms`` are replaced by the loop-extended
+                values (the same dissipation-only convention as the weak
+                path's ``--wp-loop-dof``).  Requires the dense wp backend
+                (``wp_hacapk=False``) and a genus-1 workpiece; fails loud
+                otherwise.  The alpha back-reaction onto the coil current
+                is NOT iterated (the coil-current redistribution is a
+                percent-level effect where strong coupling applies at all).
+
         Returns dict with ``L_air``, ``L_total``, ``Delta_L``, ``P_total``,
-        ``H_t_rms``, ``iterations``, ``J_coil_re``, ``J_coil_im``.
+        ``H_t_rms``, ``iterations``, ``J_coil_re``, ``J_coil_im`` (+
+        ``wp_loop_alpha`` / ``wp_loop_theta_jump`` /
+        ``wp_loop_cut_n_vertices`` / ``t_loop_dof_s`` when ``loop_dof``).
         """
         from ngsolve import GridFunction
-        from radia.bem_sibc_solver import compute_phi_inc_from_surface_J
+
+        if loop_dof and self.wp_hacapk:
+            raise ValueError(
+                "loop_dof=True needs the dense wp backend (wp_hacapk="
+                "False): the HACApK backend exposes no dense SL/DL for "
+                "the loop column.")
 
         n_J = self.n_J
         n_c = self.n_constraint
@@ -440,11 +491,18 @@ class CoupledBEMSolver:
             _, _, coil_J_im_arr = extract_element_J(
                 self.mesh_coil, gf_J_im)
 
-            phi_inc_re = compute_phi_inc_from_surface_J(
-                self.wp_nodes, coil_c, coil_a, coil_J_re_arr, n_quad=20)
-            phi_inc_im = compute_phi_inc_from_surface_J(
-                self.wp_nodes, coil_c, coil_a, coil_J_im_arr, n_quad=20)
-            phi_inc_cplx = phi_inc_re + 1j * phi_inc_im
+            # Surface-Poisson psi from the exact vertex H_inc (prepared
+            # factorization; 10% grad-consistency gate = the fail-loud
+            # contract shared with the weak path).
+            from radia.bem_sibc_solver import H_from_surface_J_complex
+            H_inc = H_from_surface_J_complex(
+                self.wp_nodes, coil_c, coil_a,
+                coil_J_re_arr + 1j * coil_J_im_arr)
+            phi_inc_cplx, phi_resid = self._phi_poisson(
+                H_inc, max_grad_residual=0.10)
+            if verbose:
+                print(f"  iter {iteration}: phi_inc poisson "
+                      f"grad-residual {phi_resid:.1%}")
 
             # --- Workpiece scalar BIE + SIBC (returns complex phi_vec) ---
             if self.wp_hacapk:
@@ -509,6 +567,48 @@ class CoupledBEMSolver:
         P_total = P_density * wp_result['area']
         H_t_rms = wp_result['H_t_rms']
 
+        # Genus-1 loop DOF on the CONVERGED state (see the loop_dof arg
+        # docstring): solve the shorted-turn current alpha against the
+        # LAST-ITERATION coil current (the same current that produced
+        # phi_inc_cplx and wp_result, so the frozen(alpha=0) sub-solve
+        # must reproduce wp_result exactly -- the operator cross-check).
+        loop_meta = {}
+        if loop_dof:
+            import time as _time
+            from radia.bem_loop_extension import solve_loop_extended
+            from radia.bem_sibc_solver import A_from_surface_J
+
+            coil_Jc = coil_J_re_arr + 1j * coil_J_im_arr
+
+            def _A_inc_fn(points):
+                A_re = A_from_surface_J(points, coil_c, coil_a,
+                                        np.real(coil_Jc))
+                A_im = A_from_surface_J(points, coil_c, coil_a,
+                                        np.imag(coil_Jc))
+                return A_re + 1j * A_im
+
+            t0 = _time.perf_counter()
+            loop_out = solve_loop_extended(
+                self.wp_solver, phi_inc_cplx, Z_s, omega, _A_inc_fn)
+            t_loop = _time.perf_counter() - t0
+            frz_rel = (abs(loop_out["P_frozen"] - P_total)
+                       / max(abs(P_total), 1e-30))
+            if frz_rel > 1e-3:
+                raise RuntimeError(
+                    f"loop-DOF frozen sub-solve disagrees with the "
+                    f"converged plain BIE solve by {frz_rel:.2e} "
+                    f"(P {loop_out['P_frozen']:.4e} vs {P_total:.4e} W) "
+                    f"-- operator mismatch, refusing to report "
+                    f"loop-extended numbers.")
+            P_total = float(loop_out["P_total"])
+            H_t_rms = float(loop_out["H_t_rms"])
+            loop_meta = {
+                'wp_loop_alpha': complex(loop_out["alpha"]),
+                'wp_loop_theta_jump': float(loop_out["theta_jump"]),
+                'wp_loop_cut_n_vertices': int(loop_out["cut_n_vertices"]),
+                't_loop_dof_s': float(t_loop),
+            }
+
         # Z_s passthrough: complex scalar in the legacy path, but a
         # ndarray in the per-node path. The caller treats it as opaque.
         if isinstance(Z_s, np.ndarray):
@@ -539,6 +639,7 @@ class CoupledBEMSolver:
             'wp_J_re': wp_J_re_arr,
             'wp_J_im': wp_J_im_arr,
             'Z_s': Z_s_out,
+            **loop_meta,
         }
 
     def _extract_wp_J(self, phi_vec_complex, phi_inc_complex):
