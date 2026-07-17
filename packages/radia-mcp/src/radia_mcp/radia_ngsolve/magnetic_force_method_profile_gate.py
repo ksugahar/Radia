@@ -131,6 +131,8 @@ def magnetic_force_method_profile_gate(
     maglev_stiffness_displacement_equilibrium_force_identity_ok = True
     bem_near_singular_distance_panel_quadrature_identity_ok = True
     moving_magnet_force_position_orientation_equilibrium_identity_ok = True
+    motor_force_dual_lane_generation_identity_ok = True
+    linear_motor_end_effect_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -160,6 +162,8 @@ def magnetic_force_method_profile_gate(
         maglev_stiffness_displacement_equilibrium_force_identity_ok = False
         bem_near_singular_distance_panel_quadrature_identity_ok = False
         moving_magnet_force_position_orientation_equilibrium_identity_ok = False
+        motor_force_dual_lane_generation_identity_ok = False
+        linear_motor_end_effect_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -1605,6 +1609,189 @@ def magnetic_force_method_profile_gate(
                 == digest
             )
 
+        dual_lane_value = identity_value.get(
+            "motor_force_dual_lane_interface_flux_coenergy_generation_identity"
+        )
+        if dual_lane_value is not None:
+            dual_lane = (
+                dual_lane_value if isinstance(dual_lane_value, Mapping) else {}
+            )
+            generation = str(
+                dual_lane.get("comparison_generation", "")
+            ).strip()
+            lane_ids = dual_lane.get("lane_ids")
+            try:
+                interface_flux = [
+                    float(value)
+                    for value in dual_lane.get("interface_normal_flux_wb", [])
+                ]
+                result_interface_flux = [
+                    float(value)
+                    for value in dual_lane.get(
+                        "result_interface_normal_flux_wb", []
+                    )
+                ]
+                coenergy = [
+                    float(value) for value in dual_lane.get("coenergy_j", [])
+                ]
+                result_coenergy = [
+                    float(value)
+                    for value in dual_lane.get("result_coenergy_j", [])
+                ]
+                force = [float(value) for value in dual_lane.get("force_n", [])]
+                result_force = [
+                    float(value) for value in dual_lane.get("result_force_n", [])
+                ]
+            except (TypeError, ValueError):
+                interface_flux = result_interface_flux = []
+                coenergy = result_coenergy = []
+                force = result_force = []
+            mesh_digest = str(
+                dual_lane.get("coupling_mesh_sha256", "")
+            ).lower()
+            operator_digest = str(
+                dual_lane.get("mixed_operator_contract_sha256", "")
+            ).lower()
+            canonical_lanes = ["ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble"]
+            motor_force_dual_lane_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    dual_lane.get(key) == generation
+                    for key in (
+                        "lane_policy_comparison_generation",
+                        "interface_flux_comparison_generation",
+                        "coenergy_comparison_generation",
+                        "force_comparison_generation",
+                        "coupling_mesh_comparison_generation",
+                    )
+                )
+                and lane_ids == canonical_lanes
+                and dual_lane.get("result_lane_ids") == canonical_lanes
+                and len(interface_flux) == len(canonical_lanes)
+                and all(math.isfinite(value) for value in interface_flux)
+                and result_interface_flux == interface_flux
+                and len(coenergy) == len(canonical_lanes)
+                and all(math.isfinite(value) for value in coenergy)
+                and result_coenergy == coenergy
+                and len(force) == len(canonical_lanes)
+                and all(math.isfinite(value) for value in force)
+                and result_force == force
+                and len(mesh_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in mesh_digest
+                )
+                and str(dual_lane.get("result_coupling_mesh_sha256", "")).lower()
+                == mesh_digest
+                and len(operator_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in operator_digest
+                )
+                and str(
+                    dual_lane.get("result_mixed_operator_contract_sha256", "")
+                ).lower()
+                == operator_digest
+            )
+
+        linear_motion_value = identity_value.get(
+            "linear_motor_end_effect_translation_position_symmetry_generation_identity"
+        )
+        if linear_motion_value is not None:
+            linear_motion = (
+                linear_motion_value
+                if isinstance(linear_motion_value, Mapping)
+                else {}
+            )
+            generation = str(
+                linear_motion.get("sweep_generation", "")
+            ).strip()
+            frame = str(linear_motion.get("translation_frame", "")).strip()
+            symmetry_factor = linear_motion.get("symmetry_factor")
+            try:
+                positions_m = [
+                    float(value)
+                    for value in linear_motion.get("mover_positions_m", [])
+                ]
+                result_positions_m = [
+                    float(value)
+                    for value in linear_motion.get("result_mover_positions_m", [])
+                ]
+                window_m = [
+                    float(value)
+                    for value in linear_motion.get("end_effect_window_m", [])
+                ]
+                result_window_m = [
+                    float(value)
+                    for value in linear_motion.get("result_end_effect_window_m", [])
+                ]
+                thrust_n = [
+                    float(value) for value in linear_motion.get("thrust_n", [])
+                ]
+                result_thrust_n = [
+                    float(value)
+                    for value in linear_motion.get("result_thrust_n", [])
+                ]
+                stiffness = [
+                    float(value)
+                    for value in linear_motion.get("stiffness_n_per_m", [])
+                ]
+                result_stiffness = [
+                    float(value)
+                    for value in linear_motion.get(
+                        "result_stiffness_n_per_m", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                positions_m = result_positions_m = []
+                window_m = result_window_m = []
+                thrust_n = result_thrust_n = []
+                stiffness = result_stiffness = []
+            digest = str(
+                linear_motion.get("linear_motion_table_sha256", "")
+            ).lower()
+            linear_motor_end_effect_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    linear_motion.get(key) == generation
+                    for key in (
+                        "position_sweep_generation",
+                        "end_effect_sweep_generation",
+                        "translation_frame_sweep_generation",
+                        "symmetry_sweep_generation",
+                        "force_result_sweep_generation",
+                    )
+                )
+                and len(positions_m) >= 3
+                and all(math.isfinite(value) for value in positions_m)
+                and all(
+                    right > left for left, right in zip(positions_m, positions_m[1:])
+                )
+                and result_positions_m == positions_m
+                and len(window_m) == 2
+                and all(math.isfinite(value) for value in window_m)
+                and window_m[0] < min(positions_m)
+                and window_m[1] > max(positions_m)
+                and result_window_m == window_m
+                and bool(frame)
+                and linear_motion.get("result_translation_frame") == frame
+                and isinstance(symmetry_factor, int)
+                and not isinstance(symmetry_factor, bool)
+                and symmetry_factor > 0
+                and linear_motion.get("result_symmetry_factor") == symmetry_factor
+                and len(thrust_n) == len(positions_m)
+                and all(math.isfinite(value) for value in thrust_n)
+                and result_thrust_n == thrust_n
+                and len(stiffness) == len(positions_m)
+                and all(math.isfinite(value) for value in stiffness)
+                and result_stiffness == stiffness
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    linear_motion.get("result_linear_motion_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -1746,6 +1933,12 @@ def magnetic_force_method_profile_gate(
         ),
         "moving_magnet_force_uses_current_position_orientation_and_equilibrium": (
             moving_magnet_force_position_orientation_equilibrium_identity_ok
+        ),
+        "motor_force_comparison_uses_age_and_hdiv_mmm_hcurl_eddy_bubble_lanes": (
+            motor_force_dual_lane_generation_identity_ok
+        ),
+        "linear_motor_force_uses_current_position_end_effect_frame_and_symmetry": (
+            linear_motor_end_effect_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]

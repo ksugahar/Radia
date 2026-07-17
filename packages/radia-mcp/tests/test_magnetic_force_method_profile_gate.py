@@ -1136,3 +1136,110 @@ def test_v21_public_moving_magnet_force_position_orientation_equilibrium_generat
     assert result["checks"][
         "moving_magnet_force_uses_current_position_orientation_and_equilibrium"
     ] is False
+
+
+def _summary_v22():
+    summary = _summary_v21()
+    identity = summary["artifact_identity"]
+    identity["motor_force_dual_lane_interface_flux_coenergy_generation_identity"] = {
+        "comparison_generation": "motor-force-41",
+        "lane_policy_comparison_generation": "motor-force-41",
+        "interface_flux_comparison_generation": "motor-force-41",
+        "coenergy_comparison_generation": "motor-force-41",
+        "force_comparison_generation": "motor-force-41",
+        "coupling_mesh_comparison_generation": "motor-force-41",
+        "lane_ids": ["ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble"],
+        "result_lane_ids": ["ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble"],
+        "interface_normal_flux_wb": [0.031, 0.0308],
+        "result_interface_normal_flux_wb": [0.031, 0.0308],
+        "coenergy_j": [1.25, 1.247],
+        "result_coenergy_j": [1.25, 1.247],
+        "force_n": [14.2, 14.15],
+        "result_force_n": [14.2, 14.15],
+        "coupling_mesh_sha256": "1" * 64,
+        "result_coupling_mesh_sha256": "1" * 64,
+        "mixed_operator_contract_sha256": "2" * 64,
+        "result_mixed_operator_contract_sha256": "2" * 64,
+    }
+    identity[
+        "linear_motor_end_effect_translation_position_symmetry_generation_identity"
+    ] = {
+        "sweep_generation": "linear-motion-41",
+        "position_sweep_generation": "linear-motion-41",
+        "end_effect_sweep_generation": "linear-motion-41",
+        "translation_frame_sweep_generation": "linear-motion-41",
+        "symmetry_sweep_generation": "linear-motion-41",
+        "force_result_sweep_generation": "linear-motion-41",
+        "mover_positions_m": [-0.01, 0.0, 0.01],
+        "result_mover_positions_m": [-0.01, 0.0, 0.01],
+        "end_effect_window_m": [-0.04, 0.04],
+        "result_end_effect_window_m": [-0.04, 0.04],
+        "translation_frame": "stator_x",
+        "result_translation_frame": "stator_x",
+        "symmetry_factor": 2,
+        "result_symmetry_factor": 2,
+        "thrust_n": [80.0, 100.0, 78.0],
+        "result_thrust_n": [80.0, 100.0, 78.0],
+        "stiffness_n_per_m": [2000.0, -100.0, -2200.0],
+        "result_stiffness_n_per_m": [2000.0, -100.0, -2200.0],
+        "linear_motion_table_sha256": "3" * 64,
+        "result_linear_motion_table_sha256": "3" * 64,
+    }
+    return summary
+
+
+def test_v22_public_positive_canonical_dual_lane_and_linear_motor_identity() -> None:
+    assert magnetic_force_method_profile_gate(_summary_v22())["status"] == "ok"
+
+
+def test_v22_public_hdiv_vim_reduced_fem_interface_flux_coenergy_force_generation_mismatch() -> None:
+    summary = _summary_v22()
+    identity = summary["artifact_identity"][
+        "motor_force_dual_lane_interface_flux_coenergy_generation_identity"
+    ]
+    identity.update(
+        {
+            "lane_policy_comparison_generation": "motor-force-40",
+            "interface_flux_comparison_generation": "motor-force-39",
+            "coenergy_comparison_generation": "motor-force-38",
+            "force_comparison_generation": "motor-force-37",
+            "result_lane_ids": ["ngsolve_age", "hdiv_vim_reduced_fem"],
+            "result_interface_normal_flux_wb": [0.031, 0.026],
+            "result_coenergy_j": [1.25, 1.08],
+            "result_force_n": [14.2, 11.4],
+            "result_coupling_mesh_sha256": "a" * 64,
+            "result_mixed_operator_contract_sha256": "b" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "motor_force_comparison_uses_age_and_hdiv_mmm_hcurl_eddy_bubble_lanes"
+    ]
+
+
+def test_v22_public_linear_motor_end_effect_translation_position_symmetry_generation_mismatch() -> None:
+    summary = _summary_v22()
+    identity = summary["artifact_identity"][
+        "linear_motor_end_effect_translation_position_symmetry_generation_identity"
+    ]
+    identity.update(
+        {
+            "position_sweep_generation": "linear-motion-40",
+            "end_effect_sweep_generation": "linear-motion-39",
+            "translation_frame_sweep_generation": "linear-motion-38",
+            "symmetry_sweep_generation": "linear-motion-37",
+            "result_mover_positions_m": [0.01, 0.0, -0.01],
+            "result_end_effect_window_m": [-0.02, 0.02],
+            "result_translation_frame": "mover_x",
+            "result_symmetry_factor": 1,
+            "result_thrust_n": [39.0, 50.0, 40.0],
+            "result_stiffness_n_per_m": [-1100.0, -50.0, 1000.0],
+            "result_linear_motion_table_sha256": "c" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "linear_motor_force_uses_current_position_end_effect_frame_and_symmetry"
+    ]
