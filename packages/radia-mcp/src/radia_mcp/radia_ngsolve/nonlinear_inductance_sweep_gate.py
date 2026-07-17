@@ -1634,6 +1634,170 @@ def _transient_monitor_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _deembedded_network_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "deembedding_reference_plane_phase_causality_passivity_grid_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("deembedding_generation", "")).strip()
+    modes = identity.get("port_mode_ids")
+    try:
+        offsets = [
+            float(value) for value in identity.get("reference_plane_offsets_m", [])
+        ]
+        result_offsets = [
+            float(value)
+            for value in identity.get("result_reference_plane_offsets_m", [])
+        ]
+        frequencies = [
+            float(value) for value in identity.get("frequency_grid_hz", [])
+        ]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+        phases = [float(value) for value in identity.get("unwrapped_phase_rad", [])]
+        result_phases = [
+            float(value) for value in identity.get("result_unwrapped_phase_rad", [])
+        ]
+        singular_values = [
+            float(value)
+            for value in identity.get("passivity_max_singular_values", [])
+        ]
+        result_singular_values = [
+            float(value)
+            for value in identity.get("result_passivity_max_singular_values", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest = str(identity.get("deembedded_network_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "reference_plane_deembedding_generation",
+                "phase_deembedding_generation",
+                "causality_deembedding_generation",
+                "passivity_deembedding_generation",
+                "frequency_grid_deembedding_generation",
+                "result_deembedding_generation",
+            )
+        )
+        and isinstance(modes, list)
+        and len(modes) >= 2
+        and all(isinstance(value, str) and bool(value.strip()) for value in modes)
+        and len(set(modes)) == len(modes)
+        and identity.get("result_port_mode_ids") == modes
+        and len(offsets) == len(modes)
+        and all(math.isfinite(value) for value in offsets)
+        and result_offsets == offsets
+        and len(frequencies) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(phases) == len(frequencies)
+        and all(math.isfinite(value) for value in phases)
+        and all(abs(right - left) <= math.pi for left, right in zip(phases, phases[1:]))
+        and result_phases == phases
+        and identity.get("causality_check_passed") is True
+        and identity.get("result_causality_check_passed") is True
+        and len(singular_values) == len(frequencies)
+        and all(
+            math.isfinite(value) and 0.0 <= value <= 1.0
+            for value in singular_values
+        )
+        and result_singular_values == singular_values
+        and _valid_sha256(digest)
+        and str(identity.get("result_deembedded_network_sha256", "")).lower()
+        == digest
+    )
+
+
+def _field_circuit_cosim_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "field_circuit_cosim_port_sign_impedance_power_balance_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("cosim_generation", "")).strip()
+    port_id = str(identity.get("port_id", "")).strip()
+    current_sign = str(identity.get("current_sign_convention", "")).strip()
+    voltage_reference = str(identity.get("voltage_reference", "")).strip()
+    convention = str(identity.get("phasor_amplitude_convention", "")).strip()
+    try:
+        voltage = [float(value) for value in identity.get("port_voltage_ri_v", [])]
+        result_voltage = [
+            float(value) for value in identity.get("result_port_voltage_ri_v", [])
+        ]
+        current = [float(value) for value in identity.get("port_current_ri_a", [])]
+        result_current = [
+            float(value) for value in identity.get("result_port_current_ri_a", [])
+        ]
+        impedance = [
+            float(value) for value in identity.get("port_impedance_ri_ohm", [])
+        ]
+        result_impedance = [
+            float(value)
+            for value in identity.get("result_port_impedance_ri_ohm", [])
+        ]
+        field_power = float(identity.get("field_absorbed_power_w"))
+        circuit_power = float(identity.get("circuit_delivered_power_w"))
+        residual = float(identity.get("power_balance_residual_w"))
+        result_residual = float(identity.get("result_power_balance_residual_w"))
+    except (TypeError, ValueError):
+        return False
+    if len(voltage) != 2 or len(current) != 2 or len(impedance) != 2:
+        return False
+    complex_voltage = complex(*voltage)
+    complex_current = complex(*current)
+    if abs(complex_current) <= 1.0e-300:
+        return False
+    expected_impedance = complex_voltage / complex_current
+    expected_power = (complex_voltage * complex_current.conjugate()).real
+    digest = str(identity.get("cosim_result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "field_port_cosim_generation",
+                "circuit_port_cosim_generation",
+                "sign_cosim_generation",
+                "impedance_cosim_generation",
+                "power_balance_cosim_generation",
+                "result_cosim_generation",
+            )
+        )
+        and bool(port_id)
+        and identity.get("result_port_id") == port_id
+        and current_sign == "positive_into_field_port"
+        and identity.get("result_current_sign_convention") == current_sign
+        and voltage_reference == "positive_to_negative_terminal"
+        and identity.get("result_voltage_reference") == voltage_reference
+        and convention == "rms"
+        and identity.get("result_phasor_amplitude_convention") == convention
+        and all(math.isfinite(value) for value in voltage + current + impedance)
+        and result_voltage == voltage
+        and result_current == current
+        and math.isclose(impedance[0], expected_impedance.real, rel_tol=1.0e-12)
+        and math.isclose(impedance[1], expected_impedance.imag, rel_tol=1.0e-12)
+        and result_impedance == impedance
+        and math.isfinite(field_power)
+        and math.isclose(field_power, expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(circuit_power, field_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(residual, circuit_power - field_power, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(result_residual, residual, rel_tol=0.0, abs_tol=1.0e-15)
+        and _valid_sha256(digest)
+        and str(identity.get("reported_cosim_result_sha256", "")).lower()
+        == digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1887,6 +2051,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "transient_monitors_use_current_time_waveform_frame_and_mesh": (
                 _transient_monitor_inputs_are_current(raw)
+            ),
+            "deembedded_network_uses_current_planes_phase_causality_passivity_and_grid": (
+                _deembedded_network_inputs_are_current(raw)
+            ),
+            "field_circuit_cosim_uses_current_sign_impedance_and_power_balance": (
+                _field_circuit_cosim_inputs_are_current(raw)
             ),
         }
         row = {
