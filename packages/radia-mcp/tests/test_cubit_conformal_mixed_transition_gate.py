@@ -1433,3 +1433,146 @@ def test_v18_source_high_order_quality_reference_coordinate_generation_mismatch(
     assert result["checks"][
         "high_order_quality_uses_current_reference_coordinates_and_order"
     ] is False
+
+
+def _with_v19_instance_layer_partition_namespace_identity(row):
+    row = _with_v18_ordinal_bias_and_quality_identity(row)
+    row["periodic_hex_node_pair_transform_instance_generation_identity"] = {
+        "mesh_generation": "periodic-hex-mesh-53",
+        "node_pair_mesh_generation": "periodic-hex-mesh-53",
+        "volume_instance_generation": "volume-instance-53",
+        "periodic_transform_volume_instance_generation": "volume-instance-53",
+        "node_pair_volume_instance_generation": "volume-instance-53",
+        "source_node_ids": [11, 12, 13],
+        "target_node_ids": [21, 22, 23],
+        "paired_source_node_ids": [11, 12, 13],
+        "paired_target_node_ids": [21, 22, 23],
+        "transform_translation_m": [0.1, 0.0, 0.0],
+        "paired_transform_translation_m": [0.1, 0.0, 0.0],
+        "node_pair_transform_sha256": "5" * 64,
+        "applied_node_pair_transform_sha256": "5" * 64,
+    }
+    row["hex_boundary_layer_thickness_surface_normal_generation_identity"] = {
+        "geometry_generation": "healed-geometry-53",
+        "surface_normal_geometry_generation": "healed-geometry-53",
+        "boundary_layer_geometry_generation": "healed-geometry-53",
+        "boundary_layer_generation": "boundary-layer-53",
+        "thickness_boundary_layer_generation": "boundary-layer-53",
+        "collapse_direction_boundary_layer_generation": "boundary-layer-53",
+        "surface_ids": [31, 32],
+        "surface_normal_signs": [1, -1],
+        "applied_surface_ids": [31, 32],
+        "applied_collapse_direction_signs": [1, -1],
+        "layer_thickness_m": [0.001, 0.0015],
+        "applied_layer_thickness_m": [0.001, 0.0015],
+        "surface_layer_map_sha256": "6" * 64,
+        "applied_surface_layer_map_sha256": "6" * 64,
+    }
+    row["partition_ghost_element_owner_shared_node_map_identity"] = {
+        "partition_generation": "partition-53",
+        "ghost_owner_partition_generation": "partition-53",
+        "shared_node_partition_generation": "partition-53",
+        "partition_ids": [0, 1],
+        "element_ids": [101, 102],
+        "element_owner_partition_ids": [0, 1],
+        "ghost_element_ids": [102, 101],
+        "ghost_owner_partition_ids": [1, 0],
+        "shared_node_ids": [41, 42],
+        "shared_node_partition_pairs": [[0, 1], [0, 1]],
+        "partition_ownership_sha256": "7" * 64,
+        "exported_partition_ownership_sha256": "7" * 64,
+    }
+    row["exodus_block_id_namespace_qa_record_mesh_generation_identity"] = {
+        "mesh_generation": "mesh-53",
+        "block_namespace_mesh_generation": "mesh-53",
+        "qa_record_mesh_generation": "mesh-53",
+        "exodus_export_generation": "exodus-53",
+        "writer_export_generation": "exodus-53",
+        "block_ids": [10, 20],
+        "block_names": ["rotor", "stator"],
+        "written_block_ids": [10, 20],
+        "written_block_names": ["rotor", "stator"],
+        "qa_record": ["radia-mcp", "v19", "2026-07-17", "headless"],
+        "written_qa_record": ["radia-mcp", "v19", "2026-07-17", "headless"],
+        "block_namespace_sha256": "8" * 64,
+        "written_block_namespace_sha256": "8" * 64,
+    }
+    return row
+
+
+def test_v19_positive_instance_layer_partition_namespace_identity():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v19_public_periodic_hex_node_pair_transform_instance_generation_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["periodic_hex_node_pair_transform_instance_generation_identity"].update(
+        {
+            "periodic_transform_volume_instance_generation": "volume-instance-52",
+            "node_pair_volume_instance_generation": "volume-instance-52",
+            "paired_target_node_ids": [22, 21, 23],
+            "paired_transform_translation_m": [0.0, 0.1, 0.0],
+            "applied_node_pair_transform_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "periodic_hex_pairs_follow_current_volume_instance_transform"
+    ] is False
+
+
+def test_v19_public_hex_boundary_layer_thickness_surface_normal_generation_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["hex_boundary_layer_thickness_surface_normal_generation_identity"].update(
+        {
+            "surface_normal_geometry_generation": "healed-geometry-52",
+            "thickness_boundary_layer_generation": "boundary-layer-52",
+            "applied_collapse_direction_signs": [-1, 1],
+            "applied_layer_thickness_m": [0.0015, 0.001],
+            "applied_surface_layer_map_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hex_boundary_layers_follow_current_healed_surface_normals"
+    ] is False
+
+
+def test_v19_source_partition_ghost_element_owner_shared_node_map_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["partition_ghost_element_owner_shared_node_map_identity"].update(
+        {
+            "ghost_owner_partition_generation": "partition-52",
+            "shared_node_partition_generation": "partition-52",
+            "ghost_owner_partition_ids": [0, 1],
+            "shared_node_partition_pairs": [[1, 0], [1, 0]],
+            "exported_partition_ownership_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "partition_ghosts_and_shared_nodes_use_current_owner_map"
+    ] is False
+
+
+def test_v19_source_exodus_block_id_namespace_qa_record_mesh_generation_mismatch():
+    row = _with_v19_instance_layer_partition_namespace_identity(summary())
+    row["exodus_block_id_namespace_qa_record_mesh_generation_identity"].update(
+        {
+            "block_namespace_mesh_generation": "mesh-52",
+            "qa_record_mesh_generation": "mesh-52",
+            "written_block_ids": [20, 10],
+            "written_qa_record": ["radia-mcp", "v18", "2026-07-16", "headless"],
+            "written_block_namespace_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus_blocks_and_qa_use_current_mesh_namespace"
+    ] is False
