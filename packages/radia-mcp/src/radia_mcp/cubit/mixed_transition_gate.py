@@ -1122,6 +1122,263 @@ def _aprepro_include_variable_transaction_generation_ok(identity: object) -> boo
     )
 
 
+def _step_ap214_multibody_export_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("body_names"),
+        identity.get("exported_body_names"),
+        identity.get("body_placement_ids"),
+        identity.get("exported_body_placement_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        names = [str(value) for value in fields[0]]
+        exported_names = [str(value) for value in fields[1]]
+        placements = [int(value) for value in fields[2]]
+        exported_placements = [int(value) for value in fields[3]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("export_generation") or "")
+    digest_pairs = (
+        ("geometry_sha256", "exported_geometry_sha256"),
+        ("placement_table_sha256", "exported_placement_table_sha256"),
+        ("mass_property_table_sha256", "exported_mass_property_table_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "geometry_export_generation",
+                "body_name_export_generation",
+                "unit_export_generation",
+                "placement_export_generation",
+                "mass_property_export_generation",
+            )
+        )
+        and identity.get("step_schema") == "AP214"
+        and identity.get("exported_step_schema") == "AP214"
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and exported_names == names
+        and bool(str(identity.get("length_unit") or ""))
+        and identity.get("exported_length_unit") == identity.get("length_unit")
+        and len(placements) == len(names)
+        and all(value > 0 for value in placements)
+        and len(set(placements)) == len(placements)
+        and exported_placements == placements
+        and all(
+            len(str(identity.get(source) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(source) or "")
+            )
+            and identity.get(exported) == identity.get(source)
+            for source, exported in digest_pairs
+        )
+    )
+
+
+def _hybrid_transition_topology_block_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("pyramid_face_orientations"),
+        identity.get("exported_pyramid_face_orientations"),
+        identity.get("shared_node_ids"),
+        identity.get("exported_shared_node_ids"),
+        identity.get("material_block_ids"),
+        identity.get("exported_material_block_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        orientations = [int(value) for value in fields[0]]
+        exported_orientations = [int(value) for value in fields[1]]
+        nodes = [int(value) for value in fields[2]]
+        exported_nodes = [int(value) for value in fields[3]]
+        blocks = [int(value) for value in fields[4]]
+        exported_blocks = [int(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mesh_generation") or "")
+    topology_digest = str(identity.get("transition_topology_sha256") or "")
+    block_digest = str(identity.get("material_block_map_sha256") or "")
+    return (
+        bool(generation)
+        and identity.get("pyramid_orientation_mesh_generation") == generation
+        and identity.get("shared_node_topology_mesh_generation") == generation
+        and identity.get("material_block_mesh_generation") == generation
+        and bool(orientations)
+        and all(value in {-1, 1} for value in orientations)
+        and exported_orientations == orientations
+        and bool(nodes)
+        and all(value > 0 for value in nodes)
+        and len(set(nodes)) == len(nodes)
+        and exported_nodes == nodes
+        and bool(blocks)
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and exported_blocks == blocks
+        and all(
+            len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in (topology_digest, block_digest)
+        )
+        and identity.get("exported_transition_topology_sha256") == topology_digest
+        and identity.get("exported_material_block_map_sha256") == block_digest
+    )
+
+
+def _headless_step_export_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("selected_body_ids"),
+        identity.get("exported_body_ids"),
+        identity.get("body_names"),
+        identity.get("exported_body_names"),
+        identity.get("transform_ids"),
+        identity.get("exported_transform_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        selected = [int(value) for value in fields[0]]
+        exported = [int(value) for value in fields[1]]
+        names = [str(value) for value in fields[2]]
+        exported_names = [str(value) for value in fields[3]]
+        transforms = [int(value) for value in fields[4]]
+        exported_transforms = [int(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("model_generation") or "")
+    digest_pairs = (
+        ("step_sha256", "exported_step_sha256"),
+        ("transform_table_sha256", "exported_transform_table_sha256"),
+        ("export_log_sha256", "recorded_export_log_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "selected_body_model_generation",
+                "transform_model_generation",
+                "name_model_generation",
+                "export_log_model_generation",
+            )
+        )
+        and bool(selected)
+        and all(value > 0 for value in selected)
+        and len(set(selected)) == len(selected)
+        and exported == selected
+        and len(names) == len(selected)
+        and all(names)
+        and len(set(names)) == len(names)
+        and exported_names == names
+        and len(transforms) == len(selected)
+        and all(value > 0 for value in transforms)
+        and len(set(transforms)) == len(transforms)
+        and exported_transforms == transforms
+        and all(
+            len(str(identity.get(source) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(source) or "")
+            )
+            and identity.get(recorded) == identity.get(source)
+            for source, recorded in digest_pairs
+        )
+    )
+
+
+def _geometry_heal_imprint_merge_ownership_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("source_entity_ids"),
+        identity.get("owned_entity_ids"),
+        identity.get("imprint_pair_ids"),
+        identity.get("owned_imprint_pair_ids"),
+        identity.get("merge_survivor_ids"),
+        identity.get("owned_merge_survivor_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        source_entities = [int(value) for value in fields[0]]
+        owned_entities = [int(value) for value in fields[1]]
+        imprint_pairs = [int(value) for value in fields[2]]
+        owned_imprint_pairs = [int(value) for value in fields[3]]
+        merge_survivors = [int(value) for value in fields[4]]
+        owned_merge_survivors = [int(value) for value in fields[5]]
+        tolerance = float(identity.get("heal_tolerance"))
+        owned_tolerance = float(identity.get("ownership_heal_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("geometry_generation") or "")
+    ownership_digest = str(identity.get("ownership_map_sha256") or "")
+    operation_digest = str(identity.get("operation_log_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "heal_geometry_generation",
+                "imprint_geometry_generation",
+                "merge_geometry_generation",
+                "ownership_geometry_generation",
+            )
+        )
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and math.isclose(owned_tolerance, tolerance, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and bool(source_entities)
+        and all(value > 0 for value in source_entities)
+        and len(set(source_entities)) == len(source_entities)
+        and owned_entities == source_entities
+        and bool(imprint_pairs)
+        and all(value > 0 for value in imprint_pairs)
+        and len(set(imprint_pairs)) == len(imprint_pairs)
+        and owned_imprint_pairs == imprint_pairs
+        and bool(merge_survivors)
+        and all(value > 0 for value in merge_survivors)
+        and len(set(merge_survivors)) == len(merge_survivors)
+        and owned_merge_survivors == merge_survivors
+        and all(
+            len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in (ownership_digest, operation_digest)
+        )
+        and identity.get("recorded_ownership_map_sha256") == ownership_digest
+        and identity.get("recorded_operation_log_sha256") == operation_digest
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -1829,6 +2086,20 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "quality_histogram_uses_current_metric_element_set_and_units": (
             _quality_histogram_metric_element_unit_generation_ok(
                 summary.get("quality_histogram_metric_element_set_unit_generation_identity")
+            )
+        ),
+        "step_ap214_multibody_export_uses_current_body_unit_frame_and_mass_properties": (
+            _step_ap214_multibody_export_generation_ok(
+                summary.get(
+                    "step_ap214_body_name_unit_frame_mass_property_generation_identity"
+                )
+            )
+        ),
+        "hybrid_transition_uses_current_orientation_shared_nodes_and_blocks": (
+            _hybrid_transition_topology_block_generation_ok(
+                summary.get(
+                    "hybrid_tet_hex_pyramid_transition_topology_block_generation_identity"
+                )
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -2560,6 +2831,20 @@ def cubit_mixed_transition_source_gate(
         "aprepro_replay_uses_current_variables_includes_and_working_directory": (
             _aprepro_include_variable_transaction_generation_ok(
                 summary.get("aprepro_include_variable_expansion_working_directory_generation_identity")
+            )
+        ),
+        "headless_step_export_uses_current_bodies_transforms_names_and_log": (
+            _headless_step_export_generation_ok(
+                summary.get(
+                    "headless_step_export_body_transform_name_generation_identity"
+                )
+            )
+        ),
+        "healed_geometry_ownership_uses_current_tolerance_imprint_and_merge": (
+            _geometry_heal_imprint_merge_ownership_generation_ok(
+                summary.get(
+                    "geometry_heal_tolerance_imprint_merge_ownership_generation_identity"
+                )
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
