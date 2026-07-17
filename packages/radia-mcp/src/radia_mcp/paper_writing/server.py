@@ -8,6 +8,12 @@ PDF download (IEEE / ScienceDirect / Emerald with cookies).
 Promoted 2026-05-26 from mcp-server-document.paper_writing
 (LAB-private) to radia-mcp (public PyPI).
 
+2026-07-17: the presentation server was MERGED into this one (Sugahara:
+slide decks cannot yet be authored end-to-end by AI, so the slide lint /
+PPTX toolset does not warrant a standalone server).  All presentation_*
+tools are served here; the radia_mcp.presentation module remains the
+implementation home.
+
 Usage:
     mcp-server-paper-writing              # stdio
     mcp-server-paper-writing --selftest   # self-test
@@ -18,6 +24,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool
+from ..presentation import register as _register_presentation
 
 from . import tools as _tools
 from ._pdf_layout_visual import (
@@ -146,6 +153,16 @@ mcp.tool()(paper_writing_extract_abstract)
 
 
 # ============================================================
+# 2026-07-17: presentation merged into paper-writing (Sugahara).
+# AI cannot yet author slide decks end-to-end, so the slide lint /
+# PPTX helper toolset rides this server instead of a standalone
+# mcp-server-presentation (entry point retired).  Humans author the
+# slides; these tools lint / extract / budget them.
+# ============================================================
+_N_PRESENTATION_TOOLS = _register_presentation(mcp)
+
+
+# ============================================================
 # Prompt: cite-with-verification reminder
 # ============================================================
 
@@ -189,11 +206,14 @@ register_status_tool(
         'figure lint (67 tools), image-based PDF layout verification '
         '(pymupdf), LaTeX figure placement knowledge (htbp/placeins/'
         'widths/anti-patterns), IEEE/ScienceDirect/Emerald PDF '
-        'download with cookies.'
+        'download with cookies. Also serves the merged presentation_* '
+        'slide lint + PPTX toolset (2026-07-17: standalone '
+        'presentation server retired).'
     ),
     subpackage='radia_mcp.paper_writing',
-    related_servers=["literature-index", "graph", "chart2d"],
-    optional_deps=["pymupdf", "Pillow", "requests"],
+    related_servers=["literature-index", "graph", "chart2d", "figure",
+                       "poster"],
+    optional_deps=["pymupdf", "Pillow", "requests", "python-pptx"],
 )
 
 
@@ -202,6 +222,9 @@ def main():
     if "--selftest" in sys.argv:
         print("paper_writing MCP server self-test:")
         print(f"  registered paper_writing_* tools: {len(_REGISTERED_TOOLS)}")
+        print(f"  registered presentation_* tools (merged): {_N_PRESENTATION_TOOLS}")
+        assert _N_PRESENTATION_TOOLS > 60, (
+            f"presentation merge lost tools: {_N_PRESENTATION_TOOLS}")
         # Smoke-test 3 representative tools
         r1 = _tools.paper_writing_check_kanji_ratio(
             'これは日本語の文章で、漢字の比率を計算します。'

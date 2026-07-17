@@ -249,6 +249,28 @@ page limit 超過は過剰な英文圧縮ではなく、冗長部削除または
 規模依存を評価するため」と明記する。この測定の近似指数は固定予算内のworkloadの
 スケーリングであり、非線形収束まで含む計算量の指数とは主張しない。
 
+#### platex+dvipdfmx 原稿の図は PDF 一択 — PNG は無警告で白紙になる
+
+出典: SA-26-078（八戸, 2026-07-17）。IEEJ 系 platex→dvipdfmx テンプレートで
+matplotlib の **PNG を \\includegraphics すると、図が本文にレイアウトだけ確保
+されて中身が白紙**になる事故が起きた（TeX Live 2026: graphicx/dvipdfmx.def は
+PNG を `em: graph` special で埋め込むが、現行 dvipdfmx バイナリがこれを
+"Unparsed material ... ignored" と黙って捨てる）。**コンパイルはエラーゼロで
+通る**うえ、ラボ標準の compile.ps1 は dvipdfmx 出力を Out-Null に捨てるため
+警告も見えない。共著者が「無駄な空白が多い」と指摘して初めて発覚した。
+
+ルール:
+1. **platex+dvipdfmx 原稿の図は PDF（matplotlib はベクトル PDF, pdf.fonttype=42）
+   のみ使う。** PNG しかない図（スクリーンショット等）は PIL で PDF に包む。
+2. **図を再生成したら .xbb を必ず更新**（extractbb を明示実行）。stale .xbb が
+   残ると旧図の縦横比の箱に新図が押し込まれ、潰れ・過剰余白になる。
+3. **投稿前に「図が PDF に埋まっているか」を機械検証する**: pymupdf で
+   `get_page_images`（ラスタ）+ `get_page_xobjects`（ベクトル Form）を数え、
+   \\includegraphics の数と突き合わせる。ページを画像レンダリングして図領域が
+   白紙でないか目視する（図の**ソースファイル**を眺めるだけでは検出できない —
+   PDF 内のレンダリングを見ること）。
+4. dvipdfmx の stdout/stderr を握りつぶさない（少なくとも warning を grep）。
+
 #### 誠実な定量報告 — 打ち切り値・in-sample 値・「データ結果」と「一般主張」
 
 出典: SA-26-078（能動学習 B 入力ストップ同定, 2026-07-17）仕上げトレース。
@@ -1245,6 +1267,93 @@ Wallwork / 佐藤『なぜあなたの研究は』/ 本多『日本語の作文�
 - **OK**: 読者が変化過程を了解している前提で、図で主張したい点 (例: 従来説を
   覆す箇所) だけを強調する。「図 3 より明白なように…である」と要点だけ書く。
 - (作図力学 2.5.2 / 中島・塚本)
+
+---
+
+## 🖼️ 図の実装は radia_mcp.figure 正準で (2026-07-17)
+
+論文の**全グラフ図**は `radia_mcp.figure` の `paper_figure()` +
+`emit_paper_figure()` で作る (スタイル詳細は radia-figure server の
+`paper_figure_recipe` / `paper_figure_quality_rules` が正典; ここには
+**論文ワークフロー側の運用ルールと実地の落とし穴**だけを置く)。
+
+### Rule 1: 1 枚指摘されたら全 figure を監査する
+
+図の品質指摘 (単位の角括弧・凡例重なり・小さすぎ等) は**指摘された図だけの
+問題であることはまずない** — 同じ生成コード/習慣で作った全図が同罪。指摘を
+受けたら文書内の **figure を全数チェック**し、生成スクリプトごと正準化する
+(2026-07-17 SA-26-078: 3 枚の指摘 → 実際は 6 枚全部が非正準で、生成スクリプト
+の無い raster 図も 1 枚発掘された)。図ごとに**再生成スクリプトを必ず持たせる**
+(生成コードの無い図は監査も再現もできない)。
+
+### Rule 2: 作図幅 = 埋め込み幅 (クラス実測値でプロファイルを作る)
+
+- 紙面 10 pt を守る前提は「作図した幅のまま 100% で埋め込む」こと。まず
+  文書クラスの実寸を測る:
+  `\typeout{COLW=\the\columnwidth TEXTW=\the\textwidth}` を挟んで 1 回
+  platex → log から mm 換算 (IEEJ-tec.cls 実測: 82.17 / 174.35 mm。
+  IEEJ Trans 用既成プロファイル 88/180 mm とは違う)。
+- `emit_paper_figure()` は**プロファイル幅へ強制リサイズ**する
+  (`paper_figure(rel_width=...)` は上書きされる)。実測幅の
+  `dataclasses.replace(IEEJ_SINGLE_COLUMN, width_mm=82.17)` プロファイルを
+  作り、`paper_figure()` と `emit_paper_figure()` の両方に**インスタンスを
+  渡す** (`get_profile` は文字列以外にインスタンスも受ける)。
+- tex 側は `width=\columnwidth` / `width=\textwidth` / 実寸 mm で 100% 埋め込み。
+
+### Rule 3: 1 段組に多パネルを詰めない → figure* に格上げ
+
+サブパネル幅が **~40 mm を切る配置は不可** (例: 84 mm 段に 3 ループ図 =
+各 26 mm)。横並び多パネルは**両欄 figure\*** (実測 \textwidth) に格上げする。
+その際、近接する単独図 (誤差 vs 振幅など) を **(d) パネルとして統合**すると
+紙面消費が旧 2 図とほぼ相殺され、ページ限界内に収まる。
+
+### Rule 4: auto_tighten の罠 — 全ラベル格子は warn + 明示マージン
+
+`emit_paper_figure(on_fail='auto_tighten')` は効率目標 (0.72) に**届かない
+場合ラベルが切れるまでマージンを削り続ける**。全パネルに軸ラベルの付く
+2x2 / 1x4 格子は構造的に効率 0.5-0.65 で頭打ちなので、`on_fail='warn'` +
+明示 `fig.subplots_adjust(...)` に切り替え、効率警告は受容する。
+`aspect` は**行あたり** (総高さ = 幅 x aspect x nrows) な点にも注意。
+
+### Rule 5: ゲートに素直に従う (実際に効いた例)
+
+- 凡例重なり検出 → 凡例をやめ**曲線終端の直接ラベル** (`ax.text` /
+  `label_curve_endpoints`) へ。
+- 色ゲート → 独自色 (#E8000B / tomato / steelblue / viridis 曲線族) は全滅。
+  モデル=vermillion #D55E00・比較=blue #0072B2・基底族=**グレースケール**・
+  参照=黒、で大抵足りる。キャプションの色名も追随 (赤→橙)。
+- 単位は丸括弧 (A/m)。`[A/m]` は IEEJ/IEEE 規約違反。
+
+### Rule 6: 検証は「レンダして見る」まで
+
+図差し替え後: `extractbb` (stale .xbb は寸法崩れ) → 再コンパイル →
+**pymupdf で該当ページを画像化して目視** (ラベル欠け・パネル間衝突・
+キャプション不一致はこれでしか見つからない) → raster 画像 0 / Type3
+フォント 0 を確認 (`pdf_font_embed_check` / get_fonts)。「図ファイルが
+正しい」ことと「紙面で正しく出る」ことは別 (PDF 一択の節も参照)。
+
+再描画の重い図 (能動学習ループ等) には **`--plot-only`** パス (保存済み
+JSON/選択点から決定論的に再構成) を用意しておくと、図スタイル反復が
+分単位で回る。
+
+---
+
+## 🎤 発表スライド (presentation — 2026-07-17 統合)
+
+**presentation は独立サーバをやめ、この paper-writing スキル群に統合された**
+(菅原判断: スライド本体は現状 AI が end-to-end で作れない。単独サーバに値する
+のは「AI が作れる」ものであって、スライドはまだ違う)。
+
+- **運用の分担**: スライドは**人が作る**。AI の役割は lint / 抽出 / 予算配分 /
+  台本照合 — `presentation_*` ツール群 (密度・箇条書き・発表時間 1/3・1/4
+  ルール・タイトル動詞・数式/図スライド適合・台本カバレッジ・PPTX テキスト
+  抽出・TTS 埋め込み等) は `mcp-server-paper-writing` が配信する。
+- **論文とスライドは同じ主張の別レンダリング**: 数値・主張・図は論文側 (この
+  スキルの誠実な定量報告・figure 正準) と同期して監査する。論文で打ち切り値を
+  到達値と書かないのと同じ規律をスライドの箇条書きにも適用する。
+- スライド作文の詳細原則 (speakability・単一メッセージ・理系ミニマリズム・
+  発表時間規則ほか) は `radia_mcp/presentation/skill.md` を参照 (統合後も
+  実装ホームは `radia_mcp.presentation` モジュール)。
 
 ---
 

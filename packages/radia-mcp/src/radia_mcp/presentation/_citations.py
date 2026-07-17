@@ -25,8 +25,9 @@ Four MCP tools (auto-registered because tools.py re-imports the
 Design notes
 ------------
 * No heavy imports at module load (python-pptx is lazy-imported only in
-  ``presentation_add_citation_footer``) so ``mcp-server-presentation
-  --selftest`` runs on a machine without a PPTX stack.
+  ``presentation_add_citation_footer``) so ``mcp-server-paper-writing
+  --selftest`` (which serves the merged presentation_* tools since
+  2026-07-17) runs on a machine without a PPTX stack.
 * Author-string contract (predictable, no silent guessing): separate
   multiple authors with ``" and "`` (BibTeX convention) or ``";"``.  A
   single ``", "`` is read as one ``"Last, First"`` BibTeX name.  Pass a

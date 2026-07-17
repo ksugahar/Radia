@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **782 tools** across 43 MCP servers.
+Total: **782 tools** across 42 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **782 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 43 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 44 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -41,9 +41,8 @@ Total: **782 tools** across 43 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 97 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 168 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 18 |
-| [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 72 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -522,6 +521,7 @@ Module: `radia_mcp.motor.server`
 |---|---|
 | `motor_age_quality` | NGSolve AGE quality gates for radia-motor. |
 | `motor_age_validation_plan` | Route a motor prompt to the required NGSolve AGE quality gates. |
+| `motor_angle_periodic_rom` | HCurl Eddy Bubble + HDiv-MMM angle-periodic motor ROM knowledge. |
 | `motor_bibliography` | Search the motor analysis bibliography catalog. |
 | `motor_darwin_model` | Darwin-model time-domain formulation (capacitive + inductive coupling). |
 | `motor_deck_bridge` | Public-safe motor deck corpus bridge for radia-motor. |
@@ -898,7 +898,7 @@ Module: `radia_mcp.chart2d.server`
 
 ## `mcp-server-paper-writing`
 
-_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints._
+_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints. Also serves the merged presentation_* slide lint + PPTX tools (2026-07-17: the standalone presentation server was retired -- AI cannot yet author slide decks end-to-end, so slides are human-authored and AI-linted here)._
 
 Module: `radia_mcp.paper_writing.server`
 
@@ -1001,42 +1001,6 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_validate_abstract_length` | Abstract 字数 / 語数が制限内か検証。言語を自動判定。 |
 | `paper_writing_validate_pdf_pages` | PDF のページ数が投稿制限内か検証。pymupdf が必要。 |
 | `paper_writing_verify_citation` | Verify a citation BEFORE inserting it into the paper. |
-
-## `mcp-server-grant-writing`
-
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, recommendation-letter template, and KDDI Digital Innovation social-implementation checks._
-
-Module: `radia_mcp.grant_writing.server`
-
-| Tool | Description |
-|---|---|
-| `grant_writing_acronym_usage_audit` | 略語の使用頻度と初出形式を監査し、3 段階の推奨を返す。 |
-| `grant_writing_analyze_sentences` | Analyze Japanese sentence length for grant proposals. |
-| `grant_writing_budget_alignment_check` | Check that budget items are tied to verification and implementation. |
-| `grant_writing_check_kanji_ratio` | 漢字比率の偏りを検出。本多『日本語の作文技術』第四章に基づく。 |
-| `grant_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用 15 パターン検出。 |
-| `grant_writing_check_notation_variants` | 同一テキスト内で同じ概念が複数の表記で書かれていないかを検出。 |
-| `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
-| `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
-| `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
-| `grant_writing_health_report` | Integrated grant-writing health report. |
-| `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
-| `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
-| `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
-| `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
-| `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
-| `grant_writing_status` | (no description) |
-| `grant_writing_suggest_redundancy_fixes` | 和文の典型的冗長表現 25 パターンを検出し置換候補を示す。 |
-| `grant_writing_usage` | Return the grant-writing guide. |
-
-## `mcp-server-presentation`
-
-_Research-talk slide lint + PPTX tools: density, bullets, speaking time, title/body alignment, figure/equation/result-slide checks._
-
-Module: `radia_mcp.presentation.server`
-
-| Tool | Description |
-|---|---|
 | `presentation_acronym_usage_audit` | 略語使用頻度監査 (re-export)。 |
 | `presentation_adaptive_health_report` | pptx health_report の severity を venue で adjust。 |
 | `presentation_add_citation_footer` | Add a small citation footnote textbox along the BOTTOM of one |
@@ -1099,7 +1063,6 @@ Module: `radia_mcp.presentation.server`
 | `presentation_slide_titles_outline_coherence` | 全 slide のタイトルだけ並べて outline 化し、論理整合を診断。 |
 | `presentation_speaker_note_ratio` | slide.notes_slide の speaker note 長 vs slide text 長の比率を検査。 |
 | `presentation_speaking_pace_estimate` | speaker_note の文字数から WPM (日本語は文字数/分) で発表時間を推定。 |
-| `presentation_status` | (no description) |
 | `presentation_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補 (re-export)。 |
 | `presentation_takehome_strength` | 最終スライド or last-3-slides の Take-home 品質診断。 |
 | `presentation_talk_feedback_lookup` | Query the learned conference-talk field-note catalog. |
@@ -1109,6 +1072,33 @@ Module: `radia_mcp.presentation.server`
 | `presentation_usage` | 学会発表スライド (IEEJ SA / IEEE conference / セミナー) の作文技術ガイド全体。 |
 | `presentation_validate_pdf_pages` | スライド PDF のページ数を実測。発表時間 / slot との整合を検証。 |
 | `presentation_visual_text_ratio_score` | per-slide visual/text ratio の distribution を score 化。 |
+
+## `mcp-server-grant-writing`
+
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, recommendation-letter template, and KDDI Digital Innovation social-implementation checks._
+
+Module: `radia_mcp.grant_writing.server`
+
+| Tool | Description |
+|---|---|
+| `grant_writing_acronym_usage_audit` | 略語の使用頻度と初出形式を監査し、3 段階の推奨を返す。 |
+| `grant_writing_analyze_sentences` | Analyze Japanese sentence length for grant proposals. |
+| `grant_writing_budget_alignment_check` | Check that budget items are tied to verification and implementation. |
+| `grant_writing_check_kanji_ratio` | 漢字比率の偏りを検出。本多『日本語の作文技術』第四章に基づく。 |
+| `grant_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用 15 パターン検出。 |
+| `grant_writing_check_notation_variants` | 同一テキスト内で同じ概念が複数の表記で書かれていないかを検出。 |
+| `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
+| `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
+| `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
+| `grant_writing_health_report` | Integrated grant-writing health report. |
+| `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
+| `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
+| `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
+| `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
+| `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
+| `grant_writing_status` | (no description) |
+| `grant_writing_suggest_redundancy_fixes` | 和文の典型的冗長表現 25 パターンを検出し置換候補を示す。 |
+| `grant_writing_usage` | Return the grant-writing guide. |
 
 ## `mcp-server-poster`
 

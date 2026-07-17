@@ -141,8 +141,8 @@ mcp-server-md2html = "radia_mcp.md2html.server:main"
 # Promoted from s:/mcp-server/src/mcp_server_document/paper_writing/.
 mcp-server-paper-writing = "radia_mcp.paper_writing.server:main"
 # 2026-06-27: grant_writing -- proposal and recommendation-letter lint,
-# restored as a first-class public document server so the writing quartet is
-# registered in parallel: paper-writing / figure / grant-writing / presentation.
+# restored as a first-class public document server so the writing trio is
+# registered in parallel: paper-writing / figure / grant-writing.
 mcp-server-grant-writing = "radia_mcp.grant_writing.server:main"
 # 2026-05-26 v0.81.0: chart2d -- 22 paper-quality 2D charts as MCP
 # tools (line / loglog / semilog / step / errorbar / fill_between /
@@ -165,11 +165,13 @@ mcp-server-figure = "radia_mcp.figure.server:main"
 # panel_review(topic=...) query.  Triggered by IGTE 2026 ESIM digest
 # GUI reproducibility audit (kubota's per-element headline).
 mcp-server-panel-review = "radia_mcp.panel_review.server:main"
-# 2026-06-02: presentation / poster / pdf / doc_convert / bibliography --
-# promoted from s:/mcp-server/src/mcp_server_document/ (LAB-private) to
-# radia-mcp (public).  Slide + poster lint, PDF/PPTX conversion + PDF
-# manipulation, BibTeX/citation tooling.  deps: pip install radia-mcp[document]
-mcp-server-presentation = "radia_mcp.presentation.server:main"
+# 2026-06-02: poster / pdf / doc_convert / bibliography -- promoted from
+# s:/mcp-server/src/mcp_server_document/ (LAB-private) to radia-mcp
+# (public).  Poster lint, PDF/PPTX conversion + PDF manipulation,
+# BibTeX/citation tooling.  deps: pip install radia-mcp[document]
+# (presentation was also promoted then; 2026-07-17 its standalone server
+# was retired and the presentation_* tools merged into
+# mcp-server-paper-writing -- AI cannot yet author slide decks end-to-end.)
 mcp-server-poster = "radia_mcp.poster.server:main"
 mcp-server-pdf = "radia_mcp.pdf.server:main"
 mcp-server-doc-convert = "radia_mcp.doc_convert.server:main"
