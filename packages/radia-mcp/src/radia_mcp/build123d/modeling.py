@@ -3686,6 +3686,156 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    nested_transform_evidence_present = any(
+        row.get("nested_assembly_location_transform_composition_identity") is not None
+        for row in identity_rows
+    )
+
+    def nested_assembly_location_transform_composition_identity(row):
+        value = row.get("nested_assembly_location_transform_composition_identity")
+        if not isinstance(value, dict):
+            return None
+        assembly_generation = str(value.get("assembly_generation", "")).strip()
+        transform_order_generation = str(
+            value.get("transform_order_generation", "")
+        ).strip()
+        child_paths = [str(path) for path in value.get("child_paths", [])]
+        location_paths = [
+            str(path) for path in value.get("location_child_paths", [])
+        ]
+        local_digests = [
+            str(digest).lower() for digest in value.get("local_transform_sha256", [])
+        ]
+        composed_digests = [
+            str(digest).lower()
+            for digest in value.get("composed_transform_sha256", [])
+        ]
+        resolved_digests = [
+            str(digest).lower()
+            for digest in value.get("resolved_composed_transform_sha256", [])
+        ]
+        tree_digest = str(value.get("location_tree_sha256", "")).lower()
+        order = str(value.get("composition_order", "")).strip()
+        if (
+            not assembly_generation
+            or value.get("location_tree_assembly_generation")
+            != assembly_generation
+            or value.get("composition_assembly_generation") != assembly_generation
+            or not transform_order_generation
+            or value.get("location_transform_order_generation")
+            != transform_order_generation
+            or not child_paths
+            or len(set(child_paths)) != len(child_paths)
+            or location_paths != child_paths
+            or len(local_digests) != len(child_paths)
+            or len(composed_digests) != len(child_paths)
+            or resolved_digests != composed_digests
+            or not all(valid_sha256(digest) for digest in local_digests)
+            or not all(valid_sha256(digest) for digest in composed_digests)
+            or order != "parent_then_child"
+            or value.get("resolved_composition_order") != order
+            or not valid_sha256(tree_digest)
+            or value.get("resolved_location_tree_sha256") != tree_digest
+        ):
+            return None
+        return (
+            assembly_generation,
+            transform_order_generation,
+            tuple(child_paths),
+            tuple(local_digests),
+            tuple(composed_digests),
+            order,
+            tree_digest,
+        )
+
+    reference_nested_transform_maps = {
+        str(row.get("name", "")): (
+            nested_assembly_location_transform_composition_identity(row)
+        )
+        for row in reference
+    }
+    nested_transform_identity_ok = not nested_transform_evidence_present
+    if nested_transform_evidence_present:
+        nested_transform_identity_ok = bool(reference_nested_transform_maps) and all(
+            value is not None for value in reference_nested_transform_maps.values()
+        )
+        for _, rows in normalized_sets:
+            nested_transform_identity_ok = nested_transform_identity_ok and all(
+                nested_assembly_location_transform_composition_identity(row)
+                == reference_nested_transform_maps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    retained_face_history_evidence_present = any(
+        row.get("boolean_retained_face_name_history_refine_identity") is not None
+        for row in identity_rows
+    )
+
+    def boolean_retained_face_name_history_refine_identity(row):
+        value = row.get("boolean_retained_face_name_history_refine_identity")
+        if not isinstance(value, dict):
+            return None
+        boolean_generation = str(value.get("boolean_generation", "")).strip()
+        refine_generation = str(value.get("refine_generation", "")).strip()
+        names = [str(name) for name in value.get("retained_face_names", [])]
+        resolved_names = [str(name) for name in value.get("resolved_face_names", [])]
+        try:
+            face_ids = [int(face_id) for face_id in value.get("retained_face_ids", [])]
+            resolved_face_ids = [
+                int(face_id) for face_id in value.get("resolved_face_ids", [])
+            ]
+        except (TypeError, ValueError):
+            return None
+        history_digest = str(value.get("topology_history_sha256", "")).lower()
+        if (
+            not boolean_generation
+            or value.get("retained_name_boolean_generation") != boolean_generation
+            or not refine_generation
+            or value.get("retained_name_refine_generation") != refine_generation
+            or value.get("topology_history_refine_generation") != refine_generation
+            or not names
+            or len(set(names)) != len(names)
+            or any(not name.strip() for name in names)
+            or resolved_names != names
+            or len(face_ids) != len(names)
+            or len(set(face_ids)) != len(face_ids)
+            or any(face_id <= 0 for face_id in face_ids)
+            or resolved_face_ids != face_ids
+            or not valid_sha256(history_digest)
+            or value.get("resolved_topology_history_sha256") != history_digest
+        ):
+            return None
+        return (
+            boolean_generation,
+            refine_generation,
+            tuple(names),
+            tuple(face_ids),
+            history_digest,
+        )
+
+    reference_retained_face_histories = {
+        str(row.get("name", "")): (
+            boolean_retained_face_name_history_refine_identity(row)
+        )
+        for row in reference
+    }
+    retained_face_history_identity_ok = not retained_face_history_evidence_present
+    if retained_face_history_evidence_present:
+        retained_face_history_identity_ok = bool(
+            reference_retained_face_histories
+        ) and all(
+            value is not None for value in reference_retained_face_histories.values()
+        )
+        for _, rows in normalized_sets:
+            retained_face_history_identity_ok = (
+                retained_face_history_identity_ok
+                and all(
+                    boolean_retained_face_name_history_refine_identity(row)
+                    == reference_retained_face_histories.get(str(row.get("name", "")))
+                    for row in rows
+                )
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3775,6 +3925,12 @@ def shape_mass_property_crosscheck_summary(
         "assembly_center_of_mass_uses_current_part_density_mapping": (
             assembly_density_identity_ok
         ),
+        "nested_assembly_locations_use_current_transform_composition_order": (
+            nested_transform_identity_ok
+        ),
+        "boolean_retained_face_names_follow_post_refine_topology_history": (
+            retained_face_history_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3819,6 +3975,14 @@ def shape_mass_property_crosscheck_summary(
         issues.append("boolean tolerance predates the active model length-unit generation")
     if not checks["assembly_center_of_mass_uses_current_part_density_mapping"]:
         issues.append("assembly center of mass uses a stale part-density mapping")
+    if not checks[
+        "nested_assembly_locations_use_current_transform_composition_order"
+    ]:
+        issues.append("nested assembly locations use a stale transform composition order")
+    if not checks[
+        "boolean_retained_face_names_follow_post_refine_topology_history"
+    ]:
+        issues.append("Boolean retained face names use topology history from before refine")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
