@@ -1665,6 +1665,256 @@ def _exodus64_mapping_identity_ok(identity: object) -> bool:
     )
 
 
+def _high_order_hex_jacobian_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    sequence_keys = (
+        "element_ids",
+        "result_element_ids",
+        "minimum_jacobian",
+        "result_minimum_jacobian",
+        "coordinate_transform",
+        "result_coordinate_transform",
+        "canonical_node_order",
+        "exported_node_order",
+        "block_ids",
+        "result_block_ids",
+    )
+    if not all(
+        isinstance(identity.get(key), Sequence)
+        and not isinstance(identity.get(key), (str, bytes))
+        for key in sequence_keys
+    ):
+        return False
+    try:
+        element_ids = [int(value) for value in identity["element_ids"]]
+        result_element_ids = [int(value) for value in identity["result_element_ids"]]
+        jacobians = [float(value) for value in identity["minimum_jacobian"]]
+        result_jacobians = [
+            float(value) for value in identity["result_minimum_jacobian"]
+        ]
+        transform = [
+            [float(value) for value in row]
+            for row in identity["coordinate_transform"]
+        ]
+        result_transform = [
+            [float(value) for value in row]
+            for row in identity["result_coordinate_transform"]
+        ]
+        node_order = [int(value) for value in identity["canonical_node_order"]]
+        exported_node_order = [int(value) for value in identity["exported_node_order"]]
+        block_ids = [int(value) for value in identity["block_ids"]]
+        result_block_ids = [int(value) for value in identity["result_block_ids"]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mesh_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "jacobian_mesh_generation",
+                "transform_mesh_generation",
+                "node_order_mesh_generation",
+                "block_mesh_generation",
+                "result_mesh_generation",
+            )
+        )
+        and bool(element_ids)
+        and len(set(element_ids)) == len(element_ids)
+        and all(value > 0 for value in element_ids)
+        and result_element_ids == element_ids
+        and len(jacobians) == len(element_ids)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and len(transform) == 3
+        and all(len(row) == 3 for row in transform)
+        and all(math.isfinite(value) for row in transform for value in row)
+        and result_transform == transform
+        and len(node_order) >= 8
+        and len(set(node_order)) == len(node_order)
+        and exported_node_order == node_order
+        and bool(block_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and result_block_ids == block_ids
+        and len(str(identity.get("mesh_sha256") or "")) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in str(identity.get("mesh_sha256") or "")
+        )
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+    )
+
+
+def _mesh_cad_closure_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        cad_volume = float(identity.get("cad_volume"))
+        mesh_volume = float(identity.get("mesh_volume"))
+        cad_area = float(identity.get("cad_boundary_area"))
+        mesh_area = float(identity.get("mesh_boundary_area"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("geometry_generation") or "")
+    unit = str(identity.get("length_unit") or "")
+    frame = str(identity.get("coordinate_frame") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "cad_geometry_generation",
+                "mesh_geometry_generation",
+                "boundary_geometry_generation",
+                "unit_geometry_generation",
+                "frame_geometry_generation",
+                "result_geometry_generation",
+            )
+        )
+        and bool(unit)
+        and identity.get("result_length_unit") == unit
+        and bool(frame)
+        and identity.get("result_coordinate_frame") == frame
+        and all(
+            math.isfinite(value) and value > 0.0
+            for value in (cad_volume, mesh_volume, cad_area, mesh_area)
+        )
+        and abs(mesh_volume - cad_volume) <= 1.0e-9 * cad_volume
+        and abs(mesh_area - cad_area) <= 1.0e-9 * cad_area
+        and identity.get("boundary_closed") is True
+        and identity.get("result_boundary_closed") is True
+        and len(str(identity.get("cad_shape_sha256") or "")) == 64
+        and identity.get("mesh_source_shape_sha256") == identity.get("cad_shape_sha256")
+        and len(str(identity.get("closure_table_sha256") or "")) == 64
+        and identity.get("result_closure_table_sha256")
+        == identity.get("closure_table_sha256")
+    )
+
+
+def _webcut_imprint_merge_topology_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        imprint_tolerance = float(identity.get("imprint_tolerance"))
+        result_imprint_tolerance = float(identity.get("result_imprint_tolerance"))
+        merge_tolerance = float(identity.get("merge_tolerance"))
+        result_merge_tolerance = float(identity.get("result_merge_tolerance"))
+        names = [str(value) for value in identity.get("entity_names", [])]
+        result_names = [str(value) for value in identity.get("result_entity_names", [])]
+    except (TypeError, ValueError):
+        return False
+    topology = identity.get("topology_counts")
+    result_topology = identity.get("result_topology_counts")
+    generation = str(identity.get("operation_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "webcut_operation_generation",
+                "imprint_operation_generation",
+                "merge_operation_generation",
+                "topology_operation_generation",
+                "result_operation_generation",
+            )
+        )
+        and math.isfinite(imprint_tolerance)
+        and imprint_tolerance > 0.0
+        and result_imprint_tolerance == imprint_tolerance
+        and math.isfinite(merge_tolerance)
+        and merge_tolerance > 0.0
+        and result_merge_tolerance == merge_tolerance
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and result_names == names
+        and isinstance(topology, Mapping)
+        and set(topology) == {"volume", "surface", "curve", "vertex"}
+        and all(isinstance(value, int) and value > 0 for value in topology.values())
+        and result_topology == topology
+        and len(str(identity.get("topology_sha256") or "")) == 64
+        and identity.get("result_topology_sha256") == identity.get("topology_sha256")
+        and len(str(identity.get("command_log_sha256") or "")) == 64
+        and identity.get("result_command_log_sha256")
+        == identity.get("command_log_sha256")
+    )
+
+
+def _exodus_qa_coordinate_distribution_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    sequence_keys = (
+        "qa_records",
+        "decoded_qa_records",
+        "coordinate_names",
+        "decoded_coordinate_names",
+        "sideset_distribution_factors",
+        "decoded_sideset_distribution_factors",
+    )
+    if not all(
+        isinstance(identity.get(key), Sequence)
+        and not isinstance(identity.get(key), (str, bytes))
+        for key in sequence_keys
+    ):
+        return False
+    try:
+        qa_records = [[str(value) for value in row] for row in identity["qa_records"]]
+        decoded_qa = [
+            [str(value) for value in row] for row in identity["decoded_qa_records"]
+        ]
+        coordinates = [str(value) for value in identity["coordinate_names"]]
+        decoded_coordinates = [
+            str(value) for value in identity["decoded_coordinate_names"]
+        ]
+        factors = [
+            [float(value) for value in row]
+            for row in identity["sideset_distribution_factors"]
+        ]
+        decoded_factors = [
+            [float(value) for value in row]
+            for row in identity["decoded_sideset_distribution_factors"]
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("export_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "qa_export_generation",
+                "coordinate_export_generation",
+                "distribution_export_generation",
+                "checksum_export_generation",
+                "result_export_generation",
+            )
+        )
+        and bool(qa_records)
+        and all(len(row) == 4 and all(row) for row in qa_records)
+        and decoded_qa == qa_records
+        and coordinates == ["x", "y", "z"]
+        and decoded_coordinates == coordinates
+        and bool(factors)
+        and all(row for row in factors)
+        and all(math.isfinite(value) and value >= 0.0 for row in factors for value in row)
+        and decoded_factors == factors
+        and len(str(identity.get("payload_sha256") or "")) == 64
+        and identity.get("decoded_payload_sha256") == identity.get("payload_sha256")
+        and len(str(identity.get("qa_table_sha256") or "")) == 64
+        and identity.get("decoded_qa_table_sha256")
+        == identity.get("qa_table_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -2399,6 +2649,20 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             _mixed_transition_interface_ownership_ok(
                 summary.get(
                     "mixed_transition_interface_block_sideset_generation_identity"
+                )
+            )
+        ),
+        "high_order_hex_uses_current_jacobians_transform_node_order_and_blocks": (
+            _high_order_hex_jacobian_identity_ok(
+                summary.get(
+                    "high_order_hex_jacobian_transform_node_order_block_generation_identity"
+                )
+            )
+        ),
+        "mesh_boundary_closure_uses_current_cad_units_frame_and_geometry": (
+            _mesh_cad_closure_identity_ok(
+                summary.get(
+                    "mesh_boundary_cad_volume_area_unit_frame_generation_identity"
                 )
             )
         ),
@@ -3158,6 +3422,20 @@ def cubit_mixed_transition_source_gate(
             _exodus64_mapping_identity_ok(
                 summary.get(
                     "exodus64_entity_sideset_element_map_schema_generation_identity"
+                )
+            )
+        ),
+        "webcut_imprint_merge_uses_current_tolerances_topology_and_entities": (
+            _webcut_imprint_merge_topology_identity_ok(
+                summary.get(
+                    "webcut_imprint_merge_tolerance_topology_entity_generation_identity"
+                )
+            )
+        ),
+        "exodus_qa_uses_current_coordinates_distribution_factors_and_checksum": (
+            _exodus_qa_coordinate_distribution_identity_ok(
+                summary.get(
+                    "exodus_qa_coordinate_distribution_checksum_generation_identity"
                 )
             )
         ),
