@@ -287,6 +287,46 @@ def _with_artifact_identity(summary: dict) -> dict:
             "coil_orientation_map_sha256": "6" * 64,
             "force_coil_orientation_map_sha256": "6" * 64,
         },
+        "bem_demag_self_term_solid_angle_orientation_generation_identity": {
+            "operator_generation": "bem-operator-21",
+            "result_operator_generation": "bem-operator-21",
+            "boundary_generation": "boundary-21",
+            "self_term_boundary_generation": "boundary-21",
+            "panel_orientation_boundary_generation": "boundary-21",
+            "operator_boundary_generation": "boundary-21",
+            "panel_ids": [101, 102, 103],
+            "self_term_panel_ids": [101, 102, 103],
+            "panel_orientation_signs": [1, 1, 1],
+            "self_term_orientation_signs": [1, 1, 1],
+            "solid_angles_sr": [6.283185307179586] * 3,
+            "applied_self_term_solid_angles_sr": [6.283185307179586] * 3,
+            "orientation_convention": "outward_positive",
+            "self_term_orientation_convention": "outward_positive",
+            "self_term_input_sha256": "a" * 64,
+            "assembled_self_term_input_sha256": "a" * 64,
+        },
+        "virtual_work_force_displacement_coordinate_geometry_generation_identity": {
+            "force_generation": "virtual-work-force-21",
+            "result_force_generation": "virtual-work-force-21",
+            "geometry_generation": "geometry-21",
+            "displacement_coordinate_geometry_generation": "geometry-21",
+            "energy_sample_geometry_generations": ["geometry-21"] * 3,
+            "force_geometry_generation": "geometry-21",
+            "displacement_coordinate_generation": "displacement-21",
+            "energy_sample_displacement_coordinate_generation": "displacement-21",
+            "force_displacement_coordinate_generation": "displacement-21",
+            "displacement_axis": "global-z",
+            "force_component_axis": "global-z",
+            "displacement_unit": "m",
+            "energy_unit": "J",
+            "force_unit": "N",
+            "displacements_m": [-0.001, 0.0, 0.001],
+            "force_displacements_m": [-0.001, 0.0, 0.001],
+            "energy_samples_j": [1.001, 1.0, 0.999],
+            "force_energy_samples_j": [1.001, 1.0, 0.999],
+            "energy_sample_table_sha256": "b" * 64,
+            "force_input_energy_sample_table_sha256": "b" * 64,
+        },
     }
     return summary
 
@@ -819,6 +859,54 @@ def test_v17_public_demag_tensor_generation_binds_force_consumer() -> None:
     assert (
         result["checks"][
             "bem_demag_tensor_uses_current_body_placement_coordinate_basis"
+        ]
+        is False
+    )
+
+
+def test_v19_public_bem_demag_self_term_solid_angle_orientation_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    identity = summary["artifact_identity"][
+        "bem_demag_self_term_solid_angle_orientation_generation_identity"
+    ]
+    identity.update(
+        {
+            "self_term_boundary_generation": "boundary-20",
+            "panel_orientation_boundary_generation": "boundary-20",
+            "self_term_panel_ids": [103, 102, 101],
+            "self_term_orientation_signs": [-1, -1, -1],
+            "assembled_self_term_input_sha256": "e" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "bem_demag_self_term_uses_current_boundary_orientation_generation"
+        ]
+        is False
+    )
+
+
+def test_v19_public_virtual_work_force_displacement_coordinate_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    identity = summary["artifact_identity"][
+        "virtual_work_force_displacement_coordinate_geometry_generation_identity"
+    ]
+    identity.update(
+        {
+            "displacement_coordinate_geometry_generation": "geometry-20",
+            "energy_sample_geometry_generations": ["geometry-20"] * 3,
+            "force_displacement_coordinate_generation": "displacement-20",
+            "force_displacements_m": [0.001, 0.0, -0.001],
+            "force_input_energy_sample_table_sha256": "e" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "virtual_work_force_uses_current_displacement_geometry_generation"
         ]
         is False
     )

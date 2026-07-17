@@ -125,6 +125,8 @@ def magnetic_force_method_profile_gate(
     magnetic_bearing_force_harmonic_phase_origin_identity_ok = True
     bem_near_singular_panel_subdivision_quadrature_generation_identity_ok = True
     maglev_force_coil_polarity_orientation_generation_identity_ok = True
+    bem_demag_self_term_solid_angle_orientation_generation_identity_ok = True
+    virtual_work_displacement_coordinate_geometry_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -148,6 +150,8 @@ def magnetic_force_method_profile_gate(
         magnetic_bearing_force_harmonic_phase_origin_identity_ok = False
         bem_near_singular_panel_subdivision_quadrature_generation_identity_ok = False
         maglev_force_coil_polarity_orientation_generation_identity_ok = False
+        bem_demag_self_term_solid_angle_orientation_generation_identity_ok = False
+        virtual_work_displacement_coordinate_geometry_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -1070,6 +1074,175 @@ def magnetic_force_method_profile_gate(
                 == orientation_digest
             )
 
+        self_term_generation_value = identity_value.get(
+            "bem_demag_self_term_solid_angle_orientation_generation_identity"
+        )
+        if self_term_generation_value is not None:
+            self_term_generation = (
+                self_term_generation_value
+                if isinstance(self_term_generation_value, Mapping)
+                else {}
+            )
+            operator_generation = str(
+                self_term_generation.get("operator_generation", "")
+            )
+            boundary_generation = str(
+                self_term_generation.get("boundary_generation", "")
+            )
+            panel_ids = self_term_generation.get("panel_ids")
+            orientation_signs = self_term_generation.get(
+                "panel_orientation_signs"
+            )
+            solid_angles = self_term_generation.get("solid_angles_sr")
+            input_digest = str(
+                self_term_generation.get("self_term_input_sha256", "")
+            ).lower()
+            bem_demag_self_term_solid_angle_orientation_generation_identity_ok = (
+                bool(operator_generation)
+                and self_term_generation.get("result_operator_generation")
+                == operator_generation
+                and bool(boundary_generation)
+                and self_term_generation.get("self_term_boundary_generation")
+                == boundary_generation
+                and self_term_generation.get(
+                    "panel_orientation_boundary_generation"
+                )
+                == boundary_generation
+                and self_term_generation.get("operator_boundary_generation")
+                == boundary_generation
+                and isinstance(panel_ids, list)
+                and bool(panel_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in panel_ids
+                )
+                and len(set(panel_ids)) == len(panel_ids)
+                and self_term_generation.get("self_term_panel_ids") == panel_ids
+                and isinstance(orientation_signs, list)
+                and len(orientation_signs) == len(panel_ids)
+                and all(value in (-1, 1) for value in orientation_signs)
+                and self_term_generation.get("self_term_orientation_signs")
+                == orientation_signs
+                and isinstance(solid_angles, list)
+                and len(solid_angles) == len(panel_ids)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in solid_angles
+                )
+                and self_term_generation.get(
+                    "applied_self_term_solid_angles_sr"
+                )
+                == solid_angles
+                and self_term_generation.get("orientation_convention")
+                == "outward_positive"
+                and self_term_generation.get("self_term_orientation_convention")
+                == self_term_generation.get("orientation_convention")
+                and len(input_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in input_digest
+                )
+                and str(
+                    self_term_generation.get(
+                        "assembled_self_term_input_sha256", ""
+                    )
+                ).lower()
+                == input_digest
+            )
+
+        virtual_work_value = identity_value.get(
+            "virtual_work_force_displacement_coordinate_geometry_generation_identity"
+        )
+        if virtual_work_value is not None:
+            virtual_work = (
+                virtual_work_value
+                if isinstance(virtual_work_value, Mapping)
+                else {}
+            )
+            force_generation = str(virtual_work.get("force_generation", ""))
+            geometry_generation = str(
+                virtual_work.get("geometry_generation", "")
+            )
+            coordinate_generation = str(
+                virtual_work.get("displacement_coordinate_generation", "")
+            )
+            displacements = virtual_work.get("displacements_m")
+            energy_samples = virtual_work.get("energy_samples_j")
+            geometry_generations = virtual_work.get(
+                "energy_sample_geometry_generations"
+            )
+            energy_digest = str(
+                virtual_work.get("energy_sample_table_sha256", "")
+            ).lower()
+            virtual_work_displacement_coordinate_geometry_generation_identity_ok = (
+                bool(force_generation)
+                and virtual_work.get("result_force_generation") == force_generation
+                and bool(geometry_generation)
+                and virtual_work.get(
+                    "displacement_coordinate_geometry_generation"
+                )
+                == geometry_generation
+                and virtual_work.get("force_geometry_generation")
+                == geometry_generation
+                and isinstance(geometry_generations, list)
+                and bool(geometry_generations)
+                and all(
+                    generation == geometry_generation
+                    for generation in geometry_generations
+                )
+                and bool(coordinate_generation)
+                and virtual_work.get(
+                    "energy_sample_displacement_coordinate_generation"
+                )
+                == coordinate_generation
+                and virtual_work.get(
+                    "force_displacement_coordinate_generation"
+                )
+                == coordinate_generation
+                and virtual_work.get("displacement_axis") == "global-z"
+                and virtual_work.get("force_component_axis")
+                == virtual_work.get("displacement_axis")
+                and virtual_work.get("displacement_unit") == "m"
+                and virtual_work.get("energy_unit") == "J"
+                and virtual_work.get("force_unit") == "N"
+                and isinstance(displacements, list)
+                and len(displacements) >= 3
+                and len(displacements) == len(geometry_generations)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in displacements
+                )
+                and all(
+                    right > left
+                    for left, right in zip(displacements, displacements[1:])
+                )
+                and virtual_work.get("force_displacements_m") == displacements
+                and isinstance(energy_samples, list)
+                and len(energy_samples) == len(displacements)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in energy_samples
+                )
+                and virtual_work.get("force_energy_samples_j") == energy_samples
+                and len(energy_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in energy_digest
+                )
+                and str(
+                    virtual_work.get(
+                        "force_input_energy_sample_table_sha256", ""
+                    )
+                ).lower()
+                == energy_digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -1193,6 +1366,12 @@ def magnetic_force_method_profile_gate(
         ),
         "maglev_force_uses_current_coil_polarity_and_winding_orientation": (
             maglev_force_coil_polarity_orientation_generation_identity_ok
+        ),
+        "bem_demag_self_term_uses_current_boundary_orientation_generation": (
+            bem_demag_self_term_solid_angle_orientation_generation_identity_ok
+        ),
+        "virtual_work_force_uses_current_displacement_geometry_generation": (
+            virtual_work_displacement_coordinate_geometry_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
