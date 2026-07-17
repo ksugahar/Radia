@@ -153,6 +153,109 @@ def _mesh_export_facet_normal_identity_ok(value: object) -> bool:
     )
 
 
+def _brep_step_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("roundtrip_generation", "")).strip()
+    source_format = str(value.get("source_format", "")).strip()
+    orientation = str(value.get("shell_orientation", "")).strip().lower()
+    try:
+        linear_tolerance = float(value.get("linear_tolerance"))
+        decoded_linear_tolerance = float(value.get("decoded_linear_tolerance"))
+        angular_tolerance = float(value.get("angular_tolerance_deg"))
+        decoded_angular_tolerance = float(value.get("decoded_angular_tolerance_deg"))
+        volume = float(value.get("volume"))
+        decoded_volume = float(value.get("decoded_volume"))
+    except (TypeError, ValueError):
+        return False
+    shape_digest = str(value.get("source_shape_sha256", "")).lower()
+    topology_digest = str(value.get("topology_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "source_roundtrip_generation",
+                "tolerance_roundtrip_generation",
+                "orientation_roundtrip_generation",
+                "volume_roundtrip_generation",
+                "topology_roundtrip_generation",
+                "result_roundtrip_generation",
+            )
+        )
+        and bool(source_format)
+        and value.get("decoded_source_format") == source_format
+        and math.isfinite(linear_tolerance)
+        and linear_tolerance > 0.0
+        and math.isclose(
+            decoded_linear_tolerance,
+            linear_tolerance,
+            rel_tol=0.0,
+            abs_tol=1.0e-18,
+        )
+        and math.isfinite(angular_tolerance)
+        and 0.0 < angular_tolerance <= 180.0
+        and math.isclose(
+            decoded_angular_tolerance,
+            angular_tolerance,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        )
+        and orientation == "outward"
+        and str(value.get("decoded_shell_orientation", "")).strip().lower()
+        == orientation
+        and math.isfinite(volume)
+        and volume > 0.0
+        and math.isclose(decoded_volume, volume, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and _valid_sha256(shape_digest)
+        and value.get("decoded_source_shape_sha256") == shape_digest
+        and _valid_sha256(topology_digest)
+        and value.get("decoded_topology_sha256") == topology_digest
+    )
+
+
+def _fresh_subprocess_result_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("run_generation", "")).strip()
+    script_digest = str(value.get("source_script_sha256", "")).lower()
+    output_digest = str(value.get("output_shape_sha256", "")).lower()
+    log_digest = str(value.get("process_log_sha256", "")).lower()
+    try:
+        remaining_processes = int(value.get("owned_process_count_after"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "process_run_generation",
+                "interpreter_run_generation",
+                "cache_run_generation",
+                "temporary_output_run_generation",
+                "result_run_generation",
+            )
+        )
+        and value.get("fresh_interpreter") is True
+        and value.get("timed_out") is False
+        and value.get("exception_raised") is False
+        and value.get("module_cache_preloaded") is False
+        and value.get("temporary_directory_unique") is True
+        and remaining_processes == 0
+        and _valid_sha256(script_digest)
+        and value.get("executed_source_script_sha256") == script_digest
+        and _valid_sha256(output_digest)
+        and value.get("accepted_output_shape_sha256") == output_digest
+        and _valid_sha256(log_digest)
+        and value.get("accepted_process_log_sha256") == log_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -479,6 +582,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     curved_mesh_export_identity_ok = True
     step_import_metadata_topology_identity_ok = True
     mesh_export_facet_normal_identity_ok = True
+    brep_step_roundtrip_identity_ok = True
+    fresh_subprocess_result_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -512,6 +617,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         curved_mesh_export_identity_ok = False
         step_import_metadata_topology_identity_ok = False
         mesh_export_facet_normal_identity_ok = False
+        brep_step_roundtrip_identity_ok = False
+        fresh_subprocess_result_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2053,6 +2160,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "mesh_export_facet_normal_tolerance_shape_digest_generation_identity"
             )
         )
+        brep_step_roundtrip_identity_ok = _brep_step_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "brep_step_roundtrip_tolerance_orientation_volume_generation_identity"
+            )
+        )
+        fresh_subprocess_result_identity_ok = _fresh_subprocess_result_identity_ok(
+            replay_identity_value.get(
+                "fresh_subprocess_timeout_exception_cache_output_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2164,6 +2281,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "mesh_export_uses_current_shape_facets_normals_and_tolerances": (
             mesh_export_facet_normal_identity_ok
+        ),
+        "brep_step_roundtrip_uses_current_tolerances_orientation_volume_and_topology": (
+            brep_step_roundtrip_identity_ok
+        ),
+        "fresh_subprocess_rejects_timeout_exception_cache_and_stale_output": (
+            fresh_subprocess_result_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
