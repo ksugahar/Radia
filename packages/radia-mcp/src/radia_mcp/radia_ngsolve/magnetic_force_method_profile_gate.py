@@ -127,6 +127,8 @@ def magnetic_force_method_profile_gate(
     maglev_force_coil_polarity_orientation_generation_identity_ok = True
     bem_demag_self_term_solid_angle_orientation_generation_identity_ok = True
     virtual_work_displacement_coordinate_geometry_generation_identity_ok = True
+    demag_energy_surface_charge_normal_quadrature_identity_ok = True
+    maglev_stiffness_displacement_equilibrium_force_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -152,6 +154,8 @@ def magnetic_force_method_profile_gate(
         maglev_force_coil_polarity_orientation_generation_identity_ok = False
         bem_demag_self_term_solid_angle_orientation_generation_identity_ok = False
         virtual_work_displacement_coordinate_geometry_generation_identity_ok = False
+        demag_energy_surface_charge_normal_quadrature_identity_ok = False
+        maglev_stiffness_displacement_equilibrium_force_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -1243,6 +1247,169 @@ def magnetic_force_method_profile_gate(
                 == energy_digest
             )
 
+        demag_energy_value = identity_value.get(
+            "demag_energy_surface_charge_normal_quadrature_generation_identity"
+        )
+        if demag_energy_value is not None:
+            demag_energy = (
+                demag_energy_value
+                if isinstance(demag_energy_value, Mapping)
+                else {}
+            )
+            energy_generation = str(
+                demag_energy.get("energy_generation", "")
+            ).strip()
+            boundary_generation = str(
+                demag_energy.get("boundary_generation", "")
+            ).strip()
+            panel_ids = demag_energy.get("panel_ids")
+            charges = demag_energy.get("surface_charges_a_per_m")
+            normal_digests = demag_energy.get("outward_normal_sha256")
+            weights = demag_energy.get("panel_quadrature_weights")
+            digest = str(
+                demag_energy.get("demag_energy_input_sha256", "")
+            ).lower()
+            demag_energy_surface_charge_normal_quadrature_identity_ok = (
+                bool(energy_generation)
+                and demag_energy.get("result_energy_generation")
+                == energy_generation
+                and bool(boundary_generation)
+                and all(
+                    demag_energy.get(key) == boundary_generation
+                    for key in (
+                        "surface_charge_boundary_generation",
+                        "normal_boundary_generation",
+                        "quadrature_boundary_generation",
+                        "energy_boundary_generation",
+                    )
+                )
+                and isinstance(panel_ids, list)
+                and bool(panel_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in panel_ids
+                )
+                and len(set(panel_ids)) == len(panel_ids)
+                and demag_energy.get("energy_panel_ids") == panel_ids
+                and isinstance(charges, list)
+                and len(charges) == len(panel_ids)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in charges
+                )
+                and demag_energy.get("energy_surface_charges_a_per_m") == charges
+                and isinstance(normal_digests, list)
+                and len(normal_digests) == len(panel_ids)
+                and all(
+                    isinstance(value, str)
+                    and len(value) == 64
+                    and all(character in "0123456789abcdef" for character in value)
+                    for value in normal_digests
+                )
+                and demag_energy.get("energy_outward_normal_sha256")
+                == normal_digests
+                and isinstance(weights, list)
+                and len(weights) == len(panel_ids)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    and float(value) >= 0.0
+                    for value in weights
+                )
+                and demag_energy.get("energy_panel_quadrature_weights") == weights
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    demag_energy.get("assembled_demag_energy_input_sha256", "")
+                ).lower()
+                == digest
+            )
+
+        stiffness_value = identity_value.get(
+            "maglev_stiffness_displacement_equilibrium_force_generation_identity"
+        )
+        if stiffness_value is not None:
+            stiffness = stiffness_value if isinstance(stiffness_value, Mapping) else {}
+            stiffness_generation = str(
+                stiffness.get("stiffness_generation", "")
+            ).strip()
+            geometry_generation = str(
+                stiffness.get("geometry_generation", "")
+            ).strip()
+            coordinate_generation = str(
+                stiffness.get("coordinate_generation", "")
+            ).strip()
+            sample_geometry = stiffness.get("sample_geometry_generations")
+            force_geometry = stiffness.get("force_geometry_generations")
+            displacements = stiffness.get("displacements_m")
+            forces = stiffness.get("force_samples_n")
+            digest = str(
+                stiffness.get("stiffness_sample_table_sha256", "")
+            ).lower()
+            try:
+                equilibrium_index = int(stiffness.get("equilibrium_sample_index"))
+                result_equilibrium_index = int(
+                    stiffness.get("stiffness_equilibrium_sample_index")
+                )
+            except (TypeError, ValueError):
+                equilibrium_index = result_equilibrium_index = -1
+            maglev_stiffness_displacement_equilibrium_force_identity_ok = (
+                bool(stiffness_generation)
+                and stiffness.get("result_stiffness_generation")
+                == stiffness_generation
+                and bool(geometry_generation)
+                and isinstance(sample_geometry, list)
+                and len(sample_geometry) >= 3
+                and all(value == geometry_generation for value in sample_geometry)
+                and force_geometry == sample_geometry
+                and bool(coordinate_generation)
+                and stiffness.get("displacement_coordinate_generation")
+                == coordinate_generation
+                and stiffness.get("force_coordinate_generation")
+                == coordinate_generation
+                and stiffness.get("displacement_axis") in {
+                    "global-x",
+                    "global-y",
+                    "global-z",
+                }
+                and stiffness.get("force_component_axis")
+                == stiffness.get("displacement_axis")
+                and isinstance(displacements, list)
+                and len(displacements) == len(sample_geometry)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in displacements
+                )
+                and all(
+                    right > left
+                    for left, right in zip(displacements, displacements[1:])
+                )
+                and stiffness.get("force_displacements_m") == displacements
+                and isinstance(forces, list)
+                and len(forces) == len(displacements)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in forces
+                )
+                and stiffness.get("stiffness_force_samples_n") == forces
+                and 0 <= equilibrium_index < len(displacements)
+                and result_equilibrium_index == equilibrium_index
+                and abs(float(displacements[equilibrium_index])) <= 1.0e-15
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    stiffness.get("result_stiffness_sample_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -1372,6 +1539,12 @@ def magnetic_force_method_profile_gate(
         ),
         "virtual_work_force_uses_current_displacement_geometry_generation": (
             virtual_work_displacement_coordinate_geometry_generation_identity_ok
+        ),
+        "demag_energy_uses_current_surface_charge_normal_and_quadrature": (
+            demag_energy_surface_charge_normal_quadrature_identity_ok
+        ),
+        "maglev_stiffness_uses_aligned_displacement_equilibrium_force_states": (
+            maglev_stiffness_displacement_equilibrium_force_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
