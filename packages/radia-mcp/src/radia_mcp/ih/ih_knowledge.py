@@ -1638,18 +1638,31 @@ surface cut.  For a flux-linked genus-1 workpiece, the loop extension
 adds the harmonic shorted-turn current.  The extension is closed by
 Faraday's law and is locked by the analytic
 shorted-ring golden plus a frozen-subsystem equivalence check.  It
-requires weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
-and ``--h1-order 1``.  The output records ``wp_loop_alpha_A`` and replaces
-the genus caveat with ``P_wp_note``.
+requires linear SIBC, ``--wp-bem-backend intree-dense``, and (on the
+weak path) ``--h1-order 1``; BOTH coupling modes take it -- the weak
+path applies it to its single solve, the strong drivers apply it ONCE
+on the converged Picard state (the Picard loop itself keeps the plain
+solve whose L_total / Delta_L convention is validated; the alpha
+back-reaction onto the coil current is not iterated, consistent with
+the measured percent-level coil-current redistribution).  The output
+records ``wp_loop_alpha_A`` and replaces the genus caveat with
+``P_wp_note``.
 
-On the weak P1 route, the incident potential is basis-determined: the
-solver always uses the Laplace-Beltrami projection of the exact vertex
-incident field.  It performs one batched field evaluation, is winding
-invariant, and fails loud when
+On every P1 route -- weak AND the strong Picard iterations -- the
+incident potential is basis-determined: the solver always uses the
+Laplace-Beltrami projection of the exact vertex incident field
+(``SurfacePoissonPhiInc``, stiffness factorized once and reused per
+Picard iteration).  It performs one batched field evaluation per
+rebuild, is winding invariant, and fails loud when
 ``||grad_S psi + H_t,inc|| / ||H_t,inc||`` exceeds 10 percent.  The
 legacy selectable P1 path-integration route and ``--wp-phi-inc`` flag
-are removed.  Higher-order and strong routes retain their sole
-implemented reconstruction until a corresponding projection exists.
+are removed; the strong solvers' former per-iteration path integration
+(the dominant per-iteration cost) and the former ngsolve.bem dense wp
+assembly (O(N^3) column extraction with a NaN incident on record) are
+removed with it -- the dense wp backend is now the same in-tree
+Sauter-Schwab Galerkin configuration as the weak path.  Only the
+Lagrange-P2 edge-node route retains path integration, as its sole
+implemented reconstruction.
 
 ``--wp-loop-dof`` accepts ``auto`` and ``on`` only.  ``auto`` applies
 the extension when its prerequisites hold and records
@@ -1683,14 +1696,21 @@ The analytic shorted-ring golden and frozen-subsystem equivalence test
 lock the added mode and its disabled-limit behavior.  Entry points:
 ``radia.bem_loop_extension.solve_loop_extended(solver, phi_inc, Z_s,
 omega, A_inc_fn)`` and the CLI flag ``calc_inductance.py --wp-loop-dof``
-(weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
-``--h1-order 1``; works with BOTH coil sources -- surface panels or PEEC
-filaments via the exact ``A_from_filaments``).  With the flag, P_wp /
-H_t are replaced by the loop-extended values, the Telegen delta_L keeps
-the plain-phi convention, the genus ``P_wp_caveat`` becomes a
+(weak AND strong coupling, linear SIBC, ``--wp-bem-backend
+intree-dense``, ``--h1-order 1`` on weak; works with BOTH coil sources
+-- surface panels or PEEC filaments via the exact ``A_from_filaments``,
+and both strong solvers take ``loop_dof=True`` applied on the converged
+Picard state).  With the flag, P_wp / H_t are replaced by the
+loop-extended values, the Telegen delta_L (weak) / L_total (strong)
+keep the plain-phi convention, the genus ``P_wp_caveat`` becomes a
 ``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
 a built-in frozen-vs-plain cross-check refuses to report on operator
-mismatch.
+mismatch.  Takahashi strong e2e (intree-dense, no flags): P_wp
+22.70 -> 18.57 kW / H_t 51.4 -> 46.53 kA/m / alpha = 5028 A --
+consistent with the weak-path 18.41 kW / 46.32 kA/m to ~1% (the
+coil-current redistribution), vs 17.0-17.7 kW / 46.1 kA/m references;
+the coupled solve dropped 439 -> 228 s (the per-iteration path
+integration was its dominant cost; the loop DOF itself adds ~8 s).
 
 **psi-Poisson incident -- the P1 weak route, basis-determined
 (2026-07-17).**  Replaces the axis-ray + horizontal-ray path

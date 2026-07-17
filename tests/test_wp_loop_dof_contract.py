@@ -51,12 +51,13 @@ def test_argparse_accepts_flag():
 
 
 @pytest.mark.parametrize("extra,frag", [
-    (["--coupling-mode", "strong", "--no-peec-proximity",
-      "--wp-bem-backend", "intree-dense"], "weak-coupling"),
     (["--impedance-model", "esim", "--wp-bem-backend", "intree-dense"],
      "linear SIBC"),
     ([], "intree-dense"),                       # default backend = hacapk
     (["--wp-bem-backend", "intree-dense", "--h1-order", "2"], "P1"),
+    # strong coupling now TAKES the loop DOF (applied once on the
+    # converged Picard state) but still needs the dense backend:
+    (["--coupling-mode", "strong", "--no-peec-proximity"], "intree-dense"),
 ])
 def test_early_guards_fail_fast(extra, frag):
     """Unsupported combinations return an error dict BEFORE the coil
@@ -65,6 +66,18 @@ def test_early_guards_fail_fast(extra, frag):
     out = ci.run_inductance(_args(extra))
     assert out.get("status") == "error", out
     assert frag in out["error"], out["error"]
+
+
+def test_strong_with_dense_backend_passes_early_guards():
+    """--coupling-mode strong + --wp-loop-dof (on) + intree-dense is a
+    SUPPORTED combination now: the early guards must NOT reject it (the
+    run proceeds to the coil solve, which fails on the dummy c.step --
+    proving the guard block was passed)."""
+    with pytest.raises(Exception) as exc:
+        ci.run_inductance(_args([
+            "--coupling-mode", "strong", "--no-peec-proximity",
+            "--wp-bem-backend", "intree-dense"]))
+    assert "wp-loop-dof" not in str(exc.value)
 
 
 @pytest.mark.skipif(

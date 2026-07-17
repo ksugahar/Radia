@@ -199,10 +199,31 @@ class CoupledPEECBEMSolver:
                 hacapk_leaf=int(wp_hacapk_leaf),
                 hacapk_eta=float(wp_hacapk_eta))
         else:
-            self.wp_solver = ScalarBIESIBCSolver(mesh_wp, order=wp_order)
+            # In-tree Sauter-Schwab Galerkin dense operators (same
+            # configuration as CoupledBEMSolver / the weak intree-dense
+            # backend); dense SL/DL also enables the loop-DOF extension.
+            self.wp_solver = ScalarBIESIBCSolver(
+                mesh_wp, order=wp_order, assemble_dense=True,
+                use_intree_bem=True, intree_geom_order=1,
+                intree_singular_n_q=6, intree_regular_quad_degree=7)
         self.wp_nodes = np.array(
             [[mesh_wp.vertices[i].point[j] for j in range(3)]
              for i in range(mesh_wp.nv)])
+
+        # P1 surface-Poisson phi_inc, prepared once (basis-determined;
+        # same contract as CoupledBEMSolver -- the Picard loop rebuilds
+        # phi_inc from the updated filament currents every iteration).
+        if int(wp_order) != 1:
+            raise ValueError(
+                f"CoupledPEECBEMSolver supports wp_order=1 only (got "
+                f"{wp_order}): the surface-Poisson phi_inc and the "
+                f"scattered-current extraction are P1 vertex-nodal.")
+        from ngsolve import BND as _BND
+        from radia.bem_sibc_solver import SurfacePoissonPhiInc
+        self.wp_tris = np.array(
+            [[v.nr for v in el.vertices] for el in mesh_wp.Elements(_BND)],
+            dtype=np.int64)
+        self._phi_poisson = SurfacePoissonPhiInc(self.wp_nodes, self.wp_tris)
 
     def _bundle_solve(self, omega, I_port, emf=None):
         """Solve the loop-bundle at ``omega`` with optional workpiece emf.
@@ -217,7 +238,7 @@ class CoupledPEECBEMSolver:
         return I_f, Z_port
 
     def solve(self, Z_s, omega, I_port=1.0, max_iter=10, tol=1e-3,
-              relax=0.5, verbose=False):
+              relax=0.5, verbose=False, loop_dof=False):
         """Run the iterative coupled PEEC<->workpiece solve.
 
         Args:
@@ -226,13 +247,24 @@ class CoupledPEECBEMSolver:
             omega: angular frequency [rad/s].
             I_port: terminal drive current amplitude [A].
             max_iter, tol, relax: Picard controls (tol on |Z_port|).
+            loop_dof: apply the genus-1 loop-DOF extension ONCE on the
+                CONVERGED state (same dissipation-only convention as
+                ``CoupledBEMSolver.solve``): ``P_total`` / ``H_t_rms``
+                are replaced by the loop-extended values, the terminal
+                impedance keeps the plain-solve convention.  Requires
+                the dense wp backend and a genus-1 workpiece.
 
         Returns dict with ``L_air``, ``R_air``, ``L_total``, ``R_total``,
         ``Delta_L``, ``Delta_R``, ``P_total``, ``H_t_rms``, ``iterations``,
         ``n_filaments``, ``n_phi_wp`` and the workpiece per-panel viz arrays.
         """
-        from radia.bem_sibc_solver import compute_phi_inc_from_filaments
+        from radia.biot_savart import h_segments_batch
 
+        if loop_dof and self.wp_hacapk:
+            raise ValueError(
+                "loop_dof=True needs the dense wp backend (wp_hacapk="
+                "False): the HACApK backend exposes no dense SL/DL for "
+                "the loop column.")
         if max_iter < 2:
             raise ValueError("max_iter must be >= 2 for coupling convergence")
         if tol <= 0.0:
@@ -256,8 +288,18 @@ class CoupledPEECBEMSolver:
 
         for iteration in range(max_iter):
             # --- Forward: filament currents -> phi_inc at workpiece ---
-            phi_inc = compute_phi_inc_from_filaments(
-                self.wp_nodes, self.paths, I_f)
+            # Exact per-filament segment Biot-Savart H at the vertices,
+            # then the prepared surface-Poisson projection (10%
+            # grad-consistency gate = the shared fail-loud contract).
+            H_inc = np.zeros((len(self.wp_nodes), 3), dtype=complex)
+            for fil_segs, Ik in zip(self.paths, I_f):
+                H_inc += complex(Ik) * h_segments_batch(
+                    fil_segs, self.wp_nodes)
+            phi_inc, phi_resid = self._phi_poisson(
+                H_inc, max_grad_residual=0.10)
+            if verbose:
+                print(f"  iter {iteration}: phi_inc poisson "
+                      f"grad-residual {phi_resid:.1%}")
 
             # --- Workpiece scalar BIE + SIBC ---
             if self.wp_hacapk:
@@ -309,6 +351,40 @@ class CoupledPEECBEMSolver:
         P_total = wp_result['P_density'] * wp_result['area']
         H_t_rms = wp_result['H_t_rms']
 
+        # Genus-1 loop DOF on the CONVERGED state (see the loop_dof arg
+        # docstring); the frozen(alpha=0) sub-solve must reproduce the
+        # converged plain solve exactly (operator cross-check).
+        loop_meta = {}
+        if loop_dof:
+            import time as _time
+            from radia.bem_loop_extension import (solve_loop_extended,
+                                                  A_from_filaments)
+
+            def _A_inc_fn(points):
+                return A_from_filaments(points, self.paths, I_f)
+
+            t0 = _time.perf_counter()
+            loop_out = solve_loop_extended(
+                self.wp_solver, phi_inc, Z_s, omega, _A_inc_fn)
+            t_loop = _time.perf_counter() - t0
+            frz_rel = (abs(loop_out["P_frozen"] - P_total)
+                       / max(abs(P_total), 1e-30))
+            if frz_rel > 1e-3:
+                raise RuntimeError(
+                    f"loop-DOF frozen sub-solve disagrees with the "
+                    f"converged plain BIE solve by {frz_rel:.2e} "
+                    f"(P {loop_out['P_frozen']:.4e} vs {P_total:.4e} W) "
+                    f"-- operator mismatch, refusing to report "
+                    f"loop-extended numbers.")
+            P_total = float(loop_out["P_total"])
+            H_t_rms = float(loop_out["H_t_rms"])
+            loop_meta = {
+                'wp_loop_alpha': complex(loop_out["alpha"]),
+                'wp_loop_theta_jump': float(loop_out["theta_jump"]),
+                'wp_loop_cut_n_vertices': int(loop_out["cut_n_vertices"]),
+                't_loop_dof_s': float(t_loop),
+            }
+
         if isinstance(Z_s, np.ndarray):
             Z_s_out = complex(np.mean(Z_s))
         else:
@@ -334,4 +410,5 @@ class CoupledPEECBEMSolver:
             'wp_J_re': wp_J_re,
             'wp_J_im': wp_J_im,
             'Z_s': Z_s_out,
+            **loop_meta,
         }
