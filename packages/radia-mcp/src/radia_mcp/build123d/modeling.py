@@ -3095,6 +3095,174 @@ def _fillet_chamfer_topology_identity(row):
     )
 
 
+def _boolean_tolerance_healing_topology_volume_identity(row):
+    value = row.get(
+        "boolean_tolerance_healing_topology_volume_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("boolean_generation", "")).strip()
+    operand_ids = [str(item).strip() for item in value.get("operand_ids", [])]
+    result_operand_ids = [
+        str(item).strip() for item in value.get("result_operand_ids", [])
+    ]
+    healing_policy = str(value.get("healing_policy", "")).strip()
+    topology_keys = ("solids", "shells", "faces", "edges")
+    topology = value.get("topology_signature")
+    result_topology = value.get("result_topology_signature")
+    try:
+        linear_tolerance = float(value.get("linear_tolerance"))
+        result_linear_tolerance = float(value.get("result_linear_tolerance"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        normalized_topology = tuple(int(topology[key]) for key in topology_keys)
+        normalized_result_topology = tuple(
+            int(result_topology[key]) for key in topology_keys
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    def valid_digest(digest):
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    operand_digest = str(value.get("operand_shape_sha256", "")).lower()
+    boolean_digest = str(value.get("boolean_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "operand_boolean_generation",
+                "tolerance_boolean_generation",
+                "healing_boolean_generation",
+                "topology_boolean_generation",
+                "volume_boolean_generation",
+                "result_boolean_generation",
+            )
+        )
+        or len(operand_ids) < 2
+        or any(not item for item in operand_ids)
+        or len(set(operand_ids)) != len(operand_ids)
+        or result_operand_ids != operand_ids
+        or not math.isfinite(linear_tolerance)
+        or linear_tolerance <= 0.0
+        or not math.isclose(
+            result_linear_tolerance,
+            linear_tolerance,
+            rel_tol=0.0,
+            abs_tol=1.0e-18,
+        )
+        or not healing_policy
+        or value.get("result_healing_policy") != healing_policy
+        or set(topology) != set(topology_keys)
+        or set(result_topology) != set(topology_keys)
+        or normalized_topology[0] < 1
+        or any(item < 0 for item in normalized_topology)
+        or normalized_result_topology != normalized_topology
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or not math.isclose(result_volume, volume, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        or not valid_digest(operand_digest)
+        or value.get("result_operand_shape_sha256") != operand_digest
+        or not valid_digest(boolean_digest)
+        or value.get("result_boolean_shape_sha256") != boolean_digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(operand_ids),
+        linear_tolerance,
+        healing_policy,
+        normalized_topology,
+        volume,
+        operand_digest,
+        boolean_digest,
+    )
+
+
+def _assembly_mate_transform_dof_loop_closure_identity(row):
+    value = row.get("assembly_mate_transform_dof_loop_closure_generation_identity")
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("assembly_generation", "")).strip()
+    mate_ids = [str(item).strip() for item in value.get("mate_ids", [])]
+    result_mate_ids = [
+        str(item).strip() for item in value.get("result_mate_ids", [])
+    ]
+    transforms = [
+        str(item).lower() for item in value.get("part_transform_sha256", [])
+    ]
+    result_transforms = [
+        str(item).lower()
+        for item in value.get("result_part_transform_sha256", [])
+    ]
+    try:
+        remaining_dof = int(value.get("remaining_dof"))
+        result_remaining_dof = int(value.get("result_remaining_dof"))
+        closure_residual = float(value.get("loop_closure_residual_m"))
+        result_closure_residual = float(
+            value.get("result_loop_closure_residual_m")
+        )
+    except (TypeError, ValueError):
+        return None
+
+    def valid_digest(digest):
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    solver_digest = str(value.get("kinematic_solver_sha256", "")).lower()
+    pose_digest = str(value.get("assembly_pose_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "mate_assembly_generation",
+                "transform_assembly_generation",
+                "dof_assembly_generation",
+                "closure_assembly_generation",
+                "solver_assembly_generation",
+                "result_assembly_generation",
+            )
+        )
+        or not mate_ids
+        or any(not item for item in mate_ids)
+        or len(set(mate_ids)) != len(mate_ids)
+        or result_mate_ids != mate_ids
+        or len(transforms) != len(mate_ids)
+        or not all(valid_digest(digest) for digest in transforms)
+        or result_transforms != transforms
+        or remaining_dof < 0
+        or result_remaining_dof != remaining_dof
+        or not math.isfinite(closure_residual)
+        or closure_residual < 0.0
+        or closure_residual > 1.0e-8
+        or not math.isclose(
+            result_closure_residual,
+            closure_residual,
+            rel_tol=0.0,
+            abs_tol=1.0e-18,
+        )
+        or not valid_digest(solver_digest)
+        or value.get("result_kinematic_solver_sha256") != solver_digest
+        or not valid_digest(pose_digest)
+        or value.get("result_assembly_pose_sha256") != pose_digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(mate_ids),
+        tuple(transforms),
+        remaining_dof,
+        closure_residual,
+        solver_digest,
+        pose_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -3217,6 +3385,52 @@ def shape_mass_property_crosscheck_summary(
             fillet_chamfer_identity_ok = fillet_chamfer_identity_ok and all(
                 _fillet_chamfer_topology_identity(row)
                 == reference_fillet_chamfer.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    boolean_operation_evidence_present = any(
+        row.get("boolean_tolerance_healing_topology_volume_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_boolean_operations = {
+        str(row.get("name", "")): _boolean_tolerance_healing_topology_volume_identity(
+            row
+        )
+        for row in reference
+    }
+    boolean_operation_identity_ok = not boolean_operation_evidence_present
+    if boolean_operation_evidence_present:
+        boolean_operation_identity_ok = bool(reference_boolean_operations) and all(
+            value is not None for value in reference_boolean_operations.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_operation_identity_ok = boolean_operation_identity_ok and all(
+                _boolean_tolerance_healing_topology_volume_identity(row)
+                == reference_boolean_operations.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    assembly_kinematics_evidence_present = any(
+        row.get("assembly_mate_transform_dof_loop_closure_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_assembly_kinematics = {
+        str(row.get("name", "")): _assembly_mate_transform_dof_loop_closure_identity(
+            row
+        )
+        for row in reference
+    }
+    assembly_kinematics_identity_ok = not assembly_kinematics_evidence_present
+    if assembly_kinematics_evidence_present:
+        assembly_kinematics_identity_ok = bool(reference_assembly_kinematics) and all(
+            value is not None for value in reference_assembly_kinematics.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_kinematics_identity_ok = assembly_kinematics_identity_ok and all(
+                _assembly_mate_transform_dof_loop_closure_identity(row)
+                == reference_assembly_kinematics.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5106,6 +5320,12 @@ def shape_mass_property_crosscheck_summary(
         "fillet_chamfer_topology_uses_current_selection_names_order_and_fingerprint": (
             fillet_chamfer_identity_ok
         ),
+        "boolean_result_uses_current_operands_tolerance_healing_topology_and_volume": (
+            boolean_operation_identity_ok
+        ),
+        "assembly_mates_use_current_transforms_dof_solver_and_loop_closure": (
+            assembly_kinematics_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -5207,6 +5427,18 @@ def shape_mass_property_crosscheck_summary(
     ]:
         issues.append(
             "fillet/chamfer topology uses stale edge selections, names, order, or build fingerprints"
+        )
+    if not checks[
+        "boolean_result_uses_current_operands_tolerance_healing_topology_and_volume"
+    ]:
+        issues.append(
+            "Boolean result mixes stale operands, tolerances, healing, topology, or volume"
+        )
+    if not checks[
+        "assembly_mates_use_current_transforms_dof_solver_and_loop_closure"
+    ]:
+        issues.append(
+            "assembly mates mix stale transforms, DOF state, solver, or loop closure"
         )
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
