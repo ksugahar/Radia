@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.15] - 2026-07-17
+
+- Added motor guidance for the angle-periodic ROM, reduced HCurl/HDiv basis
+  construction, native C ABI export, energy accounting, and stateful
+  hysteresis integration.
 - **Merged the presentation server into paper-writing** (Sugahara: slide
   decks cannot yet be authored end-to-end by AI, so the slide lint / PPTX
   toolset does not warrant a standalone server). `mcp-server-paper-writing`
