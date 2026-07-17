@@ -202,6 +202,12 @@ def regularized_trace_inverse_path_gate(
     cq_restart_identity_ok = (
         _optional_cq_restart_history_weight_segment_identity_is_aligned(summary)
     )
+    simscape_file_solid_identity_ok = (
+        _optional_simscape_file_solid_identity_is_aligned(summary)
+    )
+    multibody_xml_identity_ok = (
+        _optional_multibody_xml_import_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -315,6 +321,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_restart_reuses_current_weight_history_segment_and_time_grid": (
             cq_restart_identity_ok
+        ),
+        "simscape_file_solid_uses_current_geometry_density_inertia_and_frame": (
+            simscape_file_solid_identity_ok
+        ),
+        "multibody_xml_uses_current_joint_axes_transforms_units_and_geometry": (
+            multibody_xml_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1563,6 +1575,159 @@ def _optional_cq_restart_history_weight_segment_identity_is_aligned(
         and restart_time_grid == time_grid
         and _is_sha256(table_digest)
         and str(value.get("assembled_cq_restart_table_sha256", "")).lower()
+        == table_digest
+    )
+
+
+def _optional_simscape_file_solid_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "simscape_file_solid_geometry_density_inertia_frame_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        density = _finite_float(value, "density_kg_per_m3")
+        result_density = _finite_float(value, "result_density_kg_per_m3")
+        center = tuple(float(item) for item in value["center_of_mass_m"])
+        result_center = tuple(float(item) for item in value["result_center_of_mass_m"])
+        inertia = tuple(
+            tuple(float(component) for component in row)
+            for row in value["inertia_tensor_kg_m2"]
+        )
+        result_inertia = tuple(
+            tuple(float(component) for component in row)
+            for row in value["result_inertia_tensor_kg_m2"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("assembly_generation", "")).strip()
+    geometry_digest = str(value.get("geometry_sha256", "")).lower()
+    table_digest = str(value.get("file_solid_table_sha256", "")).lower()
+    inertia_is_symmetric = (
+        len(inertia) == 3
+        and all(len(row) == 3 for row in inertia)
+        and all(
+            math.isfinite(inertia[row][column])
+            and math.isclose(
+                inertia[row][column], inertia[column][row], rel_tol=0.0, abs_tol=1e-15
+            )
+            for row in range(3)
+            for column in range(3)
+        )
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "geometry_assembly_generation",
+                "density_assembly_generation",
+                "inertia_assembly_generation",
+                "frame_assembly_generation",
+                "result_assembly_generation",
+            )
+        )
+        and bool(str(value.get("geometry_file", "")).strip())
+        and value.get("result_geometry_file") == value.get("geometry_file")
+        and _is_sha256(geometry_digest)
+        and str(value.get("result_geometry_sha256", "")).lower() == geometry_digest
+        and density > 0.0
+        and result_density == density
+        and bool(str(value.get("center_of_mass_frame", "")).strip())
+        and value.get("result_center_of_mass_frame") == value.get("center_of_mass_frame")
+        and len(center) == 3
+        and all(math.isfinite(component) for component in center)
+        and result_center == center
+        and inertia_is_symmetric
+        and result_inertia == inertia
+        and _is_sha256(table_digest)
+        and str(value.get("result_file_solid_table_sha256", "")).lower()
+        == table_digest
+    )
+
+
+def _optional_multibody_xml_import_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "multibody_xml_joint_axis_transform_unit_geometry_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        joint_ids = tuple(str(item) for item in value["joint_ids"])
+        result_joint_ids = tuple(str(item) for item in value["result_joint_ids"])
+        axes = tuple(tuple(float(component) for component in row) for row in value["joint_axes"])
+        result_axes = tuple(
+            tuple(float(component) for component in row)
+            for row in value["result_joint_axes"]
+        )
+        transform = tuple(
+            tuple(float(component) for component in row)
+            for row in value["rigid_transforms"]
+        )
+        result_transform = tuple(
+            tuple(float(component) for component in row)
+            for row in value["result_rigid_transforms"]
+        )
+        scale = _finite_float(value, "length_scale_to_m")
+        result_scale = _finite_float(value, "result_length_scale_to_m")
+        geometry_files = tuple(str(item) for item in value["geometry_files"])
+        result_geometry_files = tuple(str(item) for item in value["result_geometry_files"])
+        geometry_digests = tuple(str(item).lower() for item in value["geometry_digests"])
+        result_geometry_digests = tuple(
+            str(item).lower() for item in value["result_geometry_digests"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("assembly_generation", "")).strip()
+    table_digest = str(value.get("xml_import_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "joint_axis_assembly_generation",
+                "rigid_transform_assembly_generation",
+                "length_unit_assembly_generation",
+                "geometry_file_assembly_generation",
+                "result_assembly_generation",
+            )
+        )
+        and bool(joint_ids)
+        and all(joint_ids)
+        and len(set(joint_ids)) == len(joint_ids)
+        and result_joint_ids == joint_ids
+        and len(axes) == len(joint_ids)
+        and all(
+            len(axis) == 3
+            and all(math.isfinite(component) for component in axis)
+            and any(component != 0.0 for component in axis)
+            for axis in axes
+        )
+        and result_axes == axes
+        and len(transform) == 4
+        and all(len(row) == 4 for row in transform)
+        and all(math.isfinite(component) for row in transform for component in row)
+        and result_transform == transform
+        and bool(str(value.get("length_unit", "")).strip())
+        and value.get("result_length_unit") == value.get("length_unit")
+        and scale > 0.0
+        and result_scale == scale
+        and bool(geometry_files)
+        and all(geometry_files)
+        and result_geometry_files == geometry_files
+        and len(geometry_digests) == len(geometry_files)
+        and all(_is_sha256(digest) for digest in geometry_digests)
+        and result_geometry_digests == geometry_digests
+        and _is_sha256(table_digest)
+        and str(value.get("result_xml_import_table_sha256", "")).lower()
         == table_digest
     )
 
