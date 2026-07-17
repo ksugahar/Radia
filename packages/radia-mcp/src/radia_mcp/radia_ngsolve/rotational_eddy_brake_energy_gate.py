@@ -606,6 +606,116 @@ def _modal_port_power_surface_orientation_identity_ok(
     )
 
 
+def _degenerate_eigenmode_subspace_tracking_basis_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("degenerate_eigenmode_subspace_tracking_basis_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    mode_ids = identity.get("cluster_mode_ids")
+    tracking_ids = identity.get("tracking_basis_mode_ids")
+    assurance = identity.get("modal_assurance_matrix")
+    tracking_assurance = identity.get("tracking_modal_assurance_matrix")
+    if not all(
+        isinstance(values, list)
+        for values in (mode_ids, tracking_ids, assurance, tracking_assurance)
+    ):
+        return False
+    try:
+        dimension = int(identity.get("subspace_dimension"))
+        tracking_dimension = int(identity.get("tracking_basis_dimension"))
+        mode_values = [int(value) for value in mode_ids]
+        tracking_values = [int(value) for value in tracking_ids]
+        assurance_values = [[float(value) for value in row] for row in assurance]
+        tracking_values_matrix = [
+            [float(value) for value in row] for row in tracking_assurance
+        ]
+    except (TypeError, ValueError):
+        return False
+    solve_generation = str(identity.get("eigensolve_generation") or "")
+    mass_generation = str(identity.get("mass_inner_product_generation") or "")
+    digest = str(identity.get("eigenspace_basis_sha256") or "")
+    matrix_shape_ok = (
+        len(assurance_values) == dimension
+        and len(tracking_values_matrix) == dimension
+        and all(len(row) == dimension for row in assurance_values)
+        and all(len(row) == dimension for row in tracking_values_matrix)
+    )
+    return (
+        bool(solve_generation)
+        and identity.get("eigenvalue_cluster_generation") == solve_generation
+        and identity.get("modal_vector_generation") == solve_generation
+        and identity.get("tracking_basis_generation") == solve_generation
+        and bool(mass_generation)
+        and identity.get("tracking_mass_inner_product_generation") == mass_generation
+        and dimension > 1
+        and tracking_dimension == dimension
+        and len(mode_values) == dimension
+        and len(set(mode_values)) == dimension
+        and tracking_values == mode_values
+        and matrix_shape_ok
+        and all(
+            math.isfinite(value) and 0.0 <= value <= 1.0
+            for row in assurance_values
+            for value in row
+        )
+        and tracking_values_matrix == assurance_values
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("tracking_basis_sha256") == digest
+    )
+
+
+def _adaptive_bdf_restart_history_event_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get("adaptive_bdf_restart_history_event_generation_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    history = identity.get("history_time_s")
+    replay_history = identity.get("solution_history_time_s")
+    if not isinstance(history, list) or not isinstance(replay_history, list):
+        return False
+    try:
+        order = int(identity.get("history_order"))
+        replay_order = int(identity.get("solution_history_order"))
+        history_values = [float(value) for value in history]
+        replay_values = [float(value) for value in replay_history]
+        event_time = float(identity.get("event_time_s"))
+        restart_time = float(identity.get("restart_event_time_s"))
+    except (TypeError, ValueError):
+        return False
+    step_generation = str(identity.get("accepted_step_generation") or "")
+    method = str(identity.get("bdf_method") or "")
+    event_id = str(identity.get("event_id") or "")
+    digest = str(identity.get("history_state_sha256") or "")
+    return (
+        bool(str(identity.get("transient_generation") or ""))
+        and bool(step_generation)
+        and identity.get("solution_history_step_generation") == step_generation
+        and identity.get("event_restart_step_generation") == step_generation
+        and method in {"bdf1", "bdf2"}
+        and identity.get("solution_history_method") == method
+        and order in {1, 2}
+        and replay_order == order
+        and ((method == "bdf1" and order == 1) or (method == "bdf2" and order == 2))
+        and len(history_values) == order + 1
+        and replay_values == history_values
+        and all(math.isfinite(value) for value in history_values)
+        and all(right > left for left, right in zip(history_values, history_values[1:]))
+        and bool(event_id)
+        and identity.get("restart_event_id") == event_id
+        and math.isfinite(event_time)
+        and math.isclose(restart_time, event_time, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(history_values[-1], event_time, rel_tol=0.0, abs_tol=1.0e-15)
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("restart_history_state_sha256") == digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -744,6 +854,12 @@ def rotational_eddy_brake_energy_gate(
     )
     modal_port_power_surface_orientation_identity_ok = (
         _modal_port_power_surface_orientation_identity_ok(summary)
+    )
+    degenerate_subspace_tracking_identity_ok = (
+        _degenerate_eigenmode_subspace_tracking_basis_identity_ok(summary)
+    )
+    adaptive_bdf_restart_identity_ok = (
+        _adaptive_bdf_restart_history_event_identity_ok(summary)
     )
     all_cardinalities = True
     all_times_increase = True
@@ -969,6 +1085,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "modal_port_power_uses_current_surface_orientation": (
             modal_port_power_surface_orientation_identity_ok
+        ),
+        "degenerate_eigenmodes_use_current_subspace_tracking_basis": (
+            degenerate_subspace_tracking_identity_ok
+        ),
+        "adaptive_bdf_restart_uses_current_history_and_event_generation": (
+            adaptive_bdf_restart_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality

@@ -543,6 +543,45 @@ def _with_v17_block_scaling_port_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v18_eigenmode_and_bdf_identity(summary: dict) -> dict:
+    summary = _with_v17_block_scaling_port_identity(summary)
+    summary["degenerate_eigenmode_subspace_tracking_basis_identity"] = {
+        "eigensolve_generation": "eigensolve-52",
+        "eigenvalue_cluster_generation": "eigensolve-52",
+        "modal_vector_generation": "eigensolve-52",
+        "tracking_basis_generation": "eigensolve-52",
+        "mass_inner_product_generation": "mass-inner-product-52",
+        "tracking_mass_inner_product_generation": "mass-inner-product-52",
+        "cluster_mode_ids": [7, 8],
+        "tracking_basis_mode_ids": [7, 8],
+        "subspace_dimension": 2,
+        "tracking_basis_dimension": 2,
+        "modal_assurance_matrix": [[0.999, 0.001], [0.001, 0.999]],
+        "tracking_modal_assurance_matrix": [[0.999, 0.001], [0.001, 0.999]],
+        "eigenspace_basis_sha256": "1" * 64,
+        "tracking_basis_sha256": "1" * 64,
+    }
+    summary["adaptive_bdf_restart_history_event_generation_identity"] = {
+        "transient_generation": "adaptive-transient-52",
+        "accepted_step_generation": "accepted-steps-52",
+        "solution_history_step_generation": "accepted-steps-52",
+        "event_restart_step_generation": "accepted-steps-52",
+        "bdf_method": "bdf2",
+        "solution_history_method": "bdf2",
+        "history_order": 2,
+        "solution_history_order": 2,
+        "history_time_s": [0.0098, 0.0099, 0.01],
+        "solution_history_time_s": [0.0098, 0.0099, 0.01],
+        "event_id": "contact-close-52",
+        "restart_event_id": "contact-close-52",
+        "event_time_s": 0.01,
+        "restart_event_time_s": 0.01,
+        "history_state_sha256": "2" * 64,
+        "restart_history_state_sha256": "2" * 64,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -819,5 +858,60 @@ def test_v17_public_modal_port_power_normalization_surface_orientation_generatio
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["modal_port_power_uses_current_surface_orientation"]
+        is False
+    )
+
+
+def test_v18_public_positive_eigenmode_and_bdf_lineage() -> None:
+    result = gate(_with_v18_eigenmode_and_bdf_identity(copy.deepcopy(_summary())))
+    assert result["status"] == "ok"
+    assert result["checks"][
+        "degenerate_eigenmodes_use_current_subspace_tracking_basis"
+    ]
+    assert result["checks"][
+        "adaptive_bdf_restart_uses_current_history_and_event_generation"
+    ]
+
+
+def test_v18_public_degenerate_eigenmode_subspace_tracking_basis_generation_mismatch() -> None:
+    summary = _with_v18_eigenmode_and_bdf_identity(copy.deepcopy(_summary()))
+    summary["degenerate_eigenmode_subspace_tracking_basis_identity"].update(
+        {
+            "tracking_basis_generation": "eigensolve-51",
+            "tracking_mass_inner_product_generation": "mass-inner-product-51",
+            "tracking_basis_mode_ids": [8, 7],
+            "tracking_modal_assurance_matrix": [[0.001, 0.999], [0.999, 0.001]],
+            "tracking_basis_sha256": "5" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "degenerate_eigenmodes_use_current_subspace_tracking_basis"
+        ]
+        is False
+    )
+
+
+def test_v18_public_adaptive_bdf_restart_history_event_generation_mismatch() -> None:
+    summary = _with_v18_eigenmode_and_bdf_identity(copy.deepcopy(_summary()))
+    summary["adaptive_bdf_restart_history_event_generation_identity"].update(
+        {
+            "solution_history_step_generation": "accepted-steps-51",
+            "event_restart_step_generation": "accepted-steps-51",
+            "solution_history_method": "bdf1",
+            "solution_history_order": 1,
+            "solution_history_time_s": [0.0099, 0.01],
+            "restart_event_id": "contact-close-51",
+            "restart_history_state_sha256": "5" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "adaptive_bdf_restart_uses_current_history_and_event_generation"
+        ]
         is False
     )
