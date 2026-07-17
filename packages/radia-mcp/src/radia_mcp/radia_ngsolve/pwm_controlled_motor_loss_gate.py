@@ -120,6 +120,8 @@ def pwm_controlled_motor_loss_gate(
     demag_temperature_phase_operating_point_identity_ok = True
     skew_slice_angle_weight_periodicity_identity_ok = True
     incremental_inductance_perturbation_phase_state_identity_ok = True
+    dq_transform_rotor_angle_phase_order_generation_identity_ok = True
+    iron_loss_frequency_harmonic_material_curve_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -147,6 +149,8 @@ def pwm_controlled_motor_loss_gate(
         demag_temperature_phase_operating_point_identity_ok = False
         skew_slice_angle_weight_periodicity_identity_ok = False
         incremental_inductance_perturbation_phase_state_identity_ok = False
+        dq_transform_rotor_angle_phase_order_generation_identity_ok = False
+        iron_loss_frequency_harmonic_material_curve_generation_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1350,6 +1354,174 @@ def pwm_controlled_motor_loss_gate(
                 == digest
             )
 
+        dq_transform = identity_value.get(
+            "dq_transform_rotor_angle_phase_order_generation_identity"
+        )
+        if dq_transform is not None:
+            dq_transform = dq_transform if isinstance(dq_transform, dict) else {}
+            generation = str(
+                dq_transform.get("operating_point_generation", "")
+            ).strip()
+            phase_order_value = dq_transform.get("phase_order")
+            dq_phase_order_value = dq_transform.get("dq_phase_order")
+            phase_order = (
+                [str(value) for value in phase_order_value]
+                if isinstance(phase_order_value, list)
+                else []
+            )
+            dq_phase_order = (
+                [str(value) for value in dq_phase_order_value]
+                if isinstance(dq_phase_order_value, list)
+                else []
+            )
+            try:
+                rotor_angle = float(
+                    dq_transform.get("rotor_mechanical_angle_deg")
+                )
+                dq_rotor_angle = float(
+                    dq_transform.get("dq_rotor_mechanical_angle_deg")
+                )
+                electrical_offset = float(
+                    dq_transform.get("electrical_offset_deg")
+                )
+                dq_electrical_offset = float(
+                    dq_transform.get("dq_electrical_offset_deg")
+                )
+                phase_values = [
+                    float(value) for value in dq_transform.get("phase_values", [])
+                ]
+                dq_phase_values = [
+                    float(value)
+                    for value in dq_transform.get("dq_source_phase_values", [])
+                ]
+            except (TypeError, ValueError):
+                rotor_angle = dq_rotor_angle = math.nan
+                electrical_offset = dq_electrical_offset = math.nan
+                phase_values = dq_phase_values = []
+            pole_pairs = dq_transform.get("pole_pairs")
+            digest = str(dq_transform.get("dq_transform_table_sha256", "")).lower()
+            dq_transform_rotor_angle_phase_order_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    dq_transform.get(key) == generation
+                    for key in (
+                        "rotor_angle_operating_point_generation",
+                        "electrical_offset_operating_point_generation",
+                        "phase_order_operating_point_generation",
+                        "dq_result_operating_point_generation",
+                    )
+                )
+                and math.isfinite(rotor_angle)
+                and dq_rotor_angle == rotor_angle
+                and isinstance(pole_pairs, int)
+                and not isinstance(pole_pairs, bool)
+                and pole_pairs > 0
+                and dq_transform.get("dq_pole_pairs") == pole_pairs
+                and math.isfinite(electrical_offset)
+                and dq_electrical_offset == electrical_offset
+                and bool(phase_order)
+                and all(value.strip() for value in phase_order)
+                and len(set(phase_order)) == len(phase_order)
+                and dq_phase_order == phase_order
+                and len(phase_values) == len(phase_order)
+                and all(math.isfinite(value) for value in phase_values)
+                and dq_phase_values == phase_values
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    dq_transform.get("resolved_dq_transform_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
+        iron_loss_inputs = identity_value.get(
+            "iron_loss_frequency_harmonic_material_curve_generation_identity"
+        )
+        if iron_loss_inputs is not None:
+            iron_loss_inputs = (
+                iron_loss_inputs if isinstance(iron_loss_inputs, dict) else {}
+            )
+            generation = str(
+                iron_loss_inputs.get("loss_study_generation", "")
+            ).strip()
+            curve_ids_value = iron_loss_inputs.get("material_curve_ids")
+            loss_curve_ids_value = iron_loss_inputs.get("loss_material_curve_ids")
+            curve_ids = (
+                [str(value) for value in curve_ids_value]
+                if isinstance(curve_ids_value, list)
+                else []
+            )
+            loss_curve_ids = (
+                [str(value) for value in loss_curve_ids_value]
+                if isinstance(loss_curve_ids_value, list)
+                else []
+            )
+            try:
+                frequency_hz = float(
+                    iron_loss_inputs.get("fundamental_frequency_hz")
+                )
+                loss_frequency_hz = float(
+                    iron_loss_inputs.get("loss_frequency_hz")
+                )
+                harmonic_orders = [
+                    int(value)
+                    for value in iron_loss_inputs.get("harmonic_orders", [])
+                ]
+                loss_harmonic_orders = [
+                    int(value)
+                    for value in iron_loss_inputs.get("loss_harmonic_orders", [])
+                ]
+                amplitudes = [
+                    float(value)
+                    for value in iron_loss_inputs.get("harmonic_amplitudes_t", [])
+                ]
+                loss_amplitudes = [
+                    float(value)
+                    for value in iron_loss_inputs.get(
+                        "loss_harmonic_amplitudes_t", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                frequency_hz = loss_frequency_hz = math.nan
+                harmonic_orders = loss_harmonic_orders = []
+                amplitudes = loss_amplitudes = []
+            digest = str(
+                iron_loss_inputs.get("loss_input_table_sha256", "")
+            ).lower()
+            iron_loss_frequency_harmonic_material_curve_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    iron_loss_inputs.get(key) == generation
+                    for key in (
+                        "frequency_loss_study_generation",
+                        "harmonic_spectrum_loss_study_generation",
+                        "material_curve_loss_study_generation",
+                        "loss_result_study_generation",
+                    )
+                )
+                and math.isfinite(frequency_hz)
+                and frequency_hz > 0.0
+                and loss_frequency_hz == frequency_hz
+                and bool(harmonic_orders)
+                and all(value > 0 for value in harmonic_orders)
+                and harmonic_orders == sorted(harmonic_orders)
+                and len(set(harmonic_orders)) == len(harmonic_orders)
+                and loss_harmonic_orders == harmonic_orders
+                and len(amplitudes) == len(harmonic_orders)
+                and all(math.isfinite(value) and value >= 0.0 for value in amplitudes)
+                and loss_amplitudes == amplitudes
+                and bool(curve_ids)
+                and all(value.strip() for value in curve_ids)
+                and len(set(curve_ids)) == len(curve_ids)
+                and loss_curve_ids == curve_ids
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    iron_loss_inputs.get("resolved_loss_input_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1615,6 +1787,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "incremental_inductance_uses_current_perturbation_phase_and_state": (
             incremental_inductance_perturbation_phase_state_identity_ok
+        ),
+        "dq_transform_uses_current_rotor_angle_offset_and_phase_order": (
+            dq_transform_rotor_angle_phase_order_generation_identity_ok
+        ),
+        "iron_loss_uses_current_frequency_harmonics_and_material_curves": (
+            iron_loss_frequency_harmonic_material_curve_generation_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
