@@ -35,6 +35,11 @@ def _finite(value: object, field: str) -> float:
     return number
 
 
+def _valid_sha256(value: object) -> bool:
+    digest = str(value or "")
+    return len(digest) == 64 and all(character in "0123456789abcdef" for character in digest)
+
+
 def _counts(value: object, field: str) -> dict[str, int]:
     row = _mapping(value, field)
     result = {family: int(row.get(family, 0)) for family in _VOLUME_FAMILIES}
@@ -1915,6 +1920,245 @@ def _exodus_qa_coordinate_distribution_identity_ok(identity: object) -> bool:
     )
 
 
+def _hybrid_interface_conformity_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    counts = identity.get("element_counts")
+    result_counts = identity.get("result_element_counts")
+    try:
+        faces = [
+            [int(value) for value in row]
+            for row in identity.get("interface_face_node_ids", [])
+        ]
+        result_faces = [
+            [int(value) for value in row]
+            for row in identity.get("result_interface_face_node_ids", [])
+        ]
+        orientations = [int(value) for value in identity.get("orientation_signs", [])]
+        result_orientations = [
+            int(value) for value in identity.get("result_orientation_signs", [])
+        ]
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        result_blocks = [int(value) for value in identity.get("result_block_ids", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mesh_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "tet_mesh_generation",
+                "hex_mesh_generation",
+                "pyramid_mesh_generation",
+                "interface_mesh_generation",
+                "orientation_mesh_generation",
+                "block_mesh_generation",
+                "result_mesh_generation",
+            )
+        )
+        and isinstance(counts, Mapping)
+        and set(counts) == {"tet4", "hex8", "pyramid5"}
+        and all(isinstance(value, int) and value > 0 for value in counts.values())
+        and result_counts == counts
+        and bool(faces)
+        and all(len(row) == 4 and len(set(row)) == 4 and all(value > 0 for value in row) for row in faces)
+        and result_faces == faces
+        and identity.get("interface_conforming") is True
+        and identity.get("result_interface_conforming") is True
+        and orientations == [1, 1, 1]
+        and result_orientations == orientations
+        and len(blocks) == 3
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and result_blocks == blocks
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+    )
+
+
+def _periodic_sideset_pairing_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        pairs = [[int(value) for value in row] for row in identity.get("node_pairs", [])]
+        result_pairs = [
+            [int(value) for value in row] for row in identity.get("result_node_pairs", [])
+        ]
+        transform = [
+            [float(value) for value in row] for row in identity.get("rigid_transform", [])
+        ]
+        result_transform = [
+            [float(value) for value in row]
+            for row in identity.get("result_rigid_transform", [])
+        ]
+        tolerance = float(identity.get("pairing_tolerance"))
+        result_tolerance = float(identity.get("result_pairing_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("periodic_generation") or "")
+    master = str(identity.get("master_sideset") or "")
+    slave = str(identity.get("slave_sideset") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "sideset_periodic_generation",
+                "node_pair_periodic_generation",
+                "transform_periodic_generation",
+                "tolerance_periodic_generation",
+                "geometry_periodic_generation",
+                "result_periodic_generation",
+            )
+        )
+        and bool(master)
+        and bool(slave)
+        and master != slave
+        and identity.get("result_master_sideset") == master
+        and identity.get("result_slave_sideset") == slave
+        and bool(pairs)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 for row in pairs)
+        and len({row[0] for row in pairs}) == len(pairs)
+        and len({row[1] for row in pairs}) == len(pairs)
+        and result_pairs == pairs
+        and len(transform) == 3
+        and all(len(row) == 4 for row in transform)
+        and all(math.isfinite(value) for row in transform for value in row)
+        and result_transform == transform
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and _valid_sha256(identity.get("geometry_sha256"))
+        and identity.get("result_geometry_sha256") == identity.get("geometry_sha256")
+        and _valid_sha256(identity.get("periodic_table_sha256"))
+        and identity.get("result_periodic_table_sha256")
+        == identity.get("periodic_table_sha256")
+    )
+
+
+def _journal_reset_replay_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    commands = identity.get("command_sequence")
+    result_commands = identity.get("result_command_sequence")
+    entity_map = identity.get("entity_id_map")
+    result_entity_map = identity.get("result_entity_id_map")
+    if not all(
+        isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+        for value in (commands, result_commands, entity_map, result_entity_map)
+    ):
+        return False
+    try:
+        command_rows = [str(value) for value in commands]
+        result_command_rows = [str(value) for value in result_commands]
+        entities = [[str(row[0]), int(row[1])] for row in entity_map if len(row) == 2]
+        result_entities = [
+            [str(row[0]), int(row[1])] for row in result_entity_map if len(row) == 2
+        ]
+    except (TypeError, ValueError, IndexError):
+        return False
+    generation = str(identity.get("session_generation") or "")
+    session = str(identity.get("session_id") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "reset_session_generation",
+                "entity_session_generation",
+                "undo_session_generation",
+                "replay_session_generation",
+                "topology_session_generation",
+                "result_session_generation",
+            )
+        )
+        and bool(session)
+        and identity.get("result_session_id") == session
+        and identity.get("reset_applied") is True
+        and identity.get("result_reset_applied") is True
+        and bool(command_rows)
+        and command_rows[0].strip().lower() == "reset"
+        and result_command_rows == command_rows
+        and bool(entities)
+        and all(row[0] and row[1] > 0 for row in entities)
+        and len({row[0] for row in entities}) == len(entities)
+        and result_entities == entities
+        and _valid_sha256(identity.get("undo_checkpoint_sha256"))
+        and identity.get("result_undo_checkpoint_sha256")
+        == identity.get("undo_checkpoint_sha256")
+        and _valid_sha256(identity.get("topology_sha256"))
+        and identity.get("result_topology_sha256") == identity.get("topology_sha256")
+        and _valid_sha256(identity.get("journal_sha256"))
+        and identity.get("result_journal_sha256") == identity.get("journal_sha256")
+    )
+
+
+def _netgen_vol_export_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        order = int(identity.get("polynomial_order"))
+        decoded_order = int(identity.get("decoded_polynomial_order"))
+        boundaries = [str(value) for value in identity.get("boundary_names", [])]
+        decoded_boundaries = [
+            str(value) for value in identity.get("decoded_boundary_names", [])
+        ]
+        materials = [int(value) for value in identity.get("material_indices", [])]
+        decoded_materials = [
+            int(value) for value in identity.get("decoded_material_indices", [])
+        ]
+        entities = [int(value) for value in identity.get("source_entity_ids", [])]
+        decoded_entities = [
+            int(value) for value in identity.get("decoded_source_entity_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("export_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "family_export_generation",
+                "order_export_generation",
+                "boundary_export_generation",
+                "material_export_generation",
+                "entity_export_generation",
+                "result_export_generation",
+            )
+        )
+        and identity.get("volume_element_family") == "tet4"
+        and identity.get("decoded_volume_element_family") == "tet4"
+        and identity.get("surface_element_family") == "tri3"
+        and identity.get("decoded_surface_element_family") == "tri3"
+        and order == 1
+        and decoded_order == order
+        and bool(boundaries)
+        and all(boundaries)
+        and len(set(boundaries)) == len(boundaries)
+        and decoded_boundaries == boundaries
+        and bool(materials)
+        and all(value > 0 for value in materials)
+        and decoded_materials == materials
+        and len(entities) == len(materials)
+        and all(value > 0 for value in entities)
+        and decoded_entities == entities
+        and _valid_sha256(identity.get("source_mesh_sha256"))
+        and identity.get("export_source_mesh_sha256") == identity.get("source_mesh_sha256")
+        and _valid_sha256(identity.get("vol_sha256"))
+        and identity.get("decoded_vol_sha256") == identity.get("vol_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -2663,6 +2907,20 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             _mesh_cad_closure_identity_ok(
                 summary.get(
                     "mesh_boundary_cad_volume_area_unit_frame_generation_identity"
+                )
+            )
+        ),
+        "hybrid_interfaces_use_current_families_nodes_orientation_and_blocks": (
+            _hybrid_interface_conformity_identity_ok(
+                summary.get(
+                    "hybrid_tet_hex_pyramid_interface_conformity_orientation_block_identity"
+                )
+            )
+        ),
+        "periodic_sidesets_use_current_node_pairs_transform_tolerance_and_geometry": (
+            _periodic_sideset_pairing_identity_ok(
+                summary.get(
+                    "periodic_sideset_node_pair_transform_tolerance_geometry_generation_identity"
                 )
             )
         ),
@@ -3436,6 +3694,20 @@ def cubit_mixed_transition_source_gate(
             _exodus_qa_coordinate_distribution_identity_ok(
                 summary.get(
                     "exodus_qa_coordinate_distribution_checksum_generation_identity"
+                )
+            )
+        ),
+        "journal_reset_replay_uses_current_session_commands_entities_and_topology": (
+            _journal_reset_replay_identity_ok(
+                summary.get(
+                    "journal_reset_entity_id_reuse_undo_replay_session_generation_identity"
+                )
+            )
+        ),
+        "netgen_vol_export_uses_p1_tri_tet_boundaries_materials_and_source_mesh": (
+            _netgen_vol_export_identity_ok(
+                summary.get(
+                    "netgen_vol_export_family_order_boundary_material_checksum_identity"
                 )
             )
         ),
