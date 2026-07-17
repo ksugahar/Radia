@@ -4,6 +4,133 @@ from __future__ import annotations
 import math
 
 
+def _valid_sha256(value):
+    digest = str(value or "").lower()
+    return len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    )
+
+
+def _nonlinear_force_operating_point_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("solve_generation", "")).strip()
+    branch_id = str(value.get("branch_id", "")).strip()
+    try:
+        current = float(value.get("operating_point_current_a"))
+        force_current = float(value.get("force_operating_point_current_a"))
+        flux_density = [
+            float(item) for item in value.get("operating_point_flux_density_t", [])
+        ]
+        force_flux_density = [
+            float(item)
+            for item in value.get("force_operating_point_flux_density_t", [])
+        ]
+        force = [float(item) for item in value.get("force_n", [])]
+        reported_force = [
+            float(item) for item in value.get("reported_force_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    permeability_digest = str(value.get("permeability_state_sha256", "")).lower()
+    mesh_digest = str(value.get("force_mesh_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "branch_solve_generation",
+                "operating_point_solve_generation",
+                "permeability_solve_generation",
+                "force_mesh_solve_generation",
+                "force_result_solve_generation",
+            )
+        )
+        and bool(branch_id)
+        and value.get("force_branch_id") == branch_id
+        and math.isfinite(current)
+        and math.isclose(force_current, current, rel_tol=0.0, abs_tol=1.0e-15)
+        and bool(flux_density)
+        and all(math.isfinite(item) for item in flux_density)
+        and force_flux_density == flux_density
+        and _valid_sha256(permeability_digest)
+        and value.get("force_permeability_state_sha256") == permeability_digest
+        and _valid_sha256(mesh_digest)
+        and value.get("integrated_force_mesh_sha256") == mesh_digest
+        and bool(force)
+        and all(math.isfinite(item) for item in force)
+        and reported_force == force
+    )
+
+
+def _sliding_band_harmonic_torque_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("sweep_generation", "")).strip()
+    try:
+        angles = [float(item) for item in value.get("rotor_angles_deg", [])]
+        torque_angles = [
+            float(item) for item in value.get("torque_rotor_angles_deg", [])
+        ]
+        samples = [float(item) for item in value.get("torque_samples_nm", [])]
+        harmonic_samples = [
+            float(item) for item in value.get("harmonic_torque_samples_nm", [])
+        ]
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        reported_orders = [
+            int(item) for item in value.get("reported_harmonic_orders", [])
+        ]
+        amplitudes = [
+            float(item) for item in value.get("harmonic_amplitudes_nm", [])
+        ]
+        reported_amplitudes = [
+            float(item)
+            for item in value.get("reported_harmonic_amplitudes_nm", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    mesh_digest = str(value.get("airgap_mesh_sha256", "")).lower()
+    current_digest = str(value.get("phase_current_table_sha256", "")).lower()
+    sample_digest = str(value.get("torque_sample_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "angle_sweep_generation",
+                "airgap_mesh_sweep_generation",
+                "phase_current_sweep_generation",
+                "torque_sample_sweep_generation",
+                "harmonic_sweep_generation",
+            )
+        )
+        and len(angles) >= 3
+        and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and torque_angles == angles
+        and _valid_sha256(mesh_digest)
+        and value.get("torque_airgap_mesh_sha256") == mesh_digest
+        and _valid_sha256(current_digest)
+        and value.get("torque_phase_current_table_sha256") == current_digest
+        and len(samples) == len(angles)
+        and all(math.isfinite(item) for item in samples)
+        and harmonic_samples == samples
+        and bool(orders)
+        and all(item >= 0 for item in orders)
+        and len(set(orders)) == len(orders)
+        and reported_orders == orders
+        and len(amplitudes) == len(orders)
+        and all(math.isfinite(item) and item >= 0.0 for item in amplitudes)
+        and reported_amplitudes == amplitudes
+        and _valid_sha256(sample_digest)
+        and value.get("harmonic_sample_table_sha256") == sample_digest
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -61,6 +188,8 @@ def force_coenergy_displacement_gate(
     harmonic_loss_phase_frequency_lamination_generation_identity_ok = True
     axisymmetric_force_energy_normalization_generation_identity_ok = True
     nonlinear_incremental_force_branch_generation_identity_ok = True
+    nonlinear_force_operating_point_identity_ok = True
+    sliding_band_harmonic_torque_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -92,6 +221,8 @@ def force_coenergy_displacement_gate(
         harmonic_loss_phase_frequency_lamination_generation_identity_ok = False
         axisymmetric_force_energy_normalization_generation_identity_ok = False
         nonlinear_incremental_force_branch_generation_identity_ok = False
+        nonlinear_force_operating_point_identity_ok = False
+        sliding_band_harmonic_torque_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1584,6 +1715,21 @@ def force_coenergy_displacement_gate(
                 == state_digest
             )
 
+        nonlinear_force_operating_point_identity_ok = (
+            _nonlinear_force_operating_point_identity_ok(
+                artifact_identity.get(
+                    "nonlinear_bh_branch_operating_point_force_mesh_generation_identity"
+                )
+            )
+        )
+        sliding_band_harmonic_torque_identity_ok = (
+            _sliding_band_harmonic_torque_identity_ok(
+                artifact_identity.get(
+                    "sliding_band_angle_mesh_harmonic_torque_generation_identity"
+                )
+            )
+        )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -1700,6 +1846,12 @@ def force_coenergy_displacement_gate(
         ),
         "nonlinear_incremental_force_uses_current_branch_mu_and_perturbation": (
             nonlinear_incremental_force_branch_generation_identity_ok
+        ),
+        "nonlinear_force_uses_current_bh_branch_operating_point_mu_and_mesh": (
+            nonlinear_force_operating_point_identity_ok
+        ),
+        "sliding_band_harmonics_use_current_angles_mesh_currents_and_samples": (
+            sliding_band_harmonic_torque_identity_ok
         ),
     }
     return {
