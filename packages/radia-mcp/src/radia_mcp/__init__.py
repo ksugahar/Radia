@@ -52,7 +52,9 @@ Layout:
                             (Pradhan 2007), rotating-coil multipole measurement
                             and 3D field reconstruction.
   radia_mcp.presentation  — Research-talk slide lint + PPTX tools (promoted
-                            2026-06-02 from LAB-private mcp-server-document).
+                            2026-06-02 from LAB-private mcp-server-document;
+                            2026-07-17 served by mcp-server-paper-writing —
+                            the standalone server was retired).
   radia_mcp.grant_writing — Grant proposal lint, recommendation-letter
                             templates, and KDDI social-implementation checks
                             (promoted 2026-06-27 from the document stack).
