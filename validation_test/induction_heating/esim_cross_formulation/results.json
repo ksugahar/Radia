@@ -1,0 +1,150 @@
+{
+  "generated_at_utc": "2026-07-17T22:42:09.521963+00:00",
+  "hostname": "lab",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "git_sha": "c675cbe07",
+  "radia_versions": [
+    "4.95.17"
+  ],
+  "benchmark": "esim_cross_formulation_bie_vs_fem_kelvin",
+  "material": {
+    "sigma": 2000000.0,
+    "mu_r": 100,
+    "half_thickness": 0.005,
+    "bh_file": "em_sample_bh.txt"
+  },
+  "bands": {
+    "A_perpanel_agreement_max": 0.05,
+    "B_uniform_agreement_max": 0.04,
+    "B_perpanel_agreement_max": 0.15,
+    "B_bie_ratio": [
+      -0.6,
+      -0.4
+    ],
+    "B_fem_ratio": [
+      -0.62,
+      -0.46
+    ]
+  },
+  "results": {
+    "A": {
+      "uniform": {
+        "bie": {
+          "P_wp": 1.637689524538314,
+          "H_t_rms": 306.1244625761784,
+          "iterations": 4,
+          "converged": true,
+          "nv": 73,
+          "radia_version": "4.95.17"
+        },
+        "fem": {
+          "P_wp": 1.440746160029248,
+          "H_t_rms": 287.1889356324721,
+          "iterations": 7,
+          "converged": true,
+          "ndof": 75546,
+          "radia_version": "4.95.17"
+        },
+        "agreement": 0.13669539435390066
+      },
+      "perpanel": {
+        "bie": {
+          "P_wp": 1.3381270168482415,
+          "H_t_rms": 276.7489032852862,
+          "iterations": 6,
+          "converged": true,
+          "nv": 73,
+          "radia_version": "4.95.17"
+        },
+        "fem": {
+          "P_wp": 1.3116915266790767,
+          "H_t_rms": 274.5285258857493,
+          "iterations": 10,
+          "converged": true,
+          "ndof": 75546,
+          "radia_version": "4.95.17"
+        },
+        "agreement": 0.02015374013743454
+      },
+      "bie_ratio": -0.1829177650596031,
+      "fem_ratio": -0.08957485845220048
+    },
+    "B": {
+      "uniform": {
+        "bie": {
+          "P_wp": 162.35832627662225,
+          "H_t_rms": 3327.776088738896,
+          "iterations": 6,
+          "converged": true,
+          "nv": 1077,
+          "radia_version": "4.95.17"
+        },
+        "fem": {
+          "P_wp": 161.08599944593163,
+          "H_t_rms": 3309.0623002525017,
+          "iterations": 18,
+          "converged": true,
+          "ndof": 84428,
+          "radia_version": "4.95.17"
+        },
+        "agreement": 0.007898432111213216
+      },
+      "perpanel": {
+        "bie": {
+          "P_wp": 81.18026045685268,
+          "H_t_rms": 1448.9157227027156,
+          "iterations": 22,
+          "converged": true,
+          "nv": 1077,
+          "radia_version": "4.95.17"
+        },
+        "fem": {
+          "P_wp": 74.28093207607121,
+          "H_t_rms": 1650.2779000626538,
+          "iterations": 19,
+          "converged": true,
+          "ndof": 84428,
+          "radia_version": "4.95.17"
+        },
+        "agreement": 0.0928815536901968
+      },
+      "bie_ratio": -0.4999932413780881,
+      "fem_ratio": -0.5388740652100958
+    }
+  },
+  "band_checks": [
+    {
+      "name": "A_perpanel_agreement",
+      "ok": true,
+      "detail": "2.0% <= 5%"
+    },
+    {
+      "name": "A_uniform_diverges_more",
+      "ok": true,
+      "detail": "uniform 13.7% > perpanel 2.0%"
+    },
+    {
+      "name": "B_uniform_agreement",
+      "ok": true,
+      "detail": "0.8% <= 4%"
+    },
+    {
+      "name": "B_perpanel_agreement",
+      "ok": true,
+      "detail": "9.3% <= 15%"
+    },
+    {
+      "name": "B_bie_ratio",
+      "ok": true,
+      "detail": "-50.0% in [-60,-40]%"
+    },
+    {
+      "name": "B_fem_ratio",
+      "ok": true,
+      "detail": "-53.9% in [-62,-46]%"
+    }
+  ],
+  "n_band_failures": 0,
+  "timings_excluded_per_benchmark_policy": true
+}

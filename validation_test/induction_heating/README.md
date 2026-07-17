@@ -2,6 +2,18 @@
 
 This directory holds induction-heating checks promoted out of `examples/`.
 
+## ESIM Cross-Formulation Consistency
+
+`esim_cross_formulation/` checks that the nonlinear per-element ESIM
+`P_wp` agrees between the scalar-potential BIE
+(`calc_inductance.py --impedance-model esim`) and the HCurl A + Kelvin
+FEM (`calc_fem_kelvin.py --impedance esim`) implementations -- both
+driving the same 1-D cell solver and Karl loop -- on two cylinders
+(BH-knee dia-20 and deep-saturation dia-50). `make_meshes.py`
+regenerates the meshes (Cubit); `run_cross_formulation.py` runs the
+comparison matrix and asserts golden bands (no Cubit import). Backs the
+validation tier (vi) of the SA-26-070 (八戸) and IGTE 2026 papers.
+
 ## Scattered RHS Clean Test
 
 `scattered_rhs_clean_test/` is a historical validation fixture for the
