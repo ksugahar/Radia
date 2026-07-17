@@ -178,6 +178,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_aca_pivot_permutation_identity_ok = (
         _optional_hmatrix_aca_pivot_cluster_permutation_is_aligned(summary)
     )
+    cq_conjugate_bin_ownership_identity_ok = (
+        _optional_cq_conjugate_frequency_bin_ownership_is_aligned(summary)
+    )
+    hmatrix_bbox_mesh_scale_identity_ok = (
+        _optional_hmatrix_bounding_box_mesh_scale_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -267,6 +273,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_aca_pivots_use_current_cluster_permutation": (
             hmatrix_aca_pivot_permutation_identity_ok
+        ),
+        "cq_inverse_transform_uses_current_conjugate_frequency_bins": (
+            cq_conjugate_bin_ownership_identity_ok
+        ),
+        "hmatrix_block_clusters_use_current_mesh_scale_bounding_boxes": (
+            hmatrix_bbox_mesh_scale_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1049,6 +1061,112 @@ def _optional_hmatrix_aca_pivot_cluster_permutation_is_aligned(
         and aca_column_pivots == column_pivots
         and _is_sha256(permutation_digest)
         and aca_digest == permutation_digest
+    )
+
+
+def _optional_cq_conjugate_frequency_bin_ownership_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_inverse_transform_conjugate_frequency_bin_ownership_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        sample_count = _positive_integer(value, "sample_count")
+        inverse_count = _positive_integer(value, "inverse_transform_sample_count")
+        positive_bins = _positive_integer_sequence(
+            value, "positive_frequency_bin_indices"
+        )
+        conjugate_bins = _positive_integer_sequence(
+            value, "conjugate_frequency_bin_indices"
+        )
+        inverse_conjugate_bins = _positive_integer_sequence(
+            value, "inverse_transform_conjugate_frequency_bin_indices"
+        )
+        dc_bin = _integer(value, "dc_bin_index")
+        nyquist_bin = _integer(value, "nyquist_bin_index")
+    except (KeyError, TypeError, ValueError):
+        return False
+    transfer_generation = str(
+        value.get("transfer_sample_generation", "")
+    ).strip()
+    bin_digest = str(value.get("frequency_bin_map_sha256", "")).lower()
+    return (
+        bool(transfer_generation)
+        and value.get("frequency_bin_transfer_sample_generation")
+        == transfer_generation
+        and value.get("inverse_transform_transfer_sample_generation")
+        == transfer_generation
+        and sample_count == inverse_count
+        and sample_count % 2 == 0
+        and len(positive_bins) == len(conjugate_bins) > 0
+        and len(set(positive_bins)) == len(positive_bins)
+        and len(set(conjugate_bins)) == len(conjugate_bins)
+        and all(0 < index < sample_count // 2 for index in positive_bins)
+        and conjugate_bins
+        == tuple(sample_count - index for index in positive_bins)
+        and inverse_conjugate_bins == conjugate_bins
+        and dc_bin == 0
+        and nyquist_bin == sample_count // 2
+        and value.get("real_response_conjugate_symmetry") is True
+        and value.get("inverse_transform_conjugate_symmetry") is True
+        and _is_sha256(bin_digest)
+        and str(
+            value.get("inverse_transform_frequency_bin_map_sha256", "")
+        ).lower()
+        == bin_digest
+    )
+
+
+def _optional_hmatrix_bounding_box_mesh_scale_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_block_cluster_bounding_box_mesh_scale_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        mesh_scale = _finite_float(value, "mesh_length_scale_to_m")
+        bbox_scale = _finite_float(
+            value, "cluster_bounding_box_length_scale_to_m"
+        )
+        source_bbox = tuple(
+            float(item) for item in value["source_cluster_bounding_box_m"]
+        )
+        block_bbox = tuple(
+            float(item) for item in value["block_source_cluster_bounding_box_m"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    mesh_generation = str(value.get("mesh_generation", "")).strip()
+    scale_generation = str(value.get("mesh_scale_generation", "")).strip()
+    bbox_digest = str(value.get("cluster_bounding_box_sha256", "")).lower()
+    return (
+        bool(mesh_generation)
+        and value.get("cluster_tree_mesh_generation") == mesh_generation
+        and value.get("block_cluster_mesh_generation") == mesh_generation
+        and bool(scale_generation)
+        and value.get("cluster_bounding_box_mesh_scale_generation")
+        == scale_generation
+        and value.get("block_admissibility_mesh_scale_generation")
+        == scale_generation
+        and mesh_scale > 0.0
+        and _close(bbox_scale, mesh_scale)
+        and len(source_bbox) == 6
+        and all(math.isfinite(item) for item in source_bbox)
+        and all(source_bbox[index] <= source_bbox[index + 3] for index in range(3))
+        and block_bbox == source_bbox
+        and _is_sha256(bbox_digest)
+        and str(
+            value.get("block_admissibility_bounding_box_sha256", "")
+        ).lower()
+        == bbox_digest
     )
 
 

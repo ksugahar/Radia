@@ -475,6 +475,52 @@ def _with_v17_identity(summary):
     return summary
 
 
+def _with_v18_identity(summary):
+    summary = _with_v17_identity(summary)
+    summary[
+        "cq_inverse_transform_conjugate_frequency_bin_ownership_identity"
+    ] = {
+        "transfer_sample_generation": "cq-transfer-20",
+        "frequency_bin_transfer_sample_generation": "cq-transfer-20",
+        "inverse_transform_transfer_sample_generation": "cq-transfer-20",
+        "sample_count": 512,
+        "inverse_transform_sample_count": 512,
+        "positive_frequency_bin_indices": [1, 2, 3],
+        "conjugate_frequency_bin_indices": [511, 510, 509],
+        "inverse_transform_conjugate_frequency_bin_indices": [511, 510, 509],
+        "dc_bin_index": 0,
+        "nyquist_bin_index": 256,
+        "real_response_conjugate_symmetry": True,
+        "inverse_transform_conjugate_symmetry": True,
+        "frequency_bin_map_sha256": "5" * 64,
+        "inverse_transform_frequency_bin_map_sha256": "5" * 64,
+    }
+    summary[
+        "hmatrix_block_cluster_bounding_box_mesh_scale_generation_identity"
+    ] = {
+        "mesh_generation": "mesh-20",
+        "cluster_tree_mesh_generation": "mesh-20",
+        "block_cluster_mesh_generation": "mesh-20",
+        "mesh_scale_generation": "mesh-scale-20",
+        "cluster_bounding_box_mesh_scale_generation": "mesh-scale-20",
+        "block_admissibility_mesh_scale_generation": "mesh-scale-20",
+        "mesh_length_scale_to_m": 1.0e-3,
+        "cluster_bounding_box_length_scale_to_m": 1.0e-3,
+        "source_cluster_bounding_box_m": [0.0, 0.0, 0.0, 0.01, 0.02, 0.03],
+        "block_source_cluster_bounding_box_m": [
+            0.0,
+            0.0,
+            0.0,
+            0.01,
+            0.02,
+            0.03,
+        ],
+        "cluster_bounding_box_sha256": "6" * 64,
+        "block_admissibility_bounding_box_sha256": "6" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -834,6 +880,64 @@ def test_v17_public_hmatrix_aca_pivot_cluster_permutation_generation_mismatch():
     assert (
         result["checks"][
             "hmatrix_aca_pivots_use_current_cluster_permutation"
+        ]
+        is False
+    )
+
+
+def test_accepts_v18_cq_conjugate_bins_and_hmatrix_mesh_scale_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v18_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v18_public_cq_inverse_transform_conjugate_frequency_bin_ownership_generation_mismatch():
+    bad = _with_v18_identity(_summary())
+    bad[
+        "cq_inverse_transform_conjugate_frequency_bin_ownership_identity"
+    ].update(
+        {
+            "inverse_transform_transfer_sample_generation": "cq-transfer-19",
+            "inverse_transform_sample_count": 510,
+            "inverse_transform_conjugate_frequency_bin_indices": [509, 508, 507],
+            "inverse_transform_conjugate_symmetry": False,
+            "inverse_transform_frequency_bin_map_sha256": "9" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cq_inverse_transform_uses_current_conjugate_frequency_bins"
+        ]
+        is False
+    )
+
+
+def test_v18_public_hmatrix_block_cluster_bounding_box_mesh_scale_generation_mismatch():
+    bad = _with_v18_identity(_summary())
+    bad[
+        "hmatrix_block_cluster_bounding_box_mesh_scale_generation_identity"
+    ].update(
+        {
+            "cluster_bounding_box_mesh_scale_generation": "mesh-scale-19",
+            "block_admissibility_mesh_scale_generation": "mesh-scale-19",
+            "cluster_bounding_box_length_scale_to_m": 1.0,
+            "block_source_cluster_bounding_box_m": [
+                0.0,
+                0.0,
+                0.0,
+                10.0,
+                20.0,
+                30.0,
+            ],
+            "block_admissibility_bounding_box_sha256": "9" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hmatrix_block_clusters_use_current_mesh_scale_bounding_boxes"
         ]
         is False
     )
