@@ -2389,6 +2389,193 @@ def _exodus_merge_identity_ok(identity: object) -> bool:
     )
 
 
+def _sheet_pillow_layer_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        elements = [int(value) for value in identity.get("inserted_layer_element_ids", [])]
+        result_elements = [int(value) for value in identity.get("result_inserted_layer_element_ids", [])]
+        interfaces = [[int(value) for value in row] for row in identity.get("block_interface_pairs", [])]
+        result_interfaces = [[int(value) for value in row] for row in identity.get("result_block_interface_pairs", [])]
+        signs = [int(value) for value in identity.get("orientation_signs", [])]
+        result_signs = [int(value) for value in identity.get("result_orientation_signs", [])]
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [float(value) for value in identity.get("result_scaled_jacobians", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("layer_generation") or "")
+    operation = str(identity.get("operation") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "topology_layer_generation", "block_layer_generation",
+            "interface_layer_generation", "orientation_layer_generation",
+            "jacobian_layer_generation", "result_layer_generation",
+        ))
+        and operation in {"sheet", "pillow"}
+        and identity.get("result_operation") == operation
+        and bool(elements)
+        and all(value > 0 for value in elements)
+        and len(set(elements)) == len(elements)
+        and result_elements == elements
+        and bool(interfaces)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 and row[0] != row[1] for row in interfaces)
+        and result_interfaces == interfaces
+        and len(signs) == len(elements)
+        and all(value == 1 for value in signs)
+        and result_signs == signs
+        and len(jacobians) == len(elements)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and _valid_sha256(identity.get("layer_topology_sha256"))
+        and identity.get("result_layer_topology_sha256") == identity.get("layer_topology_sha256")
+        and _valid_sha256(identity.get("interface_map_sha256"))
+        and identity.get("result_interface_map_sha256") == identity.get("interface_map_sha256")
+    )
+
+
+def _pyramid_transition_export_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        base = [int(value) for value in identity.get("pyramid_base_node_order", [])]
+        result_base = [int(value) for value in identity.get("result_pyramid_base_node_order", [])]
+        sides = [int(value) for value in identity.get("pyramid_side_orientations", [])]
+        result_sides = [int(value) for value in identity.get("result_pyramid_side_orientations", [])]
+        nodes = [int(value) for value in identity.get("interface_node_ids", [])]
+        result_nodes = [int(value) for value in identity.get("result_interface_node_ids", [])]
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        result_blocks = [int(value) for value in identity.get("result_block_ids", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("transition_generation") or "")
+    families = [str(value) for value in identity.get("adjacent_element_families", [])]
+    result_families = [str(value) for value in identity.get("result_adjacent_element_families", [])]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "base_transition_generation", "side_transition_generation",
+            "interface_transition_generation", "jacobian_transition_generation",
+            "block_transition_generation", "export_transition_generation",
+            "result_transition_generation",
+        ))
+        and len(base) == 4
+        and all(value > 0 for value in base)
+        and len(set(base)) == 4
+        and result_base == base
+        and len(sides) == 4
+        and all(value == 1 for value in sides)
+        and result_sides == sides
+        and len(nodes) == 5
+        and all(value > 0 for value in nodes)
+        and len(set(nodes)) == 5
+        and result_nodes == nodes
+        and families == ["hex8", "pyramid5", "tet4"]
+        and result_families == families
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and len(blocks) == 3
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == 3
+        and result_blocks == blocks
+        and _valid_sha256(identity.get("transition_export_sha256"))
+        and identity.get("result_transition_export_sha256") == identity.get("transition_export_sha256")
+    )
+
+
+def _journal_invocation_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("invocation_generation") or "")
+    includes = [str(value) for value in identity.get("include_order", [])]
+    scopes = [[str(value) for value in row] for row in identity.get("aprepro_scope", [])]
+    workdir = str(identity.get("working_directory") or "")
+    version = str(identity.get("cubit_version") or "")
+    flags = [str(value) for value in identity.get("headless_flags", [])]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "include_invocation_generation", "aprepro_invocation_generation",
+            "workdir_invocation_generation", "version_invocation_generation",
+            "output_invocation_generation", "result_invocation_generation",
+        ))
+        and bool(includes)
+        and len(set(includes)) == len(includes)
+        and identity.get("result_include_order") == includes
+        and bool(scopes)
+        and all(len(row) == 2 and all(row) for row in scopes)
+        and len({row[0] for row in scopes}) == len(scopes)
+        and identity.get("result_aprepro_scope") == scopes
+        and bool(workdir)
+        and identity.get("result_working_directory") == workdir
+        and bool(version)
+        and identity.get("result_cubit_version") == version
+        and set(flags) == {"-nographics", "-batch"}
+        and identity.get("result_headless_flags") == flags
+        and _valid_sha256(identity.get("journal_sha256"))
+        and identity.get("result_journal_sha256") == identity.get("journal_sha256")
+        and _valid_sha256(identity.get("output_sha256"))
+        and identity.get("result_output_sha256") == identity.get("output_sha256")
+    )
+
+
+def _exodus_result_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        width = int(identity.get("integer_width_bits"))
+        decoded_width = int(identity.get("decoded_integer_width_bits"))
+        ids = [int(value) for value in identity.get("global_node_ids", [])]
+        decoded_ids = [int(value) for value in identity.get("decoded_global_node_ids", [])]
+        times = [float(value) for value in identity.get("time_steps_s", [])]
+        decoded_times = [float(value) for value in identity.get("decoded_time_steps_s", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("exodus_generation") or "")
+    qa = [[str(value) for value in row] for row in identity.get("qa_records", [])]
+    variables = [str(value) for value in identity.get("nodal_variable_order", [])]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "id_exodus_generation", "qa_exodus_generation", "time_exodus_generation",
+            "variable_exodus_generation", "mesh_exodus_generation",
+            "result_exodus_generation",
+        ))
+        and width == 64
+        and decoded_width == width
+        and bool(ids)
+        and all(value > 2**31 - 1 for value in ids)
+        and len(set(ids)) == len(ids)
+        and decoded_ids == ids
+        and bool(qa)
+        and all(len(row) == 4 and all(row) for row in qa)
+        and identity.get("decoded_qa_records") == qa
+        and len(times) >= 2
+        and all(math.isfinite(value) and value >= 0.0 for value in times)
+        and all(right > left for left, right in zip(times, times[1:]))
+        and decoded_times == times
+        and bool(variables)
+        and all(variables)
+        and len(set(variables)) == len(variables)
+        and identity.get("decoded_nodal_variable_order") == variables
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("decoded_mesh_sha256") == identity.get("mesh_sha256")
+        and _valid_sha256(identity.get("exodus_sha256"))
+        and identity.get("decoded_exodus_sha256") == identity.get("exodus_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -3166,6 +3353,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
                 summary.get(
                     "high_order_hex_edge_face_interior_node_curvature_jacobian_export_generation_identity"
                 )
+            )
+        ),
+        "sheet_pillow_layers_use_current_topology_blocks_interfaces_orientation_and_jacobians": (
+            _sheet_pillow_layer_identity_ok(
+                summary.get("hex_sheet_pillow_layer_topology_block_interface_orientation_jacobian_identity")
+            )
+        ),
+        "pyramid_transitions_use_current_base_sides_interface_jacobian_blocks_and_export": (
+            _pyramid_transition_export_identity_ok(
+                summary.get("pyramid_transition_orientation_interface_jacobian_block_export_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -3967,6 +4164,16 @@ def cubit_mixed_transition_source_gate(
                 summary.get(
                     "exodus_merge_node_tolerance_global_id_block_sideset_checksum_generation_identity"
                 )
+            )
+        ),
+        "journal_replays_use_current_includes_aprepro_scope_workdir_version_and_output": (
+            _journal_invocation_identity_ok(
+                summary.get("journal_include_aprepro_scope_workdir_version_output_invocation_identity")
+            )
+        ),
+        "exodus_results_use_current_64bit_ids_qa_times_variables_mesh_and_checksum": (
+            _exodus_result_identity_ok(
+                summary.get("exodus_64bit_id_qa_time_nodal_variable_mesh_checksum_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
