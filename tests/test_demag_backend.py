@@ -1,7 +1,7 @@
 """The demag-backend API: Radia soft iron uses FEEC HDiv-VIM.
 
 Default is "auto": mesh-BACKED pure TET / HEX / WEDGE soft iron
-(radia.vim.MeshSoftIron) is eligible for FEEC HDiv-VIM RT1. Permanent-magnet
+(radia.vim.MeshSoftIron) is eligible for FEEC HDiv-VIM BDM1. Permanent-magnet
 field-only objects are unaffected. The
 mesh-backed HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math

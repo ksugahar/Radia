@@ -31,7 +31,7 @@ class SoftIron:
     bh_table : list[[H, B]], optional
         Nonlinear B-H curve.
     order : int, optional
-        HDiv finite-element order, 1 (RT1) or 2 (RT2).
+        HDiv finite-element order, 1 (BDM1) or 2 (BDM2).
     """
 
     def __init__(self, geometry, mu_r=None, bh_table=None, material_filter=None, verbose=False,
