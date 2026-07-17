@@ -55,6 +55,236 @@ def _sample_index(value: Any) -> int:
     return int(parsed)
 
 
+def _loss_power_balance_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("power_balance_generation", "")).strip()
+    try:
+        torque = [float(item) for item in value.get("torque_nm", [])]
+        result_torque = [
+            float(item) for item in value.get("power_balance_torque_nm", [])
+        ]
+        speed = [float(item) for item in value.get("speed_rad_s", [])]
+        result_speed = [
+            float(item) for item in value.get("power_balance_speed_rad_s", [])
+        ]
+        output = [float(item) for item in value.get("mechanical_output_w", [])]
+        result_output = [
+            float(item)
+            for item in value.get("power_balance_mechanical_output_w", [])
+        ]
+        time_window = [
+            float(item) for item in value.get("time_average_window_s", [])
+        ]
+        result_time_window = [
+            float(item) for item in value.get("loss_time_average_window_s", [])
+        ]
+        iron = [float(item) for item in value.get("iron_loss_w", [])]
+        result_iron = [
+            float(item) for item in value.get("power_balance_iron_loss_w", [])
+        ]
+        copper = [float(item) for item in value.get("copper_loss_w", [])]
+        result_copper = [
+            float(item) for item in value.get("power_balance_copper_loss_w", [])
+        ]
+        mechanical_loss = [
+            float(item) for item in value.get("mechanical_loss_w", [])
+        ]
+        result_mechanical_loss = [
+            float(item)
+            for item in value.get("power_balance_mechanical_loss_w", [])
+        ]
+        electrical_input = [
+            float(item) for item in value.get("electrical_input_w", [])
+        ]
+        result_electrical_input = [
+            float(item)
+            for item in value.get("power_balance_electrical_input_w", [])
+        ]
+        harmonic_window = [
+            int(item) for item in value.get("harmonic_window_samples", [])
+        ]
+        result_harmonic_window = [
+            int(item) for item in value.get("loss_harmonic_window_samples", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest = str(value.get("power_balance_sha256", "")).lower()
+    count = len(torque)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "torque_speed_power_balance_generation",
+                "harmonic_window_power_balance_generation",
+                "time_average_power_balance_generation",
+                "iron_loss_power_balance_generation",
+                "copper_loss_power_balance_generation",
+                "mechanical_loss_power_balance_generation",
+                "result_power_balance_generation",
+            )
+        )
+        and count >= 2
+        and all(
+            len(items) == count
+            for items in (
+                speed,
+                output,
+                iron,
+                copper,
+                mechanical_loss,
+                electrical_input,
+            )
+        )
+        and all(
+            math.isfinite(item)
+            for items in (
+                torque,
+                speed,
+                output,
+                iron,
+                copper,
+                mechanical_loss,
+                electrical_input,
+            )
+            for item in items
+        )
+        and result_torque == torque
+        and result_speed == speed
+        and result_output == output
+        and result_iron == iron
+        and result_copper == copper
+        and result_mechanical_loss == mechanical_loss
+        and result_electrical_input == electrical_input
+        and all(
+            math.isclose(
+                output[index],
+                torque[index] * speed[index],
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-12,
+            )
+            for index in range(count)
+        )
+        and all(
+            math.isclose(
+                electrical_input[index],
+                output[index]
+                + iron[index]
+                + copper[index]
+                + mechanical_loss[index],
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-12,
+            )
+            for index in range(count)
+        )
+        and len(harmonic_window) == 2
+        and 0 <= harmonic_window[0] < harmonic_window[1]
+        and result_harmonic_window == harmonic_window
+        and len(time_window) == 2
+        and all(math.isfinite(item) for item in time_window)
+        and 0.0 <= time_window[0] < time_window[1]
+        and result_time_window == time_window
+        and _valid_sha256(digest)
+        and value.get("reported_power_balance_sha256") == digest
+    )
+
+
+def _skew_slice_quadrature_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("skew_generation", "")).strip()
+    try:
+        slice_ids = [int(item) for item in value.get("slice_ids", [])]
+        result_slice_ids = [int(item) for item in value.get("result_slice_ids", [])]
+        weights = [float(item) for item in value.get("quadrature_weights", [])]
+        result_weights = [
+            float(item) for item in value.get("result_quadrature_weights", [])
+        ]
+        angles = [float(item) for item in value.get("rotor_angles_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_rotor_angles_deg", [])
+        ]
+        torque = [float(item) for item in value.get("slice_torque_nm", [])]
+        result_torque = [
+            float(item) for item in value.get("result_slice_torque_nm", [])
+        ]
+        weighted_torque = float(value.get("weighted_torque_nm"))
+        reported_weighted_torque = float(value.get("reported_weighted_torque_nm"))
+    except (TypeError, ValueError):
+        return False
+    phases = [str(item).strip() for item in value.get("current_phase_ids", [])]
+    result_phases = [
+        str(item).strip() for item in value.get("result_current_phase_ids", [])
+    ]
+    periodic_maps = [
+        str(item).strip() for item in value.get("periodic_map_ids", [])
+    ]
+    result_periodic_maps = [
+        str(item).strip() for item in value.get("result_periodic_map_ids", [])
+    ]
+    solve_digests = [
+        str(item).lower() for item in value.get("slice_solve_sha256", [])
+    ]
+    result_solve_digests = [
+        str(item).lower() for item in value.get("result_slice_solve_sha256", [])
+    ]
+    digest = str(value.get("skew_result_sha256", "")).lower()
+    count = len(slice_ids)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "weight_skew_generation",
+                "angle_skew_generation",
+                "phase_skew_generation",
+                "periodicity_skew_generation",
+                "solve_skew_generation",
+                "result_skew_generation",
+            )
+        )
+        and count >= 2
+        and all(item > 0 for item in slice_ids)
+        and len(set(slice_ids)) == count
+        and result_slice_ids == slice_ids
+        and all(len(items) == count for items in (weights, angles, phases, periodic_maps, solve_digests, torque))
+        and all(math.isfinite(item) and item >= 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_weights == weights
+        and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and result_angles == angles
+        and all(phases)
+        and result_phases == phases
+        and all(periodic_maps)
+        and result_periodic_maps == periodic_maps
+        and all(_valid_sha256(item) for item in solve_digests)
+        and result_solve_digests == solve_digests
+        and all(math.isfinite(item) for item in torque)
+        and result_torque == torque
+        and math.isfinite(weighted_torque)
+        and math.isclose(
+            weighted_torque,
+            sum(weight * item for weight, item in zip(weights, torque)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            reported_weighted_torque,
+            weighted_torque,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        )
+        and _valid_sha256(digest)
+        and value.get("reported_skew_result_sha256") == digest
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -126,6 +356,8 @@ def pwm_controlled_motor_loss_gate(
     irreversible_demag_state_generation_identity_ok = True
     winding_current_torque_identity_ok = True
     demag_knee_operating_identity_ok = True
+    loss_power_balance_identity_ok = True
+    skew_slice_quadrature_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -159,6 +391,8 @@ def pwm_controlled_motor_loss_gate(
         irreversible_demag_state_generation_identity_ok = False
         winding_current_torque_identity_ok = False
         demag_knee_operating_identity_ok = False
+        loss_power_balance_identity_ok = False
+        skew_slice_quadrature_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1733,6 +1967,16 @@ def pwm_controlled_motor_loss_gate(
                 "demagnetization_knee_temperature_recoil_operating_generation_identity"
             )
         )
+        loss_power_balance_identity_ok = _loss_power_balance_identity_ok(
+            identity_value.get(
+                "loss_torque_speed_power_balance_harmonic_window_generation_identity"
+            )
+        )
+        skew_slice_quadrature_identity_ok = _skew_slice_quadrature_identity_ok(
+            identity_value.get(
+                "skew_slice_weight_rotor_angle_phase_periodicity_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -2017,6 +2261,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "demag_margin_uses_current_knee_temperature_recoil_and_operating_state": (
             demag_knee_operating_identity_ok
+        ),
+        "loss_power_balance_uses_current_torque_speed_windows_and_loss_components": (
+            loss_power_balance_identity_ok
+        ),
+        "skew_slice_result_uses_current_weights_angles_phases_and_periodicity": (
+            skew_slice_quadrature_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
