@@ -59,6 +59,8 @@ def force_coenergy_displacement_gate(
     axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = True
     weighted_stress_force_mask_material_mesh_generation_identity_ok = True
     harmonic_loss_phase_frequency_lamination_generation_identity_ok = True
+    axisymmetric_force_energy_normalization_generation_identity_ok = True
+    nonlinear_incremental_force_branch_generation_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -88,6 +90,8 @@ def force_coenergy_displacement_gate(
         axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = False
         weighted_stress_force_mask_material_mesh_generation_identity_ok = False
         harmonic_loss_phase_frequency_lamination_generation_identity_ok = False
+        axisymmetric_force_energy_normalization_generation_identity_ok = False
+        nonlinear_incremental_force_branch_generation_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1429,6 +1433,157 @@ def force_coenergy_displacement_gate(
                 == table_digest
             )
 
+        axisym_normalization = artifact_identity.get(
+            "axisymmetric_force_energy_measure_depth_coordinate_generation_identity"
+        )
+        if axisym_normalization is not None:
+            axisym_normalization = (
+                axisym_normalization if isinstance(axisym_normalization, dict) else {}
+            )
+            generation = str(
+                axisym_normalization.get("solve_generation", "")
+            ).strip()
+            problem_type = str(
+                axisym_normalization.get("problem_type", "")
+            ).strip()
+            measure = str(
+                axisym_normalization.get("measure_convention", "")
+            ).strip()
+            coordinate = str(
+                axisym_normalization.get("coordinate_convention", "")
+            ).strip()
+            try:
+                depth = float(axisym_normalization.get("planar_depth_m"))
+                result_depth = float(
+                    axisym_normalization.get("result_planar_depth_m")
+                )
+                values = [
+                    float(value)
+                    for value in axisym_normalization.get("force_energy_values", [])
+                ]
+                reported_values = [
+                    float(value)
+                    for value in axisym_normalization.get(
+                        "reported_force_energy_values", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                depth = result_depth = math.nan
+                values = reported_values = []
+            digest = str(
+                axisym_normalization.get("normalization_table_sha256", "")
+            ).lower()
+            axisymmetric_force_energy_normalization_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    axisym_normalization.get(key) == generation
+                    for key in (
+                        "measure_solve_generation",
+                        "depth_solve_generation",
+                        "coordinate_solve_generation",
+                        "result_solve_generation",
+                    )
+                )
+                and problem_type in {"planar", "axisymmetric"}
+                and axisym_normalization.get("result_problem_type") == problem_type
+                and measure in {"planar_depth", "2*pi*r"}
+                and axisym_normalization.get("result_measure_convention") == measure
+                and ((problem_type == "axisymmetric" and measure == "2*pi*r") or (problem_type == "planar" and measure == "planar_depth"))
+                and math.isfinite(depth)
+                and depth > 0.0
+                and math.isclose(result_depth, depth, rel_tol=0.0, abs_tol=1.0e-15)
+                and coordinate in {"x_y", "r_z"}
+                and axisym_normalization.get("result_coordinate_convention")
+                == coordinate
+                and ((problem_type == "axisymmetric" and coordinate == "r_z") or (problem_type == "planar" and coordinate == "x_y"))
+                and bool(values)
+                and all(math.isfinite(value) for value in values)
+                and reported_values == values
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    axisym_normalization.get(
+                        "result_normalization_table_sha256", ""
+                    )
+                ).lower()
+                == digest
+            )
+
+        incremental_force = artifact_identity.get(
+            "nonlinear_incremental_mu_force_branch_perturbation_generation_identity"
+        )
+        if incremental_force is not None:
+            incremental_force = (
+                incremental_force if isinstance(incremental_force, dict) else {}
+            )
+            generation = str(
+                incremental_force.get("operating_point_generation", "")
+            ).strip()
+            branch_id = str(incremental_force.get("branch_id", "")).strip()
+            try:
+                perturbation = float(
+                    incremental_force.get("perturbation_current_a")
+                )
+                force_perturbation = float(
+                    incremental_force.get("force_perturbation_current_a")
+                )
+                force_values = [
+                    float(value)
+                    for value in incremental_force.get("incremental_force_n", [])
+                ]
+                reported_force = [
+                    float(value)
+                    for value in incremental_force.get(
+                        "reported_incremental_force_n", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                perturbation = force_perturbation = math.nan
+                force_values = reported_force = []
+            mu_digest = str(
+                incremental_force.get("differential_mu_sha256", "")
+            ).lower()
+            state_digest = str(
+                incremental_force.get("incremental_state_sha256", "")
+            ).lower()
+            nonlinear_incremental_force_branch_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    incremental_force.get(key) == generation
+                    for key in (
+                        "branch_operating_point_generation",
+                        "differential_mu_operating_point_generation",
+                        "perturbation_operating_point_generation",
+                        "force_operating_point_generation",
+                    )
+                )
+                and bool(branch_id)
+                and incremental_force.get("force_branch_id") == branch_id
+                and math.isfinite(perturbation)
+                and perturbation != 0.0
+                and math.isclose(
+                    force_perturbation,
+                    perturbation,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-15,
+                )
+                and len(mu_digest) == 64
+                and all(character in "0123456789abcdef" for character in mu_digest)
+                and str(
+                    incremental_force.get("force_differential_mu_sha256", "")
+                ).lower()
+                == mu_digest
+                and bool(force_values)
+                and all(math.isfinite(value) for value in force_values)
+                and reported_force == force_values
+                and len(state_digest) == 64
+                and all(character in "0123456789abcdef" for character in state_digest)
+                and str(
+                    incremental_force.get("force_incremental_state_sha256", "")
+                ).lower()
+                == state_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -1539,6 +1694,12 @@ def force_coenergy_displacement_gate(
         ),
         "harmonic_loss_uses_current_phase_frequency_lamination_and_material_data": (
             harmonic_loss_phase_frequency_lamination_generation_identity_ok
+        ),
+        "axisymmetric_force_energy_uses_current_measure_depth_and_coordinates": (
+            axisymmetric_force_energy_normalization_generation_identity_ok
+        ),
+        "nonlinear_incremental_force_uses_current_branch_mu_and_perturbation": (
+            nonlinear_incremental_force_branch_generation_identity_ok
         ),
     }
     return {
