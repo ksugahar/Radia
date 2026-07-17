@@ -834,6 +834,72 @@ def _with_v17_periodic_transition_and_export_identity(row: dict) -> dict:
     return row
 
 
+def _with_v18_ordinal_bias_and_quality_identity(row: dict) -> dict:
+    row = _with_v17_periodic_transition_and_export_identity(row)
+    row["hex_sideset_outward_face_ordinal_volume_reorder_identity"] = {
+        "mesh_generation": "hex-mesh-52",
+        "volume_connectivity_reorder_generation": "hex-reorder-52",
+        "face_ordinal_mesh_generation": "hex-mesh-52",
+        "normal_ownership_mesh_generation": "hex-mesh-52",
+        "face_ordinal_connectivity_reorder_generation": "hex-reorder-52",
+        "normal_connectivity_reorder_generation": "hex-reorder-52",
+        "element_ids": [101, 102],
+        "face_ordinals": [5, 6],
+        "exported_element_ids": [101, 102],
+        "exported_face_ordinals": [5, 6],
+        "outward_normal_signs": [1, 1],
+        "exported_outward_normal_signs": [1, 1],
+        "element_face_map_sha256": "1" * 64,
+        "exported_element_face_map_sha256": "1" * 64,
+    }
+    row["sweep_layer_bias_source_curve_orientation_generation_identity"] = {
+        "sweep_generation": "sweep-52",
+        "source_curve_orientation_generation": "curve-orientation-52",
+        "layer_bias_sweep_generation": "sweep-52",
+        "layer_bias_curve_orientation_generation": "curve-orientation-52",
+        "source_curve_ids": [31, 32],
+        "source_curve_orientations": [1, -1],
+        "biased_curve_ids": [31, 32],
+        "biased_curve_orientations": [1, -1],
+        "interval_counts": [4, 8],
+        "biased_interval_counts": [4, 8],
+        "bias_factors": [1.2, 1.5],
+        "applied_bias_factors": [1.2, 1.5],
+        "curve_bias_map_sha256": "2" * 64,
+        "applied_curve_bias_map_sha256": "2" * 64,
+    }
+    row["exodus_sideset_element_face_topology_generation_identity"] = {
+        "mesh_generation": "mesh-52",
+        "exodus_export_generation": "exodus-52",
+        "topology_ordinal_mesh_generation": "mesh-52",
+        "writer_mesh_generation": "mesh-52",
+        "topology_ordinal_export_generation": "exodus-52",
+        "writer_export_generation": "exodus-52",
+        "element_ids": [101, 102],
+        "element_face_topology_ordinals": [5, 6],
+        "written_element_ids": [101, 102],
+        "written_element_face_topology_ordinals": [5, 6],
+        "element_face_topology_sha256": "3" * 64,
+        "written_element_face_topology_sha256": "3" * 64,
+    }
+    row["high_order_quality_reference_coordinate_generation_identity"] = {
+        "mesh_generation": "high-order-mesh-52",
+        "element_order_generation": "element-order-52",
+        "reference_node_mesh_generation": "high-order-mesh-52",
+        "quality_mesh_generation": "high-order-mesh-52",
+        "reference_node_element_order_generation": "element-order-52",
+        "quality_element_order_generation": "element-order-52",
+        "element_order": 2,
+        "reference_node_count": 10,
+        "quality_reference_node_count": 10,
+        "jacobian_sampling_rule": "tet10_reference_nodes_and_interior",
+        "quality_jacobian_sampling_rule": "tet10_reference_nodes_and_interior",
+        "reference_coordinates_sha256": "4" * 64,
+        "quality_reference_coordinates_sha256": "4" * 64,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -1276,3 +1342,94 @@ def test_v17_source_high_order_exodus_node_permutation_previous_export_order_gen
         ]
         is False
     )
+
+
+def test_v18_positive_ordinal_bias_and_quality_identity():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+    assert public["checks"][
+        "hex_sideset_face_ordinals_and_normals_follow_connectivity_reorder"
+    ]
+    assert public["checks"][
+        "biased_sweep_layers_follow_current_source_curve_orientation"
+    ]
+    assert source["checks"][
+        "exodus_sideset_ordinals_follow_current_mesh_and_export_topology"
+    ]
+    assert source["checks"][
+        "high_order_quality_uses_current_reference_coordinates_and_order"
+    ]
+
+
+def test_v18_public_hex_sideset_outward_face_ordinal_volume_reorder_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["hex_sideset_outward_face_ordinal_volume_reorder_identity"].update(
+        {
+            "face_ordinal_connectivity_reorder_generation": "hex-reorder-51",
+            "normal_connectivity_reorder_generation": "hex-reorder-51",
+            "exported_face_ordinals": [6, 5],
+            "exported_outward_normal_signs": [-1, 1],
+            "exported_element_face_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hex_sideset_face_ordinals_and_normals_follow_connectivity_reorder"
+    ] is False
+
+
+def test_v18_public_sweep_layer_bias_source_curve_orientation_generation_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["sweep_layer_bias_source_curve_orientation_generation_identity"].update(
+        {
+            "layer_bias_curve_orientation_generation": "curve-orientation-51",
+            "biased_curve_orientations": [-1, 1],
+            "biased_interval_counts": [8, 4],
+            "applied_bias_factors": [1.5, 1.2],
+            "applied_curve_bias_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "biased_sweep_layers_follow_current_source_curve_orientation"
+    ] is False
+
+
+def test_v18_source_exodus_sideset_element_face_topology_generation_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["exodus_sideset_element_face_topology_generation_identity"].update(
+        {
+            "topology_ordinal_mesh_generation": "mesh-51",
+            "topology_ordinal_export_generation": "exodus-51",
+            "written_element_face_topology_ordinals": [6, 5],
+            "written_element_face_topology_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus_sideset_ordinals_follow_current_mesh_and_export_topology"
+    ] is False
+
+
+def test_v18_source_high_order_quality_reference_coordinate_generation_mismatch():
+    row = _with_v18_ordinal_bias_and_quality_identity(summary())
+    row["high_order_quality_reference_coordinate_generation_identity"].update(
+        {
+            "reference_node_element_order_generation": "element-order-51",
+            "quality_element_order_generation": "element-order-51",
+            "quality_reference_node_count": 4,
+            "quality_jacobian_sampling_rule": "tet4_corner_nodes",
+            "quality_reference_coordinates_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "high_order_quality_uses_current_reference_coordinates_and_order"
+    ] is False

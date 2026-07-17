@@ -203,6 +203,201 @@ def _high_order_exodus_node_permutation_export_order_ok(identity: object) -> boo
     )
 
 
+def _hex_sideset_outward_face_ordinal_volume_reorder_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        element_ids = [int(value) for value in identity.get("element_ids", [])]
+        face_ordinals = [int(value) for value in identity.get("face_ordinals", [])]
+        exported_element_ids = [
+            int(value) for value in identity.get("exported_element_ids", [])
+        ]
+        exported_face_ordinals = [
+            int(value) for value in identity.get("exported_face_ordinals", [])
+        ]
+        normal_signs = [
+            int(value) for value in identity.get("outward_normal_signs", [])
+        ]
+        exported_normal_signs = [
+            int(value)
+            for value in identity.get("exported_outward_normal_signs", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    reorder_generation = str(
+        identity.get("volume_connectivity_reorder_generation") or ""
+    )
+    mapping_digest = str(identity.get("element_face_map_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("face_ordinal_mesh_generation") == mesh_generation
+        and identity.get("normal_ownership_mesh_generation") == mesh_generation
+        and bool(reorder_generation)
+        and identity.get("face_ordinal_connectivity_reorder_generation")
+        == reorder_generation
+        and identity.get("normal_connectivity_reorder_generation")
+        == reorder_generation
+        and bool(element_ids)
+        and len(set(element_ids)) == len(element_ids)
+        and all(value > 0 for value in element_ids)
+        and len(face_ordinals) == len(element_ids)
+        and all(1 <= value <= 6 for value in face_ordinals)
+        and exported_element_ids == element_ids
+        and exported_face_ordinals == face_ordinals
+        and len(normal_signs) == len(element_ids)
+        and all(value in {-1, 1} for value in normal_signs)
+        and exported_normal_signs == normal_signs
+        and len(mapping_digest) == 64
+        and all(character in "0123456789abcdef" for character in mapping_digest)
+        and identity.get("exported_element_face_map_sha256") == mapping_digest
+    )
+
+
+def _sweep_layer_bias_source_curve_orientation_generation_ok(
+    identity: object,
+) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        curve_ids = [int(value) for value in identity.get("source_curve_ids", [])]
+        curve_orientations = [
+            int(value) for value in identity.get("source_curve_orientations", [])
+        ]
+        biased_curve_ids = [
+            int(value) for value in identity.get("biased_curve_ids", [])
+        ]
+        biased_orientations = [
+            int(value) for value in identity.get("biased_curve_orientations", [])
+        ]
+        interval_counts = [
+            int(value) for value in identity.get("interval_counts", [])
+        ]
+        biased_interval_counts = [
+            int(value) for value in identity.get("biased_interval_counts", [])
+        ]
+        bias_factors = [float(value) for value in identity.get("bias_factors", [])]
+        applied_bias_factors = [
+            float(value) for value in identity.get("applied_bias_factors", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    sweep_generation = str(identity.get("sweep_generation") or "")
+    orientation_generation = str(
+        identity.get("source_curve_orientation_generation") or ""
+    )
+    bias_digest = str(identity.get("curve_bias_map_sha256") or "")
+    return (
+        bool(sweep_generation)
+        and identity.get("layer_bias_sweep_generation") == sweep_generation
+        and bool(orientation_generation)
+        and identity.get("layer_bias_curve_orientation_generation")
+        == orientation_generation
+        and bool(curve_ids)
+        and len(set(curve_ids)) == len(curve_ids)
+        and all(value > 0 for value in curve_ids)
+        and len(curve_orientations) == len(curve_ids)
+        and all(value in {-1, 1} for value in curve_orientations)
+        and biased_curve_ids == curve_ids
+        and biased_orientations == curve_orientations
+        and len(interval_counts) == len(curve_ids)
+        and all(value > 0 for value in interval_counts)
+        and biased_interval_counts == interval_counts
+        and len(bias_factors) == len(curve_ids)
+        and all(math.isfinite(value) and value > 0.0 for value in bias_factors)
+        and applied_bias_factors == bias_factors
+        and len(bias_digest) == 64
+        and all(character in "0123456789abcdef" for character in bias_digest)
+        and identity.get("applied_curve_bias_map_sha256") == bias_digest
+    )
+
+
+def _exodus_sideset_element_face_topology_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        element_ids = [int(value) for value in identity.get("element_ids", [])]
+        ordinals = [
+            int(value)
+            for value in identity.get("element_face_topology_ordinals", [])
+        ]
+        written_element_ids = [
+            int(value) for value in identity.get("written_element_ids", [])
+        ]
+        written_ordinals = [
+            int(value)
+            for value in identity.get(
+                "written_element_face_topology_ordinals", []
+            )
+        ]
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    export_generation = str(identity.get("exodus_export_generation") or "")
+    topology_digest = str(identity.get("element_face_topology_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("topology_ordinal_mesh_generation") == mesh_generation
+        and identity.get("writer_mesh_generation") == mesh_generation
+        and bool(export_generation)
+        and identity.get("topology_ordinal_export_generation") == export_generation
+        and identity.get("writer_export_generation") == export_generation
+        and bool(element_ids)
+        and len(set(element_ids)) == len(element_ids)
+        and all(value > 0 for value in element_ids)
+        and len(ordinals) == len(element_ids)
+        and all(1 <= value <= 6 for value in ordinals)
+        and written_element_ids == element_ids
+        and written_ordinals == ordinals
+        and len(topology_digest) == 64
+        and all(character in "0123456789abcdef" for character in topology_digest)
+        and identity.get("written_element_face_topology_sha256") == topology_digest
+    )
+
+
+def _high_order_quality_reference_coordinate_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        element_order = int(identity.get("element_order", 0))
+        reference_node_count = int(identity.get("reference_node_count", 0))
+        quality_reference_node_count = int(
+            identity.get("quality_reference_node_count", 0)
+        )
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    order_generation = str(identity.get("element_order_generation") or "")
+    sampling_rule = str(identity.get("jacobian_sampling_rule") or "")
+    coordinate_digest = str(identity.get("reference_coordinates_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("reference_node_mesh_generation") == mesh_generation
+        and identity.get("quality_mesh_generation") == mesh_generation
+        and bool(order_generation)
+        and identity.get("reference_node_element_order_generation")
+        == order_generation
+        and identity.get("quality_element_order_generation") == order_generation
+        and element_order >= 2
+        and reference_node_count > 0
+        and quality_reference_node_count == reference_node_count
+        and bool(sampling_rule)
+        and identity.get("quality_jacobian_sampling_rule") == sampling_rule
+        and len(coordinate_digest) == 64
+        and all(character in "0123456789abcdef" for character in coordinate_digest)
+        and identity.get("quality_reference_coordinates_sha256")
+        == coordinate_digest
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -808,6 +1003,18 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             summary.get("pyramid_transition_face_diagonal_convention_identity")
         )
     )
+    hex_sideset_face_ordinal_reorder_ok = (
+        _hex_sideset_outward_face_ordinal_volume_reorder_ok(
+            summary.get("hex_sideset_outward_face_ordinal_volume_reorder_identity")
+        )
+    )
+    sweep_layer_bias_orientation_ok = (
+        _sweep_layer_bias_source_curve_orientation_generation_ok(
+            summary.get(
+                "sweep_layer_bias_source_curve_orientation_generation_identity"
+            )
+        )
+    )
 
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
@@ -863,6 +1070,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         ),
         "pyramid_transition_neighbors_share_one_face_diagonal_convention": (
             pyramid_transition_face_diagonal_convention_ok
+        ),
+        "hex_sideset_face_ordinals_and_normals_follow_connectivity_reorder": (
+            hex_sideset_face_ordinal_reorder_ok
+        ),
+        "biased_sweep_layers_follow_current_source_curve_orientation": (
+            sweep_layer_bias_orientation_ok
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -1457,6 +1670,16 @@ def cubit_mixed_transition_source_gate(
             summary.get("high_order_exodus_node_permutation_export_order_identity")
         )
     )
+    exodus_sideset_topology_generation_ok = (
+        _exodus_sideset_element_face_topology_generation_ok(
+            summary.get("exodus_sideset_element_face_topology_generation_identity")
+        )
+    )
+    high_order_quality_reference_generation_ok = (
+        _high_order_quality_reference_coordinate_generation_ok(
+            summary.get("high_order_quality_reference_coordinate_generation_identity")
+        )
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -1548,6 +1771,12 @@ def cubit_mixed_transition_source_gate(
         ),
         "high_order_exodus_nodes_use_current_export_order_permutation": (
             high_order_exodus_node_permutation_export_order_ok
+        ),
+        "exodus_sideset_ordinals_follow_current_mesh_and_export_topology": (
+            exodus_sideset_topology_generation_ok
+        ),
+        "high_order_quality_uses_current_reference_coordinates_and_order": (
+            high_order_quality_reference_generation_ok
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
