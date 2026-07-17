@@ -1063,6 +1063,154 @@ def _realized_gain_excitation_and_accepted_power_are_current(
     )
 
 
+def _farfield_polarization_phase_center_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get(
+        "farfield_polarization_basis_phase_center_coordinate_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    farfield_generation = str(identity.get("farfield_generation", "")).strip()
+    coordinate_generation = str(
+        identity.get("monitor_coordinate_generation", "")
+    ).strip()
+    sample_ids = identity.get("sample_ids")
+    theta_digests = identity.get("theta_basis_sha256")
+    phi_digests = identity.get("phi_basis_sha256")
+    phase_center = identity.get("phase_center_m")
+    try:
+        phase_center_values = [float(value) for value in phase_center]
+    except (TypeError, ValueError):
+        phase_center_values = []
+
+    def valid_digest_list(values: Any) -> bool:
+        return (
+            isinstance(values, list)
+            and bool(values)
+            and all(
+                isinstance(value, str)
+                and len(value) == 64
+                and all(character in "0123456789abcdef" for character in value.lower())
+                for value in values
+            )
+        )
+
+    table_digest = str(identity.get("polarization_table_sha256", "")).lower()
+    return (
+        bool(farfield_generation)
+        and identity.get("result_farfield_generation") == farfield_generation
+        and bool(coordinate_generation)
+        and identity.get("theta_basis_monitor_coordinate_generation")
+        == coordinate_generation
+        and identity.get("phi_basis_monitor_coordinate_generation")
+        == coordinate_generation
+        and identity.get("phase_center_monitor_coordinate_generation")
+        == coordinate_generation
+        and identity.get("result_monitor_coordinate_generation")
+        == coordinate_generation
+        and isinstance(sample_ids, list)
+        and bool(sample_ids)
+        and all(isinstance(value, int) and not isinstance(value, bool) for value in sample_ids)
+        and len(set(sample_ids)) == len(sample_ids)
+        and identity.get("result_sample_ids") == sample_ids
+        and valid_digest_list(theta_digests)
+        and len(theta_digests) == len(sample_ids)
+        and identity.get("result_theta_basis_sha256") == theta_digests
+        and valid_digest_list(phi_digests)
+        and len(phi_digests) == len(sample_ids)
+        and identity.get("result_phi_basis_sha256") == phi_digests
+        and len(phase_center_values) == 3
+        and all(math.isfinite(value) for value in phase_center_values)
+        and identity.get("result_phase_center_m") == phase_center
+        and len(table_digest) == 64
+        and all(character in "0123456789abcdef" for character in table_digest)
+        and str(identity.get("result_polarization_table_sha256", "")).lower()
+        == table_digest
+    )
+
+
+def _broadband_energy_q_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "broadband_energy_q_port_loss_normalization_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    analysis_generation = str(identity.get("analysis_generation", "")).strip()
+    grid_generation = str(
+        identity.get("frequency_grid_generation", "")
+    ).strip()
+    excitation_generation = str(
+        identity.get("excitation_generation", "")
+    ).strip()
+    series_keys = (
+        "frequencies_hz",
+        "stored_energy_j",
+        "port_power_w",
+        "loss_power_w",
+    )
+    try:
+        series = {
+            key: [float(value) for value in identity.get(key)] for key in series_keys
+        }
+    except (TypeError, ValueError):
+        series = {key: [] for key in series_keys}
+    frequencies = series["frequencies_hz"]
+    digest = str(identity.get("energy_q_input_sha256", "")).lower()
+    return (
+        bool(analysis_generation)
+        and all(
+            identity.get(key) == analysis_generation
+            for key in (
+                "energy_analysis_generation",
+                "port_power_analysis_generation",
+                "loss_analysis_generation",
+                "q_result_analysis_generation",
+            )
+        )
+        and bool(grid_generation)
+        and all(
+            identity.get(key) == grid_generation
+            for key in (
+                "energy_frequency_grid_generation",
+                "port_power_frequency_grid_generation",
+                "loss_frequency_grid_generation",
+                "q_frequency_grid_generation",
+            )
+        )
+        and bool(excitation_generation)
+        and all(
+            identity.get(key) == excitation_generation
+            for key in (
+                "energy_excitation_generation",
+                "port_power_excitation_generation",
+                "loss_excitation_generation",
+            )
+        )
+        and bool(frequencies)
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and all(
+            len(values) == len(frequencies)
+            and all(math.isfinite(value) and value >= 0.0 for value in values)
+            for key, values in series.items()
+            if key != "frequencies_hz"
+        )
+        and identity.get("q_frequencies_hz") == identity.get("frequencies_hz")
+        and identity.get("q_stored_energy_j") == identity.get("stored_energy_j")
+        and identity.get("q_port_power_w") == identity.get("port_power_w")
+        and identity.get("q_loss_power_w") == identity.get("loss_power_w")
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and str(identity.get("result_energy_q_input_sha256", "")).lower()
+        == digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1292,6 +1440,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "realized_gain_uses_current_excitation_and_accepted_power": (
                 _realized_gain_excitation_and_accepted_power_are_current(raw)
+            ),
+            "farfield_polarization_basis_and_phase_center_use_current_coordinates": (
+                _farfield_polarization_phase_center_is_current(raw)
+            ),
+            "broadband_energy_q_uses_current_port_and_loss_normalization": (
+                _broadband_energy_q_inputs_are_current(raw)
             ),
         }
         row = {
