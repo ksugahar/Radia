@@ -1012,3 +1012,127 @@ def test_v20_public_maglev_stiffness_displacement_equilibrium_force_generation_m
     assert result["checks"][
         "maglev_stiffness_uses_aligned_displacement_equilibrium_force_states"
     ] is False
+
+
+def _summary_v21():
+    summary = _summary_v20()
+    identity = summary["artifact_identity"]
+    identity["bem_near_singular_distance_panel_quadrature_generation_identity"] = {
+        "interaction_generation": "bem-interaction-31",
+        "result_interaction_generation": "bem-interaction-31",
+        "geometry_generation": "bem-geometry-31",
+        "target_distance_geometry_generation": "bem-geometry-31",
+        "source_panel_geometry_generation": "bem-geometry-31",
+        "adaptive_quadrature_geometry_generation": "bem-geometry-31",
+        "target_point_id": 501,
+        "distance_target_point_id": 501,
+        "source_panel_id": 101,
+        "distance_source_panel_id": 101,
+        "target_distance_m": 1.0e-5,
+        "quadrature_target_distance_m": 1.0e-5,
+        "source_panel_geometry_sha256": "1" * 64,
+        "quadrature_source_panel_geometry_sha256": "1" * 64,
+        "adaptive_quadrature_order": 16,
+        "evaluated_quadrature_order": 16,
+        "near_singular_interaction_sha256": "2" * 64,
+        "assembled_near_singular_interaction_sha256": "2" * 64,
+    }
+    identity[
+        "moving_magnet_force_position_orientation_equilibrium_generation_identity"
+    ] = {
+        "force_generation": "moving-force-31",
+        "result_force_generation": "moving-force-31",
+        "geometry_generation": "moving-geometry-31",
+        "position_sample_geometry_generations": ["moving-geometry-31"] * 3,
+        "orientation_geometry_generation": "moving-geometry-31",
+        "equilibrium_geometry_generation": "moving-geometry-31",
+        "force_geometry_generation": "moving-geometry-31",
+        "position_samples_m": [
+            [0.0, 0.0, -0.001],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.001],
+        ],
+        "force_position_samples_m": [
+            [0.0, 0.0, -0.001],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.001],
+        ],
+        "magnet_orientation_quaternion": [1.0, 0.0, 0.0, 0.0],
+        "force_orientation_quaternion": [1.0, 0.0, 0.0, 0.0],
+        "force_samples_n": [
+            [0.0, 0.0, 10.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, -10.0],
+        ],
+        "differentiated_force_samples_n": [
+            [0.0, 0.0, 10.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, -10.0],
+        ],
+        "equilibrium_sample_index": 1,
+        "force_equilibrium_sample_index": 1,
+        "moving_force_sample_table_sha256": "3" * 64,
+        "result_moving_force_sample_table_sha256": "3" * 64,
+    }
+    return summary
+
+
+def test_v21_public_positive_bem_and_moving_magnet_force_identity() -> None:
+    result = magnetic_force_method_profile_gate(_summary_v21())
+    assert result["status"] == "ok"
+    assert result["checks"][
+        "bem_near_singular_quadrature_uses_current_distance_and_panel_geometry"
+    ]
+    assert result["checks"][
+        "moving_magnet_force_uses_current_position_orientation_and_equilibrium"
+    ]
+
+
+def test_v21_public_bem_near_singular_distance_panel_quadrature_generation_mismatch() -> None:
+    summary = _summary_v21()
+    summary["artifact_identity"][
+        "bem_near_singular_distance_panel_quadrature_generation_identity"
+    ].update(
+        {
+            "target_distance_geometry_generation": "bem-geometry-30",
+            "source_panel_geometry_generation": "bem-geometry-29",
+            "adaptive_quadrature_geometry_generation": "bem-geometry-28",
+            "distance_target_point_id": 502,
+            "distance_source_panel_id": 102,
+            "quadrature_target_distance_m": 1.0e-3,
+            "quadrature_source_panel_geometry_sha256": "a" * 64,
+            "evaluated_quadrature_order": 4,
+            "assembled_near_singular_interaction_sha256": "b" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "bem_near_singular_quadrature_uses_current_distance_and_panel_geometry"
+    ] is False
+
+
+def test_v21_public_moving_magnet_force_position_orientation_equilibrium_generation_mismatch() -> None:
+    summary = _summary_v21()
+    summary["artifact_identity"][
+        "moving_magnet_force_position_orientation_equilibrium_generation_identity"
+    ].update(
+        {
+            "position_sample_geometry_generations": ["moving-geometry-30"] * 3,
+            "orientation_geometry_generation": "moving-geometry-29",
+            "equilibrium_geometry_generation": "moving-geometry-28",
+            "force_position_samples_m": [
+                [0.0, 0.0, 0.001],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, -0.001],
+            ],
+            "force_orientation_quaternion": [0.0, 0.0, 0.0, 1.0],
+            "force_equilibrium_sample_index": 0,
+            "result_moving_force_sample_table_sha256": "c" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "moving_magnet_force_uses_current_position_orientation_and_equilibrium"
+    ] is False

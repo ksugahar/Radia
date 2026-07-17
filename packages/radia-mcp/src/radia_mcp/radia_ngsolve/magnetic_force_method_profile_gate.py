@@ -129,6 +129,8 @@ def magnetic_force_method_profile_gate(
     virtual_work_displacement_coordinate_geometry_generation_identity_ok = True
     demag_energy_surface_charge_normal_quadrature_identity_ok = True
     maglev_stiffness_displacement_equilibrium_force_identity_ok = True
+    bem_near_singular_distance_panel_quadrature_identity_ok = True
+    moving_magnet_force_position_orientation_equilibrium_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -156,6 +158,8 @@ def magnetic_force_method_profile_gate(
         virtual_work_displacement_coordinate_geometry_generation_identity_ok = False
         demag_energy_surface_charge_normal_quadrature_identity_ok = False
         maglev_stiffness_displacement_equilibrium_force_identity_ok = False
+        bem_near_singular_distance_panel_quadrature_identity_ok = False
+        moving_magnet_force_position_orientation_equilibrium_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -1410,6 +1414,197 @@ def magnetic_force_method_profile_gate(
                 == digest
             )
 
+        near_singular_value = identity_value.get(
+            "bem_near_singular_distance_panel_quadrature_generation_identity"
+        )
+        if near_singular_value is not None:
+            near_singular = (
+                near_singular_value
+                if isinstance(near_singular_value, Mapping)
+                else {}
+            )
+            interaction_generation = str(
+                near_singular.get("interaction_generation", "")
+            ).strip()
+            geometry_generation = str(
+                near_singular.get("geometry_generation", "")
+            ).strip()
+            target_id = near_singular.get("target_point_id")
+            panel_id = near_singular.get("source_panel_id")
+            panel_digest = str(
+                near_singular.get("source_panel_geometry_sha256", "")
+            ).lower()
+            interaction_digest = str(
+                near_singular.get("near_singular_interaction_sha256", "")
+            ).lower()
+            try:
+                distance = float(near_singular.get("target_distance_m"))
+                quadrature_distance = float(
+                    near_singular.get("quadrature_target_distance_m")
+                )
+            except (TypeError, ValueError):
+                distance = quadrature_distance = math.nan
+            quadrature_order = near_singular.get("adaptive_quadrature_order")
+            bem_near_singular_distance_panel_quadrature_identity_ok = (
+                bool(interaction_generation)
+                and near_singular.get("result_interaction_generation")
+                == interaction_generation
+                and bool(geometry_generation)
+                and all(
+                    near_singular.get(key) == geometry_generation
+                    for key in (
+                        "target_distance_geometry_generation",
+                        "source_panel_geometry_generation",
+                        "adaptive_quadrature_geometry_generation",
+                    )
+                )
+                and isinstance(target_id, int)
+                and not isinstance(target_id, bool)
+                and target_id > 0
+                and near_singular.get("distance_target_point_id") == target_id
+                and isinstance(panel_id, int)
+                and not isinstance(panel_id, bool)
+                and panel_id > 0
+                and near_singular.get("distance_source_panel_id") == panel_id
+                and math.isfinite(distance)
+                and distance > 0.0
+                and quadrature_distance == distance
+                and len(panel_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in panel_digest
+                )
+                and str(
+                    near_singular.get(
+                        "quadrature_source_panel_geometry_sha256", ""
+                    )
+                ).lower()
+                == panel_digest
+                and isinstance(quadrature_order, int)
+                and not isinstance(quadrature_order, bool)
+                and quadrature_order > 0
+                and near_singular.get("evaluated_quadrature_order")
+                == quadrature_order
+                and len(interaction_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in interaction_digest
+                )
+                and str(
+                    near_singular.get(
+                        "assembled_near_singular_interaction_sha256", ""
+                    )
+                ).lower()
+                == interaction_digest
+            )
+
+        moving_force_value = identity_value.get(
+            "moving_magnet_force_position_orientation_equilibrium_generation_identity"
+        )
+        if moving_force_value is not None:
+            moving_force = (
+                moving_force_value
+                if isinstance(moving_force_value, Mapping)
+                else {}
+            )
+            force_generation = str(
+                moving_force.get("force_generation", "")
+            ).strip()
+            geometry_generation = str(
+                moving_force.get("geometry_generation", "")
+            ).strip()
+            sample_generations = moving_force.get(
+                "position_sample_geometry_generations"
+            )
+            moving_positions = moving_force.get("position_samples_m")
+            orientation = moving_force.get("magnet_orientation_quaternion")
+            moving_force_samples = moving_force.get("force_samples_n")
+            equilibrium_index = moving_force.get("equilibrium_sample_index")
+            digest = str(
+                moving_force.get("moving_force_sample_table_sha256", "")
+            ).lower()
+
+            def finite_vectors(value: object, count: int) -> bool:
+                return (
+                    isinstance(value, list)
+                    and len(value) == count
+                    and all(
+                        isinstance(row, list)
+                        and len(row) == 3
+                        and all(
+                            isinstance(component, (int, float))
+                            and not isinstance(component, bool)
+                            and math.isfinite(float(component))
+                            for component in row
+                        )
+                        for row in value
+                    )
+                )
+
+            positions_ok = finite_vectors(
+                moving_positions, len(sample_generations)
+            ) if isinstance(sample_generations, list) else False
+            force_samples_ok = finite_vectors(
+                moving_force_samples, len(sample_generations)
+            ) if isinstance(sample_generations, list) else False
+            orientation_ok = (
+                isinstance(orientation, list)
+                and len(orientation) == 4
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in orientation
+                )
+                and math.isclose(
+                    sum(float(value) ** 2 for value in orientation),
+                    1.0,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-12,
+                )
+            )
+            moving_magnet_force_position_orientation_equilibrium_identity_ok = (
+                bool(force_generation)
+                and moving_force.get("result_force_generation") == force_generation
+                and bool(geometry_generation)
+                and isinstance(sample_generations, list)
+                and len(sample_generations) >= 3
+                and all(
+                    value == geometry_generation for value in sample_generations
+                )
+                and all(
+                    moving_force.get(key) == geometry_generation
+                    for key in (
+                        "orientation_geometry_generation",
+                        "equilibrium_geometry_generation",
+                        "force_geometry_generation",
+                    )
+                )
+                and positions_ok
+                and moving_force.get("force_position_samples_m")
+                == moving_positions
+                and orientation_ok
+                and moving_force.get("force_orientation_quaternion") == orientation
+                and force_samples_ok
+                and moving_force.get("differentiated_force_samples_n")
+                == moving_force_samples
+                and isinstance(equilibrium_index, int)
+                and not isinstance(equilibrium_index, bool)
+                and 0 <= equilibrium_index < len(sample_generations)
+                and moving_force.get("force_equilibrium_sample_index")
+                == equilibrium_index
+                and sum(
+                    float(value) ** 2
+                    for value in moving_positions[equilibrium_index]
+                )
+                <= 1.0e-30
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    moving_force.get("result_moving_force_sample_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -1545,6 +1740,12 @@ def magnetic_force_method_profile_gate(
         ),
         "maglev_stiffness_uses_aligned_displacement_equilibrium_force_states": (
             maglev_stiffness_displacement_equilibrium_force_identity_ok
+        ),
+        "bem_near_singular_quadrature_uses_current_distance_and_panel_geometry": (
+            bem_near_singular_distance_panel_quadrature_identity_ok
+        ),
+        "moving_magnet_force_uses_current_position_orientation_and_equilibrium": (
+            moving_magnet_force_position_orientation_equilibrium_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
