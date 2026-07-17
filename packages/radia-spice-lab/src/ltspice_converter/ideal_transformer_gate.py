@@ -897,6 +897,158 @@ def _transient_power_interpolation_grid_identity_ok(
     )
 
 
+def _stepped_ac_parameter_tuple_grid_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "stepped_ac_trace_parameter_tuple_interpolation_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    names = contract.get("parameter_names")
+    tuples = contract.get("parameter_tuples")
+    trace_tuples = contract.get("trace_parameter_tuples")
+    frequency = contract.get("frequency_hz")
+    trace_frequency = contract.get("trace_frequency_hz")
+    interpolation_frequency = contract.get("interpolation_frequency_hz")
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in (
+            names,
+            tuples,
+            trace_tuples,
+            frequency,
+            trace_frequency,
+            interpolation_frequency,
+        )
+    ):
+        return False
+    name_rows = [str(value) for value in names]
+    try:
+        tuple_rows = [
+            [_finite(value, "parameter_tuple") for value in row]
+            for row in tuples
+            if isinstance(row, Sequence) and not isinstance(row, (str, bytes))
+        ]
+        trace_tuple_rows = [
+            [_finite(value, "trace_parameter_tuple") for value in row]
+            for row in trace_tuples
+            if isinstance(row, Sequence) and not isinstance(row, (str, bytes))
+        ]
+        frequency_rows = [
+            _finite(value, "frequency_hz", positive=True) for value in frequency
+        ]
+        trace_frequency_rows = [
+            _finite(value, "trace_frequency_hz", positive=True)
+            for value in trace_frequency
+        ]
+        interpolation_frequency_rows = [
+            _finite(value, "interpolation_frequency_hz", positive=True)
+            for value in interpolation_frequency
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("sweep_generation_id") or "")
+    tuple_digest = str(contract.get("parameter_tuple_table_sha256") or "")
+    grid_digest = str(contract.get("trace_frequency_grid_sha256") or "")
+    return (
+        bool(generation)
+        and contract.get("parameter_tuple_sweep_generation_id") == generation
+        and contract.get("trace_grid_sweep_generation_id") == generation
+        and contract.get("interpolator_sweep_generation_id") == generation
+        and bool(name_rows)
+        and all(name_rows)
+        and len(set(name_rows)) == len(name_rows)
+        and len(tuple_rows) == len(tuples) == len(trace_tuple_rows)
+        and bool(tuple_rows)
+        and all(len(row) == len(name_rows) for row in tuple_rows)
+        and trace_tuple_rows == tuple_rows
+        and len(frequency_rows) >= 2
+        and all(
+            right > left for left, right in zip(frequency_rows, frequency_rows[1:])
+        )
+        and trace_frequency_rows == frequency_rows
+        and interpolation_frequency_rows == frequency_rows
+        and _is_sha256(tuple_digest)
+        and contract.get("trace_parameter_tuple_table_sha256") == tuple_digest
+        and _is_sha256(grid_digest)
+        and contract.get("interpolation_frequency_grid_sha256") == grid_digest
+    )
+
+
+def _measure_trigger_target_crossing_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "measure_trigger_target_crossing_edge_count_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    trigger_bracket = contract.get("trigger_bracket_time_s")
+    target_bracket = contract.get("target_bracket_time_s")
+    if not all(
+        isinstance(values, Sequence)
+        and not isinstance(values, (str, bytes))
+        and len(values) == 2
+        for values in (trigger_bracket, target_bracket)
+    ):
+        return False
+    try:
+        trigger_bounds = [
+            _finite(value, "trigger_bracket_time_s") for value in trigger_bracket
+        ]
+        target_bounds = [
+            _finite(value, "target_bracket_time_s") for value in target_bracket
+        ]
+        trigger_time = _finite(
+            contract.get("trigger_crossing_time_s"), "trigger_crossing_time_s"
+        )
+        target_time = _finite(
+            contract.get("target_crossing_time_s"), "target_crossing_time_s"
+        )
+        trigger_count = int(
+            _finite(
+                contract.get("trigger_crossing_count"),
+                "trigger_crossing_count",
+                positive=True,
+            )
+        )
+        target_count = int(
+            _finite(
+                contract.get("target_crossing_count"),
+                "target_crossing_count",
+                positive=True,
+            )
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("accepted_grid_generation_id") or "")
+    digest = str(contract.get("accepted_grid_sha256") or "")
+    return (
+        bool(str(contract.get("transient_generation_id") or ""))
+        and bool(generation)
+        and contract.get("trigger_crossing_grid_generation_id") == generation
+        and contract.get("target_crossing_grid_generation_id") == generation
+        and contract.get("measure_interpolator_grid_generation_id") == generation
+        and contract.get("trigger_edge") in {"rise", "fall", "cross"}
+        and contract.get("target_edge") in {"rise", "fall", "cross"}
+        and trigger_count == contract.get("trigger_crossing_count")
+        and target_count == contract.get("target_crossing_count")
+        and trigger_bounds[0] < trigger_bounds[1]
+        and target_bounds[0] < target_bounds[1]
+        and trigger_bounds[0] <= trigger_time <= trigger_bounds[1]
+        and target_bounds[0] <= target_time <= target_bounds[1]
+        and target_time > trigger_time
+        and _is_sha256(digest)
+        and contract.get("trigger_crossing_table_sha256") == digest
+        and contract.get("target_crossing_table_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1223,6 +1375,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "transient_power_uses_one_current_voltage_interpolation_grid": (
             _transient_power_interpolation_grid_identity_ok(positive)
+        ),
+        "stepped_ac_traces_use_current_parameter_tuple_and_frequency_grid": (
+            _stepped_ac_parameter_tuple_grid_identity_ok(positive)
+        ),
+        "measure_trigger_target_use_current_crossing_counts_and_brackets": (
+            _measure_trigger_target_crossing_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
