@@ -340,6 +340,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     tessellation_vertex_index_normal_transform_generation_identity_ok = True
     brep_serialization_shape_digest_occt_location_generation_identity_ok = True
     dxf_wire_plane_orientation_layer_generation_identity_ok = True
+    step_assembly_product_color_location_generation_identity_ok = True
+    sketch_constraint_entity_solver_order_generation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -367,6 +369,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         tessellation_vertex_index_normal_transform_generation_identity_ok = False
         brep_serialization_shape_digest_occt_location_generation_identity_ok = False
         dxf_wire_plane_orientation_layer_generation_identity_ok = False
+        step_assembly_product_color_location_generation_identity_ok = False
+        sketch_constraint_entity_solver_order_generation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -1555,6 +1559,208 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 )
                 and dxf_wire.get("imported_wire_table_sha256") == table_digest
             )
+
+        step_assembly = replay_identity_value.get(
+            "step_assembly_product_id_color_location_generation_identity"
+        )
+        if step_assembly is not None:
+            step_assembly = (
+                step_assembly if isinstance(step_assembly, Mapping) else {}
+            )
+            export_generation = str(
+                step_assembly.get("step_export_generation", "")
+            ).strip()
+            assembly_generation = str(
+                step_assembly.get("assembly_generation", "")
+            ).strip()
+            product_ids = [
+                str(item).strip() for item in step_assembly.get("product_ids", [])
+            ]
+            decoded_product_ids = [
+                str(item).strip()
+                for item in step_assembly.get("decoded_product_ids", [])
+            ]
+            parent_ids = [
+                str(item).strip()
+                for item in step_assembly.get("parent_product_ids", [])
+            ]
+            decoded_parent_ids = [
+                str(item).strip()
+                for item in step_assembly.get("decoded_parent_product_ids", [])
+            ]
+            try:
+                colors = [
+                    [int(channel) for channel in color]
+                    for color in step_assembly.get("colors_rgb", [])
+                ]
+                decoded_colors = [
+                    [int(channel) for channel in color]
+                    for color in step_assembly.get("decoded_colors_rgb", [])
+                ]
+            except (TypeError, ValueError):
+                colors = []
+                decoded_colors = []
+            locations = [
+                str(item).lower()
+                for item in step_assembly.get("component_location_sha256", [])
+            ]
+            decoded_locations = [
+                str(item).lower()
+                for item in step_assembly.get(
+                    "decoded_component_location_sha256", []
+                )
+            ]
+            metadata_digest = str(
+                step_assembly.get("assembly_metadata_sha256", "")
+            ).lower()
+            step_assembly_product_color_location_generation_identity_ok = (
+                bool(export_generation)
+                and step_assembly.get("decoder_step_export_generation")
+                == export_generation
+                and bool(assembly_generation)
+                and all(
+                    step_assembly.get(key) == assembly_generation
+                    for key in (
+                        "product_id_assembly_generation",
+                        "color_assembly_generation",
+                        "hierarchy_assembly_generation",
+                        "location_assembly_generation",
+                    )
+                )
+                and bool(product_ids)
+                and len(set(product_ids)) == len(product_ids)
+                and all(product_ids)
+                and decoded_product_ids == product_ids
+                and len(parent_ids) == len(product_ids)
+                and parent_ids[0] == ""
+                and all(
+                    not parent or parent in product_ids
+                    for parent in parent_ids
+                )
+                and decoded_parent_ids == parent_ids
+                and len(colors) == len(product_ids)
+                and all(
+                    len(color) == 3
+                    and all(0 <= channel <= 255 for channel in color)
+                    for color in colors
+                )
+                and decoded_colors == colors
+                and len(locations) == len(product_ids)
+                and all(
+                    len(digest) == 64
+                    and all(
+                        character in "0123456789abcdef" for character in digest
+                    )
+                    for digest in locations
+                )
+                and decoded_locations == locations
+                and len(metadata_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in metadata_digest
+                )
+                and step_assembly.get("decoded_assembly_metadata_sha256")
+                == metadata_digest
+            )
+
+        sketch_constraint = replay_identity_value.get(
+            "sketch_constraint_entity_id_solver_order_generation_identity"
+        )
+        if sketch_constraint is not None:
+            sketch_constraint = (
+                sketch_constraint
+                if isinstance(sketch_constraint, Mapping)
+                else {}
+            )
+            sketch_generation = str(
+                sketch_constraint.get("sketch_generation", "")
+            ).strip()
+            try:
+                entity_ids = [
+                    int(item) for item in sketch_constraint.get("entity_ids", [])
+                ]
+                replay_entity_ids = [
+                    int(item)
+                    for item in sketch_constraint.get("replay_entity_ids", [])
+                ]
+                constraint_ids = [
+                    int(item)
+                    for item in sketch_constraint.get("constraint_ids", [])
+                ]
+                solver_order = [
+                    int(item)
+                    for item in sketch_constraint.get(
+                        "solver_constraint_order", []
+                    )
+                ]
+                replay_solver_order = [
+                    int(item)
+                    for item in sketch_constraint.get(
+                        "replay_solver_constraint_order", []
+                    )
+                ]
+                constraint_entities = [
+                    [int(item) for item in row]
+                    for row in sketch_constraint.get("constraint_entity_ids", [])
+                ]
+                replay_constraint_entities = [
+                    [int(item) for item in row]
+                    for row in sketch_constraint.get(
+                        "replay_constraint_entity_ids", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                entity_ids = []
+                replay_entity_ids = []
+                constraint_ids = []
+                solver_order = []
+                replay_solver_order = []
+                constraint_entities = []
+                replay_constraint_entities = []
+            entity_digest = str(
+                sketch_constraint.get("entity_table_sha256", "")
+            ).lower()
+            constraint_digest = str(
+                sketch_constraint.get("constraint_table_sha256", "")
+            ).lower()
+            sketch_constraint_entity_solver_order_generation_identity_ok = (
+                bool(sketch_generation)
+                and all(
+                    sketch_constraint.get(key) == sketch_generation
+                    for key in (
+                        "entity_table_sketch_generation",
+                        "constraint_table_sketch_generation",
+                        "solver_order_sketch_generation",
+                    )
+                )
+                and bool(entity_ids)
+                and len(set(entity_ids)) == len(entity_ids)
+                and replay_entity_ids == entity_ids
+                and bool(constraint_ids)
+                and len(set(constraint_ids)) == len(constraint_ids)
+                and solver_order == constraint_ids
+                and replay_solver_order == solver_order
+                and len(constraint_entities) == len(constraint_ids)
+                and all(
+                    row and set(row).issubset(entity_ids)
+                    for row in constraint_entities
+                )
+                and replay_constraint_entities == constraint_entities
+                and len(entity_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in entity_digest
+                )
+                and sketch_constraint.get("replay_entity_table_sha256")
+                == entity_digest
+                and len(constraint_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in constraint_digest
+                )
+                and sketch_constraint.get("replay_constraint_table_sha256")
+                == constraint_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -1648,6 +1854,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "dxf_wires_use_current_plane_layer_and_closure_generations": (
             dxf_wire_plane_orientation_layer_generation_identity_ok
+        ),
+        "step_assembly_uses_current_product_colors_hierarchy_and_locations": (
+            step_assembly_product_color_location_generation_identity_ok
+        ),
+        "sketch_constraints_use_current_entity_ids_and_solver_order": (
+            sketch_constraint_entity_solver_order_generation_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
