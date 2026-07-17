@@ -232,6 +232,10 @@ def regularized_trace_inverse_path_gate(
     p1_fembem_discretization_identity_ok = (
         _optional_p1_fembem_discretization_identity_is_aligned(summary)
     )
+    hmatrix_aca_cluster_identity_ok = (
+        _optional_hmatrix_aca_cluster_identity_is_aligned(summary)
+    )
+    calderon_cq_identity_ok = _optional_calderon_cq_identity_is_aligned(summary)
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -381,6 +385,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "p1_fembem_uses_current_boundary_orientation_quadrature_singular_trace_matrices_and_mesh": (
             p1_fembem_discretization_identity_ok
+        ),
+        "hmatrix_aca_uses_current_clusters_permutation_admissibility_rank_tolerance_kernel_mesh_and_result": (
+            hmatrix_aca_cluster_identity_ok
+        ),
+        "calderon_cq_uses_current_v_k_trace_normals_frequency_inverse_mesh_and_result": (
+            calderon_cq_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -2493,6 +2503,148 @@ def _optional_p1_fembem_discretization_identity_is_aligned(
             == str(value.get(source, "")).lower()
             for source, target in digests
         )
+    )
+
+
+def _optional_hmatrix_aca_cluster_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_aca_cluster_permutation_admissibility_rank_tolerance_kernel_mesh_result_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        permutation = tuple(
+            _integer({"value": item}, "value")
+            for item in value["cluster_permutation"]
+        )
+        result_permutation = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_cluster_permutation"]
+        )
+        eta = float(value["admissibility_eta"])
+        result_eta = float(value["result_admissibility_eta"])
+        rank = _integer(value, "aca_rank")
+        result_rank = _integer(value, "result_aca_rank")
+        tolerance = float(value["relative_tolerance"])
+        result_tolerance = float(value["result_relative_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("hmatrix_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "cluster_hmatrix_generation",
+                "permutation_hmatrix_generation",
+                "admissibility_hmatrix_generation",
+                "rank_hmatrix_generation",
+                "tolerance_hmatrix_generation",
+                "kernel_hmatrix_generation",
+                "mesh_hmatrix_generation",
+                "result_hmatrix_generation",
+            )
+        )
+        and len(permutation) >= 2
+        and sorted(permutation) == list(range(1, len(permutation) + 1))
+        and result_permutation == permutation
+        and value.get("admissibility_rule") == "eta-weak"
+        and value.get("result_admissibility_rule") == "eta-weak"
+        and math.isfinite(eta)
+        and eta > 0.0
+        and result_eta == eta
+        and rank > 0
+        and result_rank == rank
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance < 1.0
+        and result_tolerance == tolerance
+        and value.get("kernel") == "helmholtz-single-layer-p1"
+        and value.get("result_kernel") == "helmholtz-single-layer-p1"
+        and _is_sha256(str(value.get("cluster_tree_sha256", "")).lower())
+        and value.get("loaded_cluster_tree_sha256")
+        == value.get("cluster_tree_sha256")
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_calderon_cq_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "calderon_cq_operator_v_k_trace_normal_frequency_grid_inverse_transform_mesh_result_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        trace_shape = tuple(
+            _integer({"value": item}, "value") for item in value["trace_shape"]
+        )
+        result_trace_shape = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_trace_shape"]
+        )
+        frequencies = tuple(
+            tuple(float(component) for component in row)
+            for row in value["laplace_frequency_ri"]
+        )
+        result_frequencies = tuple(
+            tuple(float(component) for component in row)
+            for row in value["result_laplace_frequency_ri"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("calderon_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "v_calderon_generation",
+                "k_calderon_generation",
+                "trace_calderon_generation",
+                "normal_calderon_generation",
+                "frequency_calderon_generation",
+                "inverse_calderon_generation",
+                "mesh_calderon_generation",
+                "result_calderon_generation",
+            )
+        )
+        and _is_sha256(str(value.get("v_operator_sha256", "")).lower())
+        and value.get("result_v_operator_sha256") == value.get("v_operator_sha256")
+        and _is_sha256(str(value.get("k_operator_sha256", "")).lower())
+        and value.get("result_k_operator_sha256") == value.get("k_operator_sha256")
+        and value.get("trace_basis") == "p1-nodal-boundary-trace"
+        and value.get("result_trace_basis") == "p1-nodal-boundary-trace"
+        and len(trace_shape) == 2
+        and all(item > 0 for item in trace_shape)
+        and trace_shape[0] <= trace_shape[1]
+        and result_trace_shape == trace_shape
+        and value.get("boundary_normal") == "volume-outward"
+        and value.get("result_boundary_normal") == "volume-outward"
+        and len(frequencies) >= 3
+        and all(
+            len(pair) == 2
+            and all(math.isfinite(item) for item in pair)
+            and pair[0] > 0.0
+            for pair in frequencies
+        )
+        and result_frequencies == frequencies
+        and value.get("inverse_transform") == "bdf2-cq-ifft-real"
+        and value.get("result_inverse_transform") == "bdf2-cq-ifft-real"
+        and _is_sha256(str(value.get("boundary_mesh_sha256", "")).lower())
+        and value.get("result_boundary_mesh_sha256")
+        == value.get("boundary_mesh_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
     )
 
 
