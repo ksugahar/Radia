@@ -692,6 +692,157 @@ def _iron_loss_decomposition_element_identity_ok(value: object) -> bool:
     )
 
 
+def _pwm_observable_alignment_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("pwm_generation", "")).strip()
+    try:
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        result_orders = [int(item) for item in value.get("result_harmonic_orders", [])]
+        currents = [float(item) for item in value.get("current_harmonic_a", [])]
+        result_currents = [
+            float(item) for item in value.get("result_current_harmonic_a", [])
+        ]
+        phases = [float(item) for item in value.get("current_phase_deg", [])]
+        result_phases = [
+            float(item) for item in value.get("result_current_phase_deg", [])
+        ]
+        times = [float(item) for item in value.get("time_s", [])]
+        result_times = [float(item) for item in value.get("result_time_s", [])]
+        angles = [float(item) for item in value.get("electrical_angle_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_electrical_angle_deg", [])
+        ]
+        pole_pairs = int(value.get("pole_pairs"))
+        result_pole_pairs = int(value.get("result_pole_pairs"))
+        window = [float(item) for item in value.get("torque_window_s", [])]
+        result_window = [
+            float(item) for item in value.get("result_torque_window_s", [])
+        ]
+        torque_average = float(value.get("torque_average_nm"))
+        result_torque_average = float(value.get("result_torque_average_nm"))
+        loss_average = float(value.get("loss_average_w"))
+        result_loss_average = float(value.get("result_loss_average_w"))
+    except (TypeError, ValueError):
+        return False
+    harmonic_count = len(orders)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "current_pwm_generation",
+                "time_pwm_generation",
+                "angle_pwm_generation",
+                "torque_pwm_generation",
+                "loss_pwm_generation",
+                "mesh_pwm_generation",
+                "result_pwm_generation",
+            )
+        )
+        and harmonic_count > 0
+        and len(set(orders)) == harmonic_count
+        and all(item > 0 for item in orders)
+        and len(currents) == len(phases) == harmonic_count
+        and all(math.isfinite(item) and item >= 0.0 for item in currents)
+        and all(math.isfinite(item) for item in phases)
+        and result_orders == orders
+        and result_currents == currents
+        and result_phases == phases
+        and len(times) >= 2
+        and len(angles) == len(times)
+        and all(math.isfinite(item) for item in times + angles)
+        and all(right > left for left, right in zip(times, times[1:]))
+        and result_times == times
+        and result_angles == angles
+        and pole_pairs > 0
+        and result_pole_pairs == pole_pairs
+        and len(window) == 2
+        and math.isclose(window[0], times[0], rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(window[1], times[-1], rel_tol=0.0, abs_tol=1.0e-15)
+        and result_window == window
+        and math.isfinite(torque_average)
+        and math.isclose(
+            result_torque_average, torque_average, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and math.isfinite(loss_average)
+        and loss_average >= 0.0
+        and math.isclose(
+            result_loss_average, loss_average, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _skew_slice_average_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("skew_generation", "")).strip()
+    try:
+        angles = [float(item) for item in value.get("slice_angles_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_slice_angles_deg", [])
+        ]
+        weights = [float(item) for item in value.get("slice_weights", [])]
+        result_weights = [float(item) for item in value.get("result_slice_weights", [])]
+        torque = [float(item) for item in value.get("slice_torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_slice_torque_nm", [])]
+        average = float(value.get("torque_average_nm"))
+        result_average = float(value.get("result_torque_average_nm"))
+        ripple = float(value.get("torque_ripple_nm"))
+        result_ripple = float(value.get("result_torque_ripple_nm"))
+    except (TypeError, ValueError):
+        return False
+    count = len(angles)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "angle_skew_generation",
+                "weight_skew_generation",
+                "frame_skew_generation",
+                "interpolation_skew_generation",
+                "torque_skew_generation",
+                "mesh_skew_generation",
+                "result_skew_generation",
+            )
+        )
+        and count >= 3
+        and len(weights) == len(torque) == count
+        and all(math.isfinite(item) for item in angles + weights + torque)
+        and all(item > 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_angles == angles
+        and result_weights == weights
+        and value.get("rotor_frame") == "mechanical-ccw"
+        and value.get("result_rotor_frame") == "mechanical-ccw"
+        and value.get("interpolation_rule") == "periodic-cubic"
+        and value.get("result_interpolation_rule") == "periodic-cubic"
+        and result_torque == torque
+        and math.isclose(
+            average,
+            sum(weight * item for weight, item in zip(weights, torque)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(result_average, average, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(ripple, max(torque) - min(torque), rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_ripple, ripple, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -771,6 +922,8 @@ def pwm_controlled_motor_loss_gate(
     skew_slice_phase_angle_mesh_identity_ok = True
     rotating_sector_torque_frame_identity_ok = True
     iron_loss_decomposition_element_identity_ok = True
+    pwm_observable_alignment_identity_ok = True
+    skew_slice_average_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -812,6 +965,8 @@ def pwm_controlled_motor_loss_gate(
         skew_slice_phase_angle_mesh_identity_ok = False
         rotating_sector_torque_frame_identity_ok = False
         iron_loss_decomposition_element_identity_ok = False
+        pwm_observable_alignment_identity_ok = False
+        skew_slice_average_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -2426,6 +2581,16 @@ def pwm_controlled_motor_loss_gate(
                 "iron_loss_harmonic_decomposition_model_temperature_frequency_element_volume_result_generation_identity"
             )
         )
+        pwm_observable_alignment_identity_ok = _pwm_observable_alignment_identity_ok(
+            identity_value.get(
+                "pwm_current_harmonic_time_electrical_angle_torque_loss_mesh_result_generation_identity"
+            )
+        )
+        skew_slice_average_identity_ok = _skew_slice_average_identity_ok(
+            identity_value.get(
+                "skew_slice_angle_weight_frame_interpolation_torque_ripple_mesh_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -2734,6 +2899,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "iron_loss_decomposition_uses_current_model_temperature_frequency_elements_volume_and_result": (
             iron_loss_decomposition_element_identity_ok
+        ),
+        "pwm_observables_use_current_harmonics_time_angle_torque_loss_mesh_and_result": (
+            pwm_observable_alignment_identity_ok
+        ),
+        "skew_average_uses_current_angles_weights_frame_interpolation_torque_mesh_and_result": (
+            skew_slice_average_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
