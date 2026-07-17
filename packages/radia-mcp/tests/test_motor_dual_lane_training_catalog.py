@@ -26,18 +26,21 @@ def test_dual_lane_training_catalog_has_wide_scrubbed_case_set():
     assert gate["count"] >= 50
     assert gate["forbidden_hits"] == []
     assert gate["checks"]["all_cases_have_age_lane"] is True
-    assert gate["checks"]["all_cases_have_vim_lane"] is True
+    assert gate["checks"]["all_cases_have_mmm_eddy_lane"] is True
     assert gate["checks"]["covers_wide_machine_families"] is True
 
 
-def test_each_training_case_routes_to_age_and_vim():
+def test_each_training_case_routes_to_age_and_mmm_eddy():
     for case in motor_dual_lane_training_catalog():
         assert case["radia_motor_age"]["lane_id"] == "radia-motor-age"
         assert case["radia_motor_age"]["validation_lane"] == "ngsolve_age"
         assert case["radia_motor_age"]["targets"]
-        assert case["radia_motor_vim"]["lane_id"] == "radia-motor-vim"
-        assert case["radia_motor_vim"]["validation_lane"] == "hdiv_vim_reduced_fem"
-        assert case["radia_motor_vim"]["targets"]
+        assert case["radia_motor_mmm_eddy"]["lane_id"] == "radia-motor-mmm-eddy"
+        assert (
+            case["radia_motor_mmm_eddy"]["validation_lane"]
+            == "hdiv_mmm_hcurl_eddy_bubble"
+        )
+        assert case["radia_motor_mmm_eddy"]["targets"]
         assert case["teaching_gate"]
 
 
@@ -68,7 +71,7 @@ def test_training_route_selects_matching_case_and_both_lanes():
     assert route["selected_case"]["case_id"] == "ipm_saliency_mtpa"
     calls = "\n".join(route["next_public_calls"])
     assert "motor_age_validation_plan" in calls
-    assert "hdiv_vim_reduced_fem" in calls
+    assert "hdiv_mmm_hcurl_eddy_bubble" in calls
 
 
 def test_training_route_covers_wide_machine_families():

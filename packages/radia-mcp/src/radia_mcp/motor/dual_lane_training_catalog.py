@@ -31,7 +31,7 @@ FORBIDDEN_PUBLIC_MARKERS = (
 
 @dataclass(frozen=True)
 class DualLaneTrainingCase:
-    """One scrubbed motor lesson for AGE and VIM training."""
+    """One scrubbed motor lesson for AGE and HDiv-MMM/eddy-bubble training."""
 
     case_id: str
     family: str
@@ -39,7 +39,7 @@ class DualLaneTrainingCase:
     source_seed_class: str
     learning_axis: str
     age_targets: tuple[str, ...]
-    vim_targets: tuple[str, ...]
+    mmm_eddy_targets: tuple[str, ...]
     observable_family: str
     validation_focus: str
     teaching_gate: str
@@ -51,10 +51,10 @@ class DualLaneTrainingCase:
             "validation_lane": "ngsolve_age",
             "targets": list(self.age_targets),
         }
-        data["radia_motor_vim"] = {
-            "lane_id": "radia-motor-vim",
-            "validation_lane": "hdiv_vim_reduced_fem",
-            "targets": list(self.vim_targets),
+        data["radia_motor_mmm_eddy"] = {
+            "lane_id": "radia-motor-mmm-eddy",
+            "validation_lane": "hdiv_mmm_hcurl_eddy_bubble",
+            "targets": list(self.mmm_eddy_targets),
         }
         return data
 
@@ -754,14 +754,16 @@ def motor_dual_lane_training_catalog_gate() -> dict[str, Any]:
     text = json.dumps(cases, ensure_ascii=True, sort_keys=True)
     forbidden_hits = [marker for marker in FORBIDDEN_PUBLIC_MARKERS if marker in text]
     missing_age = [case["case_id"] for case in cases if "radia_motor_age" not in case]
-    missing_vim = [case["case_id"] for case in cases if "radia_motor_vim" not in case]
+    missing_mmm_eddy = [
+        case["case_id"] for case in cases if "radia_motor_mmm_eddy" not in case
+    ]
     source_classes = Counter(case["source_seed_class"] for case in cases)
     families = Counter(case["family"] for case in cases)
     checks = {
         "case_count_at_least_50": len(cases) >= 50,
         "no_forbidden_public_markers": not forbidden_hits,
         "all_cases_have_age_lane": not missing_age,
-        "all_cases_have_vim_lane": not missing_vim,
+        "all_cases_have_mmm_eddy_lane": not missing_mmm_eddy,
         "has_external_readable_reference_gap_closure": (
             source_classes["external_readable_machine_fem_reference"] >= 4
             and source_classes["external_current_machine_example_library"] >= 20
@@ -795,12 +797,12 @@ def motor_dual_lane_training_catalog_gate() -> dict[str, Any]:
         "checks": checks,
         "forbidden_hits": forbidden_hits,
         "missing_age": missing_age,
-        "missing_vim": missing_vim,
+        "missing_mmm_eddy": missing_mmm_eddy,
         "source_seed_classes": dict(source_classes),
         "families": dict(families),
         "promotion_targets": [
             "radia-motor-age",
-            "radia-motor-vim",
+            "radia-motor-mmm-eddy",
             "radia_mcp.motor.validation_lanes_knowledge",
         ],
     }
@@ -825,9 +827,9 @@ def route_dual_lane_training_case(goal: str) -> dict[str, Any]:
         "selected_case": case,
         "next_public_calls": [
             f'motor_age_validation_plan("{case["family"]} {case["observable_family"]}")',
-            'motor_validation_lane_template("hdiv_vim_reduced_fem")',
+            'motor_validation_lane_template("hdiv_mmm_hcurl_eddy_bubble")',
             'motor_validation_artifact_gate(..., "ngsolve_age")',
-            'motor_validation_artifact_gate(..., "hdiv_vim_reduced_fem")',
+            'motor_validation_artifact_gate(..., "hdiv_mmm_hcurl_eddy_bubble")',
         ],
     }
 
@@ -842,7 +844,7 @@ def format_motor_dual_lane_training_catalog(query: str = "all") -> str:
         "",
         f"- status: `{gate['status']}`",
         f"- cases: `{len(cases)}` shown / `{gate['count']}` total",
-        "- lanes: `radia-motor-age` and `radia-motor-vim`",
+        "- lanes: `radia-motor-age` and `radia-motor-mmm-eddy`",
         "- public boundary: source-native provenance is private; this catalog keeps only scrubbed engineering lessons.",
         "",
     ]
@@ -850,6 +852,9 @@ def format_motor_dual_lane_training_catalog(query: str = "all") -> str:
         lines.append(f"{index}. `{case['case_id']}` -- {case['title']}")
         lines.append(f"   family: `{case['family']}`, observable: `{case['observable_family']}`")
         lines.append(f"   AGE targets: {', '.join(case['radia_motor_age']['targets'])}")
-        lines.append(f"   VIM targets: {', '.join(case['radia_motor_vim']['targets'])}")
+        lines.append(
+            "   HDiv-MMM/HCurl eddy-bubble targets: "
+            + ", ".join(case["radia_motor_mmm_eddy"]["targets"])
+        )
         lines.append(f"   gate: `{case['teaching_gate']}`")
     return "\n".join(lines).rstrip()
