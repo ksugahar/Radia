@@ -670,6 +670,209 @@ def _cogging_periodic_interpolation_identity_ok(value: object) -> bool:
     )
 
 
+def _bem_panel_self_term_energy_force_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("panel_generation", "")).strip()
+    try:
+        panel_ids = [int(item) for item in value.get("panel_ids", [])]
+        result_panel_ids = [int(item) for item in value.get("result_panel_ids", [])]
+        normals = [
+            [float(component) for component in row]
+            for row in value.get("outward_unit_normals", [])
+        ]
+        result_normals = [
+            [float(component) for component in row]
+            for row in value.get("result_outward_unit_normals", [])
+        ]
+        areas = [float(item) for item in value.get("panel_area_m2", [])]
+        result_areas = [float(item) for item in value.get("result_panel_area_m2", [])]
+        magnetization = [
+            [float(component) for component in row]
+            for row in value.get("magnetization_a_m", [])
+        ]
+        result_magnetization = [
+            [float(component) for component in row]
+            for row in value.get("result_magnetization_a_m", [])
+        ]
+        displacement = [float(item) for item in value.get("displacement_m", [])]
+        result_displacement = [
+            float(item) for item in value.get("result_displacement_m", [])
+        ]
+        energy = [float(item) for item in value.get("magnetic_energy_j", [])]
+        result_energy = [
+            float(item) for item in value.get("result_magnetic_energy_j", [])
+        ]
+        force = [
+            float(item)
+            for item in value.get("negative_energy_derivative_force_n", [])
+        ]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+    except (TypeError, ValueError):
+        return False
+    count = len(panel_ids)
+    closure = [
+        sum(area * normal[axis] for area, normal in zip(areas, normals))
+        for axis in range(3)
+    ] if count and len(areas) == len(normals) == count else [math.inf] * 3
+    symmetric_displacement = (
+        len(displacement) == 3
+        and displacement[0] < 0.0
+        and displacement[1] == 0.0
+        and math.isclose(displacement[2], -displacement[0], rel_tol=0.0, abs_tol=1.0e-15)
+    )
+    stiffness = (
+        2.0 * energy[2] / (displacement[2] * displacement[2])
+        if symmetric_displacement and len(energy) == 3 and displacement[2] != 0.0
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "orientation_panel_generation",
+                "magnetization_panel_generation",
+                "self_term_panel_generation",
+                "energy_panel_generation",
+                "force_panel_generation",
+                "mesh_panel_generation",
+                "result_panel_generation",
+            )
+        )
+        and count >= 4
+        and all(item > 0 for item in panel_ids)
+        and len(set(panel_ids)) == count
+        and result_panel_ids == panel_ids
+        and len(normals) == len(areas) == len(magnetization) == count
+        and all(
+            len(row) == 3
+            and all(math.isfinite(item) for item in row)
+            and math.isclose(sum(item * item for item in row), 1.0, rel_tol=1.0e-12)
+            for row in normals
+        )
+        and result_normals == normals
+        and all(math.isfinite(item) and item > 0.0 for item in areas)
+        and result_areas == areas
+        and all(abs(item) <= 1.0e-12 * sum(areas) for item in closure)
+        and all(
+            len(row) == 3 and all(math.isfinite(item) for item in row)
+            for row in magnetization
+        )
+        and result_magnetization == magnetization
+        and value.get("magnetization_frame") == "global-cartesian"
+        and value.get("result_magnetization_frame") == "global-cartesian"
+        and value.get("singular_self_term") == "analytic-solid-angle"
+        and value.get("result_singular_self_term") == "analytic-solid-angle"
+        and symmetric_displacement
+        and len(energy) == len(force) == 3
+        and all(math.isfinite(item) for item in displacement + energy + force)
+        and result_displacement == displacement
+        and result_energy == energy
+        and math.isfinite(stiffness)
+        and stiffness > 0.0
+        and all(
+            math.isclose(item, 0.5 * stiffness * x * x, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for x, item in zip(displacement, energy)
+        )
+        and all(
+            math.isclose(item, -stiffness * x, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for x, item in zip(displacement, force)
+        )
+        and result_force == force
+        and _valid_sha256(value.get("panel_mesh_sha256"))
+        and value.get("result_panel_mesh_sha256") == value.get("panel_mesh_sha256")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256") == value.get("force_result_sha256")
+    )
+
+
+def _motor_reduced_basis_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("reduced_generation", "")).strip()
+    snapshot_ids = value.get("snapshot_ids")
+    try:
+        basis_dimension = int(value.get("basis_dimension"))
+        result_basis_dimension = int(value.get("result_basis_dimension"))
+        points = [
+            [float(component) for component in row]
+            for row in value.get("snapshot_operating_points", [])
+        ]
+        result_points = [
+            [float(component) for component in row]
+            for row in value.get("result_snapshot_operating_points", [])
+        ]
+        query = [float(item) for item in value.get("query_operating_point", [])]
+        result_query = [
+            float(item) for item in value.get("result_query_operating_point", [])
+        ]
+        weights = [float(item) for item in value.get("interpolation_weights", [])]
+        result_weights = [
+            float(item) for item in value.get("result_interpolation_weights", [])
+        ]
+        torque = [float(item) for item in value.get("snapshot_torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_snapshot_torque_nm", [])]
+        reduced_torque = float(value.get("reduced_torque_nm"))
+        result_reduced_torque = float(value.get("result_reduced_torque_nm"))
+        residual = float(value.get("relative_residual"))
+        result_residual = float(value.get("result_relative_residual"))
+        residual_limit = float(value.get("accepted_relative_residual"))
+    except (TypeError, ValueError):
+        return False
+    count = len(snapshot_ids) if isinstance(snapshot_ids, list) else 0
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "basis_reduced_generation",
+                "snapshot_reduced_generation",
+                "operating_point_reduced_generation",
+                "weight_reduced_generation",
+                "torque_reduced_generation",
+                "residual_reduced_generation",
+                "result_reduced_generation",
+            )
+        )
+        and count >= 2
+        and all(isinstance(item, str) and item.strip() for item in snapshot_ids)
+        and len(set(snapshot_ids)) == count
+        and value.get("result_snapshot_ids") == snapshot_ids
+        and 1 <= basis_dimension <= count
+        and result_basis_dimension == basis_dimension
+        and len(points) == len(weights) == len(torque) == count
+        and all(len(row) == 3 and all(math.isfinite(item) for item in row) for row in points)
+        and result_points == points
+        and len(query) == 3
+        and all(math.isfinite(item) for item in query)
+        and result_query == query
+        and all(math.isfinite(item) and item >= 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_weights == weights
+        and all(math.isfinite(item) for item in torque)
+        and result_torque == torque
+        and math.isclose(
+            reduced_torque,
+            sum(weight * item for weight, item in zip(weights, torque)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and result_reduced_torque == reduced_torque
+        and math.isfinite(residual)
+        and 0.0 <= residual <= residual_limit
+        and result_residual == residual
+        and _valid_sha256(value.get("basis_sha256"))
+        and value.get("loaded_basis_sha256") == value.get("basis_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -772,6 +975,8 @@ def magnetic_force_method_profile_gate(
     linear_motor_thrust_ripple_generation_identity_ok = True
     levitation_gradient_energy_identity_ok = True
     cogging_periodic_interpolation_identity_ok = True
+    bem_panel_self_term_energy_force_identity_ok = True
+    motor_reduced_basis_torque_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -811,6 +1016,8 @@ def magnetic_force_method_profile_gate(
         linear_motor_thrust_ripple_generation_identity_ok = False
         levitation_gradient_energy_identity_ok = False
         cogging_periodic_interpolation_identity_ok = False
+        bem_panel_self_term_energy_force_identity_ok = False
+        motor_reduced_basis_torque_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -2491,6 +2698,18 @@ def magnetic_force_method_profile_gate(
                 "cogging_torque_position_periodicity_mesh_interpolation_reference_angle_generation_identity"
             )
         )
+        bem_panel_self_term_energy_force_identity_ok = (
+            _bem_panel_self_term_energy_force_identity_ok(
+                identity_value.get(
+                    "bem_panel_orientation_magnetization_frame_self_term_energy_force_generation_identity"
+                )
+            )
+        )
+        motor_reduced_basis_torque_identity_ok = _motor_reduced_basis_torque_identity_ok(
+            identity_value.get(
+                "motor_reduced_basis_snapshot_operating_point_interpolation_torque_residual_generation_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -2663,6 +2882,12 @@ def magnetic_force_method_profile_gate(
         ),
         "cogging_torque_uses_current_position_periodicity_mesh_interpolation_reference_and_result": (
             cogging_periodic_interpolation_identity_ok
+        ),
+        "bem_demag_force_uses_current_panel_orientation_magnetization_self_term_energy_mesh_and_result": (
+            bem_panel_self_term_energy_force_identity_ok
+        ),
+        "motor_reduced_torque_uses_current_basis_snapshots_operating_point_weights_residual_and_result": (
+            motor_reduced_basis_torque_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
