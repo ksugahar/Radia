@@ -169,17 +169,18 @@ def test_meta_by_tag_optimization_finds_at_least_4():
         f"only {result['n_matches']} optimization servers"
 
 
-def test_meta_related_to_chart2d_includes_figure():
-    """Sanity: chart2d → figure cross-link (the canonical
+def test_meta_related_to_chart2d_includes_paper_writing():
+    """Sanity: chart2d -> paper-writing cross-link (the canonical
     "use case A naturally suggests use case B" pattern).
-    Previously used mcmc → optuna, but mcmc was removed from the
-    catalog 2026-05-26; chart2d/figure is the most stable pair to
-    pin here (both shipped 2026-05 and not at risk of removal).
+    chart2d inherits the figure profile + gate stack, which as of
+    2026-07-18 is served by mcp-server-paper-writing (figure merged
+    in; the standalone figure server was retired).  This pins that
+    the merged figure tooling stays discoverable from chart2d.
     """
     from radia_mcp.meta.server import radia_mcp_related
     result = radia_mcp_related("chart2d")
     names = [r["name"] for r in result["related"]]
-    assert "figure" in names, f"chart2d related: {names}"
+    assert "paper-writing" in names, f"chart2d related: {names}"
 
 
 def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():

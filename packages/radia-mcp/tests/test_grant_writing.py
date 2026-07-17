@@ -84,19 +84,25 @@ def test_document_meta_grant_domain_uses_public_grant_writing(tmp_path):
     assert "grant lint stays" not in str(result)
 
 
-def test_meta_catalog_lists_document_writing_trio_and_merged_presentation():
-    for key in ("paper-writing", "figure", "grant-writing"):
+def test_meta_catalog_lists_document_writing_pair_and_merged_presentation_figure():
+    for key in ("paper-writing", "grant-writing"):
         assert key in CATALOG
         assert CATALOG[key]["entry_point"].startswith("mcp-server-")
+    from radia_mcp.meta.catalog import _resolve
     # 2026-07-17: presentation merged into paper-writing (standalone
     # server retired); the old name must still resolve for discovery
     # and the tools must be advertised on the paper-writing entry.
     assert "presentation" not in CATALOG
     assert "presentation_usage" in CATALOG["paper-writing"]["primary_tools"]
-    from radia_mcp.meta.catalog import _resolve
     assert _resolve("presentation") == "paper-writing"
+    # 2026-07-18: figure merged into paper-writing the same way.
+    assert "figure" not in CATALOG
+    assert "figure_style_guide" in CATALOG["paper-writing"]["primary_tools"]
+    assert _resolve("figure") == "paper-writing"
+    assert _resolve("mcp-server-figure") == "paper-writing"
 
 
-def test_paper_writing_server_serves_merged_presentation_tools():
+def test_paper_writing_server_serves_merged_presentation_and_figure_tools():
     from radia_mcp.paper_writing import server as pw_server
     assert pw_server._N_PRESENTATION_TOOLS > 60
+    assert pw_server._N_FIGURE_TOOLS > 5

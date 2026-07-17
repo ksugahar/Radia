@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **782 tools** across 42 MCP servers.
+Total: **782 tools** across 41 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -37,11 +37,10 @@ Total: **782 tools** across 42 MCP servers.
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
-| [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
+| [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 12 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
-| [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 168 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 18 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -830,6 +829,7 @@ Module: `radia_mcp.mathematica.server`
 | `mathematica_to_tex` | Wolfram の TeXForm を文字列で取得 (paper / 数式 DB 登録用)。 |
 | `mathematica_unit_convert` | 物理単位変換 (Wolfram Quantity / UnitConvert)。 |
 | `mathematica_vector_calc` | ベクトル解析: Curl / Div / Grad / Laplacian / Cross / Dot。 |
+| `mathematica_verify_script` | Run a Wolfram Language regression script and parse its JSON verdict. |
 
 ## `mcp-server-md2html`
 
@@ -841,27 +841,6 @@ Module: `radia_mcp.md2html.server`
 |---|---|
 | `md2html_convert` | Convert a Markdown file to a self-contained HTML file. |
 | `md2html_status` | (no description) |
-
-## `mcp-server-figure`
-
-_Sugahara Lab publication-figure toolkit (Times New Roman default): beamer/slide + IEEE/IEEJ paper profiles, MATLAB + Matplotlib snippets, lab style rules (units in parentheses, no in-figure title).  Promoted from mcp-server-document._
-
-Module: `radia_mcp.figure.server`
-
-| Tool | Description |
-|---|---|
-| `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
-| `figure_design_principles` | The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the |
-| `figure_diagram_recipes` | Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill |
-| `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
-| `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
-| `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
-| `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
-| `figure_status` | (no description) |
-| `figure_style_guide` | Return the lab-standard graph style guide. |
-| `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
-| `paper_figure_quality_rules` | Why paper-quality figures need a margin-efficiency gate. |
-| `paper_figure_recipe` | Generate a self-contained Python recipe for a paper-quality figure. |
 
 ## `mcp-server-chart2d`
 
@@ -898,12 +877,23 @@ Module: `radia_mcp.chart2d.server`
 
 ## `mcp-server-paper-writing`
 
-_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints. Also serves the merged presentation_* slide lint + PPTX tools (2026-07-17: the standalone presentation server was retired -- AI cannot yet author slide decks end-to-end, so slides are human-authored and AI-linted here)._
+_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints. Also serves the merged presentation_* slide lint + PPTX tools (2026-07-17) and the merged figure_* / paper_figure_* publication-figure tools (2026-07-18: the standalone presentation and figure servers were retired -- AI cannot yet author slide decks end-to-end, and figure was a shared middle layer now unified here)._
 
 Module: `radia_mcp.paper_writing.server`
 
 | Tool | Description |
 |---|---|
+| `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
+| `figure_design_principles` | The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the |
+| `figure_diagram_recipes` | Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill |
+| `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
+| `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
+| `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
+| `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
+| `figure_style_guide` | Return the lab-standard graph style guide. |
+| `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
+| `paper_figure_quality_rules` | Why paper-quality figures need a margin-efficiency gate. |
+| `paper_figure_recipe` | Generate a self-contained Python recipe for a paper-quality figure. |
 | `paper_writing_abstract_strength` | Abstract の強度を 4 要素 (problem / method / result-with-number / impact) |
 | `paper_writing_acronym_usage_audit` | 略語の使用頻度監査 (grant_writing 実装の re-export)。 |
 | `paper_writing_adaptive_health_report` | paper T8 health_report の severity 判定を context で adjust。 |

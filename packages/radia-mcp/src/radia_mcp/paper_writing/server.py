@@ -25,6 +25,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool
 from ..presentation import register as _register_presentation
+from ..figure import register as _register_figure
 
 from . import tools as _tools
 from ._pdf_layout_visual import (
@@ -163,6 +164,16 @@ _N_PRESENTATION_TOOLS = _register_presentation(mcp)
 
 
 # ============================================================
+# 2026-07-18: figure merged into paper-writing (Sugahara).
+# figure was a shared middle-layer server for paper-writing +
+# presentation; since presentation merged here (2026-07-17), figure
+# follows.  The standalone mcp-server-figure entry point is retired;
+# all figure_* / paper_figure_* tools ride this server.
+# ============================================================
+_N_FIGURE_TOOLS = _register_figure(mcp)
+
+
+# ============================================================
 # Prompt: cite-with-verification reminder
 # ============================================================
 
@@ -207,13 +218,14 @@ register_status_tool(
         '(pymupdf), LaTeX figure placement knowledge (htbp/placeins/'
         'widths/anti-patterns), IEEE/ScienceDirect/Emerald PDF '
         'download with cookies. Also serves the merged presentation_* '
-        'slide lint + PPTX toolset (2026-07-17: standalone '
-        'presentation server retired).'
+        'slide lint + PPTX toolset (2026-07-17) and the merged figure_* '
+        '/ paper_figure_* publication-figure toolset (2026-07-18: '
+        'standalone presentation + figure servers retired).'
     ),
     subpackage='radia_mcp.paper_writing',
-    related_servers=["literature-index", "graph", "chart2d", "figure",
-                       "poster"],
-    optional_deps=["pymupdf", "Pillow", "requests", "python-pptx"],
+    related_servers=["literature-index", "chart2d", "poster"],
+    optional_deps=["pymupdf", "Pillow", "requests", "python-pptx",
+                     "matplotlib"],
 )
 
 
@@ -225,6 +237,14 @@ def main():
         print(f"  registered presentation_* tools (merged): {_N_PRESENTATION_TOOLS}")
         assert _N_PRESENTATION_TOOLS > 60, (
             f"presentation merge lost tools: {_N_PRESENTATION_TOOLS}")
+        print(f"  registered figure_* tools (merged): {_N_FIGURE_TOOLS}")
+        assert _N_FIGURE_TOOLS > 5, (
+            f"figure merge lost tools: {_N_FIGURE_TOOLS}")
+        import radia_mcp.figure.server as _figsrv
+        _fdp = _figsrv.figure_design_principles("all")
+        assert len(_fdp) > 1000, (
+            f"figure_design_principles too small: {len(_fdp)}")
+        print(f"    figure_design_principles('all'): {len(_fdp)} chars")
         # Smoke-test 3 representative tools
         r1 = _tools.paper_writing_check_kanji_ratio(
             'これは日本語の文章で、漢字の比率を計算します。'

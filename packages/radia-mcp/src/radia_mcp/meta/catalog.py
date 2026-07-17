@@ -424,8 +424,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Mathematica recipes: vector calc, Kelvin transform, "
                        "symbolic Maxwell, evaluation pipeline",
         "primary_tools": ["mathematica_recipes", "mathematica_status"],
-        "related": ["differential-forms", "radia-ngsolve", "figure",
-                      "md2html"],
+        "related": ["differential-forms", "radia-ngsolve", "md2html"],
         "tags": ["theory"],
     },
     "md2html": {
@@ -437,34 +436,15 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "fallback for legacy Japanese files.  Promoted "
                        "from mcp-server-document.",
         "primary_tools": ["md2html_convert"],
-        "related": ["mathematica", "figure", "literature-index"],
+        "related": ["mathematica", "literature-index"],
         "tags": ["meta"],
     },
-    "figure": {
-        "subpackage": "radia_mcp.figure",
-        "entry_point": "mcp-server-figure",
-        "description": "Sugahara Lab publication-figure toolkit "
-                       "(Times New Roman default): beamer/slide + "
-                       "IEEE/IEEJ paper profiles, MATLAB + Matplotlib "
-                       "snippets, lab style rules (units in parentheses, "
-                       "no in-figure title).  Promoted from "
-                       "mcp-server-document.",
-        "primary_tools": ["figure_style_guide", "figure_size_for_target",
-                            "paper_figure_profiles", "paper_figure_recipe",
-                            "paper_figure_quality_rules"],
-        "related": [
-            "mathematica",
-            "literature-index",
-            "chart2d",
-            "md2html",
-            "paper-writing",
-            "grant-writing",
-            "poster",
-        ],
-        # 'meta' tag = cross-cutting utility usable by any paper /
-        # digest, not bound to a single solver domain.
-        "tags": ["meta"],
-    },
+    # "figure" was a standalone server until 2026-07-18; it was a shared
+    # middle-layer server for paper-writing + presentation, and since
+    # presentation merged into paper-writing (2026-07-17), figure follows.
+    # Its figure_* / paper_figure_* tools are now served by
+    # mcp-server-paper-writing (see the paper-writing entry below); the
+    # radia_mcp.figure module remains the implementation home.
     "chart2d": {
         "subpackage": "radia_mcp.chart2d",
         "entry_point": "mcp-server-chart2d",
@@ -479,7 +459,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "gate stack.",
         "primary_tools": ["chart2d_catalog", "chart2d_line", "chart2d_bode",
                             "chart2d_scatter", "chart2d_contourf"],
-        "related": ["figure"],
+        "related": ["paper-writing"],
         "tags": ["meta"],
     },
     "paper-writing": {
@@ -488,21 +468,25 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Journal paper / digest writing helpers: IMRaD, "
                        "abstract, citation, figure, equation, PDF layout, "
                        "and reviewer-trigger lints. Also serves the merged "
-                       "presentation_* slide lint + PPTX tools (2026-07-17: "
-                       "the standalone presentation server was retired -- "
-                       "AI cannot yet author slide decks end-to-end, so "
-                       "slides are human-authored and AI-linted here).",
+                       "presentation_* slide lint + PPTX tools (2026-07-17) "
+                       "and the merged figure_* / paper_figure_* "
+                       "publication-figure tools (2026-07-18: the standalone "
+                       "presentation and figure servers were retired -- AI "
+                       "cannot yet author slide decks end-to-end, and figure "
+                       "was a shared middle layer now unified here).",
         "primary_tools": ["paper_writing_usage",
                             "paper_writing_health_report",
                             "paper_writing_em_submission_gate",
                             "presentation_usage",
                             "presentation_health_report",
-                            "presentation_extract_pptx_text"],
+                            "presentation_extract_pptx_text",
+                            "figure_style_guide",
+                            "paper_figure_profiles"],
         "related": [
-            "figure",
             "grant-writing",
             "poster",
             "document-meta",
+            "chart2d",
         ],
         "tags": ["meta"],
     },
@@ -517,7 +501,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "grant_writing_health_report",
                             "grant_writing_kddi_digital_check",
                             "grant_writing_recommendation_letter_template"],
-        "related": ["paper-writing", "figure", "document-meta"],
+        "related": ["paper-writing", "document-meta"],
         "tags": ["meta"],
     },
     # "presentation" was a standalone server until 2026-07-17; its
@@ -534,7 +518,6 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "poster_health_report"],
         "related": [
             "paper-writing",
-            "figure",
             "document-meta",
         ],
         "tags": ["meta"],
@@ -547,7 +530,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
-        "related": ["meta", "figure", "md2html"],
+        "related": ["meta", "md2html"],
         "tags": ["meta"],
     },
     "document-meta": {
@@ -685,6 +668,10 @@ _ALIASES = {
     # server retired); keep the old name resolving for discovery.
     "presentation": "paper-writing",
     "mcp-server-presentation": "paper-writing",
+    # 2026-07-18: figure merged into paper-writing (standalone server
+    # retired); keep the old names resolving for discovery.
+    "figure": "paper-writing",
+    "mcp-server-figure": "paper-writing",
 }
 # Auto-generate underscore variants for every hyphenated catalog key
 # (e.g. 'magnetic-materials' resolves from both 'magnetic-materials' and

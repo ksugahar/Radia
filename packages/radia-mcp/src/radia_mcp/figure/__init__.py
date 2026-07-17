@@ -1,10 +1,16 @@
 """radia_mcp.figure — Sugahara Lab publication-figure toolkit.
 
 Promoted on 2026-05-26 from LAB-private figure tooling into radia-mcp as
-a standalone subpackage following the `radia_mcp.<topic>.server` pattern
-(statusable, --selftest-able, discoverable via the meta catalog).
+a standalone subpackage following the `radia_mcp.<topic>.server` pattern.
 
-Two MCP tools:
+2026-07-18: figure MERGED into mcp-server-paper-writing (Sugahara).
+figure was a shared middle-layer server for paper-writing + presentation;
+since presentation merged into paper-writing (2026-07-17), figure follows.
+The standalone mcp-server-figure entry point is retired -- all figure_* /
+paper_figure_* tools are now served by mcp-server-paper-writing via the
+register() function at the end of this module.
+
+The figure MCP tools (registered by register()):
   - figure_style_guide(target='all'|'paper_single_column'|...)
         Lab-standard rules (Times New Roman, units in parentheses,
         no in-figure title, font sizes per embed width).
@@ -108,3 +114,24 @@ from ._builders import (  # noqa: F401
     quiver_pair,
     bh_curve,
 )
+
+
+def register(mcp) -> int:
+    """Register all figure_* / paper_figure_* tools onto the given FastMCP.
+
+    2026-07-18: figure MERGED into mcp-server-paper-writing (Sugahara):
+    figure was a shared middle-layer server for paper-writing + presentation;
+    since presentation merged into paper-writing, figure follows. The
+    standalone mcp-server-figure entry point is retired.
+    """
+    from . import tools as _tools
+    from . import server as _srv
+    count = 0
+    for name in sorted(dir(_tools)):
+        if name.startswith("figure_") and callable(getattr(_tools, name)):
+            mcp.tool()(getattr(_tools, name)); count += 1
+    for fn in (_srv.paper_figure_profiles, _srv.paper_figure_recipe,
+               _srv.paper_figure_quality_rules, _srv.figure_design_principles,
+               _srv.figure_diagram_recipes, _srv.figure_audit_embeds):
+        mcp.tool()(fn); count += 1
+    return count

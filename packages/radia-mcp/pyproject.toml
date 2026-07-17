@@ -141,23 +141,25 @@ mcp-server-md2html = "radia_mcp.md2html.server:main"
 # Promoted from s:/mcp-server/src/mcp_server_document/paper_writing/.
 mcp-server-paper-writing = "radia_mcp.paper_writing.server:main"
 # 2026-06-27: grant_writing -- proposal and recommendation-letter lint,
-# restored as a first-class public document server so the writing trio is
-# registered in parallel: paper-writing / figure / grant-writing.
+# restored as a first-class public document server so the writing pair is
+# registered in parallel: paper-writing / grant-writing.
 mcp-server-grant-writing = "radia_mcp.grant_writing.server:main"
 # 2026-05-26 v0.81.0: chart2d -- 22 paper-quality 2D charts as MCP
 # tools (line / loglog / semilog / step / errorbar / fill_between /
 # bode / histogram / bar / box / violin / ecdf / contour / contourf /
 # pcolormesh / quiver / streamplot / imshow / polar / scatter / phase).
-# Companion to mcp-server-figure; inherits its profiles + gate stack.
+# Companion to the figure toolset (figure_* / paper_figure_*, now served
+# by mcp-server-paper-writing); inherits its profiles + gate stack.
 # Recipe (text) + MCP-Image (inline) dual return.
 mcp-server-chart2d = "radia_mcp.chart2d.server:main"
 # 2026-05-26: figure -- Sugahara Lab publication-figure toolkit
-# (Times New Roman default, IEEE/IEEJ/beamer profiles).
-# Promoted from s:/mcp-server/src/mcp_server_document/graph/ into
-# radia-mcp as a standalone subpackage.  Surfaces IEEE/IEEJ font/size
-# profiles + MATLAB/Matplotlib snippets via figure_style_guide /
-# figure_size_for_target tools.
-mcp-server-figure = "radia_mcp.figure.server:main"
+# (Times New Roman default, IEEE/IEEJ/beamer profiles).  Promoted from
+# s:/mcp-server/src/mcp_server_document/graph/ into radia-mcp.
+# 2026-07-18: figure's standalone server was RETIRED and all figure_* /
+# paper_figure_* tools were merged into mcp-server-paper-writing (figure
+# was a shared middle layer for paper-writing + presentation; since
+# presentation merged into paper-writing on 2026-07-17, figure follows).
+# The radia_mcp.figure module remains the implementation home.
 # 2026-05-24 evening (radia-mcp 0.70.0): GUI panel review skill-chain.
 # Surfaces panel-cli-diff / panel-review / panel-qt-test / panel-preview /
 # panel-smoke + known bug catalogue (val()-checkbox-truthy, AMG-class

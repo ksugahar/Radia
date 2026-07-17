@@ -12,7 +12,21 @@ crystallized as its own package.
 - Added motor guidance for the angle-periodic ROM, reduced HCurl/HDiv basis
   construction, native C ABI export, energy accounting, and stateful
   hysteresis integration.
- - **Merged the presentation server into paper-writing** (Sugahara: slide
+- **Merged the figure server into paper-writing** (Sugahara: figure was a
+  shared middle-layer server for paper-writing + presentation; since
+  presentation merged into paper-writing on 2026-07-17, figure no longer
+  needs to be a shared middle layer). `mcp-server-paper-writing` now serves
+  all `figure_*` / `paper_figure_*` tools; the `mcp-server-figure` entry
+  point and the standalone-server scaffolding in `radia_mcp/figure/server.py`
+  (module-level FastMCP, auto-register loop, `register_status_tool`, `main`)
+  were retired -- `radia_mcp.figure` remains the implementation home and now
+  exposes a `register(mcp)` used by the paper-writing server. The `figure`
+  catalog entry was folded into `paper-writing` with `figure` /
+  `mcp-server-figure` -> `paper-writing` discovery aliases; `docs/TOOLS.md`
+  regenerated. The standalone `figure_status` tool is dropped (paper-writing's
+  status tool covers the merged tools).
+
+- **Merged the presentation server into paper-writing** (Sugahara: slide
   decks cannot yet be authored end-to-end by AI, so the slide lint / PPTX
   toolset does not warrant a standalone server). `mcp-server-paper-writing`
   now serves all `presentation_*` tools; the `mcp-server-presentation`
