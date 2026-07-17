@@ -190,6 +190,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_aca_tolerance_rank_identity_ok = (
         _optional_hmatrix_aca_tolerance_norm_rank_is_aligned(summary)
     )
+    fembem_trace_map_identity_ok = (
+        _optional_fembem_trace_orientation_normal_node_map_is_aligned(summary)
+    )
+    cq_causality_pair_identity_ok = (
+        _optional_cq_causality_conjugate_contour_pair_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -291,6 +297,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_aca_uses_current_block_tolerance_norm_and_rank": (
             hmatrix_aca_tolerance_rank_identity_ok
+        ),
+        "fembem_trace_uses_current_orientation_normals_and_volume_node_map": (
+            fembem_trace_map_identity_ok
+        ),
+        "cq_inverse_transform_uses_current_causal_conjugate_contour_pairs": (
+            cq_causality_pair_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1292,6 +1304,125 @@ def _optional_hmatrix_aca_tolerance_norm_rank_is_aligned(
         and _is_sha256(table_digest)
         and str(value.get("assembled_aca_block_table_sha256", "")).lower()
         == table_digest
+    )
+
+
+def _optional_fembem_trace_orientation_normal_node_map_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_trace_orientation_normal_node_map_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        triangle_ids = _positive_integer_sequence(value, "boundary_triangle_ids")
+        trace_ids = _positive_integer_sequence(value, "trace_triangle_ids")
+        orientations = tuple(int(item) for item in value["triangle_orientations"])
+        applied_orientations = tuple(
+            int(item) for item in value["applied_triangle_orientations"]
+        )
+        normal_digests = tuple(str(item).lower() for item in value["normal_sha256"])
+        applied_normal_digests = tuple(
+            str(item).lower() for item in value["applied_normal_sha256"]
+        )
+        volume_nodes = _positive_integer_sequence(value, "volume_boundary_node_ids")
+        trace_nodes = _positive_integer_sequence(value, "trace_volume_node_ids")
+    except (KeyError, TypeError, ValueError):
+        return False
+    volume_generation = str(value.get("volume_mesh_generation", "")).strip()
+    boundary_generation = str(value.get("boundary_mesh_generation", "")).strip()
+    map_digest = str(value.get("trace_map_sha256", "")).lower()
+    return (
+        bool(volume_generation)
+        and value.get("boundary_trace_volume_mesh_generation") == volume_generation
+        and bool(boundary_generation)
+        and all(
+            value.get(key) == boundary_generation
+            for key in (
+                "triangle_orientation_boundary_mesh_generation",
+                "normal_boundary_mesh_generation",
+                "node_map_boundary_mesh_generation",
+                "fem_trace_boundary_mesh_generation",
+                "bem_trace_boundary_mesh_generation",
+            )
+        )
+        and bool(triangle_ids)
+        and len(set(triangle_ids)) == len(triangle_ids)
+        and trace_ids == triangle_ids
+        and len(orientations) == len(triangle_ids)
+        and all(item in {-1, 1} for item in orientations)
+        and applied_orientations == orientations
+        and len(normal_digests) == len(triangle_ids)
+        and all(_is_sha256(item) for item in normal_digests)
+        and applied_normal_digests == normal_digests
+        and bool(volume_nodes)
+        and len(set(volume_nodes)) == len(volume_nodes)
+        and trace_nodes == volume_nodes
+        and _is_sha256(map_digest)
+        and str(value.get("assembled_trace_map_sha256", "")).lower() == map_digest
+    )
+
+
+def _optional_cq_causality_conjugate_contour_pair_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_causality_conjugate_symmetry_contour_pair_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        positive_ids = _positive_integer_sequence(value, "positive_frequency_ids")
+        conjugate_ids = _positive_integer_sequence(value, "conjugate_frequency_ids")
+        inverse_ids = _positive_integer_sequence(
+            value, "inverse_transform_conjugate_frequency_ids"
+        )
+        contour_indices = _positive_integer_sequence(value, "contour_indices")
+        inverse_contour = _positive_integer_sequence(
+            value, "inverse_transform_contour_indices"
+        )
+        causality_window = tuple(int(item) for item in value["causality_window_samples"])
+        inverse_window = tuple(
+            int(item) for item in value["inverse_transform_causality_window_samples"]
+        )
+        precausal_max = _finite_float(value, "precausal_max_abs")
+        precausal_tolerance = _finite_float(value, "precausal_tolerance")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    pair_digest = str(value.get("cq_pair_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "frequency_pair_cq_generation",
+                "contour_index_cq_generation",
+                "causality_window_cq_generation",
+                "inverse_transform_cq_generation",
+            )
+        )
+        and bool(positive_ids)
+        and len(positive_ids) == len(conjugate_ids)
+        and inverse_ids == conjugate_ids
+        and contour_indices == inverse_contour
+        and set(positive_ids).issubset(contour_indices)
+        and set(conjugate_ids).issubset(contour_indices)
+        and len(causality_window) == 2
+        and 0 <= causality_window[0] < causality_window[1]
+        and inverse_window == causality_window
+        and value.get("real_time_response") is True
+        and value.get("inverse_transform_conjugate_symmetry") is True
+        and 0.0 <= precausal_max <= precausal_tolerance
+        and precausal_tolerance > 0.0
+        and _is_sha256(pair_digest)
+        and str(value.get("inverse_transform_pair_table_sha256", "")).lower()
+        == pair_digest
     )
 
 

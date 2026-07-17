@@ -561,6 +561,51 @@ def _with_v19_identity(summary):
     return summary
 
 
+def _with_v20_identity(summary):
+    summary = _with_v19_identity(summary)
+    summary["fembem_trace_orientation_normal_node_map_generation_identity"] = {
+        "volume_mesh_generation": "vol-mesh-22",
+        "boundary_trace_volume_mesh_generation": "vol-mesh-22",
+        "boundary_mesh_generation": "boundary-mesh-22",
+        "triangle_orientation_boundary_mesh_generation": "boundary-mesh-22",
+        "normal_boundary_mesh_generation": "boundary-mesh-22",
+        "node_map_boundary_mesh_generation": "boundary-mesh-22",
+        "fem_trace_boundary_mesh_generation": "boundary-mesh-22",
+        "bem_trace_boundary_mesh_generation": "boundary-mesh-22",
+        "boundary_triangle_ids": [101, 102, 103],
+        "trace_triangle_ids": [101, 102, 103],
+        "triangle_orientations": [1, -1, 1],
+        "applied_triangle_orientations": [1, -1, 1],
+        "normal_sha256": ["1" * 64, "2" * 64, "3" * 64],
+        "applied_normal_sha256": ["1" * 64, "2" * 64, "3" * 64],
+        "volume_boundary_node_ids": [11, 12, 13, 14],
+        "trace_volume_node_ids": [11, 12, 13, 14],
+        "trace_map_sha256": "4" * 64,
+        "assembled_trace_map_sha256": "4" * 64,
+    }
+    summary["cq_causality_conjugate_symmetry_contour_pair_generation_identity"] = {
+        "cq_generation": "cq-22",
+        "frequency_pair_cq_generation": "cq-22",
+        "contour_index_cq_generation": "cq-22",
+        "causality_window_cq_generation": "cq-22",
+        "inverse_transform_cq_generation": "cq-22",
+        "positive_frequency_ids": [1, 2, 3],
+        "conjugate_frequency_ids": [511, 510, 509],
+        "inverse_transform_conjugate_frequency_ids": [511, 510, 509],
+        "contour_indices": [1, 2, 3, 509, 510, 511],
+        "inverse_transform_contour_indices": [1, 2, 3, 509, 510, 511],
+        "causality_window_samples": [0, 511],
+        "inverse_transform_causality_window_samples": [0, 511],
+        "real_time_response": True,
+        "inverse_transform_conjugate_symmetry": True,
+        "precausal_max_abs": 1.0e-12,
+        "precausal_tolerance": 1.0e-10,
+        "cq_pair_table_sha256": "5" * 64,
+        "inverse_transform_pair_table_sha256": "5" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -1036,3 +1081,49 @@ def test_v19_public_hmatrix_aca_tolerance_norm_block_rank_generation_mismatch():
         ]
         is False
     )
+
+
+def test_accepts_v20_trace_map_and_cq_causality_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v20_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v20_public_fembem_trace_orientation_normal_node_map_generation_mismatch():
+    bad = _with_v20_identity(_summary())
+    bad["fembem_trace_orientation_normal_node_map_generation_identity"].update(
+        {
+            "triangle_orientation_boundary_mesh_generation": "boundary-mesh-21",
+            "normal_boundary_mesh_generation": "boundary-mesh-21",
+            "trace_triangle_ids": [103, 102, 101],
+            "applied_triangle_orientations": [-1, 1, -1],
+            "applied_normal_sha256": ["3" * 64, "2" * 64, "1" * 64],
+            "trace_volume_node_ids": [14, 13, 12, 11],
+            "assembled_trace_map_sha256": "f" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "fembem_trace_uses_current_orientation_normals_and_volume_node_map"
+    ]
+
+
+def test_v20_public_cq_causality_conjugate_symmetry_contour_pair_generation_mismatch():
+    bad = _with_v20_identity(_summary())
+    bad["cq_causality_conjugate_symmetry_contour_pair_generation_identity"].update(
+        {
+            "frequency_pair_cq_generation": "cq-21",
+            "causality_window_cq_generation": "cq-21",
+            "inverse_transform_conjugate_frequency_ids": [509, 510, 511],
+            "inverse_transform_contour_indices": [1, 2, 3, 511, 510, 509],
+            "inverse_transform_causality_window_samples": [16, 511],
+            "inverse_transform_conjugate_symmetry": False,
+            "precausal_max_abs": 1.0e-4,
+            "inverse_transform_pair_table_sha256": "f" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "cq_inverse_transform_uses_current_causal_conjugate_contour_pairs"
+    ]
