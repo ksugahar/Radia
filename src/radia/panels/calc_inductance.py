@@ -703,10 +703,15 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
             f"loop-extended numbers.")
 
     alpha = loop_out["alpha"]
+    alpha_deg = float(math.degrees(cmath.phase(alpha)))
+    screening = float(loop_out["P_total"]
+                      / max(float(loop_out["P_frozen"]), 1e-300))
+    regime = _loop_regime(alpha_deg)
     progress("BEM",
         f"loop-DOF: alpha={abs(alpha):.4g} A "
-        f"(phase {math.degrees(cmath.phase(alpha)):+.1f} deg), "
-        f"P_wp {P_plain:.4e} -> {loop_out['P_total']:.4e} W, "
+        f"(phase {alpha_deg:+.1f} deg, {regime}), "
+        f"P_wp {P_plain:.4e} -> {loop_out['P_total']:.4e} W "
+        f"(screening P/P_frozen={screening:.3f}), "
         f"H_t {res_bem['H_t_rms']:.4g} -> {loop_out['H_t_rms']:.4g} A/m "
         f"({t_loop:.1f}s)")
     res_bem = dict(res_bem)
@@ -715,12 +720,42 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     loop_meta = {
         "wp_loop_dof": True,
         "wp_loop_alpha_A": float(abs(alpha)),
-        "wp_loop_alpha_deg": float(math.degrees(cmath.phase(alpha))),
+        "wp_loop_alpha_deg": alpha_deg,
         "wp_loop_theta_jump": float(loop_out["theta_jump"]),
         "wp_loop_cut_n_vertices": int(loop_out["cut_n_vertices"]),
+        # Screening diagnostics: the frozen (alpha = 0) sub-solve is the
+        # no-mode ("slitted tube") physics, so P/P_frozen exposes what
+        # the shorted-turn mode does to the heating in THIS run, and the
+        # alpha phase classifies the regime (see _loop_regime).
+        "wp_loop_P_frozen_W": float(loop_out["P_frozen"]),
+        "wp_loop_H_t_frozen_A_per_m": float(loop_out["Ht_frozen"]),
+        "wp_loop_screening_ratio": screening,
+        "wp_loop_regime": regime,
         "t_loop_dof_s": float(t_loop),
     }
     return res_bem, loop_meta
+
+
+def _loop_regime(alpha_deg):
+    """Screening-regime label from the loop-current phase vs the drive.
+
+    A passive R-L shorted turn driven by ``-j omega Phi`` sits between
+    quadrature and anti-phase: ``I_2 = -j omega M I_1 / (R + j omega L)``
+    has phase in (-180, -90) deg.  Near anti-phase (|phase| -> 180,
+    omega L >> R) the turn is a nearly lossless FLUX CANCELLER -- Lenz
+    screening REDUCES the total surface |H_t|^2 and hence P_wp
+    (Takahashi: -174 deg, P/P_frozen = 0.857 = (H_t/H_t_frozen)^2).
+    Near quadrature (|phase| -> 90, omega L << R) the screening is weak
+    and the turn mostly ADDS its own dissipation -- the classic
+    "shorted turn overheats" regime.  Thresholds split the continuum at
+    135 / 105 deg.
+    """
+    a = abs(float(alpha_deg))
+    if a >= 135.0:
+        return "inductive-screening"
+    if a >= 105.0:
+        return "mixed"
+    return "resistive-dissipative"
 
 
 # Fail-loud bound on the surface-Poisson tangential-gradient residual
@@ -1770,11 +1805,20 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["wp_loop_theta_jump"] = float(wp_data["wp_loop_theta_jump"])
         out["wp_loop_cut_n_vertices"] = int(
             wp_data["wp_loop_cut_n_vertices"])
+        out["wp_loop_P_frozen_W"] = float(wp_data["wp_loop_P_frozen_W"])
+        out["wp_loop_H_t_frozen_A_per_m"] = float(
+            wp_data["wp_loop_H_t_frozen_A_per_m"])
+        out["wp_loop_screening_ratio"] = float(
+            wp_data["wp_loop_screening_ratio"])
+        out["wp_loop_regime"] = str(wp_data["wp_loop_regime"])
         out["t_loop_dof_s"] = float(wp_data["t_loop_dof_s"])
         out["P_wp_note"] = (
             "genus-1 loop DOF active: the net shorted-turn eddy current "
             "(wp_loop_alpha_A) is solved and its Lenz screening is included "
-            "in P_wp / H_t.  delta_L keeps the plain-solve phi convention; "
+            "in P_wp / H_t (wp_loop_screening_ratio = P_wp / P_frozen; "
+            "wp_loop_regime classifies the alpha phase -- anti-phase = "
+            "inductance-dominated screening, quadrature = resistive "
+            "self-heating).  delta_L keeps the plain-solve phi convention; "
             "the loop extension is locked by the analytic shorted-ring "
             "golden.")
     elif out["wp_genus"] != 0:
@@ -1967,9 +2011,15 @@ def _solve_workpiece_strong_coupled(args):
     for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im"):
         if sol.get(key) is not None:
             sol[key] = sol[key] * I_term
-    # The loop current scales like the fields (alpha ~ I).
+    # The loop current scales like the fields (alpha ~ I); the frozen
+    # diagnostics scale like their production counterparts (P ~ I^2,
+    # H_t ~ I; the screening RATIO is scale-invariant and stays).
     if sol.get("wp_loop_alpha") is not None:
         sol["wp_loop_alpha"] = complex(sol["wp_loop_alpha"]) * I_term
+        sol["wp_loop_P_frozen"] = (float(sol["wp_loop_P_frozen"])
+                                   * I_term * I_term)
+        sol["wp_loop_H_t_frozen"] = (float(sol["wp_loop_H_t_frozen"])
+                                     * abs(I_term))
 
     progress("COUPLED",
         f"converged in {int(sol['iterations'])} iter: "
@@ -2198,6 +2248,12 @@ def _assemble_strong_output(args, coil_data, strong):
         out["wp_loop_theta_jump"] = float(strong["wp_loop_theta_jump"])
         out["wp_loop_cut_n_vertices"] = int(
             strong["wp_loop_cut_n_vertices"])
+        out["wp_loop_P_frozen_W"] = float(strong["wp_loop_P_frozen"])
+        out["wp_loop_H_t_frozen_A_per_m"] = float(
+            strong["wp_loop_H_t_frozen"])
+        out["wp_loop_screening_ratio"] = float(
+            strong["wp_loop_screening_ratio"])
+        out["wp_loop_regime"] = _loop_regime(out["wp_loop_alpha_deg"])
         out["t_loop_dof_s"] = float(strong.get("t_loop_dof_s", 0.0))
         out["P_wp_note"] = (
             "genus-1 loop DOF active on the converged strong-coupling "

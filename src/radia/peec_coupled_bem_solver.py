@@ -376,12 +376,18 @@ class CoupledPEECBEMSolver:
                     f"(P {loop_out['P_frozen']:.4e} vs {P_total:.4e} W) "
                     f"-- operator mismatch, refusing to report "
                     f"loop-extended numbers.")
+            P_frozen = float(loop_out["P_frozen"])
             P_total = float(loop_out["P_total"])
             H_t_rms = float(loop_out["H_t_rms"])
             loop_meta = {
                 'wp_loop_alpha': complex(loop_out["alpha"]),
                 'wp_loop_theta_jump': float(loop_out["theta_jump"]),
                 'wp_loop_cut_n_vertices': int(loop_out["cut_n_vertices"]),
+                # frozen (alpha = 0) = the no-mode physics; the ratio
+                # exposes the Lenz-screening effect of the shorted turn
+                'wp_loop_P_frozen': P_frozen,
+                'wp_loop_H_t_frozen': float(loop_out["Ht_frozen"]),
+                'wp_loop_screening_ratio': P_total / max(P_frozen, 1e-300),
                 't_loop_dof_s': float(t_loop),
             }
 
