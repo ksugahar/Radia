@@ -39,6 +39,187 @@ def _trapezoid_integral(positions: Sequence[float], values: Sequence[float]) -> 
     )
 
 
+def _valid_sha256(value: object) -> bool:
+    digest = str(value or "").lower()
+    return len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    )
+
+
+def _bem_panel_demag_force_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("solve_generation", "")).strip()
+    panel_ids = value.get("panel_ids")
+    region_ids = value.get("material_region_ids")
+    frame = str(value.get("force_coordinate_frame", "")).strip()
+    try:
+        normals = [
+            [float(component) for component in row]
+            for row in value.get("outward_normals", [])
+        ]
+        result_normals = [
+            [float(component) for component in row]
+            for row in value.get("result_outward_normals", [])
+        ]
+        demag = [float(item) for item in value.get("demag_field_a_per_m", [])]
+        result_demag = [
+            float(item) for item in value.get("result_demag_field_a_per_m", [])
+        ]
+        forces = [
+            [float(component) for component in row]
+            for row in value.get("force_vectors_n", [])
+        ]
+        result_forces = [
+            [float(component) for component in row]
+            for row in value.get("result_force_vectors_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest = str(value.get("panel_force_table_sha256", "")).lower()
+    panels_ok = (
+        isinstance(panel_ids, list)
+        and bool(panel_ids)
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item > 0
+            for item in panel_ids
+        )
+        and len(set(panel_ids)) == len(panel_ids)
+    )
+    normals_ok = (
+        panels_ok
+        and len(normals) == len(panel_ids)
+        and all(
+            len(row) == 3
+            and all(math.isfinite(component) for component in row)
+            and math.isclose(
+                sum(component * component for component in row),
+                1.0,
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            for row in normals
+        )
+    )
+    regions_ok = (
+        isinstance(region_ids, list)
+        and panels_ok
+        and len(region_ids) == len(panel_ids)
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item > 0
+            for item in region_ids
+        )
+    )
+    vectors_ok = (
+        panels_ok
+        and len(forces) == len(panel_ids)
+        and all(
+            len(row) == 3 and all(math.isfinite(component) for component in row)
+            for row in forces
+        )
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "panel_mesh_solve_generation",
+                "outward_normal_solve_generation",
+                "material_region_solve_generation",
+                "demag_result_solve_generation",
+                "force_result_solve_generation",
+            )
+        )
+        and panels_ok
+        and value.get("result_panel_ids") == panel_ids
+        and normals_ok
+        and result_normals == normals
+        and regions_ok
+        and value.get("result_material_region_ids") == region_ids
+        and len(demag) == len(panel_ids)
+        and all(math.isfinite(item) for item in demag)
+        and result_demag == demag
+        and vectors_ok
+        and result_forces == forces
+        and frame in {"global_xyz", "local_xyz"}
+        and value.get("result_force_coordinate_frame") == frame
+        and _valid_sha256(digest)
+        and str(value.get("result_panel_force_table_sha256", "")).lower()
+        == digest
+    )
+
+
+def _motor_harmonic_force_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("sweep_generation", "")).strip()
+    frame = str(value.get("force_coordinate_frame", "")).strip()
+    bins = value.get("harmonic_bins")
+    try:
+        angles = [float(item) for item in value.get("rotor_angles_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_rotor_angles_deg", [])
+        ]
+        phases = [float(item) for item in value.get("current_phase_deg", [])]
+        result_phases = [
+            float(item) for item in value.get("result_current_phase_deg", [])
+        ]
+        harmonics = [
+            [float(component) for component in row]
+            for row in value.get("force_harmonics_n", [])
+        ]
+        result_harmonics = [
+            [float(component) for component in row]
+            for row in value.get("result_force_harmonics_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest = str(value.get("harmonic_force_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "rotor_angle_sweep_generation",
+                "current_phase_sweep_generation",
+                "harmonic_bin_sweep_generation",
+                "force_frame_sweep_generation",
+                "force_result_sweep_generation",
+            )
+        )
+        and len(angles) >= 3
+        and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and result_angles == angles
+        and len(phases) == 3
+        and all(math.isfinite(item) for item in phases)
+        and result_phases == phases
+        and isinstance(bins, list)
+        and bool(bins)
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item >= 0
+            for item in bins
+        )
+        and bins == sorted(set(bins))
+        and value.get("result_harmonic_bins") == bins
+        and frame in {"global_xyz", "rotor_dq"}
+        and value.get("result_force_coordinate_frame") == frame
+        and len(harmonics) == len(bins)
+        and all(
+            len(row) == 2 and all(math.isfinite(component) for component in row)
+            for row in harmonics
+        )
+        and result_harmonics == harmonics
+        and _valid_sha256(digest)
+        and str(value.get("result_harmonic_force_table_sha256", "")).lower()
+        == digest
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -133,6 +314,8 @@ def magnetic_force_method_profile_gate(
     moving_magnet_force_position_orientation_equilibrium_identity_ok = True
     motor_force_dual_lane_generation_identity_ok = True
     linear_motor_end_effect_generation_identity_ok = True
+    bem_panel_demag_force_generation_identity_ok = True
+    motor_harmonic_force_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -164,6 +347,8 @@ def magnetic_force_method_profile_gate(
         moving_magnet_force_position_orientation_equilibrium_identity_ok = False
         motor_force_dual_lane_generation_identity_ok = False
         linear_motor_end_effect_generation_identity_ok = False
+        bem_panel_demag_force_generation_identity_ok = False
+        motor_harmonic_force_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -1792,6 +1977,21 @@ def magnetic_force_method_profile_gate(
                 == digest
             )
 
+        bem_panel_demag_force_generation_identity_ok = (
+            _bem_panel_demag_force_identity_ok(
+                identity_value.get(
+                    "bem_panel_normal_material_region_demag_force_generation_identity"
+                )
+            )
+        )
+        motor_harmonic_force_generation_identity_ok = (
+            _motor_harmonic_force_identity_ok(
+                identity_value.get(
+                    "motor_harmonic_rotor_angle_current_phase_force_frame_generation_identity"
+                )
+            )
+        )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -1939,6 +2139,12 @@ def magnetic_force_method_profile_gate(
         ),
         "linear_motor_force_uses_current_position_end_effect_frame_and_symmetry": (
             linear_motor_end_effect_generation_identity_ok
+        ),
+        "bem_demag_force_uses_current_panels_normals_materials_and_results": (
+            bem_panel_demag_force_generation_identity_ok
+        ),
+        "motor_force_harmonics_use_current_angles_phases_bins_and_frame": (
+            motor_harmonic_force_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
