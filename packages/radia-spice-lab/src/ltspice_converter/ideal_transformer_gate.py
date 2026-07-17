@@ -1318,6 +1318,180 @@ def _stepped_transient_measure_row_identity_ok(
     )
 
 
+def _switched_converter_cycle_measure_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "switched_converter_cycle_measure_initial_state_topology_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    keys = (
+        "state_variable_ids",
+        "initial_state_values",
+        "solver_initial_state_values",
+        "accepted_time_grid_s",
+        "measure_time_grid_s",
+        "cycle_windows_s",
+        "measure_cycle_windows_s",
+        "measure_names",
+        "reported_measure_names",
+        "cycle_measure_values",
+        "reported_cycle_measure_values",
+    )
+    rows = tuple(contract.get(key) for key in keys)
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        state_ids = [str(value) for value in rows[0]]
+        initial_state = [_finite(value, "initial_state") for value in rows[1]]
+        solver_state = [_finite(value, "solver_initial_state") for value in rows[2]]
+        accepted_grid = [_finite(value, "accepted_time_grid_s") for value in rows[3]]
+        measure_grid = [_finite(value, "measure_time_grid_s") for value in rows[4]]
+        cycle_windows = [
+            [_finite(value, "cycle_window_s") for value in window] for window in rows[5]
+        ]
+        measure_windows = [
+            [_finite(value, "measure_cycle_window_s") for value in window]
+            for window in rows[6]
+        ]
+        measure_names = [str(value) for value in rows[7]]
+        reported_names = [str(value) for value in rows[8]]
+        measure_values = [_finite(value, "cycle_measure_value") for value in rows[9]]
+        reported_values = [
+            _finite(value, "reported_cycle_measure_value") for value in rows[10]
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("transient_generation_id") or "")
+    topology_digest = str(contract.get("switching_topology_sha256") or "")
+    measure_digest = str(contract.get("cycle_measure_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "initial_state_transient_generation_id",
+                "topology_transient_generation_id",
+                "accepted_grid_transient_generation_id",
+                "cycle_window_transient_generation_id",
+                "measure_transient_generation_id",
+            )
+        )
+        and bool(state_ids)
+        and all(state_ids)
+        and len(set(state_ids)) == len(state_ids)
+        and len(initial_state) == len(state_ids)
+        and solver_state == initial_state
+        and _is_sha256(topology_digest)
+        and contract.get("solver_switching_topology_sha256") == topology_digest
+        and len(accepted_grid) >= 2
+        and accepted_grid[0] >= 0.0
+        and all(right > left for left, right in zip(accepted_grid, accepted_grid[1:]))
+        and measure_grid == accepted_grid
+        and bool(cycle_windows)
+        and all(
+            len(window) == 2
+            and accepted_grid[0] <= window[0] < window[1] <= accepted_grid[-1]
+            for window in cycle_windows
+        )
+        and all(
+            right[0] >= left[1]
+            for left, right in zip(cycle_windows, cycle_windows[1:])
+        )
+        and measure_windows == cycle_windows
+        and bool(measure_names)
+        and all(measure_names)
+        and len(set(measure_names)) == len(measure_names)
+        and reported_names == measure_names
+        and len(measure_values) == len(measure_names)
+        and reported_values == measure_values
+        and _is_sha256(measure_digest)
+        and contract.get("reported_cycle_measure_table_sha256") == measure_digest
+    )
+
+
+def _electrothermal_generation_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "electrothermal_temperature_device_model_network_timestep_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    keys = (
+        "electrical_loss_time_s",
+        "thermal_time_s",
+        "electrical_loss_w",
+        "thermal_input_loss_w",
+        "junction_temperature_c",
+        "reported_junction_temperature_c",
+    )
+    rows = tuple(contract.get(key) for key in keys)
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        model_temperature = _finite(
+            contract.get("device_model_temperature_c"), "device_model_temperature_c"
+        )
+        solver_temperature = _finite(
+            contract.get("solver_device_model_temperature_c"),
+            "solver_device_model_temperature_c",
+        )
+        loss_time = [_finite(value, "electrical_loss_time_s") for value in rows[0]]
+        thermal_time = [_finite(value, "thermal_time_s") for value in rows[1]]
+        loss = [_finite(value, "electrical_loss_w") for value in rows[2]]
+        thermal_loss = [_finite(value, "thermal_input_loss_w") for value in rows[3]]
+        temperature = [_finite(value, "junction_temperature_c") for value in rows[4]]
+        reported_temperature = [
+            _finite(value, "reported_junction_temperature_c") for value in rows[5]
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("electrothermal_generation_id") or "")
+    model_digest = str(contract.get("device_model_sha256") or "")
+    network_digest = str(contract.get("thermal_network_sha256") or "")
+    table_digest = str(contract.get("electrothermal_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "device_model_electrothermal_generation_id",
+                "temperature_electrothermal_generation_id",
+                "loss_trace_electrothermal_generation_id",
+                "thermal_network_electrothermal_generation_id",
+                "time_grid_electrothermal_generation_id",
+                "result_electrothermal_generation_id",
+            )
+        )
+        and solver_temperature == model_temperature
+        and _is_sha256(model_digest)
+        and contract.get("solver_device_model_sha256") == model_digest
+        and _is_sha256(network_digest)
+        and contract.get("solver_thermal_network_sha256") == network_digest
+        and len(loss_time) >= 2
+        and loss_time[0] >= 0.0
+        and all(right > left for left, right in zip(loss_time, loss_time[1:]))
+        and thermal_time == loss_time
+        and len(loss) == len(loss_time)
+        and all(value >= 0.0 for value in loss)
+        and thermal_loss == loss
+        and len(temperature) == len(loss_time)
+        and reported_temperature == temperature
+        and _is_sha256(table_digest)
+        and contract.get("reported_electrothermal_table_sha256") == table_digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1662,6 +1836,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "stepped_transient_measures_use_current_grid_parameter_tuples_and_row_order": (
             _stepped_transient_measure_row_identity_ok(positive)
+        ),
+        "switched_converter_measures_use_current_initial_state_topology_grid_and_cycle_window": (
+            _switched_converter_cycle_measure_identity_ok(positive)
+        ),
+        "electrothermal_results_use_current_temperature_model_loss_network_and_timestep": (
+            _electrothermal_generation_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }

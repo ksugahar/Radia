@@ -1328,3 +1328,120 @@ def test_v21_public_stepped_transient_accepted_grid_measure_row_generation_misma
     assert not result["checks"][
         "stepped_transient_measures_use_current_grid_parameter_tuples_and_row_order"
     ]
+
+
+def _with_v22_switching_and_electrothermal_identity(summary: dict) -> dict:
+    summary = _with_v21_noise_and_stepped_transient_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive[
+        "switched_converter_cycle_measure_initial_state_topology_generation_identity"
+    ] = {
+        "transient_generation_id": "switch-run-71",
+        "initial_state_transient_generation_id": "switch-run-71",
+        "topology_transient_generation_id": "switch-run-71",
+        "accepted_grid_transient_generation_id": "switch-run-71",
+        "cycle_window_transient_generation_id": "switch-run-71",
+        "measure_transient_generation_id": "switch-run-71",
+        "state_variable_ids": ["V(out)", "I(L1)"],
+        "initial_state_values": [0.0, 0.0],
+        "solver_initial_state_values": [0.0, 0.0],
+        "switching_topology_sha256": "1" * 64,
+        "solver_switching_topology_sha256": "1" * 64,
+        "accepted_time_grid_s": [0.0, 1.0e-6, 2.0e-6, 3.0e-6, 4.0e-6],
+        "measure_time_grid_s": [0.0, 1.0e-6, 2.0e-6, 3.0e-6, 4.0e-6],
+        "cycle_windows_s": [[0.0, 2.0e-6], [2.0e-6, 4.0e-6]],
+        "measure_cycle_windows_s": [[0.0, 2.0e-6], [2.0e-6, 4.0e-6]],
+        "measure_names": ["VOUT_AVG", "IL1_RMS"],
+        "reported_measure_names": ["VOUT_AVG", "IL1_RMS"],
+        "cycle_measure_values": [5.0, 1.25],
+        "reported_cycle_measure_values": [5.0, 1.25],
+        "cycle_measure_table_sha256": "2" * 64,
+        "reported_cycle_measure_table_sha256": "2" * 64,
+    }
+    positive[
+        "electrothermal_temperature_device_model_network_timestep_generation_identity"
+    ] = {
+        "electrothermal_generation_id": "electrothermal-71",
+        "device_model_electrothermal_generation_id": "electrothermal-71",
+        "temperature_electrothermal_generation_id": "electrothermal-71",
+        "loss_trace_electrothermal_generation_id": "electrothermal-71",
+        "thermal_network_electrothermal_generation_id": "electrothermal-71",
+        "time_grid_electrothermal_generation_id": "electrothermal-71",
+        "result_electrothermal_generation_id": "electrothermal-71",
+        "device_model_temperature_c": 125.0,
+        "solver_device_model_temperature_c": 125.0,
+        "device_model_sha256": "3" * 64,
+        "solver_device_model_sha256": "3" * 64,
+        "thermal_network_sha256": "4" * 64,
+        "solver_thermal_network_sha256": "4" * 64,
+        "electrical_loss_time_s": [0.0, 1.0e-3, 2.0e-3],
+        "thermal_time_s": [0.0, 1.0e-3, 2.0e-3],
+        "electrical_loss_w": [0.0, 2.0, 3.0],
+        "thermal_input_loss_w": [0.0, 2.0, 3.0],
+        "junction_temperature_c": [25.0, 25.8, 27.0],
+        "reported_junction_temperature_c": [25.0, 25.8, 27.0],
+        "electrothermal_table_sha256": "5" * 64,
+        "reported_electrothermal_table_sha256": "5" * 64,
+    }
+    return summary
+
+
+def test_accepts_v22_switching_and_electrothermal_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v22_switching_and_electrothermal_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v22_public_switched_converter_cycle_measure_initial_state_topology_generation_mismatch() -> None:
+    bad = _with_v22_switching_and_electrothermal_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "switched_converter_cycle_measure_initial_state_topology_generation_identity"
+    ]
+    identity.update(
+        {
+            "initial_state_transient_generation_id": "switch-run-70",
+            "topology_transient_generation_id": "switch-run-69",
+            "accepted_grid_transient_generation_id": "switch-run-68",
+            "cycle_window_transient_generation_id": "switch-run-67",
+            "solver_initial_state_values": [5.0, -1.0],
+            "solver_switching_topology_sha256": "c" * 64,
+            "measure_time_grid_s": [0.0, 2.0e-6, 1.0e-6, 4.0e-6],
+            "measure_cycle_windows_s": [[1.0e-6, 3.0e-6], [3.0e-6, 4.0e-6]],
+            "reported_measure_names": ["IL1_RMS", "VOUT_AVG"],
+            "reported_cycle_measure_values": [1.25, 4.5],
+            "reported_cycle_measure_table_sha256": "d" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "switched_converter_measures_use_current_initial_state_topology_grid_and_cycle_window"
+    ]
+
+
+def test_v22_public_electrothermal_temperature_step_device_model_thermal_network_generation_mismatch() -> None:
+    bad = _with_v22_switching_and_electrothermal_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "electrothermal_temperature_device_model_network_timestep_generation_identity"
+    ]
+    identity.update(
+        {
+            "device_model_electrothermal_generation_id": "electrothermal-70",
+            "temperature_electrothermal_generation_id": "electrothermal-69",
+            "thermal_network_electrothermal_generation_id": "electrothermal-68",
+            "time_grid_electrothermal_generation_id": "electrothermal-67",
+            "solver_device_model_temperature_c": 25.0,
+            "solver_device_model_sha256": "e" * 64,
+            "solver_thermal_network_sha256": "f" * 64,
+            "thermal_time_s": [0.0, 2.0e-3, 1.0e-3],
+            "thermal_input_loss_w": [0.0, 3.0, 2.0],
+            "reported_junction_temperature_c": [25.0, 26.0, 25.5],
+            "reported_electrothermal_table_sha256": "0" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "electrothermal_results_use_current_temperature_model_loss_network_and_timestep"
+    ]
