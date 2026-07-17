@@ -398,6 +398,217 @@ def _high_order_quality_reference_coordinate_generation_ok(identity: object) -> 
     )
 
 
+def _periodic_hex_node_pair_transform_instance_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("source_node_ids"),
+        identity.get("target_node_ids"),
+        identity.get("paired_source_node_ids"),
+        identity.get("paired_target_node_ids"),
+        identity.get("transform_translation_m"),
+        identity.get("paired_transform_translation_m"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        source_ids = [int(value) for value in fields[0]]
+        target_ids = [int(value) for value in fields[1]]
+        paired_source_ids = [int(value) for value in fields[2]]
+        paired_target_ids = [int(value) for value in fields[3]]
+        translation = [float(value) for value in fields[4]]
+        paired_translation = [float(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    instance_generation = str(identity.get("volume_instance_generation") or "")
+    digest = str(identity.get("node_pair_transform_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("node_pair_mesh_generation") == mesh_generation
+        and bool(instance_generation)
+        and identity.get("periodic_transform_volume_instance_generation")
+        == instance_generation
+        and identity.get("node_pair_volume_instance_generation")
+        == instance_generation
+        and bool(source_ids)
+        and len(source_ids) == len(target_ids)
+        and len(set(source_ids)) == len(source_ids)
+        and len(set(target_ids)) == len(target_ids)
+        and paired_source_ids == source_ids
+        and paired_target_ids == target_ids
+        and len(translation) == 3
+        and all(math.isfinite(value) for value in translation)
+        and paired_translation == translation
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("applied_node_pair_transform_sha256") == digest
+    )
+
+
+def _hex_boundary_layer_thickness_surface_normal_generation_ok(
+    identity: object,
+) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("surface_ids"),
+        identity.get("surface_normal_signs"),
+        identity.get("applied_surface_ids"),
+        identity.get("applied_collapse_direction_signs"),
+        identity.get("layer_thickness_m"),
+        identity.get("applied_layer_thickness_m"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        surface_ids = [int(value) for value in fields[0]]
+        normal_signs = [int(value) for value in fields[1]]
+        applied_ids = [int(value) for value in fields[2]]
+        applied_signs = [int(value) for value in fields[3]]
+        thickness = [float(value) for value in fields[4]]
+        applied_thickness = [float(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    geometry_generation = str(identity.get("geometry_generation") or "")
+    layer_generation = str(identity.get("boundary_layer_generation") or "")
+    digest = str(identity.get("surface_layer_map_sha256") or "")
+    return (
+        bool(geometry_generation)
+        and identity.get("surface_normal_geometry_generation") == geometry_generation
+        and identity.get("boundary_layer_geometry_generation") == geometry_generation
+        and bool(layer_generation)
+        and identity.get("thickness_boundary_layer_generation") == layer_generation
+        and identity.get("collapse_direction_boundary_layer_generation")
+        == layer_generation
+        and bool(surface_ids)
+        and len(set(surface_ids)) == len(surface_ids)
+        and len(surface_ids) == len(normal_signs) == len(thickness)
+        and all(sign in {-1, 1} for sign in normal_signs)
+        and applied_ids == surface_ids
+        and applied_signs == normal_signs
+        and all(math.isfinite(value) and value > 0.0 for value in thickness)
+        and applied_thickness == thickness
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("applied_surface_layer_map_sha256") == digest
+    )
+
+
+def _partition_ghost_owner_shared_node_map_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("partition_ids"),
+        identity.get("element_ids"),
+        identity.get("element_owner_partition_ids"),
+        identity.get("ghost_element_ids"),
+        identity.get("ghost_owner_partition_ids"),
+        identity.get("shared_node_ids"),
+        identity.get("shared_node_partition_pairs"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        partition_ids = [int(value) for value in fields[0]]
+        element_ids = [int(value) for value in fields[1]]
+        owners = [int(value) for value in fields[2]]
+        ghost_ids = [int(value) for value in fields[3]]
+        ghost_owners = [int(value) for value in fields[4]]
+        shared_nodes = [int(value) for value in fields[5]]
+        shared_pairs = [[int(value) for value in pair] for pair in fields[6]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("partition_generation") or "")
+    digest = str(identity.get("partition_ownership_sha256") or "")
+    owner_by_element = dict(zip(element_ids, owners))
+    return (
+        bool(generation)
+        and identity.get("ghost_owner_partition_generation") == generation
+        and identity.get("shared_node_partition_generation") == generation
+        and bool(partition_ids)
+        and len(set(partition_ids)) == len(partition_ids)
+        and len(element_ids) == len(owners)
+        and len(set(element_ids)) == len(element_ids)
+        and all(owner in partition_ids for owner in owners)
+        and len(ghost_ids) == len(ghost_owners)
+        and all(owner_by_element.get(element) == owner for element, owner in zip(ghost_ids, ghost_owners))
+        and len(shared_nodes) == len(shared_pairs)
+        and len(set(shared_nodes)) == len(shared_nodes)
+        and all(len(pair) == 2 and set(pair).issubset(partition_ids) for pair in shared_pairs)
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("exported_partition_ownership_sha256") == digest
+    )
+
+
+def _exodus_block_namespace_qa_mesh_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("block_ids"),
+        identity.get("block_names"),
+        identity.get("written_block_ids"),
+        identity.get("written_block_names"),
+        identity.get("qa_record"),
+        identity.get("written_qa_record"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        block_ids = [int(value) for value in fields[0]]
+        block_names = [str(value) for value in fields[1]]
+        written_ids = [int(value) for value in fields[2]]
+        written_names = [str(value) for value in fields[3]]
+        qa_record = [str(value) for value in fields[4]]
+        written_qa = [str(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    export_generation = str(identity.get("exodus_export_generation") or "")
+    digest = str(identity.get("block_namespace_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("block_namespace_mesh_generation") == mesh_generation
+        and identity.get("qa_record_mesh_generation") == mesh_generation
+        and bool(export_generation)
+        and identity.get("writer_export_generation") == export_generation
+        and bool(block_ids)
+        and len(block_ids) == len(block_names)
+        and len(set(block_ids)) == len(block_ids)
+        and len(set(block_names)) == len(block_names)
+        and all(block_names)
+        and written_ids == block_ids
+        and written_names == block_names
+        and len(qa_record) == 4
+        and all(qa_record)
+        and written_qa == qa_record
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("written_block_namespace_sha256") == digest
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -1076,6 +1287,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         ),
         "biased_sweep_layers_follow_current_source_curve_orientation": (
             sweep_layer_bias_orientation_ok
+        ),
+        "periodic_hex_pairs_follow_current_volume_instance_transform": (
+            _periodic_hex_node_pair_transform_instance_generation_ok(
+                summary.get("periodic_hex_node_pair_transform_instance_generation_identity")
+            )
+        ),
+        "hex_boundary_layers_follow_current_healed_surface_normals": (
+            _hex_boundary_layer_thickness_surface_normal_generation_ok(
+                summary.get("hex_boundary_layer_thickness_surface_normal_generation_identity")
+            )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -1777,6 +1998,16 @@ def cubit_mixed_transition_source_gate(
         ),
         "high_order_quality_uses_current_reference_coordinates_and_order": (
             high_order_quality_reference_generation_ok
+        ),
+        "partition_ghosts_and_shared_nodes_use_current_owner_map": (
+            _partition_ghost_owner_shared_node_map_generation_ok(
+                summary.get("partition_ghost_element_owner_shared_node_map_identity")
+            )
+        ),
+        "exodus_blocks_and_qa_use_current_mesh_namespace": (
+            _exodus_block_namespace_qa_mesh_generation_ok(
+                summary.get("exodus_block_id_namespace_qa_record_mesh_generation_identity")
+            )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
