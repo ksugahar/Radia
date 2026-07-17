@@ -244,6 +244,162 @@ def _axisymmetric_revolved_energy_force_identity_ok(value):
     )
 
 
+def _nonlinear_bh_incremental_force_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("nonlinear_generation", "")).strip()
+    material_ids = [
+        str(item).strip() for item in value.get("nonlinear_material_ids", [])
+    ]
+    result_material_ids = [
+        str(item).strip()
+        for item in value.get("result_nonlinear_material_ids", [])
+    ]
+    branch_id = str(value.get("branch_id", "")).strip()
+    try:
+        current = float(value.get("load_current_a"))
+        result_current = float(value.get("result_load_current_a"))
+        energy = float(value.get("magnetic_energy_j"))
+        result_energy = float(value.get("result_magnetic_energy_j"))
+        coenergy = float(value.get("magnetic_coenergy_j"))
+        result_coenergy = float(value.get("result_magnetic_coenergy_j"))
+        force = [float(item) for item in value.get("incremental_force_n", [])]
+        result_force = [
+            float(item) for item in value.get("result_incremental_force_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest_pairs = (
+        ("bh_curve_sha256", "result_bh_curve_sha256"),
+        ("material_map_sha256", "result_material_map_sha256"),
+        ("incremental_state_sha256", "result_incremental_state_sha256"),
+        ("mesh_sha256", "result_mesh_sha256"),
+        ("result_sha256", "accepted_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "bh_curve_nonlinear_generation",
+                "material_nonlinear_generation",
+                "branch_nonlinear_generation",
+                "incremental_state_nonlinear_generation",
+                "mesh_nonlinear_generation",
+                "energy_nonlinear_generation",
+                "coenergy_nonlinear_generation",
+                "force_nonlinear_generation",
+                "result_nonlinear_generation",
+            )
+        )
+        and bool(material_ids)
+        and all(material_ids)
+        and len(set(material_ids)) == len(material_ids)
+        and result_material_ids == material_ids
+        and bool(branch_id)
+        and value.get("result_branch_id") == branch_id
+        and math.isfinite(current)
+        and math.isclose(result_current, current, rel_tol=0.0, abs_tol=1.0e-15)
+        and all(
+            _valid_sha256(value.get(source))
+            and value.get(result) == value.get(source)
+            for source, result in digest_pairs
+        )
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and math.isclose(result_energy, energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isfinite(coenergy)
+        and coenergy >= 0.0
+        and math.isclose(
+            result_coenergy, coenergy, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and bool(force)
+        and all(math.isfinite(item) for item in force)
+        and result_force == force
+    )
+
+
+def _open_boundary_decay_multipole_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("boundary_generation", "")).strip()
+    boundary_type = str(value.get("boundary_type", "")).strip()
+    try:
+        source_radius = float(value.get("source_radius_m"))
+        result_source_radius = float(value.get("result_source_radius_m"))
+        outer_radius = float(value.get("outer_radius_m"))
+        result_outer_radius = float(value.get("result_outer_radius_m"))
+        multipole_order = int(value.get("multipole_order"))
+        result_multipole_order = int(value.get("result_multipole_order"))
+        radii = [float(item) for item in value.get("decay_sample_radii_m", [])]
+        result_radii = [
+            float(item) for item in value.get("result_decay_sample_radii_m", [])
+        ]
+        flux_density = [
+            float(item) for item in value.get("decay_flux_density_t", [])
+        ]
+        result_flux_density = [
+            float(item) for item in value.get("result_decay_flux_density_t", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest_pairs = (
+        ("material_map_sha256", "result_material_map_sha256"),
+        ("mesh_sha256", "result_mesh_sha256"),
+        ("multipole_moment_sha256", "result_multipole_moment_sha256"),
+        ("result_sha256", "accepted_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "domain_boundary_generation",
+                "mesh_boundary_generation",
+                "material_boundary_generation",
+                "multipole_boundary_generation",
+                "decay_boundary_generation",
+                "result_boundary_generation",
+            )
+        )
+        and boundary_type == "asymptotic_multipole"
+        and value.get("result_boundary_type") == boundary_type
+        and math.isfinite(source_radius)
+        and source_radius > 0.0
+        and math.isclose(
+            result_source_radius, source_radius, rel_tol=0.0, abs_tol=1.0e-18
+        )
+        and math.isfinite(outer_radius)
+        and outer_radius > source_radius
+        and math.isclose(
+            result_outer_radius, outer_radius, rel_tol=0.0, abs_tol=1.0e-18
+        )
+        and multipole_order >= 1
+        and result_multipole_order == multipole_order
+        and all(
+            _valid_sha256(value.get(source))
+            and value.get(result) == value.get(source)
+            for source, result in digest_pairs
+        )
+        and len(radii) >= 3
+        and all(math.isfinite(item) for item in radii)
+        and all(left < right for left, right in zip(radii, radii[1:]))
+        and radii[0] > source_radius
+        and radii[-1] <= outer_radius
+        and result_radii == radii
+        and len(flux_density) == len(radii)
+        and all(math.isfinite(item) and item >= 0.0 for item in flux_density)
+        and all(
+            left >= right for left, right in zip(flux_density, flux_density[1:])
+        )
+        and result_flux_density == flux_density
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -305,6 +461,8 @@ def force_coenergy_displacement_gate(
     sliding_band_harmonic_torque_identity_ok = True
     weighted_stress_energy_derivative_identity_ok = True
     axisymmetric_revolved_energy_force_identity_ok = True
+    nonlinear_bh_incremental_force_identity_ok = True
+    open_boundary_decay_multipole_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -340,6 +498,8 @@ def force_coenergy_displacement_gate(
         sliding_band_harmonic_torque_identity_ok = False
         weighted_stress_energy_derivative_identity_ok = False
         axisymmetric_revolved_energy_force_identity_ok = False
+        nonlinear_bh_incremental_force_identity_ok = False
+        open_boundary_decay_multipole_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1860,6 +2020,20 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        nonlinear_bh_incremental_force_identity_ok = (
+            _nonlinear_bh_incremental_force_identity_ok(
+                artifact_identity.get(
+                    "nonlinear_bh_incremental_energy_coenergy_force_branch_mesh_generation_identity"
+                )
+            )
+        )
+        open_boundary_decay_multipole_identity_ok = (
+            _open_boundary_decay_multipole_identity_ok(
+                artifact_identity.get(
+                    "open_boundary_domain_decay_multipole_moment_material_generation_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -1989,6 +2163,12 @@ def force_coenergy_displacement_gate(
         ),
         "axisymmetric_revolved_energy_force_share_2pir_hodge_field_material_and_mesh": (
             axisymmetric_revolved_energy_force_identity_ok
+        ),
+        "nonlinear_bh_incremental_force_uses_current_branch_material_mesh_energy_and_coenergy": (
+            nonlinear_bh_incremental_force_identity_ok
+        ),
+        "open_boundary_uses_current_domain_decay_multipole_material_and_mesh": (
+            open_boundary_decay_multipole_identity_ok
         ),
     }
     return {
