@@ -1763,17 +1763,41 @@ keep the plain-phi convention, the genus ``P_wp_caveat`` becomes a
 a built-in frozen-vs-plain cross-check refuses to report on operator
 mismatch.
 
-**Weak-vs-strong method choice: WEAK FIRST.**
-Run the weak path as the production route because it avoids the
-iterative coil-current re-solve.  The weak run's own
-``|delta_L_nH| / L_coil_nH`` ratio is the escalation indicator for coil
-back-reaction.  Escalate to ``--coupling-mode strong`` when that ratio
-is not small (close-coupled / high-mu / small-gap workpiece)
-or when the self-consistent L_total including the workpiece
-magnetic-energy term (the term weak's Telegen form drops) is itself
-the target quantity.  Both routes now carry the identical genus-1
-correction, so this is purely a cost/physics-regime choice, not an
-accuracy fallback.
+**Weak-vs-strong method choice: WEAK FIRST (Sugahara, 2026-07-17).**
+Run the weak path as the production route -- on Takahashi it is ~10x
+faster on the workpiece stage (~25 s vs 228 s coupled; the coil solve
+is common) and agrees with strong to ~1% on P_wp / H_t.  The weak
+run's OWN output reports the coupling strength: ``|delta_L_nH| /
+L_coil_nH`` measures the coil back-reaction.  MEASURED on Takahashi
+(2026-07-17 corrected; an earlier note said 1.4%, which was wrong):
+delta_L = -15.5 nH -> |delta_L|/L_coil = 15% -- and weak-vs-strong
+P_wp STILL agrees to ~1%, so a double-digit back-reaction ratio does
+NOT by itself mandate strong for heating.  Escalate to
+``--coupling-mode strong`` when the self-consistent L_total including
+the workpiece magnetic-energy term (the term weak's Telegen form
+drops) is itself the target quantity, or in close-coupled / high-mu /
+small-gap regimes where the coil-current REDISTRIBUTION (not just its
+lumped delta_L) plausibly changes the incident field shape -- then
+verify by one weak-vs-strong pair before batch runs.  Both routes
+carry the identical genus-1 correction, so this is purely a
+cost/physics-regime choice, not an accuracy fallback.
+
+**PEEC-coil weak coupling: verified against BEM-A on Takahashi
+(2026-07-17).**  The fastest forward route (``--coil-solver peec
+--coil-step <coil.step>`` + weak + intree-dense, loop auto) was
+cross-checked against the BEM-A coil on the same workpiece: P_wp
+18.33 vs 18.41 kW (0.55%), H_t 46.22 vs 46.32 kA/m (0.3%), alpha
+5110 A @ -174.1 deg vs 5264 A @ -173.9 deg, delta_L -15.9 vs
+-15.5 nH -- with the coil stage collapsing from ~82 s
+(impedance-EFIE, 4136 tris) to ~1.1 s (filament extraction 0.4 s +
+proximity bundle solve 0.7 s); whole weak run ~23 s vs ~109 s.  The
+PEEC coil there was a RECONSTRUCTED gapped rect-torus STEP (342 deg
+arc, true 18.1 x 16.3 mm section, leads omitted -- Kubota's original
+CAD was unavailable), so the 0.55% also bounds the lead contribution
+to P_wp.  PEEC + nonlinear ESIM composes too (Karl converged in 15
+iterations, P_wp 18.58 kW, loop auto-skipped with the recorded ESIM
+skip reason).  L_coil differs from BEM-A by the leads (66 vs 102 nH):
+use BEM-A when coil L / R themselves are deliverables.
 
 **psi-Poisson incident -- the P1 weak route, basis-determined
 (2026-07-17).**  Replaces the axis-ray + horizontal-ray path
