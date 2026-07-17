@@ -220,6 +220,10 @@ def regularized_trace_inverse_path_gate(
     cq_time_history_identity_ok = (
         _optional_cq_time_history_identity_is_aligned(summary)
     )
+    hmatrix_block_tree_identity_ok = (
+        _optional_hmatrix_block_tree_identity_is_aligned(summary)
+    )
+    ad_gradient_identity_ok = _optional_ad_gradient_identity_is_aligned(summary)
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -351,6 +355,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_time_history_uses_current_contour_weights_startup_and_causality_window": (
             cq_time_history_identity_ok
+        ),
+        "hmatrix_uses_current_block_tree_admissibility_permutations_tolerance_kernel_and_mesh": (
+            hmatrix_block_tree_identity_ok
+        ),
+        "ad_gradient_uses_current_tape_material_operator_mesh_objective_and_primal": (
+            ad_gradient_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -2029,6 +2039,162 @@ def _optional_cq_time_history_identity_is_aligned(
         and result_prehistory == prehistory
         and _is_sha256(digest)
         and str(value.get("reported_cq_result_sha256", "")).lower() == digest
+    )
+
+
+def _optional_hmatrix_block_tree_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_block_tree_admissibility_permutation_tolerance_kernel_mesh_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        shape = tuple(int(item) for item in value["matrix_shape"])
+        result_shape = tuple(int(item) for item in value["result_matrix_shape"])
+        row_permutation = tuple(int(item) for item in value["row_permutation"])
+        result_row_permutation = tuple(
+            int(item) for item in value["result_row_permutation"]
+        )
+        column_permutation = tuple(
+            int(item) for item in value["column_permutation"]
+        )
+        result_column_permutation = tuple(
+            int(item) for item in value["result_column_permutation"]
+        )
+        eta = float(value["admissibility_eta"])
+        result_eta = float(value["result_admissibility_eta"])
+        tolerance = float(value["relative_tolerance"])
+        result_tolerance = float(value["result_relative_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("hmatrix_generation", "")).strip()
+    block_digest = str(value.get("block_tree_sha256", "")).lower()
+    mesh_digest = str(value.get("boundary_mesh_sha256", "")).lower()
+    result_digest = str(value.get("hmatrix_result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "block_tree_hmatrix_generation",
+                "admissibility_hmatrix_generation",
+                "permutation_hmatrix_generation",
+                "tolerance_hmatrix_generation",
+                "kernel_hmatrix_generation",
+                "mesh_hmatrix_generation",
+                "result_hmatrix_generation",
+            )
+        )
+        and len(shape) == 2
+        and all(item > 0 for item in shape)
+        and result_shape == shape
+        and _is_sha256(block_digest)
+        and str(value.get("result_block_tree_sha256", "")).lower() == block_digest
+        and value.get("admissibility_rule") == "diameter_le_eta_distance"
+        and value.get("result_admissibility_rule")
+        == value.get("admissibility_rule")
+        and math.isfinite(eta)
+        and eta > 0.0
+        and result_eta == eta
+        and sorted(row_permutation) == list(range(shape[0]))
+        and result_row_permutation == row_permutation
+        and sorted(column_permutation) == list(range(shape[1]))
+        and result_column_permutation == column_permutation
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance < 1.0
+        and result_tolerance == tolerance
+        and bool(str(value.get("kernel_id", "")).strip())
+        and value.get("result_kernel_id") == value.get("kernel_id")
+        and _is_sha256(mesh_digest)
+        and str(value.get("result_boundary_mesh_sha256", "")).lower()
+        == mesh_digest
+        and _is_sha256(result_digest)
+        and str(value.get("reported_hmatrix_result_sha256", "")).lower()
+        == result_digest
+    )
+
+
+def _optional_ad_gradient_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "ad_parameter_tape_material_operator_mesh_objective_primal_gradient_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        names = tuple(str(item) for item in value["parameter_names"])
+        result_names = tuple(str(item) for item in value["result_parameter_names"])
+        parameters = tuple(float(item) for item in value["parameter_values"])
+        result_parameters = tuple(
+            float(item) for item in value["result_parameter_values"]
+        )
+        gradient = tuple(float(item) for item in value["ad_gradient"])
+        reference = tuple(
+            float(item) for item in value["finite_difference_gradient"]
+        )
+        reported_error = float(value["maximum_gradient_relative_error"])
+        tolerance = float(value["gradient_relative_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("ad_generation", "")).strip()
+    relative_errors = [
+        abs(left - right) / max(abs(left), abs(right), 1.0e-300)
+        for left, right in zip(gradient, reference)
+    ]
+    digests = (
+        ("parameter_tape_sha256", "result_parameter_tape_sha256"),
+        ("assembled_operator_sha256", "result_assembled_operator_sha256"),
+        ("mesh_sha256", "result_mesh_sha256"),
+        ("primal_solution_sha256", "result_primal_solution_sha256"),
+        ("gradient_result_sha256", "reported_gradient_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "parameter_tape_ad_generation",
+                "material_law_ad_generation",
+                "operator_ad_generation",
+                "mesh_ad_generation",
+                "objective_ad_generation",
+                "primal_ad_generation",
+                "gradient_ad_generation",
+                "result_ad_generation",
+            )
+        )
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and result_names == names
+        and len(parameters) == len(names)
+        and all(math.isfinite(item) for item in parameters)
+        and result_parameters == parameters
+        and bool(str(value.get("material_law_id", "")).strip())
+        and value.get("result_material_law_id") == value.get("material_law_id")
+        and bool(str(value.get("objective_id", "")).strip())
+        and value.get("result_objective_id") == value.get("objective_id")
+        and all(
+            _is_sha256(str(value.get(source, "")).lower())
+            and str(value.get(target, "")).lower()
+            == str(value.get(source, "")).lower()
+            for source, target in digests
+        )
+        and len(gradient) == len(reference) == len(names)
+        and all(math.isfinite(item) for item in gradient + reference)
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and math.isfinite(reported_error)
+        and relative_errors
+        and math.isclose(reported_error, max(relative_errors), rel_tol=1.0e-6)
+        and reported_error <= tolerance
     )
 
 
