@@ -336,6 +336,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     brep_edge_tolerance_shape_fix_identity_ok = True
     step_occurrence_color_material_inheritance_identity_ok = True
     stl_tolerance_model_length_unit_generation_identity_ok = True
+    step_import_tolerance_unit_healing_generation_identity_ok = True
+    tessellation_vertex_index_normal_transform_generation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -359,6 +361,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         brep_edge_tolerance_shape_fix_identity_ok = False
         step_occurrence_color_material_inheritance_identity_ok = False
         stl_tolerance_model_length_unit_generation_identity_ok = False
+        step_import_tolerance_unit_healing_generation_identity_ok = False
+        tessellation_vertex_index_normal_transform_generation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -1251,6 +1255,152 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and stl_tolerance.get("tessellator_tolerance_contract_sha256")
                 == digest
             )
+
+        step_import_healing = replay_identity_value.get(
+            "step_import_tolerance_unit_healing_generation_identity"
+        )
+        if step_import_healing is not None:
+            step_import_healing = (
+                step_import_healing
+                if isinstance(step_import_healing, Mapping)
+                else {}
+            )
+            import_generation = str(
+                step_import_healing.get("step_import_generation", "")
+            ).strip()
+            healing_generation = str(
+                step_import_healing.get("healing_generation", "")
+            ).strip()
+            source_unit = str(
+                step_import_healing.get("source_length_unit", "")
+            ).strip()
+            tolerance_unit = str(
+                step_import_healing.get("tolerance_length_unit", "")
+            ).strip()
+            length_scales = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            try:
+                tolerance_value = float(step_import_healing.get("tolerance_value"))
+                tolerance_si = float(step_import_healing.get("tolerance_si_m"))
+                healed_edge_ids = [
+                    int(item)
+                    for item in step_import_healing.get("healed_edge_ids", [])
+                ]
+                imported_edge_ids = [
+                    int(item)
+                    for item in step_import_healing.get(
+                        "imported_healed_edge_ids", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                tolerance_value = tolerance_si = math.nan
+                healed_edge_ids = []
+                imported_edge_ids = []
+            digest = str(
+                step_import_healing.get("healed_edge_map_sha256", "")
+            ).lower()
+            scale = length_scales.get(tolerance_unit)
+            step_import_tolerance_unit_healing_generation_identity_ok = (
+                bool(import_generation)
+                and step_import_healing.get("tolerance_import_generation")
+                == import_generation
+                and step_import_healing.get("healed_edge_map_import_generation")
+                == import_generation
+                and bool(healing_generation)
+                and step_import_healing.get("tolerance_healing_generation")
+                == healing_generation
+                and step_import_healing.get("healed_edge_map_healing_generation")
+                == healing_generation
+                and source_unit in length_scales
+                and tolerance_unit == source_unit
+                and scale is not None
+                and math.isfinite(tolerance_value)
+                and tolerance_value > 0.0
+                and math.isclose(
+                    tolerance_value * scale,
+                    tolerance_si,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-30,
+                )
+                and bool(healed_edge_ids)
+                and len(set(healed_edge_ids)) == len(healed_edge_ids)
+                and imported_edge_ids == healed_edge_ids
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and step_import_healing.get("imported_healed_edge_map_sha256")
+                == digest
+            )
+
+        tessellation_transform = replay_identity_value.get(
+            "tessellation_vertex_index_normal_transform_generation_identity"
+        )
+        if tessellation_transform is not None:
+            tessellation_transform = (
+                tessellation_transform
+                if isinstance(tessellation_transform, Mapping)
+                else {}
+            )
+            shape_generation = str(
+                tessellation_transform.get("shape_generation", "")
+            ).strip()
+            transform_generation = str(
+                tessellation_transform.get("location_transform_generation", "")
+            ).strip()
+            try:
+                vertex_count = int(tessellation_transform.get("vertex_count", -1))
+                normal_count = int(tessellation_transform.get("normal_count", -1))
+                triangles = [
+                    [int(item) for item in row]
+                    for row in tessellation_transform.get("triangle_indices", [])
+                ]
+                transformed_triangles = [
+                    [int(item) for item in row]
+                    for row in tessellation_transform.get(
+                        "transformed_triangle_indices", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                vertex_count = normal_count = -1
+                triangles = []
+                transformed_triangles = []
+            digest = str(
+                tessellation_transform.get("tessellation_sha256", "")
+            ).lower()
+            tessellation_vertex_index_normal_transform_generation_identity_ok = (
+                bool(shape_generation)
+                and tessellation_transform.get("vertex_shape_generation")
+                == shape_generation
+                and tessellation_transform.get("index_shape_generation")
+                == shape_generation
+                and tessellation_transform.get("normal_shape_generation")
+                == shape_generation
+                and bool(transform_generation)
+                and tessellation_transform.get(
+                    "vertex_location_transform_generation"
+                )
+                == transform_generation
+                and tessellation_transform.get(
+                    "index_location_transform_generation"
+                )
+                == transform_generation
+                and tessellation_transform.get(
+                    "normal_location_transform_generation"
+                )
+                == transform_generation
+                and vertex_count > 0
+                and normal_count == vertex_count
+                and bool(triangles)
+                and all(
+                    len(row) == 3
+                    and len(set(row)) == 3
+                    and all(0 <= item < vertex_count for item in row)
+                    for row in triangles
+                )
+                and transformed_triangles == triangles
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and tessellation_transform.get("rendered_tessellation_sha256")
+                == digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -1332,6 +1482,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "stl_tolerances_use_current_model_length_unit_generation": (
             stl_tolerance_model_length_unit_generation_identity_ok
+        ),
+        "step_import_tolerances_and_healed_edges_share_current_generation": (
+            step_import_tolerance_unit_healing_generation_identity_ok
+        ),
+        "tessellation_vertices_indices_and_normals_use_final_transform": (
+            tessellation_vertex_index_normal_transform_generation_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"

@@ -3836,6 +3836,160 @@ def shape_mass_property_crosscheck_summary(
                 )
             )
 
+    boolean_subshape_evidence_present = any(
+        row.get("boolean_history_subshape_label_fillet_order_identity") is not None
+        for row in identity_rows
+    )
+
+    def boolean_history_subshape_label_fillet_order_identity(row):
+        value = row.get("boolean_history_subshape_label_fillet_order_identity")
+        if not isinstance(value, dict):
+            return None
+        boolean_generation = str(value.get("boolean_generation", "")).strip()
+        fillet_generation = str(value.get("fillet_generation", "")).strip()
+        labels = [str(label) for label in value.get("subshape_labels", [])]
+        resolved_labels = [
+            str(label) for label in value.get("resolved_subshape_labels", [])
+        ]
+        try:
+            face_ids = [int(item) for item in value.get("history_face_ids", [])]
+            resolved_face_ids = [
+                int(item) for item in value.get("resolved_face_ids", [])
+            ]
+            edge_ids = [int(item) for item in value.get("fillet_edge_ids", [])]
+            resolved_edge_ids = [
+                int(item) for item in value.get("resolved_fillet_edge_ids", [])
+            ]
+        except (TypeError, ValueError):
+            return None
+        digest = str(value.get("subshape_history_sha256", "")).lower()
+        if (
+            not boolean_generation
+            or value.get("history_boolean_generation") != boolean_generation
+            or not fillet_generation
+            or value.get("label_fillet_generation") != fillet_generation
+            or value.get("edge_order_fillet_generation") != fillet_generation
+            or not labels
+            or len(set(labels)) != len(labels)
+            or any(not label.strip() for label in labels)
+            or resolved_labels != labels
+            or len(face_ids) != len(labels)
+            or len(set(face_ids)) != len(face_ids)
+            or resolved_face_ids != face_ids
+            or not edge_ids
+            or len(set(edge_ids)) != len(edge_ids)
+            or resolved_edge_ids != edge_ids
+            or not valid_sha256(digest)
+            or value.get("resolved_subshape_history_sha256") != digest
+        ):
+            return None
+        return (
+            boolean_generation,
+            fillet_generation,
+            tuple(labels),
+            tuple(face_ids),
+            tuple(edge_ids),
+            digest,
+        )
+
+    reference_boolean_subshape_histories = {
+        str(row.get("name", "")): boolean_history_subshape_label_fillet_order_identity(
+            row
+        )
+        for row in reference
+    }
+    boolean_subshape_identity_ok = not boolean_subshape_evidence_present
+    if boolean_subshape_evidence_present:
+        boolean_subshape_identity_ok = bool(
+            reference_boolean_subshape_histories
+        ) and all(
+            value is not None
+            for value in reference_boolean_subshape_histories.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_subshape_identity_ok = boolean_subshape_identity_ok and all(
+                boolean_history_subshape_label_fillet_order_identity(row)
+                == reference_boolean_subshape_histories.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    assembly_mate_evidence_present = any(
+        row.get("assembly_mate_frame_unit_location_generation_identity") is not None
+        for row in identity_rows
+    )
+
+    def assembly_mate_frame_unit_location_generation_identity(row):
+        value = row.get("assembly_mate_frame_unit_location_generation_identity")
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("assembly_generation", "")).strip()
+        length_unit = str(value.get("length_unit", "")).strip()
+        names = [str(name) for name in value.get("mate_names", [])]
+        resolved_names = [str(name) for name in value.get("resolved_mate_names", [])]
+        local_digests = [
+            str(item).lower() for item in value.get("local_frame_sha256", [])
+        ]
+        resolved_local_digests = [
+            str(item).lower()
+            for item in value.get("resolved_local_frame_sha256", [])
+        ]
+        parent_digests = [
+            str(item).lower() for item in value.get("parent_location_sha256", [])
+        ]
+        resolved_parent_digests = [
+            str(item).lower()
+            for item in value.get("resolved_parent_location_sha256", [])
+        ]
+        digest = str(value.get("mate_resolution_sha256", "")).lower()
+        if (
+            not generation
+            or value.get("mate_frame_assembly_generation") != generation
+            or value.get("parent_location_assembly_generation") != generation
+            or value.get("unit_assembly_generation") != generation
+            or length_unit not in {"m", "cm", "mm"}
+            or value.get("mate_frame_length_unit") != length_unit
+            or value.get("parent_location_length_unit") != length_unit
+            or not names
+            or len(set(names)) != len(names)
+            or any(not name.strip() for name in names)
+            or resolved_names != names
+            or len(local_digests) != len(names)
+            or resolved_local_digests != local_digests
+            or len(parent_digests) != len(names)
+            or resolved_parent_digests != parent_digests
+            or not all(valid_sha256(item) for item in local_digests)
+            or not all(valid_sha256(item) for item in parent_digests)
+            or not valid_sha256(digest)
+            or value.get("resolved_mate_resolution_sha256") != digest
+        ):
+            return None
+        return (
+            generation,
+            length_unit,
+            tuple(names),
+            tuple(local_digests),
+            tuple(parent_digests),
+            digest,
+        )
+
+    reference_assembly_mate_maps = {
+        str(row.get("name", "")): (
+            assembly_mate_frame_unit_location_generation_identity(row)
+        )
+        for row in reference
+    }
+    assembly_mate_identity_ok = not assembly_mate_evidence_present
+    if assembly_mate_evidence_present:
+        assembly_mate_identity_ok = bool(reference_assembly_mate_maps) and all(
+            value is not None for value in reference_assembly_mate_maps.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_mate_identity_ok = assembly_mate_identity_ok and all(
+                assembly_mate_frame_unit_location_generation_identity(row)
+                == reference_assembly_mate_maps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3931,6 +4085,12 @@ def shape_mass_property_crosscheck_summary(
         "boolean_retained_face_names_follow_post_refine_topology_history": (
             retained_face_history_identity_ok
         ),
+        "boolean_subshape_labels_follow_current_fillet_edge_order": (
+            boolean_subshape_identity_ok
+        ),
+        "assembly_mates_share_current_frame_unit_and_parent_location": (
+            assembly_mate_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3983,6 +4143,12 @@ def shape_mass_property_crosscheck_summary(
         "boolean_retained_face_names_follow_post_refine_topology_history"
     ]:
         issues.append("Boolean retained face names use topology history from before refine")
+    if not checks["boolean_subshape_labels_follow_current_fillet_edge_order"]:
+        issues.append("Boolean subshape labels use history from before fillet reordering")
+    if not checks[
+        "assembly_mates_share_current_frame_unit_and_parent_location"
+    ]:
+        issues.append("assembly mates mix stale frames, units, or parent locations")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
