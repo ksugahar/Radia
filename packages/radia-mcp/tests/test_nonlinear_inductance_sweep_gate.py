@@ -394,6 +394,53 @@ def _with_v14_bindings(summary):
             "excitation_table_sha256": "c" * 64,
             "realized_gain_excitation_table_sha256": "c" * 64,
         }
+        row[
+            "farfield_polarization_basis_phase_center_coordinate_generation_identity"
+        ] = {
+            "farfield_generation": "farfield-22",
+            "result_farfield_generation": "farfield-22",
+            "monitor_coordinate_generation": "farfield-monitor-22",
+            "theta_basis_monitor_coordinate_generation": "farfield-monitor-22",
+            "phi_basis_monitor_coordinate_generation": "farfield-monitor-22",
+            "phase_center_monitor_coordinate_generation": "farfield-monitor-22",
+            "result_monitor_coordinate_generation": "farfield-monitor-22",
+            "sample_ids": [1, 2, 3],
+            "result_sample_ids": [1, 2, 3],
+            "theta_basis_sha256": ["1" * 64, "2" * 64, "3" * 64],
+            "result_theta_basis_sha256": ["1" * 64, "2" * 64, "3" * 64],
+            "phi_basis_sha256": ["4" * 64, "5" * 64, "6" * 64],
+            "result_phi_basis_sha256": ["4" * 64, "5" * 64, "6" * 64],
+            "phase_center_m": [0.0, 0.0, 0.0],
+            "result_phase_center_m": [0.0, 0.0, 0.0],
+            "polarization_table_sha256": "7" * 64,
+            "result_polarization_table_sha256": "7" * 64,
+        }
+        row["broadband_energy_q_port_loss_normalization_generation_identity"] = {
+            "analysis_generation": "broadband-analysis-22",
+            "energy_analysis_generation": "broadband-analysis-22",
+            "port_power_analysis_generation": "broadband-analysis-22",
+            "loss_analysis_generation": "broadband-analysis-22",
+            "q_result_analysis_generation": "broadband-analysis-22",
+            "frequency_grid_generation": "frequency-grid-22",
+            "energy_frequency_grid_generation": "frequency-grid-22",
+            "port_power_frequency_grid_generation": "frequency-grid-22",
+            "loss_frequency_grid_generation": "frequency-grid-22",
+            "q_frequency_grid_generation": "frequency-grid-22",
+            "excitation_generation": "excitation-22",
+            "energy_excitation_generation": "excitation-22",
+            "port_power_excitation_generation": "excitation-22",
+            "loss_excitation_generation": "excitation-22",
+            "frequencies_hz": [1.0e9, 1.5e9, 2.0e9],
+            "q_frequencies_hz": [1.0e9, 1.5e9, 2.0e9],
+            "stored_energy_j": [1.0e-6, 1.1e-6, 1.2e-6],
+            "q_stored_energy_j": [1.0e-6, 1.1e-6, 1.2e-6],
+            "port_power_w": [1.0, 1.0, 1.0],
+            "q_port_power_w": [1.0, 1.0, 1.0],
+            "loss_power_w": [0.1, 0.11, 0.12],
+            "q_loss_power_w": [0.1, 0.11, 0.12],
+            "energy_q_input_sha256": "8" * 64,
+            "result_energy_q_input_sha256": "8" * 64,
+        }
     return summary
 
 
