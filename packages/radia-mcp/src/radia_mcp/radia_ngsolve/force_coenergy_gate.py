@@ -131,6 +131,119 @@ def _sliding_band_harmonic_torque_identity_ok(value):
     )
 
 
+def _weighted_stress_energy_derivative_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    mesh_digest = str(value.get("weighted_stress_mesh_sha256", "")).lower()
+    result_digest = str(value.get("force_result_sha256", "")).lower()
+    try:
+        weighted_force = [
+            float(item) for item in value.get("weighted_stress_force_n", [])
+        ]
+        derivative_force = [
+            float(item) for item in value.get("energy_derivative_force_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    frame_id = str(value.get("displacement_frame_id", "")).strip()
+    displacement_unit = str(value.get("displacement_unit", "")).strip()
+    force_unit = str(value.get("force_unit", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "weighted_stress_force_generation",
+                "energy_derivative_force_generation",
+                "mesh_force_generation",
+                "displacement_frame_force_generation",
+                "unit_force_generation",
+                "result_force_generation",
+            )
+        )
+        and _valid_sha256(mesh_digest)
+        and value.get("energy_derivative_mesh_sha256") == mesh_digest
+        and bool(frame_id)
+        and value.get("energy_derivative_displacement_frame_id") == frame_id
+        and displacement_unit == "m"
+        and value.get("energy_derivative_displacement_unit") == displacement_unit
+        and force_unit == "N"
+        and value.get("energy_derivative_force_unit") == force_unit
+        and bool(weighted_force)
+        and all(math.isfinite(item) for item in weighted_force)
+        and derivative_force == weighted_force
+        and _valid_sha256(result_digest)
+        and value.get("energy_derivative_result_sha256") == result_digest
+    )
+
+
+def _axisymmetric_revolved_energy_force_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("axisymmetric_generation", "")).strip()
+    measure = str(value.get("jacobian_measure", "")).strip().lower()
+    derham_id = str(value.get("derham_sequence_id", "")).strip()
+    try:
+        angle = float(value.get("revolution_angle_deg"))
+        axisymmetric_energy = float(value.get("axisymmetric_energy_j"))
+        revolved_energy = float(value.get("revolved_energy_j"))
+        axisymmetric_force = [
+            float(item) for item in value.get("axisymmetric_force_n", [])
+        ]
+        revolved_force = [
+            float(item) for item in value.get("revolved_force_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest_pairs = (
+        ("field_state_sha256", "revolved_field_state_sha256"),
+        ("material_map_sha256", "revolved_material_map_sha256"),
+        ("axisymmetric_mesh_sha256", "revolved_source_mesh_sha256"),
+        ("result_sha256", "revolved_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "jacobian_axisymmetric_generation",
+                "field_axisymmetric_generation",
+                "material_axisymmetric_generation",
+                "mesh_axisymmetric_generation",
+                "revolved_result_axisymmetric_generation",
+            )
+        )
+        and measure == "2*pi*r"
+        and str(value.get("revolved_jacobian_measure", "")).strip().lower()
+        == measure
+        and all(
+            _valid_sha256(value.get(source))
+            and value.get(result) == value.get(source)
+            for source, result in digest_pairs
+        )
+        and math.isfinite(angle)
+        and math.isclose(angle, 360.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isfinite(axisymmetric_energy)
+        and math.isfinite(revolved_energy)
+        and math.isclose(
+            revolved_energy,
+            axisymmetric_energy,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-18,
+        )
+        and bool(axisymmetric_force)
+        and all(math.isfinite(item) for item in axisymmetric_force)
+        and revolved_force == axisymmetric_force
+        and bool(derham_id)
+        and value.get("revolved_derham_sequence_id") == derham_id
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -190,6 +303,8 @@ def force_coenergy_displacement_gate(
     nonlinear_incremental_force_branch_generation_identity_ok = True
     nonlinear_force_operating_point_identity_ok = True
     sliding_band_harmonic_torque_identity_ok = True
+    weighted_stress_energy_derivative_identity_ok = True
+    axisymmetric_revolved_energy_force_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -223,6 +338,8 @@ def force_coenergy_displacement_gate(
         nonlinear_incremental_force_branch_generation_identity_ok = False
         nonlinear_force_operating_point_identity_ok = False
         sliding_band_harmonic_torque_identity_ok = False
+        weighted_stress_energy_derivative_identity_ok = False
+        axisymmetric_revolved_energy_force_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1729,6 +1846,20 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        weighted_stress_energy_derivative_identity_ok = (
+            _weighted_stress_energy_derivative_identity_ok(
+                artifact_identity.get(
+                    "weighted_stress_energy_derivative_force_mesh_frame_unit_generation_identity"
+                )
+            )
+        )
+        axisymmetric_revolved_energy_force_identity_ok = (
+            _axisymmetric_revolved_energy_force_identity_ok(
+                artifact_identity.get(
+                    "axisymmetric_revolved_energy_force_2pir_jacobian_derham_generation_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -1852,6 +1983,12 @@ def force_coenergy_displacement_gate(
         ),
         "sliding_band_harmonics_use_current_angles_mesh_currents_and_samples": (
             sliding_band_harmonic_torque_identity_ok
+        ),
+        "weighted_stress_and_energy_derivative_share_mesh_frame_units_and_generation": (
+            weighted_stress_energy_derivative_identity_ok
+        ),
+        "axisymmetric_revolved_energy_force_share_2pir_hodge_field_material_and_mesh": (
+            axisymmetric_revolved_energy_force_identity_ok
         ),
     }
     return {
