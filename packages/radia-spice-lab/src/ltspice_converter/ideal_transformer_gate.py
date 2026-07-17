@@ -1699,6 +1699,164 @@ def _ac_noise_source_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _transient_startup_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "transient_startup_initial_condition_uic_operating_point_waveform_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    initial = contract.get("initial_conditions")
+    result_initial = contract.get("result_initial_conditions")
+    if not all(
+        isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+        for value in (initial, result_initial)
+    ):
+        return False
+    try:
+        initial_rows = [[str(row[0]), float(row[1])] for row in initial]
+        result_initial_rows = [[str(row[0]), float(row[1])] for row in result_initial]
+        time_s = [float(value) for value in contract.get("accepted_time_s", [])]
+        result_time_s = [float(value) for value in contract.get("result_time_s", [])]
+        traces = [str(value) for value in contract.get("waveform_trace_ids", [])]
+        result_traces = [
+            str(value) for value in contract.get("result_waveform_trace_ids", [])
+        ]
+    except (IndexError, TypeError, ValueError):
+        return False
+    generation = str(contract.get("transient_generation_id") or "")
+    operating_point_digest = str(contract.get("operating_point_sha256") or "")
+    waveform_digest = str(contract.get("waveform_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "startup_mode_transient_generation_id",
+                "initial_condition_transient_generation_id",
+                "uic_transient_generation_id",
+                "operating_point_transient_generation_id",
+                "accepted_time_grid_transient_generation_id",
+                "waveform_transient_generation_id",
+                "result_transient_generation_id",
+            )
+        )
+        and contract.get("startup_mode") == "operating_point_then_transient"
+        and contract.get("result_startup_mode") == contract.get("startup_mode")
+        and contract.get("uic_enabled") is False
+        and contract.get("result_uic_enabled") is False
+        and bool(initial_rows)
+        and all(name and math.isfinite(value) for name, value in initial_rows)
+        and len({name for name, _ in initial_rows}) == len(initial_rows)
+        and result_initial_rows == initial_rows
+        and _is_sha256(operating_point_digest)
+        and contract.get("result_operating_point_sha256") == operating_point_digest
+        and len(time_s) >= 2
+        and time_s[0] >= 0.0
+        and all(math.isfinite(value) for value in time_s)
+        and all(right > left for left, right in zip(time_s, time_s[1:]))
+        and result_time_s == time_s
+        and bool(traces)
+        and all(traces)
+        and len(set(traces)) == len(traces)
+        and result_traces == traces
+        and _is_sha256(waveform_digest)
+        and contract.get("result_waveform_table_sha256") == waveform_digest
+    )
+
+
+def _stepped_monte_carlo_aggregation_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "stepped_monte_carlo_measure_aggregation_failed_row_seed_weight_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        sample_ids = [int(value) for value in contract.get("sample_ids", [])]
+        result_ids = [int(value) for value in contract.get("result_sample_ids", [])]
+        seeds = [int(value) for value in contract.get("random_seeds", [])]
+        result_seeds = [int(value) for value in contract.get("result_random_seeds", [])]
+        statuses = [str(value) for value in contract.get("measure_statuses", [])]
+        accepted_ids = [
+            int(value) for value in contract.get("accepted_sample_ids", [])
+        ]
+        result_accepted_ids = [
+            int(value) for value in contract.get("result_accepted_sample_ids", [])
+        ]
+        failed_ids = [int(value) for value in contract.get("failed_sample_ids", [])]
+        result_failed_ids = [
+            int(value) for value in contract.get("result_failed_sample_ids", [])
+        ]
+        values = [float(value) for value in contract.get("sample_values", [])]
+        weights = [float(value) for value in contract.get("sample_weights", [])]
+        result_weights = [
+            float(value) for value in contract.get("result_sample_weights", [])
+        ]
+        reported_mean = float(contract.get("reported_weighted_mean"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("monte_carlo_generation_id") or "")
+    expected_accepted = [
+        sample_id
+        for sample_id, status in zip(sample_ids, statuses)
+        if status == "passed"
+    ]
+    expected_failed = [
+        sample_id
+        for sample_id, status in zip(sample_ids, statuses)
+        if status == "failed"
+    ]
+    total_weight = sum(weights)
+    weighted_mean = (
+        sum(value * weight for value, weight in zip(values, weights)) / total_weight
+        if total_weight > 0.0
+        else math.nan
+    )
+    digest = str(contract.get("sample_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "measure_row_monte_carlo_generation_id",
+                "seed_monte_carlo_generation_id",
+                "filter_monte_carlo_generation_id",
+                "weight_monte_carlo_generation_id",
+                "aggregation_monte_carlo_generation_id",
+                "result_monte_carlo_generation_id",
+            )
+        )
+        and bool(sample_ids)
+        and all(value > 0 for value in sample_ids)
+        and len(set(sample_ids)) == len(sample_ids)
+        and result_ids == sample_ids
+        and len(seeds) == len(sample_ids)
+        and len(set(seeds)) == len(seeds)
+        and result_seeds == seeds
+        and len(statuses) == len(sample_ids)
+        and all(status in {"passed", "failed"} for status in statuses)
+        and accepted_ids == expected_accepted
+        and result_accepted_ids == accepted_ids
+        and failed_ids == expected_failed
+        and result_failed_ids == failed_ids
+        and len(values) == len(weights) == len(accepted_ids) == len(sample_ids)
+        and all(math.isfinite(value) for value in values)
+        and all(math.isfinite(weight) and weight > 0.0 for weight in weights)
+        and result_weights == weights
+        and contract.get("aggregation_rule") == "weighted_mean"
+        and contract.get("result_aggregation_rule") == contract.get("aggregation_rule")
+        and math.isfinite(reported_mean)
+        and math.isclose(reported_mean, weighted_mean, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and _is_sha256(digest)
+        and contract.get("result_sample_table_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -2061,6 +2219,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "ac_noise_uses_current_source_normalization_aliases_complex_axis_and_grid": (
             _ac_noise_source_identity_ok(positive)
+        ),
+        "transient_startup_uses_current_initial_conditions_uic_operating_point_grid_and_waveforms": (
+            _transient_startup_identity_ok(positive)
+        ),
+        "stepped_monte_carlo_aggregation_uses_current_rows_seeds_filters_weights_and_rule": (
+            _stepped_monte_carlo_aggregation_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
