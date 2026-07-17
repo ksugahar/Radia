@@ -220,6 +220,193 @@ def _motor_harmonic_force_identity_ok(value: object) -> bool:
     )
 
 
+def _maglev_force_energy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("maglev_generation", "")).strip()
+    frame = str(value.get("coordinate_frame", "")).strip()
+    sign = str(value.get("force_energy_sign_convention", "")).strip()
+    try:
+        equilibrium_x = float(value.get("equilibrium_displacement_m"))
+        result_equilibrium_x = float(value.get("result_equilibrium_displacement_m"))
+        equilibrium_force = float(value.get("equilibrium_force_n"))
+        result_equilibrium_force = float(value.get("result_equilibrium_force_n"))
+        displacements = [
+            float(item) for item in value.get("displacement_samples_m", [])
+        ]
+        energies = [float(item) for item in value.get("energy_samples_j", [])]
+        forces = [float(item) for item in value.get("force_samples_n", [])]
+        energy_forces = [
+            float(item)
+            for item in value.get("energy_finite_difference_force_n", [])
+        ]
+        stiffness = float(value.get("stiffness_n_m"))
+        reported_stiffness = float(value.get("reported_stiffness_n_m"))
+    except (TypeError, ValueError):
+        return False
+    mesh_digest = str(value.get("mesh_sha256", "")).lower()
+    result_digest = str(value.get("maglev_result_sha256", "")).lower()
+    finite_values = [
+        equilibrium_x,
+        result_equilibrium_x,
+        equilibrium_force,
+        result_equilibrium_force,
+        stiffness,
+        reported_stiffness,
+        *displacements,
+        *energies,
+        *forces,
+        *energy_forces,
+    ]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "equilibrium_maglev_generation",
+                "displacement_maglev_generation",
+                "energy_maglev_generation",
+                "force_maglev_generation",
+                "stiffness_maglev_generation",
+                "coordinate_frame_maglev_generation",
+                "result_maglev_generation",
+            )
+        )
+        and len(displacements) >= 3
+        and len(energies) == len(forces) == len(energy_forces) == len(displacements)
+        and all(math.isfinite(item) for item in finite_values)
+        and all(left < right for left, right in zip(displacements, displacements[1:]))
+        and equilibrium_x in displacements
+        and math.isclose(result_equilibrium_x, equilibrium_x, abs_tol=1.0e-15)
+        and math.isclose(result_equilibrium_force, equilibrium_force, abs_tol=1.0e-12)
+        and stiffness > 0.0
+        and math.isclose(reported_stiffness, stiffness, rel_tol=1.0e-12)
+        and all(
+            math.isclose(energy, 0.5 * stiffness * displacement**2, rel_tol=1.0e-10, abs_tol=1.0e-14)
+            for displacement, energy in zip(displacements, energies)
+        )
+        and all(
+            math.isclose(force, -stiffness * displacement, rel_tol=1.0e-10, abs_tol=1.0e-12)
+            for displacement, force in zip(displacements, forces)
+        )
+        and energy_forces == forces
+        and math.isclose(equilibrium_force, -stiffness * equilibrium_x, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and sign == "force=-dW/dx"
+        and value.get("result_force_energy_sign_convention") == sign
+        and frame == "global_z"
+        and value.get("result_coordinate_frame") == frame
+        and _valid_sha256(mesh_digest)
+        and str(value.get("result_mesh_sha256", "")).lower() == mesh_digest
+        and _valid_sha256(result_digest)
+        and str(value.get("reported_maglev_result_sha256", "")).lower()
+        == result_digest
+    )
+
+
+def _motor_dual_lane_alignment_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("comparison_generation", "")).strip()
+    lane_ids = value.get("lane_ids")
+    geometries = value.get("geometry_revision_sha256")
+    excitations = value.get("excitation_table_sha256")
+    frames = value.get("force_coordinate_frames")
+    bins = value.get("harmonic_bins")
+    angles = value.get("rotor_angles_deg")
+    try:
+        harmonics = [
+            [[float(component) for component in row] for row in lane]
+            for lane in value.get("force_harmonics_n", [])
+        ]
+        result_harmonics = [
+            [[float(component) for component in row] for row in lane]
+            for lane in value.get("result_force_harmonics_n", [])
+        ]
+        parsed_angles = [
+            [float(item) for item in lane] for lane in angles
+        ] if isinstance(angles, list) else []
+    except (TypeError, ValueError):
+        return False
+    result_digest = str(value.get("comparison_result_sha256", "")).lower()
+    bins_ok = (
+        isinstance(bins, list)
+        and len(bins) == 2
+        and all(
+            isinstance(lane, list)
+            and bool(lane)
+            and all(
+                isinstance(item, int) and not isinstance(item, bool) and item >= 0
+                for item in lane
+            )
+            and lane == sorted(set(lane))
+            for lane in bins
+        )
+        and bins[0] == bins[1]
+    )
+    angles_ok = (
+        len(parsed_angles) == 2
+        and all(len(lane) >= 3 for lane in parsed_angles)
+        and all(
+            all(math.isfinite(item) for item in lane)
+            and all(left < right for left, right in zip(lane, lane[1:]))
+            for lane in parsed_angles
+        )
+        and parsed_angles[0] == parsed_angles[1]
+    )
+    harmonics_ok = (
+        bins_ok
+        and len(harmonics) == 2
+        and all(len(lane) == len(bins[0]) for lane in harmonics)
+        and all(
+            len(row) == 2 and all(math.isfinite(component) for component in row)
+            for lane in harmonics
+            for row in lane
+        )
+        and harmonics[0] == harmonics[1]
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "geometry_comparison_generation",
+                "excitation_comparison_generation",
+                "force_frame_comparison_generation",
+                "harmonic_comparison_generation",
+                "rotor_angle_comparison_generation",
+                "result_comparison_generation",
+            )
+        )
+        and lane_ids == ["ngsolve-age", "hdiv-mmm-hcurl-eddy-bubble"]
+        and value.get("result_lane_ids") == lane_ids
+        and isinstance(geometries, list)
+        and len(geometries) == 2
+        and all(_valid_sha256(item) for item in geometries)
+        and geometries[0] == geometries[1]
+        and value.get("result_geometry_revision_sha256") == geometries
+        and isinstance(excitations, list)
+        and len(excitations) == 2
+        and all(_valid_sha256(item) for item in excitations)
+        and excitations[0] == excitations[1]
+        and value.get("result_excitation_table_sha256") == excitations
+        and frames == ["rotor_dq", "rotor_dq"]
+        and value.get("result_force_coordinate_frames") == frames
+        and bins_ok
+        and value.get("result_harmonic_bins") == bins
+        and angles_ok
+        and value.get("result_rotor_angles_deg") == angles
+        and harmonics_ok
+        and result_harmonics == harmonics
+        and _valid_sha256(result_digest)
+        and str(value.get("reported_comparison_result_sha256", "")).lower()
+        == result_digest
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -316,6 +503,8 @@ def magnetic_force_method_profile_gate(
     linear_motor_end_effect_generation_identity_ok = True
     bem_panel_demag_force_generation_identity_ok = True
     motor_harmonic_force_generation_identity_ok = True
+    maglev_force_energy_generation_identity_ok = True
+    motor_dual_lane_alignment_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -349,6 +538,8 @@ def magnetic_force_method_profile_gate(
         linear_motor_end_effect_generation_identity_ok = False
         bem_panel_demag_force_generation_identity_ok = False
         motor_harmonic_force_generation_identity_ok = False
+        maglev_force_energy_generation_identity_ok = False
+        motor_dual_lane_alignment_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -1991,6 +2182,20 @@ def magnetic_force_method_profile_gate(
                 )
             )
         )
+        maglev_force_energy_generation_identity_ok = (
+            _maglev_force_energy_identity_ok(
+                identity_value.get(
+                    "maglev_force_stiffness_equilibrium_energy_finite_difference_generation_identity"
+                )
+            )
+        )
+        motor_dual_lane_alignment_generation_identity_ok = (
+            _motor_dual_lane_alignment_identity_ok(
+                identity_value.get(
+                    "motor_dual_lane_geometry_excitation_force_frame_harmonic_alignment_generation_identity"
+                )
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -2145,6 +2350,12 @@ def magnetic_force_method_profile_gate(
         ),
         "motor_force_harmonics_use_current_angles_phases_bins_and_frame": (
             motor_harmonic_force_generation_identity_ok
+        ),
+        "maglev_force_stiffness_energy_and_equilibrium_share_current_state": (
+            maglev_force_energy_generation_identity_ok
+        ),
+        "motor_dual_lanes_share_geometry_excitation_frame_harmonics_and_angles": (
+            motor_dual_lane_alignment_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
