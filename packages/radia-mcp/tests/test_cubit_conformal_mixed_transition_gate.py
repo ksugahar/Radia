@@ -2108,3 +2108,182 @@ def test_v22_source_geometry_heal_tolerance_imprint_merge_ownership_generation_m
     assert result["checks"][
         "healed_geometry_ownership_uses_current_tolerance_imprint_and_merge"
     ] is False
+
+
+def _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(row):
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(row)
+    row["parallel_sculpt_partition_ghost_refinement_generation_identity"] = {
+        "mesh_generation": "sculpt-81",
+        "partition_mesh_generation": "sculpt-81",
+        "ghost_interface_mesh_generation": "sculpt-81",
+        "refinement_mesh_generation": "sculpt-81",
+        "assembly_mesh_generation": "sculpt-81",
+        "partition_ids": [1, 2, 3, 4],
+        "assembled_partition_ids": [1, 2, 3, 4],
+        "ghost_interface_ids": [101, 102, 103],
+        "assembled_ghost_interface_ids": [101, 102, 103],
+        "refinement_levels": [1, 2, 2, 1],
+        "assembled_refinement_levels": [1, 2, 2, 1],
+        "partition_map_sha256": "1" * 64,
+        "assembled_partition_map_sha256": "1" * 64,
+        "ghost_interface_sha256": "2" * 64,
+        "assembled_ghost_interface_sha256": "2" * 64,
+        "sculpt_mesh_sha256": "3" * 64,
+        "assembled_sculpt_mesh_sha256": "3" * 64,
+    }
+    row["mixed_transition_interface_block_sideset_generation_identity"] = {
+        "mesh_generation": "mixed-transition-81",
+        "interface_mesh_generation": "mixed-transition-81",
+        "element_family_mesh_generation": "mixed-transition-81",
+        "block_mesh_generation": "mixed-transition-81",
+        "sideset_mesh_generation": "mixed-transition-81",
+        "element_families": ["tet", "pyramid", "hex"],
+        "exported_element_families": ["tet", "pyramid", "hex"],
+        "interface_face_ids": [201, 202, 203, 204],
+        "exported_interface_face_ids": [201, 202, 203, 204],
+        "block_ids": [10, 20, 30],
+        "exported_block_ids": [10, 20, 30],
+        "sideset_ids": [40, 50],
+        "exported_sideset_ids": [40, 50],
+        "transition_table_sha256": "4" * 64,
+        "exported_transition_table_sha256": "4" * 64,
+        "ownership_table_sha256": "5" * 64,
+        "exported_ownership_table_sha256": "5" * 64,
+    }
+    row["journal_replay_geometry_entity_map_version_generation_identity"] = {
+        "replay_generation": "journal-replay-81",
+        "geometry_replay_generation": "journal-replay-81",
+        "entity_map_replay_generation": "journal-replay-81",
+        "application_version_replay_generation": "journal-replay-81",
+        "command_log_replay_generation": "journal-replay-81",
+        "application_version": "2026.6",
+        "replay_application_version": "2026.6",
+        "geometry_entity_ids": [301, 302, 303],
+        "replay_geometry_entity_ids": [301, 302, 303],
+        "entity_names": ["stator", "rotor", "airgap"],
+        "replay_entity_names": ["stator", "rotor", "airgap"],
+        "entity_map_sha256": "6" * 64,
+        "replay_entity_map_sha256": "6" * 64,
+        "journal_sha256": "7" * 64,
+        "replay_journal_sha256": "7" * 64,
+        "command_log_sha256": "8" * 64,
+        "replay_command_log_sha256": "8" * 64,
+    }
+    row["exodus64_entity_sideset_element_map_schema_generation_identity"] = {
+        "export_generation": "exodus64-81",
+        "entity_id_export_generation": "exodus64-81",
+        "sideset_export_generation": "exodus64-81",
+        "element_map_export_generation": "exodus64-81",
+        "schema_export_generation": "exodus64-81",
+        "integer_width_bits": 64,
+        "decoded_integer_width_bits": 64,
+        "entity_ids": [4294967301, 4294967302, 4294967303],
+        "decoded_entity_ids": [4294967301, 4294967302, 4294967303],
+        "sideset_ids": [11, 12],
+        "decoded_sideset_ids": [11, 12],
+        "sideset_entity_ids": [[4294967301, 4294967302], [4294967303]],
+        "decoded_sideset_entity_ids": [[4294967301, 4294967302], [4294967303]],
+        "element_map_sha256": "9" * 64,
+        "decoded_element_map_sha256": "9" * 64,
+        "schema_sha256": "a" * 64,
+        "decoded_schema_sha256": "a" * 64,
+    }
+    return row
+
+
+def test_v23_positive_parallel_sculpt_mixed_transition_replay_exodus_identity():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v23_public_parallel_sculpt_partition_ghost_refinement_generation_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["parallel_sculpt_partition_ghost_refinement_generation_identity"].update(
+        {
+            "partition_mesh_generation": "sculpt-80",
+            "ghost_interface_mesh_generation": "sculpt-79",
+            "refinement_mesh_generation": "sculpt-78",
+            "assembly_mesh_generation": "sculpt-77",
+            "assembled_partition_ids": [1, 3, 2, 4],
+            "assembled_ghost_interface_ids": [103, 102, 104],
+            "assembled_refinement_levels": [1, 1, 2, 3],
+            "assembled_partition_map_sha256": "b" * 64,
+            "assembled_ghost_interface_sha256": "c" * 64,
+            "assembled_sculpt_mesh_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "parallel_sculpt_assembly_uses_current_partitions_ghosts_and_refinement"
+    ] is False
+
+
+def test_v23_public_mixed_tet_pyramid_hex_interface_block_sideset_generation_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["mixed_transition_interface_block_sideset_generation_identity"].update(
+        {
+            "interface_mesh_generation": "mixed-transition-80",
+            "element_family_mesh_generation": "mixed-transition-79",
+            "block_mesh_generation": "mixed-transition-78",
+            "sideset_mesh_generation": "mixed-transition-77",
+            "exported_element_families": ["tet", "hex"],
+            "exported_interface_face_ids": [204, 203, 202, 201],
+            "exported_block_ids": [10, 20, 40],
+            "exported_sideset_ids": [50, 60],
+            "exported_transition_table_sha256": "e" * 64,
+            "exported_ownership_table_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "mixed_transition_export_uses_current_interfaces_families_blocks_and_sidesets"
+    ] is False
+
+
+def test_v23_source_journal_replay_geometry_entity_id_map_version_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["journal_replay_geometry_entity_map_version_generation_identity"].update(
+        {
+            "geometry_replay_generation": "journal-replay-80",
+            "entity_map_replay_generation": "journal-replay-79",
+            "application_version_replay_generation": "journal-replay-78",
+            "command_log_replay_generation": "journal-replay-77",
+            "replay_application_version": "2025.8",
+            "replay_geometry_entity_ids": [303, 302, 301],
+            "replay_entity_names": ["rotor", "stator", "airgap"],
+            "replay_entity_map_sha256": "0" * 64,
+            "replay_journal_sha256": "1" * 64,
+            "replay_command_log_sha256": "2" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "journal_replay_uses_current_geometry_entity_map_version_and_command_log"
+    ] is False
+
+
+def test_v23_source_exodus64_entity_id_sideset_mapping_schema_generation_mismatch():
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(summary())
+    row["exodus64_entity_sideset_element_map_schema_generation_identity"].update(
+        {
+            "entity_id_export_generation": "exodus64-80",
+            "sideset_export_generation": "exodus64-79",
+            "element_map_export_generation": "exodus64-78",
+            "schema_export_generation": "exodus64-77",
+            "decoded_integer_width_bits": 32,
+            "decoded_entity_ids": [5, 6, 7],
+            "decoded_sideset_ids": [12, 13],
+            "decoded_sideset_entity_ids": [[5, 6], [7]],
+            "decoded_element_map_sha256": "3" * 64,
+            "decoded_schema_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus64_decode_uses_current_entity_sideset_element_map_and_schema"
+    ] is False
