@@ -844,6 +844,95 @@ def _nearfield_farfield_phase_center_frame_is_current(
     )
 
 
+def _sparameter_deembed_reference_plane_map_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get(
+        "sparameter_deembed_reference_plane_per_port_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    sparameter_generation = str(
+        identity.get("sparameter_generation", "")
+    ).strip()
+    port_generation = str(identity.get("port_generation", "")).strip()
+    port_ids = identity.get("port_ids")
+    offsets = identity.get("reference_plane_offsets_m")
+    applied_offsets = identity.get("applied_reference_plane_offsets_m")
+    map_digest = str(identity.get("reference_plane_map_sha256", "")).lower()
+    try:
+        offset_values = [float(value) for value in offsets]
+        applied_values = [float(value) for value in applied_offsets]
+    except (TypeError, ValueError):
+        offset_values = []
+        applied_values = []
+    return (
+        bool(sparameter_generation)
+        and identity.get("deembedded_result_sparameter_generation")
+        == sparameter_generation
+        and bool(port_generation)
+        and identity.get("reference_plane_port_generation") == port_generation
+        and identity.get("deembedded_result_port_generation") == port_generation
+        and isinstance(port_ids, list)
+        and bool(port_ids)
+        and all(isinstance(value, str) and bool(value) for value in port_ids)
+        and len(set(port_ids)) == len(port_ids)
+        and identity.get("reference_plane_port_ids") == port_ids
+        and len(offset_values) == len(port_ids)
+        and all(math.isfinite(value) for value in offset_values)
+        and applied_values == offset_values
+        and len(map_digest) == 64
+        and all(character in "0123456789abcdef" for character in map_digest)
+        and str(
+            identity.get("deembedded_reference_plane_map_sha256", "")
+        ).lower()
+        == map_digest
+    )
+
+
+def _time_domain_port_signal_gate_window_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("time_domain_port_signal_gate_window_generation_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    signal_generation = str(identity.get("signal_generation", "")).strip()
+    gate_generation = str(identity.get("gate_generation", "")).strip()
+    try:
+        signal_start = int(identity.get("signal_sample_start"))
+        signal_end = int(identity.get("signal_sample_end"))
+        gate_start = int(identity.get("gate_window_start_sample"))
+        gate_end = int(identity.get("gate_window_end_sample"))
+        transform_window = [
+            int(value) for value in identity.get("transform_gate_window", [])
+        ]
+    except (TypeError, ValueError):
+        signal_start = signal_end = gate_start = gate_end = -1
+        transform_window = []
+    normalization_basis = str(identity.get("normalization_basis", ""))
+    gate_digest = str(identity.get("gate_window_sha256", "")).lower()
+    return (
+        bool(signal_generation)
+        and identity.get("gate_window_signal_generation") == signal_generation
+        and identity.get("transform_signal_generation") == signal_generation
+        and bool(gate_generation)
+        and identity.get("transform_gate_generation") == gate_generation
+        and 0 <= signal_start <= gate_start < gate_end <= signal_end
+        and transform_window == [gate_start, gate_end]
+        and normalization_basis
+        in {"incident_wave_peak", "incident_wave_energy", "unit_impulse"}
+        and identity.get("transform_normalization_basis") == normalization_basis
+        and len(gate_digest) == 64
+        and all(character in "0123456789abcdef" for character in gate_digest)
+        and str(identity.get("transform_gate_window_sha256", "")).lower()
+        == gate_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1061,6 +1150,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "nearfield_farfield_phase_center_uses_one_global_coordinate_frame": (
                 _nearfield_farfield_phase_center_frame_is_current(raw)
+            ),
+            "sparameter_deembed_uses_current_per_port_reference_planes": (
+                _sparameter_deembed_reference_plane_map_is_current(raw)
+            ),
+            "time_domain_port_transform_uses_current_gate_window": (
+                _time_domain_port_signal_gate_window_is_current(raw)
             ),
         }
         row = {
