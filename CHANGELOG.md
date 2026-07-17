@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.19 - Production motor ROM and native C ABI
+
+Released 2026-07-17.
+
+- Added the angle-periodic electric-machine ROM with reciprocal inductance,
+  PM flux, losses, motion, skew, temperature scaling, and stateful hysteresis,
+  plus a standalone native C ABI for external time-domain consumers.
+- Added HCurl-to-HDiv reduced coupling and mixed Galerkin production kernels,
+  with result-bearing motor documentation and focused regression validation.
+- Added curved-mesh Jacobian and conductor-face quality gates, and hardened
+  accepted-step hysteresis state plus native-library wheel delivery.
+
 ## 4.95.18 - Genus-1 loop closure for coupled IH
 
 Released 2026-07-17.

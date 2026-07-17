@@ -6,6 +6,13 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.2 - Curved-mesh and conductor-face quality gates
+
+Released 2026-07-17.
+
+- Add sampled high-order Jacobian checks, required label checks, and
+  conductor/SIBC face-adjacency classification to `check-vol` and the Python
+  consistency API.
 - Require Coreform Cubit 2025.12+ in both `cubit-plugin-install` and
   Radia panel registration; older 2025.3/2025.6 installs are no longer
   selected accidentally.
