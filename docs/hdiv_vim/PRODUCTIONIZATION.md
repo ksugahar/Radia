@@ -62,7 +62,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 - The linear-recoil path accepts a constant or spatial NGSolve `B_r` in tesla
   and applies `M = (mu_rec-1) H + B_r/mu0` through the existing symmetric C++
   HDiv solve.  It supports production 3D element/curve/IMA routes and planar
-  2D at their normal RT order.  A scalar `mu_rec > 1` is required; fixed-M is
+  2D at their normal BDM order.  A scalar `mu_rec > 1` is required; fixed-M is
   the explicit `mu_rec=1` limit.
 - A spatial `B_r` is valid within one conforming magnet body.  Do not merge
   normal-discontinuous recoil segments into one HDiv space: that removes their
