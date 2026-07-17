@@ -1673,3 +1673,103 @@ def test_v26_public_segregated_multiphysics_iteration_relaxation_residual_compon
     assert not result["checks"][
         "segregated_solution_uses_current_iterations_relaxation_residuals_and_components"
     ]
+
+
+def _with_v27_restart_and_floquet_identity(summary: dict) -> dict:
+    summary["nonlinear_state_time_integrator_tangent_load_step_restart_generation_identity"] = {
+        "nonlinear_generation": "nonlinear-restart-141",
+        "state_nonlinear_generation": "nonlinear-restart-141",
+        "integrator_nonlinear_generation": "nonlinear-restart-141",
+        "tangent_nonlinear_generation": "nonlinear-restart-141",
+        "load_step_nonlinear_generation": "nonlinear-restart-141",
+        "checkpoint_nonlinear_generation": "nonlinear-restart-141",
+        "result_nonlinear_generation": "nonlinear-restart-141",
+        "state_variable_names": ["plastic_strain", "hardening_variable"],
+        "result_state_variable_names": ["plastic_strain", "hardening_variable"],
+        "time_integrator": "generalized_alpha",
+        "result_time_integrator": "generalized_alpha",
+        "integrator_order": 2,
+        "result_integrator_order": 2,
+        "load_step_ids": [1, 2, 3, 4],
+        "result_load_step_ids": [1, 2, 3, 4],
+        "restart_time_s": 0.003,
+        "result_restart_time_s": 0.003,
+        "state_vector_sha256": "1" * 64,
+        "result_state_vector_sha256": "1" * 64,
+        "consistent_tangent_sha256": "2" * 64,
+        "result_consistent_tangent_sha256": "2" * 64,
+        "checkpoint_sha256": "3" * 64,
+        "result_checkpoint_sha256": "3" * 64,
+        "solution_sha256": "4" * 64,
+        "result_solution_sha256": "4" * 64,
+    }
+    summary["floquet_pair_orientation_phase_wavevector_normalization_dataset_mesh_generation_identity"] = {
+        "floquet_generation": "floquet-141",
+        "pair_floquet_generation": "floquet-141",
+        "orientation_floquet_generation": "floquet-141",
+        "phase_floquet_generation": "floquet-141",
+        "wavevector_floquet_generation": "floquet-141",
+        "normalization_floquet_generation": "floquet-141",
+        "dataset_floquet_generation": "floquet-141",
+        "mesh_floquet_generation": "floquet-141",
+        "result_floquet_generation": "floquet-141",
+        "periodic_pair_tags": ["pair-x", "pair-y"],
+        "result_periodic_pair_tags": ["pair-x", "pair-y"],
+        "pair_orientation_signs": [1, -1],
+        "result_pair_orientation_signs": [1, -1],
+        "phase_shift_rad": [0.2, -0.1],
+        "result_phase_shift_rad": [0.2, -0.1],
+        "wavevector_rad_m": [20.0, -10.0, 0.0],
+        "result_wavevector_rad_m": [20.0, -10.0, 0.0],
+        "mode_normalization": "unit_cell_energy_1j",
+        "result_mode_normalization": "unit_cell_energy_1j",
+        "dataset_tag": "dset-floquet-2",
+        "result_dataset_tag": "dset-floquet-2",
+        "periodic_mesh_map_sha256": "5" * 64,
+        "result_periodic_mesh_map_sha256": "5" * 64,
+        "mode_field_sha256": "6" * 64,
+        "result_mode_field_sha256": "6" * 64,
+    }
+    return summary
+
+
+def test_v27_public_positive_restart_and_floquet_identity() -> None:
+    result = gate(_with_v27_restart_and_floquet_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v27_public_nonlinear_state_variable_time_integrator_consistent_tangent_load_step_restart_mismatch() -> None:
+    summary = _with_v27_restart_and_floquet_identity(_summary())
+    summary["nonlinear_state_time_integrator_tangent_load_step_restart_generation_identity"].update(
+        {
+            "state_nonlinear_generation": "nonlinear-restart-140",
+            "result_state_variable_names": ["hardening_variable"],
+            "result_time_integrator": "bdf",
+            "result_load_step_ids": [1, 2, 4, 5],
+            "result_checkpoint_sha256": "d" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "nonlinear_restart_uses_current_state_integrator_tangent_load_step_and_checkpoint"
+    ]
+
+
+def test_v27_public_floquet_periodic_pair_orientation_phase_wavenumber_mode_normalization_dataset_mismatch() -> None:
+    summary = _with_v27_restart_and_floquet_identity(_summary())
+    summary["floquet_pair_orientation_phase_wavevector_normalization_dataset_mesh_generation_identity"].update(
+        {
+            "orientation_floquet_generation": "floquet-139",
+            "result_pair_orientation_signs": [-1, 1],
+            "result_phase_shift_rad": [-0.1, 0.2],
+            "result_wavevector_rad_m": [-10.0, 20.0, 0.0],
+            "result_mode_normalization": "max_field_1",
+            "result_dataset_tag": "dset-floquet-1",
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "floquet_modes_use_current_pair_orientation_phase_wavevector_normalization_and_dataset"
+    ]
