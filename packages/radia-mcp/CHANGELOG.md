@@ -12,7 +12,7 @@ crystallized as its own package.
 - Added motor guidance for the angle-periodic ROM, reduced HCurl/HDiv basis
   construction, native C ABI export, energy accounting, and stateful
   hysteresis integration.
-- **Merged the presentation server into paper-writing** (Sugahara: slide
+ - **Merged the presentation server into paper-writing** (Sugahara: slide
   decks cannot yet be authored end-to-end by AI, so the slide lint / PPTX
   toolset does not warrant a standalone server). `mcp-server-paper-writing`
   now serves all `presentation_*` tools; the `mcp-server-presentation`
@@ -20,17 +20,17 @@ crystallized as its own package.
   `radia_mcp.presentation` module remains the implementation home, still
   consumed by `document_meta` cross-lint). Catalog entry folded into
   `paper-writing` with a `presentation -> paper-writing` discovery alias;
-  skills cross-linked (`paper_writing/skill.md` gained presentation and
-  `radia_mcp.figure` operational sections; `presentation/skill.md` notes the
-  merge).
+  skills cross-linked (`paper_writing/skill.md` gained 発表スライド +
+  `radia_mcp.figure` operational sections; `presentation/skill.md` header
+  notes the merge).
 
 ## [1.4.14] - 2026-07-17
 
 - Documented genus-1 loop-current closure across weak and strong induction-
   heating coupling, including screening diagnostics and the canonical current-
   phase convention.
-- Added method-selection guidance based on the weak-route coil back-reaction
-  ratio and synchronized the topology references with the production API.
+ - Added method-selection guidance based on the weak-route coil back-reaction
+   ratio and synchronized the topology references with the production API.
 
 ## [1.4.13] - 2026-07-17
 
