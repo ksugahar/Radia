@@ -1857,6 +1857,140 @@ def _stepped_monte_carlo_aggregation_identity_ok(
     )
 
 
+def _ac_sweep_measure_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "ac_sweep_mode_frequency_grid_complex_phase_unwrap_measure_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        points_per_decade = int(contract.get("points_per_decade"))
+        result_points_per_decade = int(contract.get("result_points_per_decade"))
+        frequencies = [float(value) for value in contract.get("frequency_grid_hz", [])]
+        result_frequencies = [
+            float(value) for value in contract.get("result_frequency_grid_hz", [])
+        ]
+        row_ids = [str(value) for value in contract.get("measure_row_ids", [])]
+        result_row_ids = [
+            str(value) for value in contract.get("result_measure_row_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("ac_generation_id") or "")
+    digest = str(contract.get("measure_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "sweep_mode_ac_generation_id",
+                "frequency_grid_ac_generation_id",
+                "complex_basis_ac_generation_id",
+                "phase_unwrap_ac_generation_id",
+                "measure_row_ac_generation_id",
+                "result_ac_generation_id",
+            )
+        )
+        and contract.get("sweep_mode") == "decade"
+        and contract.get("result_sweep_mode") == contract.get("sweep_mode")
+        and points_per_decade > 0
+        and result_points_per_decade == points_per_decade
+        and len(frequencies) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and contract.get("complex_basis") == "real_imaginary"
+        and contract.get("result_complex_basis") == contract.get("complex_basis")
+        and contract.get("phase_unwrap") == "continuous_radians"
+        and contract.get("result_phase_unwrap") == contract.get("phase_unwrap")
+        and bool(row_ids)
+        and all(row_ids)
+        and len(set(row_ids)) == len(row_ids)
+        and result_row_ids == row_ids
+        and _is_sha256(digest)
+        and contract.get("result_measure_table_sha256") == digest
+    )
+
+
+def _electrothermal_waveform_closure_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "electrothermal_device_power_temperature_model_thermal_network_timestep_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        trace_ids = [str(value) for value in contract.get("device_power_trace_ids", [])]
+        result_trace_ids = [
+            str(value) for value in contract.get("result_device_power_trace_ids", [])
+        ]
+        timestep = float(contract.get("time_step_s"))
+        result_timestep = float(contract.get("result_time_step_s"))
+        time_grid = [float(value) for value in contract.get("time_grid_s", [])]
+        result_time_grid = [
+            float(value) for value in contract.get("result_time_grid_s", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("electrothermal_generation_id") or "")
+    digests = (
+        ("device_power_sha256", "result_device_power_sha256"),
+        ("temperature_model_sha256", "result_temperature_model_sha256"),
+        ("thermal_network_sha256", "result_thermal_network_sha256"),
+        ("temperature_waveform_sha256", "result_temperature_waveform_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "device_power_electrothermal_generation_id",
+                "temperature_model_electrothermal_generation_id",
+                "thermal_network_electrothermal_generation_id",
+                "timestep_electrothermal_generation_id",
+                "result_electrothermal_generation_id",
+            )
+        )
+        and bool(trace_ids)
+        and all(trace_ids)
+        and len(set(trace_ids)) == len(trace_ids)
+        and result_trace_ids == trace_ids
+        and bool(str(contract.get("temperature_model_id") or ""))
+        and contract.get("result_temperature_model_id")
+        == contract.get("temperature_model_id")
+        and bool(str(contract.get("thermal_network_id") or ""))
+        and contract.get("result_thermal_network_id")
+        == contract.get("thermal_network_id")
+        and math.isfinite(timestep)
+        and timestep > 0.0
+        and result_timestep == timestep
+        and len(time_grid) >= 2
+        and time_grid[0] == 0.0
+        and all(math.isfinite(value) for value in time_grid)
+        and all(right > left for left, right in zip(time_grid, time_grid[1:]))
+        and all(
+            math.isclose(
+                right - left,
+                timestep,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-15,
+            )
+            for left, right in zip(time_grid, time_grid[1:])
+        )
+        and result_time_grid == time_grid
+        and all(
+            _is_sha256(str(contract.get(source) or ""))
+            and contract.get(target) == contract.get(source)
+            for source, target in digests
+        )
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -2225,6 +2359,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "stepped_monte_carlo_aggregation_uses_current_rows_seeds_filters_weights_and_rule": (
             _stepped_monte_carlo_aggregation_identity_ok(positive)
+        ),
+        "ac_measures_use_current_sweep_grid_complex_basis_phase_unwrap_rows_and_result": (
+            _ac_sweep_measure_identity_ok(positive)
+        ),
+        "electrothermal_waveforms_use_current_power_temperature_model_network_timestep_and_result": (
+            _electrothermal_waveform_closure_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
