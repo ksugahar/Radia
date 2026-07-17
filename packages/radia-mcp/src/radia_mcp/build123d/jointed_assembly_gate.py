@@ -334,6 +334,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     selector_normal_world_frame_identity_ok = True
     step_occurrence_hierarchy_identity_ok = True
     brep_edge_tolerance_shape_fix_identity_ok = True
+    step_occurrence_color_material_inheritance_identity_ok = True
+    stl_tolerance_model_length_unit_generation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -355,6 +357,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         brep_surface_parameter_orientation_identity_ok = False
         step_occurrence_hierarchy_identity_ok = False
         brep_edge_tolerance_shape_fix_identity_ok = False
+        step_occurrence_color_material_inheritance_identity_ok = False
+        stl_tolerance_model_length_unit_generation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -1079,6 +1083,174 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and edge_tolerance.get("edge_tolerance_topology_sha256")
                 == topology_digest
             )
+
+        occurrence_inheritance = replay_identity_value.get(
+            "step_occurrence_color_material_inheritance_identity"
+        )
+        if occurrence_inheritance is not None:
+            occurrence_inheritance = (
+                occurrence_inheritance
+                if isinstance(occurrence_inheritance, Mapping)
+                else {}
+            )
+            import_generation = str(
+                occurrence_inheritance.get("step_import_generation", "")
+            ).strip()
+            assembly_generation = str(
+                occurrence_inheritance.get("assembly_generation", "")
+            ).strip()
+            occurrence_ids = list(occurrence_inheritance.get("occurrence_ids") or [])
+            metadata_ids = list(
+                occurrence_inheritance.get("metadata_occurrence_ids") or []
+            )
+            parent_ids = list(
+                occurrence_inheritance.get("parent_occurrence_ids") or []
+            )
+            metadata_parent_ids = list(
+                occurrence_inheritance.get("metadata_parent_occurrence_ids") or []
+            )
+            inherited_colors = list(
+                occurrence_inheritance.get("inherited_colors_rgb") or []
+            )
+            imported_colors = list(
+                occurrence_inheritance.get("imported_colors_rgb") or []
+            )
+            inherited_materials = list(
+                occurrence_inheritance.get("inherited_material_names") or []
+            )
+            imported_materials = list(
+                occurrence_inheritance.get("imported_material_names") or []
+            )
+            digest = str(
+                occurrence_inheritance.get("occurrence_metadata_sha256", "")
+            ).lower()
+            try:
+                colors_ok = all(
+                    len(color) == 3
+                    and all(
+                        math.isfinite(float(channel))
+                        and 0.0 <= float(channel) <= 1.0
+                        for channel in color
+                    )
+                    for color in inherited_colors
+                )
+            except (TypeError, ValueError):
+                colors_ok = False
+            step_occurrence_color_material_inheritance_identity_ok = (
+                bool(import_generation)
+                and occurrence_inheritance.get(
+                    "occurrence_metadata_import_generation"
+                )
+                == import_generation
+                and bool(assembly_generation)
+                and occurrence_inheritance.get(
+                    "occurrence_metadata_assembly_generation"
+                )
+                == assembly_generation
+                and occurrence_inheritance.get(
+                    "color_inheritance_assembly_generation"
+                )
+                == assembly_generation
+                and occurrence_inheritance.get(
+                    "material_inheritance_assembly_generation"
+                )
+                == assembly_generation
+                and bool(occurrence_ids)
+                and len(set(occurrence_ids)) == len(occurrence_ids)
+                and metadata_ids == occurrence_ids
+                and len(parent_ids) == len(occurrence_ids)
+                and metadata_parent_ids == parent_ids
+                and len(inherited_colors) == len(occurrence_ids)
+                and imported_colors == inherited_colors
+                and colors_ok
+                and len(inherited_materials) == len(occurrence_ids)
+                and all(str(material).strip() for material in inherited_materials)
+                and imported_materials == inherited_materials
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and occurrence_inheritance.get(
+                    "imported_occurrence_metadata_sha256"
+                )
+                == digest
+            )
+
+        stl_tolerance = replay_identity_value.get(
+            "stl_tolerance_model_length_unit_generation_identity"
+        )
+        if stl_tolerance is not None:
+            stl_tolerance = stl_tolerance if isinstance(stl_tolerance, Mapping) else {}
+            model_unit_generation = str(
+                stl_tolerance.get("model_length_unit_generation", "")
+            ).strip()
+            model_unit = str(stl_tolerance.get("model_length_unit", "")).strip()
+            chordal_unit = str(
+                stl_tolerance.get("chordal_tolerance_length_unit", "")
+            ).strip()
+            angular_unit = str(
+                stl_tolerance.get("angular_tolerance_unit", "")
+            ).strip()
+            length_scales = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            angular_scales = {"rad": 1.0, "deg": math.pi / 180.0}
+            digest = str(stl_tolerance.get("tolerance_contract_sha256", "")).lower()
+            try:
+                chordal_value = float(stl_tolerance.get("chordal_tolerance_value"))
+                chordal_si = float(stl_tolerance.get("chordal_tolerance_si_m"))
+                tessellator_chordal_si = float(
+                    stl_tolerance.get("tessellator_chordal_tolerance_si_m")
+                )
+                angular_value = float(stl_tolerance.get("angular_tolerance_value"))
+                angular_rad = float(stl_tolerance.get("angular_tolerance_rad"))
+                tessellator_angular_rad = float(
+                    stl_tolerance.get("tessellator_angular_tolerance_rad")
+                )
+            except (TypeError, ValueError):
+                chordal_value = chordal_si = tessellator_chordal_si = math.nan
+                angular_value = angular_rad = tessellator_angular_rad = math.nan
+            length_scale = length_scales.get(chordal_unit)
+            angular_scale = angular_scales.get(angular_unit)
+            stl_tolerance_model_length_unit_generation_identity_ok = (
+                bool(model_unit_generation)
+                and stl_tolerance.get("tessellation_model_unit_generation")
+                == model_unit_generation
+                and stl_tolerance.get("tolerance_conversion_model_unit_generation")
+                == model_unit_generation
+                and model_unit in length_scales
+                and chordal_unit == model_unit
+                and length_scale is not None
+                and angular_scale is not None
+                and math.isfinite(chordal_value)
+                and chordal_value > 0.0
+                and math.isclose(
+                    chordal_value * length_scale,
+                    chordal_si,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-30,
+                )
+                and math.isclose(
+                    tessellator_chordal_si,
+                    chordal_si,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-30,
+                )
+                and math.isfinite(angular_value)
+                and angular_value > 0.0
+                and math.isclose(
+                    angular_value * angular_scale,
+                    angular_rad,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-15,
+                )
+                and math.isclose(
+                    tessellator_angular_rad,
+                    angular_rad,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-15,
+                )
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and stl_tolerance.get("tessellator_tolerance_contract_sha256")
+                == digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -1154,6 +1326,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "brep_edge_tolerances_follow_final_shape_fix_topology": (
             brep_edge_tolerance_shape_fix_identity_ok
+        ),
+        "step_occurrence_inheritance_uses_current_assembly_generation": (
+            step_occurrence_color_material_inheritance_identity_ok
+        ),
+        "stl_tolerances_use_current_model_length_unit_generation": (
+            stl_tolerance_model_length_unit_generation_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
