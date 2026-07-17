@@ -847,6 +847,281 @@ def _netgen_vol_block_order_curving_generation_ok(identity: object) -> bool:
     )
 
 
+def _hex_sweep_face_vertex_twist_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("source_vertex_ids"),
+        identity.get("mapped_source_vertex_ids"),
+        identity.get("target_vertex_ids"),
+        identity.get("mapped_target_vertex_ids"),
+        identity.get("twist_path_vertex_ids"),
+        identity.get("mapped_twist_path_vertex_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        source_vertices = [int(value) for value in fields[0]]
+        mapped_source_vertices = [int(value) for value in fields[1]]
+        target_vertices = [int(value) for value in fields[2]]
+        mapped_target_vertices = [int(value) for value in fields[3]]
+        twist_path = [int(value) for value in fields[4]]
+        mapped_twist_path = [int(value) for value in fields[5]]
+        source_face = int(identity.get("source_face_id"))
+        mapped_source_face = int(identity.get("mapped_source_face_id"))
+        target_face = int(identity.get("target_face_id"))
+        mapped_target_face = int(identity.get("mapped_target_face_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sweep_generation") or "")
+    face_digest = str(identity.get("face_vertex_map_sha256") or "")
+    twist_digest = str(identity.get("twist_path_sha256") or "")
+    return (
+        bool(generation)
+        and identity.get("source_face_sweep_generation") == generation
+        and identity.get("target_face_sweep_generation") == generation
+        and identity.get("vertex_map_sweep_generation") == generation
+        and identity.get("twist_path_sweep_generation") == generation
+        and source_face > 0
+        and target_face > 0
+        and source_face != target_face
+        and mapped_source_face == source_face
+        and mapped_target_face == target_face
+        and len(source_vertices) == 4
+        and len(set(source_vertices)) == 4
+        and mapped_source_vertices == source_vertices
+        and len(target_vertices) == 4
+        and len(set(target_vertices)) == 4
+        and mapped_target_vertices == target_vertices
+        and not set(source_vertices).intersection(target_vertices)
+        and len(twist_path) == 8
+        and set(twist_path) == set(source_vertices + target_vertices)
+        and mapped_twist_path == twist_path
+        and all(
+            len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in (face_digest, twist_digest)
+        )
+        and identity.get("applied_face_vertex_map_sha256") == face_digest
+        and identity.get("applied_twist_path_sha256") == twist_digest
+    )
+
+
+def _quality_histogram_metric_element_unit_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("element_ids"),
+        identity.get("evaluated_element_ids"),
+        identity.get("metric_values"),
+        identity.get("evaluated_metric_values"),
+        identity.get("histogram_bin_edges"),
+        identity.get("histogram_counts"),
+        identity.get("evaluated_histogram_counts"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        element_ids = [int(value) for value in fields[0]]
+        evaluated_ids = [int(value) for value in fields[1]]
+        metric_values = [float(value) for value in fields[2]]
+        evaluated_values = [float(value) for value in fields[3]]
+        bin_edges = [float(value) for value in fields[4]]
+        counts = [int(value) for value in fields[5]]
+        evaluated_counts = [int(value) for value in fields[6]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mesh_generation") or "")
+    digest = str(identity.get("quality_table_sha256") or "")
+    computed_counts = [0] * max(0, len(bin_edges) - 1)
+    for value in metric_values:
+        for index, (lower, upper) in enumerate(zip(bin_edges, bin_edges[1:])):
+            if lower <= value < upper or (
+                index == len(computed_counts) - 1 and value == upper
+            ):
+                computed_counts[index] += 1
+                break
+    return (
+        bool(generation)
+        and identity.get("metric_mesh_generation") == generation
+        and identity.get("element_set_mesh_generation") == generation
+        and identity.get("coordinate_unit_mesh_generation") == generation
+        and bool(str(identity.get("metric_name") or ""))
+        and identity.get("evaluated_metric_name") == identity.get("metric_name")
+        and bool(str(identity.get("coordinate_unit") or ""))
+        and identity.get("evaluated_coordinate_unit")
+        == identity.get("coordinate_unit")
+        and bool(element_ids)
+        and len(set(element_ids)) == len(element_ids)
+        and evaluated_ids == element_ids
+        and len(metric_values) == len(element_ids)
+        and all(math.isfinite(value) for value in metric_values)
+        and evaluated_values == metric_values
+        and len(bin_edges) >= 2
+        and all(math.isfinite(value) for value in bin_edges)
+        and all(right > left for left, right in zip(bin_edges, bin_edges[1:]))
+        and len(counts) == len(bin_edges) - 1
+        and all(value >= 0 for value in counts)
+        and counts == computed_counts
+        and evaluated_counts == counts
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("evaluated_quality_table_sha256") == digest
+    )
+
+
+def _block_sideset_merge_renumber_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("block_ids"),
+        identity.get("exported_block_ids"),
+        identity.get("block_entity_ids"),
+        identity.get("exported_block_entity_ids"),
+        identity.get("sideset_ids"),
+        identity.get("exported_sideset_ids"),
+        identity.get("sideset_entity_ids"),
+        identity.get("exported_sideset_entity_ids"),
+        identity.get("group_entity_ids"),
+        identity.get("exported_group_entity_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        block_ids = [int(value) for value in fields[0]]
+        exported_block_ids = [int(value) for value in fields[1]]
+        block_entities = [[int(value) for value in row] for row in fields[2]]
+        exported_block_entities = [
+            [int(value) for value in row] for row in fields[3]
+        ]
+        sideset_ids = [int(value) for value in fields[4]]
+        exported_sideset_ids = [int(value) for value in fields[5]]
+        sideset_entities = [[int(value) for value in row] for row in fields[6]]
+        exported_sideset_entities = [
+            [int(value) for value in row] for row in fields[7]
+        ]
+        group_entities = [int(value) for value in fields[8]]
+        exported_group_entities = [int(value) for value in fields[9]]
+    except (TypeError, ValueError):
+        return False
+    topology_generation = str(identity.get("topology_generation") or "")
+    merge_generation = str(identity.get("merge_transaction_generation") or "")
+    digest = str(identity.get("ownership_table_sha256") or "")
+    owned_entities = [
+        entity
+        for membership in block_entities + sideset_entities
+        for entity in membership
+    ]
+    return (
+        bool(topology_generation)
+        and identity.get("block_topology_generation") == topology_generation
+        and identity.get("sideset_topology_generation") == topology_generation
+        and identity.get("group_topology_generation") == topology_generation
+        and identity.get("renumber_topology_generation") == topology_generation
+        and bool(merge_generation)
+        and identity.get("group_merge_transaction_generation")
+        == merge_generation
+        and bool(block_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and len(block_entities) == len(block_ids)
+        and all(membership for membership in block_entities)
+        and exported_block_ids == block_ids
+        and exported_block_entities == block_entities
+        and bool(sideset_ids)
+        and len(set(sideset_ids)) == len(sideset_ids)
+        and len(sideset_entities) == len(sideset_ids)
+        and all(membership for membership in sideset_entities)
+        and exported_sideset_ids == sideset_ids
+        and exported_sideset_entities == sideset_entities
+        and len(set(group_entities)) == len(group_entities)
+        and set(group_entities) == set(owned_entities)
+        and exported_group_entities == group_entities
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("exported_ownership_table_sha256") == digest
+    )
+
+
+def _aprepro_include_variable_transaction_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("variable_names"),
+        identity.get("expanded_variable_names"),
+        identity.get("variable_values"),
+        identity.get("expanded_variable_values"),
+        identity.get("include_paths"),
+        identity.get("expanded_include_paths"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        names = [str(value) for value in fields[0]]
+        expanded_names = [str(value) for value in fields[1]]
+        values = [float(value) for value in fields[2]]
+        expanded_values = [float(value) for value in fields[3]]
+        includes = [str(value) for value in fields[4]]
+        expanded_includes = [str(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("journal_transaction_generation") or "")
+    working_directory = str(identity.get("working_directory") or "")
+    variable_digest = str(identity.get("variable_table_sha256") or "")
+    include_digest = str(identity.get("include_tree_sha256") or "")
+    return (
+        bool(generation)
+        and identity.get("variable_table_transaction_generation") == generation
+        and identity.get("include_expansion_transaction_generation") == generation
+        and identity.get("working_directory_transaction_generation") == generation
+        and bool(working_directory)
+        and not Path(working_directory).is_absolute()
+        and ".." not in Path(working_directory).parts
+        and identity.get("replay_working_directory") == working_directory
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and expanded_names == names
+        and len(values) == len(names)
+        and all(math.isfinite(value) for value in values)
+        and expanded_values == values
+        and bool(includes)
+        and all(
+            path
+            and not Path(path).is_absolute()
+            and ".." not in Path(path).parts
+            for path in includes
+        )
+        and expanded_includes == includes
+        and all(
+            len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in (variable_digest, include_digest)
+        )
+        and identity.get("expanded_variable_table_sha256") == variable_digest
+        and identity.get("expanded_include_tree_sha256") == include_digest
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -1544,6 +1819,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "tet_hex_pyramid_interface_uses_current_face_orientation_and_conformity": (
             _tet_hex_pyramid_interface_orientation_conformity_ok(
                 summary.get("tet_hex_pyramid_interface_face_orientation_conformity_identity")
+            )
+        ),
+        "hex_sweep_uses_current_source_target_vertex_map_and_twist_path": (
+            _hex_sweep_face_vertex_twist_generation_ok(
+                summary.get("hex_sweep_source_target_face_vertex_twist_generation_identity")
+            )
+        ),
+        "quality_histogram_uses_current_metric_element_set_and_units": (
+            _quality_histogram_metric_element_unit_generation_ok(
+                summary.get("quality_histogram_metric_element_set_unit_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -2265,6 +2550,16 @@ def cubit_mixed_transition_source_gate(
         "netgen_export_uses_current_block_order_and_curving_generation": (
             _netgen_vol_block_order_curving_generation_ok(
                 summary.get("netgen_vol_element_block_order_curving_generation_identity")
+            )
+        ),
+        "block_sideset_groups_use_current_merge_and_renumber_generation": (
+            _block_sideset_merge_renumber_generation_ok(
+                summary.get("block_sideset_group_entity_merge_renumber_generation_identity")
+            )
+        ),
+        "aprepro_replay_uses_current_variables_includes_and_working_directory": (
+            _aprepro_include_variable_transaction_generation_ok(
+                summary.get("aprepro_include_variable_expansion_working_directory_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
