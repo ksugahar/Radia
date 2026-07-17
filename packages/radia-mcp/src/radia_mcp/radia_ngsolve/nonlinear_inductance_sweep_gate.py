@@ -1346,6 +1346,153 @@ def _time_farfield_fft_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _waveguide_degenerate_mode_tracking_is_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_degenerate_mode_phase_order_overlap_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("sweep_generation", "")).strip()
+    mode_ids = identity.get("mode_ids")
+    modal_order = identity.get("modal_order")
+    try:
+        phases = [
+            float(value) for value in identity.get("phase_reference_deg", [])
+        ]
+        result_phases = [
+            float(value)
+            for value in identity.get("result_phase_reference_deg", [])
+        ]
+        overlaps = [
+            [float(value) for value in row]
+            for row in identity.get("overlap_vectors", [])
+        ]
+        result_overlaps = [
+            [float(value) for value in row]
+            for row in identity.get("result_overlap_vectors", [])
+        ]
+    except (TypeError, ValueError):
+        phases = result_phases = []
+        overlaps = result_overlaps = []
+    digest = str(identity.get("mode_tracking_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mesh_sweep_generation",
+                "phase_sweep_generation",
+                "modal_order_sweep_generation",
+                "overlap_sweep_generation",
+                "result_sweep_generation",
+            )
+        )
+        and isinstance(mode_ids, list)
+        and len(mode_ids) >= 2
+        and all(isinstance(value, str) and bool(value.strip()) for value in mode_ids)
+        and len(set(mode_ids)) == len(mode_ids)
+        and identity.get("result_mode_ids") == mode_ids
+        and isinstance(modal_order, list)
+        and len(modal_order) == len(mode_ids)
+        and all(
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
+            for value in modal_order
+        )
+        and len(set(modal_order)) == len(modal_order)
+        and identity.get("result_modal_order") == modal_order
+        and len(phases) == len(mode_ids)
+        and all(math.isfinite(value) for value in phases)
+        and result_phases == phases
+        and len(overlaps) == len(mode_ids)
+        and all(
+            len(row) == len(mode_ids)
+            and all(math.isfinite(value) for value in row)
+            and any(value != 0.0 for value in row)
+            for row in overlaps
+        )
+        and result_overlaps == overlaps
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and str(identity.get("result_mode_tracking_table_sha256", "")).lower()
+        == digest
+    )
+
+
+def _dispersive_causal_pole_fit_is_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "dispersive_causal_pole_fit_temperature_unit_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("fit_generation", "")).strip()
+    convention = str(identity.get("causal_convention", "")).strip()
+    unit = str(identity.get("frequency_unit", "")).strip()
+    try:
+        temperature = float(identity.get("temperature_c"))
+        result_temperature = float(identity.get("result_temperature_c"))
+        poles = [
+            [float(value) for value in row]
+            for row in identity.get("pole_pairs_rad_per_s", [])
+        ]
+        result_poles = [
+            [float(value) for value in row]
+            for row in identity.get("result_pole_pairs_rad_per_s", [])
+        ]
+        residues = [
+            [float(value) for value in row]
+            for row in identity.get("residues", [])
+        ]
+        result_residues = [
+            [float(value) for value in row]
+            for row in identity.get("result_residues", [])
+        ]
+    except (TypeError, ValueError):
+        temperature = result_temperature = math.nan
+        poles = result_poles = []
+        residues = result_residues = []
+    digest = str(identity.get("pole_fit_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "pole_fit_generation",
+                "causal_convention_fit_generation",
+                "temperature_fit_generation",
+                "frequency_unit_fit_generation",
+                "field_result_fit_generation",
+            )
+        )
+        and convention in {"exp(-iwt)", "exp(+iwt)"}
+        and identity.get("result_causal_convention") == convention
+        and math.isfinite(temperature)
+        and result_temperature == temperature
+        and unit in {"Hz", "kHz", "MHz", "GHz"}
+        and identity.get("result_frequency_unit") == unit
+        and len(poles) >= 2
+        and all(
+            len(row) == 2
+            and all(math.isfinite(value) for value in row)
+            and row[0] < 0.0
+            for row in poles
+        )
+        and result_poles == poles
+        and len(residues) == len(poles)
+        and all(
+            len(row) == 2 and all(math.isfinite(value) for value in row)
+            for row in residues
+        )
+        and result_residues == residues
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and str(identity.get("result_pole_fit_sha256", "")).lower() == digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1587,6 +1734,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "time_farfield_fft_uses_current_grid_window_scaling_and_phase_center": (
                 _time_farfield_fft_inputs_are_current(raw)
+            ),
+            "degenerate_modes_use_current_mesh_phase_order_and_overlap": (
+                _waveguide_degenerate_mode_tracking_is_current(raw)
+            ),
+            "dispersive_fields_use_current_causal_poles_temperature_and_units": (
+                _dispersive_causal_pole_fit_is_current(raw)
             ),
         }
         row = {
