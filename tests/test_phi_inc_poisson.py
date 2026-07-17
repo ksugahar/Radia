@@ -109,3 +109,13 @@ def test_h_shape_mismatch_raises():
     pts, tris = _icosphere(1)
     with pytest.raises(ValueError, match="every surface vertex"):
         compute_phi_inc_surface_poisson(pts, tris, np.zeros((5, 3)))
+
+
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf])
+def test_nonfinite_h_fails_loud(bad_value):
+    pts, tris = _icosphere(1)
+    H = np.zeros((len(pts), 3), dtype=complex)
+    H[0, 0] = bad_value
+    with pytest.raises(ValueError, match="only finite values"):
+        compute_phi_inc_surface_poisson(pts, tris, H,
+                                        max_grad_residual=0.10)

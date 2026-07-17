@@ -103,11 +103,11 @@ def test_net_current_matches_ring_circuit(ring_case):
     alpha = out["alpha"]
     ratio = abs(alpha) / abs(I_ANA)
     assert 0.95 < ratio < 1.02, f"|alpha|/|I_ana| = {ratio:.4f}"
-    # phase up to the cut-orientation sign (tree-cotree direction is
-    # mesh-dependent): compare modulo 180 degrees.
+    # The production cut is normalized to positive toroidal winding, so
+    # alpha has a canonical sign and its phase is directly comparable.
     dph = (cmath.phase(alpha) - cmath.phase(I_ANA)) * 180 / math.pi
-    dph = abs((dph + 90) % 180 - 90)
-    assert dph < 5.0, f"phase mismatch {dph:.2f} deg (mod 180)"
+    dph = abs((dph + 180) % 360 - 180)
+    assert dph < 5.0, f"phase mismatch {dph:.2f} deg"
 
 
 def test_theta_jump_is_unit(ring_case):

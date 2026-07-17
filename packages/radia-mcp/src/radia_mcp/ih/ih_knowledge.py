@@ -1640,7 +1640,7 @@ Faraday's law and is locked by the analytic
 shorted-ring golden plus a frozen-subsystem equivalence check.
 Theoretical anchor: K. Sugahara, "Investigation of a Boundary Integral
 Equation n x H = J_s on Torus-Shaped Perfect Conductors," IEEE Trans.
-Antennas Propag. 56(3), pp. 722-725 (2008) -- the DUAL defect of the
+Antennas Propag. 56(3), pp. 722-727 (2008) -- the DUAL defect of the
 same H^1(S) != 0 topology (there the BIE admits a spurious harmonic
 null-space mode violating B.n=0, closed by one virtual-magnetic-current
 DOF + a one-point constraint; here the representation LACKS the
@@ -1671,24 +1671,23 @@ Counter-intuitive on first sight ("an extra current should add Joule
 heat"), resolved by the PHASE.  The tube is a shorted one-turn
 secondary: ``I_2 = -j omega M I_1 / (R_loop + j omega L_loop)``, whose
 phase lies between quadrature (-90 deg, resistance-dominated) and
-anti-phase (-180 deg, inductance-dominated).  Takahashi measures
-alpha = 5264 A at -174 deg vs the 6700 A drive: within 6 deg of pure
-anti-phase, i.e. deep in the INDUCTANCE-DOMINATED regime where the
-shorted turn is a nearly lossless FLUX CANCELLER.  Since
+anti-phase (-180 deg, inductance-dominated).  In the
+INDUCTANCE-DOMINATED regime the shorted turn approaches a lossless flux
+canceller.  Since
 ``P = 1/2 Re(Z_s) int |H_t|^2`` and
 ``|H_inc + H_alpha|^2 = |H_inc|^2 + 2 Re(H_inc . H_alpha*) +
 |H_alpha|^2`` with a large NEGATIVE cross term, the Lenz screening
-removes more surface |H_t|^2 than the mode's own dissipation adds:
-measured H_t 50.06 -> 46.35 kA/m and P 21.51 -> 18.43 kW, with
-``P/P_frozen = 0.857 = (H_t/H_t_frozen)^2`` exactly (P is literally
-the |H_t|^2 integral).  Clamping the mode to zero (single-valued phi)
+can remove more surface |H_t|^2 than the mode's own dissipation adds.
+The emitted ``P/P_frozen`` ratio and alpha phase expose whether a run
+is in that screening regime.  Clamping the mode to zero (single-valued phi)
 is the physics of a tube with an insulating slit around its section:
 the full coil flux swings through the bore unopposed and the surface
-sees the UNSCREENED field -- hence the +15-20% over-estimate.  The
+sees the unscreened field.  The
 machine-design intuition "a shorted turn overheats" belongs to the
 OPPOSITE regime (omega L << R_loop, phase near -90 deg, weak screening,
 the turn mostly self-heats); the alpha phase is the regime
-discriminator, and ``test_screening_reduces_H_t`` locks the sign.
+discriminator.  The cut is oriented to positive toroidal winding before
+alpha is reported, so this phase label is independent of tree orientation.
 
 Every loop-DOF run now emits the screening diagnostics in the JSON:
 ``wp_loop_P_frozen_W`` / ``wp_loop_H_t_frozen_A_per_m`` (the no-mode,
@@ -1701,9 +1700,8 @@ requires linear SIBC, ``--wp-bem-backend intree-dense``, and (on the
 weak path) ``--h1-order 1``; BOTH coupling modes take it -- the weak
 path applies it to its single solve, the strong drivers apply it ONCE
 on the converged Picard state (the Picard loop itself keeps the plain
-solve whose L_total / Delta_L convention is validated; the alpha
-back-reaction onto the coil current is not iterated, consistent with
-the measured percent-level coil-current redistribution).  The output
+solve whose L_total / Delta_L convention is retained; the alpha
+back-reaction onto the coil current is not iterated).  The output
 records ``wp_loop_alpha_A`` and replaces the genus caveat with
 ``P_wp_note``.
 
@@ -1716,9 +1714,8 @@ rebuild, is winding invariant, and fails loud when
 ``||grad_S psi + H_t,inc|| / ||H_t,inc||`` exceeds 10 percent.  The
 legacy selectable P1 path-integration route and ``--wp-phi-inc`` flag
 are removed; the strong solvers' former per-iteration path integration
-(the dominant per-iteration cost) and the former ngsolve.bem dense wp
-assembly (O(N^3) column extraction with a NaN incident on record) are
-removed with it -- the dense wp backend is now the same in-tree
+and former ngsolve.bem dense workpiece assembly are removed with it --
+the dense wp backend is now the same in-tree
 Sauter-Schwab Galerkin configuration as the weak path.  Only the
 Lagrange-P2 edge-node route retains path integration, as its sole
 implemented reconstruction.
@@ -1764,22 +1761,14 @@ loop-extended values, the Telegen delta_L (weak) / L_total (strong)
 keep the plain-phi convention, the genus ``P_wp_caveat`` becomes a
 ``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
 a built-in frozen-vs-plain cross-check refuses to report on operator
-mismatch.  Takahashi strong e2e (intree-dense, no flags): P_wp
-22.70 -> 18.57 kW / H_t 51.4 -> 46.53 kA/m / alpha = 5028 A --
-consistent with the weak-path 18.41 kW / 46.32 kA/m to ~1% (the
-coil-current redistribution), vs 17.0-17.7 kW / 46.1 kA/m references;
-the coupled solve dropped 439 -> 228 s (the per-iteration path
-integration was its dominant cost; the loop DOF itself adds ~8 s).
+mismatch.
 
-**Weak-vs-strong method choice: WEAK FIRST (Sugahara, 2026-07-17).**
-Run the weak path as the production route -- on Takahashi it is ~10x
-faster on the workpiece stage (~25 s vs 228 s coupled; the coil solve
-is common) and agrees with strong to ~1% on P_wp / H_t.  The weak
-run's OWN output contains the escalation criterion: ``|delta_L_nH| /
-L_coil_nH`` measures the coil back-reaction (Takahashi: 1.4% -> the
-coil-current redistribution is percent-level and strong adds nothing
-but wall-clock).  Escalate to ``--coupling-mode strong`` only when
-that ratio is large (close-coupled / high-mu / small-gap workpiece)
+**Weak-vs-strong method choice: WEAK FIRST.**
+Run the weak path as the production route because it avoids the
+iterative coil-current re-solve.  The weak run's own
+``|delta_L_nH| / L_coil_nH`` ratio is the escalation indicator for coil
+back-reaction.  Escalate to ``--coupling-mode strong`` when that ratio
+is not small (close-coupled / high-mu / small-gap workpiece)
 or when the self-consistent L_total including the workpiece
 magnetic-energy term (the term weak's Telegen form drops) is itself
 the target quantity.  Both routes now carry the identical genus-1
