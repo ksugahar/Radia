@@ -7,6 +7,19 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.13] - 2026-07-17
+
+- Added executable Mathematica studies for RT/BDM simplex families,
+  parent-order admissibility, conductor-topology reduction, and the discrete
+  de Rham bridge from HCurl T modes to solenoidal HDiv currents.
+- Documented the topology-aware eddy-bubble HCurl response basis, SIBC and
+  conductor-cycle retention, and the shared-mesh BDM-MMM coupling API.
+- Corrected HDiv family terminology to BDM1/BDM2 throughout the live API
+  knowledge and added focused family-dimension and production-contract tests.
+- Strengthened CQ contour, ACA pivot, LTspice event-window, and group-delay
+  evidence gates, and synchronized IH guidance with the removed invalid
+  incident-potential and loop-current routes.
+
 ## [1.4.12] - 2026-07-17
 
 - Added genus-aware induction-heating guidance for surface orientation,
