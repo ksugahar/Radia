@@ -1098,3 +1098,99 @@ def test_v20_public_eigenmode_phase_normalization_tracking_parameter_generation_
         ]
         is False
     )
+
+
+def _with_v21_restart_and_coupling_identity(summary: dict) -> dict:
+    summary = _with_v20_transfer_and_mode_tracking_identity(summary)
+    summary["parameter_sweep_branch_restart_solution_mesh_generation_identity"] = {
+        "parameter_sweep_generation": "parameter-sweep-71",
+        "current_branch_generation": "sweep-branch-71",
+        "checkpoint_parameter_sweep_generation": "parameter-sweep-71",
+        "checkpoint_branch_generation": "sweep-branch-71",
+        "solution_vector_branch_generation": "sweep-branch-71",
+        "continuation_state_branch_generation": "sweep-branch-71",
+        "mesh_coordinate_branch_generation": "sweep-branch-71",
+        "current_branch_id": 5,
+        "checkpoint_branch_id": 5,
+        "parameter_names": ["current_a", "rotor_angle_deg"],
+        "current_parameter_tuple": [12.0, 18.0],
+        "checkpoint_parameter_tuple": [12.0, 18.0],
+        "solution_vector_sha256": "1" * 64,
+        "checkpoint_solution_vector_sha256": "1" * 64,
+        "continuation_state_sha256": "2" * 64,
+        "checkpoint_continuation_state_sha256": "2" * 64,
+        "mesh_coordinate_sha256": "3" * 64,
+        "checkpoint_mesh_coordinate_sha256": "3" * 64,
+    }
+    summary[
+        "multiphysics_coupling_source_frame_unit_selection_generation_identity"
+    ] = {
+        "coupling_generation": "multiphysics-coupling-71",
+        "source_values_coupling_generation": "multiphysics-coupling-71",
+        "source_frame_coupling_generation": "multiphysics-coupling-71",
+        "source_unit_coupling_generation": "multiphysics-coupling-71",
+        "source_selection_coupling_generation": "multiphysics-coupling-71",
+        "source_coordinate_frame": "spatial",
+        "assembled_coordinate_frame": "spatial",
+        "source_units": ["N/m^3", "W/m^3"],
+        "assembled_source_units": ["N/m^3", "W/m^3"],
+        "source_selection_ids": [21, 22],
+        "assembled_source_selection_ids": [21, 22],
+        "source_selection_dimensions": [3, 3],
+        "assembled_source_selection_dimensions": [3, 3],
+        "source_values_sha256": "4" * 64,
+        "assembled_source_values_sha256": "4" * 64,
+        "source_selection_sha256": "5" * 64,
+        "assembled_source_selection_sha256": "5" * 64,
+    }
+    return summary
+
+
+def test_v21_public_positive_restart_and_coupling_identity() -> None:
+    result = gate(_with_v21_restart_and_coupling_identity(copy.deepcopy(_summary())))
+    assert result["status"] == "ok"
+
+
+def test_v21_public_parameter_sweep_branch_restart_solution_mesh_generation_mismatch() -> None:
+    summary = _with_v21_restart_and_coupling_identity(copy.deepcopy(_summary()))
+    summary[
+        "parameter_sweep_branch_restart_solution_mesh_generation_identity"
+    ].update(
+        {
+            "checkpoint_branch_generation": "sweep-branch-70",
+            "solution_vector_branch_generation": "sweep-branch-70",
+            "mesh_coordinate_branch_generation": "sweep-branch-69",
+            "checkpoint_branch_id": 4,
+            "checkpoint_parameter_tuple": [10.0, 12.0],
+            "checkpoint_solution_vector_sha256": "9" * 64,
+            "checkpoint_mesh_coordinate_sha256": "a" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "parameter_sweep_restart_uses_current_branch_solution_and_mesh"
+    ]
+
+
+def test_v21_public_multiphysics_coupling_source_frame_unit_selection_generation_mismatch() -> None:
+    summary = _with_v21_restart_and_coupling_identity(copy.deepcopy(_summary()))
+    summary[
+        "multiphysics_coupling_source_frame_unit_selection_generation_identity"
+    ].update(
+        {
+            "source_frame_coupling_generation": "multiphysics-coupling-70",
+            "source_unit_coupling_generation": "multiphysics-coupling-69",
+            "source_selection_coupling_generation": "multiphysics-coupling-68",
+            "assembled_coordinate_frame": "material",
+            "assembled_source_units": ["N/mm^3", "W/mm^3"],
+            "assembled_source_selection_ids": [22, 24],
+            "assembled_source_values_sha256": "b" * 64,
+            "assembled_source_selection_sha256": "c" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "multiphysics_coupling_uses_current_source_frame_units_and_selection"
+    ]
