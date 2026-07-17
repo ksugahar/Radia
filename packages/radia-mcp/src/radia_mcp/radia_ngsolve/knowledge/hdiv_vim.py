@@ -76,6 +76,13 @@ The production 3-D coupled entry point is
 - a high-order `HCurl` parent supplies `T`, with `J = curl(T)`, and is reduced
   by external-response Krylov/EVRS plus topology classes.
 
+The production HCurl reduction is two-stage.  After the parent-space Krylov
+basis is formed, `CompressHCurlResponseInCurrentGram` eigendecomposes the
+sampled `J=curl(T)` Gram matrix.  Relative-null directions are independent in
+the parent-T metric but carry no independent current; they are removed, and the
+same whitening transform is applied to parent T and sampled J.  Only then are
+bulk, conductor-cycle bridge, and air-facing SIBC blocks assembled.
+
 `NgsolveBDMHDivMMMResponseReduction` creates the BDM parent internally and
 records `parent_family="BDM"` and `parent_order` in diagnostics.  Physical
 stator/rotor applied-H responses are protected before energy-POD compression;
@@ -91,6 +98,19 @@ HCurl `T`, parent BDM magnetization, sampled currents in every retained block,
 average Joule loss, and residuals.  `solution.eddy_flux_density(points)` sums
 the quasi-static Biot--Savart field of bulk, bridge, and SIBC currents; pass a
 block name to inspect one contribution.
+
+For the fully integrated reduction use
+`mixed.solve_frequency_eddy_bubbled(frequency)`.  The production builder stores
+`volume=bulk`, `volume1=bridge`, and `surface=sibc` roles from neighboring
+material labels.  The convenience solve protects bridge/cycle and air-facing
+SIBC blocks and eliminates only the ordinary bulk eddy-bubble block.
+
+The transformation is built from the complete coupled HDiv/HCurl matrix.  It
+therefore Schur-updates the HDiv operator and both coupling blocks, projects the
+RHS, includes the affine lift for a nonzero eliminated RHS, and reconstructs
+the full HCurl coefficients.  The HDiv parent demag operator continues to use
+the C++ `_ChargeGramHMatrix` HACApK backend; the final mixed Schur system is a
+small dense retained-mode matrix.
 """
 
 _IMPLEMENTATION = r"""

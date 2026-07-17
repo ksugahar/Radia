@@ -14,9 +14,9 @@ Material labels emitted:
   rotor_pm_Sp, rotor_pm_Nn
   air
   stator_iron
-  stator_ind_Ap, stator_ind_An  (3-phase × 2-sign × 4 = 24 slots, but
-  stator_ind_Bp, stator_ind_Bn   we use 6 grouped regions A/B/C ± for
-  stator_ind_Cp, stator_ind_Cn)  the simplified model
+  stator_ind_Ap, stator_ind_An  (A/B/C +/- phase-belt labels; the golden uses
+  stator_ind_Bp, stator_ind_Bn   6 equivalent regions and the machine benchmark
+  stator_ind_Cp, stator_ind_Cn)  uses 24 physical slots, four per label)
 
 Boundary labels emitted:
   outer       Dirichlet A=0
@@ -38,7 +38,10 @@ def build_pmsm_mesh(out_vol="test_pmsm.vol",
                     R_airmid=0.05025, R_rotor_out=0.050,
                     R_yoke=0.030,
                     n_poles=8, n_phases=3,
-                    maxh=0.005):
+                    maxh=0.005,
+                    curved_geometry=False,
+                    curve_order=1,
+                    physical_slots=6):
     """Build 2D 8-pole PMSM mesh, save as .vol.
 
     Returns the saved Mesh object for verification.
@@ -49,6 +52,11 @@ def build_pmsm_mesh(out_vol="test_pmsm.vol",
 
     def add_circle(cx, cy, r, left, right, bc="", n=64):
         """Append a circle as N short line segments (so we can place bc)."""
+        if curved_geometry:
+            geo.AddCircle(
+                (cx, cy), r, leftdomain=left, rightdomain=right, bc=bc
+            )
+            return
         pts = [geo.AppendPoint(cx + r*math.cos(2*math.pi*i/n),
                                 cy + r*math.sin(2*math.pi*i/n))
                for i in range(n)]
@@ -63,7 +71,9 @@ def build_pmsm_mesh(out_vol="test_pmsm.vol",
     #   11 = stator_iron yoke
     #   12..17 = stator_ind_Ap, An, Bp, Bn, Cp, Cn (6 grouped slot regions)
     NUM_PMS = n_poles                  # 8 PMs
-    NUM_SLOTS = 6                      # A+, A-, B+, B-, C+, C-
+    NUM_SLOTS = int(physical_slots)
+    if NUM_SLOTS not in (6, 24):
+        raise ValueError("physical_slots must be 6 (golden) or 24 (machine benchmark)")
 
     # Outer Dirichlet circle: stator iron is inside, "outside" (0) is exterior
     add_circle(0, 0, R_outer, left=11, right=0, bc="outer", n=64)
@@ -107,30 +117,39 @@ def build_pmsm_mesh(out_vol="test_pmsm.vol",
     geo.SetMaterial(10, "air")
     geo.SetMaterial(11, "stator_iron")
 
-    # Add slot regions (6 slots arranged at angles 30, 90, 150, 210, 270, 330)
-    # Each slot is a small circle inserted into the stator iron.
+    # Add slot regions.  The historical golden uses six large equivalent
+    # regions.  The machine benchmark uses 24 physical slots, with four slots
+    # sharing each A+/A-/B+/B-/C+/C- material label.
     slot_R_center = (R_outer + R_stator_in) / 2.0   # ~0.065 m
-    slot_radius = (R_outer - R_stator_in) * 0.30    # leave room
+    slot_radius = (R_outer - R_stator_in) * (0.30 if NUM_SLOTS == 6 else 0.12)
     phase_names = ["stator_ind_Ap", "stator_ind_An",
                    "stator_ind_Bp", "stator_ind_Bn",
                    "stator_ind_Cp", "stator_ind_Cn"]
-    for i, ph in enumerate(phase_names):
+    for i in range(NUM_SLOTS):
+        ph = phase_names[i % len(phase_names)]
         angle = (i + 0.5) * 2.0 * math.pi / NUM_SLOTS
         cx, cy = slot_R_center * math.cos(angle), slot_R_center * math.sin(angle)
-        slot_dom = 12 + i
+        slot_dom = 12 + i % len(phase_names)
         add_circle(cx, cy, slot_radius, left=slot_dom, right=11, bc="", n=24)
         geo.SetMaterial(slot_dom, ph)
 
     from ngsolve import Mesh, TaskManager
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh)
-        ngmesh.Save(out_vol)
+        if int(curve_order) < 1:
+            raise ValueError("curve_order must be positive")
+        if curved_geometry and int(curve_order) > 1:
+            curved_mesh = Mesh(ngmesh)
+            curved_mesh.Curve(int(curve_order))
+            curved_mesh.ngmesh.Save(out_vol)
+        else:
+            ngmesh.Save(out_vol)
         print(f"saved {out_vol}")
 
         m = Mesh(out_vol)
         mats = set(m.GetMaterials())
         bnds = set(m.GetBoundaries())
-        print(f"  ne={m.ne} nv={m.nv}")
+        print(f"  ne={m.ne} nv={m.nv} curve_order={m.GetCurveOrder()}")
         print(f"  materials: {sorted(mats)}")
         print(f"  boundaries: {sorted(bnds)}")
         # Sanity
