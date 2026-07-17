@@ -793,7 +793,6 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     from surface_mesh_extract import _extract_surface_mesh_filtered
     from radia.bem_sibc_solver import (
         ScalarBIESIBCSolver, compute_phi_inc_from_filaments,
-        compute_phi_inc_from_filaments_surface_path,
         compute_phi_inc_from_surface_J)
     from em_material import EMMaterial
     # Hole-extractor for wp-as-hole geometry (closed-torus convention).
@@ -868,8 +867,6 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     wp_loop_skip = None
     if wp_loop_req == "on":
         wp_loop_apply = True
-    elif wp_loop_req == "off":
-        wp_loop_apply, wp_loop_skip = False, "explicitly off"
     elif wp_genus != 1:
         wp_loop_apply = False
         wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
@@ -984,15 +981,19 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     else:
         obs = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
                          for i in range(wp_mesh.nv)])
-    phi_inc_req = getattr(args, "wp_phi_inc", "auto")
-    if phi_inc_req == "auto":
-        # poisson needs the P1 vertex-nodal DOF layout; the Lagrange-P2
-        # path keeps the validated path integration.
-        phi_inc_mode = "poisson" if basis_order == 1 else "path"
-    else:
-        phi_inc_mode = phi_inc_req
+    # Incident-potential reconstruction is basis-determined, NOT a knob:
+    # P1 -> surface-Poisson psi from the exact vertex H_inc (wall-free,
+    # fails loud if H_t,inc is not a surface gradient); Lagrange-P2 ->
+    # path integration (the sole implementation for edge-node DOFs; it
+    # carries the branch-cut-wall limitation documented on
+    # compute_phi_inc_from_filaments).  The legacy P1 path-integration
+    # route was REMOVED 2026-07-17 once the surface-Poisson
+    # reconstruction was validated end-to-end (Takahashi e2e + icosphere
+    # goldens): a superseded twin with a known wall bias must not stay
+    # selectable.
+    phi_inc_mode = "poisson" if basis_order == 1 else "path"
     progress("BEM", f"phi_inc from coil ({coil_data['source_type']}, "
-                    f"mode={phi_inc_mode}, requested={phi_inc_req})")
+                    f"mode={phi_inc_mode})")
     t0 = time.perf_counter()
     phi_inc_grad_residual = None
     if phi_inc_mode == "poisson":
@@ -2399,28 +2400,6 @@ def run_inductance(args):
                     "error": "--wp-loop-dof supports the P1 nodal path only "
                              "(--h1-order 1)."}
 
-    # Surface-Poisson phi_inc: an EXPLICIT "poisson" fails fast on
-    # unsupported combinations BEFORE the expensive coil solve (same
-    # policy as --wp-loop-dof).  "auto" resolves inside the weak driver
-    # (poisson on the P1 nodal path, path otherwise) and never errors
-    # here.
-    if getattr(args, "wp_phi_inc", "auto") == "poisson":
-        if args.coupling_mode != "weak":
-            return {"status": "error",
-                    "error": "--wp-phi-inc poisson is wired into the "
-                             "weak-coupling workpiece path only; the strong "
-                             "driver keeps path-integration."}
-        if args.coil_only or not args.vol:
-            return {"status": "error",
-                    "error": "--wp-phi-inc poisson requires a workpiece "
-                             "--vol (phi_inc lives on the workpiece "
-                             "surface)."}
-        if int(args.h1_order) != 1:
-            return {"status": "error",
-                    "error": "--wp-phi-inc poisson supports the P1 nodal "
-                             "path only (--h1-order 1): psi is "
-                             "reconstructed on the extracted vertex mesh."}
-
     # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
     # / PEEC) in TaskManager so it runs in parallel: the helpers were
     # de-wrapped under the "caller wraps, helper does NOT" policy
@@ -2639,7 +2618,7 @@ def build_argparser():
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
     parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
     parser.add_argument("--wp-loop-dof", nargs="?", const="on",
-                        default="auto", choices=["auto", "on", "off"],
+                        default="auto", choices=["auto", "on"],
                         help="Genus-1 loop DOF (net shorted-turn eddy "
                              "current) for the workpiece scalar BIE "
                              "(radia.bem_loop_extension).  Recovers the "
@@ -2654,25 +2633,11 @@ def build_argparser():
                              "keep the P_wp_caveat).  "
                              "on (= bare --wp-loop-dof): require it -- "
                              "unmet prerequisites or genus != 1 fail "
-                             "loud.  off: plain solver (genus-1 caveat "
-                             "applies).  delta_L (Telegen) keeps the "
+                             "loud.  There is deliberately NO 'off': the "
+                             "legacy un-extended genus-1 solve is a known "
+                             "+25-30% over-estimate and must not be "
+                             "selectable.  delta_L (Telegen) keeps the "
                              "plain-solve phi convention.")
-    parser.add_argument("--wp-phi-inc", default="auto",
-                        choices=["auto", "path", "poisson"],
-                        help="Workpiece incident-potential reconstruction.  "
-                             "poisson: surface-Poisson (Laplace-Beltrami) "
-                             "projection of the exact vertex H_inc -- "
-                             "wall-free, L2-optimal tangential gradient, "
-                             "and much faster (one batched H evaluation "
-                             "instead of per-vertex quadrature rays); "
-                             "fails loud when grad_S psi misses H_t,inc "
-                             "by > 10% (e.g. coil current piercing the "
-                             "surface).  path: legacy axis-ray + "
-                             "horizontal-ray path integration (accumulates "
-                             "local H errors into a branch-cut wall on "
-                             "the surface).  auto (default): poisson on "
-                             "the weak P1 nodal path, path otherwise "
-                             "(--h1-order 2 / strong driver).")
 
     # ----- Excitation -----
     parser.add_argument("--frequency", type=float, required=True,
