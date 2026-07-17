@@ -407,7 +407,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
               solve, e.g. a manufactured hard-magnet state.  It is not a
               replacement for explicitly modelling the magnetizing fixture.
     initial_state : optional state dict returned by an earlier call.  Restarts
-              material history, RT coefficients, B cache, and convergence
+              material history, BDM coefficients, B cache, and convergence
               scale without hidden mutable material state.
     order   : HDiv order 1 or 2.  BDM1 retains one constitutive state per element;
               BDM2 stores state at physical volume quadrature points and returns
