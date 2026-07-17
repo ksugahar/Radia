@@ -1049,6 +1049,122 @@ def _measure_trigger_target_crossing_identity_ok(
     )
 
 
+def _monte_carlo_sample_trace_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "monte_carlo_seed_sample_tuple_trace_row_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    rows = (
+        contract.get("sample_ids"),
+        contract.get("seed_order"),
+        contract.get("trace_seed_order"),
+        contract.get("parameter_names"),
+        contract.get("sample_parameter_tuples"),
+        contract.get("trace_sample_ids"),
+        contract.get("trace_parameter_tuples"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        sample_ids = [int(value) for value in rows[0]]
+        seeds = [int(value) for value in rows[1]]
+        trace_seeds = [int(value) for value in rows[2]]
+        names = [str(value) for value in rows[3]]
+        samples = [[_finite(value, "sample") for value in row] for row in rows[4]]
+        trace_ids = [int(value) for value in rows[5]]
+        trace_samples = [
+            [_finite(value, "trace_sample") for value in row] for row in rows[6]
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("monte_carlo_generation_id") or "")
+    digest = str(contract.get("sample_table_sha256") or "")
+    return (
+        bool(generation)
+        and contract.get("seed_order_generation_id") == generation
+        and contract.get("sample_tuple_generation_id") == generation
+        and contract.get("trace_row_generation_id") == generation
+        and bool(sample_ids)
+        and all(value > 0 for value in sample_ids)
+        and len(set(sample_ids)) == len(sample_ids)
+        and len(seeds) == len(sample_ids)
+        and all(value > 0 for value in seeds)
+        and len(set(seeds)) == len(seeds)
+        and trace_seeds == seeds
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and len(samples) == len(sample_ids)
+        and all(len(row) == len(names) for row in samples)
+        and trace_ids == sample_ids
+        and trace_samples == samples
+        and _is_sha256(digest)
+        and contract.get("trace_sample_table_sha256") == digest
+    )
+
+
+def _fft_window_harmonic_bin_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "fft_window_sample_rate_harmonic_bin_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        sample_count = int(_finite(contract.get("sample_count"), "sample_count", positive=True))
+        window_count = int(
+            _finite(contract.get("window_sample_count"), "window_sample_count", positive=True)
+        )
+        sample_rate = _finite(contract.get("sample_rate_hz"), "sample_rate_hz", positive=True)
+        fft_rate = _finite(contract.get("fft_sample_rate_hz"), "fft_sample_rate_hz", positive=True)
+        gain = _finite(contract.get("coherent_gain"), "coherent_gain", positive=True)
+        applied_gain = _finite(
+            contract.get("applied_coherent_gain"), "applied_coherent_gain", positive=True
+        )
+        bins = [int(value) for value in contract["harmonic_bin_indices"]]
+        fft_bins = [int(value) for value in contract["fft_harmonic_bin_indices"]]
+        frequencies = [float(value) for value in contract["harmonic_frequencies_hz"]]
+        fft_frequencies = [
+            float(value) for value in contract["fft_harmonic_frequencies_hz"]
+        ]
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(contract.get("transient_generation_id") or "")
+    digest = str(contract.get("fft_contract_sha256") or "")
+    expected_frequencies = [value * sample_rate / sample_count for value in bins]
+    return (
+        bool(generation)
+        and contract.get("window_transient_generation_id") == generation
+        and contract.get("sample_rate_transient_generation_id") == generation
+        and contract.get("harmonic_bin_transient_generation_id") == generation
+        and contract.get("fft_result_transient_generation_id") == generation
+        and sample_count == contract.get("sample_count") == window_count
+        and math.isclose(fft_rate, sample_rate, rel_tol=1.0e-12)
+        and contract.get("window_name") in {"hann", "hamming", "blackman", "rectangular"}
+        and 0.0 < gain <= 1.0
+        and math.isclose(applied_gain, gain, rel_tol=1.0e-12)
+        and bool(bins)
+        and all(0 < value < sample_count // 2 for value in bins)
+        and len(set(bins)) == len(bins)
+        and fft_bins == bins
+        and len(frequencies) == len(bins)
+        and all(
+            math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for value, expected in zip(frequencies, expected_frequencies)
+        )
+        and fft_frequencies == frequencies
+        and _is_sha256(digest)
+        and contract.get("result_fft_contract_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1381,6 +1497,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "measure_trigger_target_use_current_crossing_counts_and_brackets": (
             _measure_trigger_target_crossing_identity_ok(positive)
+        ),
+        "monte_carlo_traces_use_current_seed_sample_tuple_row_order": (
+            _monte_carlo_sample_trace_identity_ok(positive)
+        ),
+        "fft_harmonics_use_current_window_sample_rate_and_bin_table": (
+            _fft_window_harmonic_bin_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
