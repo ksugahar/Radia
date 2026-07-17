@@ -1213,3 +1213,118 @@ def test_v20_public_fft_window_sample_rate_harmonic_bin_generation_mismatch() ->
     assert not result["checks"][
         "fft_harmonics_use_current_window_sample_rate_and_bin_table"
     ]
+
+
+def _with_v21_noise_and_stepped_transient_identity(summary: dict) -> dict:
+    summary = _with_v20_monte_carlo_and_fft_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive[
+        "noise_monte_carlo_sample_filter_psd_integration_generation_identity"
+    ] = {
+        "monte_carlo_generation_id": "noise-mc-61",
+        "sample_filter_monte_carlo_generation_id": "noise-mc-61",
+        "psd_table_monte_carlo_generation_id": "noise-mc-61",
+        "integration_monte_carlo_generation_id": "noise-mc-61",
+        "sample_ids": [1, 2, 3, 4],
+        "accepted_sample_mask": [True, False, True, True],
+        "psd_sample_ids": [1, 2, 3, 4],
+        "integration_sample_ids": [1, 3, 4],
+        "frequency_hz": [100.0, 200.0, 400.0],
+        "bin_width_hz": [100.0, 150.0, 200.0],
+        "integration_bin_width_hz": [100.0, 150.0, 200.0],
+        "psd_sidedness": "one-sided",
+        "integration_psd_sidedness": "one-sided",
+        "psd_table_sha256": "1" * 64,
+        "integration_input_sha256": "1" * 64,
+    }
+    positive[
+        "stepped_transient_accepted_grid_measure_row_generation_identity"
+    ] = {
+        "transient_generation_id": "stepped-transient-61",
+        "accepted_grid_transient_generation_id": "stepped-transient-61",
+        "parameter_tuple_transient_generation_id": "stepped-transient-61",
+        "measure_row_transient_generation_id": "stepped-transient-61",
+        "step_ids": [1, 2],
+        "parameter_names": ["RLOAD", "CLOAD"],
+        "parameter_tuples": [[100.0, 1.0e-9], [200.0, 2.0e-9]],
+        "measure_step_ids": [1, 1, 2, 2],
+        "measure_parameter_tuples": [
+            [100.0, 1.0e-9],
+            [100.0, 1.0e-9],
+            [200.0, 2.0e-9],
+            [200.0, 2.0e-9],
+        ],
+        "measure_names": ["rise", "fall", "rise", "fall"],
+        "accepted_time_grid_s": [0.0, 1.0e-6, 2.0e-6, 4.0e-6],
+        "measure_time_grid_s": [0.0, 1.0e-6, 2.0e-6, 4.0e-6],
+        "measure_row_keys": ["1:rise", "1:fall", "2:rise", "2:fall"],
+        "decoded_measure_row_keys": ["1:rise", "1:fall", "2:rise", "2:fall"],
+        "accepted_grid_sha256": "2" * 64,
+        "measure_grid_sha256": "2" * 64,
+        "parameter_tuple_table_sha256": "3" * 64,
+        "measure_parameter_tuple_table_sha256": "3" * 64,
+    }
+    return summary
+
+
+def test_accepts_v21_noise_and_stepped_transient_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v21_noise_and_stepped_transient_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v21_public_noise_monte_carlo_sample_filter_psd_integration_generation_mismatch() -> None:
+    bad = _with_v21_noise_and_stepped_transient_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "noise_monte_carlo_sample_filter_psd_integration_generation_identity"
+    ]
+    identity.update(
+        {
+            "sample_filter_monte_carlo_generation_id": "noise-mc-60",
+            "integration_monte_carlo_generation_id": "noise-mc-59",
+            "accepted_sample_mask": [True, True, False, True],
+            "integration_sample_ids": [4, 2, 1],
+            "integration_bin_width_hz": [200.0, 150.0, 100.0],
+            "integration_psd_sidedness": "two-sided",
+            "integration_input_sha256": "f" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "noise_monte_carlo_psd_integration_uses_current_filtered_samples_bins_and_sidedness"
+    ]
+
+
+def test_v21_public_stepped_transient_accepted_grid_measure_row_generation_mismatch() -> None:
+    bad = _with_v21_noise_and_stepped_transient_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "stepped_transient_accepted_grid_measure_row_generation_identity"
+    ]
+    identity.update(
+        {
+            "accepted_grid_transient_generation_id": "stepped-transient-60",
+            "measure_row_transient_generation_id": "stepped-transient-59",
+            "measure_parameter_tuples": [
+                [200.0, 2.0e-9],
+                [200.0, 2.0e-9],
+                [100.0, 1.0e-9],
+                [100.0, 1.0e-9],
+            ],
+            "measure_time_grid_s": [0.0, 2.0e-6, 1.0e-6, 4.0e-6],
+            "decoded_measure_row_keys": [
+                "2:fall",
+                "2:rise",
+                "1:fall",
+                "1:rise",
+            ],
+            "measure_grid_sha256": "e" * 64,
+            "measure_parameter_tuple_table_sha256": "f" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "stepped_transient_measures_use_current_grid_parameter_tuples_and_row_order"
+    ]
