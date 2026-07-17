@@ -1002,3 +1002,99 @@ def test_v19_public_nonconforming_mortar_interface_projection_quadrature_mesh_mi
         ]
         is False
     )
+
+
+def _with_v20_transfer_and_mode_tracking_identity(summary: dict) -> dict:
+    summary = _with_v19_continuation_and_mortar_identity(summary)
+    summary["adaptive_mesh_field_transfer_projection_conservation_identity"] = {
+        "solve_generation": "adaptive-solve-62",
+        "source_mesh_generation": "adaptive-mesh-61",
+        "projection_source_mesh_generation": "adaptive-mesh-61",
+        "conservation_source_mesh_generation": "adaptive-mesh-61",
+        "target_mesh_generation": "adaptive-mesh-62",
+        "projection_target_mesh_generation": "adaptive-mesh-62",
+        "conservation_target_mesh_generation": "adaptive-mesh-62",
+        "source_field_values": [1.0, 2.0],
+        "source_integration_weights": [0.5, 0.5],
+        "projected_field_values": [0.75, 1.5, 2.25],
+        "target_integration_weights": [1.0 / 3.0] * 3,
+        "source_conserved_integral": 1.5,
+        "target_conserved_integral": 1.5,
+        "projection_shape": [3, 2],
+        "projection_operator_sha256": "a" * 64,
+        "conservation_weight_table_sha256": "b" * 64,
+        "transfer_conservation_weight_table_sha256": "b" * 64,
+    }
+    summary["eigenmode_phase_normalization_tracking_parameter_identity"] = {
+        "parameter_table_generation": "eigen-parameter-62",
+        "previous_eigensolve_generation": "eigensolve-61",
+        "current_eigensolve_generation": "eigensolve-62",
+        "tracker_current_eigensolve_generation": "eigensolve-62",
+        "phase_anchor_current_eigensolve_generation": "eigensolve-62",
+        "normalization_current_eigensolve_generation": "eigensolve-62",
+        "parameter_name": "rotor_angle_deg",
+        "previous_parameter_value": 10.0,
+        "current_parameter_value": 12.0,
+        "tracked_mode_ids": [3, 4],
+        "tracker_mode_ids": [3, 4],
+        "phase_anchor_dof_ids": [101, 205],
+        "tracker_phase_anchor_dof_ids": [101, 205],
+        "normalization_integrals": [1.0, 1.0],
+        "tracker_normalization_integrals": [1.0, 1.0],
+        "selected_correlation": [0.98, 0.96],
+        "tracker_selected_correlation": [0.98, 0.96],
+        "mode_tracking_table_sha256": "c" * 64,
+        "tracker_mode_tracking_table_sha256": "c" * 64,
+    }
+    return summary
+
+
+def test_v20_public_positive_transfer_and_mode_tracking_identity() -> None:
+    result = gate(
+        _with_v20_transfer_and_mode_tracking_identity(copy.deepcopy(_summary()))
+    )
+    assert result["status"] == "ok"
+
+
+def test_v20_public_adaptive_mesh_field_transfer_projection_conservation_generation_mismatch() -> None:
+    summary = _with_v20_transfer_and_mode_tracking_identity(copy.deepcopy(_summary()))
+    summary["adaptive_mesh_field_transfer_projection_conservation_identity"].update(
+        {
+            "projection_source_mesh_generation": "adaptive-mesh-60",
+            "conservation_target_mesh_generation": "adaptive-mesh-61",
+            "target_integration_weights": [0.25, 0.25, 0.25],
+            "target_conserved_integral": 1.125,
+            "transfer_conservation_weight_table_sha256": "f" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "adaptive_field_transfer_uses_current_mesh_projection_and_conservation"
+        ]
+        is False
+    )
+
+
+def test_v20_public_eigenmode_phase_normalization_tracking_parameter_generation_mismatch() -> None:
+    summary = _with_v20_transfer_and_mode_tracking_identity(copy.deepcopy(_summary()))
+    summary["eigenmode_phase_normalization_tracking_parameter_identity"].update(
+        {
+            "tracker_current_eigensolve_generation": "eigensolve-61",
+            "phase_anchor_current_eigensolve_generation": "eigensolve-61",
+            "tracker_mode_ids": [4, 3],
+            "tracker_phase_anchor_dof_ids": [205, 101],
+            "tracker_normalization_integrals": [0.5, 2.0],
+            "tracker_selected_correlation": [0.65, 0.71],
+            "tracker_mode_tracking_table_sha256": "f" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "eigenmode_tracking_uses_current_phase_normalization_and_parameter_state"
+        ]
+        is False
+    )

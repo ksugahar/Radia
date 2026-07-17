@@ -812,6 +812,136 @@ def _nonconforming_mortar_projection_quadrature_mesh_identity_ok(
     )
 
 
+def _adaptive_mesh_field_transfer_conservation_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "adaptive_mesh_field_transfer_projection_conservation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    rows = (
+        identity.get("source_field_values"),
+        identity.get("source_integration_weights"),
+        identity.get("projected_field_values"),
+        identity.get("target_integration_weights"),
+        identity.get("projection_shape"),
+    )
+    if not all(isinstance(values, list) for values in rows):
+        return False
+    try:
+        source_values = [float(value) for value in rows[0]]
+        source_weights = [float(value) for value in rows[1]]
+        target_values = [float(value) for value in rows[2]]
+        target_weights = [float(value) for value in rows[3]]
+        shape = [int(value) for value in rows[4]]
+        reported_source = float(identity.get("source_conserved_integral"))
+        reported_target = float(identity.get("target_conserved_integral"))
+    except (TypeError, ValueError):
+        return False
+    source_integral = sum(
+        value * weight for value, weight in zip(source_values, source_weights)
+    )
+    target_integral = sum(
+        value * weight for value, weight in zip(target_values, target_weights)
+    )
+    source_generation = str(identity.get("source_mesh_generation") or "")
+    target_generation = str(identity.get("target_mesh_generation") or "")
+    weight_digest = str(identity.get("conservation_weight_table_sha256") or "")
+    return (
+        bool(str(identity.get("solve_generation") or ""))
+        and bool(source_generation)
+        and identity.get("projection_source_mesh_generation") == source_generation
+        and identity.get("conservation_source_mesh_generation") == source_generation
+        and bool(target_generation)
+        and target_generation != source_generation
+        and identity.get("projection_target_mesh_generation") == target_generation
+        and identity.get("conservation_target_mesh_generation") == target_generation
+        and bool(source_values)
+        and len(source_values) == len(source_weights)
+        and bool(target_values)
+        and len(target_values) == len(target_weights)
+        and shape == [len(target_values), len(source_values)]
+        and all(math.isfinite(value) for value in source_values + target_values)
+        and all(math.isfinite(value) and value > 0.0 for value in source_weights + target_weights)
+        and math.isclose(reported_source, source_integral, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(reported_target, target_integral, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(target_integral, source_integral, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and len(str(identity.get("projection_operator_sha256") or "")) == 64
+        and len(weight_digest) == 64
+        and all(character in "0123456789abcdef" for character in weight_digest)
+        and identity.get("transfer_conservation_weight_table_sha256") == weight_digest
+    )
+
+
+def _eigenmode_phase_normalization_tracking_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "eigenmode_phase_normalization_tracking_parameter_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    rows = (
+        identity.get("tracked_mode_ids"),
+        identity.get("tracker_mode_ids"),
+        identity.get("phase_anchor_dof_ids"),
+        identity.get("tracker_phase_anchor_dof_ids"),
+        identity.get("normalization_integrals"),
+        identity.get("tracker_normalization_integrals"),
+        identity.get("selected_correlation"),
+        identity.get("tracker_selected_correlation"),
+    )
+    if not all(isinstance(values, list) for values in rows):
+        return False
+    try:
+        modes = [int(value) for value in rows[0]]
+        tracker_modes = [int(value) for value in rows[1]]
+        anchors = [int(value) for value in rows[2]]
+        tracker_anchors = [int(value) for value in rows[3]]
+        norms = [float(value) for value in rows[4]]
+        tracker_norms = [float(value) for value in rows[5]]
+        correlations = [float(value) for value in rows[6]]
+        tracker_correlations = [float(value) for value in rows[7]]
+        previous_parameter = float(identity.get("previous_parameter_value"))
+        current_parameter = float(identity.get("current_parameter_value"))
+    except (TypeError, ValueError):
+        return False
+    current_generation = str(identity.get("current_eigensolve_generation") or "")
+    digest = str(identity.get("mode_tracking_table_sha256") or "")
+    return (
+        bool(str(identity.get("parameter_table_generation") or ""))
+        and bool(str(identity.get("previous_eigensolve_generation") or ""))
+        and bool(current_generation)
+        and identity.get("tracker_current_eigensolve_generation") == current_generation
+        and identity.get("phase_anchor_current_eigensolve_generation") == current_generation
+        and identity.get("normalization_current_eigensolve_generation") == current_generation
+        and bool(str(identity.get("parameter_name") or ""))
+        and math.isfinite(previous_parameter)
+        and math.isfinite(current_parameter)
+        and current_parameter != previous_parameter
+        and bool(modes)
+        and len(set(modes)) == len(modes)
+        and tracker_modes == modes
+        and len(anchors) == len(modes)
+        and len(set(anchors)) == len(anchors)
+        and tracker_anchors == anchors
+        and len(norms) == len(modes)
+        and all(math.isfinite(value) and value > 0.0 for value in norms)
+        and tracker_norms == norms
+        and len(correlations) == len(modes)
+        and all(math.isfinite(value) and 0.0 <= value <= 1.0 for value in correlations)
+        and tracker_correlations == correlations
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("tracker_mode_tracking_table_sha256") == digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1193,6 +1323,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "mortar_projection_uses_current_interface_mesh_and_quadrature": (
             _nonconforming_mortar_projection_quadrature_mesh_identity_ok(summary)
+        ),
+        "adaptive_field_transfer_uses_current_mesh_projection_and_conservation": (
+            _adaptive_mesh_field_transfer_conservation_identity_ok(summary)
+        ),
+        "eigenmode_tracking_uses_current_phase_normalization_and_parameter_state": (
+            _eigenmode_phase_normalization_tracking_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
