@@ -405,6 +405,83 @@ def _occ_version_tolerance_tessellation_cache_build_identity_ok(
     )
 
 
+def _stl_tessellation_component_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("stl_generation", "")).strip()
+    try:
+        linear = float(value.get("linear_deflection_m"))
+        decoded_linear = float(value.get("decoded_linear_deflection_m"))
+        angular = float(value.get("angular_deflection_rad"))
+        decoded_angular = float(value.get("decoded_angular_deflection_rad"))
+        triangles = int(value.get("triangle_count"))
+        decoded_triangles = int(value.get("decoded_triangle_count"))
+    except (TypeError, ValueError):
+        return False
+    components = [str(item).strip() for item in value.get("component_ids", [])]
+    decoded_components = [str(item).strip() for item in value.get("decoded_component_ids", [])]
+    source_digest = str(value.get("source_shape_sha256", "")).lower()
+    stl_digest = str(value.get("stl_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "tolerance_stl_generation", "triangle_stl_generation", "normal_stl_generation",
+            "component_stl_generation", "result_stl_generation"))
+        and math.isfinite(linear) and linear > 0.0 and decoded_linear == linear
+        and math.isfinite(angular) and 0.0 < angular <= math.pi and decoded_angular == angular
+        and triangles > 0 and decoded_triangles == triangles
+        and value.get("normal_orientation") == "outward"
+        and value.get("decoded_normal_orientation") == "outward"
+        and bool(components) and all(components) and len(set(components)) == len(components)
+        and decoded_components == components
+        and _valid_sha256(source_digest) and value.get("tessellated_source_shape_sha256") == source_digest
+        and _valid_sha256(stl_digest) and value.get("decoded_stl_sha256") == stl_digest
+    )
+
+
+def _builder_context_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("context_generation", "")).strip()
+    stack = [str(item).strip() for item in value.get("context_stack", [])]
+    result_stack = [str(item).strip() for item in value.get("result_context_stack", [])]
+    parts = [str(item).strip() for item in value.get("part_ids", [])]
+    result_parts = [str(item).strip() for item in value.get("result_part_ids", [])]
+    try:
+        origin = [float(item) for item in value.get("workplane_origin_m", [])]
+        result_origin = [float(item) for item in value.get("result_workplane_origin_m", [])]
+        normal = [float(item) for item in value.get("workplane_normal", [])]
+        result_normal = [float(item) for item in value.get("result_workplane_normal", [])]
+        transform = [[float(item) for item in row] for row in value.get("local_frame_transform", [])]
+        result_transform = [[float(item) for item in row] for row in value.get("result_local_frame_transform", [])]
+    except (TypeError, ValueError):
+        return False
+    cache_digest = str(value.get("builder_cache_sha256", "")).lower()
+    result_digest = str(value.get("builder_result_sha256", "")).lower()
+    normal_norm = math.sqrt(sum(item * item for item in normal))
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "stack_context_generation", "workplane_context_generation", "frame_context_generation",
+            "part_context_generation", "cache_context_generation", "result_context_generation"))
+        and bool(stack) and all(stack) and result_stack == stack
+        and len(origin) == 3 and all(math.isfinite(item) for item in origin) and result_origin == origin
+        and len(normal) == 3 and all(math.isfinite(item) for item in normal)
+        and math.isclose(normal_norm, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and result_normal == normal
+        and len(transform) == 3 and all(len(row) == 4 for row in transform)
+        and all(math.isfinite(item) for row in transform for item in row)
+        and result_transform == transform
+        and bool(parts) and all(parts) and len(set(parts)) == len(parts) and result_parts == parts
+        and _valid_sha256(cache_digest) and value.get("result_builder_cache_sha256") == cache_digest
+        and _valid_sha256(result_digest) and value.get("result_builder_result_sha256") == result_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -735,6 +812,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     fresh_subprocess_result_identity_ok = True
     step_roundtrip_metadata_identity_ok = True
     occ_build_fingerprint_identity_ok = True
+    stl_tessellation_component_identity_ok = True
+    builder_context_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -772,6 +851,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         fresh_subprocess_result_identity_ok = False
         step_roundtrip_metadata_identity_ok = False
         occ_build_fingerprint_identity_ok = False
+        stl_tessellation_component_identity_ok = False
+        builder_context_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2337,6 +2418,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 )
             )
         )
+        stl_tessellation_component_identity_ok = _stl_tessellation_component_identity_ok(
+            replay_identity_value.get(
+                "stl_chord_tolerance_triangle_normal_orientation_component_digest_generation_identity"
+            )
+        )
+        builder_context_identity_ok = _builder_context_identity_ok(
+            replay_identity_value.get(
+                "builder_context_workplane_local_frame_part_identity_cache_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2460,6 +2551,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "occ_build_uses_current_version_tolerances_tessellation_cache_and_fingerprint": (
             occ_build_fingerprint_identity_ok
+        ),
+        "stl_handoff_uses_current_tolerances_triangles_normals_components_and_digests": (
+            stl_tessellation_component_identity_ok
+        ),
+        "builder_replay_uses_current_context_workplane_frame_parts_and_cache": (
+            builder_context_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
