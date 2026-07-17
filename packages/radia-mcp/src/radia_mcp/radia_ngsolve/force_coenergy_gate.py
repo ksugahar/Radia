@@ -51,6 +51,8 @@ def force_coenergy_displacement_gate(
     virtual_displacement_force_geometry_field_identity_ok = True
     axisymmetric_weighted_stress_force_mask_mesh_identity_ok = True
     lorentz_current_density_orientation_identity_ok = True
+    circuit_current_phasor_convention_identity_ok = True
+    incremental_permeability_operating_point_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -72,6 +74,8 @@ def force_coenergy_displacement_gate(
         virtual_displacement_force_geometry_field_identity_ok = False
         axisymmetric_weighted_stress_force_mask_mesh_identity_ok = False
         lorentz_current_density_orientation_identity_ok = False
+        circuit_current_phasor_convention_identity_ok = False
+        incremental_permeability_operating_point_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -886,6 +890,135 @@ def force_coenergy_displacement_gate(
                 == force_digest
             )
 
+        circuit_phasor = artifact_identity.get(
+            "circuit_current_peak_rms_phasor_phase_generation_identity"
+        )
+        if circuit_phasor is not None:
+            circuit_phasor = circuit_phasor if isinstance(circuit_phasor, dict) else {}
+            circuit_generation = str(
+                circuit_phasor.get("circuit_generation", "")
+            ).strip()
+            phasor_generation = str(
+                circuit_phasor.get("phasor_generation", "")
+            ).strip()
+            phasor_digest = str(
+                circuit_phasor.get("current_phasor_sha256", "")
+            ).lower()
+            try:
+                current_amplitude = float(circuit_phasor.get("current_amplitude_a"))
+                response_amplitude = float(
+                    circuit_phasor.get("field_response_current_amplitude_a")
+                )
+                phase_value = float(circuit_phasor.get("phase_value"))
+                response_phase = float(
+                    circuit_phasor.get("field_response_phase_value")
+                )
+            except (TypeError, ValueError):
+                current_amplitude = response_amplitude = math.nan
+                phase_value = response_phase = math.nan
+            circuit_current_phasor_convention_identity_ok = (
+                bool(circuit_generation)
+                and circuit_phasor.get("field_response_circuit_generation")
+                == circuit_generation
+                and bool(phasor_generation)
+                and circuit_phasor.get("circuit_current_phasor_generation")
+                == phasor_generation
+                and circuit_phasor.get("field_response_phasor_generation")
+                == phasor_generation
+                and circuit_phasor.get("current_amplitude_convention")
+                in {"peak", "rms"}
+                and circuit_phasor.get("field_response_amplitude_convention")
+                == circuit_phasor.get("current_amplitude_convention")
+                and math.isfinite(current_amplitude)
+                and current_amplitude > 0.0
+                and response_amplitude == current_amplitude
+                and circuit_phasor.get("phase_unit") in {"deg", "rad"}
+                and circuit_phasor.get("field_response_phase_unit")
+                == circuit_phasor.get("phase_unit")
+                and math.isfinite(phase_value)
+                and response_phase == phase_value
+                and len(phasor_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in phasor_digest
+                )
+                and str(
+                    circuit_phasor.get("field_response_current_phasor_sha256", "")
+                ).lower()
+                == phasor_digest
+            )
+
+        incremental_mu = artifact_identity.get(
+            "incremental_permeability_bh_operating_point_iteration_identity"
+        )
+        if incremental_mu is not None:
+            incremental_mu = incremental_mu if isinstance(incremental_mu, dict) else {}
+            solve_generation = str(
+                incremental_mu.get("nonlinear_solve_generation", "")
+            ).strip()
+            iteration_generation = str(
+                incremental_mu.get("operating_point_iteration_generation", "")
+            ).strip()
+            operating_digest = str(
+                incremental_mu.get("operating_point_sha256", "")
+            ).lower()
+            try:
+                operating_iteration = int(
+                    incremental_mu.get("operating_point_iteration", -1)
+                )
+                incremental_iteration = int(
+                    incremental_mu.get("incremental_permeability_iteration", -1)
+                )
+                force_iteration = int(
+                    incremental_mu.get("force_sensitivity_iteration", -1)
+                )
+                operating_b = [
+                    float(value) for value in incremental_mu.get("operating_point_b_t", [])
+                ]
+                incremental_b = [
+                    float(value)
+                    for value in incremental_mu.get("incremental_permeability_b_t", [])
+                ]
+            except (TypeError, ValueError):
+                operating_iteration = incremental_iteration = force_iteration = -1
+                operating_b = []
+                incremental_b = []
+            incremental_permeability_operating_point_identity_ok = (
+                bool(solve_generation)
+                and incremental_mu.get("operating_point_solve_generation")
+                == solve_generation
+                and incremental_mu.get("incremental_permeability_solve_generation")
+                == solve_generation
+                and incremental_mu.get("force_sensitivity_solve_generation")
+                == solve_generation
+                and bool(iteration_generation)
+                and incremental_mu.get(
+                    "incremental_permeability_iteration_generation"
+                )
+                == iteration_generation
+                and incremental_mu.get("force_sensitivity_iteration_generation")
+                == iteration_generation
+                and operating_iteration >= 0
+                and incremental_iteration == operating_iteration
+                and force_iteration == operating_iteration
+                and bool(operating_b)
+                and all(math.isfinite(value) for value in operating_b)
+                and incremental_b == operating_b
+                and len(operating_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in operating_digest
+                )
+                and str(
+                    incremental_mu.get(
+                        "incremental_permeability_operating_point_sha256", ""
+                    )
+                ).lower()
+                == operating_digest
+                and str(
+                    incremental_mu.get("force_sensitivity_operating_point_sha256", "")
+                ).lower()
+                == operating_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -972,6 +1105,12 @@ def force_coenergy_displacement_gate(
         ),
         "planar_lorentz_force_uses_current_jz_out_of_plane_orientation": (
             lorentz_current_density_orientation_identity_ok
+        ),
+        "circuit_current_and_field_response_share_phasor_convention_generation": (
+            circuit_current_phasor_convention_identity_ok
+        ),
+        "incremental_permeability_and_force_use_current_bh_operating_point": (
+            incremental_permeability_operating_point_identity_ok
         ),
     }
     return {
