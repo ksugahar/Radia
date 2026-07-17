@@ -910,3 +910,105 @@ def test_v19_public_virtual_work_force_displacement_coordinate_generation_mismat
         ]
         is False
     )
+
+
+def _summary_v20():
+    summary = _with_artifact_identity(_summary())
+    identity = summary["artifact_identity"]
+    identity["demag_energy_surface_charge_normal_quadrature_generation_identity"] = {
+        "energy_generation": "demag-energy-22",
+        "result_energy_generation": "demag-energy-22",
+        "boundary_generation": "boundary-22",
+        "surface_charge_boundary_generation": "boundary-22",
+        "normal_boundary_generation": "boundary-22",
+        "quadrature_boundary_generation": "boundary-22",
+        "energy_boundary_generation": "boundary-22",
+        "panel_ids": [101, 102, 103],
+        "energy_panel_ids": [101, 102, 103],
+        "surface_charges_a_per_m": [1.0, -0.5, 0.25],
+        "energy_surface_charges_a_per_m": [1.0, -0.5, 0.25],
+        "outward_normal_sha256": ["1" * 64, "2" * 64, "3" * 64],
+        "energy_outward_normal_sha256": ["1" * 64, "2" * 64, "3" * 64],
+        "panel_quadrature_weights": [0.25, 0.5, 0.25],
+        "energy_panel_quadrature_weights": [0.25, 0.5, 0.25],
+        "demag_energy_input_sha256": "4" * 64,
+        "assembled_demag_energy_input_sha256": "4" * 64,
+    }
+    identity[
+        "maglev_stiffness_displacement_equilibrium_force_generation_identity"
+    ] = {
+        "stiffness_generation": "stiffness-22",
+        "result_stiffness_generation": "stiffness-22",
+        "geometry_generation": "geometry-22",
+        "sample_geometry_generations": ["geometry-22"] * 3,
+        "force_geometry_generations": ["geometry-22"] * 3,
+        "coordinate_generation": "coordinate-22",
+        "displacement_coordinate_generation": "coordinate-22",
+        "force_coordinate_generation": "coordinate-22",
+        "displacement_axis": "global-z",
+        "force_component_axis": "global-z",
+        "displacements_m": [-0.001, 0.0, 0.001],
+        "force_displacements_m": [-0.001, 0.0, 0.001],
+        "force_samples_n": [10.0, 0.0, -10.0],
+        "stiffness_force_samples_n": [10.0, 0.0, -10.0],
+        "equilibrium_sample_index": 1,
+        "stiffness_equilibrium_sample_index": 1,
+        "stiffness_sample_table_sha256": "5" * 64,
+        "result_stiffness_sample_table_sha256": "5" * 64,
+    }
+    return summary
+
+
+def test_v20_public_positive_demag_energy_and_maglev_stiffness_identity() -> None:
+    result = magnetic_force_method_profile_gate(_summary_v20())
+    assert result["status"] == "ok"
+    assert result["checks"][
+        "demag_energy_uses_current_surface_charge_normal_and_quadrature"
+    ]
+    assert result["checks"][
+        "maglev_stiffness_uses_aligned_displacement_equilibrium_force_states"
+    ]
+
+
+def test_v20_public_demag_energy_surface_charge_normal_quadrature_generation_mismatch() -> None:
+    summary = _summary_v20()
+    summary["artifact_identity"][
+        "demag_energy_surface_charge_normal_quadrature_generation_identity"
+    ].update(
+        {
+            "surface_charge_boundary_generation": "boundary-21",
+            "normal_boundary_generation": "boundary-21",
+            "energy_panel_ids": [103, 102, 101],
+            "energy_surface_charges_a_per_m": [0.25, -0.5, 1.0],
+            "energy_outward_normal_sha256": ["3" * 64, "2" * 64, "1" * 64],
+            "energy_panel_quadrature_weights": [0.5, 0.25, 0.25],
+            "assembled_demag_energy_input_sha256": "f" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "demag_energy_uses_current_surface_charge_normal_and_quadrature"
+    ] is False
+
+
+def test_v20_public_maglev_stiffness_displacement_equilibrium_force_generation_mismatch() -> None:
+    summary = _summary_v20()
+    summary["artifact_identity"][
+        "maglev_stiffness_displacement_equilibrium_force_generation_identity"
+    ].update(
+        {
+            "sample_geometry_generations": ["geometry-21"] * 3,
+            "force_coordinate_generation": "coordinate-21",
+            "force_component_axis": "global-x",
+            "force_displacements_m": [0.001, 0.0, -0.001],
+            "stiffness_force_samples_n": [-10.0, 1.0, 10.0],
+            "stiffness_equilibrium_sample_index": 0,
+            "result_stiffness_sample_table_sha256": "f" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "maglev_stiffness_uses_aligned_displacement_equilibrium_force_states"
+    ] is False
