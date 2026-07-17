@@ -114,6 +114,8 @@ def pwm_controlled_motor_loss_gate(
     iron_loss_spatial_harmonic_mesh_volume_identity_ok = True
     dq_torque_map_park_transform_angle_sign_identity_ok = True
     efficiency_map_power_averaging_window_identity_ok = True
+    skew_slice_torque_mechanical_phase_offset_generation_identity_ok = True
+    winding_phase_belt_slot_numbering_sequence_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -135,6 +137,8 @@ def pwm_controlled_motor_loss_gate(
         iron_loss_spatial_harmonic_mesh_volume_identity_ok = False
         dq_torque_map_park_transform_angle_sign_identity_ok = False
         efficiency_map_power_averaging_window_identity_ok = False
+        skew_slice_torque_mechanical_phase_offset_generation_identity_ok = False
+        winding_phase_belt_slot_numbering_sequence_generation_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -965,6 +969,129 @@ def pwm_controlled_motor_loss_gate(
                 == window_digest
             )
 
+        skew_slice_value = identity_value.get(
+            "skew_slice_torque_mechanical_phase_offset_generation_identity"
+        )
+        if skew_slice_value is not None:
+            skew_slice = skew_slice_value if isinstance(skew_slice_value, dict) else {}
+            average_generation = str(
+                skew_slice.get("torque_average_generation", "")
+            )
+            geometry_generation = str(
+                skew_slice.get("slice_geometry_generation", "")
+            )
+            slice_ids = skew_slice.get("slice_ids")
+            phase_slice_ids = skew_slice.get("phase_offset_slice_ids")
+            offsets = skew_slice.get("mechanical_phase_offsets_deg")
+            applied_offsets = skew_slice.get("applied_mechanical_phase_offsets_deg")
+            waveform_digests = skew_slice.get("slice_torque_waveform_sha256")
+            averaged_digests = skew_slice.get(
+                "averaged_slice_torque_waveform_sha256"
+            )
+            phase_digest = str(
+                skew_slice.get("phase_offset_map_sha256", "")
+            ).lower()
+            skew_slice_torque_mechanical_phase_offset_generation_identity_ok = (
+                bool(average_generation)
+                and skew_slice.get("slice_torque_average_generation")
+                == average_generation
+                and bool(geometry_generation)
+                and skew_slice.get("phase_offset_slice_geometry_generation")
+                == geometry_generation
+                and skew_slice.get("torque_waveform_slice_geometry_generation")
+                == geometry_generation
+                and isinstance(slice_ids, list)
+                and bool(slice_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in slice_ids
+                )
+                and len(set(slice_ids)) == len(slice_ids)
+                and phase_slice_ids == slice_ids
+                and isinstance(offsets, list)
+                and len(offsets) == len(slice_ids)
+                and all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    for value in offsets
+                )
+                and applied_offsets == offsets
+                and isinstance(waveform_digests, list)
+                and len(waveform_digests) == len(slice_ids)
+                and all(
+                    len(str(value)) == 64
+                    and all(
+                        character in "0123456789abcdef"
+                        for character in str(value).lower()
+                    )
+                    for value in waveform_digests
+                )
+                and averaged_digests == waveform_digests
+                and len(phase_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in phase_digest
+                )
+                and str(
+                    skew_slice.get("applied_phase_offset_map_sha256", "")
+                ).lower()
+                == phase_digest
+            )
+
+        winding_value = identity_value.get(
+            "winding_phase_belt_slot_numbering_sequence_generation_identity"
+        )
+        if winding_value is not None:
+            winding = winding_value if isinstance(winding_value, dict) else {}
+            winding_generation = str(winding.get("winding_generation", ""))
+            numbering_generation = str(
+                winding.get("slot_numbering_generation", "")
+            )
+            slot_numbers = winding.get("slot_numbers")
+            phase_sequence = winding.get("phase_sequence")
+            slot_map_digest = str(
+                winding.get("slot_phase_map_sha256", "")
+            ).lower()
+            winding_phase_belt_slot_numbering_sequence_generation_identity_ok = (
+                bool(winding_generation)
+                and winding.get("phase_belt_winding_generation")
+                == winding_generation
+                and winding.get("mmf_harmonic_winding_generation")
+                == winding_generation
+                and bool(numbering_generation)
+                and winding.get("phase_belt_slot_numbering_generation")
+                == numbering_generation
+                and winding.get("mmf_slot_numbering_generation")
+                == numbering_generation
+                and isinstance(slot_numbers, list)
+                and bool(slot_numbers)
+                and all(
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value > 0
+                    for value in slot_numbers
+                )
+                and len(set(slot_numbers)) == len(slot_numbers)
+                and winding.get("phase_belt_slot_numbers") == slot_numbers
+                and isinstance(phase_sequence, list)
+                and len(phase_sequence) == len(slot_numbers)
+                and all(
+                    isinstance(value, str)
+                    and len(value) == 2
+                    and value[0] in "ABC"
+                    and value[1] in "+-"
+                    for value in phase_sequence
+                )
+                and winding.get("mmf_phase_sequence") == phase_sequence
+                and len(slot_map_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in slot_map_digest
+                )
+                and str(winding.get("mmf_slot_phase_map_sha256", "")).lower()
+                == slot_map_digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1212,6 +1339,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "efficiency_map_powers_share_current_steady_cycle_window": (
             efficiency_map_power_averaging_window_identity_ok
+        ),
+        "skew_torque_average_uses_current_slice_phase_offset_map": (
+            skew_slice_torque_mechanical_phase_offset_generation_identity_ok
+        ),
+        "winding_phase_belt_uses_current_slot_numbering_and_sequence": (
+            winding_phase_belt_slot_numbering_sequence_generation_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
