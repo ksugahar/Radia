@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.18 - Genus-1 loop closure for coupled IH
+
+Released 2026-07-17.
+
+- Integrated the genus-1 workpiece loop DOF into weak and strong induction-
+  heating coupling, with frozen-mode screening diagnostics and a canonical
+  toroidal orientation for stable current phase reporting.
+- Unified surface loop construction on the public `radia.cohomology` API and
+  locked the fundamental-cycle rank, winding, and analytic ring contracts.
+- Made surface-Poisson incident-field projection reject non-finite inputs and
+  clarified when weak coupling should be escalated to the self-consistent
+  strong route.
+
 ## 4.95.17 - Production-hardened HCurl/BDM hybrid VIM
 
 Released 2026-07-17.

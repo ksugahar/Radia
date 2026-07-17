@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.14] - 2026-07-17
+
+- Documented genus-1 loop-current closure across weak and strong induction-
+  heating coupling, including screening diagnostics and the canonical current-
+  phase convention.
+- Added method-selection guidance based on the weak-route coil back-reaction
+  ratio and synchronized the topology references with the production API.
+
 ## [1.4.13] - 2026-07-17
 
 - Added executable Mathematica studies for RT/BDM simplex families,
