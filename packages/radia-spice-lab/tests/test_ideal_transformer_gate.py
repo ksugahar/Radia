@@ -1022,3 +1022,100 @@ def test_v18_public_transient_power_voltage_current_interpolation_grid_generatio
         ]
         is False
     )
+
+
+def _with_v19_stepped_ac_and_measure_crossing_identity(summary: dict) -> dict:
+    summary = _with_v18_noise_and_transient_power_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["stepped_ac_trace_parameter_tuple_interpolation_generation_identity"] = {
+        "sweep_generation_id": "ac-sweep-59",
+        "parameter_tuple_sweep_generation_id": "ac-sweep-59",
+        "trace_grid_sweep_generation_id": "ac-sweep-59",
+        "interpolator_sweep_generation_id": "ac-sweep-59",
+        "parameter_names": ["RLOAD", "CLOAD"],
+        "parameter_tuples": [[100.0, 1.0e-9], [200.0, 2.0e-9]],
+        "trace_parameter_tuples": [[100.0, 1.0e-9], [200.0, 2.0e-9]],
+        "frequency_hz": [100.0, 1000.0, 10000.0],
+        "trace_frequency_hz": [100.0, 1000.0, 10000.0],
+        "interpolation_frequency_hz": [100.0, 1000.0, 10000.0],
+        "parameter_tuple_table_sha256": "a" * 64,
+        "trace_parameter_tuple_table_sha256": "a" * 64,
+        "trace_frequency_grid_sha256": "b" * 64,
+        "interpolation_frequency_grid_sha256": "b" * 64,
+    }
+    positive["measure_trigger_target_crossing_edge_count_generation_identity"] = {
+        "transient_generation_id": "transient-59",
+        "accepted_grid_generation_id": "accepted-grid-59",
+        "trigger_crossing_grid_generation_id": "accepted-grid-59",
+        "target_crossing_grid_generation_id": "accepted-grid-59",
+        "measure_interpolator_grid_generation_id": "accepted-grid-59",
+        "trigger_edge": "rise",
+        "target_edge": "fall",
+        "trigger_crossing_count": 2,
+        "target_crossing_count": 3,
+        "trigger_bracket_time_s": [1.0e-6, 1.2e-6],
+        "target_bracket_time_s": [4.0e-6, 4.4e-6],
+        "trigger_crossing_time_s": 1.1e-6,
+        "target_crossing_time_s": 4.2e-6,
+        "accepted_grid_sha256": "c" * 64,
+        "trigger_crossing_table_sha256": "c" * 64,
+        "target_crossing_table_sha256": "c" * 64,
+    }
+    return summary
+
+
+def test_accepts_v19_stepped_ac_and_measure_crossing_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v19_stepped_ac_and_measure_crossing_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v19_public_stepped_ac_trace_parameter_tuple_interpolation_generation_mismatch() -> None:
+    bad = _with_v19_stepped_ac_and_measure_crossing_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "stepped_ac_trace_parameter_tuple_interpolation_generation_identity"
+    ]
+    identity.update(
+        {
+            "trace_grid_sweep_generation_id": "ac-sweep-58",
+            "interpolator_sweep_generation_id": "ac-sweep-58",
+            "trace_parameter_tuples": [[100.0, 1.0e-9], [220.0, 2.0e-9]],
+            "trace_frequency_hz": [100.0, 900.0, 10000.0],
+            "trace_parameter_tuple_table_sha256": "d" * 64,
+            "interpolation_frequency_grid_sha256": "e" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "stepped_ac_traces_use_current_parameter_tuple_and_frequency_grid"
+        ]
+        is False
+    )
+
+
+def test_v19_public_measure_trigger_target_crossing_edge_count_generation_mismatch() -> None:
+    bad = _with_v19_stepped_ac_and_measure_crossing_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "measure_trigger_target_crossing_edge_count_generation_identity"
+    ]
+    identity.update(
+        {
+            "target_crossing_grid_generation_id": "accepted-grid-58",
+            "measure_interpolator_grid_generation_id": "accepted-grid-58",
+            "target_crossing_count": 2,
+            "target_bracket_time_s": [3.6e-6, 4.0e-6],
+            "target_crossing_time_s": 3.8e-6,
+            "target_crossing_table_sha256": "e" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "measure_trigger_target_use_current_crossing_counts_and_brackets"
+        ]
+        is False
+    )
