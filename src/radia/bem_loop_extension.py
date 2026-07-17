@@ -63,6 +63,19 @@ Scope / limitations (fail-loud, not silent)
   ``ScalarBIESIBCSolver`` must have been built with
   ``assemble_dense=True`` so ``M/K/SL/DL`` are available.
 
+References
+==========
+* K. Sugahara, "Investigation of a Boundary Integral Equation
+  n x H = J_s on Torus-Shaped Perfect Conductors," IEEE Trans.
+  Antennas Propag., vol. 56, no. 3, pp. 722-725, Mar. 2008.  The dual
+  defect of the same H^1(S) != 0 topology: on a torus the n x H = J_s
+  BIE admits a spurious solution violating B . n = 0 (a harmonic
+  null-space mode), closed there by ONE virtual-magnetic-current DOF +
+  a one-point B . n = 0 constraint -- here the single-valued scalar
+  potential LACKS the harmonic mode (representation deficit) and is
+  closed by ONE loop DOF + the Faraday constraint.  Per handle, both
+  formulations need exactly one extra DOF and one extra condition.
+
 Part of the Radia project.
 """
 from __future__ import annotations
