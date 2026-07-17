@@ -515,6 +515,29 @@ class AnglePeriodicMotorROM:
             skew_span_rad=self.skew_span_rad,
         )
 
+    def _evaluate_hysteresis(self, angle_rad, currents, committed_state):
+        """Evaluate one pure trial and validate every returned quantity."""
+        if self.hysteresis_port is None:
+            raise RuntimeError("hysteresis port is not configured")
+        evaluated = self.hysteresis_port.evaluate(
+            float(angle_rad), np.asarray(currents, dtype=float), committed_state
+        )
+        flux = _vector(
+            evaluated.flux_linkage_Wb,
+            self.ports.n_generalized,
+            "hysteresis flux_linkage_Wb",
+        )
+        torque = float(evaluated.torque_Nm)
+        stored = float(evaluated.stored_energy_J)
+        dissipated = float(evaluated.dissipated_energy_increment_J)
+        if not np.all(np.isfinite((torque, stored, dissipated))):
+            raise ValueError("hysteresis trial returned non-finite scalar data")
+        if dissipated < 0.0:
+            raise ValueError(
+                "hysteresis dissipated_energy_increment_J must be non-negative"
+            )
+        return evaluated, flux, torque, stored, dissipated
+
     def inductance(self, angle_rad: float, *, derivative: int = 0) -> np.ndarray:
         value = self._eval(self.inductance_H, angle_rad, derivative)
         if derivative == 0:
@@ -640,16 +663,10 @@ class AnglePeriodicMotorROM:
         hysteresis_flux = np.zeros(self.ports.n_generalized)
         hysteresis_energy = 0.0
         if self.hysteresis_port is not None:
-            evaluated = self.hysteresis_port.evaluate(
-                float(rotor_angle_rad), q, None
+            evaluated, hysteresis_flux, _, hysteresis_energy, _ = (
+                self._evaluate_hysteresis(float(rotor_angle_rad), q, None)
             )
             hysteresis_state = evaluated.state
-            hysteresis_flux = _vector(
-                evaluated.flux_linkage_Wb,
-                self.ports.n_generalized,
-                "hysteresis flux_linkage_Wb",
-            )
-            hysteresis_energy = float(evaluated.stored_energy_J)
         return MotorROMState(
             time_s=0.0,
             rotor_angle_rad=float(rotor_angle_rad),
@@ -712,15 +729,9 @@ class AnglePeriodicMotorROM:
             hflux1 = hflux0
             htorque = 0.0
             if self.hysteresis_port is not None:
-                h_eval = self.hysteresis_port.evaluate(
+                h_eval, hflux1, htorque, _, _ = self._evaluate_hysteresis(
                     theta1, q1, state.hysteresis_state
                 )
-                hflux1 = _vector(
-                    h_eval.flux_linkage_Wb,
-                    self.ports.n_generalized,
-                    "hysteresis flux_linkage_Wb",
-                )
-                htorque = float(h_eval.torque_Nm)
             rhs = (
                 lambda0
                 + dt * u
@@ -778,18 +789,19 @@ class AnglePeriodicMotorROM:
         next_hstate = state.hysteresis_state
         next_hflux = hflux0
         next_henergy = state.hysteresis_stored_energy_J
-        if h_eval is not None:
-            components["hysteresis"] = float(h_eval.torque_Nm)
+        if self.hysteresis_port is not None:
+            # The iteration evaluates pure trials.  Re-evaluate once at the
+            # accepted state so the committed history cannot lag the returned
+            # electrical/mechanical state when a caller uses a loose tolerance.
+            h_eval, next_hflux, htorque, next_henergy, dissipated = (
+                self._evaluate_hysteresis(
+                    theta1, q1, state.hysteresis_state
+                )
+            )
+            components["hysteresis"] = htorque
             components["total"] += components["hysteresis"]
             next_hstate = h_eval.state
-            next_hflux = _vector(
-                h_eval.flux_linkage_Wb,
-                self.ports.n_generalized,
-                "hysteresis flux_linkage_Wb",
-            )
-            next_henergy = float(h_eval.stored_energy_J)
-            if np.isfinite(h_eval.dissipated_energy_increment_J):
-                hysteresis_loss = float(h_eval.dissipated_energy_increment_J / dt)
+            hysteresis_loss = dissipated / dt
         next_state = MotorROMState(
             time_s=float(state.time_s) + dt,
             rotor_angle_rad=theta1 % self.period_rad,

@@ -19,9 +19,9 @@ jobs:
       - uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
-      # Download the .pyd artifact produced by CI
+      # Download the native-binary artifact produced by CI
       # ----------------------------------------------------------------
-      - name: Download .pyd artifact
+      - name: Download native binary artifact
         uses: actions/download-artifact@v4
         with:
           name: radia-pyd
@@ -30,16 +30,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # ----------------------------------------------------------------
-      # Upload .pyd to GitHub Releases (tag: binaries)
+      # Upload native binaries to GitHub Releases (tag: binaries)
       # ----------------------------------------------------------------
-      - name: Upload .pyd to GitHub Releases (gh-free)
+      - name: Upload native binaries to GitHub Releases (gh-free)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== Uploading .pyd files to GitHub Releases (gh-free) ==="
-          FILES=$(find pyd-files -name '*.pyd' 2>/dev/null)
+          echo "=== Uploading native files to GitHub Releases (gh-free) ==="
+          FILES=$(find pyd-files -type f \( -name '*.pyd' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \) 2>/dev/null)
           if [ -z "$FILES" ]; then
-            echo "::warning::No .pyd files found to upload"
+            echo "::warning::No native files found to upload"
             exit 0
           fi
           # No GitHub CLI policy (CLAUDE.md): use the REST helper, not
@@ -132,6 +132,12 @@ jobs:
                     f"vs radia.__version__={pkg_ver}.")
               sys.exit(1)
           print(f"OK version consistency: {pkg_ver}")
+          required = ["radia/radia_motor_rom.dll"]
+          missing = [name for name in required if name not in names]
+          if missing:
+              print(f"::error::Wheel missing mandatory motor C ABI: {missing}")
+              sys.exit(1)
+          print("OK mandatory motor C ABI: radia/radia_motor_rom.dll")
           PY
 
       - name: Publish to PyPI

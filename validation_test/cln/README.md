@@ -382,5 +382,5 @@ current errors are `4.855e-3` and `3.666e-3`; corner basis-energy density is
 ```powershell
 python validation_test/cln/hcurl_corner_gmsh_visualization.py `
   --corner-edge-maxh 0.2 --order 6 --steps 22 --shift 10 `
-  --output C:\temp\hcurl_gmsh\corner_edge_h02_p6_n44_shift10.msh
+  --output validation_test/cln/hcurl_corner_fields.msh
 ```

@@ -12,7 +12,7 @@
 #      if a gate CI would fail is red locally.  This is the enforcement half
 #      of "commit -> CI check -> push": it stops the push-then-discover loop.
 #      Bypass for an emergency with:   CI_PREFLIGHT_SKIP=1 git push
-#   2. Upload .pyd binaries to the GitHub 'binaries' Release (NEVER blocks).
+#   2. Upload native binaries to the GitHub 'binaries' Release (NEVER blocks).
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && exit 0
@@ -51,7 +51,7 @@ fi
 
 # ---- Duty 2: upload binaries (never blocks the push) ----------------------
 UPLOAD_FILES=()
-for f in src/radia/*.pyd; do
+for f in src/radia/*.pyd src/radia/*.dll src/radia/*.so src/radia/*.dylib; do
     case "$f" in
         *locked-old.pyd|*.lockedold.pyd) continue ;;
     esac
