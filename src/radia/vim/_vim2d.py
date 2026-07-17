@@ -155,7 +155,7 @@ class PlanarDemagBody:
         return np.asarray(result["m"], dtype=float)
 
     def project(self, H_cf):
-        """RT-interpolate a (2-component) CoefficientFunction -> coefficient vector."""
+        """HDiv-interpolate a (2-component) CoefficientFunction -> coefficient vector."""
         gf = ng.GridFunction(self.fes)
         gf.Set(H_cf)
         return gf.vec.FV().NumPy().copy()

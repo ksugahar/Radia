@@ -13,7 +13,7 @@ material getter), so this bridge keeps a registry populated at build time by
 ``cont``, builds the applied field ``H_ext`` from the remaining source members
 (``rad.RadiaField(.., 'h')``), and runs ``radia.vim.Solve`` for one body or
 ``radia.vim.SolveCoupled`` for several.  It writes each element magnetization
-back through ``ObjSetM`` and registers the persistent RT field evaluators so
+back through ``ObjSetM`` and registers the persistent BDM field evaluators so
 that ``rad.Fld`` / ``rad.ObjM`` reflect the coupled HDiv-VIM solution.
 
 Element types: HDiv-VIM is BDM1/BDM2 on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
