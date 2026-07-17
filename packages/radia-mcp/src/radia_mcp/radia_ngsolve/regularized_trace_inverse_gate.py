@@ -228,6 +228,10 @@ def regularized_trace_inverse_path_gate(
     fembem_coupling_identity_ok = (
         _optional_fembem_coupling_identity_is_aligned(summary)
     )
+    adaptive_cq_identity_ok = _optional_adaptive_cq_identity_is_aligned(summary)
+    p1_fembem_discretization_identity_ok = (
+        _optional_p1_fembem_discretization_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -371,6 +375,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_coupling_uses_current_trace_normals_material_wavenumber_matrices_and_mesh": (
             fembem_coupling_identity_ok
+        ),
+        "adaptive_cq_uses_current_contour_order_startup_error_estimator_restart_and_history": (
+            adaptive_cq_identity_ok
+        ),
+        "p1_fembem_uses_current_boundary_orientation_quadrature_singular_trace_matrices_and_mesh": (
+            p1_fembem_discretization_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -2337,6 +2347,146 @@ def _optional_fembem_coupling_identity_is_aligned(
         and wavenumber[0] > 0.0
         and wavenumber[1] >= 0.0
         and result_wavenumber == wavenumber
+        and all(
+            _is_sha256(str(value.get(source, "")).lower())
+            and str(value.get(target, "")).lower()
+            == str(value.get(source, "")).lower()
+            for source, target in digests
+        )
+    )
+
+
+def _optional_adaptive_cq_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_adaptive_contour_quadrature_order_startup_correction_error_estimator_restart_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        radii = tuple(float(item) for item in value["contour_radii"])
+        result_radii = tuple(float(item) for item in value["result_contour_radii"])
+        orders = tuple(_integer({"value": item}, "value") for item in value["quadrature_orders"])
+        result_orders = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_quadrature_orders"]
+        )
+        tolerance = float(value["relative_tolerance"])
+        result_tolerance = float(value["result_relative_tolerance"])
+        errors = tuple(float(item) for item in value["estimated_relative_errors"])
+        result_errors = tuple(
+            float(item) for item in value["result_estimated_relative_errors"]
+        )
+        restart_step = _integer(value, "restart_step")
+        result_restart_step = _integer(value, "result_restart_step")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "contour_cq_generation",
+                "quadrature_order_cq_generation",
+                "startup_correction_cq_generation",
+                "error_estimator_cq_generation",
+                "restart_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and value.get("contour_family") == "lubich_bdf2_circle"
+        and value.get("result_contour_family") == value.get("contour_family")
+        and len(radii) >= 2
+        and all(math.isfinite(item) and 0.0 < item < 1.0 for item in radii)
+        and result_radii == radii
+        and len(orders) == len(radii)
+        and all(item > 0 for item in orders)
+        and all(left < right for left, right in zip(orders, orders[1:]))
+        and result_orders == orders
+        and value.get("startup_correction") == "bdf2_consistent_two_step"
+        and value.get("result_startup_correction") == value.get("startup_correction")
+        and value.get("error_estimator") == "successive_contour_l2_relative"
+        and value.get("result_error_estimator") == value.get("error_estimator")
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and len(errors) == len(orders)
+        and all(math.isfinite(item) and item >= 0.0 for item in errors)
+        and result_errors == errors
+        and errors[-1] <= tolerance
+        and restart_step >= 0
+        and result_restart_step == restart_step
+        and _is_sha256(str(value.get("restart_state_sha256", "")).lower())
+        and str(value.get("loaded_restart_state_sha256", "")).lower()
+        == str(value.get("restart_state_sha256", "")).lower()
+        and _is_sha256(str(value.get("time_history_sha256", "")).lower())
+        and str(value.get("accepted_time_history_sha256", "")).lower()
+        == str(value.get("time_history_sha256", "")).lower()
+    )
+
+
+def _optional_p1_fembem_discretization_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "p1_fembem_boundary_orientation_quadrature_singular_treatment_trace_matrix_mesh_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        fem_order = _integer(value, "fem_basis_order")
+        bem_order = _integer(value, "bem_basis_order")
+        trace_shape = tuple(
+            _integer({"value": item}, "value") for item in value["trace_shape"]
+        )
+        result_trace_shape = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_trace_shape"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("coupling_generation", "")).strip()
+    digests = (
+        ("trace_matrix_sha256", "result_trace_matrix_sha256"),
+        ("fem_matrix_sha256", "result_fem_matrix_sha256"),
+        ("bem_matrix_sha256", "result_bem_matrix_sha256"),
+        ("volume_mesh_sha256", "result_volume_mesh_sha256"),
+        ("boundary_mesh_sha256", "result_boundary_mesh_sha256"),
+        ("coupled_result_sha256", "accepted_coupled_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "boundary_orientation_coupling_generation",
+                "quadrature_coupling_generation",
+                "singular_treatment_coupling_generation",
+                "trace_coupling_generation",
+                "matrix_coupling_generation",
+                "mesh_coupling_generation",
+                "result_coupling_generation",
+            )
+        )
+        and fem_order == bem_order == 1
+        and value.get("volume_element") == "tet"
+        and value.get("boundary_element") == "tri"
+        and value.get("boundary_orientation") == "volume_outward"
+        and value.get("result_boundary_orientation") == value.get("boundary_orientation")
+        and value.get("regular_quadrature") == "triangle_degree_4"
+        and value.get("result_regular_quadrature") == value.get("regular_quadrature")
+        and value.get("singular_treatment") == "duffy_p1_galerkin"
+        and value.get("result_singular_treatment") == value.get("singular_treatment")
+        and len(trace_shape) == 2
+        and all(item > 0 for item in trace_shape)
+        and trace_shape[0] <= trace_shape[1]
+        and result_trace_shape == trace_shape
         and all(
             _is_sha256(str(value.get(source, "")).lower())
             and str(value.get(target, "")).lower()
