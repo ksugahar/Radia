@@ -1019,6 +1019,126 @@ def surface_euler_characteristic(mesh):
     return len(verts) - len(edges) + n_faces
 
 
+def H_from_surface_J_complex(obs_points, src_centroids, src_areas,
+                             src_J_complex):
+    """Vectorised Biot-Savart H from a complex surface-current source.
+
+    ``H(r) = (1/4 pi) sum_t [J_t x (r - c_t)] / |r - c_t|^3 * A_t``
+    (1-point centroid quadrature per source panel; the same kernel the
+    Telegen bridge and the coupled solvers use).
+    """
+    inv_4pi = 1.0 / (4.0 * np.pi)
+    obs = np.asarray(obs_points, dtype=float)
+    dx = obs[:, None, :] - src_centroids[None, :, :]
+    r2 = np.sum(dx * dx, axis=2)
+    r2 = np.maximum(r2, 1e-60)
+    r3_inv = src_areas[None, :] / (r2 * np.sqrt(r2))
+    cross = np.cross(np.asarray(src_J_complex)[None, :, :], dx)
+    return inv_4pi * np.sum(cross * r3_inv[..., None], axis=1)
+
+
+class SurfacePoissonPhiInc:
+    """Prepared surface-Poisson phi_inc reconstructor.
+
+    Factorizes the P1 Laplace-Beltrami stiffness (with a mean-zero
+    Lagrange multiplier) ONCE for a fixed surface mesh; each call
+    projects a new incident H field with a pair of triangular
+    back-substitutions.  Use this when phi_inc must be rebuilt
+    repeatedly on the same mesh (the strong-coupling Picard loop
+    re-derives phi_inc from the updated coil current every iteration);
+    ``compute_phi_inc_surface_poisson`` is the one-shot wrapper and
+    documents the formulation, validity condition, and the fail-loud
+    gate semantics.
+    """
+
+    def __init__(self, points, tris):
+        from scipy.sparse import coo_matrix, csr_matrix, bmat
+        from scipy.sparse.linalg import splu
+
+        pts = np.asarray(points, dtype=float)
+        tri = np.asarray(tris, dtype=np.int64)
+        nv = len(pts)
+
+        p0, p1, p2 = pts[tri[:, 0]], pts[tri[:, 1]], pts[tri[:, 2]]
+        n_raw = np.cross(p1 - p0, p2 - p0)
+        two_A = np.linalg.norm(n_raw, axis=1)
+        if np.any(two_A < 1e-30):
+            raise ValueError(
+                "degenerate (zero-area) triangle in surface mesh")
+        areas = 0.5 * two_A
+        n_hat = n_raw / two_A[:, None]
+
+        # P1 shape gradients (constant per triangle, winding-invariant):
+        # grad lambda_k = n_hat x (edge opposite vertex k) / (2A).
+        g = np.empty((len(tri), 3, 3))
+        g[:, 0] = np.cross(n_hat, p2 - p1) / two_A[:, None]
+        g[:, 1] = np.cross(n_hat, p0 - p2) / two_A[:, None]
+        g[:, 2] = np.cross(n_hat, p1 - p0) / two_A[:, None]
+
+        # P1 surface stiffness K_kl = sum_t A_t grad l_k . grad l_l with
+        # a mean-zero Lagrange multiplier (constants are K's nullspace
+        # on a closed surface; a constant shift of phi_inc is gauge --
+        # the BIE maps constants to constants and J_s = n x -grad phi
+        # is unaffected).  LU-factorized once.
+        Kloc = areas[:, None, None] * np.einsum('tkd,tld->tkl', g, g)
+        rows = tri[:, [0, 0, 0, 1, 1, 1, 2, 2, 2]].reshape(-1)
+        cols = tri[:, [0, 1, 2, 0, 1, 2, 0, 1, 2]].reshape(-1)
+        K = coo_matrix((Kloc.reshape(-1), (rows, cols)),
+                       shape=(nv, nv)).tocsr()
+        ones = csr_matrix(np.ones((nv, 1)))
+        Kaug = bmat([[K, ones], [ones.T, None]], format="csc")
+        self._lu = splu(Kaug)
+        self._tri = tri
+        self._nv = nv
+        self._areas = areas
+        self._n_hat = n_hat
+        self._g = g
+
+    def __call__(self, H_vertices, max_grad_residual=None):
+        tri, nv = self._tri, self._nv
+        areas, n_hat, g = self._areas, self._n_hat, self._g
+        H = np.asarray(H_vertices).astype(complex)
+        if H.shape != (nv, 3):
+            raise ValueError(
+                f"H_vertices shape {H.shape} != (nv={nv}, 3): H must be "
+                f"evaluated at every surface vertex in DOF order.")
+
+        # Tangential incident field per triangle (corner mean; the
+        # gradients are constant so the 3-corner rule reduces to the
+        # mean).
+        H_tri = (H[tri[:, 0]] + H[tri[:, 1]] + H[tri[:, 2]]) / 3.0
+        Hn = np.einsum('td,td->t', H_tri, n_hat.astype(complex))
+        Ht = H_tri - Hn[:, None] * n_hat
+
+        # Weak RHS b_k = - sum_t A_t (grad lambda_k . H_t).
+        binc = -areas[:, None] * np.einsum('tkd,td->tk', g, Ht)
+        b = np.zeros(nv, dtype=complex)
+        np.add.at(b, tri, binc)
+
+        psi = (self._lu.solve(np.concatenate([b.real, [0.0]]))[:nv]
+               + 1j * self._lu.solve(
+                   np.concatenate([b.imag, [0.0]]))[:nv])
+
+        # Grad-consistency: how well does -grad_S psi reproduce H_t?
+        gpsi = np.einsum('tkd,tk->td', g, psi[tri])
+        diff = gpsi + Ht
+        num = float(np.sum(
+            areas * np.einsum('td,td->t', diff.conj(), diff).real))
+        den = float(np.sum(
+            areas * np.einsum('td,td->t', Ht.conj(), Ht).real))
+        residual = math.sqrt(num / max(den, 1e-300))
+        if max_grad_residual is not None and residual > max_grad_residual:
+            raise ValueError(
+                f"surface-Poisson phi_inc: tangential-gradient residual "
+                f"{residual:.1%} exceeds the {max_grad_residual:.0%} "
+                f"gate.  H_t,inc is not a surface gradient at this "
+                f"accuracy -- either the coil current pierces the "
+                f"workpiece surface (psi does not exist; use the "
+                f"loop-DOF/cohomology route) or the incident H "
+                f"evaluation is broken.  No silent fallback.")
+        return psi, residual
+
+
 def compute_phi_inc_surface_poisson(points, tris, H_vertices,
                                     max_grad_residual=None):
     """Reconstruct phi_inc on a closed surface by a surface-Poisson
@@ -1062,77 +1182,17 @@ def compute_phi_inc_surface_poisson(points, tris, H_vertices,
             ``||grad_S psi + H_t|| / ||H_t||`` (area-weighted L2 over
             triangles) exceeds this bound.
 
+    For repeated reconstructions on the SAME mesh (strong-coupling
+    Picard iterations), build a ``SurfacePoissonPhiInc(points, tris)``
+    once and call it per H field -- the stiffness factorization is
+    cached there; this wrapper rebuilds it every call.
+
     Returns:
         (psi, residual): (nv,) complex mean-zero potential and the
         float grad-consistency residual.
     """
-    from scipy.sparse import coo_matrix, csr_matrix, bmat
-    from scipy.sparse.linalg import spsolve
-
-    pts = np.asarray(points, dtype=float)
-    tri = np.asarray(tris, dtype=np.int64)
-    nv = len(pts)
-    H = np.asarray(H_vertices).astype(complex)
-    if H.shape != (nv, 3):
-        raise ValueError(
-            f"H_vertices shape {H.shape} != (nv={nv}, 3): H must be "
-            f"evaluated at every surface vertex in DOF order.")
-
-    p0, p1, p2 = pts[tri[:, 0]], pts[tri[:, 1]], pts[tri[:, 2]]
-    n_raw = np.cross(p1 - p0, p2 - p0)
-    two_A = np.linalg.norm(n_raw, axis=1)
-    if np.any(two_A < 1e-30):
-        raise ValueError("degenerate (zero-area) triangle in surface mesh")
-    areas = 0.5 * two_A
-    n_hat = n_raw / two_A[:, None]
-
-    # P1 shape gradients (constant per triangle, winding-invariant):
-    # grad lambda_k = n_hat x (edge opposite vertex k) / (2A).
-    g = np.empty((len(tri), 3, 3))
-    g[:, 0] = np.cross(n_hat, p2 - p1) / two_A[:, None]
-    g[:, 1] = np.cross(n_hat, p0 - p2) / two_A[:, None]
-    g[:, 2] = np.cross(n_hat, p1 - p0) / two_A[:, None]
-
-    # Tangential incident field per triangle (corner mean; the gradients
-    # are constant so the 3-corner rule reduces to the mean).
-    H_tri = (H[tri[:, 0]] + H[tri[:, 1]] + H[tri[:, 2]]) / 3.0
-    Hn = np.einsum('td,td->t', H_tri, n_hat.astype(complex))
-    Ht = H_tri - Hn[:, None] * n_hat
-
-    # Weak RHS b_k = - sum_t A_t (grad lambda_k . H_t).
-    binc = -areas[:, None] * np.einsum('tkd,td->tk', g, Ht)
-    b = np.zeros(nv, dtype=complex)
-    np.add.at(b, tri, binc)
-
-    # P1 surface stiffness K_kl = sum_t A_t grad lambda_k . grad lambda_l,
-    # solved with a mean-zero Lagrange multiplier (constants are the
-    # nullspace of K on a closed surface; a constant shift of phi_inc is
-    # gauge -- the BIE maps constants to constants and J_s = n x -grad phi
-    # is unaffected).
-    Kloc = areas[:, None, None] * np.einsum('tkd,tld->tkl', g, g)
-    rows = tri[:, [0, 0, 0, 1, 1, 1, 2, 2, 2]].reshape(-1)
-    cols = tri[:, [0, 1, 2, 0, 1, 2, 0, 1, 2]].reshape(-1)
-    K = coo_matrix((Kloc.reshape(-1), (rows, cols)), shape=(nv, nv)).tocsr()
-    ones = csr_matrix(np.ones((nv, 1)))
-    Kaug = bmat([[K, ones], [ones.T, None]], format="csr")
-    psi = (spsolve(Kaug, np.concatenate([b.real, [0.0]]))[:nv]
-           + 1j * spsolve(Kaug, np.concatenate([b.imag, [0.0]]))[:nv])
-
-    # Grad-consistency: how well does -grad_S psi reproduce H_t?
-    gpsi = np.einsum('tkd,tk->td', g, psi[tri])
-    diff = gpsi + Ht
-    num = float(np.sum(areas * np.einsum('td,td->t', diff.conj(), diff).real))
-    den = float(np.sum(areas * np.einsum('td,td->t', Ht.conj(), Ht).real))
-    residual = math.sqrt(num / max(den, 1e-300))
-    if max_grad_residual is not None and residual > max_grad_residual:
-        raise ValueError(
-            f"surface-Poisson phi_inc: tangential-gradient residual "
-            f"{residual:.1%} exceeds the {max_grad_residual:.0%} gate.  "
-            f"H_t,inc is not a surface gradient at this accuracy -- "
-            f"either the coil current pierces the workpiece surface "
-            f"(psi does not exist; use the loop-DOF/cohomology route) or "
-            f"the incident H evaluation is broken.  No silent fallback.")
-    return psi, residual
+    return SurfacePoissonPhiInc(points, tris)(
+        H_vertices, max_grad_residual=max_grad_residual)
 
 
 def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
