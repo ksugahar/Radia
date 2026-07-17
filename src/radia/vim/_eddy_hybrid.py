@@ -4958,7 +4958,144 @@ class ReducedInteractionMatrix:
         return self.matrix[a0:a1, b0:b1]
 
 
-def _validate_interaction_block(block, left: SampledCurrentBasis, right: SampledCurrentBasis) -> np.ndarray:
+def _is_matrix_free_operator(value) -> bool:
+    return (
+        hasattr(value, "shape")
+        and callable(getattr(value, "matvec", None))
+        and not isinstance(value, np.ndarray)
+    )
+
+
+class ReducedBlockHMatrixOperator:
+    """Dense cross blocks plus symmetric matrix-free diagonal blocks."""
+
+    def __init__(self, dense, operator_blocks):
+        base = np.asarray(dense)
+        if base.ndim != 2 or base.shape[0] != base.shape[1]:
+            raise ValueError("dense reduced block matrix must be square")
+        self._dense = np.array(base, copy=True)
+        self._operator_blocks = tuple(operator_blocks)
+        self.shape = self._dense.shape
+        self.dtype = np.result_type(self._dense.dtype, float)
+
+    @property
+    def T(self):
+        return self
+
+    @property
+    def H(self):
+        return self
+
+    @property
+    def matrix_free(self) -> bool:
+        return True
+
+    @property
+    def is_hermitian(self) -> bool:
+        return True
+
+    def matvec(self, vector):
+        x = np.asarray(vector)
+        if x.ndim != 1 or x.shape[0] != self.shape[1]:
+            raise ValueError(f"vector must have shape ({self.shape[1]},)")
+        result = self._dense @ x
+        for start, stop, operator in self._operator_blocks:
+            result[start:stop] += operator.matvec(x[start:stop])
+        return result
+
+    def matmat(self, matrix):
+        values = np.asarray(matrix)
+        if values.ndim == 1:
+            return self.matvec(values)
+        if values.ndim != 2 or values.shape[0] != self.shape[1]:
+            raise ValueError(f"matrix must have shape ({self.shape[1]}, n_rhs)")
+        result = self._dense @ values
+        for start, stop, operator in self._operator_blocks:
+            result[start:stop, :] += operator.matmat(values[start:stop, :])
+        return result
+
+    def __matmul__(self, other):
+        return self.matmat(other)
+
+    def to_dense(self):
+        dense = np.array(self._dense, copy=True)
+        for start, stop, operator in self._operator_blocks:
+            dense[start:stop, start:stop] += operator.to_dense()
+        return 0.5 * (dense + dense.conj().T)
+
+    def __array__(self, dtype=None, copy=None):
+        dense = self.to_dense()
+        if dtype is not None:
+            dense = dense.astype(dtype, copy=False)
+        if copy is False:
+            return dense
+        return np.array(dense, copy=True)
+
+    def __getitem__(self, key):
+        return self.to_dense()[key]
+
+    def stats(self):
+        return {
+            "matrix_free": True,
+            "mode_count": int(self.shape[0]),
+            "operator_block_count": len(self._operator_blocks),
+            "dense_cross_bytes": int(self._dense.nbytes),
+            "operator_blocks": [
+                {
+                    "start": int(start),
+                    "stop": int(stop),
+                    "stats": operator.stats(),
+                }
+                for start, stop, operator in self._operator_blocks
+            ],
+        }
+
+
+class ShiftedReducedOperator:
+    """Matrix-free ``dense + scale * inductance`` reduced impedance."""
+
+    def __init__(self, dense, inductance, scale):
+        self._dense = np.asarray(dense)
+        self._inductance = inductance
+        self._scale = scale
+        self.shape = self._dense.shape
+        self.dtype = np.result_type(self._dense.dtype, scale, inductance.dtype)
+
+    def matvec(self, vector):
+        x = np.asarray(vector)
+        return self._dense @ x + self._scale * self._inductance.matvec(x)
+
+    def matmat(self, matrix):
+        values = np.asarray(matrix)
+        return self._dense @ values + self._scale * self._inductance.matmat(values)
+
+    def __matmul__(self, other):
+        values = np.asarray(other)
+        return self.matvec(values) if values.ndim == 1 else self.matmat(values)
+
+    def to_dense(self):
+        return self._dense + self._scale * self._inductance.to_dense()
+
+    def __array__(self, dtype=None, copy=None):
+        dense = self.to_dense()
+        if dtype is not None:
+            dense = dense.astype(dtype, copy=False)
+        if copy is False:
+            return dense
+        return np.array(dense, copy=True)
+
+    def __getitem__(self, key):
+        return self.to_dense()[key]
+
+
+def _validate_interaction_block(block, left: SampledCurrentBasis, right: SampledCurrentBasis):
+    if _is_matrix_free_operator(block):
+        if tuple(block.shape) != (left.n_modes, right.n_modes):
+            raise ValueError(
+                "interaction backend returned an operator with shape "
+                f"{block.shape}, expected {(left.n_modes, right.n_modes)}"
+            )
+        return block
     arr = np.asarray(block)
     if arr.shape != (left.n_modes, right.n_modes):
         raise ValueError(
@@ -5250,14 +5387,43 @@ def EVRSTMethodAlgebra(
     return _evrs_tmethod_algebra_numpy(*args)
 
 
-def _relative_hermitian_error(matrix: np.ndarray) -> float:
+def _relative_hermitian_error(matrix) -> float:
+    if _is_matrix_free_operator(matrix):
+        if getattr(matrix, "is_hermitian", False):
+            return 0.0
+        if callable(getattr(matrix, "to_dense", None)):
+            return _relative_hermitian_error(matrix.to_dense())
+        raise TypeError("matrix-free operator must declare is_hermitian or provide to_dense")
     norm = float(np.linalg.norm(matrix))
     if norm == 0.0:
         return 0.0
     return float(np.linalg.norm(matrix - matrix.conj().T) / norm)
 
 
-def _min_hermitian_eigenvalue(matrix: np.ndarray) -> float:
+def _min_hermitian_eigenvalue(matrix) -> float:
+    if _is_matrix_free_operator(matrix):
+        if not getattr(matrix, "is_hermitian", False):
+            raise TypeError("matrix-free inductance operator must declare is_hermitian")
+        n = int(matrix.shape[0])
+        if n == 0:
+            return 0.0
+        if n <= 2:
+            dense = matrix.matmat(np.eye(n))
+            return float(np.min(np.linalg.eigvalsh(0.5 * (dense + dense.conj().T)).real))
+        from scipy.sparse.linalg import LinearOperator, eigsh
+
+        operator = LinearOperator(
+            matrix.shape, matvec=matrix.matvec, dtype=np.dtype(matrix.dtype)
+        )
+        value = eigsh(
+            operator,
+            k=1,
+            which="SA",
+            return_eigenvectors=False,
+            tol=1.0e-8,
+            maxiter=max(100, 10 * n),
+        )[0]
+        return float(np.real(value))
     if matrix.size == 0:
         return 0.0
     hermitian = 0.5 * (matrix + matrix.conj().T)
@@ -5373,7 +5539,7 @@ class HybridVIMSystem:
     """Reduced eddy-current VIM matrices on bulk-T plus surface-Omega bases."""
 
     resistance: np.ndarray
-    inductance: np.ndarray
+    inductance: object
     surface_mass: np.ndarray
     basis_names: tuple[str, ...]
     blocks: dict[str, tuple[int, int]]
@@ -5386,11 +5552,24 @@ class HybridVIMSystem:
     def impedance(self, s, *, surface_impedance=0.0) -> np.ndarray:
         """Return ``R + s L + Zs(s) Ms``."""
 
+        inductance = (
+            self.inductance.to_dense()
+            if _is_matrix_free_operator(self.inductance)
+            else self.inductance
+        )
         return (
             self.resistance
-            + s * self.inductance
+            + s * inductance
             + surface_impedance * self.surface_mass
         )
+
+    def impedance_operator(self, s, *, surface_impedance=0.0):
+        """Return the impedance without materializing HACApK-backed inductance."""
+
+        dense = self.resistance + surface_impedance * self.surface_mass
+        if _is_matrix_free_operator(self.inductance):
+            return ShiftedReducedOperator(dense, self.inductance, s)
+        return dense + s * self.inductance
 
     def block_slice(self, name: str) -> slice:
         """Return the coefficient slice for a named reduced basis block."""
@@ -5587,11 +5766,68 @@ class HybridVIMSystem:
             return rhs[:, 0]
         return rhs
 
-    def solve(self, s, rhs, *, surface_impedance=0.0) -> np.ndarray:
-        """Solve the reduced VIM system for a supplied right-hand side."""
+    def solve(
+        self,
+        s,
+        rhs,
+        *,
+        surface_impedance=0.0,
+        tolerance: float = 1.0e-10,
+        max_iterations: int | None = None,
+        restart: int | None = None,
+    ) -> np.ndarray:
+        """Solve directly or by GMRES when the inductance stays in HACApK form."""
 
-        z = self.impedance(s, surface_impedance=surface_impedance)
-        return _solve_reduced_linear(z, np.asarray(rhs))
+        z = self.impedance_operator(s, surface_impedance=surface_impedance)
+        values = np.asarray(rhs)
+        if not _is_matrix_free_operator(z):
+            return _solve_reduced_linear(z, values)
+        if tolerance <= 0.0:
+            raise ValueError("tolerance must be positive")
+        from scipy.sparse.linalg import LinearOperator, gmres
+
+        n = self.n_modes
+        if values.ndim == 1:
+            rhs_matrix = values[:, np.newaxis]
+            vector_result = True
+        elif values.ndim == 2:
+            rhs_matrix = values
+            vector_result = False
+        else:
+            raise ValueError("rhs must be one- or two-dimensional")
+        if rhs_matrix.shape[0] != n:
+            raise ValueError(f"rhs must have {n} rows")
+        max_iterations = max(100, 10 * n) if max_iterations is None else int(max_iterations)
+        restart = min(max(n, 1), 50) if restart is None else int(restart)
+        if max_iterations <= 0 or restart <= 0:
+            raise ValueError("max_iterations and restart must be positive")
+        linear = LinearOperator(z.shape, matvec=z.matvec, dtype=np.dtype(z.dtype))
+        diagonal = np.diag(z._dense)
+        threshold = np.finfo(float).eps * max(float(np.max(np.abs(diagonal))), 1.0)
+        preconditioner = None
+        if np.all(np.abs(diagonal) > threshold):
+            inverse = 1.0 / diagonal
+            preconditioner = LinearOperator(
+                z.shape,
+                matvec=lambda x: inverse * x,
+                dtype=np.dtype(z.dtype),
+            )
+        solutions = []
+        for column in range(rhs_matrix.shape[1]):
+            solution, info = gmres(
+                linear,
+                rhs_matrix[:, column],
+                M=preconditioner,
+                rtol=float(tolerance),
+                atol=0.0,
+                restart=restart,
+                maxiter=max_iterations,
+            )
+            if info != 0:
+                raise RuntimeError(f"matrix-free HCurl GMRES did not converge (info={info})")
+            solutions.append(solution)
+        result = np.column_stack(solutions)
+        return result[:, 0] if vector_result else result
 
     def port_admittance(self, s, rhs, *, surface_impedance=0.0) -> np.ndarray:
         """Return the reduced port admittance ``B^* Z(s)^-1 B``."""
@@ -5621,6 +5857,7 @@ class HybridVIMSystem:
         rmin = _min_hermitian_eigenvalue(self.resistance)
         lmin = _min_hermitian_eigenvalue(self.inductance)
         smin = _min_hermitian_eigenvalue(self.surface_mass)
+        matrix_free = _is_matrix_free_operator(self.inductance)
         return {
             "n_modes": self.n_modes,
             "interaction_backend": self.interaction_backend,
@@ -5632,6 +5869,8 @@ class HybridVIMSystem:
             "min_resistance_eigenvalue": rmin,
             "min_inductance_eigenvalue": lmin,
             "min_surface_mass_eigenvalue": smin,
+            "inductance_matrix_free": matrix_free,
+            "inductance_operator": self.inductance.stats() if matrix_free else None,
             "passive_blocks": (
                 rmin >= -passive_tol
                 and lmin >= -passive_tol
@@ -5656,7 +5895,7 @@ class HCurlEddyCLNModel:
     """
 
     resistance: np.ndarray
-    inductance: np.ndarray
+    inductance: object
     surface_mass: np.ndarray
     port_rhs: np.ndarray
     basis_names: tuple[str, ...] = ()
@@ -7425,6 +7664,7 @@ def AssembleHybridVIM(
     rmat = np.zeros((total, total), dtype=complex)
     lmat = np.zeros((total, total), dtype=complex)
     smat = np.zeros((total, total), dtype=complex)
+    operator_blocks = []
     names: list[str] = []
     blocks: dict[str, tuple[int, int]] = {}
 
@@ -7446,9 +7686,16 @@ def AssembleHybridVIM(
                 )
             else:
                 block = _validate_interaction_block(interaction(left, right), left, right)
-            lmat[a0:a1, b0:b1] = block
-            if ia != ib:
-                lmat[b0:b1, a0:a1] = block.conj().T
+            if _is_matrix_free_operator(block):
+                if ia != ib:
+                    raise NotImplementedError(
+                        "matrix-free interaction blocks must currently be diagonal basis blocks"
+                    )
+                operator_blocks.append((a0, a1, block))
+            else:
+                lmat[a0:a1, b0:b1] = block
+                if ia != ib:
+                    lmat[b0:b1, a0:a1] = block.conj().T
             if left.kind == "volume" and right.kind == "volume":
                 if sigma is None:
                     raise ValueError("sigma is required when volume bases are used")
@@ -7463,9 +7710,14 @@ def AssembleHybridVIM(
     rmat = 0.5 * (rmat + rmat.conj().T)
     lmat = 0.5 * (lmat + lmat.conj().T)
     smat = 0.5 * (smat + smat.conj().T)
+    inductance = (
+        ReducedBlockHMatrixOperator(lmat, operator_blocks)
+        if operator_blocks
+        else lmat
+    )
     return HybridVIMSystem(
         resistance=rmat,
-        inductance=lmat,
+        inductance=inductance,
         surface_mass=smat,
         basis_names=tuple(names),
         blocks=blocks,

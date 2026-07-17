@@ -134,9 +134,10 @@ now use uniform h refinement until both the current and geometry residuals
 pass.  In the warped-HEX regression, one refinement changes 6 to 48 leaves,
 reduces the current residual from `3.27e-4` to `8.63e-6`, and reduces the
 geometry residual from `1.56e-2` to `6.84e-3`; the resulting Gram is positive.
-The work guard is based on both leaf count and
-`leaf_count^2 * monomial_count`, so a high-degree request cannot silently
-expand into an impractical dense moment contraction.
+The work guard is based on leaf count and the QR-compressed local polynomial
+rank, so a high-degree request cannot silently expand into an impractical
+H-matrix build.  The old `leaf_count^2 * monomial_count` gate is retained only
+when `matrix_free=False` explicitly requests the dense verification route.
 
 Parent orders above six are residual-controlled rather than rejected.  For a
 p=7 HEX parent the formal degree is 21; the production path caps analytic
@@ -192,17 +193,35 @@ passes.  The next end-to-end gate is to drive that position sweep from the
 same 3-D HCurl basis.  The generic 3-D interaction accepts affine TET, HEX,
 WEDGE, and PYRAMID geometry, exact P2 curved tetrahedra, and residual-controlled
 warped/curved non-tet cells.  Parent requirements above total degree 18 use an
-hp degree-cap path.  Current projection, geometry, scalar-charge count, and
-dense moment work remain hard gates rather than silent approximations.  See
+hp degree-cap path.  Current projection, geometry, compressed scalar-charge
+count, and subdivision work remain hard gates rather than silent
+approximations.  See
 `validation_test/maglev/team28_hcurl_vim_force_summary.json`.
 
-HACApK is active in the exact P2 curved-tetrahedron assembly: the scalar
-reference-density Gram is built as a `_ChargeGramHMatrix` and contracted by
-symmetric H-matrix matvecs.  The affine and residual-controlled TET/HEX/WEDGE/
-PYRAMID paths currently assemble the analytic degree-18 reduced Gram densely.
-The curved path also materializes the final reduced mode matrix after the
-HACApK contractions.  Keeping that final HCurl operator compressed is therefore
-a separate production scaling gate, not a completed claim.
+HACApK is now the default end-to-end HCurl interaction operator.  On every
+affine or residual-controlled TET/HEX/WEDGE/PYRAMID leaf, rank-revealing QR
+selects a stable subset of the original three-component current polynomials;
+it never rotates the ill-conditioned degree-18 monomial coefficients into an
+artificial coefficient-space basis.  The scalar charge count is bounded by
+`3 * reduced_modes * leaf_tets`, instead of `monomials * leaf_tets`.  For one
+p=6 HEX this changes 7980 degree-18 monomial charges to 18 charges for one
+response mode or 144 for eight modes.  The three CSR maps are registered once
+in C++, and each Krylov action evaluates
+`sum_c B_c^T G_HACApK B_c x` without forming the reduced inductance matrix.
+Symmetrized high-order host-pair blocks cache their reverse transpose at build
+time, and a self-host block reuses its one directed integration.
+
+The exact P2 curved-tet and planar-log paths keep their existing scalar
+`_ChargeGramHMatrix` and use the same composed HCurl operator, so their final
+mode matrices are no longer materialized either.  `AssembleHybridVIM` preserves
+these diagonal H-matrix blocks and `HybridVIMSystem.solve` uses GMRES on
+`R + sL + Zs M_surface`.  Explicit `matrix_free=False`, `to_dense()`, Schur,
+and mixed-Galerkin calls remain available as deliberate small-ROM verification
+or condensation paths.  In a bulk/bridge/SIBC system the bulk diagonal is the
+HACApK operator; bridge-surface cross interactions remain the small dense
+blocks returned by the selected VIM/BEM backend.  The assembled operator is
+therefore "HACApK diagonal plus reduced cross blocks", not a claim that the
+SIBC cross kernel itself has been replaced.
 
 ## Files
 

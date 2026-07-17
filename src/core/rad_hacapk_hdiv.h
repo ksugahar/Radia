@@ -148,6 +148,21 @@ public:
                         std::vector<double> ref_tri_pts_in = {}, std::vector<double> ref_tri_w_in = {},
                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
+    // HCurl local-polynomial mode.  Each scalar HACApK charge is an arbitrary
+    // linear combination of the common reference monomial list, rather than
+    // one monomial.  A caller can therefore rank-reveal all retained
+    // vector-current components on each sub-tet, keep stable original
+    // component polynomials, and build only the local polynomial rank.
+    // polynomial_coefficients layout is [charge][monomial].  Entries use the
+    // exact reference-coordinate Newton moments through degree 18 and host-pair
+    // block reuse, while the final HCurl map remains Bx/By/Bz outside G.
+    RadHACApKChargeGram(std::vector<double> cell_verts, int n_el,
+                        std::vector<int> charge_host,
+                        std::vector<double> polynomial_coefficients,
+                        std::vector<int> polynomial_exponents,
+                        std::vector<double> ref_tet_pts,
+                        std::vector<double> ref_tet_w);
+
     // CURVED HIGH-ORDER mode (isoparametric P2, curve_order=2): the same monomial-charge Gram as the flat HO
     // mode above, but on a CURVED (mesh.Curve(2)) geometry -- the boundary surface charge sigma=M.n and the
     // volume charge live on the true curved element.  cell_nodes [n_cell*30] = 10 P2 nodes/tet (corners
@@ -358,6 +373,9 @@ public:
     void ConfigureChargeMap(
         std::vector<int> B_indptr, std::vector<int> B_indices,
         std::vector<double> B_data, int n_face);
+    void ConfigureVectorChargeMap(
+        std::vector<int> B_indptr, std::vector<int> B_indices,
+        std::vector<double> B_data, int n_face, int n_components);
     void ConfigureMassMatrix(
         std::vector<int> mI, std::vector<int> mJ,
         std::vector<double> mV, int n_face);
@@ -556,6 +574,7 @@ private:
     // H-matrix matvec and matching NGSolve's persistent BaseMatrix model.
     std::vector<int> m_operatorBTIndptr, m_operatorBTIndices;
     std::vector<double> m_operatorBTData;
+    int m_operatorChargeComponents = 0;
     std::vector<int> m_operatorMassI, m_operatorMassJ;
     std::vector<double> m_operatorMassV;
     // Material mass in CSR, built once when the COO tangent is registered.
@@ -726,6 +745,10 @@ private:
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
+    bool m_polyCombo = false;                           // arbitrary local polynomial per scalar charge
+    int m_comboNMono = 0;
+    std::vector<double> m_comboCoeffs;                  // [n][m_comboNMono]
+    std::vector<std::array<int,3>> m_comboExponents;    // shared reference monomial list
     std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
     std::vector<int> m_nmono;                          // [n] # co-located charges per (kind,host) group -- QuadDot memo gating (skip groups of 1)
     std::vector<int> m_hoLocalOf;                      // [n] local charge index within the flat high-order host

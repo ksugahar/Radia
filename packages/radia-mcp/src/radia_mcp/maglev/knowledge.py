@@ -558,9 +558,9 @@ rule.
 PYRAMID is the qualified case: its HCurl apex modes are rational, not finite
 polynomials.  The default projection tolerance is 1e-4.  For a strict 1e-8
 projection, apex-only midpoint refinement reaches 9.34e-9 at level 8 with 114
-leaf tetrahedra; this is opt-in because the present dense analytic Gram scales
-quadratically in leaf count.  Geometry and projection residuals remain hard
-gates.
+leaf tetrahedra; this remains opt-in because projection and H-matrix setup grow
+with the refined leaf basis.  Geometry, projection, leaf count, and compressed
+charge count remain hard gates.
 
 P2 curved tetrahedra use a separate exact-geometry path.  The curl-Piola
 reference density `K(xi)=curl(T)(X(xi))*abs(det(dX/dxi))` contains the physical
@@ -571,19 +571,33 @@ projection residual 4.55e-16, geometry residual 3.55e-16, and a positive
 epsilon-free Gram.  Curved production defaults to a 125-point outer rule and
 an eight-point one-dimensional Duffy rule.
 
-HACApK scope must be stated precisely.  The P2 curved-tet path builds the
-scalar reference-density Gram with `_ChargeGramHMatrix(build=True)` and uses
-symmetric HACApK matvecs for the three component contractions.  The affine and
-residual-controlled TET/HEX/WEDGE/PYRAMID paths still form the exact degree-18
-reduced Gram densely with `_TetHCurlReducedGram`.  Even the curved path
-materializes the final reduced mode matrix after contraction.  Thus HACApK is
-used during curved assembly, but an end-to-end compressed HCurl Eddy Bubble
-operator remains a production scaling gate.
+HACApK scope must be stated precisely.  It is now the default end-to-end HCurl
+interaction operator for affine and residual-controlled TET/HEX/WEDGE/PYRAMID,
+exact P2 curved tetrahedra, and the planar-log path.  The affine path uses
+rank-revealing QR per leaf to select original current-component polynomials;
+it does not rotate ill-conditioned degree-18 monomial coefficients.  The
+scalar charge count is bounded by `3 * reduced_modes * leaf_tets`, rather than
+`monomials * leaf_tets`: one p=6 HEX changes 7980 monomial charges to 18 for
+one response mode or 144 for eight modes.  C++ stores all three CSR maps and
+applies `sum_c B_c^T G_HACApK B_c` in one native call.  The final reduced
+inductance matrix is not materialized.  Symmetrized high-order host-pair blocks
+also cache the reverse transpose, while self-host blocks reuse one directed
+integration, removing duplicate matrix-build work without changing entries.
+
+`AssembleHybridVIM` keeps H-matrix-backed diagonal blocks, and
+`HybridVIMSystem.solve` applies `R + sL + Zs M_surface` through matrix-free
+GMRES.  `matrix_free=False`, `to_dense()`, Schur complements, and mixed
+Galerkin orthogonalization are explicit small-ROM verification or condensation
+paths.  They are not the default production solve path.  For a
+bulk/bridge/SIBC system, HACApK supplies the bulk diagonal while the selected
+VIM/BEM backend supplies the reduced bridge-surface cross blocks.  The full
+system is an H-matrix diagonal plus reduced dense cross blocks; do not claim
+that this change replaced the SIBC cross kernel.
 
 Warped or curved non-tet cells use uniform h refinement until both current and
 piecewise-affine geometry residuals pass.  A warped HEX regression reaches
 current residual 8.63e-6 and geometry residual 6.84e-3 at 48 leaves.  Work is
-guarded by leaf count and `leaf_count^2 * monomial_count`.  Requirements above
+guarded by leaf count and compressed charge count.  Requirements above
 degree 18 are not rejected: p=7 HEX formally requires degree 21, is capped at
 analytic degree 18, and passes the default gate at residual 3.54e-5; a tighter
 gate activates uniform h refinement.  This makes p=6 a studied choice rather

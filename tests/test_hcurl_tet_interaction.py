@@ -7,10 +7,12 @@ import pytest
 
 import radia._radia_pybind as _rp
 import radia.vim as vim
+from radia.vim._hcurl_tet_interaction import _affine_polynomial_hmatrix_operator
 from radia.vim._vim import (
     _f64_buffer,
     _g01,
     _i32_buffer,
+    _monos_vol,
     _outer_tet,
     _outer_tri,
 )
@@ -74,6 +76,90 @@ def test_reduced_reference_polynomial_gram_matches_charge_gram_oracle():
         expected += values @ scalar @ values.T
 
     assert np.allclose(reduced, expected, rtol=2.0e-14, atol=1.0e-18)
+
+
+def test_native_component_charge_map_matches_explicit_btgb():
+    vertices = np.array(
+        [[[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.1, 0.8, 0.05], [0.05, 0.2, 0.9]]]
+    )
+    exponents = np.array(
+        [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.int32
+    )
+    polynomial_coefficients = np.eye(4)
+    tet_points, tet_weights = _outer_tet(4)
+    gram = _rp._ChargeGramHMatrix.from_local_polynomials(
+        cell_verts=_f64_buffer(vertices),
+        n_el=1,
+        charge_host=_i32_buffer(np.zeros(4, dtype=int)),
+        polynomial_coefficients=_f64_buffer(polynomial_coefficients),
+        polynomial_exponents=_i32_buffer(exponents),
+        ref_tet_pts=_f64_buffer(tet_points),
+        ref_tet_w=_f64_buffer(tet_weights),
+        eps=1.0e-12,
+        leaf=2,
+        eta=2.0,
+        build=True,
+    )
+    maps = np.random.default_rng(20260717).normal(size=(3, 4, 3))
+    operator = vim.HCurlHMatrixOperator(gram, maps, mu=1.7)
+    scalar = np.array([[gram.entry(i, j) for j in range(4)] for i in range(4)])
+    expected = 1.7 * sum(charge_map.T @ scalar @ charge_map for charge_map in maps)
+
+    np.testing.assert_allclose(operator.to_dense(), expected, rtol=2.0e-13, atol=1.0e-18)
+    np.testing.assert_allclose(
+        operator.matvec(np.array([1.0, -0.5, 0.25])),
+        expected @ np.array([1.0, -0.5, 0.25]),
+        rtol=2.0e-13,
+        atol=1.0e-18,
+    )
+    assert operator.stats()["charge_map_backend"] == "native-cpp-component-csr"
+
+
+def test_degree18_multitet_operator_matches_dense_reduced_gram():
+    vertices = np.array(
+        [
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            [[1.2, 0.0, 0.0], [2.2, 0.0, 0.0], [1.2, 1.0, 0.0], [1.2, 0.0, 1.0]],
+        ]
+    )
+    exponents = np.asarray(_monos_vol(18), dtype=np.int32)
+    coefficients = np.random.default_rng(20260718).normal(
+        size=(4, 2, len(exponents), 3)
+    )
+    coefficients *= np.power(10.0, 0.35 * exponents.sum(axis=1))[None, None, :, None]
+    projected = {
+        "cell_verts": vertices,
+        "cell_count": 2,
+        "subtet_count": 2,
+        "coefficients": coefficients,
+        "exponents": exponents,
+    }
+    points, weights = _outer_tet(4)
+    operator = _affine_polynomial_hmatrix_operator(
+        projected,
+        outer_points=points,
+        outer_weights=weights,
+        eps=1.0e-12,
+        leafsize=64,
+        eta=2.0,
+        local_rank_rtol=1.0e-13,
+        max_charges=1_000,
+        mu=1.0,
+    )
+    dense = np.asarray(
+        _rp._TetHCurlReducedGram(
+            _f64_buffer(vertices),
+            _i32_buffer(exponents),
+            _f64_buffer(coefficients),
+            4,
+            _f64_buffer(points),
+            _f64_buffer(weights),
+        )
+    )
+
+    np.testing.assert_allclose(operator.to_dense(), dense, rtol=2.0e-12, atol=1.0e-12)
+    assert operator.stats()["local_rank_min"] == 12
+    assert operator.stats()["local_rank_relative_truncation_error"] == 0.0
 
 
 def test_curved_gram_reference_density_omits_both_physical_measures():
@@ -144,6 +230,15 @@ def test_ngsolve_hcurl_tet_interaction_is_psd_and_epsilon_free():
             materials="cond",
             outer_quad=4,
         )
+        dense = vim.NgsolveHCurlTetVolumeInteraction(
+            mesh,
+            fes,
+            vectors,
+            basis,
+            materials="cond",
+            outer_quad=4,
+            matrix_free=False,
+        )
 
     diagnostics = interaction.diagnostics()
     assert interaction.matrix.shape == (2, 2)
@@ -152,7 +247,10 @@ def test_ngsolve_hcurl_tet_interaction_is_psd_and_epsilon_free():
     assert diagnostics["projection_relative_residual"] < 1.0e-12
     assert diagnostics["kernel_epsilon_m"] is None
     assert diagnostics["singular_self_treatment"].startswith("analytic-reference")
-    assert np.array_equal(interaction(basis, basis), interaction.matrix)
+    assert interaction(basis, basis) is interaction.matrix
+    assert diagnostics["matrix_free"] is True
+    assert diagnostics["hmatrix_operator"]["charge_map_backend"] == "native-cpp-component-csr"
+    np.testing.assert_allclose(interaction.matrix, dense.matrix, rtol=2.0e-8, atol=1.0e-18)
 
 
 def test_ngsolve_hcurl_tet_interaction_rejects_underfit_degree():
@@ -204,13 +302,14 @@ def test_p2_curved_hcurl_uses_reference_density_and_exact_geometry():
 
     diagnostics = interaction.diagnostics()
     assert interaction.matrix[0, 0] > 0.0
-    assert diagnostics["backend"] == "curved-p2-reference-density-hcurl-hmatrix"
+    assert diagnostics["backend"] == "curved-p2-reference-density-hcurl-hmatrix-operator"
     assert diagnostics["geometry"] == "curved-p2-reference-density"
     assert diagnostics["polynomial_degree"] == 2
     assert diagnostics["charge_count"] == 10 * mesh.GetNE(ng.VOL)
     assert diagnostics["projection_relative_residual"] < 1.0e-12
     assert diagnostics["geometry_relative_residual"] < 1.0e-12
     assert diagnostics["kernel_epsilon_m"] is None
+    assert diagnostics["matrix_free"] is True
 
 
 def test_public_hcurl_tet_interaction_names_are_exported():
