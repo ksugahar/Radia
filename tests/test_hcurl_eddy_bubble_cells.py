@@ -295,6 +295,12 @@ def test_p6_non_tet_uses_high_order_analytic_moments(
     assert info["projection_relative_residual"] < residual_limit
     assert info["subdivision_level"] == 0
     assert info["kernel_epsilon_m"] is None
+    assert info["matrix_free"] is True
+    assert info["charge_count"] <= 3 * info["subtet_count"]
+    assert (
+        info["hmatrix_operator"]["uncompressed_charge_count"]
+        > info["charge_count"]
+    )
     assert interaction.matrix[0, 0] > 0.0
 
 
@@ -398,6 +404,7 @@ def test_planar_log_interaction_agrees_for_one_quad_and_two_trigs():
     assert trig.matrix[0, 0] > 0.0
     np.testing.assert_allclose(quad.matrix, trig.matrix, rtol=1.0e-4)
     assert quad.diagnostics()["kernel_epsilon_m"] is None
+    assert quad.diagnostics()["matrix_free"] is True
     assert trig.diagnostics()["family_counts"] == {"trig": 2}
 
 

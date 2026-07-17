@@ -3601,6 +3601,40 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "monomial-weighted outer quad x the subtraction inner potential (matches the independent high-order analytic reference). "
              "ref_*_lo + ho_far_factor (<inf) enable the accuracy-preserving NEAR/FAR adaptive quadrature: far "
              "pairs (|c_a-c_b| > ho_far_factor*(size_a+size_b)) use the cheap LOW-quad plain double-Gauss.")
+        .def_static("from_local_polynomials",
+             [](F64Array cell_verts_a, int n_el,
+                I32Array charge_host_a,
+                F64Array polynomial_coefficients_a,
+                I32Array polynomial_exponents_a,
+                F64Array ref_tet_pts_a, F64Array ref_tet_w_a,
+                double eps, int leaf, double eta, bool build) {
+                 auto cell_verts = to_1d_vector<double>(cell_verts_a, "cell_verts");
+                 auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
+                 auto polynomial_coefficients = to_1d_vector<double>(
+                     polynomial_coefficients_a, "polynomial_coefficients");
+                 auto polynomial_exponents = to_1d_vector<int>(
+                     polynomial_exponents_a, "polynomial_exponents");
+                 auto ref_tet_pts = to_1d_vector<double>(ref_tet_pts_a, "ref_tet_pts");
+                 auto ref_tet_w = to_1d_vector<double>(ref_tet_w_a, "ref_tet_w");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(cell_verts), n_el, std::move(charge_host),
+                         std::move(polynomial_coefficients),
+                         std::move(polynomial_exponents),
+                         std::move(ref_tet_pts), std::move(ref_tet_w)); },
+                     eps, leaf, eta, build,
+                     "HCurl local-polynomial Gram H-matrix build failed");
+             },
+             py::arg("cell_verts"), py::arg("n_el"), py::arg("charge_host"),
+             py::arg("polynomial_coefficients"), py::arg("polynomial_exponents"),
+             py::arg("ref_tet_pts"), py::arg("ref_tet_w"),
+             py::arg("eps") = 1e-6, py::arg("leaf") = 32,
+             py::arg("eta") = 2.0, py::arg("build") = true,
+             "Create an HCurl local-polynomial Gram: each HACApK scalar charge is an arbitrary "
+             "reference-polynomial combination through degree 18.  The intended caller "
+             "rank-reveals the three retained-current blocks per sub-tet while preserving "
+             "stable original component polynomials, "
+             "then applies the final vector Gram as sum_c B_c^T G B_c without materializing it.")
         .def(py::init([](F64Array cell_nodes_a, F64Array face_nodes_a,
                          I32Array cell_vertices_a, I32Array face_vertices_a,
                          int n_el, int curve_order,
@@ -3928,6 +3962,22 @@ PYBIND11_MODULE(_radia_pybind, m) {
              },
              py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
              "Register the geometry/FESpace charge map once on the persistent C++ operator.")
+        .def("configure_vector_charge_map",
+             [](RadHACApKChargeGram& s, I32Array B_indptr_a, I32Array B_indices_a,
+                F64Array B_data_a, int n_face, int n_components) {
+                 const auto indptr = array_1d_view<int>(B_indptr_a, "B_indptr");
+                 const auto indices = array_1d_view<int>(B_indices_a, "B_indices");
+                 const auto data = array_1d_view<double>(B_data_a, "B_data");
+                 py::gil_scoped_release release;
+                 s.ConfigureVectorChargeMap(
+                     std::vector<int>(indptr.data, indptr.data + indptr.size),
+                     std::vector<int>(indices.data, indices.data + indices.size),
+                     std::vector<double>(data.data, data.data + data.size),
+                     n_face, n_components);
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"),
+             py::arg("n_face"), py::arg("n_components") = 3,
+             "Register component charge maps for a persistent sum_c B_c^T G B_c operator.")
         .def("configure_mass_matrix",
              [](RadHACApKChargeGram& s, I32Array mI_a, I32Array mJ_a,
                 F64Array mV_a, int n_face) {

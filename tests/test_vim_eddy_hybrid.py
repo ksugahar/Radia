@@ -4,6 +4,26 @@ import pytest
 import radia.vim as vim
 
 
+class _ToySymmetricOperator:
+    def __init__(self, matrix):
+        self._matrix = np.asarray(matrix, dtype=float)
+        self.shape = self._matrix.shape
+        self.dtype = self._matrix.dtype
+        self.is_hermitian = True
+
+    def matvec(self, vector):
+        return self._matrix @ vector
+
+    def matmat(self, matrix):
+        return self._matrix @ matrix
+
+    def to_dense(self):
+        return self._matrix.copy()
+
+    def stats(self):
+        return {"matrix_free": True, "backend": "toy"}
+
+
 def test_team28_skin_depth_gate_selects_volumetric_hcurl():
     gate = vim.EddySIBCApplicability(
         frequency_hz=50.0,
@@ -56,6 +76,39 @@ def test_empty_surface_basis_keeps_a_volume_only_vim_well_formed():
     assert system.block_slice("surface") == slice(1, 1)
     assert system.solve(1j * 2.0 * np.pi * 50.0, rhs).shape == (1,)
     assert system.diagnostics()["passive_blocks"] is True
+
+
+def test_matrix_free_inductance_uses_gmres_without_materializing():
+    basis = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        weights=np.ones(2),
+        current_modes=np.array(
+            [
+                [[1.0, 0.0, 0.0], [0.5, 0.0, 0.0]],
+                [[0.0, 1.0, 0.0], [0.0, 0.25, 0.0]],
+            ]
+        ),
+        names=["bulk0", "bulk1"],
+    )
+    inductance = np.array([[3.0, 0.4], [0.4, 2.0]])
+    operator = _ToySymmetricOperator(inductance)
+    system = vim.AssembleHybridVIM(
+        basis,
+        sigma=2.0,
+        interaction=lambda _left, _right: operator,
+    )
+    s = 1j * 7.0
+    rhs = np.array([1.0 + 0.5j, -0.25j])
+    expected = np.linalg.solve(
+        system.resistance + s * inductance,
+        rhs,
+    )
+
+    np.testing.assert_allclose(system.solve(s, rhs), expected, rtol=2.0e-12)
+    info = system.diagnostics()
+    assert info["inductance_matrix_free"] is True
+    assert info["inductance_operator"]["operator_block_count"] == 1
+    assert info["passive_blocks"] is True
 
 
 def test_hcurl_eddy_cln_model_preserves_vim_response_and_faraday_drive():

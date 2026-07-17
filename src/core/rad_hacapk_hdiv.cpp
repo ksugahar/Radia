@@ -888,6 +888,141 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     }
 }
 
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> cell_verts, int n_el,
+    std::vector<int> charge_host,
+    std::vector<double> polynomial_coefficients,
+    std::vector<int> polynomial_exponents,
+    std::vector<double> ref_tet_pts,
+    std::vector<double> ref_tet_w)
+    : m_n_el(n_el), m_highorder(true), m_polyCombo(true),
+      m_cellV(std::move(cell_verts)), m_host(std::move(charge_host)),
+      m_comboCoeffs(std::move(polynomial_coefficients))
+{
+    if (n_el <= 0 || m_cellV.size() != static_cast<size_t>(n_el)*12)
+        throw std::invalid_argument("HCurl polynomial Gram: invalid tetrahedron array");
+    if (polynomial_exponents.empty() || polynomial_exponents.size()%3 != 0)
+        throw std::invalid_argument("HCurl polynomial Gram: exponents must have shape (n_monomial,3)");
+    m_comboNMono = static_cast<int>(polynomial_exponents.size()/3);
+    m_comboExponents.resize(static_cast<size_t>(m_comboNMono));
+    for (int m = 0; m < m_comboNMono; ++m) {
+        auto& e = m_comboExponents[static_cast<size_t>(m)];
+        e = {polynomial_exponents[3*m], polynomial_exponents[3*m+1],
+             polynomial_exponents[3*m+2]};
+        if (e[0] < 0 || e[1] < 0 || e[2] < 0 || e[0] + e[1] + e[2] > 18)
+            throw std::invalid_argument("HCurl polynomial Gram: exponent degree must be in [0,18]");
+    }
+    m_n = static_cast<int>(m_host.size());
+    if (m_n <= 0 || m_comboCoeffs.size() != static_cast<size_t>(m_n)*m_comboNMono)
+        throw std::invalid_argument("HCurl polynomial Gram: coefficient array shape mismatch");
+    if (ref_tet_pts.empty() || ref_tet_pts.size()%3 != 0 ||
+        ref_tet_w.size() != ref_tet_pts.size()/3)
+        throw std::invalid_argument("HCurl polynomial Gram: invalid outer tetrahedron rule");
+    for (int host : m_host)
+        if (host < 0 || host >= n_el)
+            throw std::invalid_argument("HCurl polynomial Gram: charge host out of range");
+    for (double value : m_comboCoeffs)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("HCurl polynomial Gram: non-finite coefficient");
+
+    m_build_id = NextChargeGramBuildId();
+    m_kind.assign(static_cast<size_t>(m_n), 0);
+    m_expo.assign(static_cast<size_t>(m_n)*3, 0);
+    m_nmono.assign(static_cast<size_t>(m_n), 1);
+    m_hoLocalOf.assign(static_cast<size_t>(m_n), 0);
+    m_hoCellCharges.assign(static_cast<size_t>(n_el), {});
+    m_hoFaceCharges.clear();
+    for (int charge = 0; charge < m_n; ++charge) {
+        auto& group = m_hoCellCharges[static_cast<size_t>(m_host[charge])];
+        m_hoLocalOf[static_cast<size_t>(charge)] = static_cast<int>(group.size());
+        group.push_back(charge);
+    }
+    for (int charge = 0; charge < m_n; ++charge)
+        m_nmono[static_cast<size_t>(charge)] =
+            static_cast<int>(m_hoCellCharges[static_cast<size_t>(m_host[charge])].size());
+
+    const int nqt = static_cast<int>(ref_tet_w.size());
+    m_cellInv.assign(static_cast<size_t>(n_el)*9, 0.0);
+    std::vector<std::vector<rad_hdiv::Vec3>> cell_points(static_cast<size_t>(n_el));
+    std::vector<std::vector<double>> cell_weights(static_cast<size_t>(n_el));
+    std::vector<rad_hdiv::Vec3> cell_centers(static_cast<size_t>(n_el));
+    std::vector<double> cell_sizes(static_cast<size_t>(n_el), 0.0);
+    for (int cell = 0; cell < n_el; ++cell) {
+        const double* V = &m_cellV[static_cast<size_t>(cell)*12];
+        double E[9];
+        for (int row = 0; row < 3; ++row)
+            for (int col = 0; col < 3; ++col)
+                E[row*3+col] = V[3*(col+1)+row] - V[row];
+        rad_inv3x3(E, &m_cellInv[static_cast<size_t>(cell)*9]);
+        const double det = E[0]*(E[4]*E[8]-E[5]*E[7])
+                         - E[1]*(E[3]*E[8]-E[5]*E[6])
+                         + E[2]*(E[3]*E[7]-E[4]*E[6]);
+        if (!std::isfinite(det) || std::fabs(det) < 1e-300)
+            throw std::invalid_argument("HCurl polynomial Gram: degenerate tetrahedron");
+        rad_hdiv::Vec3 center = {0.0, 0.0, 0.0};
+        for (int vertex = 0; vertex < 4; ++vertex)
+            for (int k = 0; k < 3; ++k) center[k] += V[3*vertex+k]/4.0;
+        cell_centers[static_cast<size_t>(cell)] = center;
+        double radius = 0.0;
+        for (int vertex = 0; vertex < 4; ++vertex) {
+            const double dx = V[3*vertex] - center[0];
+            const double dy = V[3*vertex+1] - center[1];
+            const double dz = V[3*vertex+2] - center[2];
+            radius = std::max(radius, std::sqrt(dx*dx + dy*dy + dz*dz));
+        }
+        cell_sizes[static_cast<size_t>(cell)] = radius;
+        auto& points = cell_points[static_cast<size_t>(cell)];
+        auto& weights = cell_weights[static_cast<size_t>(cell)];
+        points.resize(static_cast<size_t>(nqt));
+        weights.resize(static_cast<size_t>(nqt));
+        for (int q = 0; q < nqt; ++q) {
+            const double xi0 = ref_tet_pts[3*q];
+            const double xi1 = ref_tet_pts[3*q+1];
+            const double xi2 = ref_tet_pts[3*q+2];
+            for (int k = 0; k < 3; ++k)
+                points[static_cast<size_t>(q)][k] = V[k]
+                    + xi0*(V[3+k]-V[k]) + xi1*(V[6+k]-V[k])
+                    + xi2*(V[9+k]-V[k]);
+            weights[static_cast<size_t>(q)] = ref_tet_w[static_cast<size_t>(q)]*std::fabs(det);
+        }
+    }
+
+    auto polynomial_at_reference = [&](int charge, const double xi[3]) {
+        const double* coeff = &m_comboCoeffs[static_cast<size_t>(charge)*m_comboNMono];
+        double value = 0.0;
+        for (int m = 0; m < m_comboNMono; ++m) {
+            const auto& e = m_comboExponents[static_cast<size_t>(m)];
+            value += coeff[m] * rad_ipow(xi[0], e[0])
+                              * rad_ipow(xi[1], e[1])
+                              * rad_ipow(xi[2], e[2]);
+        }
+        return value;
+    };
+
+    m_cent.assign(static_cast<size_t>(m_n)*3, 0.0);
+    m_size.assign(static_cast<size_t>(m_n), 0.0);
+    m_qp.resize(static_cast<size_t>(m_n));
+    m_qw.resize(static_cast<size_t>(m_n));
+    for (int charge = 0; charge < m_n; ++charge) {
+        const int host = m_host[charge];
+        const auto& center = cell_centers[static_cast<size_t>(host)];
+        m_cent[3*charge] = center[0];
+        m_cent[3*charge+1] = center[1];
+        m_cent[3*charge+2] = center[2];
+        m_size[static_cast<size_t>(charge)] = cell_sizes[static_cast<size_t>(host)];
+        m_qp[static_cast<size_t>(charge)] = cell_points[static_cast<size_t>(host)];
+        auto& weighted = m_qw[static_cast<size_t>(charge)];
+        weighted.resize(static_cast<size_t>(nqt));
+        for (int q = 0; q < nqt; ++q) {
+            const double xi[3] = {ref_tet_pts[3*q], ref_tet_pts[3*q+1], ref_tet_pts[3*q+2]};
+            weighted[static_cast<size_t>(q)] = cell_weights[static_cast<size_t>(host)][static_cast<size_t>(q)]
+                * polynomial_at_reference(charge, xi);
+        }
+    }
+    m_hoAnalyticBlock = true;
+    m_ho_far_factor = 1e30;
+}
+
 // ---- CURVED HIGH-ORDER (isoparametric P2) constructor: monomial-charge Gram on a mesh.Curve(2) geometry. ----
 // Mirrors the flat HO build but uses the curved P2 map + curved measure for the OUTER quad (xi^expo folded at
 // the REFERENCE point, no affine inverse) and the curved Duffy for the INNER potential (PhiInner -> PhiAtHO_
@@ -1098,6 +1233,16 @@ double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
         const double l0 = Inv[0]*d[0]+Inv[1]*d[1]+Inv[2]*d[2];
         const double l1 = Inv[3]*d[0]+Inv[4]*d[1]+Inv[5]*d[2];
         const double l2 = Inv[6]*d[0]+Inv[7]*d[1]+Inv[8]*d[2];
+        if (m_polyCombo) {
+            const double* coeff = &m_comboCoeffs[(size_t)charge*m_comboNMono];
+            double value = 0.0;
+            for (int m = 0; m < m_comboNMono; ++m) {
+                const auto& ce = m_comboExponents[(size_t)m];
+                value += coeff[m] * rad_ipow(l0, ce[0]) * rad_ipow(l1, ce[1])
+                                  * rad_ipow(l2, ce[2]);
+            }
+            return value;
+        }
         return rad_ipow(l0, e[0]) * rad_ipow(l1, e[1]) * rad_ipow(l2, e[2]);
     }
     const double* V = &m_faceV[(size_t)host*9];             // tri face: lam1^i lam2^j (in-plane ref coords)
@@ -1225,6 +1370,26 @@ void RadHACApKChargeGram::PhiInnerHOHostVec(
     int kind, int host, const double p[3], const std::vector<int>& charges, double* values) const
 {
     if (charges.empty()) return;
+    if (m_polyCombo) {
+        if (kind != 0) throw std::logic_error("HCurl polynomial Gram supports cell charges only");
+        double V[4][3];
+        const double* stored = &m_cellV[(size_t)host*12];
+        for (int i = 0; i < 4; ++i)
+            for (int k = 0; k < 3; ++k) V[i][k] = stored[3*i+k];
+        thread_local std::vector<double> moments;
+        moments.resize((size_t)m_comboNMono);
+        rad_hdiv::TetReferencePotentialMoments(
+            V, p, m_comboExponents, moments.data());
+        for (size_t local = 0; local < charges.size(); ++local) {
+            const int charge = charges[local];
+            const double* coeff = &m_comboCoeffs[(size_t)charge*m_comboNMono];
+            double value = 0.0;
+            for (int m = 0; m < m_comboNMono; ++m)
+                value += coeff[m]*moments[(size_t)m];
+            values[local] = value;
+        }
+        return;
+    }
     int max_degree = 0;
     for (int src : charges) max_degree = std::max(max_degree, m_hoPolyDegree[src]);
 
@@ -3977,15 +4142,36 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
         std::vector<double> ab = QuadBlockHOTet(kindA, hostA, kindB, hostB);
         const bool direct_curved = m_curved && CurvedDirectEnabled() &&
                                    !CurvedHostsTouch(kindA, hostA, kindB, hostB);
+        const bool same_host = kindA == kindB && hostA == hostB;
         std::vector<double> ba;
-        if (!direct_curved) ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
+        if (!direct_curved && !same_host)
+            ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
         std::vector<double> sym((size_t)nA*nB);
         for (int localA = 0; localA < nA; ++localA)
             for (int localB = 0; localB < nB; ++localB)
                 sym[(size_t)localA*nB + localB] = direct_curved
                     ? ab[(size_t)localA*nB + localB]
-                    : 0.5*(ab[(size_t)localA*nB + localB] + ba[(size_t)localB*nA + localA]);
+                    : 0.5*(ab[(size_t)localA*nB + localB] +
+                          (same_host ? ab[(size_t)localB*nA + localA]
+                                     : ba[(size_t)localB*nA + localA]));
         it = s_ho_tet_sym_block_cache.emplace(key, std::move(sym)).first;
+        if (!same_host) {
+            // The symmetrized reverse block is exactly the transpose.  Store
+            // it now so a later H-matrix leaf with the opposite cluster
+            // ordering does not repeat both expensive directed integrations.
+            const HexBlockKey reverse_key{kindB, hostB, kindA, hostA, 0};
+            if (s_ho_tet_sym_block_cache.find(reverse_key) ==
+                s_ho_tet_sym_block_cache.end()) {
+                std::vector<double> reverse((size_t)nB*nA);
+                const auto& forward = it->second;
+                for (int localA = 0; localA < nA; ++localA)
+                    for (int localB = 0; localB < nB; ++localB)
+                        reverse[(size_t)localB*nA + localA] =
+                            forward[(size_t)localA*nB + localB];
+                s_ho_tet_sym_block_cache.emplace(reverse_key, std::move(reverse));
+                it = s_ho_tet_sym_block_cache.find(key);
+            }
+        }
     } else HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockHits);
     return it->second;
 }
@@ -4951,7 +5137,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
                  return std::sqrt(dx*dx + dy*dy + dz*dz) >
                         m_ho_far_factor * (m_size[a] + m_size[b]); }();
         double base;
-        const bool use_host_block = m_curved ||
+        const bool use_host_block = m_polyCombo || m_curved ||
             (m_hoAnalyticBlock && HOAnalyticBlockEnabled());
         if (use_host_block && !far_pair) {
             // Flat order<=2 and curved P2 NEAR/self: all monomial charges on a host share the geometry and
@@ -5386,37 +5572,8 @@ void RadHACApKChargeGram::ConfigureChargeMap(
     std::vector<int> B_indptr, std::vector<int> B_indices,
     std::vector<double> B_data, int n_face)
 {
-    if (n_face < 0 || static_cast<int>(B_indptr.size()) != m_ndof + 1)
-        throw std::runtime_error("ConfigureChargeMap: B row count must equal charge-Gram ndof");
-    if (B_indices.size() != B_data.size() || B_indptr.empty() || B_indptr.front() != 0 ||
-        B_indptr.back() != static_cast<int>(B_data.size()))
-        throw std::runtime_error("ConfigureChargeMap: invalid B CSR arrays");
-    for (size_t row = 0; row + 1 < B_indptr.size(); ++row) {
-        if (B_indptr[row] > B_indptr[row + 1])
-            throw std::runtime_error("ConfigureChargeMap: B_indptr must be nondecreasing");
-    }
-    for (int col : B_indices) {
-        if (col < 0 || col >= n_face)
-            throw std::runtime_error("ConfigureChargeMap: B column index out of range");
-    }
-    if (m_operatorMassConfigured && m_operatorNFace != n_face)
-        throw std::runtime_error("ConfigureChargeMap: n_face differs from configured mass matrix");
-    m_operatorBTIndptr.assign((size_t)n_face + 1, 0);
-    for (int col : B_indices) ++m_operatorBTIndptr[(size_t)col + 1];
-    for (int col = 0; col < n_face; ++col)
-        m_operatorBTIndptr[(size_t)col + 1] += m_operatorBTIndptr[(size_t)col];
-    m_operatorBTIndices.resize(B_indices.size());
-    m_operatorBTData.resize(B_data.size());
-    std::vector<int> bt_cursor = m_operatorBTIndptr;
-    for (int row = 0; row < m_ndof; ++row) {
-        for (int k = B_indptr[(size_t)row]; k < B_indptr[(size_t)row + 1]; ++k) {
-            const int col = B_indices[(size_t)k];
-            const int dst = bt_cursor[(size_t)col]++;
-            m_operatorBTIndices[(size_t)dst] = row;
-            m_operatorBTData[(size_t)dst] = B_data[(size_t)k];
-        }
-    }
-    m_operatorConstrained.assign((size_t)n_face, 0);
+    ConfigureVectorChargeMap(
+        std::move(B_indptr), std::move(B_indices), std::move(B_data), n_face, 1);
     if (!m_image_masks.empty() && m_kind.size() == (size_t)m_ndof) {
         const int dimension = m_d2 ? 2 : 3;
         bool positive_axis[3] = {false, false, false};
@@ -5453,14 +5610,64 @@ void RadHACApKChargeGram::ConfigureChargeMap(
                 on_positive_plane = on_positive_plane || on_plane;
             }
             if (!on_positive_plane) continue;
-            for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k)
-                if (std::fabs(B_data[(size_t)k]) > 0.0)
-                    m_operatorConstrained[(size_t)B_indices[(size_t)k]] = 1;
+            for (int k = m_operatorBIndptr[(size_t)a];
+                 k < m_operatorBIndptr[(size_t)a + 1]; ++k)
+                if (std::fabs(m_operatorBData[(size_t)k]) > 0.0)
+                    m_operatorConstrained[(size_t)m_operatorBIndices[(size_t)k]] = 1;
         }
     }
+}
+
+void RadHACApKChargeGram::ConfigureVectorChargeMap(
+    std::vector<int> B_indptr, std::vector<int> B_indices,
+    std::vector<double> B_data, int n_face, int n_components)
+{
+    if (n_face < 0 || n_components < 1 ||
+        static_cast<int>(B_indptr.size()) != n_components * m_ndof + 1)
+        throw std::runtime_error(
+            "ConfigureVectorChargeMap: B row count must equal components times charge-Gram ndof");
+    if (B_indices.size() != B_data.size() || B_indptr.empty() || B_indptr.front() != 0 ||
+        B_indptr.back() != static_cast<int>(B_data.size()))
+        throw std::runtime_error("ConfigureVectorChargeMap: invalid B CSR arrays");
+    for (size_t row = 0; row + 1 < B_indptr.size(); ++row) {
+        if (B_indptr[row] > B_indptr[row + 1])
+            throw std::runtime_error("ConfigureVectorChargeMap: B_indptr must be nondecreasing");
+    }
+    for (int col : B_indices) {
+        if (col < 0 || col >= n_face)
+            throw std::runtime_error("ConfigureVectorChargeMap: B column index out of range");
+    }
+    if (m_operatorMassConfigured && m_operatorNFace != n_face)
+        throw std::runtime_error(
+            "ConfigureVectorChargeMap: n_face differs from configured mass matrix");
+    m_operatorBTIndptr.assign((size_t)n_components * (size_t)n_face + 1, 0);
+    for (int component = 0; component < n_components; ++component)
+        for (int row = 0; row < m_ndof; ++row)
+            for (int k = B_indptr[(size_t)component * (size_t)m_ndof + (size_t)row];
+                 k < B_indptr[(size_t)component * (size_t)m_ndof + (size_t)row + 1]; ++k)
+                ++m_operatorBTIndptr[(size_t)component * (size_t)n_face +
+                                     (size_t)B_indices[(size_t)k] + 1];
+    for (size_t row = 0; row + 1 < m_operatorBTIndptr.size(); ++row)
+        m_operatorBTIndptr[row + 1] += m_operatorBTIndptr[row];
+    m_operatorBTIndices.resize(B_indices.size());
+    m_operatorBTData.resize(B_data.size());
+    std::vector<int> bt_cursor = m_operatorBTIndptr;
+    for (int component = 0; component < n_components; ++component)
+        for (int row = 0; row < m_ndof; ++row) {
+            const size_t flat_row = (size_t)component * (size_t)m_ndof + (size_t)row;
+            for (int k = B_indptr[flat_row]; k < B_indptr[flat_row + 1]; ++k) {
+                const int col = B_indices[(size_t)k];
+                const int dst = bt_cursor[(size_t)component * (size_t)n_face +
+                                          (size_t)col]++;
+                m_operatorBTIndices[(size_t)dst] = row;
+                m_operatorBTData[(size_t)dst] = B_data[(size_t)k];
+            }
+        }
+    m_operatorConstrained.assign((size_t)n_face, 0);
     m_operatorBIndptr = std::move(B_indptr);
     m_operatorBIndices = std::move(B_indices);
     m_operatorBData = std::move(B_data);
+    m_operatorChargeComponents = n_components;
     m_operatorNFace = n_face;
     m_operatorChargeConfigured = true;
 }
@@ -5599,25 +5806,32 @@ void RadHACApKChargeGram::ApplyConfiguredDemagImpl(
     static thread_local std::vector<double> Gq;
     q.resize((size_t)m_ndof);
     Gq.resize((size_t)m_ndof);
-    std::fill(Gq.begin(), Gq.end(), 0.0);
     double* const q_data = q.data();
-    ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t a) {
-        double sum = 0.0;
-        for (int k = m_operatorBIndptr[a]; k < m_operatorBIndptr[a + 1]; ++k)
-            sum += m_operatorBData[(size_t)k] * x[(size_t)m_operatorBIndices[(size_t)k]];
-        q_data[a] = sum;
-    });
-    if (symmetric) MatVecSym(q, Gq);
-    else MatVec(q, Gq);
-    const double* const Gq_data = Gq.data();
-    ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](size_t f) {
-        double sum = 0.0;
-        for (int k = m_operatorBTIndptr[f]; k < m_operatorBTIndptr[f + 1]; ++k)
-            sum += m_operatorBTData[(size_t)k] * Gq_data[(size_t)m_operatorBTIndices[(size_t)k]];
-        const double value = m_operatorConstrained[f] ? 0.0 : scale * sum;
-        if (add) y[f] += value;
-        else y[f] = value;
-    });
+    if (!add) std::fill(y, y + m_operatorNFace, 0.0);
+    for (int component = 0; component < m_operatorChargeComponents; ++component) {
+        const size_t row_offset = (size_t)component * (size_t)m_ndof;
+        ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t a) {
+            double sum = 0.0;
+            const size_t row = row_offset + a;
+            for (int k = m_operatorBIndptr[row]; k < m_operatorBIndptr[row + 1]; ++k)
+                sum += m_operatorBData[(size_t)k] *
+                       x[(size_t)m_operatorBIndices[(size_t)k]];
+            q_data[a] = sum;
+        });
+        std::fill(Gq.begin(), Gq.end(), 0.0);
+        if (symmetric) MatVecSym(q, Gq);
+        else MatVec(q, Gq);
+        const double* const Gq_data = Gq.data();
+        const size_t bt_offset = (size_t)component * (size_t)m_operatorNFace;
+        ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](size_t f) {
+            double sum = 0.0;
+            const size_t row = bt_offset + f;
+            for (int k = m_operatorBTIndptr[row]; k < m_operatorBTIndptr[row + 1]; ++k)
+                sum += m_operatorBTData[(size_t)k] *
+                       Gq_data[(size_t)m_operatorBTIndices[(size_t)k]];
+            if (!m_operatorConstrained[f]) y[f] += scale * sum;
+        });
+    }
 }
 
 std::vector<double> RadHACApKChargeGram::ApplyConfiguredGeometryMass(
