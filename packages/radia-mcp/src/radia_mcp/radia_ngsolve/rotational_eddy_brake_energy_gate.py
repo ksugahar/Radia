@@ -1811,6 +1811,183 @@ def _floquet_pair_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _rotating_sliding_interface_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "rotating_sliding_interface_sector_pitch_azimuth_interpolation_frame_periodicity_mesh_torque_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        pitch = float(identity.get("sector_pitch_deg"))
+        result_pitch = float(identity.get("result_sector_pitch_deg"))
+        count = int(identity.get("sector_count"))
+        result_count = int(identity.get("result_sector_count"))
+        origin = float(identity.get("azimuth_origin_deg"))
+        result_origin = float(identity.get("result_azimuth_origin_deg"))
+        phase = float(identity.get("periodic_phase_deg"))
+        result_phase = float(identity.get("result_periodic_phase_deg"))
+        samples = [
+            float(value) for value in identity.get("azimuth_samples_deg", [])
+        ]
+        result_samples = [
+            float(value) for value in identity.get("result_azimuth_samples_deg", [])
+        ]
+        torque = [float(value) for value in identity.get("torque_nm", [])]
+        result_torque = [
+            float(value) for value in identity.get("result_torque_nm", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sliding_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "sector_sliding_generation",
+                "azimuth_sliding_generation",
+                "interpolation_sliding_generation",
+                "frame_sliding_generation",
+                "periodicity_sliding_generation",
+                "mesh_sliding_generation",
+                "result_sliding_generation",
+            )
+        )
+        and all(
+            math.isfinite(value)
+            for value in (pitch, result_pitch, origin, result_origin, phase, result_phase)
+        )
+        and pitch > 0.0
+        and count > 1
+        and math.isclose(pitch * count, 360.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_pitch == pitch
+        and result_count == count
+        and 0.0 <= origin < pitch
+        and result_origin == origin
+        and bool(str(identity.get("source_interface_tag") or ""))
+        and bool(str(identity.get("target_interface_tag") or ""))
+        and identity.get("source_interface_tag") != identity.get("target_interface_tag")
+        and identity.get("result_source_interface_tag")
+        == identity.get("source_interface_tag")
+        and identity.get("result_target_interface_tag")
+        == identity.get("target_interface_tag")
+        and identity.get("interpolation") == "conservative_mortar_azimuth"
+        and identity.get("result_interpolation") == identity.get("interpolation")
+        and identity.get("rotor_frame") == "rotor_cylindrical"
+        and identity.get("result_rotor_frame") == identity.get("rotor_frame")
+        and result_phase == phase
+        and len(samples) >= 3
+        and samples[0] == origin
+        and math.isclose(samples[-1] - samples[0], pitch, abs_tol=1.0e-12)
+        and all(right > left for left, right in zip(samples, samples[1:]))
+        and result_samples == samples
+        and len(torque) == len(samples)
+        and all(math.isfinite(value) for value in torque)
+        and math.isclose(torque[0], torque[-1], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_torque == torque
+        and _is_sha256(str(identity.get("sliding_mesh_sha256") or ""))
+        and identity.get("result_sliding_mesh_sha256")
+        == identity.get("sliding_mesh_sha256")
+        and _is_sha256(str(identity.get("torque_result_sha256") or ""))
+        and identity.get("accepted_torque_result_sha256")
+        == identity.get("torque_result_sha256")
+    )
+
+
+def _acoustic_radiation_impedance_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "acoustic_radiation_impedance_modal_trace_reference_area_pressure_velocity_power_frequency_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        modes = [int(value) for value in identity.get("mode_indices", [])]
+        result_modes = [
+            int(value) for value in identity.get("result_mode_indices", [])
+        ]
+        area = float(identity.get("reference_area_m2"))
+        result_area = float(identity.get("result_reference_area_m2"))
+        frequencies = [
+            float(value) for value in identity.get("frequency_grid_hz", [])
+        ]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+        impedance = [
+            [float(value) for value in row]
+            for row in identity.get("radiation_impedance_ri", [])
+        ]
+        result_impedance = [
+            [float(value) for value in row]
+            for row in identity.get("result_radiation_impedance_ri", [])
+        ]
+        power = [
+            float(value) for value in identity.get("outward_power_flux_w", [])
+        ]
+        result_power = [
+            float(value)
+            for value in identity.get("result_outward_power_flux_w", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("radiation_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "modal_radiation_generation",
+                "trace_radiation_generation",
+                "area_radiation_generation",
+                "convention_radiation_generation",
+                "power_radiation_generation",
+                "frequency_radiation_generation",
+                "result_radiation_generation",
+            )
+        )
+        and bool(str(identity.get("modal_basis_id") or ""))
+        and identity.get("result_modal_basis_id") == identity.get("modal_basis_id")
+        and bool(modes)
+        and all(value > 0 for value in modes)
+        and len(set(modes)) == len(modes)
+        and result_modes == modes
+        and identity.get("trace_projection") == "l2_p1_boundary"
+        and identity.get("result_trace_projection")
+        == identity.get("trace_projection")
+        and math.isfinite(area)
+        and area > 0.0
+        and result_area == area
+        and identity.get("pressure_velocity_convention")
+        == "outward_positive_velocity"
+        and identity.get("result_pressure_velocity_convention")
+        == identity.get("pressure_velocity_convention")
+        and len(frequencies) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(impedance) == len(power) == len(frequencies)
+        and all(
+            len(row) == 2
+            and all(math.isfinite(value) for value in row)
+            and row[0] >= 0.0
+            for row in impedance
+        )
+        and result_impedance == impedance
+        and all(math.isfinite(value) and value >= 0.0 for value in power)
+        and result_power == power
+        and _is_sha256(str(identity.get("radiation_mesh_sha256") or ""))
+        and identity.get("result_radiation_mesh_sha256")
+        == identity.get("radiation_mesh_sha256")
+        and _is_sha256(str(identity.get("radiation_result_sha256") or ""))
+        and identity.get("accepted_radiation_result_sha256")
+        == identity.get("radiation_result_sha256")
+    )
+
+
 def _thermoelastic_frequency_identity_ok(summary: dict[str, Any]) -> bool:
     identity = summary.get(
         "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
@@ -2387,6 +2564,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "field_circuit_uses_current_terminals_orientation_sign_gauge_power_mesh_and_solution": (
             _field_circuit_power_identity_ok(summary)
+        ),
+        "rotating_sliding_interface_uses_current_sector_azimuth_interpolation_frame_periodicity_mesh_and_torque": (
+            _rotating_sliding_interface_identity_ok(summary)
+        ),
+        "acoustic_radiation_uses_current_modes_trace_area_convention_frequency_power_and_result": (
+            _acoustic_radiation_impedance_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
