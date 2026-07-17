@@ -100,6 +100,8 @@ from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noq
 from ._capabilities import HDivCapability, hdiv_capabilities  # noqa: F401
 from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC eddy-current VIM primitives)
     MU0,
+    SkinDepth,
+    EddySIBCApplicability,
     EddyTracePolynomialDim,
     EddyParentOrderLedger,
     SampledCurrentBasis,
@@ -116,7 +118,9 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     EddyReductionPlan,
     EddyBubbleDecomposition,
     EddyBubbleHCurlBasis,
+    HCurlCellFamilyInventory,
     EddyBubbleReduction,
+    NgsolveHCurlCellFamilies,
     ClassifyNgsolveEddyTopology,
     NgsolveEddyDofPolicy,
     NgsolveEddyBubbleReduction,
@@ -169,6 +173,8 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     CoupleEddyBubbleHCurlBasisWithHDivMMM,
     MixedGalerkinOrthogonalization,
     HybridVIMSystem,
+    HCurlEddyCLNModel,
+    HCurlEddyCLNFromVIM,
     AssembleHybridVIM,
     TopologyAwareHybridVIM,
     NgsolveTopologyAwareHybridVIM,
@@ -180,6 +186,16 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     SIBCSchurTerminationImpedance,
     SIBCSchurTerminationAdmittance,
     ExternalVectorPotentialRHS,
+)
+from ._hcurl_tet_interaction import (  # noqa: F401
+    HCurlTetVolumeInteraction,
+    HCurlCellVolumeInteraction,
+    NgsolveHCurlTetVolumeInteraction,
+    NgsolveHCurlCellVolumeInteraction,
+)
+from ._hcurl_planar_interaction import (  # noqa: F401
+    HCurlPlanarVolumeInteraction,
+    NgsolveHCurlPlanarVolumeInteraction,
 )
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
@@ -295,14 +311,17 @@ __all__ = [
     "CoupledBody", "SolveCoupled", "FieldFromCoupledSolution",
     "CoupledHistoryBody", "SolveCoupledHysteresis", "FieldFromCoupledHysteresis",
     "HDivCapability", "hdiv_capabilities",
-    "MU0", "EddyTracePolynomialDim", "EddyParentOrderLedger",
+    "MU0", "SkinDepth", "EddySIBCApplicability",
+    "EddyTracePolynomialDim", "EddyParentOrderLedger",
     "SampledCurrentBasis", "SampledMagnetizationBasis",
     "VolumeCurrentBasis", "MagnetizationBasis", "SurfaceOmegaBasis",
     "EddyFaceTopology", "EddyConductorGraphEdge", "EddyConductorCycle",
     "EddyConductorGraph", "EddyMeshTopology", "EddyDofPolicy",
     "EddyReductionPlan", "EddyBubbleDecomposition", "EddyBubbleHCurlBasis",
+    "HCurlCellFamilyInventory",
     "EddyBubbleReduction",
     "ClassifyNgsolveEddyTopology", "NgsolveEddyDofPolicy", "NgsolveEddyBubbleReduction",
+    "NgsolveHCurlCellFamilies",
     "NgsolveEddyBubbleHCurlBasis",
     "NgsolveBridgeCycleCurrentBasis", "SampleNgsolveVectorCFs", "NgsolveVolumeCurrentBasis",
     "NgsolveMagnetizationBasis", "NgsolveHDivMagnetizationBasis",
@@ -318,6 +337,10 @@ __all__ = [
     "BlockKrylovBasis", "NgsolveBlockKrylovBasis",
     "NgsolveOperatorBlockKrylovBasis", "NgsolveStaticCondensedBlockKrylovBasis",
     "SampledLaplaceInteraction", "ReducedInteractionMatrix", "HybridVIMSystem",
+    "HCurlTetVolumeInteraction", "HCurlCellVolumeInteraction",
+    "NgsolveHCurlTetVolumeInteraction", "NgsolveHCurlCellVolumeInteraction",
+    "HCurlPlanarVolumeInteraction", "NgsolveHCurlPlanarVolumeInteraction",
+    "HCurlEddyCLNModel", "HCurlEddyCLNFromVIM",
     "CurrentMagneticFluxDensitySamples", "MagnetizationCurrentCoupling",
     "EVRSTMethodAlgebra", "ReducedPortAdmittance", "ReducedPortImpedance",
     "SharedMeshMaterialModel", "HCurlVIMHDivMMMSolution",

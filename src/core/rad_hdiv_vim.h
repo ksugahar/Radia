@@ -48,6 +48,22 @@ void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],
                               double out[84]);                                    /* total-degree <= 6 moments */
+/* Reduced HCurl-VIM vector-potential Gram on affine tetrahedra.
+ *
+ * Each vector mode is supplied as three polynomials in the tetrahedron's
+ * reference coordinates (lambda1,lambda2,lambda3).  The source integral uses
+ * analytic reference-monomial Newton potentials through total degree 18;
+ * only the smooth outer integral uses the caller-supplied tetrahedron rule.
+ * coefficients layout: [mode][cell][monomial][component].  The returned
+ * row-major matrix includes 1/(4*pi), but not permeability.
+ */
+std::vector<double> TetHCurlReducedGram(
+    const std::vector<double>& cell_verts,
+    const std::vector<std::array<int,3>>& exponents,
+    const std::vector<double>& coefficients,
+    int n_modes,
+    const std::vector<double>& ref_points,
+    const std::vector<double>& ref_weights);
 void TriPotentialMomentsUpTo4(const double V[3][3], const double r[3],
                               double out[35]);                                    /* total-degree <= 4 moments */
 void TriPotentialMomentsUpTo2(const double V[3][3], const double r[3],
@@ -73,14 +89,16 @@ void ClosestPointTet(const double V[4][3], const double p[3], double out[3]);
  * 0,1,2 ; mid-edges 3=(0-1),4=(1-2),5=(2-0)); gl/gw = an nq-point Gauss-Legendre rule on [0,1]. */
 void ClosestRefTri(const double nodes[6][3], const double p[3], double xi0[2]);
 double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double p[3],
-                          const double* gl, const double* gw, int nq);
+                          const double* gl, const double* gw, int nq,
+                          bool include_measure = true);
 
 /* CURVED (isoparametric P2) tetrahedron VOLUME-charge support.  nodes = 10x3 P2 nodes (corners 0,1,2,3 ;
  * mid-edges 4=(0-1),5=(1-2),6=(2-0),7=(0-3),8=(1-3),9=(2-3)).  CurvedTetPotential: INT_curvedtet
  * xi^e0 eta^e1 zeta^e2 / |p-X(xi)| dV_curved via the reference Duffy from xi0=ClosestRefTet. */
 void ClosestRefTet(const double nodes[10][3], const double p[3], double xi0[3]);
 double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, const double p[3],
-                          const double* gl, const double* gw, int nq);
+                          const double* gl, const double* gw, int nq,
+                          bool include_measure = true);
 
 /* OUTER-quadrature helpers for the curved charge Gram: curved physical point X(xi) + curved MEASURE (area
  * element dA = |Xu x Xv| for a P2 face, volume element dV = |det dX/dxi| for a P2 tet) at a reference point. */

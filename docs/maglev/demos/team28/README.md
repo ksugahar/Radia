@@ -3,7 +3,8 @@
 **Result (verified 2026-06-04; external-reference validation + force-convention
 fix 2026-06-20):** a 6-stage Cauer Ladder Network (CLN) reduced model
 reproduces the **TEAM Problem 28 electrodynamic-levitation Lorentz force vs
-height** to better than 0.1% (max |CLN - full-FEM| = 5e-4 N over the sweep),
+height** with max |CLN - repo full-FEM| = 1.2e-6 N over the sweep.  The max
+|CLN - independent reference curve| is 4.7e-4 N,
 and the physically-correct levitation equilibrium (where the time-averaged
 lift equals the disk weight 1.055 N) lands at **absolute disk-bottom height
 z = 11.0 mm** -- matching the **published measured steady-state levitation
@@ -63,6 +64,146 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | 3 | -2.196 | 0.14 % |
 | 5 | -2.19253 | 0.000 % |
 
+## HCurl Eddy Bubble + CLN production route
+
+HCurl Eddy Bubble and CLN are consecutive reductions, not competing solvers.
+The intended 3-D route is
+
+    HCurl(p=6) parent
+      -> face-adjacency and conductor-cycle protection
+      -> EVRS spatial basis (HCurl Eddy Bubble)
+      -> passive R, L, P descriptor
+      -> CLN / constant-basis position interpolation
+      -> force and motion coupling
+
+The topology-aware parent reduction now covers every NGSolve HCurl volume-cell
+family used by this route.  All six p=6 single-cell parents are exercised by
+the implementation tests; mixed-cell meshes are inventoried per family before
+the reduction.
+
+| dimension | NGSolve cell | protected interface | reduced current | VIM interaction |
+|---:|---|---|---|---|
+| 3-D | TET | face | three-component `curl(T)` | affine analytic moments / exact P2 curved Duffy |
+| 3-D | HEX | face | three-component `curl(T)` | six affine sub-tetrahedra |
+| 3-D | PRISM / WEDGE | face | three-component `curl(T)` | three affine sub-tetrahedra |
+| 3-D | PYRAMID | face | three-component `curl(T)` | two affine sub-tetrahedra |
+| 2-D | TRIG | edge | out-of-plane `Jz` | planar `-log(r)/(2 pi)` interaction |
+| 2-D | QUAD | edge | out-of-plane `Jz` | planar `-log(r)/(2 pi)` interaction |
+
+`NgsolveHCurlCellFamilies` records this contract, while
+`NgsolveHCurlCellVolumeInteraction` and
+`NgsolveHCurlPlanarVolumeInteraction` select the dimensionally correct
+epsilon-free kernel.  The 2-D path never falls back to the sampled 3-D
+Laplace kernel.  Its diagnostics also report net current because an absolute
+2-D inductance requires a consistent return-current/gauge convention.
+
+The non-tetrahedral p=6 analytic path uses a tetrahedral Bernstein fit and an
+exact conversion to reference monomials.  Radia's analytic Newton-potential
+moments now extend through total degree 18.  The automatic family degrees are
+`p-1` for TET, `2p` for WEDGE, and `3p` for HEX/PYRAMID.  The p=6 acceptance
+results are:
+
+| cell | analytic degree | projection residual | canonical sub-tets |
+|---|---:|---:|---:|
+| HEX | 18 | `1.90e-11` | 6 |
+| WEDGE | 12 | `1.77e-13` | 3 |
+| PYRAMID | 18 | `4.72e-5` | 2 |
+
+PYRAMID modes are rational at the apex rather than finite polynomials.  The
+default `1e-4` projection gate accepts the two-sub-tet degree-18 model.  A
+strict `1e-8` projection gate is also available: apex-only midpoint refinement
+reaches `9.34e-9` at level 8 with 114 leaf tetrahedra.  This strict setting is
+an accuracy option, not the dense-Gram default.  The outer 15- and 125-point
+rules on the p=6 HEX cell differ by `1.09e-4`; `outer_quad=5` is therefore the
+explicit convergence check above the default 15-point rule.
+
+Curved P2 tetrahedra no longer pass through a planarized sub-tet model.  The
+curl-Piola identity is used in the form
+`K(xi) = curl(T)(X(xi))*abs(det(dX/dxi))`; both physical measures are then
+already contained in the two reference densities.  Radia projects `K` in the
+reference tetrahedron and evaluates the Laplace distance on the exact P2 map
+with the existing curved Duffy/H-matrix kernel.  On the 102-tet curved-sphere
+regression at HCurl p=2, the 1020 scalar reference charges have current
+projection residual `4.55e-16` and NGSolve-to-Radia geometry residual
+`3.55e-16`; the reduced Gram is positive and has no diagonal epsilon.  The
+production curved default uses the 125-point outer rule and eight-point
+one-dimensional Duffy rule.
+
+Warped HEX/WEDGE/PYRAMID cells retain the common analytic sub-tet kernel, but
+now use uniform h refinement until both the current and geometry residuals
+pass.  In the warped-HEX regression, one refinement changes 6 to 48 leaves,
+reduces the current residual from `3.27e-4` to `8.63e-6`, and reduces the
+geometry residual from `1.56e-2` to `6.84e-3`; the resulting Gram is positive.
+The work guard is based on both leaf count and
+`leaf_count^2 * monomial_count`, so a high-degree request cannot silently
+expand into an impractical dense moment contraction.
+
+Parent orders above six are residual-controlled rather than rejected.  For a
+p=7 HEX parent the formal degree is 21; the production path caps analytic
+moments at degree 18 and accepts the unrefined six-sub-tet representation at a
+measured residual of `3.54e-5`.  A tighter gate selects uniform h refinement.
+Thus p=6 remains a studied parent order, not a hard implementation ceiling.
+
+SIBC selection has two gates.  A conductor-air/exterior face is only a
+topological SIBC *candidate*.  The half-space model is enabled only when the
+local/body thickness is sufficiently larger than the skin depth.  For the
+TEAM 28 aluminium disk at 50 Hz, the skin depth is 12.21 mm and the disk is
+only 3 mm thick (`t/delta = 0.246`).  Therefore all 196 air-facing candidate
+faces remain in the **volumetric HCurl-VIM** path; no SIBC mode is selected.
+
+The committed structural acceptance builds a real 3-D disk mesh and obtains:
+
+| quantity | value |
+|---|---:|
+| HCurl parent | p=6 |
+| parent DoF | 22,814 |
+| EVRS modes | 6 |
+| conductor-graph cycle modes | 130 |
+| selected SIBC modes | 0 |
+| estimated retained modes | 136 (0.596%) |
+
+`radia.vim.HCurlEddyCLNFromVIM` is the handoff from the spatially reduced VIM
+to the passive CLN descriptor.  `radia.maglev.MovingHCurlCLNFamily` enforces
+the constant-basis condition before interpolating `R(z)`, `L(z)`, and `P(z)`;
+the convex interpolation preserves passivity.
+
+The fixed-position 3-D HCurl-VIM force gate now passes without a kernel
+epsilon.  Each reduced `curl(T)` mode is projected exactly to degree-5
+reference polynomials, the tetrahedron self interaction uses analytic moments
+from the shared degree-18 engine, and only the smooth outer integral is quadrature.  The mdx
+validation produced:
+
+| maximum tetrahedron size | p=6 parent DoF | response modes | physical `F_z` | relative error |
+|---:|---:|---:|---:|---:|
+| 25 mm | 22,814 | 3 | 1.101889 N | 0.513% |
+| 20 mm | 28,394 | 3 | 1.098167 N | 0.173% |
+| 15 mm | 40,712 | 3 | 1.092733 N | 0.322% |
+
+The target physical force is 1.096266 N.  The largest transverse-force ratio
+is 0.165%, the polynomial projection residual is below `3.4e-15`, and changing
+the outer tetrahedron rule from 15 to 125 points changes the force by 0.0197%.
+The structural 136-mode count is the topology-preserving a priori plan; the
+3-mode count above is the final response rank after mixed-Galerkin/EVRS
+compression for the three TEAM excitation ports.
+
+The two ROM levels therefore have independent acceptance gates: the 3-D
+HCurl-VIM fixed-position force passes, and the existing 25-position CLN curve
+passes.  The next end-to-end gate is to drive that position sweep from the
+same 3-D HCurl basis.  The generic 3-D interaction accepts affine TET, HEX,
+WEDGE, and PYRAMID geometry, exact P2 curved tetrahedra, and residual-controlled
+warped/curved non-tet cells.  Parent requirements above total degree 18 use an
+hp degree-cap path.  Current projection, geometry, scalar-charge count, and
+dense moment work remain hard gates rather than silent approximations.  See
+`validation_test/maglev/team28_hcurl_vim_force_summary.json`.
+
+HACApK is active in the exact P2 curved-tetrahedron assembly: the scalar
+reference-density Gram is built as a `_ChargeGramHMatrix` and contracted by
+symmetric H-matrix matvecs.  The affine and residual-controlled TET/HEX/WEDGE/
+PYRAMID paths currently assemble the analytic degree-18 reduced Gram densely.
+The curved path also materializes the final reduced mode matrix after the
+HACApK contractions.  Keeping that final HCurl operator compressed is therefore
+a separate production scaling gate, not a completed claim.
+
 ## Files
 
 | File | What |
@@ -70,6 +211,8 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `team28_axisym_fem.py` | Repo-clean port of the lab full-FEM axisymmetric TEAM 28 solve (mixed phi-B + anisotropic-nu infinite shell). Reproduces the lab `.mat` force to **0.01%** at dZ=0. The ground-truth baseline. |
 | `team28_cln_force.py`  | CLN/Cauer reduction at one height: builds K, N, F, shows the N-stage CLN force converging to full-FEM (golden). |
 | `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the physical levitation equilibrium (`F_z/2 == weight`) at absolute z ~ 11.0 mm (published 11.5 mm). |
+| `validation_test/maglev/team28_hcurl_eddy_bubble.py` | Recomputes the p=6 face/cycle/SIBC policy and locks the existing 25-position full-FEM/CLN force curve as the acceptance target for the 3-D HCurl-VIM route. |
+| `validation_test/maglev/team28_hcurl_vim_force.py` | Builds the p=6 3-D HCurl parent, applies topology-aware Eddy Bubble reduction, assembles the epsilon-free analytic tetrahedron VIM interaction, and verifies Lorentz force on three meshes plus an outer-quadrature check. |
 | `cln_sibc_cuboid_3d.py` | Python port of the lab CLN-SIBC (Mixed Galerkin rank-(1,1) specialization) 3D cuboid core: Foster admittance + CLN reduction + Schur SIBC termination + polarizability `alpha(s)=V-Y/sigma`. The non-axisym building block. |
 | `maglev_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
@@ -284,6 +427,7 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
 python team28_axisym_fem.py      # full-FEM baseline  -> -2.1925 N @ dZ=0
 python team28_cln_force.py       # CLN convergence    -> 5-stage golden
 python team28_cln_sweep.py       # CLN force vs height -> physical equilib z~11.0mm (pub 11.5mm)
+python validation_test/maglev/team28_hcurl_eddy_bubble.py  # run from repo root
 python cln_sibc_cuboid_3d.py     # CLN-SIBC 3D cuboid core (alpha, Schur-F)
 python maglev_sphere_force.py  # isotropic levitation force, coeff pinned
 ```

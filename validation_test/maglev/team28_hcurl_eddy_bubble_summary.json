@@ -1,0 +1,188 @@
+{
+  "schema": "radia.team28.hcurl-eddy-bubble-acceptance.v1",
+  "generated_at_utc": "2026-07-17T11:14:17.926778+00:00",
+  "runtime": {
+    "hostname": "lab",
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.17",
+    "ngsolve_version": "6.2.2604",
+    "elapsed_seconds_lab_smoke": 0.5574151000473648
+  },
+  "problem": {
+    "name": "TEAM Workshop Problem 28",
+    "frequency_hz": 50.0,
+    "disk_radius_m": 0.065,
+    "disk_thickness_m": 0.003,
+    "conductivity_S_per_m": 34000000.0,
+    "parent_hcurl_order": 6,
+    "evrs_rank": 6,
+    "force_convention": "stored force is 2x physical time-average"
+  },
+  "surface_model": {
+    "frequency_hz": 50.0,
+    "sigma_S_per_m": 34000000.0,
+    "mu_H_per_m": 1.2566370614359173e-06,
+    "skin_depth_m": 0.012206626915347938,
+    "characteristic_thickness_m": 0.003,
+    "thickness_to_skin_depth": 0.24576814060139462,
+    "min_thickness_to_skin_depth": 3.0,
+    "characteristic_curvature_radius_m": null,
+    "curvature_radius_to_skin_depth": null,
+    "min_curvature_radius_to_skin_depth": 3.0,
+    "thickness_separated": false,
+    "curvature_resolved": true,
+    "sibc_applicable": false,
+    "selected_model": "volumetric",
+    "adjacency_candidate_face_count": 196,
+    "selected_sibc_face_count": 0,
+    "volumetric_boundary_face_count": 196
+  },
+  "p6_spatial_reduction": {
+    "mesh_elements": 227,
+    "mesh_vertices": 100,
+    "parent_family": "HCurl",
+    "parent_order": 6,
+    "parent_ndof": 22814,
+    "topology": {
+      "face_count": 552,
+      "roles": [
+        "conductor-conductor",
+        "conductor-exterior"
+      ],
+      "conductive_materials": [
+        "Al"
+      ],
+      "air_materials": [
+        "air",
+        "vacuum"
+      ],
+      "conductive_element_count": 227,
+      "conductive_component_count": 1,
+      "conductive_graph_edge_count": 356,
+      "conductive_graph_cycle_rank": 130,
+      "surface_face_count": 196,
+      "sibc_face_count": 196,
+      "non_sibc_trace_face_count": 0,
+      "loop_bridge_face_count": 356,
+      "conductor_exterior_face_count": 196,
+      "conductor_air_face_count": 0,
+      "conductor_insulator_face_count": 0,
+      "conductor_conductor_face_count": 356,
+      "conductive_interface_face_count": 0
+    },
+    "conductor_graph": {
+      "node_count": 227,
+      "edge_count": 356,
+      "component_count": 1,
+      "cycle_rank": 130,
+      "fundamental_cycle_count": 130,
+      "material_interface_edge_count": 0
+    },
+    "dof_policy": {
+      "ndof": 22814,
+      "free_dofs": 22814,
+      "sibc_surface_dofs": 4214,
+      "surface_candidate_dofs": 4214,
+      "non_sibc_trace_dofs": 0,
+      "loop_bridge_dofs": 7509,
+      "sibc_loop_bridge_overlap_dofs": 259,
+      "sibc_surface_only_dofs": 3955,
+      "ordinary_evrs_candidate_dofs": 11350,
+      "partitioned_free_dofs": 22814,
+      "local_bubble_dofs": 11350,
+      "interface_dofs": 4940,
+      "wirebasket_dofs": 6524,
+      "loop_bridge_fraction": 0.3291400017533094,
+      "sibc_surface_fraction": 0.18471114228105548,
+      "non_sibc_trace_fraction": 0.0,
+      "ordinary_evrs_fraction": 0.49750153414570003
+    },
+    "reduction_plan": {
+      "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+      "free_dofs": 22814,
+      "loop_bridge_keep_dofs": 7509,
+      "loop_bridge_reduced_modes": 130,
+      "loop_bridge_reduction_strategy": "cycle-basis",
+      "loop_bridge_reduction_savings": 7379,
+      "sibc_surface_trace_dofs": 4214,
+      "sibc_surface_only_dofs": 3955,
+      "non_sibc_trace_dofs": 0,
+      "non_sibc_trace_modes": 0,
+      "sibc_loop_bridge_overlap_dofs": 259,
+      "ordinary_evrs_candidate_dofs": 11350,
+      "conservative_structural_keep_dofs": 11464,
+      "evrs_rank": 6,
+      "surface_modes": 0,
+      "conservative_estimated_reduced_modes": 7515,
+      "estimated_reduced_modes": 136,
+      "estimated_reduction_ratio": 0.005961251862891207,
+      "ordinary_evrs_candidate_fraction": 0.49750153414570003,
+      "conservative_structural_keep_fraction": 0.5024984658543
+    }
+  },
+  "cln_reference_acceptance": {
+    "cln_stages": 6,
+    "cln_vs_full_fem": {
+      "candidate": "cln-6-stage",
+      "reference": "full-fem",
+      "sample_count": 25,
+      "max_abs_error_N": 1.1706156328727957e-06,
+      "rms_error_N": 4.836171610609956e-07,
+      "max_abs_error_normalized": 1.7791281083085482e-07
+    },
+    "cln_vs_reference": {
+      "candidate": "cln-6-stage",
+      "reference": "reference",
+      "sample_count": 25,
+      "max_abs_error_N": 0.00046566481791993075,
+      "rms_error_N": 0.0002270847269620396,
+      "max_abs_error_normalized": 7.077618292244442e-05
+    },
+    "equilibrium_dz_m": 0.0002385951717095344,
+    "equilibrium_abs_height_m": 0.011038595171709535,
+    "published_steady_height_m": 0.0115
+  },
+  "reduced_mode_summary": {
+    "parent_ndof": 22814,
+    "evrs_modes": 6,
+    "cycle_bridge_modes": 130,
+    "sibc_modes": 0,
+    "estimated_total_modes": 136,
+    "estimated_reduction_ratio": 0.005961251862891207
+  },
+  "hcurl_vim_force_acceptance": {
+    "result_file": "team28_hcurl_vim_force_summary.json",
+    "generated_at_utc": "2026-07-17T11:13:52.621410+00:00",
+    "validation_host": "mdx",
+    "mesh_case_count": 3,
+    "maximum_force_relative_error": 0.005129236545245354,
+    "outer_quadrature_relative_force_change": 0.00019733537536860055,
+    "checks": {
+      "all_projection_residuals_below_1e-10": true,
+      "all_inductance_blocks_positive": true,
+      "all_force_errors_below_one_percent": true,
+      "all_transverse_force_ratios_below_half_percent": true,
+      "all_runtime_reductions_below_one_percent": true,
+      "no_kernel_epsilon": true,
+      "all_hcurl_to_cln_handoffs_passive": true,
+      "outer_quadrature_change_below_0p1_percent": true
+    }
+  },
+  "checks": {
+    "team28_routes_to_volumetric_hcurl": true,
+    "air_adjacency_creates_sibc_candidates": true,
+    "skin_gate_disables_all_sibc_faces": true,
+    "disk_conductor_is_connected": true,
+    "cycle_bridge_basis_is_nonempty": true,
+    "p6_reduction_is_below_one_percent": true,
+    "cln_force_curve_matches_full_fem_below_5uN": true,
+    "cln_force_curve_matches_reference_below_0p5mN": true,
+    "physical_equilibrium_found": true,
+    "physical_equilibrium_within_10_percent_of_11p5mm": true,
+    "fixed_position_3d_hcurl_vim_force_passed": true
+  },
+  "structural_and_reference_acceptance_passed": true,
+  "hcurl_vim_force_acceptance_complete": true,
+  "next_numeric_gate": "Run the same HCurl-VIM basis through the 25-position moving CLN sweep, then keep the reduced HCurl operator in HACApK form instead of materializing its final dense matrix"
+}

@@ -173,7 +173,8 @@ public:
                         std::vector<double> ref_tet_pts_lo = {}, std::vector<double> ref_tet_w_lo = {},
                         std::vector<double> ref_tri_pts_lo = {}, std::vector<double> ref_tri_w_lo = {},
                         double ho_far_factor = 1e30,
-                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        bool reference_density = false);
 
     // CURVED POLYTOPE mode (curved hex/wedge): FULLY curved -- both the CELL volume charge AND the boundary
     // FACE surface charge live on the true mesh.Curve(2) geometry (the cell volume charge is DOMINANT for the
@@ -464,6 +465,11 @@ private:
     // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments, no
     // inner-subtraction table, no near/far split (m_ho_far_factor stays 1e30).
     bool m_curved = false;
+    // HCurl curl-Piola currents are supplied as K(xi)=J(X(xi))*|det dX/dxi|.
+    // Their physical volume measures are already folded into K, so both Gram
+    // integrations use reference measure while retaining the exact curved map
+    // in the Laplace distance.
+    bool m_curvedReferenceDensity = false;
     int  m_curve_order = 0;
     std::vector<double> m_cellNodes, m_faceNodes;      // [n_cell*30] (P2 tet), [n_bf*18] (P2 tri)
     std::vector<int> m_cellVertices, m_faceVertices;   // [n_cell*4], [n_bf*3] global mesh vertex ids
