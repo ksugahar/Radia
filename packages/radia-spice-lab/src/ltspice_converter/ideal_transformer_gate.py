@@ -763,6 +763,140 @@ def _transient_rms_average_event_window_identity_ok(
     )
 
 
+def _ac_noise_integrated_density_bin_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "ac_noise_integrated_density_sidedness_bin_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    rows = (
+        contract.get("frequency_hz"),
+        contract.get("frequency_bin_width_hz"),
+        contract.get("integration_frequency_bin_width_hz"),
+        contract.get("noise_density_v_per_sqrt_hz"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        frequencies = [_finite(value, "frequency_hz", positive=True) for value in rows[0]]
+        widths = [
+            _finite(value, "frequency_bin_width_hz", positive=True)
+            for value in rows[1]
+        ]
+        integration_widths = [
+            _finite(value, "integration_frequency_bin_width_hz", positive=True)
+            for value in rows[2]
+        ]
+        densities = [
+            _finite(value, "noise_density_v_per_sqrt_hz", positive=True)
+            for value in rows[3]
+        ]
+        amplitude_factor = _finite(
+            contract.get("density_to_integration_amplitude_factor"),
+            "density_to_integration_amplitude_factor",
+            positive=True,
+        )
+        integrated = _finite(
+            contract.get("integrated_noise_rms_v"),
+            "integrated_noise_rms_v",
+            positive=True,
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("frequency_bin_generation_id") or "")
+    digest = str(contract.get("frequency_bin_table_sha256") or "")
+    recomputed = math.sqrt(
+        sum(
+            (amplitude_factor * density) ** 2 * width
+            for density, width in zip(densities, widths)
+        )
+    )
+    return (
+        bool(str(contract.get("noise_generation_id") or ""))
+        and bool(generation)
+        and contract.get("density_frequency_bin_generation_id") == generation
+        and contract.get("integration_frequency_bin_generation_id") == generation
+        and contract.get("sidedness_conversion_frequency_bin_generation_id")
+        == generation
+        and len(frequencies) == len(widths) == len(integration_widths) == len(densities)
+        and len(frequencies) >= 2
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and integration_widths == widths
+        and contract.get("density_sidedness_basis")
+        == "one_sided_positive_frequency"
+        and contract.get("integration_sidedness_basis")
+        == "one_sided_positive_frequency"
+        and math.isclose(amplitude_factor, 1.0, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(integrated, recomputed, rel_tol=1.0e-12, abs_tol=1.0e-24)
+        and _is_sha256(digest)
+        and contract.get("integration_frequency_bin_table_sha256") == digest
+    )
+
+
+def _transient_power_interpolation_grid_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "transient_power_voltage_current_interpolation_grid_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    rows = (
+        contract.get("voltage_sample_time_s"),
+        contract.get("current_sample_time_s"),
+        contract.get("power_interpolation_time_s"),
+        contract.get("interpolated_voltage_v"),
+        contract.get("interpolated_current_a"),
+        contract.get("instantaneous_power_w"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        voltage_time = [_finite(value, "voltage_sample_time_s") for value in rows[0]]
+        current_time = [_finite(value, "current_sample_time_s") for value in rows[1]]
+        target_time = [_finite(value, "power_interpolation_time_s") for value in rows[2]]
+        voltage = [_finite(value, "interpolated_voltage_v") for value in rows[3]]
+        current = [_finite(value, "interpolated_current_a") for value in rows[4]]
+        power = [_finite(value, "instantaneous_power_w") for value in rows[5]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("voltage_sample_grid_generation_id") or "")
+    digest = str(contract.get("voltage_current_grid_sha256") or "")
+    expected_power = [volts * amps for volts, amps in zip(voltage, current)]
+    return (
+        bool(str(contract.get("transient_generation_id") or ""))
+        and bool(generation)
+        and contract.get("current_sample_grid_generation_id") == generation
+        and contract.get("power_interpolation_grid_generation_id") == generation
+        and contract.get("integration_grid_generation_id") == generation
+        and len(voltage_time) == len(current_time) == len(target_time)
+        == len(voltage) == len(current) == len(power)
+        and len(target_time) >= 2
+        and all(right > left for left, right in zip(target_time, target_time[1:]))
+        and voltage_time == target_time
+        and current_time == target_time
+        and all(
+            math.isclose(reported, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for reported, expected in zip(power, expected_power)
+        )
+        and contract.get("power_sign_convention") == "passive_absorbed_positive"
+        and _is_sha256(digest)
+        and contract.get("power_interpolation_grid_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1083,6 +1217,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "transient_rms_and_average_share_switching_event_window": (
             _transient_rms_average_event_window_identity_ok(positive)
+        ),
+        "ac_noise_integration_uses_current_sidedness_frequency_bins": (
+            _ac_noise_integrated_density_bin_identity_ok(positive)
+        ),
+        "transient_power_uses_one_current_voltage_interpolation_grid": (
+            _transient_power_interpolation_grid_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
