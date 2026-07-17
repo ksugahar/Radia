@@ -1297,6 +1297,134 @@ def _parametric_sequence_initial_solution_identity_ok(summary: dict[str, Any]) -
     )
 
 
+def _multiphysics_power_work_heat_balance_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "multiphysics_power_work_heat_balance_frame_time_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        window = [float(value) for value in identity.get("time_window_s", [])]
+        result_window = [
+            float(value) for value in identity.get("result_time_window_s", [])
+        ]
+        electromagnetic = float(identity.get("electromagnetic_input_j"))
+        mechanical = float(identity.get("mechanical_work_j"))
+        heat = float(identity.get("heat_source_j"))
+        stored = float(identity.get("stored_energy_change_j"))
+        reported = float(identity.get("reported_balance_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("balance_generation") or "")
+    frame = str(identity.get("coordinate_frame") or "")
+    scale = max(abs(electromagnetic), 1.0)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "electromagnetic_balance_generation",
+                "mechanical_balance_generation",
+                "thermal_balance_generation",
+                "stored_energy_balance_generation",
+                "result_balance_generation",
+            )
+        )
+        and bool(frame)
+        and identity.get("result_coordinate_frame") == frame
+        and len(window) == 2
+        and all(math.isfinite(value) for value in window)
+        and window[0] < window[1]
+        and result_window == window
+        and all(
+            math.isfinite(value)
+            for value in (electromagnetic, mechanical, heat, stored, reported)
+        )
+        and abs(electromagnetic - mechanical - heat - stored) <= 1.0e-12 * scale
+        and abs(reported) <= 1.0e-12 * scale
+        and _is_sha256(str(identity.get("balance_table_sha256") or ""))
+        and identity.get("result_balance_table_sha256")
+        == identity.get("balance_table_sha256")
+    )
+
+
+def _degenerate_eigenmode_subspace_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "degenerate_eigenmode_subspace_normalization_phase_projection_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    sequence_keys = (
+        "eigenvalues_hz",
+        "result_eigenvalues_hz",
+        "complex_phase_rad",
+        "result_complex_phase_rad",
+        "subspace_projection",
+        "result_subspace_projection",
+    )
+    if not all(isinstance(identity.get(key), list) for key in sequence_keys):
+        return False
+    try:
+        eigenvalues = [float(value) for value in identity["eigenvalues_hz"]]
+        result_eigenvalues = [
+            float(value) for value in identity["result_eigenvalues_hz"]
+        ]
+        phases = [float(value) for value in identity["complex_phase_rad"]]
+        result_phases = [
+            float(value) for value in identity["result_complex_phase_rad"]
+        ]
+        projection = [
+            [float(value) for value in row]
+            for row in identity["subspace_projection"]
+        ]
+        result_projection = [
+            [float(value) for value in row]
+            for row in identity["result_subspace_projection"]
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("eigensolve_generation") or "")
+    normalization = str(identity.get("normalization") or "")
+    count = len(eigenvalues)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "subspace_eigensolve_generation",
+                "normalization_eigensolve_generation",
+                "phase_eigensolve_generation",
+                "projection_eigensolve_generation",
+                "mesh_eigensolve_generation",
+                "result_eigensolve_generation",
+            )
+        )
+        and count >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in eigenvalues)
+        and result_eigenvalues == eigenvalues
+        and bool(normalization)
+        and identity.get("result_normalization") == normalization
+        and len(phases) == count
+        and all(math.isfinite(value) for value in phases)
+        and result_phases == phases
+        and len(projection) == count
+        and all(len(row) == count for row in projection)
+        and all(math.isfinite(value) for row in projection for value in row)
+        and result_projection == projection
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("modal_table_sha256") or ""))
+        and identity.get("result_modal_table_sha256")
+        == identity.get("modal_table_sha256")
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1704,6 +1832,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "parametric_sequence_uses_current_rows_initial_solutions_and_dataset": (
             _parametric_sequence_initial_solution_identity_ok(summary)
+        ),
+        "multiphysics_energy_balance_uses_current_frame_time_and_generation": (
+            _multiphysics_power_work_heat_balance_identity_ok(summary)
+        ),
+        "degenerate_eigenmodes_use_current_subspace_normalization_phase_and_mesh": (
+            _degenerate_eigenmode_subspace_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
