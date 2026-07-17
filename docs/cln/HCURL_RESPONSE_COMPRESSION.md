@@ -261,6 +261,20 @@ is the algebraic bridge between
 high-order FE matrices  <->  response Krylov basis  <->  CLN stages.
 ```
 
+The parent response basis must then be quotiented by the current map.  Let
+`V` contain the HCurl Krylov vectors, `C` sample `curl(T)`, and `W` contain the
+volume quadrature weights.  Radia forms
+
+```text
+G_J = (C V)^* W (C V).
+```
+
+Directions in the relative null space of `G_J` are independent parent-T
+coordinates but carry no independent eddy current, loss, or VIM interaction.
+`CompressHCurlResponseInCurrentGram` removes them and applies the whitening
+transform to both `V` and `C V`.  This second quotient is the current-space
+Eddy Bubble removal; topology-aware bridge/SIBC protection is applied after it.
+
 The key design rule is therefore not "use p=4" or "use four stages".  The rule
 is:
 
@@ -442,6 +456,7 @@ Current primitives:
 | API | Role |
 |---|---|
 | `EVRSBasis` | named retained Eddy-Visible Response Space with EID/eddy-bubble diagnostics |
+| `CompressHCurlResponseInCurrentGram` | removes response directions in the relative null space of sampled `curl(T)` and current-Gram orthonormalizes the retained parent/current basis |
 | `NgsolveBlockKrylovBasis` | NGSolve matrix/vector bridge into response-visible basis |
 | `NgsolveStaticCondensedBlockKrylovBasis` | NGSolve `LOCAL_DOF` static condensation followed by EVRS/EID response compression |
 | `NgsolveHCurlCurlBasis` | maps response coefficients to sampled `curl(T)` current modes |
@@ -477,6 +492,7 @@ Current primitives:
 | `MagnetizationCurrentCoupling` | builds the rectangular HDiv-magnetization / eddy-current coupling `int M_i dot B[J_j] dV` |
 | `CoupleHDivMagnetizationToEVRS` | packages the rectangular HDiv-MMM / EVRS eddy-current coupling as a named mixed system |
 | `CoupledHDivHybridVIMSystem` | HDiv-MMM coupled to a full hybrid HCurl-VIM eddy system: bulk EVRS, bridge-cycle, and surface-Omega/SIBC blocks |
+| `MixedGalerkinHDivHybridVIMSystem` | frequency-specific exact Schur system obtained by eliminating only adjacency-class bulk eddy-bubble blocks from the complete HDiv/HCurl operator |
 | `HCurlVIMHDivMMMSolution` | one-frequency mixed result with parent-HCurl `T`, sampled bulk/bridge/SIBC currents, sampled HDiv magnetization, Biot-Savart eddy `B`, loss, port response, and residual diagnostics |
 | `CoupleHybridVIMWithHDivMMM` | builds the HDiv-MMM / hybrid HCurl-VIM coupling from a `HybridVIMSystem` and its current bases |
 | `HCurlVIMHDivMMMSystem` | production-facing name for the mixed HCurl-VIM eddy branch and HDiv-MMM magnetic branch |
@@ -592,7 +608,7 @@ mixed = vim.NgsolveBDMEddyBubbleVIM(
     conductive_materials="cond",
     port_vector_potentials=port_vector_potentials,
 )
-solution = mixed.solve_frequency(100.0)
+solution = mixed.solve_frequency_eddy_bubbled(100.0)
 
 T_parent = solution.parent_t_coefficients
 J_bulk = solution.current_samples("bulk")
@@ -603,6 +619,29 @@ M_hdiv = solution.sampled_magnetization
 M_parent = solution.parent_magnetization_coefficients
 ```
 
+The production builder records the neighboring-material roles explicitly as
+`volume -> bulk`, `volume1 -> bridge`, and `surface -> sibc`.
+`solve_frequency_eddy_bubbled()` obtains its keep/eliminate partition from
+this role map: conductor-conductor cycle modes and conductor-air SIBC modes are
+protected, while only the ordinary bulk candidate is eliminated.  It does not
+apply one uniform basis rule to every element or face.
+
+The mixed Galerkin transformation is formed from the complete coupled matrix,
+not from the HCurl block in isolation.  For retained coordinates
+`k = [HDiv, bridge, SIBC]` and eliminated bulk coordinates `b`, it constructs
+
+```text
+P_trial = [-A_bb^-1 A_bk; I]
+P_test  = [-A_bb^-T A_kb^T; I]
+P_test^T A P_trial = A_kk - A_kb A_bb^-1 A_bk.
+```
+
+Thus HDiv self interaction, both HDiv/HCurl coupling blocks, the projected RHS,
+and the HCurl field lift are transformed together.  A nonzero eliminated RHS
+uses the affine correction `x_b^(0) = A_bb^-1 f_b`, so reconstruction is an
+exact solution of the original coupled reduced system rather than only a
+homogeneous-basis projection.
+
 `NgsolveBDMEddyBubbleVIM` first calls
 `NgsolveBDMHDivMMMResponseReduction`, which creates bare NGSolve
 `HDiv(order=hdiv_order)` and records `parent_family="BDM"`.  It then calls
@@ -611,6 +650,12 @@ samples `curl(T)`, adds bridge-cycle and SIBC/surface-Omega blocks, assembles
 the hybrid VIM impedance, and finally forms the HDiv-MMM coupling block.  The
 lower-level `NgsolveHCurlVIMHDivMMM` remains available for explicit RT studies
 or externally constructed magnetic bases.
+
+The BDM-MMM parent demagnetizing operator remains the C++
+`_ChargeGramHMatrix` HACApK path.  Mixed Galerkin acts after that parent
+operator and the HCurl response basis have been projected.  The final coupled
+Schur matrix is deliberately dense because its dimension is the retained HDiv
+plus protected HCurl mode count, not the high-order parent DoF count.
 
 For production naming the same concrete object is also exported as
 `HCurlVIMHDivMMMSystem`, with constructor `CoupleHCurlVIMWithHDivMMM`.  This is
@@ -666,19 +711,31 @@ path on a notched conductor with a p=6 HCurl parent, conductor-cycle bridges,
 exterior-only SIBC modes, a response-adapted HDiv magnetization basis, and two
 excitation ports.  The saved native-kernel smoke gives:
 
-| parent HCurl DoF | bulk EVRS | bridge cycles | SIBC | total eddy modes |
-|---:|---:|---:|---:|---:|
-| 3557 | 16 | 14 | 3 | 33 |
+| parent HCurl DoF | Krylov | current-Gram bulk | bridge cycles | SIBC | total eddy modes |
+|---:|---:|---:|---:|---:|---:|
+| 3557 | 10 | 8 | 14 | 3 | 25 |
 
 The production-default run uses NGSolve's bare `HDiv(order=1)`, hence BDM1,
 with harmonic ports through degree two.  At 100 Hz and 10 kHz, the full mixed
-residuals are `4.36e-15` and `8.03e-15`.  It reconstructs all 3557 parent-HCurl
+RHS-scaled residuals are `4.69e-16` and `4.60e-16`, while the corresponding
+backward errors are `2.58e-20` and `2.50e-18`.  It reconstructs all 3557 parent-HCurl
 coordinates and all 267 parent-BDM1 coordinates; the magnetic branch reduces
 267 DoFs to 8 modes.  The maximum snapshot residual is `9.91e-11` and the
 full-rank training-response energy error is `3.54e-11`.  The same run evaluates
 the summed bulk/bridge/SIBC eddy-current field at an exterior probe and records
-`1.13e-4 T`, exercising the physical-field reconstruction rather than only the
+`1.12e-4 T`, exercising the physical-field reconstruction rather than only the
 reduced matrix solve.
+
+The current-Gram quotient first removes 2 `curl(T)`-null directions and leaves
+8 bulk modes whose Gram identity defect is `1.49e-14`.  The adjacency-role map
+classifies `volume` as ordinary bulk, `volume1` as a
+conductor-conductor cycle bridge, and `surface` as conductor-air SIBC.  The
+mixed Galerkin step consequently eliminates 8 bulk coordinates but retains
+all 8 BDM1, 14 bridge, and 3 SIBC coordinates, reducing the complete 33-mode
+system to 25 modes.  Across 100 Hz and 10 kHz, the maximum full-coupled Schur
+error is `1.11e-16`; direct-solve port response and Joule loss are reproduced
+to `6.98e-16` and `8.14e-16`.  The parent HDiv demagnetizing action is supplied
+by HACApK `_ChargeGramHMatrix`; only the small retained Schur solve is dense.
 
 The companion `hcurl_vim_hdiv_mmm_bdm2_smoke.json` uses degree-three harmonic
 ports and reduces 738 BDM2 DoFs to 15 modes.  Actual Raviart--Thomas is kept as
@@ -686,6 +743,18 @@ an explicit comparison, generated with `--hdiv-family rt`; RT1 and RT2 have
 369 and 942 parent DoFs on this mesh.  Do not infer RT from the `HDiv` class
 name.  Motor-specific training should replace or augment the generic harmonics
 with actual slot and rotor-angle fields.
+
+| HDiv parent | parent DoF -> modes | coupled modes -> retained | max Schur error | max port error | max loss error |
+|---|---:|---:|---:|---:|---:|
+| BDM1 | 267 -> 8 | 33 -> 25 | 1.110e-16 | 6.982e-16 | 8.140e-16 |
+| BDM2 | 738 -> 15 | 40 -> 32 | 8.600e-17 | 4.238e-16 | 1.252e-15 |
+| RT1 | 369 -> 8 | 33 -> 25 | 7.850e-17 | 9.090e-16 | 2.075e-15 |
+| RT2 | 942 -> 15 | 40 -> 32 | 1.147e-16 | 6.657e-16 | 1.647e-15 |
+
+The bulk block condition number was near `1e18` before the current-Gram
+quotient.  The v8 complete coupled matrix is conditioned at `2.52e6` for 100 Hz
+and `2.53e4` for 10 kHz.  Backward error, exact-Schur diagnostics,
+reconstructed fields, port response, and Joule loss now agree simultaneously.
 
 ### 6.2 Planar BDM/RT Corner Smoke
 

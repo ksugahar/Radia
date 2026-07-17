@@ -47,7 +47,6 @@ from evrs_pn_convergence import (  # noqa: E402
     _parse_ints,
     _port_samples,
     _relative_frobenius_error,
-    _response_basis,
     _sampled_basis_diagnostics,
 )
 
@@ -59,6 +58,26 @@ def _parse_floats(text: str) -> list[float]:
     if any(value <= 0.0 for value in values):
         raise argparse.ArgumentTypeError("values must be positive")
     return values
+
+
+def _response_basis(fes, stiffness, mass, ports, *, steps, condense, rtol):
+    if condense:
+        return vim.NgsolveStaticCondensedBlockKrylovBasis(
+            stiffness,
+            mass,
+            ports,
+            steps=steps,
+            free_dofs=fes.FreeDofs(True),
+            rtol=rtol,
+        )
+    return vim.NgsolveOperatorBlockKrylovBasis(
+        stiffness,
+        mass,
+        ports,
+        steps=steps,
+        free_dofs=fes.FreeDofs(False),
+        rtol=rtol,
+    )
 
 
 def _complex_scalar_parts(value) -> dict[str, float]:
@@ -81,6 +100,8 @@ def _make_skin_shape(geometry: str):
         leg_x = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 0.45, 1))
         leg_y = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(0.45, 1, 1))
         shape = leg_x + leg_y
+    elif geometry == "sphere":
+        shape = occ.Sphere(occ.Pnt(0, 0, 0), 1.0)
     else:
         raise ValueError(f"unknown geometry: {geometry}")
     shape.mat("cond")
@@ -89,18 +110,39 @@ def _make_skin_shape(geometry: str):
     return shape
 
 
-def _make_skin_mesh(maxh: float, geometry: str):
+def _make_skin_mesh(
+    maxh: float,
+    geometry: str,
+    curve_order: int = 1,
+    corner_edge_maxh: float | None = None,
+):
     import ngsolve as ng
     import netgen.occ as occ
 
     shape = _make_skin_shape(geometry)
-    return ng.Mesh(occ.OCCGeometry(shape).GenerateMesh(maxh=maxh))
+    if corner_edge_maxh is not None:
+        if geometry not in {"notched-box", "l-prism"}:
+            raise ValueError("corner_edge_maxh requires notched-box or l-prism")
+        for edge in shape.edges:
+            center = np.asarray(tuple(edge.center), dtype=float)
+            if np.linalg.norm(center[:2] - (0.45, 0.45)) < 1.0e-8:
+                edge.maxh = float(corner_edge_maxh)
+    mesh = ng.Mesh(occ.OCCGeometry(shape).GenerateMesh(maxh=maxh))
+    if curve_order > 1:
+        mesh.Curve(curve_order)
+    return mesh
 
 
-def _assemble_parent(order: int, maxh: float, condense: bool, geometry: str):
+def _assemble_parent(
+    order: int,
+    maxh: float,
+    condense: bool,
+    geometry: str,
+    curve_order: int = 1,
+):
     import ngsolve as ng
 
-    mesh = _make_skin_mesh(maxh, geometry)
+    mesh = _make_skin_mesh(maxh, geometry, curve_order)
     fes = ng.HCurl(mesh, order=order, nograds=True)
     u, v = fes.TnT()
 
@@ -258,6 +300,12 @@ def _frequency_result(
         eliminate_blocks="volume",
         surface_impedance=zs,
     )
+    mixed_orthogonalization = system.mixed_galerkin_orthogonalization(
+        ("volume1", "surface"),
+        "volume",
+        s,
+        surface_impedance=zs,
+    )
 
     return {
         "frequency_Hz": float(frequency),
@@ -272,6 +320,7 @@ def _frequency_result(
             "solution_relative_error_to_direct"
         ],
         "schur_residual_relative_error": schur_checks["residual_relative_error"],
+        "mixed_galerkin_orthogonalization": mixed_orthogonalization.diagnostics(),
         "direct_residual_relative_error": schur_checks[
             "direct_residual_relative_error"
         ],
@@ -417,6 +466,7 @@ def run_sweep(args: argparse.Namespace) -> dict[str, object]:
             args.maxh,
             condense,
             args.geometry,
+            args.curve_order,
         )
         for steps in args.steps:
             cases.append(
@@ -469,8 +519,8 @@ def run_sweep(args: argparse.Namespace) -> dict[str, object]:
             "ngsolve_version": getattr(ng, "__version__", "unknown"),
         },
         "note": (
-            "LAB/desktop smoke only: timings are recorded to diagnose the run, "
-            "not as benchmark data."
+            "Timing fields are wall-clock observations on validation_host; "
+            "publish them only when generated on a designated compute host."
         ),
         "configuration": {
             "order": args.order,
@@ -480,6 +530,7 @@ def run_sweep(args: argparse.Namespace) -> dict[str, object]:
             "reference": {"order": reference_order, "krylov_steps": reference_steps},
             "frequencies_Hz": args.frequencies,
             "maxh": args.maxh,
+            "curve_order": args.curve_order,
             "sigma": args.sigma,
             "intorder": args.intorder,
             "kernel_epsilon": args.kernel_epsilon,
@@ -498,12 +549,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--orders", type=_parse_ints, default=None)
     parser.add_argument(
         "--geometry",
-        choices=("box", "bar", "notched-box", "l-prism"),
+        choices=("box", "bar", "notched-box", "l-prism", "sphere"),
         default="box",
     )
     parser.add_argument("--steps", type=_parse_ints, default=[8, 11, 12])
     parser.add_argument("--frequencies", type=_parse_floats, default=[100.0, 1.0e4, 1.0e6])
     parser.add_argument("--maxh", type=float, default=3.0)
+    parser.add_argument("--curve-order", type=int, default=1)
     parser.add_argument("--sigma", type=float, default=5.8e7)
     parser.add_argument("--intorder", type=int, default=2)
     parser.add_argument("--kernel-epsilon", type=float, default=0.12)
@@ -523,6 +575,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--orders must contain positive integers")
     if args.dtn_pole_hz < 0.0:
         parser.error("--dtn-pole-hz must be non-negative")
+    if args.curve_order < 1:
+        parser.error("--curve-order must be positive")
 
     result = run_sweep(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)

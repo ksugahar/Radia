@@ -59,6 +59,89 @@ def test_block_krylov_basis_respects_free_dofs_and_metric_orthonormality():
     }
 
 
+def test_block_krylov_relative_rank_test_is_port_scale_invariant():
+    stiffness = np.diag([1.0, 1.0 + 1.0e-13])
+    mass = np.eye(2)
+    port = np.array([1.0, 1.0])
+
+    base = vim.BlockKrylovBasis(
+        stiffness,
+        mass,
+        port,
+        steps=2,
+        rtol=1.0e-10,
+    )
+    scaled = vim.BlockKrylovBasis(
+        stiffness,
+        mass,
+        1.0e12 * port,
+        steps=2,
+        rtol=1.0e-10,
+    )
+
+    assert base.rank == 1
+    assert scaled.rank == base.rank
+    np.testing.assert_allclose(
+        np.abs(scaled.vectors),
+        np.abs(base.vectors),
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+
+def test_current_gram_compression_removes_curl_null_response():
+    response = vim.EVRSBasis(
+        vectors=np.eye(3),
+        active_dofs=np.arange(3),
+        port_count=1,
+        krylov_steps=3,
+    )
+    current = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+        weights=np.ones(2),
+        current_modes=np.array(
+            [
+                [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                [[1.0e-14, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            ]
+        ),
+    )
+
+    compressed_response, compressed_current = (
+        vim.CompressHCurlResponseInCurrentGram(
+            response,
+            current,
+            rtol=1.0e-10,
+        )
+    )
+
+    assert compressed_response.rank == 2
+    assert compressed_current.n_modes == 2
+    np.testing.assert_allclose(
+        compressed_current.mass_matrix(),
+        np.eye(2),
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(
+        compressed_current.modes,
+        np.einsum(
+            "mk,mpc->kpc",
+            np.linalg.lstsq(
+                response.vectors,
+                compressed_response.vectors,
+                rcond=None,
+            )[0],
+            current.modes,
+        ),
+        atol=1.0e-12,
+    )
+    diagnostics = compressed_response.diagnostics()
+    assert diagnostics["pre_current_gram_rank"] == 3
+    assert diagnostics["current_gram_rank"] == 2
+    assert diagnostics["construction"].endswith("+current-gram")
+
+
 def test_evrs_tmethod_algebra_preserves_derham_gauge_and_ports():
     curl_map = np.array([
         [1.0, -1.0, 0.0],
@@ -589,6 +672,107 @@ def test_hdiv_mmm_couples_to_hybrid_vim_volume_and_surface_blocks():
     assert info["hybrid_blocks"] == eddy_system.diagnostics()["blocks"]
 
 
+def test_full_coupled_mixed_galerkin_is_exact_with_eliminated_rhs():
+    bulk = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["bulk"],
+    )
+    bridge = vim.VolumeCurrentBasis(
+        points=np.array([[0.5, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[0.0, 1.0, 0.0]]]),
+        names=["bridge"],
+    )
+    surface = vim.SurfaceOmegaBasis(
+        points=np.array([[0.0, 0.5, 0.0]]),
+        weights=np.array([1.0]),
+        normals=np.array([[0.0, 0.0, 1.0]]),
+        grad_omega_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["surface"],
+    )
+    magnetization = vim.MagnetizationBasis(
+        points=np.array([[0.25, 0.25, 0.25]]),
+        weights=np.array([1.0]),
+        magnetization_modes=np.array([[[0.0, 0.0, 1.0]]]),
+        names=["m0"],
+    )
+    eddy_system = vim.HybridVIMSystem(
+        resistance=np.array([
+            [4.0, 0.3, -0.2],
+            [0.3, 3.0, 0.4],
+            [-0.2, 0.4, 2.5],
+        ]),
+        inductance=np.array([
+            [1.0, 0.1, 0.05],
+            [0.1, 0.8, -0.1],
+            [0.05, -0.1, 0.6],
+        ]),
+        surface_mass=np.diag([0.0, 0.0, 1.2]),
+        basis_names=("bulk", "bridge", "surface"),
+        blocks={"bulk": (0, 1), "bridge": (1, 2), "surface": (2, 3)},
+    )
+    coupled = vim.CoupledHDivHybridVIMSystem(
+        magnetization_basis=magnetization,
+        eddy_system=eddy_system,
+        eddy_bases=(bulk, bridge, surface),
+        coupling=np.array([[0.7, -0.25, 0.4]]),
+        magnetic_operator=np.array([[5.0]]),
+    )
+    s = 0.3 + 0.8j
+    zs = 0.15 + 0.2j
+    full = coupled.mixed_operator(s=s, surface_impedance=zs)
+    reduced = coupled.mixed_galerkin_orthogonalization(
+        ("bridge", "surface"),
+        "bulk",
+        s=s,
+        surface_impedance=zs,
+    )
+
+    keep = np.array([0, 2, 3])
+    eliminate = np.array([1])
+    expected_schur = (
+        full[np.ix_(keep, keep)]
+        - full[np.ix_(keep, eliminate)]
+        @ np.linalg.solve(
+            full[np.ix_(eliminate, eliminate)],
+            full[np.ix_(eliminate, keep)],
+        )
+    )
+    assert isinstance(reduced, vim.MixedGalerkinHDivHybridVIMSystem)
+    np.testing.assert_allclose(reduced.reduced_operator, expected_schur)
+    assert reduced.n_hdiv_modes == 1
+    assert reduced.n_hcurl_retained_modes == 2
+    assert reduced.n_hcurl_eliminated_modes == 1
+
+    rhs = np.array([1.1, 0.7, -0.3, 0.2])
+    solved = reduced.solve(
+        magnetic_rhs=rhs[:1],
+        eddy_rhs=rhs[1:],
+        require_excitation=True,
+        return_operator=True,
+    )
+    expected_reduced_rhs = (
+        rhs[keep, np.newaxis]
+        - full[np.ix_(keep, eliminate)]
+        @ np.linalg.solve(
+            full[np.ix_(eliminate, eliminate)],
+            rhs[eliminate, np.newaxis],
+        )
+    )
+    np.testing.assert_allclose(solved["reduced_rhs"], expected_reduced_rhs)
+    np.testing.assert_allclose(
+        solved["full_solution"].ravel(),
+        np.linalg.solve(full, rhs),
+    )
+    assert solved["full_residual_relative_norm"] < 1.0e-14
+    assert solved["projected_residual_relative_norm"] < 1.0e-14
+    info = reduced.diagnostics()
+    assert info["full_coupled_schur"] is True
+    assert info["schur_relative_error"] < 1.0e-14
+
+
 def test_shared_mesh_material_model_validates_positive_scalar_coefficients():
     model = vim.SharedMeshMaterialModel(
         mesh="mesh",
@@ -711,6 +895,27 @@ def test_hybrid_vim_named_block_schur_matches_igte_mixed_galerkin_formula():
         system.schur_complement("bulk", "surface", s, surface_impedance=zs),
         z[:1, :1] - z[:1, 1:] @ np.linalg.solve(z[1:, 1:], z[1:, :1]),
     )
+    orthogonalized = system.mixed_galerkin_orthogonalization(
+        "surface",
+        "bulk",
+        s,
+        surface_impedance=zs,
+    )
+    assert isinstance(orthogonalized, vim.MixedGalerkinOrthogonalization)
+    np.testing.assert_allclose(
+        orthogonalized.reduced_operator,
+        system.schur_complement("surface", "bulk", s, surface_impedance=zs),
+    )
+    np.testing.assert_allclose(
+        orthogonalized.trial_transform,
+        orthogonalized.test_transform,
+    )
+    orthogonal_info = orthogonalized.diagnostics()
+    assert orthogonal_info["retained_modes"] == 1
+    assert orthogonal_info["eliminated_modes"] == 1
+    assert orthogonal_info["trial_orthogonality_relative_defect"] < 1.0e-15
+    assert orthogonal_info["test_orthogonality_relative_defect"] < 1.0e-15
+    assert orthogonal_info["schur_relative_error"] < 1.0e-15
     np.testing.assert_allclose(
         system.block_rhs(
             bulk=np.array([[1.0, 2.0]]),
@@ -728,6 +933,40 @@ def test_hybrid_vim_named_block_schur_matches_igte_mixed_galerkin_formula():
         system.block_rhs(bulk=np.ones((2, 1)))
     with pytest.raises(ValueError):
         system.block_rhs(bulk=np.ones((1, 1)), surface=np.ones((1, 2)))
+
+
+def test_mixed_galerkin_uses_distinct_trial_and_test_for_nonsymmetric_operator():
+    system = vim.HybridVIMSystem(
+        resistance=np.array([
+            [4.0, 1.0],
+            [2.0, 3.0],
+        ]),
+        inductance=np.zeros((2, 2)),
+        surface_mass=np.zeros((2, 2)),
+        basis_names=("bulk", "surface"),
+        blocks={"bulk": (0, 1), "surface": (1, 2)},
+    )
+
+    orthogonalized = system.mixed_galerkin_orthogonalization(
+        "surface",
+        "bulk",
+        0.0,
+    )
+
+    np.testing.assert_allclose(
+        orthogonalized.trial_transform,
+        np.array([[-0.25], [1.0]]),
+    )
+    np.testing.assert_allclose(
+        orthogonalized.test_transform,
+        np.array([[-0.5], [1.0]]),
+    )
+    np.testing.assert_allclose(orthogonalized.reduced_operator, np.array([[2.5]]))
+    info = orthogonalized.diagnostics()
+    assert info["trial_test_relative_difference"] > 0.0
+    assert info["trial_orthogonality_relative_defect"] < 1.0e-15
+    assert info["test_orthogonality_relative_defect"] < 1.0e-15
+    assert info["schur_relative_error"] < 1.0e-15
 
 
 def test_hybrid_vim_multi_block_schur_eliminates_evrs_keeps_bridge_and_surface():
@@ -762,6 +1001,21 @@ def test_hybrid_vim_multi_block_schur_eliminates_evrs_keeps_bridge_and_surface()
         z[np.ix_(keep, keep)] - z[np.ix_(keep, elim)] @ np.linalg.solve(
             z[np.ix_(elim, elim)],
             z[np.ix_(elim, keep)],
+        ),
+    )
+    orthogonalized = system.mixed_galerkin_orthogonalization(
+        ("volume1", "surface"),
+        "volume",
+        s,
+        surface_impedance=zs,
+    )
+    np.testing.assert_allclose(
+        orthogonalized.reduced_operator,
+        system.schur_complement_blocks(
+            ("volume1", "surface"),
+            "volume",
+            s,
+            surface_impedance=zs,
         ),
     )
     np.testing.assert_allclose(
@@ -903,6 +1157,7 @@ def test_hybrid_vim_public_names_are_exported():
         "NgsolveOperatorBlockKrylovBasis",
         "NgsolveStaticCondensedBlockKrylovBasis",
         "EVRSBasis",
+        "CompressHCurlResponseInCurrentGram",
         "BlockKrylovBasis",
         "SampledLaplaceInteraction",
         "ReducedInteractionMatrix",
@@ -916,6 +1171,7 @@ def test_hybrid_vim_public_names_are_exported():
         "CoupledHDivHybridVIMSystem",
         "HCurlVIMHDivMMMSolution",
         "HCurlVIMHDivMMMSystem",
+        "MixedGalerkinHDivHybridVIMSystem",
         "CoupleHDivMagnetizationToEVRS",
         "CoupleHCurlVIMWithHDivMMM",
         "CoupleHybridVIMWithHDivMMM",
@@ -1290,6 +1546,58 @@ def test_ngsolve_bridge_cycle_current_basis_feeds_hybrid_vim():
     assert system.diagnostics()["passive_blocks"] is True
 
 
+def test_ngsolve_curved_sphere_preserves_surface_and_bridge_geometry():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    sphere = occ.Sphere(occ.Pnt(0, 0, 0), 1.0)
+    sphere.mat("cond")
+    for face in sphere.faces:
+        face.name = "skin"
+    mesh = ng.Mesh(occ.OCCGeometry(sphere).GenerateMesh(maxh=0.75))
+    mesh.Curve(3)
+
+    surface = vim.NgsolveSurfaceOmegaBasis(
+        mesh,
+        (ng.CoefficientFunction((1.0, 0.0, 0.0)),),
+        intorder=8,
+        boundaries="skin",
+    )
+    points, weights, normals = vim.SampleNgsolveVectorCFs(
+        mesh,
+        (ng.specialcf.normal(3),),
+        vb="BND",
+        intorder=8,
+        boundaries="skin",
+    )
+    fem_area = ng.Integrate(
+        1.0,
+        mesh,
+        definedon=mesh.Boundaries("skin"),
+        order=8,
+    )
+
+    np.testing.assert_allclose(surface.points, points, atol=1.0e-14)
+    np.testing.assert_allclose(surface.weights, weights, rtol=1.0e-13)
+    assert surface.weights.sum() == pytest.approx(fem_area, rel=1.0e-12)
+    assert surface.weights.sum() == pytest.approx(4.0 * np.pi, rel=5.0e-4)
+    tangential_defect = np.max(
+        np.abs(np.einsum("ij,ij->i", surface.modes[0], normals[0]))
+    )
+    assert tangential_defect < 1.0e-12
+
+    topology = vim.ClassifyNgsolveEddyTopology(mesh, conductive_materials="cond")
+    bridge = vim.NgsolveBridgeCycleCurrentBasis(
+        mesh,
+        topology,
+        geometry_intorder=8,
+    )
+    assert bridge.n_modes == topology.conductor_graph().cycle_rank
+    assert np.all(np.isfinite(bridge.points))
+    assert np.all(bridge.weights > 0.0)
+    assert np.min(np.linalg.eigvalsh(bridge.mass_matrix().real)) > 0.0
+
+
 def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     ng = pytest.importorskip("ngsolve")
     occ = pytest.importorskip("netgen.occ")
@@ -1316,6 +1624,7 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
         conductive_materials="cond",
         surface_boundaries="skin",
         intorder=1,
+        geometry_intorder=4,
         kernel_epsilon=0.1,
         port_vector_potentials=(
             np.array([1.0, 0.0, 0.0]),
@@ -1465,7 +1774,13 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
         ),
     )
     assert isinstance(hybrid, vim.TopologyAwareHybridVIM)
-    assert hybrid.volume_basis.n_modes == 2
+    assert hybrid.response_basis.diagnostics()["pre_current_gram_rank"] == 2
+    assert hybrid.volume_basis.n_modes == 1
+    np.testing.assert_allclose(
+        hybrid.volume_basis.mass_matrix(),
+        np.eye(1),
+        atol=1.0e-12,
+    )
     assert hybrid.surface_basis.n_modes == 1
     assert hybrid.system.n_modes == (
         hybrid.volume_basis.n_modes
@@ -1533,12 +1848,29 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
     assert op.shape == (1 + hybrid.system.n_modes, 1 + hybrid.system.n_modes)
     assert mixed.diagnostics()["has_eddy_rhs"] is True
     assert mixed.diagnostics()["has_response_basis"] is True
+    assert mixed.diagnostics()["response_basis"]["current_gram_rank"] == (
+        mixed.eddy_bases[0].n_modes
+    )
     assert mixed.diagnostics()["has_hdiv_reduction"] is True
+    assert mixed.diagnostics()["eddy_block_roles"] == {
+        "volume": "bulk",
+        "volume1": "bridge",
+        "surface": "sibc",
+    }
     assert mixed.hdiv_reduction.parent_family == "BDM"
     assert mixed.hdiv_reduction.parent_order == 1
+    hdiv_info = mixed.hdiv_reduction.diagnostics()
+    assert hdiv_info["demag_hmatrix_active"] is True
+    assert "ChargeGramHMatrix" in hdiv_info["demag_hmatrix_backend"]
 
     solved = mixed.solve_frequency(100.0)
     assert isinstance(solved, vim.HCurlVIMHDivMMMSolution)
+    assert solved.eddy_block_roles == ("bulk", "bridge", "sibc")
+    assert solved.diagnostics()["eddy_block_roles"] == [
+        "bulk",
+        "bridge",
+        "sibc",
+    ]
     assert solved.parent_t_coefficients.shape == (fes.ndof, 1)
     assert solved.parent_magnetization_coefficients.shape == (
         mixed.hdiv_reduction.parent_ndof,
@@ -1561,6 +1893,53 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
     )
     assert solved.average_joule_loss[0] >= 0.0
     assert solved.residual_relative_norm < 1.0e-10
+    assert mixed.adjacency_class_block_partition() == (
+        ("volume1", "surface"),
+        ("volume",),
+    )
+    solved_orthogonalized = mixed.solve_frequency_eddy_bubbled(100.0)
+    np.testing.assert_allclose(
+        solved_orthogonalized.magnetization_coefficients,
+        solved.magnetization_coefficients,
+        rtol=2.0e-5,
+        atol=3.0e-8,
+    )
+    np.testing.assert_allclose(
+        solved_orthogonalized.eddy_coefficients,
+        solved.eddy_coefficients,
+        rtol=2.0e-5,
+        atol=3.0e-8,
+    )
+    np.testing.assert_allclose(
+        solved_orthogonalized.parent_t_coefficients,
+        solved.parent_t_coefficients,
+        rtol=2.0e-5,
+        atol=3.0e-8,
+    )
+    np.testing.assert_allclose(
+        solved_orthogonalized.port_response,
+        solved.port_response,
+        rtol=2.0e-8,
+        atol=1.0e-10,
+    )
+    np.testing.assert_allclose(
+        solved_orthogonalized.average_joule_loss,
+        solved.average_joule_loss,
+        rtol=2.0e-8,
+        atol=1.0e-10,
+    )
+    assert solved_orthogonalized.orthogonalized_solution is not None
+    assert solved_orthogonalized.mixed_galerkin_diagnostics[
+        "full_coupled_schur"
+    ] is True
+    assert solved_orthogonalized.mixed_galerkin_diagnostics[
+        "keep_eddy_blocks"
+    ] == ["volume1", "surface"]
+    assert solved_orthogonalized.mixed_galerkin_diagnostics[
+        "hdiv_demag_hmatrix_backend"
+    ] == hdiv_info["demag_hmatrix_backend"]
+    assert solved_orthogonalized.residual_relative_norm < 1.0e-10
+    assert solved_orthogonalized.residual_backward_error < 1.0e-12
     target = np.array([[2.0, 2.0, 2.0]])
     total_field = solved.eddy_flux_density(target)
     block_field = sum(

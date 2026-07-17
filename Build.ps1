@@ -252,6 +252,16 @@ if /I "%RADIA_ONLY%"=="True" (
 
 echo.
 echo ========================================
+echo   Building radia_motor_rom C ABI
+echo ========================================
+"$CMAKE_EXE" --build . --config Release --target radia_motor_rom -j
+if errorlevel 1 (
+    echo ERROR: radia_motor_rom build failed
+    exit /b 1
+)
+
+echo.
+echo ========================================
 echo   Building peec_matrices
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target peec_matrices -j

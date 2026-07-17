@@ -236,6 +236,37 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_stream_function.cpp       # (ACA+)+TSVD stream-function solver (HACApK ACA+ + TSVD recompression)
 	${CORE_DIR}/rad_evrs_tmethod.cpp          # EVRS/T-method algebra kernel (T --curl--> J, reduced VIM/CLN projection)
 	${CORE_DIR}/rad_hybrid_vim_schur.cpp      # Complex Schur/SIBC helper kernels for hybrid VIM / mixed Galerkin reduction
+	${CORE_DIR}/rad_motor_rom_c.cpp           # Angle-periodic motor ROM C ABI
+)
+
+# Platform-neutral C ABI for Simulink S-functions, Modelica, and FMI wrappers.
+# The same source is also compiled into _radia_pybind above so the ABI cannot
+# silently drift away from the Python package build.
+add_library(radia_motor_rom SHARED
+	${CORE_DIR}/rad_motor_rom_c.cpp
+)
+if(MSVC)
+	# This source is also compiled into _radia_pybind and owns the C ABI's
+	# exception-to-status translation boundary.
+	set_source_files_properties(${CORE_DIR}/rad_motor_rom_c.cpp PROPERTIES
+		COMPILE_OPTIONS /EHsc
+	)
+endif()
+target_include_directories(radia_motor_rom PUBLIC ${CORE_DIR})
+set_target_properties(radia_motor_rom PROPERTIES
+	PREFIX ""
+	OUTPUT_NAME "radia_motor_rom"
+)
+if(MSVC)
+	target_compile_options(radia_motor_rom PRIVATE /O2 /W4)
+else()
+	target_compile_options(radia_motor_rom PRIVATE -O3 -Wall -Wextra)
+endif()
+add_custom_command(TARGET radia_motor_rom POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:radia_motor_rom>"
+		"${CMAKE_SOURCE_DIR}/src/radia/$<TARGET_FILE_NAME:radia_motor_rom>"
+	COMMENT "Copying motor ROM C ABI library to src/radia"
 )
 
 # Radia ext sources
