@@ -224,6 +224,10 @@ def regularized_trace_inverse_path_gate(
         _optional_hmatrix_block_tree_identity_is_aligned(summary)
     )
     ad_gradient_identity_ok = _optional_ad_gradient_identity_is_aligned(summary)
+    cq_transfer_identity_ok = _optional_cq_transfer_identity_is_aligned(summary)
+    fembem_coupling_identity_ok = (
+        _optional_fembem_coupling_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -361,6 +365,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "ad_gradient_uses_current_tape_material_operator_mesh_objective_and_primal": (
             ad_gradient_identity_ok
+        ),
+        "cq_history_uses_current_contour_timestep_branch_transfer_and_inverse_transform": (
+            cq_transfer_identity_ok
+        ),
+        "fembem_coupling_uses_current_trace_normals_material_wavenumber_matrices_and_mesh": (
+            fembem_coupling_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -2195,6 +2205,144 @@ def _optional_ad_gradient_identity_is_aligned(
         and relative_errors
         and math.isclose(reported_error, max(relative_errors), rel_tol=1.0e-6)
         and reported_error <= tolerance
+    )
+
+
+def _optional_cq_transfer_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_contour_radius_timestep_laplace_branch_transfer_operator_inverse_transform_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        radius = float(value["contour_radius"])
+        result_radius = float(value["result_contour_radius"])
+        timestep = float(value["time_step_s"])
+        result_timestep = float(value["result_time_step_s"])
+        points = tuple(
+            tuple(float(item) for item in pair)
+            for pair in value["laplace_points_ri"]
+        )
+        result_points = tuple(
+            tuple(float(item) for item in pair)
+            for pair in value["result_laplace_points_ri"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    operator_digest = str(value.get("transfer_operator_sha256", "")).lower()
+    result_digest = str(value.get("time_history_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "contour_cq_generation",
+                "timestep_cq_generation",
+                "laplace_branch_cq_generation",
+                "transfer_operator_cq_generation",
+                "inverse_transform_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and math.isfinite(radius)
+        and 0.0 < radius < 1.0
+        and result_radius == radius
+        and math.isfinite(timestep)
+        and timestep > 0.0
+        and result_timestep == timestep
+        and value.get("laplace_branch") == "principal_sqrt_outgoing"
+        and value.get("result_laplace_branch") == value.get("laplace_branch")
+        and len(points) >= 4
+        and all(
+            len(pair) == 2 and all(math.isfinite(item) for item in pair)
+            for pair in points
+        )
+        and all(pair[0] > 0.0 for pair in points)
+        and result_points == points
+        and bool(str(value.get("transfer_operator_id", "")).strip())
+        and value.get("result_transfer_operator_id")
+        == value.get("transfer_operator_id")
+        and _is_sha256(operator_digest)
+        and str(value.get("result_transfer_operator_sha256", "")).lower()
+        == operator_digest
+        and value.get("inverse_transform") == "fft_conjugate_symmetric"
+        and value.get("result_inverse_transform")
+        == value.get("inverse_transform")
+        and _is_sha256(result_digest)
+        and str(value.get("reported_time_history_sha256", "")).lower()
+        == result_digest
+    )
+
+
+def _optional_fembem_coupling_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_trace_map_normal_material_wavenumber_coupling_matrix_mesh_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        density = float(value["fluid_density_kg_m3"])
+        result_density = float(value["result_fluid_density_kg_m3"])
+        sound_speed = float(value["sound_speed_m_s"])
+        result_sound_speed = float(value["result_sound_speed_m_s"])
+        wavenumber = tuple(float(item) for item in value["wavenumber_ri_m_inv"])
+        result_wavenumber = tuple(
+            float(item) for item in value["result_wavenumber_ri_m_inv"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("coupling_generation", "")).strip()
+    digests = (
+        ("trace_map_sha256", "result_trace_map_sha256"),
+        ("normal_field_sha256", "result_normal_field_sha256"),
+        ("coupling_matrix_sha256", "result_coupling_matrix_sha256"),
+        ("volume_mesh_sha256", "result_volume_mesh_sha256"),
+        ("boundary_mesh_sha256", "result_boundary_mesh_sha256"),
+        ("coupled_result_sha256", "reported_coupled_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "trace_map_coupling_generation",
+                "normal_coupling_generation",
+                "material_coupling_generation",
+                "wavenumber_coupling_generation",
+                "matrix_coupling_generation",
+                "mesh_coupling_generation",
+                "result_coupling_generation",
+            )
+        )
+        and value.get("normal_orientation") == "volume_outward"
+        and value.get("result_normal_orientation")
+        == value.get("normal_orientation")
+        and math.isfinite(density)
+        and density > 0.0
+        and result_density == density
+        and math.isfinite(sound_speed)
+        and sound_speed > 0.0
+        and result_sound_speed == sound_speed
+        and len(wavenumber) == 2
+        and all(math.isfinite(item) for item in wavenumber)
+        and wavenumber[0] > 0.0
+        and wavenumber[1] >= 0.0
+        and result_wavenumber == wavenumber
+        and all(
+            _is_sha256(str(value.get(source, "")).lower())
+            and str(value.get(target, "")).lower()
+            == str(value.get(source, "")).lower()
+            for source, target in digests
+        )
     )
 
 
