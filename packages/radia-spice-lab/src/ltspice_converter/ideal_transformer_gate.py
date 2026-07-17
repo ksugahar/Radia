@@ -1559,6 +1559,146 @@ def _behavioral_switch_hysteresis_identity_ok(positive: Mapping[str, object]) ->
     )
 
 
+def _hierarchical_step_identity_ok(positive: Mapping[str, object]) -> bool:
+    c = positive.get(
+        "hierarchical_step_parameter_scope_model_bin_temperature_sample_generation_identity"
+    )
+    if c is None:
+        return True
+    if not isinstance(c, Mapping):
+        return False
+    generation = str(c.get("step_generation_id") or "")
+    try:
+        sample_ids = [int(value) for value in c.get("step_sample_ids", [])]
+        result_ids = [int(value) for value in c.get("result_step_sample_ids", [])]
+        parameters = [float(value) for value in c.get("parameter_values_ohm", [])]
+        result_parameters = [
+            float(value) for value in c.get("result_parameter_values_ohm", [])
+        ]
+        temperatures = [float(value) for value in c.get("temperatures_c", [])]
+        result_temperatures = [
+            float(value) for value in c.get("result_temperatures_c", [])
+        ]
+        samples = [float(value) for value in c.get("sample_values_v", [])]
+        result_samples = [float(value) for value in c.get("result_sample_values_v", [])]
+    except (TypeError, ValueError):
+        return False
+    hierarchy = str(c.get("hierarchy_path") or "")
+    scope = str(c.get("parameter_scope") or "")
+    model_bin = str(c.get("model_bin") or "")
+    digest = str(c.get("step_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            c.get(key) == generation
+            for key in (
+                "scope_step_generation_id",
+                "model_bin_step_generation_id",
+                "temperature_step_generation_id",
+                "sample_row_step_generation_id",
+                "result_step_generation_id",
+            )
+        )
+        and bool(hierarchy)
+        and c.get("result_hierarchy_path") == hierarchy
+        and bool(scope)
+        and c.get("result_parameter_scope") == scope
+        and bool(model_bin)
+        and c.get("result_model_bin") == model_bin
+        and bool(sample_ids)
+        and all(value > 0 for value in sample_ids)
+        and len(set(sample_ids)) == len(sample_ids)
+        and result_ids == sample_ids
+        and len(parameters) == len(sample_ids)
+        and all(math.isfinite(value) and value > 0.0 for value in parameters)
+        and result_parameters == parameters
+        and len(temperatures) == len(sample_ids)
+        and all(math.isfinite(value) and value >= -273.15 for value in temperatures)
+        and result_temperatures == temperatures
+        and len(samples) == len(sample_ids)
+        and all(math.isfinite(value) for value in samples)
+        and result_samples == samples
+        and _is_sha256(digest)
+        and c.get("result_step_table_sha256") == digest
+    )
+
+
+def _ac_noise_source_identity_ok(positive: Mapping[str, object]) -> bool:
+    c = positive.get(
+        "ac_noise_source_normalization_node_alias_complex_axis_generation_identity"
+    )
+    if c is None:
+        return True
+    if not isinstance(c, Mapping):
+        return False
+    generation = str(c.get("analysis_generation_id") or "")
+    aliases = c.get("node_aliases")
+    result_aliases = c.get("result_node_aliases")
+    transfer = c.get("transfer_function_ri")
+    result_transfer = c.get("result_transfer_function_ri")
+    if not all(
+        isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+        for value in (aliases, result_aliases, transfer, result_transfer)
+    ):
+        return False
+    try:
+        frequency = [float(value) for value in c.get("frequency_grid_hz", [])]
+        result_frequency = [
+            float(value) for value in c.get("result_frequency_grid_hz", [])
+        ]
+        transfer_pairs = [[float(value) for value in row] for row in transfer]
+        result_pairs = [[float(value) for value in row] for row in result_transfer]
+        noise = [float(value) for value in c.get("output_noise_v_per_sqrt_hz", [])]
+        result_noise = [
+            float(value) for value in c.get("result_output_noise_v_per_sqrt_hz", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    alias_rows = [[str(value) for value in row] for row in aliases]
+    result_alias_rows = [[str(value) for value in row] for row in result_aliases]
+    source = str(c.get("source_id") or "")
+    normalization = str(c.get("source_normalization") or "")
+    digest = str(c.get("ac_noise_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            c.get(key) == generation
+            for key in (
+                "source_analysis_generation_id",
+                "node_alias_analysis_generation_id",
+                "complex_axis_analysis_generation_id",
+                "frequency_grid_analysis_generation_id",
+                "result_analysis_generation_id",
+            )
+        )
+        and bool(source)
+        and c.get("result_source_id") == source
+        and normalization == "1_V_ac"
+        and c.get("result_source_normalization") == normalization
+        and bool(alias_rows)
+        and all(len(row) == 2 and all(row) for row in alias_rows)
+        and len({row[0] for row in alias_rows}) == len(alias_rows)
+        and result_alias_rows == alias_rows
+        and c.get("complex_axis_convention") == "real_imaginary"
+        and c.get("result_complex_axis_convention") == "real_imaginary"
+        and len(frequency) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequency)
+        and all(right > left for left, right in zip(frequency, frequency[1:]))
+        and result_frequency == frequency
+        and len(transfer_pairs) == len(frequency)
+        and all(
+            len(row) == 2 and all(math.isfinite(value) for value in row)
+            for row in transfer_pairs
+        )
+        and result_pairs == transfer_pairs
+        and len(noise) == len(frequency)
+        and all(math.isfinite(value) and value >= 0.0 for value in noise)
+        and result_noise == noise
+        and _is_sha256(digest)
+        and c.get("result_ac_noise_table_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1915,6 +2055,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "behavioral_switch_measures_use_current_hysteresis_events_timesteps_and_window": (
             _behavioral_switch_hysteresis_identity_ok(positive)
+        ),
+        "hierarchical_steps_use_current_scope_model_bin_temperature_and_sample_rows": (
+            _hierarchical_step_identity_ok(positive)
+        ),
+        "ac_noise_uses_current_source_normalization_aliases_complex_axis_and_grid": (
+            _ac_noise_source_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
