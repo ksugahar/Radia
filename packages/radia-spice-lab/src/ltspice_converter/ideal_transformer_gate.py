@@ -2117,6 +2117,191 @@ def _switch_event_timing_owner_identity_ok(positive: Mapping[str, object]) -> bo
     )
 
 
+def _smps_efficiency_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "smps_efficiency_source_load_steady_cycle_energy_integration_switching_waveform_timestep_result_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        window = [float(value) for value in contract.get("steady_cycle_window_s", [])]
+        result_window = [
+            float(value)
+            for value in contract.get("result_steady_cycle_window_s", [])
+        ]
+        source_energy = float(contract.get("source_energy_j"))
+        result_source_energy = float(contract.get("result_source_energy_j"))
+        load_energy = float(contract.get("load_energy_j"))
+        result_load_energy = float(contract.get("result_load_energy_j"))
+        efficiency = float(contract.get("efficiency"))
+        result_efficiency = float(contract.get("result_efficiency"))
+        timestep = float(contract.get("max_timestep_s"))
+        result_timestep = float(contract.get("result_max_timestep_s"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("efficiency_generation_id") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "source_trace_efficiency_generation_id",
+                "load_trace_efficiency_generation_id",
+                "cycle_window_efficiency_generation_id",
+                "integration_efficiency_generation_id",
+                "waveform_efficiency_generation_id",
+                "timestep_efficiency_generation_id",
+                "result_efficiency_generation_id",
+            )
+        )
+        and bool(str(contract.get("source_trace_id") or ""))
+        and contract.get("result_source_trace_id") == contract.get("source_trace_id")
+        and bool(str(contract.get("load_trace_id") or ""))
+        and contract.get("result_load_trace_id") == contract.get("load_trace_id")
+        and len(window) == 2
+        and all(math.isfinite(value) for value in window)
+        and 0.0 <= window[0] < window[1]
+        and result_window == window
+        and contract.get("energy_integration_rule")
+        == "trapezoid_power_over_time"
+        and contract.get("result_energy_integration_rule")
+        == contract.get("energy_integration_rule")
+        and all(
+            math.isfinite(value)
+            for value in (
+                source_energy,
+                result_source_energy,
+                load_energy,
+                result_load_energy,
+                efficiency,
+                result_efficiency,
+                timestep,
+                result_timestep,
+            )
+        )
+        and source_energy > 0.0
+        and 0.0 <= load_energy <= source_energy
+        and result_source_energy == source_energy
+        and result_load_energy == load_energy
+        and 0.0 <= efficiency <= 1.0
+        and math.isclose(
+            efficiency,
+            load_energy / source_energy,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and result_efficiency == efficiency
+        and timestep > 0.0
+        and timestep <= (window[1] - window[0]) / 20.0
+        and result_timestep == timestep
+        and _is_sha256(str(contract.get("switching_waveform_sha256") or ""))
+        and contract.get("result_switching_waveform_sha256")
+        == contract.get("switching_waveform_sha256")
+        and _is_sha256(str(contract.get("efficiency_result_sha256") or ""))
+        and contract.get("accepted_efficiency_result_sha256")
+        == contract.get("efficiency_result_sha256")
+    )
+
+
+def _loop_gain_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "loop_gain_break_injection_sign_phase_unwrap_crossover_margin_frequency_grid_result_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        nodes = [str(value) for value in contract.get("loop_break_nodes", [])]
+        result_nodes = [
+            str(value) for value in contract.get("result_loop_break_nodes", [])
+        ]
+        injection_sign = int(contract.get("injection_sign"))
+        result_injection_sign = int(contract.get("result_injection_sign"))
+        frequencies = [float(value) for value in contract.get("frequency_grid_hz", [])]
+        result_frequencies = [
+            float(value) for value in contract.get("result_frequency_grid_hz", [])
+        ]
+        gains = [float(value) for value in contract.get("loop_gain_db", [])]
+        result_gains = [float(value) for value in contract.get("result_loop_gain_db", [])]
+        phases = [float(value) for value in contract.get("phase_deg", [])]
+        result_phases = [float(value) for value in contract.get("result_phase_deg", [])]
+        crossover = float(contract.get("gain_crossover_hz"))
+        result_crossover = float(contract.get("result_gain_crossover_hz"))
+        phase_margin = float(contract.get("phase_margin_deg"))
+        result_phase_margin = float(contract.get("result_phase_margin_deg"))
+        gain_margin = float(contract.get("gain_margin_db"))
+        result_gain_margin = float(contract.get("result_gain_margin_db"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("loop_gain_generation_id") or "")
+    zero_gain_indices = [
+        index for index, gain in enumerate(gains) if math.isclose(gain, 0.0, abs_tol=1.0e-12)
+    ]
+    crossover_index_ok = (
+        len(zero_gain_indices) == 1
+        and frequencies[zero_gain_indices[0]] == crossover
+        and math.isclose(
+            180.0 + phases[zero_gain_indices[0]],
+            phase_margin,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+    ) if frequencies and len(frequencies) == len(gains) == len(phases) else False
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "break_loop_gain_generation_id",
+                "injection_loop_gain_generation_id",
+                "phase_loop_gain_generation_id",
+                "crossover_loop_gain_generation_id",
+                "frequency_loop_gain_generation_id",
+                "result_loop_gain_generation_id",
+            )
+        )
+        and bool(str(contract.get("loop_break_element") or ""))
+        and contract.get("result_loop_break_element")
+        == contract.get("loop_break_element")
+        and len(nodes) == 2
+        and all(nodes)
+        and nodes[0] != nodes[1]
+        and result_nodes == nodes
+        and injection_sign in {-1, 1}
+        and result_injection_sign == injection_sign
+        and contract.get("phase_unwrap_rule") == "continuous_negative_180"
+        and contract.get("result_phase_unwrap_rule")
+        == contract.get("phase_unwrap_rule")
+        and contract.get("crossover_interpolation")
+        == "log_frequency_linear_db"
+        and contract.get("result_crossover_interpolation")
+        == contract.get("crossover_interpolation")
+        and len(frequencies) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(gains) == len(frequencies)
+        and len(phases) == len(frequencies)
+        and all(math.isfinite(value) for value in gains + phases)
+        and result_gains == gains
+        and result_phases == phases
+        and crossover_index_ok
+        and result_crossover == crossover
+        and math.isfinite(phase_margin)
+        and 0.0 < phase_margin < 180.0
+        and result_phase_margin == phase_margin
+        and math.isfinite(gain_margin)
+        and gain_margin > 0.0
+        and result_gain_margin == gain_margin
+        and _is_sha256(str(contract.get("loop_gain_result_sha256") or ""))
+        and contract.get("accepted_loop_gain_result_sha256")
+        == contract.get("loop_gain_result_sha256")
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -2497,6 +2682,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "switch_timing_uses_current_hysteresis_events_timestep_window_waveform_and_measures": (
             _switch_event_timing_owner_identity_ok(positive)
+        ),
+        "smps_efficiency_uses_current_traces_cycle_window_integration_waveform_timestep_and_result": (
+            _smps_efficiency_owner_identity_ok(positive)
+        ),
+        "loop_gain_uses_current_break_injection_phase_grid_crossover_margins_and_result": (
+            _loop_gain_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
