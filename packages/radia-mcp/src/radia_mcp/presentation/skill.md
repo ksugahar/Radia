@@ -2,6 +2,12 @@
 
 研究発表スライドの作文ガイド。国内 (IEEJ 系 / 応物 / 機械学会) + 国際 (IEEE conference / APS March Meeting / Compumag 等) + 社内セミナー共通の設計原則。
 
+> **2026-07-17: paper-writing スキル群に統合。** スライド本体は現状 AI が
+> end-to-end で作れない（菅原判断）ため、presentation は独立サーバをやめ、
+> `mcp-server-paper-writing` が全 `presentation_*` ツールを配信する。
+> 運用は「人がスライドを作り、AI が lint / 抽出 / 時間予算 / 台本照合で
+> 支援する」。上流の作文原則は `paper_writing/skill.md` と共有。
+
 ---
 
 ## 🗣️ 良いスライドの定義 — しゃべりやすさ (speakability)

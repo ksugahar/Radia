@@ -459,7 +459,6 @@ CATALOG: dict[str, dict[str, Any]] = {
             "md2html",
             "paper-writing",
             "grant-writing",
-            "presentation",
             "poster",
         ],
         # 'meta' tag = cross-cutting utility usable by any paper /
@@ -488,14 +487,20 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-paper-writing",
         "description": "Journal paper / digest writing helpers: IMRaD, "
                        "abstract, citation, figure, equation, PDF layout, "
-                       "and reviewer-trigger lints.",
+                       "and reviewer-trigger lints. Also serves the merged "
+                       "presentation_* slide lint + PPTX tools (2026-07-17: "
+                       "the standalone presentation server was retired -- "
+                       "AI cannot yet author slide decks end-to-end, so "
+                       "slides are human-authored and AI-linted here).",
         "primary_tools": ["paper_writing_usage",
                             "paper_writing_health_report",
-                            "paper_writing_em_submission_gate"],
+                            "paper_writing_em_submission_gate",
+                            "presentation_usage",
+                            "presentation_health_report",
+                            "presentation_extract_pptx_text"],
         "related": [
             "figure",
             "grant-writing",
-            "presentation",
             "poster",
             "document-meta",
         ],
@@ -512,28 +517,13 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "grant_writing_health_report",
                             "grant_writing_kddi_digital_check",
                             "grant_writing_recommendation_letter_template"],
-        "related": ["paper-writing", "figure", "presentation",
-                      "document-meta"],
+        "related": ["paper-writing", "figure", "document-meta"],
         "tags": ["meta"],
     },
-    "presentation": {
-        "subpackage": "radia_mcp.presentation",
-        "entry_point": "mcp-server-presentation",
-        "description": "Research-talk slide lint + PPTX tools: density, "
-                       "bullets, speaking time, title/body alignment, "
-                       "figure/equation/result-slide checks.",
-        "primary_tools": ["presentation_usage",
-                            "presentation_health_report",
-                            "presentation_extract_pptx_text"],
-        "related": [
-            "paper-writing",
-            "grant-writing",
-            "figure",
-            "poster",
-            "document-meta",
-        ],
-        "tags": ["meta"],
-    },
+    # "presentation" was a standalone server until 2026-07-17; its
+    # presentation_* tools are now served by mcp-server-paper-writing
+    # (see the paper-writing entry above). The radia_mcp.presentation
+    # module remains the implementation home.
     "poster": {
         "subpackage": "radia_mcp.poster",
         "entry_point": "mcp-server-poster",
@@ -543,7 +533,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["poster_usage", "poster_lint",
                             "poster_health_report"],
         "related": [
-            "presentation",
             "paper-writing",
             "figure",
             "document-meta",
@@ -579,7 +568,6 @@ CATALOG: dict[str, dict[str, Any]] = {
             "meta",
             "paper-writing",
             "grant-writing",
-            "presentation",
             "poster",
         ],
         "tags": ["meta"],
@@ -693,6 +681,10 @@ _ALIASES = {
     # CLI-name -> catalog key
     "radia-meta": "meta",
     "radia_meta": "meta",
+    # 2026-07-17: presentation merged into paper-writing (standalone
+    # server retired); keep the old name resolving for discovery.
+    "presentation": "paper-writing",
+    "mcp-server-presentation": "paper-writing",
 }
 # Auto-generate underscore variants for every hyphenated catalog key
 # (e.g. 'magnetic-materials' resolves from both 'magnetic-materials' and

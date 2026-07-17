@@ -7,6 +7,18 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- **Merged the presentation server into paper-writing** (Sugahara: slide
+  decks cannot yet be authored end-to-end by AI, so the slide lint / PPTX
+  toolset does not warrant a standalone server). `mcp-server-paper-writing`
+  now serves all `presentation_*` tools; the `mcp-server-presentation`
+  entry point and `radia_mcp/presentation/server.py` were retired (the
+  `radia_mcp.presentation` module remains the implementation home, still
+  consumed by `document_meta` cross-lint). Catalog entry folded into
+  `paper-writing` with a `presentation -> paper-writing` discovery alias;
+  skills cross-linked (`paper_writing/skill.md` gained presentation and
+  `radia_mcp.figure` operational sections; `presentation/skill.md` notes the
+  merge).
+
 ## [1.4.14] - 2026-07-17
 
 - Documented genus-1 loop-current closure across weak and strong induction-
