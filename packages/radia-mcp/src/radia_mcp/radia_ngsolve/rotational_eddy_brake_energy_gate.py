@@ -942,6 +942,132 @@ def _eigenmode_phase_normalization_tracking_identity_ok(
     )
 
 
+def _parameter_sweep_branch_restart_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "parameter_sweep_branch_restart_solution_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    rows = (
+        identity.get("parameter_names"),
+        identity.get("current_parameter_tuple"),
+        identity.get("checkpoint_parameter_tuple"),
+    )
+    if not all(isinstance(values, list) for values in rows):
+        return False
+    try:
+        names = [str(value) for value in rows[0]]
+        current_tuple = [float(value) for value in rows[1]]
+        checkpoint_tuple = [float(value) for value in rows[2]]
+        current_branch_id = int(identity.get("current_branch_id"))
+        checkpoint_branch_id = int(identity.get("checkpoint_branch_id"))
+    except (TypeError, ValueError):
+        return False
+    sweep_generation = str(identity.get("parameter_sweep_generation") or "")
+    branch_generation = str(identity.get("current_branch_generation") or "")
+    digest_pairs = (
+        ("solution_vector_sha256", "checkpoint_solution_vector_sha256"),
+        ("continuation_state_sha256", "checkpoint_continuation_state_sha256"),
+        ("mesh_coordinate_sha256", "checkpoint_mesh_coordinate_sha256"),
+    )
+    return (
+        bool(sweep_generation)
+        and identity.get("checkpoint_parameter_sweep_generation")
+        == sweep_generation
+        and bool(branch_generation)
+        and identity.get("checkpoint_branch_generation") == branch_generation
+        and identity.get("solution_vector_branch_generation") == branch_generation
+        and identity.get("continuation_state_branch_generation")
+        == branch_generation
+        and identity.get("mesh_coordinate_branch_generation")
+        == branch_generation
+        and current_branch_id >= 0
+        and checkpoint_branch_id == current_branch_id
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and len(names) == len(current_tuple) == len(checkpoint_tuple)
+        and all(math.isfinite(value) for value in current_tuple + checkpoint_tuple)
+        and checkpoint_tuple == current_tuple
+        and all(
+            len(str(identity.get(current_key) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(current_key) or "")
+            )
+            and identity.get(checkpoint_key) == identity.get(current_key)
+            for current_key, checkpoint_key in digest_pairs
+        )
+    )
+
+
+def _multiphysics_coupling_source_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get(
+        "multiphysics_coupling_source_frame_unit_selection_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    rows = (
+        identity.get("source_units"),
+        identity.get("assembled_source_units"),
+        identity.get("source_selection_ids"),
+        identity.get("assembled_source_selection_ids"),
+        identity.get("source_selection_dimensions"),
+        identity.get("assembled_source_selection_dimensions"),
+    )
+    if not all(isinstance(values, list) for values in rows):
+        return False
+    try:
+        source_units = [str(value) for value in rows[0]]
+        assembled_units = [str(value) for value in rows[1]]
+        source_ids = [int(value) for value in rows[2]]
+        assembled_ids = [int(value) for value in rows[3]]
+        source_dimensions = [int(value) for value in rows[4]]
+        assembled_dimensions = [int(value) for value in rows[5]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("coupling_generation") or "")
+    frame = str(identity.get("source_coordinate_frame") or "")
+    value_digest = str(identity.get("source_values_sha256") or "")
+    selection_digest = str(identity.get("source_selection_sha256") or "")
+    digests = (value_digest, selection_digest)
+    return (
+        bool(generation)
+        and identity.get("source_values_coupling_generation") == generation
+        and identity.get("source_frame_coupling_generation") == generation
+        and identity.get("source_unit_coupling_generation") == generation
+        and identity.get("source_selection_coupling_generation") == generation
+        and frame in {"material", "spatial"}
+        and identity.get("assembled_coordinate_frame") == frame
+        and bool(source_units)
+        and all(source_units)
+        and assembled_units == source_units
+        and bool(source_ids)
+        and all(value > 0 for value in source_ids)
+        and len(set(source_ids)) == len(source_ids)
+        and assembled_ids == source_ids
+        and len(source_dimensions) == len(source_ids)
+        and all(value in {0, 1, 2, 3} for value in source_dimensions)
+        and assembled_dimensions == source_dimensions
+        and all(
+            len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in digests
+        )
+        and identity.get("assembled_source_values_sha256") == value_digest
+        and identity.get("assembled_source_selection_sha256")
+        == selection_digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1329,6 +1455,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "eigenmode_tracking_uses_current_phase_normalization_and_parameter_state": (
             _eigenmode_phase_normalization_tracking_identity_ok(summary)
+        ),
+        "parameter_sweep_restart_uses_current_branch_solution_and_mesh": (
+            _parameter_sweep_branch_restart_identity_ok(summary)
+        ),
+        "multiphysics_coupling_uses_current_source_frame_units_and_selection": (
+            _multiphysics_coupling_source_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
