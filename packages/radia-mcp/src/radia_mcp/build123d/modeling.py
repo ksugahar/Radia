@@ -4205,6 +4205,184 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    boolean_result_evidence_present = any(
+        row.get(
+            "boolean_result_solid_orientation_location_label_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+
+    def boolean_result_orientation_location_label_identity(row):
+        value = row.get(
+            "boolean_result_solid_orientation_location_label_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("boolean_generation", "")).strip()
+        operand_generations = [
+            str(item).strip() for item in value.get("operand_generations", [])
+        ]
+        result_operands = [
+            str(item).strip()
+            for item in value.get("result_operand_generations", [])
+        ]
+        orientation = str(value.get("solid_orientation", "")).strip()
+        labels = [str(item).strip() for item in value.get("semantic_labels", [])]
+        resolved_labels = [
+            str(item).strip()
+            for item in value.get("resolved_semantic_labels", [])
+        ]
+        location_digest = str(
+            value.get("result_location_sha256", "")
+        ).lower()
+        result_digest = str(value.get("boolean_result_sha256", "")).lower()
+        if (
+            not generation
+            or any(
+                value.get(key) != generation
+                for key in (
+                    "result_boolean_generation",
+                    "orientation_boolean_generation",
+                    "location_boolean_generation",
+                    "label_boolean_generation",
+                )
+            )
+            or len(operand_generations) < 2
+            or any(not item for item in operand_generations)
+            or result_operands != operand_generations
+            or orientation not in {"forward", "reversed"}
+            or value.get("resolved_solid_orientation") != orientation
+            or not labels
+            or len(set(labels)) != len(labels)
+            or any(not item for item in labels)
+            or resolved_labels != labels
+            or not valid_sha256(location_digest)
+            or value.get("resolved_result_location_sha256") != location_digest
+            or not valid_sha256(result_digest)
+            or value.get("resolved_boolean_result_sha256") != result_digest
+        ):
+            return None
+        return (
+            generation,
+            tuple(operand_generations),
+            orientation,
+            tuple(labels),
+            location_digest,
+            result_digest,
+        )
+
+    reference_boolean_result_maps = {
+        str(row.get("name", "")): boolean_result_orientation_location_label_identity(
+            row
+        )
+        for row in reference
+    }
+    boolean_result_identity_ok = not boolean_result_evidence_present
+    if boolean_result_evidence_present:
+        boolean_result_identity_ok = bool(reference_boolean_result_maps) and all(
+            value is not None for value in reference_boolean_result_maps.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_result_identity_ok = boolean_result_identity_ok and all(
+                boolean_result_orientation_location_label_identity(row)
+                == reference_boolean_result_maps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    tessellation_generation_evidence_present = any(
+        row.get("tessellation_chord_angle_unit_location_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+
+    def tessellation_chord_angle_unit_location_identity(row):
+        value = row.get(
+            "tessellation_chord_angle_unit_location_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        shape_generation = str(value.get("shape_generation", "")).strip()
+        tessellation_generation = str(
+            value.get("tessellation_generation", "")
+        ).strip()
+        try:
+            chord = float(value.get("chord_tolerance"))
+            evaluated_chord = float(value.get("evaluated_chord_tolerance"))
+            angle = float(value.get("angular_tolerance_deg"))
+            evaluated_angle = float(value.get("evaluated_angular_tolerance_deg"))
+        except (TypeError, ValueError):
+            return None
+        length_unit = str(value.get("length_unit", "")).strip()
+        location_digest = str(
+            value.get("object_location_sha256", "")
+        ).lower()
+        tessellation_digest = str(
+            value.get("tessellation_sha256", "")
+        ).lower()
+        if (
+            not shape_generation
+            or value.get("tessellation_shape_generation") != shape_generation
+            or not tessellation_generation
+            or value.get("metric_tessellation_generation")
+            != tessellation_generation
+            or value.get("location_tessellation_generation")
+            != tessellation_generation
+            or not math.isfinite(chord)
+            or chord <= 0.0
+            or not math.isclose(
+                evaluated_chord, chord, rel_tol=0.0, abs_tol=1.0e-18
+            )
+            or not math.isfinite(angle)
+            or not 0.0 < angle <= 180.0
+            or not math.isclose(
+                evaluated_angle, angle, rel_tol=0.0, abs_tol=1.0e-12
+            )
+            or length_unit not in {"m", "cm", "mm"}
+            or value.get("evaluated_length_unit") != length_unit
+            or not valid_sha256(location_digest)
+            or value.get("evaluated_object_location_sha256") != location_digest
+            or not valid_sha256(tessellation_digest)
+            or value.get("evaluated_tessellation_sha256")
+            != tessellation_digest
+        ):
+            return None
+        return (
+            shape_generation,
+            tessellation_generation,
+            chord,
+            angle,
+            length_unit,
+            location_digest,
+            tessellation_digest,
+        )
+
+    reference_tessellation_generation_maps = {
+        str(row.get("name", "")): tessellation_chord_angle_unit_location_identity(
+            row
+        )
+        for row in reference
+    }
+    tessellation_generation_identity_ok = not tessellation_generation_evidence_present
+    if tessellation_generation_evidence_present:
+        tessellation_generation_identity_ok = bool(
+            reference_tessellation_generation_maps
+        ) and all(
+            value is not None
+            for value in reference_tessellation_generation_maps.values()
+        )
+        for _, rows in normalized_sets:
+            tessellation_generation_identity_ok = (
+                tessellation_generation_identity_ok
+                and all(
+                    tessellation_chord_angle_unit_location_identity(row)
+                    == reference_tessellation_generation_maps.get(
+                        str(row.get("name", ""))
+                    )
+                    for row in rows
+                )
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -4311,6 +4489,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "swept_solid_uses_current_path_frames_twist_and_profile_orientation": (
             sweep_frame_identity_ok
+        ),
+        "boolean_result_uses_current_orientation_location_and_labels": (
+            boolean_result_identity_ok
+        ),
+        "tessellation_uses_current_tolerances_units_and_object_location": (
+            tessellation_generation_identity_ok
         ),
     }
     issues = []
