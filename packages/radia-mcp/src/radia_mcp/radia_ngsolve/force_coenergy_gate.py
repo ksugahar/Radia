@@ -55,6 +55,8 @@ def force_coenergy_displacement_gate(
     incremental_permeability_operating_point_identity_ok = True
     weighted_stress_air_mask_nodal_weight_identity_ok = True
     sliding_band_periodic_angle_rotor_position_identity_ok = True
+    coenergy_torque_angle_difference_remesh_state_identity_ok = True
+    axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -80,6 +82,8 @@ def force_coenergy_displacement_gate(
         incremental_permeability_operating_point_identity_ok = False
         weighted_stress_air_mask_nodal_weight_identity_ok = False
         sliding_band_periodic_angle_rotor_position_identity_ok = False
+        coenergy_torque_angle_difference_remesh_state_identity_ok = False
+        axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1138,6 +1142,144 @@ def force_coenergy_displacement_gate(
                 == map_digest
             )
 
+        torque_states = artifact_identity.get(
+            "coenergy_torque_angle_difference_remesh_state_generation_identity"
+        )
+        if torque_states is not None:
+            torque_states = torque_states if isinstance(torque_states, dict) else {}
+            torque_generation = str(
+                torque_states.get("torque_generation", "")
+            ).strip()
+            table_generation = str(
+                torque_states.get("state_table_generation", "")
+            ).strip()
+            angle_generation = str(
+                torque_states.get("angle_spacing_generation", "")
+            ).strip()
+            solve_generations = [
+                str(value)
+                for value in torque_states.get("coenergy_solve_generations", [])
+            ]
+            mesh_generations = [
+                str(value)
+                for value in torque_states.get("mesh_remap_solve_generations", [])
+            ]
+            excitation_generations = [
+                str(value)
+                for value in torque_states.get("excitation_solve_generations", [])
+            ]
+            angle_state_generations = [
+                str(value)
+                for value in torque_states.get("angle_state_solve_generations", [])
+            ]
+            try:
+                angles = [
+                    float(value) for value in torque_states.get("angles_deg", [])
+                ]
+                derivative_angles = [
+                    float(value)
+                    for value in torque_states.get("derivative_angles_deg", [])
+                ]
+            except (TypeError, ValueError):
+                angles = derivative_angles = []
+            digest = str(
+                torque_states.get("coenergy_state_table_sha256", "")
+            ).lower()
+            coenergy_torque_angle_difference_remesh_state_identity_ok = (
+                bool(torque_generation)
+                and torque_states.get("derivative_torque_generation")
+                == torque_generation
+                and bool(table_generation)
+                and torque_states.get("derivative_state_table_generation")
+                == table_generation
+                and len(solve_generations) >= 3
+                and all(solve_generations)
+                and len(set(solve_generations)) == len(solve_generations)
+                and mesh_generations == solve_generations
+                and excitation_generations == solve_generations
+                and angle_state_generations == solve_generations
+                and len(angles) == len(solve_generations)
+                and all(math.isfinite(value) for value in angles)
+                and all(left < right for left, right in zip(angles, angles[1:]))
+                and derivative_angles == angles
+                and bool(angle_generation)
+                and torque_states.get("derivative_angle_spacing_generation")
+                == angle_generation
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    torque_states.get("derivative_state_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
+        hodge_radius = artifact_identity.get(
+            "axisymmetric_henrotte_hodge_radius_weight_coordinate_generation_identity"
+        )
+        if hodge_radius is not None:
+            hodge_radius = hodge_radius if isinstance(hodge_radius, dict) else {}
+            mesh_generation = str(
+                hodge_radius.get("mesh_geometry_generation", "")
+            ).strip()
+            try:
+                node_ids = [int(value) for value in hodge_radius.get("node_ids", [])]
+                field_node_ids = [
+                    int(value) for value in hodge_radius.get("field_node_ids", [])
+                ]
+                radius = [float(value) for value in hodge_radius.get("radius_m", [])]
+                hodge_weights = [
+                    float(value)
+                    for value in hodge_radius.get("hodge_radius_weight_m", [])
+                ]
+                cylindrical_radius = [
+                    float(value)
+                    for value in hodge_radius.get("cylindrical_r_coordinate_m", [])
+                ]
+            except (TypeError, ValueError):
+                node_ids = field_node_ids = []
+                radius = hodge_weights = cylindrical_radius = []
+            weight_digest = str(
+                hodge_radius.get("radius_weight_table_sha256", "")
+            ).lower()
+            coordinate_digest = str(
+                hodge_radius.get("coordinate_table_sha256", "")
+            ).lower()
+            axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok = (
+                bool(mesh_generation)
+                and hodge_radius.get("field_mesh_geometry_generation")
+                == mesh_generation
+                and hodge_radius.get("radius_weight_mesh_geometry_generation")
+                == mesh_generation
+                and hodge_radius.get(
+                    "cylindrical_coordinate_mesh_geometry_generation"
+                )
+                == mesh_generation
+                and bool(node_ids)
+                and len(set(node_ids)) == len(node_ids)
+                and field_node_ids == node_ids
+                and len(radius) == len(node_ids)
+                and all(math.isfinite(value) and value >= 0.0 for value in radius)
+                and hodge_weights == radius
+                and cylindrical_radius == radius
+                and len(weight_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in weight_digest
+                )
+                and str(
+                    hodge_radius.get("force_radius_weight_table_sha256", "")
+                ).lower()
+                == weight_digest
+                and len(coordinate_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in coordinate_digest
+                )
+                and str(
+                    hodge_radius.get("field_coordinate_table_sha256", "")
+                ).lower()
+                == coordinate_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -1236,6 +1378,12 @@ def force_coenergy_displacement_gate(
         ),
         "sliding_band_angles_and_torque_use_current_rotor_position": (
             sliding_band_periodic_angle_rotor_position_identity_ok
+        ),
+        "coenergy_torque_states_share_remesh_excitation_and_angle_generations": (
+            coenergy_torque_angle_difference_remesh_state_identity_ok
+        ),
+        "axisymmetric_hodge_radius_weights_use_current_mesh_coordinates": (
+            axisymmetric_henrotte_hodge_radius_weight_coordinate_identity_ok
         ),
     }
     return {
