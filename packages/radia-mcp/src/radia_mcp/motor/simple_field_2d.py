@@ -243,7 +243,7 @@ def route_motor_validation(goal: str) -> dict[str, Any]:
         "workflow": [
             "Select and inspect a public motor input deck.",
             "Run motor_field_quick_check for a first-order sign/scale sanity check.",
-            "Use motor_validation_lanes('lane_matrix') to choose HDiv-VIM + reduced FEM for pickup/demag/flux checks or NGSolve+AGE for FE air-gap quantities.",
+            "Use motor_validation_lanes('lane_matrix') to compare HDiv-MMM + HCurl eddy-bubble with NGSolve+AGE on the same motor identity.",
             "Call motor_age_validation_plan(goal) to select the public AGE quality gates.",
             "Use NGSolve AGE / radia-ngsolve for the independent validation anchor.",
             "Only after the reduced quantities agree, move to local product runs.",

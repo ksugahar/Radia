@@ -5,8 +5,8 @@ into one score:
 
 * NGSolve+AGE for the finite-element air-gap machine path: torque, dq,
   eddy, and nonlinear machine quantities.
-* HDiv-VIM for the implemented reduced saliency/reluctance rotor path, with
-  fixed-stator reduced-FEM/AGE coupling still tracked as an experimental RFC.
+* Radia HDiv-MMM coupled to the HCurl eddy-bubble basis for the independent
+  material and eddy-current path.
 
 This module gives MCP clients a small contract for naming the lane, checking
 artifact metadata, and deciding which radia-motor knowledge should be updated
@@ -53,6 +53,8 @@ COMMON_REQUIRED_FIELDS = (
     "metrics",
     "timing_breakdown_s",
     "artifact_feedback",
+    "shared_mesh_material_identity",
+    "solver_ready_artifact",
 )
 
 
@@ -121,10 +123,10 @@ LANES: dict[str, MotorValidationLane] = {
             "radia_mcp.radia_ngsolve AGE / force recipes",
         ),
     ),
-    "hdiv_vim_reduced_fem": MotorValidationLane(
-        lane_id="hdiv_vim_reduced_fem",
-        label="HDiv-VIM + reduced FEM (reduced motor validated; coupling RFC)",
-        support_status="experimental_rfc",
+    "hdiv_mmm_hcurl_eddy_bubble": MotorValidationLane(
+        lane_id="hdiv_mmm_hcurl_eddy_bubble",
+        label="Radia HDiv-MMM + HCurl eddy-bubble",
+        support_status="required_validation_path",
         support_note=(
             "The single-rotor planar reluctance path is implemented as "
             "radia.motor_hdiv.HDivReducedMotor and the radia_motor 'HDiv Reduced' "
@@ -137,19 +139,17 @@ LANES: dict[str, MotorValidationLane] = {
             "not be inferred from the validated reduced rotor path."
         ),
         radia_path=(
-            "radia.motor_hdiv.HDivReducedMotor + calc_motor_hdiv_reduced.py; "
-            "fixed-stator reduced FEM/AGE coupling remains proposed"
+            "radia.vim.NgsolveHDivMMMResponseReduction + "
+            "radia.vim.CoupleEddyBubbleHCurlBasisWithHDivMMM"
         ),
         best_for=(
             "passive pickup flux and signed flux-linkage sweeps",
-            "linear PM motor pickup-flux and thrust-trend reduced checks",
-            "rotary SPM/BLDC/IPM/IM/SRM/SynRM/AFPM reduced flux and coenergy trend checks",
+            "linear PM motor thrust and eddy-current reaction checks",
+            "rotary SPM/BLDC/IPM/IM/SRM/SynRM/AFPM flux, loss, and coenergy checks",
             "permanent-magnet demagnetizing-field anchors",
-            "source-field / surface-current intuition",
-            "planar saliency torque sign and scale checks against closed form reluctance torque",
-            "reduced reluctance-motor angle sweeps with one cached charge Gram",
-            "three-way Maxwell/volume/coenergy torque consistency",
-            "researching whether a rotor VIM source can drive a compact fixed-stator reduced FEM response",
+            "magnetic-material and conductor coupling on a shared mesh/material identity",
+            "frequency-domain eddy-current and Joule-loss checks",
+            "Maxwell, volume-force, coenergy, and magnetic-energy consistency",
         ),
         observable_families=(
             "pickup_flux",
@@ -161,26 +161,31 @@ LANES: dict[str, MotorValidationLane] = {
             "demag_field",
             "coenergy",
             "force_or_torque_trend",
+            "eddy_current",
+            "joule_loss",
+            "frequency_response",
         ),
         required_fields=COMMON_REQUIRED_FIELDS
         + (
-            "coupling_design_status",
-            "interface_operator_contract",
-            "reduced_fem_contract",
-            "vim_operator_contract",
+            "hdiv_mmm_operator_contract",
+            "hcurl_eddy_bubble_contract",
+            "coupling_operator_contract",
         ),
         required_metrics=(
             "signed_agreement_count",
             "mean_abs_relative_error",
             "rms_abs_relative_error",
             "max_abs_relative_error",
+            "mixed_block_residual",
+            "magnetic_energy_closure",
+            "eddy_power_nonnegative",
         ),
         public_evidence=(
             "analytic sign/scale checks",
-            "tests/test_motor_hdiv_reduced.py",
-            "validation_test/feec/test_hdiv_motor_minimal_contract.py",
+            "tests/test_vim_eddy_hybrid.py::test_eddy_bubble_hcurl_basis_is_vim_and_hdiv_mmm_ready",
+            "validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py",
+            "validation_test/cln/planar_hdiv_mmm_response_smoke.py",
             "stored public-safe regression artifacts",
-            "reduced FEM consistency checks",
         ),
         private_reference_sources=(
             "product local reference",
@@ -196,23 +201,32 @@ LANES: dict[str, MotorValidationLane] = {
 }
 
 
+LEGACY_LANE_ALIASES = {
+    "hdiv_vim_reduced_fem": "hdiv_mmm_hcurl_eddy_bubble",
+}
+
+
+def _canonical_lane_id(lane_id: str) -> str:
+    normalized = lane_id.strip().lower()
+    return LEGACY_LANE_ALIASES.get(normalized, normalized)
+
+
 OVERVIEW = """\
 # radia-motor validation lanes
 
 radia-motor should keep independent cross-validation lanes, but its default
 learning environment is an always-on two-lane comparison: every motor result
 that claims radia-motor MCP learning must include both `ngsolve_age` and
-`hdiv_vim_reduced_fem` in the same combined artifact.  A single-lane artifact
+`hdiv_mmm_hcurl_eddy_bubble` in the same combined artifact.  A single-lane artifact
 can pass its own metadata gate, but it is not enough to say radia-motor learned.
 
 - `ngsolve_age`: NGSolve+AGE.  This is the current supported radia-motor
   finite-element air-gap machine lane for torque, dq quantities, cogging,
   eddy/slip, hysteresis, and nonlinear machine studies.
-- `hdiv_vim_reduced_fem`: the planar HDiv reduced saliency/reluctance rotor is
-  implemented and solver-validated.  The lane retains `experimental_rfc`
-  status because its larger promise includes a fixed-stator reduced FEM/AGE
-  model, which still needs a reduced-basis regression and complete coupling
-  solve.  State which of those two scopes an artifact exercised.
+- `hdiv_mmm_hcurl_eddy_bubble`: Radia HDiv-MMM + HCurl eddy-bubble.  The mixed
+  operator is the independent material/eddy-current lane.  Every promoted
+  motor artifact must record its shared mesh/material identity, solver-ready
+  artifact, and concrete execution verification.
 
 Private product, lab-local, open-source, analytic, and stored-regression
 comparisons can all be reference sources.  The public MCP learning artifact
@@ -250,7 +264,7 @@ PROMOTION_POLICY = """\
 
 Each motor cross-validation slot should end with three decisions:
 
-1. `which_lane`: `ngsolve_age` or `hdiv_vim_reduced_fem`.
+1. `which_lane`: `ngsolve_age` or `hdiv_mmm_hcurl_eddy_bubble`.
 2. `which_observable`: one lane-supported observable family.
 3. `which_promotion`: the exact public-safe knowledge or recipe that improved.
 
@@ -264,8 +278,9 @@ Promotion is allowed when:
   benchmark numbers.
 
 For radia-motor learning, promote through the combined comparison gate:
-`ngsolve_age` and `hdiv_vim_reduced_fem` must both be present. The HDiv-VIM
-lane must include a solver-ready artifact with a non-empty verification list.
+`ngsolve_age` and `hdiv_mmm_hcurl_eddy_bubble` must both be present. The Radia
+lane must include a solver-ready mixed-system artifact with a non-empty
+verification list.
 If the slot only produced a useful private comparison, keep it in the private
 cross-validation directory and mark `artifact_feedback.status = candidate`.
 """
@@ -274,22 +289,18 @@ cross-validation directory and mark `artifact_feedback.status = candidate`.
 RUNBOOK = """\
 # Motor validation lane runbook
 
-For an HDiv-VIM + reduced FEM research slot:
+For a Radia HDiv-MMM + HCurl eddy-bubble slot:
 
 ```powershell
-python -m pytest validation_test\\feec\\test_hdiv_motor_minimal_contract.py -q
-python -m pytest tests\\test_loop_slot_gates.py -k hdiv
+python validation_test\\cln\\hcurl_vim_hdiv_mmm_end_to_end.py
+python -m pytest tests\\test_vim_eddy_hybrid.py -q
 ```
 
-Use the first command as the public solver-ready HDiv-VIM operator gate: a
-planar elliptic saliency body, rotating applied field, cached body operator,
-odd torque under angle reversal, and closed-form reluctance-torque scale.
-Then attach the private/local comparison as a research artifact with
-`motor_validation_lane = "hdiv_vim_reduced_fem"` and
-`coupling_design_status = "experimental_rfc"` unless the artifact includes
-a non-empty `solver_ready_artifact.verification` list.  Passing this metadata
-gate means the idea is organized for learning; it does not mean radia-motor
-already supports the full coupled solver.
+Use the first command as the solver-ready mixed-system gate.  It must exercise
+HDiv-MMM material response, the HCurl eddy-bubble basis, their coupling block,
+and the shared mesh/material registry.  Attach the comparison with
+`motor_validation_lane = "hdiv_mmm_hcurl_eddy_bubble"`; a non-empty
+`solver_ready_artifact.verification` list is mandatory for MCP learning.
 
 For an NGSolve+AGE slot:
 
@@ -357,7 +368,7 @@ def format_motor_validation_lanes(topic: str = "overview") -> str:
 
 def lane_template(lane_id: str = "all") -> dict[str, Any]:
     """Return a JSON-serializable artifact template for one lane or all lanes."""
-    requested = lane_id.strip().lower()
+    requested = _canonical_lane_id(lane_id)
     if requested == "all":
         return {
             "schema_version": "radia-motor-validation-lanes/v1",
@@ -442,8 +453,14 @@ def validate_motor_validation_artifact(
 
     errors: list[str] = []
     warnings: list[str] = []
-    lane_id = str(data.get("motor_validation_lane", "")).strip().lower()
-    if expected_lane and lane_id != expected_lane.strip().lower():
+    declared_lane_id = str(data.get("motor_validation_lane", "")).strip().lower()
+    lane_id = _canonical_lane_id(declared_lane_id)
+    if declared_lane_id in LEGACY_LANE_ALIASES:
+        warnings.append(
+            f"deprecated motor_validation_lane {declared_lane_id!r}; use {lane_id!r}"
+        )
+    expected_canonical = _canonical_lane_id(expected_lane) if expected_lane else ""
+    if expected_canonical and lane_id != expected_canonical:
         errors.append(
             f"expected lane {expected_lane!r}, artifact declares {lane_id!r}"
         )
@@ -501,6 +518,32 @@ def validate_motor_validation_artifact(
             "solver_ready_artifact must include artifact_id and a non-empty "
             "verification list when coupling_design_status claims solver validation"
         )
+    if lane_id in LANES and not has_solver_ready_artifact:
+        errors.append(
+            f"{lane_id} requires solver_ready_artifact with artifact_id and "
+            "non-empty execution verification"
+        )
+    shared_identity = data.get("shared_mesh_material_identity")
+    if lane_id in LANES and not isinstance(shared_identity, Mapping):
+        errors.append("shared_mesh_material_identity must be an object")
+    elif isinstance(shared_identity, Mapping):
+        for key in ("geometry_sha256", "material_sha256", "excitation_sha256"):
+            digest = str(shared_identity.get(key, "")).lower()
+            if len(digest) != 64 or any(
+                character not in "0123456789abcdef" for character in digest
+            ):
+                errors.append(
+                    f"shared_mesh_material_identity.{key} must be a sha256 digest"
+                )
+    if lane_id == "hdiv_mmm_hcurl_eddy_bubble":
+        for contract_name in (
+            "hdiv_mmm_operator_contract",
+            "hcurl_eddy_bubble_contract",
+            "coupling_operator_contract",
+        ):
+            contract = data.get(contract_name)
+            if not isinstance(contract, Mapping) or not contract:
+                errors.append(f"{contract_name} must be a non-empty object")
 
     feedback = data.get("artifact_feedback", {})
     if not isinstance(feedback, Mapping):
@@ -518,6 +561,7 @@ def validate_motor_validation_artifact(
         result_status == "pass"
         and status_value == "pass"
         and support_status == "supported_validation_path"
+        and has_solver_ready_artifact
     )
     accepted_for_mcp_rfc_learning = (
         result_status == "pass"
@@ -529,12 +573,20 @@ def validate_motor_validation_artifact(
         and coupling_status in {"solver_validated", "validated_solver_path"}
         and has_solver_ready_artifact
     )
+    validated_required_solver_path = (
+        result_status == "pass"
+        and status_value == "pass"
+        and support_status == "required_validation_path"
+        and has_solver_ready_artifact
+    )
     accepted_for_mcp_learning = (
         result_status == "pass"
         and status_value == "pass"
+        and not warnings
         and (
             validated_solver_path
             or validated_experimental_solver_path
+            or validated_required_solver_path
         )
     )
     return {
@@ -544,6 +596,7 @@ def validate_motor_validation_artifact(
         "support_status": support_status,
         "validated_solver_path": validated_solver_path,
         "validated_experimental_solver_path": validated_experimental_solver_path,
+        "validated_required_solver_path": validated_required_solver_path,
         "validated_supported_path": validated_solver_path,
         "accepted_for_mcp_learning": accepted_for_mcp_learning,
         "accepted_for_mcp_rfc_learning": accepted_for_mcp_rfc_learning,
@@ -563,6 +616,7 @@ def format_artifact_gate_result(result: Mapping[str, Any]) -> str:
         f"- support status: `{result.get('support_status', '')}`",
         f"- validated solver path: `{result.get('validated_solver_path', False)}`",
         f"- validated experimental solver path: `{result.get('validated_experimental_solver_path', False)}`",
+        f"- validated required solver path: `{result.get('validated_required_solver_path', False)}`",
         f"- validated supported path: `{result.get('validated_supported_path', False)}`",
         f"- accepted for MCP learning: `{result.get('accepted_for_mcp_learning', False)}`",
         f"- accepted for MCP RFC learning: `{result.get('accepted_for_mcp_rfc_learning', False)}`",

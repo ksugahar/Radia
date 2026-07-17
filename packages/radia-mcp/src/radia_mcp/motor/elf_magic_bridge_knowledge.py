@@ -221,8 +221,8 @@ not as a one-off deck replay:
 
 1. Use `NGSolve+AGE` for the field/air-gap finite-element lane:
    `linear_thrust`, `linear_pm_flux`, and field-energy consistency.
-2. Use `HDiv-VIM + reduced FEM` for the reduced source-field lane:
-   `linear_pm_flux` and `linear_force_or_thrust` sign/trend checks.
+2. Use `HDiv-MMM + HCurl eddy-bubble` for the independent mixed-system lane:
+   `linear_pm_flux`, eddy-current response, and thrust sign/trend checks.
 3. Keep the source-tool run as `product_local_reference`; publish only the
    scrubbed lesson, not raw local logs or benchmark rows.
 4. A local direct-solver replay may confirm the source deck is runnable, but
@@ -242,7 +242,7 @@ Rotary motor source-tool examples should train radia-motor as a **family
 sweep**, not as one generic motor bucket. A useful 30-case replay covers at
 least these five families:
 
-| Family | AGE lane focus | HDiv-VIM + reduced FEM focus |
+| Family | AGE lane focus | HDiv-MMM + HCurl eddy-bubble focus |
 |---|---|---|
 | SPM / SPMSM | PM flux linkage, back-EMF, cogging/torque periodicity | pickup flux, demag/source-field trend |
 | IPM / hairpin | `Ld/Lq`, MTPA, field-weakening, demag margin | PM plus saliency flux-linkage trend |
@@ -257,7 +257,8 @@ The public MCP learning rule is the same as other product-local slots:
 
 1. Record only `product_local_reference` as the source class.
 2. Accept radia-motor learning only when `ngsolve_age` and
-   `hdiv_vim_reduced_fem` are both represented by verification commands.
+   `hdiv_mmm_hcurl_eddy_bubble` are both represented by verification commands
+   on the same geometry/material/excitation identity.
 3. Keep raw product rows, logs, paths, and benchmark numbers in the private
    source lane.
 4. Promote only the family coverage, observable names, tolerances, and gate
@@ -284,8 +285,9 @@ The important correction is that `.mao` is the primary run-log artifact.
 Do not count `.mei` as a run result; it is part of the mesh-generation input
 route.  When a private source-tool slot is promoted into radia-motor learning,
 the public artifact should contain only reduced quantities and generic lessons:
-which observable was checked, which radia lane was used, whether AGE and
-HDiv-VIM reduced-FEM both ran, tolerances, version/date/timing metadata, and a
+which observable was checked, which radia lane was used, whether AGE and the
+HDiv-MMM/HCurl eddy-bubble system both ran, tolerances, version/date/timing
+metadata, and a
 scrubbed summary.
 """
 
