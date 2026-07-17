@@ -2125,6 +2125,170 @@ def _farfield_result_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _time_domain_port_smatrix_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "time_domain_port_waveform_normalization_fft_window_grid_deembedding_smatrix_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("time_domain_generation", "")).strip()
+    mode_ids = identity.get("port_mode_ids")
+    smatrix = identity.get("smatrix_ri")
+    try:
+        times = [float(value) for value in identity.get("time_grid_s", [])]
+        result_times = [float(value) for value in identity.get("result_time_grid_s", [])]
+        waveform = [float(value) for value in identity.get("incident_waveform", [])]
+        result_waveform = [
+            float(value) for value in identity.get("result_incident_waveform", [])
+        ]
+        impedances = [
+            float(value) for value in identity.get("reference_impedance_ohm", [])
+        ]
+        result_impedances = [
+            float(value)
+            for value in identity.get("result_reference_impedance_ohm", [])
+        ]
+        frequencies = [float(value) for value in identity.get("frequency_grid_hz", [])]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+        offsets = [float(value) for value in identity.get("deembedding_offsets_m", [])]
+        result_offsets = [
+            float(value) for value in identity.get("result_deembedding_offsets_m", [])
+        ]
+        numeric_smatrix = [
+            [[float(value) for value in pair] for pair in row] for row in smatrix
+        ]
+        numeric_result_smatrix = [
+            [[float(value) for value in pair] for pair in row]
+            for row in identity.get("result_smatrix_ri", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    mode_count = len(mode_ids) if isinstance(mode_ids, list) else 0
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "waveform_time_domain_generation",
+                "normalization_time_domain_generation",
+                "fft_time_domain_generation",
+                "grid_time_domain_generation",
+                "deembedding_time_domain_generation",
+                "smatrix_time_domain_generation",
+                "result_time_domain_generation",
+            )
+        )
+        and mode_count >= 2
+        and all(isinstance(value, str) and value.strip() for value in mode_ids)
+        and len(set(mode_ids)) == mode_count
+        and identity.get("result_port_mode_ids") == mode_ids
+        and len(times) >= 4
+        and all(math.isfinite(value) and value >= 0.0 for value in times)
+        and all(left < right for left, right in zip(times, times[1:]))
+        and result_times == times
+        and len(waveform) == len(times)
+        and all(math.isfinite(value) for value in waveform)
+        and any(value != 0.0 for value in waveform)
+        and result_waveform == waveform
+        and identity.get("wave_normalization") == "power-wave"
+        and identity.get("result_wave_normalization") == "power-wave"
+        and len(impedances) == mode_count
+        and all(math.isfinite(value) and value > 0.0 for value in impedances)
+        and result_impedances == impedances
+        and identity.get("fft_window") == "tukey-0.2"
+        and identity.get("result_fft_window") == "tukey-0.2"
+        and len(frequencies) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(offsets) == mode_count
+        and all(math.isfinite(value) for value in offsets)
+        and result_offsets == offsets
+        and len(numeric_smatrix) == mode_count
+        and all(
+            len(row) == mode_count
+            and all(
+                len(pair) == 2 and all(math.isfinite(value) for value in pair)
+                for pair in row
+            )
+            for row in numeric_smatrix
+        )
+        and numeric_result_smatrix == numeric_smatrix
+        and _valid_sha256(identity.get("time_result_sha256"))
+        and identity.get("accepted_time_result_sha256")
+        == identity.get("time_result_sha256")
+        and _valid_sha256(identity.get("smatrix_sha256"))
+        and identity.get("accepted_smatrix_sha256") == identity.get("smatrix_sha256")
+    )
+
+
+def _huygens_near_far_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "huygens_box_orientation_phase_center_frequency_mesh_near_far_transform_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("huygens_generation", "")).strip()
+    face_ids = identity.get("box_face_ids")
+    try:
+        signs = [int(value) for value in identity.get("outward_orientation_sign", [])]
+        result_signs = [
+            int(value) for value in identity.get("result_outward_orientation_sign", [])
+        ]
+        phase_center = [float(value) for value in identity.get("phase_center_m", [])]
+        result_phase_center = [
+            float(value) for value in identity.get("result_phase_center_m", [])
+        ]
+        frequency = float(identity.get("frequency_hz"))
+        result_frequency = float(identity.get("result_frequency_hz"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "orientation_huygens_generation",
+                "phase_center_huygens_generation",
+                "frequency_huygens_generation",
+                "mesh_huygens_generation",
+                "transform_huygens_generation",
+                "result_huygens_generation",
+            )
+        )
+        and face_ids == ["-x", "+x", "-y", "+y", "-z", "+z"]
+        and identity.get("result_box_face_ids") == face_ids
+        and signs == [-1, 1, -1, 1, -1, 1]
+        and result_signs == signs
+        and len(phase_center) == 3
+        and all(math.isfinite(value) for value in phase_center)
+        and result_phase_center == phase_center
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and result_frequency == frequency
+        and identity.get("near_far_transform") == "equivalent-current-near-to-far"
+        and identity.get("result_near_far_transform")
+        == "equivalent-current-near-to-far"
+        and identity.get("encloses_all_sources") is True
+        and identity.get("result_encloses_all_sources") is True
+        and _valid_sha256(identity.get("enclosing_mesh_sha256"))
+        and identity.get("result_enclosing_mesh_sha256")
+        == identity.get("enclosing_mesh_sha256")
+        and _valid_sha256(identity.get("near_field_sha256"))
+        and identity.get("accepted_near_field_sha256")
+        == identity.get("near_field_sha256")
+        and _valid_sha256(identity.get("far_field_sha256"))
+        and identity.get("accepted_far_field_sha256")
+        == identity.get("far_field_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2396,6 +2560,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "farfields_use_current_angular_grid_polarization_coordinates_power_mesh_and_result": (
                 _farfield_result_inputs_are_current(raw)
+            ),
+            "time_domain_sparameters_use_current_waveform_normalization_fft_grid_deembedding_and_result": (
+                _time_domain_port_smatrix_inputs_are_current(raw)
+            ),
+            "near_to_far_results_use_current_huygens_orientation_phase_center_frequency_mesh_and_transform": (
+                _huygens_near_far_inputs_are_current(raw)
             ),
         }
         row = {
