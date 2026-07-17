@@ -925,3 +925,100 @@ def test_v17_public_transient_rms_average_event_window_generation_mismatch() -> 
         ]
         is False
     )
+
+
+def _with_v18_noise_and_transient_power_identity(summary: dict) -> dict:
+    summary = _with_v17_group_delay_and_event_window_identity(summary)
+    positive = summary["metrics"]["positive"]
+    density = [1.0e-9, 2.0e-9, 1.5e-9]
+    widths = [50.0, 150.0, 200.0]
+    positive["ac_noise_integrated_density_sidedness_bin_generation_identity"] = {
+        "noise_generation_id": "noise-50",
+        "frequency_bin_generation_id": "noise-grid-50",
+        "density_frequency_bin_generation_id": "noise-grid-50",
+        "integration_frequency_bin_generation_id": "noise-grid-50",
+        "sidedness_conversion_frequency_bin_generation_id": "noise-grid-50",
+        "frequency_hz": [100.0, 200.0, 400.0],
+        "frequency_bin_width_hz": widths,
+        "integration_frequency_bin_width_hz": widths,
+        "noise_density_v_per_sqrt_hz": density,
+        "density_sidedness_basis": "one_sided_positive_frequency",
+        "integration_sidedness_basis": "one_sided_positive_frequency",
+        "density_to_integration_amplitude_factor": 1.0,
+        "integrated_noise_rms_v": math.sqrt(
+            sum(value * value * width for value, width in zip(density, widths))
+        ),
+        "frequency_bin_table_sha256": "c" * 64,
+        "integration_frequency_bin_table_sha256": "c" * 64,
+    }
+    positive["transient_power_voltage_current_interpolation_grid_generation_identity"] = {
+        "transient_generation_id": "transient-50",
+        "voltage_sample_grid_generation_id": "transient-grid-50",
+        "current_sample_grid_generation_id": "transient-grid-50",
+        "power_interpolation_grid_generation_id": "transient-grid-50",
+        "integration_grid_generation_id": "transient-grid-50",
+        "voltage_sample_time_s": [0.0, 1.0e-6, 2.0e-6],
+        "current_sample_time_s": [0.0, 1.0e-6, 2.0e-6],
+        "power_interpolation_time_s": [0.0, 1.0e-6, 2.0e-6],
+        "interpolated_voltage_v": [10.0, 8.0, 6.0],
+        "interpolated_current_a": [1.0, 1.5, 2.0],
+        "instantaneous_power_w": [10.0, 12.0, 12.0],
+        "power_sign_convention": "passive_absorbed_positive",
+        "voltage_current_grid_sha256": "d" * 64,
+        "power_interpolation_grid_sha256": "d" * 64,
+    }
+    return summary
+
+
+def test_accepts_v18_noise_bins_and_transient_power_grid_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v18_noise_and_transient_power_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v18_public_ac_noise_integrated_density_sidedness_bin_generation_mismatch() -> None:
+    bad = _with_v18_noise_and_transient_power_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "ac_noise_integrated_density_sidedness_bin_generation_identity"
+    ]
+    identity.update(
+        {
+            "integration_frequency_bin_generation_id": "noise-grid-49",
+            "sidedness_conversion_frequency_bin_generation_id": "noise-grid-49",
+            "integration_frequency_bin_width_hz": [25.0, 75.0, 100.0],
+            "integration_frequency_bin_table_sha256": "e" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "ac_noise_integration_uses_current_sidedness_frequency_bins"
+        ]
+        is False
+    )
+
+
+def test_v18_public_transient_power_voltage_current_interpolation_grid_generation_mismatch() -> None:
+    bad = _with_v18_noise_and_transient_power_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "transient_power_voltage_current_interpolation_grid_generation_identity"
+    ]
+    identity.update(
+        {
+            "current_sample_grid_generation_id": "transient-grid-49",
+            "integration_grid_generation_id": "transient-grid-49",
+            "current_sample_time_s": [0.0, 0.8e-6, 2.0e-6],
+            "interpolated_current_a": [1.0, 1.4, 2.0],
+            "power_interpolation_grid_sha256": "e" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "transient_power_uses_one_current_voltage_interpolation_grid"
+        ]
+        is False
+    )
