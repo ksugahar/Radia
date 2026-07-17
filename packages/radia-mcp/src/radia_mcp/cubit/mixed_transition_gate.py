@@ -2576,6 +2576,235 @@ def _exodus_result_identity_ok(identity: object) -> bool:
     )
 
 
+def _spine_sweep_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        spine_ids = [int(value) for value in identity.get("spine_curve_ids", [])]
+        result_spine_ids = [int(value) for value in identity.get("result_spine_curve_ids", [])]
+        twists = [float(value) for value in identity.get("twist_angles_deg", [])]
+        result_twists = [float(value) for value in identity.get("result_twist_angles_deg", [])]
+        intervals = int(identity.get("interval_count"))
+        result_intervals = int(identity.get("result_interval_count"))
+        source = int(identity.get("source_surface_id"))
+        result_source = int(identity.get("result_source_surface_id"))
+        target = int(identity.get("target_surface_id"))
+        result_target = int(identity.get("result_target_surface_id"))
+        block = int(identity.get("block_id"))
+        result_block = int(identity.get("result_block_id"))
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [float(value) for value in identity.get("result_scaled_jacobians", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sweep_generation") or "")
+    frame = str(identity.get("frame_method") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "spine_sweep_generation", "frame_sweep_generation",
+            "twist_sweep_generation", "interval_sweep_generation",
+            "surface_sweep_generation", "block_sweep_generation",
+            "quality_sweep_generation", "result_sweep_generation",
+        ))
+        and bool(spine_ids)
+        and all(value > 0 for value in spine_ids)
+        and len(set(spine_ids)) == len(spine_ids)
+        and result_spine_ids == spine_ids
+        and frame in {"parallel_transport", "frenet", "fixed"}
+        and identity.get("result_frame_method") == frame
+        and len(twists) >= 2
+        and all(math.isfinite(value) for value in twists)
+        and result_twists == twists
+        and intervals > 0
+        and result_intervals == intervals
+        and source > 0
+        and target > 0
+        and source != target
+        and result_source == source
+        and result_target == target
+        and block > 0
+        and result_block == block
+        and bool(jacobians)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and _valid_sha256(identity.get("sweep_mesh_sha256"))
+        and identity.get("result_sweep_mesh_sha256") == identity.get("sweep_mesh_sha256")
+    )
+
+
+def _local_refinement_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        parents = [int(value) for value in identity.get("parent_element_ids", [])]
+        result_parents = [int(value) for value in identity.get("result_parent_element_ids", [])]
+        children = [[int(value) for value in row] for row in identity.get("child_parent_pairs", [])]
+        result_children = [[int(value) for value in row] for row in identity.get("result_child_parent_pairs", [])]
+        transitions = [[int(value) for value in row] for row in identity.get("transition_face_pairs", [])]
+        result_transitions = [[int(value) for value in row] for row in identity.get("result_transition_face_pairs", [])]
+        conformity = [[int(value) for value in row] for row in identity.get("conformity_node_pairs", [])]
+        result_conformity = [[int(value) for value in row] for row in identity.get("result_conformity_node_pairs", [])]
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        result_blocks = [int(value) for value in identity.get("result_block_ids", [])]
+        boundaries = [int(value) for value in identity.get("boundary_sideset_ids", [])]
+        result_boundaries = [int(value) for value in identity.get("result_boundary_sideset_ids", [])]
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("refinement_generation") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "parent_refinement_generation", "child_refinement_generation",
+            "transition_refinement_generation", "conformity_refinement_generation",
+            "block_refinement_generation", "boundary_refinement_generation",
+            "jacobian_refinement_generation", "export_refinement_generation",
+            "result_refinement_generation",
+        ))
+        and bool(parents)
+        and all(value > 0 for value in parents)
+        and len(set(parents)) == len(parents)
+        and result_parents == parents
+        and bool(children)
+        and all(len(row) == 2 and row[0] > 0 and row[1] in parents for row in children)
+        and len({row[0] for row in children}) == len(children)
+        and result_children == children
+        and bool(transitions)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 and row[0] != row[1] for row in transitions)
+        and result_transitions == transitions
+        and bool(conformity)
+        and all(len(row) == 2 and row[0] > 0 and row[0] == row[1] for row in conformity)
+        and result_conformity == conformity
+        and bool(blocks)
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and result_blocks == blocks
+        and bool(boundaries)
+        and all(value > 0 for value in boundaries)
+        and len(set(boundaries)) == len(boundaries)
+        and result_boundaries == boundaries
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and _valid_sha256(identity.get("refined_mesh_sha256"))
+        and identity.get("result_refined_mesh_sha256") == identity.get("refined_mesh_sha256")
+    )
+
+
+def _sideset_export_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        dimension = int(identity.get("skin_entity_dimension"))
+        decoded_dimension = int(identity.get("decoded_skin_entity_dimension"))
+        faces = [int(value) for value in identity.get("skin_face_ids", [])]
+        decoded_faces = [int(value) for value in identity.get("decoded_skin_face_ids", [])]
+        signs = [int(value) for value in identity.get("orientation_signs", [])]
+        decoded_signs = [int(value) for value in identity.get("decoded_orientation_signs", [])]
+        sideset = int(identity.get("sideset_id"))
+        decoded_sideset = int(identity.get("decoded_sideset_id"))
+        owners = [int(value) for value in identity.get("geometric_owner_surface_ids", [])]
+        decoded_owners = [int(value) for value in identity.get("decoded_geometric_owner_surface_ids", [])]
+        exodus_pairs = [[int(value) for value in row] for row in identity.get("exodus_element_side_pairs", [])]
+        decoded_exodus_pairs = [[int(value) for value in row] for row in identity.get("decoded_exodus_element_side_pairs", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sideset_generation") or "")
+    namespace = str(identity.get("id_namespace") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "skin_sideset_generation", "dimension_sideset_generation",
+            "orientation_sideset_generation", "namespace_sideset_generation",
+            "owner_sideset_generation", "exodus_sideset_generation",
+            "mesh_sideset_generation", "result_sideset_generation",
+        ))
+        and dimension == 2
+        and decoded_dimension == dimension
+        and bool(faces)
+        and all(value > 0 for value in faces)
+        and len(set(faces)) == len(faces)
+        and decoded_faces == faces
+        and len(signs) == len(faces)
+        and all(value in {-1, 1} for value in signs)
+        and decoded_signs == signs
+        and namespace == "sideset"
+        and identity.get("decoded_id_namespace") == namespace
+        and sideset > 0
+        and decoded_sideset == sideset
+        and bool(owners)
+        and all(value > 0 for value in owners)
+        and len(set(owners)) == len(owners)
+        and decoded_owners == owners
+        and len(exodus_pairs) == len(faces)
+        and all(len(row) == 2 and row[0] > 0 and 1 <= row[1] <= 6 for row in exodus_pairs)
+        and decoded_exodus_pairs == exodus_pairs
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("decoded_mesh_sha256") == identity.get("mesh_sha256")
+        and _valid_sha256(identity.get("exodus_sha256"))
+        and identity.get("decoded_exodus_sha256") == identity.get("exodus_sha256")
+    )
+
+
+def _headless_python_invocation_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        undo_before = int(identity.get("undo_depth_before"))
+        result_undo_before = int(identity.get("result_undo_depth_before"))
+        undo_after = int(identity.get("undo_depth_after"))
+        result_undo_after = int(identity.get("result_undo_depth_after"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("invocation_generation") or "")
+    executable = str(identity.get("interpreter_executable") or "")
+    python_version = str(identity.get("python_version") or "")
+    module_version = str(identity.get("cubit_module_version") or "")
+    flags = [str(value) for value in identity.get("headless_flags", [])]
+    transaction = str(identity.get("command_transaction_id") or "")
+    paths = [str(value) for value in identity.get("output_paths", [])]
+    digests = [str(value) for value in identity.get("output_sha256", [])]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "interpreter_invocation_generation", "module_invocation_generation",
+            "transaction_invocation_generation", "undo_invocation_generation",
+            "output_invocation_generation", "result_invocation_generation",
+        ))
+        and bool(executable)
+        and identity.get("result_interpreter_executable") == executable
+        and bool(python_version)
+        and identity.get("result_python_version") == python_version
+        and bool(module_version)
+        and identity.get("result_cubit_module_version") == module_version
+        and set(flags) == {"-nographics", "-batch"}
+        and identity.get("result_headless_flags") == flags
+        and bool(transaction)
+        and identity.get("result_command_transaction_id") == transaction
+        and _valid_sha256(identity.get("command_log_sha256"))
+        and identity.get("result_command_log_sha256") == identity.get("command_log_sha256")
+        and undo_before >= 0
+        and undo_after == undo_before
+        and result_undo_before == undo_before
+        and result_undo_after == undo_after
+        and bool(paths)
+        and len(set(paths)) == len(paths)
+        and identity.get("result_output_paths") == paths
+        and len(digests) == len(paths)
+        and all(_valid_sha256(value) for value in digests)
+        and identity.get("result_output_sha256") == digests
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -3363,6 +3592,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "pyramid_transitions_use_current_base_sides_interface_jacobian_blocks_and_export": (
             _pyramid_transition_export_identity_ok(
                 summary.get("pyramid_transition_orientation_interface_jacobian_block_export_identity")
+            )
+        ),
+        "spine_sweeps_use_current_frame_twist_intervals_surfaces_block_and_quality": (
+            _spine_sweep_identity_ok(
+                summary.get("hex_sweep_spine_frame_twist_interval_surface_block_quality_identity")
+            )
+        ),
+        "local_refinements_use_current_parent_child_transition_conformity_blocks_boundaries_and_export": (
+            _local_refinement_identity_ok(
+                summary.get("local_refinement_parent_child_transition_conformity_block_boundary_export_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -4174,6 +4413,16 @@ def cubit_mixed_transition_source_gate(
         "exodus_results_use_current_64bit_ids_qa_times_variables_mesh_and_checksum": (
             _exodus_result_identity_ok(
                 summary.get("exodus_64bit_id_qa_time_nodal_variable_mesh_checksum_identity")
+            )
+        ),
+        "sideset_exports_use_current_skin_dimension_orientation_namespace_owner_exodus_and_mesh": (
+            _sideset_export_identity_ok(
+                summary.get("sideset_skin_dimension_orientation_namespace_owner_exodus_mesh_identity")
+            )
+        ),
+        "headless_python_runs_use_current_interpreter_module_transaction_undo_outputs_and_invocation": (
+            _headless_python_invocation_identity_ok(
+                summary.get("headless_python_interpreter_module_transaction_undo_output_invocation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
