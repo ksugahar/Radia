@@ -1582,3 +1582,94 @@ def test_v25_public_nonlinear_continuation_load_step_branch_state_solver_generat
     assert not result["checks"][
         "nonlinear_solutions_use_current_load_steps_branch_state_and_solver"
     ]
+
+
+def _with_v26_ale_and_segregated_identity(summary: dict) -> dict:
+    summary["ale_moving_mesh_time_step_field_transfer_force_work_balance_generation_identity"] = {
+        "ale_generation": "ale-work-131",
+        "geometry_ale_generation": "ale-work-131",
+        "time_step_ale_generation": "ale-work-131",
+        "field_transfer_ale_generation": "ale-work-131",
+        "force_ale_generation": "ale-work-131",
+        "work_ale_generation": "ale-work-131",
+        "result_ale_generation": "ale-work-131",
+        "time_s": [0.0, 0.001, 0.002, 0.003],
+        "result_time_s": [0.0, 0.001, 0.002, 0.003],
+        "mesh_displacement_m": [0.01, 0.01, 0.01],
+        "result_mesh_displacement_m": [0.01, 0.01, 0.01],
+        "force_n": [10.0, 12.0, 14.0],
+        "result_force_n": [10.0, 12.0, 14.0],
+        "reported_mechanical_work_j": 0.36,
+        "field_energy_change_j": 0.20,
+        "dissipated_energy_j": 0.16,
+        "geometry_mesh_sha256": "1" * 64,
+        "result_geometry_mesh_sha256": "1" * 64,
+        "field_transfer_sha256": "2" * 64,
+        "result_field_transfer_sha256": "2" * 64,
+        "force_work_table_sha256": "3" * 64,
+        "result_force_work_table_sha256": "3" * 64,
+    }
+    summary["segregated_multiphysics_iteration_relaxation_residual_component_solution_generation_identity"] = {
+        "solve_generation": "segregated-131",
+        "iteration_solve_generation": "segregated-131",
+        "relaxation_solve_generation": "segregated-131",
+        "residual_solve_generation": "segregated-131",
+        "component_solve_generation": "segregated-131",
+        "solution_solve_generation": "segregated-131",
+        "result_solve_generation": "segregated-131",
+        "iteration_ids": [1, 2, 3, 4],
+        "result_iteration_ids": [1, 2, 3, 4],
+        "component_order": ["magnetic", "thermal", "mechanical"],
+        "result_component_order": ["magnetic", "thermal", "mechanical"],
+        "relaxation_factors": [0.7, 0.8, 1.0],
+        "result_relaxation_factors": [0.7, 0.8, 1.0],
+        "residual_norm": "l2",
+        "result_residual_norm": "l2",
+        "residual_history": [1.0, 0.1, 0.005, 0.00001],
+        "result_residual_history": [1.0, 0.1, 0.005, 0.00001],
+        "relative_tolerance": 0.0001,
+        "converged": True,
+        "solution_sha256": "4" * 64,
+        "result_solution_sha256": "4" * 64,
+    }
+    return summary
+
+
+def test_v26_public_positive_ale_and_segregated_identity() -> None:
+    assert gate(_with_v26_ale_and_segregated_identity(_summary()))["status"] == "ok"
+
+
+def test_v26_public_ale_moving_mesh_time_step_field_transfer_force_work_balance_generation_mismatch() -> None:
+    summary = _with_v26_ale_and_segregated_identity(_summary())
+    summary["ale_moving_mesh_time_step_field_transfer_force_work_balance_generation_identity"].update(
+        {
+            "geometry_ale_generation": "ale-work-130",
+            "result_time_s": [0.0, 0.001, 0.0025, 0.003],
+            "result_force_n": [10.0, 8.0, 14.0],
+            "reported_mechanical_work_j": 0.9,
+            "result_field_transfer_sha256": "b" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "ale_force_work_uses_current_geometry_time_transfer_and_energy_balance"
+    ]
+
+
+def test_v26_public_segregated_multiphysics_iteration_relaxation_residual_component_solution_mismatch() -> None:
+    summary = _with_v26_ale_and_segregated_identity(_summary())
+    summary["segregated_multiphysics_iteration_relaxation_residual_component_solution_generation_identity"].update(
+        {
+            "iteration_solve_generation": "segregated-130",
+            "result_component_order": ["thermal", "magnetic", "mechanical"],
+            "result_residual_norm": "linf",
+            "result_residual_history": [1.0, 0.5, 0.8, 0.2],
+            "converged": False,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "segregated_solution_uses_current_iterations_relaxation_residuals_and_components"
+    ]
