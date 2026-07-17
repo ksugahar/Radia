@@ -141,11 +141,17 @@ class IHDesignSpec:
     wp_sigma: str = "5.0e6"
     mu_r: str = "100"
     half_thickness: str = "0.0125"
-    # Weak-BIE topology controls. "auto" applies each extension when its
-    # mathematical and solver prerequisites hold; explicit modes remain
-    # available for reproducibility and fail-fast validation.
-    wp_loop_dof: str | bool = "auto"
-    wp_phi_inc: str = "auto"
+    # calc_inductance weak-path genus-1 loop DOF. "auto" (default)
+    # applies it whenever it can: with the
+    # "Dense LU (small)" solver preset (= intree-dense backend) + linear
+    # SIBC + order 1, a genus-1 workpiece gets the solved shorted-turn
+    # current automatically; inapplicable cases skip with a recorded
+    # wp_loop_dof_skip_reason + caveat.  "on" makes unmet prerequisites
+    # fail loud.  There is deliberately no "off" because the unextended
+    # genus-1 solve omits the required cohomology mode, and the incident potential
+    # is basis-determined in calc_inductance (P1 -> surface-Poisson),
+    # not a panel knob.
+    wp_loop_dof: str = "auto"
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
@@ -187,14 +193,8 @@ class IHDesignSpec:
     vtu_prefix: str = ""
 
     def __post_init__(self) -> None:
-        # Preserve the bool constructor contract shipped before the controls
-        # became three-state notebook dropdowns.
-        if isinstance(self.wp_loop_dof, bool):
-            self.wp_loop_dof = "on" if self.wp_loop_dof else "off"
-        if self.wp_loop_dof not in {"auto", "on", "off"}:
-            raise ValueError("wp_loop_dof must be auto, on, or off")
-        if self.wp_phi_inc not in {"auto", "path", "poisson"}:
-            raise ValueError("wp_phi_inc must be auto, path, or poisson")
+        if self.wp_loop_dof not in {"auto", "on"}:
+            raise ValueError("wp_loop_dof must be auto or on")
 
     def impedance_model_cli(self) -> str:
         return "esim" if self.impedance_model.startswith("Nonlinear ESIM") else "sibc"
@@ -234,6 +234,10 @@ class IHDesignSpec:
                 "wp_material", "wp_sigma", "mu_r", "half_thickness",
                 "impedance_model", "fes_order",
             })
+            if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
+                # calc_inductance weak path only (strong / FEM-Kelvin /
+                # FEM-full do not take this flag).
+                fields.add("wp_loop_dof")
             if self.impedance_model_cli() == "esim":
                 fields.update({
                     "bh_file", "esim_max_iter", "esim_per_panel",
@@ -242,12 +246,6 @@ class IHDesignSpec:
                     fields.update({"esim_tol", "esim_relax"})
                 if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
                     fields.add("esim_anderson_m")
-        if (
-            self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM)
-            and self.impedance_model_cli() == "sibc"
-            and self.fes_order == 1
-        ):
-            fields.update({"wp_loop_dof", "wp_phi_inc"})
         if self.method == METHOD_BEMA_BEM_STRONG:
             # Strong coupling (CoupledBEMSolver) is linear-SIBC only:
             # workpiece material + Leontovich Z_s knobs, no impedance-model /
@@ -428,8 +426,6 @@ class IHDesignSpec:
             cmd += ["--peec-n-peri", str(self.peec_n_peri)]
         if self.wp_loop_dof != "auto":
             cmd += ["--wp-loop-dof", self.wp_loop_dof]
-        if self.wp_phi_inc != "auto":
-            cmd += ["--wp-phi-inc", self.wp_phi_inc]
         self._append_esim_args(cmd, include_anderson=True, kelvin=False)
         return cmd
 

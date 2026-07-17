@@ -1642,27 +1642,109 @@ requires weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
 and ``--h1-order 1``.  The output records ``wp_loop_alpha_A`` and replaces
 the genus caveat with ``P_wp_note``.
 
-``--wp-phi-inc poisson`` replaces path integration with a
-Laplace-Beltrami projection of the exact vertex incident field.  It uses
-one batched field evaluation, is winding invariant, and fails loud when
-``||grad_S psi + H_t,inc|| / ||H_t,inc||`` exceeds 10 percent.  It works
-with both coil sources on the weak P1 path and composes with
-``--wp-loop-dof``.  The analytic icosphere tests cover uniform fields,
-complex linearity, winding invariance, and the non-gradient failure gate.
+On the weak P1 route, the incident potential is basis-determined: the
+solver always uses the Laplace-Beltrami projection of the exact vertex
+incident field.  It performs one batched field evaluation, is winding
+invariant, and fails loud when
+``||grad_S psi + H_t,inc|| / ||H_t,inc||`` exceeds 10 percent.  The
+legacy selectable P1 path-integration route and ``--wp-phi-inc`` flag
+are removed.  Higher-order and strong routes retain their sole
+implemented reconstruction until a corresponding projection exists.
 
-Both controls default to ``auto``.  ``--wp-phi-inc auto`` selects the
-surface-Poisson route on the weak P1 nodal path and the path route
-otherwise.  ``--wp-loop-dof auto`` applies the loop extension to a
-genus-1 workpiece when its prerequisites hold; otherwise the output
-records ``wp_loop_dof_skip_reason``.  A bare ``--wp-loop-dof`` means
-``on`` and keeps fail-fast prerequisite checks, while ``off`` requests
-the single-valued legacy solve.  The notebook workbench exposes both
-modes in its Workpiece section.
+``--wp-loop-dof`` accepts ``auto`` and ``on`` only.  ``auto`` applies
+the extension when its prerequisites hold and records
+``wp_loop_dof_skip_reason`` otherwise; ``on`` keeps fail-fast
+prerequisite checks.  The known-invalid ``off`` route is not selectable.
+The notebook workbench exposes this control in its Workpiece section.
 
-Every weak or strong run records ``wp_euler_chi`` and ``wp_genus``.
-Without the loop extension, a flux-linked genus-1 result carries
-``P_wp_caveat`` because strong coil re-solving does not add the missing
-workpiece cohomology mode.
+**Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
+The hole extractor's per-triangle "centroid-outward" flip is wrong on a
+genus-1 tube (the bore-wall outward normal points TOWARD the centroid),
+so it flipped the entire inner wall -- 199 directed-edge conflicts --
+corrupting the double-layer operator.  Fixed by
+``surface_mesh_extract.orient_surface_triangles`` (face-BFS flip
+propagation + per-component signed-volume outward), wired into BOTH
+extractors.  No-op on consistent meshes (sphere benchmark unchanged).
+
+**Part 2 (was +27-32 % on P_wp, +11 % on H_t): genus-1 missing loop
+current -- SOLVED by ``radia.bem_loop_extension`` (2026-07-17).**
+chi = V - E + F = 0 -> genus 1; the coil flux links the bore, and the
+BIE's ``J_s = n x (-grad phi)`` with single-valued phi carries ZERO net
+current through any cut -- the shorted-turn eddy current and its Lenz
+screening are unrepresentable.  The extension adds ONE DOF alpha (the
+net toroidal current): ``phi = phi_u + alpha Theta`` with Theta the
+potential of a unit mid-wall ring (ray-cast from the homology cut, same
+class -> single-valued on the cut-open mesh, verified +-1 jump), alpha
+column = ``SL(gamma M^-1 K(Theta) - q_Theta)`` (the membrane term
+cancels against Theta's own identity), closed by Faraday on the cut
+loop.  BEM operators stay on the CLOSED mesh (assembling on the open
+mesh poisons the regular quadrature via coincident duplicated vertices).
+The analytic shorted-ring golden and frozen-subsystem equivalence test
+lock the added mode and its disabled-limit behavior.  Entry points:
+``radia.bem_loop_extension.solve_loop_extended(solver, phi_inc, Z_s,
+omega, A_inc_fn)`` and the CLI flag ``calc_inductance.py --wp-loop-dof``
+(weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
+``--h1-order 1``; works with BOTH coil sources -- surface panels or PEEC
+filaments via the exact ``A_from_filaments``).  With the flag, P_wp /
+H_t are replaced by the loop-extended values, the Telegen delta_L keeps
+the plain-phi convention, the genus ``P_wp_caveat`` becomes a
+``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
+a built-in frozen-vs-plain cross-check refuses to report on operator
+mismatch.
+
+**psi-Poisson incident -- the P1 weak route, basis-determined
+(2026-07-17).**  Replaces the axis-ray + horizontal-ray path
+integration of phi_inc with a surface-Poisson (Laplace-Beltrami)
+projection of the EXACT vertex H_inc
+(``radia.bem_sibc_solver.compute_phi_inc_surface_poisson``): mean-zero
+psi with ``int grad_S psi . grad_S v = -int H_t,inc . grad_S v``, so
+the branch-cut wall a spanning-path integral drags across the surface
+disappears and the reconstruction is L2-optimal.  It also replaces
+per-vertex quadrature rays with one batched field evaluation.  The
+fail-loud gate raises when
+``||grad_S psi + H_t,inc|| / ||H_t,inc|| > 10%``; no silent fallback is
+used when the projected scalar potential does not exist.
+Works with both coil sources (BEM-A panels / PEEC filaments).
+Goldens: ``tests/test_phi_inc_poisson.py`` (icosphere: uniform field
+recovers psi = -H0 z to <2%, rotational Killing field fires the gate,
+winding-invariance, complex linearity).
+
+**THE FIX IS THE DEFAULT; THE BUGGY ROUTES ARE DELETED (2026-07-17,
+Sugahara: a known-buggy path must not stay selectable).**
+
+- phi_inc is NOT a knob: the weak P1 route is surface-Poisson ALWAYS.
+  The legacy P1 path-integration option and the transient
+  ``--wp-phi-inc`` flag were REMOVED the same day they were added;
+  path integration survives ONLY where poisson has no implementation
+  yet (Lagrange-P2 edge-node DOFs, and inside the strong driver) as
+  the sole route there, with the wall limitation documented.  The
+  dead ``compute_phi_inc_from_filaments_surface_path`` (reverted
+  2026-05-21) was deleted outright.
+- ``--wp-loop-dof {auto,on}`` (default auto; bare flag = on): auto
+  applies the loop DOF on a genus-1 workpiece when the prerequisites
+  hold (weak + linear SIBC + ``--wp-bem-backend intree-dense`` + P1)
+  and otherwise SKIPS with a recorded ``wp_loop_dof_skip_reason``
+  (genus >= 1 skips keep the ``P_wp_caveat``).  "on" fails loud on
+  unmet prerequisites.  There is deliberately NO "off": the
+  un-extended genus-1 solve is a known +25-30% over-estimate.
+
+With ``--wp-bem-backend intree-dense`` the defaults enable the complete
+genus-1 correction.  With the HACApK backend the projected incident
+potential still applies, while the loop-DoF skip reason and caveat are
+emitted so the limitation is explicit.  The notebook panel has one
+``auto``-defaulted loop-DoF control and no incident-potential knob.
+
+Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
++ ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
+WARNING for genus >= 1 and emits ``wp_euler_chi`` / ``wp_genus`` +
+``P_wp_caveat`` in the JSON (genus-conditional; genus-0 gets NO caveat,
+backed by the sphere benchmark).
+
+For a genus-1 workpiece, use ``--wp-bem-backend intree-dense`` when the
+mesh fits so the dense SL/DL loop extension can be assembled.  The
+HACApK path currently reports ``wp_loop_dof_skip_reason`` and
+``P_wp_caveat`` instead of silently claiming the missing cohomology
+mode.  Genus-0 workpieces carry no topology caveat.
 
 ## When to use this
 
