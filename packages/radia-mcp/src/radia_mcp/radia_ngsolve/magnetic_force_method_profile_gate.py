@@ -407,6 +407,177 @@ def _motor_dual_lane_alignment_identity_ok(value: object) -> bool:
     )
 
 
+def _bem_demag_surface_material_frame_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("solve_generation", "")).strip()
+    surface_ids = value.get("surface_ids")
+    orientation = str(value.get("surface_orientation", "")).strip()
+    frame = str(value.get("coordinate_frame", "")).strip()
+    material_id = value.get("material_region_id")
+    try:
+        normals = [
+            [float(component) for component in row]
+            for row in value.get("outward_normals", [])
+        ]
+        result_normals = [
+            [float(component) for component in row]
+            for row in value.get("result_outward_normals", [])
+        ]
+        magnetization = [
+            float(component)
+            for component in value.get("magnetization_vector_a_per_m", [])
+        ]
+        result_magnetization = [
+            float(component)
+            for component in value.get("result_magnetization_vector_a_per_m", [])
+        ]
+        volume = float(value.get("body_volume_m3"))
+        result_volume = float(value.get("result_body_volume_m3"))
+    except (TypeError, ValueError):
+        return False
+    ids_ok = (
+        isinstance(surface_ids, list)
+        and bool(surface_ids)
+        and all(
+            isinstance(item, int) and not isinstance(item, bool) and item > 0
+            for item in surface_ids
+        )
+        and len(set(surface_ids)) == len(surface_ids)
+    )
+    normals_ok = (
+        ids_ok
+        and len(normals) == len(surface_ids)
+        and all(
+            len(row) == 3
+            and all(math.isfinite(component) for component in row)
+            and math.isclose(
+                sum(component * component for component in row),
+                1.0,
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            for row in normals
+        )
+    )
+    surface_digest = str(value.get("surface_mesh_sha256", "")).lower()
+    result_digest = str(value.get("demag_result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "surface_mesh_solve_generation",
+                "surface_orientation_solve_generation",
+                "magnetization_solve_generation",
+                "body_volume_solve_generation",
+                "material_region_solve_generation",
+                "coordinate_frame_solve_generation",
+                "result_solve_generation",
+            )
+        )
+        and ids_ok
+        and value.get("result_surface_ids") == surface_ids
+        and orientation == "outward_from_magnet"
+        and value.get("result_surface_orientation") == orientation
+        and normals_ok
+        and result_normals == normals
+        and len(magnetization) == 3
+        and all(math.isfinite(component) for component in magnetization)
+        and sum(component * component for component in magnetization) > 0.0
+        and result_magnetization == magnetization
+        and math.isfinite(volume)
+        and volume > 0.0
+        and math.isclose(result_volume, volume, rel_tol=0.0, abs_tol=0.0)
+        and isinstance(material_id, int)
+        and not isinstance(material_id, bool)
+        and material_id > 0
+        and value.get("result_material_region_id") == material_id
+        and frame == "global_xyz"
+        and value.get("result_coordinate_frame") == frame
+        and _valid_sha256(surface_digest)
+        and str(value.get("result_surface_mesh_sha256", "")).lower()
+        == surface_digest
+        and _valid_sha256(result_digest)
+        and str(value.get("reported_demag_result_sha256", "")).lower()
+        == result_digest
+    )
+
+
+def _linear_motor_thrust_ripple_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("sweep_generation", "")).strip()
+    frame = str(value.get("force_coordinate_frame", "")).strip()
+    order = value.get("sample_order")
+    try:
+        period = float(value.get("mechanical_period_m"))
+        result_period = float(value.get("result_mechanical_period_m"))
+        positions = [float(item) for item in value.get("mover_positions_m", [])]
+        result_positions = [
+            float(item) for item in value.get("result_mover_positions_m", [])
+        ]
+        phases = [float(item) for item in value.get("excitation_phase_deg", [])]
+        result_phases = [
+            float(item) for item in value.get("result_excitation_phase_deg", [])
+        ]
+        thrust = [float(item) for item in value.get("thrust_samples_n", [])]
+        result_thrust = [
+            float(item) for item in value.get("result_thrust_samples_n", [])
+        ]
+        ripple = float(value.get("thrust_ripple_peak_to_peak_n"))
+        reported_ripple = float(
+            value.get("reported_thrust_ripple_peak_to_peak_n")
+        )
+    except (TypeError, ValueError):
+        return False
+    digest = str(value.get("thrust_table_sha256", "")).lower()
+    sample_count = len(positions)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "period_sweep_generation",
+                "position_sweep_generation",
+                "phase_sweep_generation",
+                "force_frame_sweep_generation",
+                "sample_order_sweep_generation",
+                "result_sweep_generation",
+            )
+        )
+        and math.isfinite(period)
+        and period > 0.0
+        and math.isclose(result_period, period, rel_tol=0.0, abs_tol=0.0)
+        and sample_count >= 4
+        and all(math.isfinite(item) for item in positions)
+        and all(left < right for left, right in zip(positions, positions[1:]))
+        and math.isclose(positions[-1] - positions[0], period, rel_tol=1.0e-12)
+        and result_positions == positions
+        and len(phases) == sample_count
+        and all(math.isfinite(item) for item in phases)
+        and all(left < right for left, right in zip(phases, phases[1:]))
+        and math.isclose(phases[-1] - phases[0], 360.0, abs_tol=1.0e-12)
+        and result_phases == phases
+        and order == list(range(sample_count))
+        and value.get("result_sample_order") == order
+        and frame == "global_x"
+        and value.get("result_force_coordinate_frame") == frame
+        and len(thrust) == sample_count
+        and all(math.isfinite(item) for item in thrust)
+        and math.isclose(thrust[0], thrust[-1], rel_tol=1.0e-12)
+        and result_thrust == thrust
+        and math.isclose(ripple, max(thrust) - min(thrust), rel_tol=1.0e-12)
+        and math.isclose(reported_ripple, ripple, rel_tol=1.0e-12)
+        and _valid_sha256(digest)
+        and str(value.get("result_thrust_table_sha256", "")).lower() == digest
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -505,6 +676,8 @@ def magnetic_force_method_profile_gate(
     motor_harmonic_force_generation_identity_ok = True
     maglev_force_energy_generation_identity_ok = True
     motor_dual_lane_alignment_generation_identity_ok = True
+    bem_demag_surface_material_frame_generation_identity_ok = True
+    linear_motor_thrust_ripple_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -540,6 +713,8 @@ def magnetic_force_method_profile_gate(
         motor_harmonic_force_generation_identity_ok = False
         maglev_force_energy_generation_identity_ok = False
         motor_dual_lane_alignment_generation_identity_ok = False
+        bem_demag_surface_material_frame_generation_identity_ok = False
+        linear_motor_thrust_ripple_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -2196,6 +2371,20 @@ def magnetic_force_method_profile_gate(
                 )
             )
         )
+        bem_demag_surface_material_frame_generation_identity_ok = (
+            _bem_demag_surface_material_frame_identity_ok(
+                identity_value.get(
+                    "bem_demag_surface_orientation_magnetization_volume_material_frame_generation_identity"
+                )
+            )
+        )
+        linear_motor_thrust_ripple_generation_identity_ok = (
+            _linear_motor_thrust_ripple_identity_ok(
+                identity_value.get(
+                    "linear_motor_thrust_ripple_period_position_phase_frame_generation_identity"
+                )
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -2356,6 +2545,12 @@ def magnetic_force_method_profile_gate(
         ),
         "motor_dual_lanes_share_geometry_excitation_frame_harmonics_and_angles": (
             motor_dual_lane_alignment_generation_identity_ok
+        ),
+        "bem_demag_surface_shares_orientation_magnetization_volume_material_and_frame": (
+            bem_demag_surface_material_frame_generation_identity_ok
+        ),
+        "linear_motor_thrust_ripple_shares_period_position_phase_frame_and_order": (
+            linear_motor_thrust_ripple_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
