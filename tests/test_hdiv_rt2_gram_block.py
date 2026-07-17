@@ -1,4 +1,4 @@
-"""Fast regression for the flat RT2 analytic host-block ChargeGram path."""
+"""Fast regression for the flat BDM2 analytic host-block ChargeGram path."""
 
 import numpy as np
 import pytest

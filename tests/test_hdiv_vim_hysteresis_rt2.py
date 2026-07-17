@@ -1,4 +1,4 @@
-"""RT2 B-input history state lives on NGSolve integration-rule points."""
+"""BDM2 B-input history state lives on NGSolve integration-rule points."""
 
 import numpy as np
 import pytest
@@ -100,7 +100,7 @@ def test_rt2_history_uses_quadrature_state_and_restarts():
 )
 def test_curved_rt2_production_hysteresis_models_reuse_quadrature_state(
         material_factory, expected_model, expected_level):
-    """Actual Play/EnergyStop models run through the curved RT2 solver."""
+    """Actual Play/EnergyStop models run through the curved BDM2 solver."""
     mesh = _curved_hex()
     material = material_factory()
     with ng.TaskManager():

@@ -56,3 +56,13 @@ def test_legacy_hdiv_vim_names_are_not_public_aliases():
     ):
         assert not hasattr(vim, name)
         assert name not in vim.__all__
+
+
+def test_public_soft_iron_order_uses_bdm_terminology():
+    from radia.soft_iron import SoftIron
+
+    doc = SoftIron.__doc__ or ""
+    assert "BDM1" in doc
+    assert "BDM2" in doc
+    assert "RT1" not in doc
+    assert "RT2" not in doc

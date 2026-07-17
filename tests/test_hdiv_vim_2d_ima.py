@@ -38,9 +38,9 @@ def test_planar_quad_image_solve_and_field_match_full_to_roundoff(
         half_field = half["body"].H_at(probes, half["m"])
 
     relative = np.linalg.norm(full_field - half_field) / np.linalg.norm(full_field)
-    # RT2 adds two local reference-basis transformations before the C++ solve;
+    # BDM2 adds two local reference-basis transformations before the C++ solve;
     # its 12-20 eps full/reduced spread is still roundoff, not a discretization
-    # tolerance.  RT1 keeps the original strict 10 eps gate.
+    # tolerance.  BDM1 keeps the original strict 10 eps gate.
     roundoff_factor = 10.0 if order == 1 else 32.0
     assert relative < roundoff_factor * np.finfo(float).eps
     expected_constraints = 2*(order+1) if image == "+x" else 0

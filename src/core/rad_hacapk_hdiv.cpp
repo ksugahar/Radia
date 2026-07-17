@@ -2176,7 +2176,7 @@ static bool HexInv3(const double A[3][3], double B[3][3])
 
 // Exact affine-cell inner is retained for self/near blocks, where the singularity and spectrum require it.
 // Smooth far blocks use the complete-host tensor product below; applying the degree-six recurrence to every
-// far outer point was the dominant RT2 HEX H-matrix build cost.
+// far outer point was the dominant BDM2 HEX H-matrix build cost.
 static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = true;
 static constexpr double HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0;
 
