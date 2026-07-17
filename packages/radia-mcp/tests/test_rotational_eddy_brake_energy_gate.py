@@ -915,3 +915,90 @@ def test_v18_public_adaptive_bdf_restart_history_event_generation_mismatch() -> 
         ]
         is False
     )
+
+
+def _with_v19_continuation_and_mortar_identity(summary: dict) -> dict:
+    summary = _with_v18_eigenmode_and_bdf_identity(summary)
+    summary["nonlinear_continuation_branch_tangent_checkpoint_identity"] = {
+        "nonlinear_solve_generation": "nonlinear-solve-53",
+        "continuation_state_generation": "continuation-state-53",
+        "tangent_continuation_state_generation": "continuation-state-53",
+        "checkpoint_continuation_state_generation": "continuation-state-53",
+        "branch_id": "upper-stable-53",
+        "tangent_branch_id": "upper-stable-53",
+        "checkpoint_branch_id": "upper-stable-53",
+        "load_parameter_name": "coil_current_A",
+        "load_parameter_value": 12.5,
+        "tangent_load_parameter_value": 12.5,
+        "checkpoint_load_parameter_value": 12.5,
+        "tangent_vector": [0.2, -0.1, 0.05],
+        "checkpoint_tangent_vector": [0.2, -0.1, 0.05],
+        "continuation_tangent_sha256": "5" * 64,
+        "checkpoint_tangent_sha256": "5" * 64,
+    }
+    summary["nonconforming_mortar_projection_quadrature_mesh_identity"] = {
+        "interface_generation": "mortar-interface-53",
+        "source_mesh_generation": "source-mesh-53",
+        "projection_source_mesh_generation": "source-mesh-53",
+        "quadrature_source_mesh_generation": "source-mesh-53",
+        "target_mesh_generation": "target-mesh-53",
+        "projection_target_mesh_generation": "target-mesh-53",
+        "quadrature_target_mesh_generation": "target-mesh-53",
+        "source_trace_dof_ids": [11, 12],
+        "projection_source_trace_dof_ids": [11, 12],
+        "target_trace_dof_ids": [21, 22, 23],
+        "projection_target_trace_dof_ids": [21, 22, 23],
+        "projection_shape": [3, 2],
+        "quadrature_projection_shape": [3, 2],
+        "projection_operator_sha256": "6" * 64,
+        "quadrature_projection_operator_sha256": "6" * 64,
+    }
+    return summary
+
+
+def test_v19_public_positive_continuation_and_mortar_identity() -> None:
+    result = gate(_with_v19_continuation_and_mortar_identity(copy.deepcopy(_summary())))
+    assert result["status"] == "ok"
+
+
+def test_v19_public_nonlinear_continuation_branch_tangent_load_parameter_checkpoint_mismatch() -> None:
+    summary = _with_v19_continuation_and_mortar_identity(copy.deepcopy(_summary()))
+    summary["nonlinear_continuation_branch_tangent_checkpoint_identity"].update(
+        {
+            "tangent_continuation_state_generation": "continuation-state-52",
+            "checkpoint_continuation_state_generation": "continuation-state-52",
+            "checkpoint_branch_id": "lower-unstable-52",
+            "tangent_load_parameter_value": 12.0,
+            "checkpoint_tangent_vector": [-0.2, 0.1, -0.05],
+            "checkpoint_tangent_sha256": "9" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "nonlinear_continuation_uses_current_branch_tangent_checkpoint"
+        ]
+        is False
+    )
+
+
+def test_v19_public_nonconforming_mortar_interface_projection_quadrature_mesh_mismatch() -> None:
+    summary = _with_v19_continuation_and_mortar_identity(copy.deepcopy(_summary()))
+    summary["nonconforming_mortar_projection_quadrature_mesh_identity"].update(
+        {
+            "projection_source_mesh_generation": "source-mesh-52",
+            "quadrature_target_mesh_generation": "target-mesh-52",
+            "projection_source_trace_dof_ids": [12, 11],
+            "quadrature_projection_shape": [2, 3],
+            "quadrature_projection_operator_sha256": "9" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "mortar_projection_uses_current_interface_mesh_and_quadrature"
+        ]
+        is False
+    )
