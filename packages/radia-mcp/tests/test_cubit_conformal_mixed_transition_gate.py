@@ -2700,3 +2700,116 @@ def test_v25_source_netgen_vol_export_family_order_boundary_material_checksum_mi
     assert result["checks"][
         "netgen_vol_export_uses_p1_tri_tet_boundaries_materials_and_source_mesh"
     ] is False
+
+
+def _with_v26_sweep_high_order_sculpt_exodus_identity(row):
+    row = _with_v25_hybrid_periodic_journal_vol_identity(row)
+    row["hex_sweep_source_target_layer_correspondence_jacobian_block_generation_identity"] = {
+        "sweep_generation": "hex-sweep-131", "source_sweep_generation": "hex-sweep-131",
+        "target_sweep_generation": "hex-sweep-131", "layer_sweep_generation": "hex-sweep-131",
+        "correspondence_sweep_generation": "hex-sweep-131", "jacobian_sweep_generation": "hex-sweep-131",
+        "block_sweep_generation": "hex-sweep-131", "result_sweep_generation": "hex-sweep-131",
+        "source_face_id": 11, "result_source_face_id": 11, "target_face_id": 21,
+        "result_target_face_id": 21, "layer_count": 4, "result_layer_count": 4,
+        "source_target_vertex_pairs": [[1, 5], [2, 6], [3, 7], [4, 8]],
+        "result_source_target_vertex_pairs": [[1, 5], [2, 6], [3, 7], [4, 8]],
+        "layer_element_counts": [8, 8, 8, 8], "result_layer_element_counts": [8, 8, 8, 8],
+        "scaled_jacobians": [0.72, 0.68, 0.65, 0.61],
+        "result_scaled_jacobians": [0.72, 0.68, 0.65, 0.61],
+        "block_id": 30, "result_block_id": 30, "sweep_mesh_sha256": "1" * 64,
+        "result_sweep_mesh_sha256": "1" * 64,
+    }
+    row["high_order_hex_edge_face_interior_node_curvature_jacobian_export_generation_identity"] = {
+        "export_generation": "hex27-export-131", "edge_export_generation": "hex27-export-131",
+        "face_export_generation": "hex27-export-131", "interior_export_generation": "hex27-export-131",
+        "curvature_export_generation": "hex27-export-131", "jacobian_export_generation": "hex27-export-131",
+        "result_export_generation": "hex27-export-131", "element_family": "hex27",
+        "decoded_element_family": "hex27", "edge_node_order": list(range(9, 21)),
+        "decoded_edge_node_order": list(range(9, 21)), "face_node_order": list(range(21, 27)),
+        "decoded_face_node_order": list(range(21, 27)), "interior_node_order": [27],
+        "decoded_interior_node_order": [27], "curved_geometry_order": 2,
+        "decoded_curved_geometry_order": 2, "minimum_scaled_jacobian": 0.58,
+        "decoded_minimum_scaled_jacobian": 0.58, "export_sha256": "2" * 64,
+        "decoded_export_sha256": "2" * 64,
+    }
+    row["sculpt_voxel_spacing_threshold_material_block_output_session_generation_identity"] = {
+        "sculpt_generation": "sculpt-131", "voxel_sculpt_generation": "sculpt-131",
+        "threshold_sculpt_generation": "sculpt-131", "material_sculpt_generation": "sculpt-131",
+        "block_sculpt_generation": "sculpt-131", "output_sculpt_generation": "sculpt-131",
+        "result_sculpt_generation": "sculpt-131", "session_id": "headless-sculpt-131",
+        "result_session_id": "headless-sculpt-131", "voxel_spacing_m": [0.001, 0.001, 0.002],
+        "result_voxel_spacing_m": [0.001, 0.001, 0.002], "thresholds": [0.25, 0.75],
+        "result_thresholds": [0.25, 0.75], "material_to_block": [[1, 10], [2, 20]],
+        "result_material_to_block": [[1, 10], [2, 20]], "element_counts_by_block": [[10, 120], [20, 80]],
+        "result_element_counts_by_block": [[10, 120], [20, 80]], "input_volume_sha256": "3" * 64,
+        "result_input_volume_sha256": "3" * 64, "output_mesh_sha256": "4" * 64,
+        "result_output_mesh_sha256": "4" * 64,
+    }
+    row["exodus_merge_node_tolerance_global_id_block_sideset_checksum_generation_identity"] = {
+        "merge_generation": "exodus-merge-131", "tolerance_merge_generation": "exodus-merge-131",
+        "node_merge_generation": "exodus-merge-131", "global_id_merge_generation": "exodus-merge-131",
+        "block_merge_generation": "exodus-merge-131", "sideset_merge_generation": "exodus-merge-131",
+        "result_merge_generation": "exodus-merge-131", "merge_tolerance_m": 1.0e-8,
+        "decoded_merge_tolerance_m": 1.0e-8, "merged_node_pairs": [[101, 201], [102, 202]],
+        "decoded_merged_node_pairs": [[101, 201], [102, 202]], "global_node_ids": [101, 102, 103, 104],
+        "decoded_global_node_ids": [101, 102, 103, 104], "block_ids": [10, 20],
+        "decoded_block_ids": [10, 20], "sideset_ids": [100, 200],
+        "decoded_sideset_ids": [100, 200], "source_mesh_sha256": "5" * 64,
+        "merge_source_mesh_sha256": "5" * 64, "exodus_sha256": "6" * 64,
+        "decoded_exodus_sha256": "6" * 64,
+    }
+    return row
+
+
+def test_v26_positive_sweep_high_order_sculpt_exodus_identity():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v26_public_hex_sweep_source_target_face_layer_correspondence_jacobian_block_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["hex_sweep_source_target_layer_correspondence_jacobian_block_generation_identity"].update(
+        {"source_sweep_generation": "hex-sweep-130", "result_target_face_id": 22,
+         "result_layer_count": 3, "result_scaled_jacobians": [0.72, -0.1, 0.4],
+         "result_sweep_mesh_sha256": "a" * 64}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["hex_sweeps_use_current_faces_layers_correspondence_jacobians_and_blocks"] is False
+
+
+def test_v26_public_high_order_hex_edge_face_interior_node_order_curvature_jacobian_export_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["high_order_hex_edge_face_interior_node_curvature_jacobian_export_generation_identity"].update(
+        {"edge_export_generation": "hex27-export-130", "decoded_element_family": "hex20",
+         "decoded_edge_node_order": [10, 9] + list(range(11, 21)), "decoded_interior_node_order": [],
+         "decoded_curved_geometry_order": 1, "decoded_minimum_scaled_jacobian": -0.02}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["high_order_hex_exports_use_current_edge_face_interior_order_curvature_and_jacobian"] is False
+
+
+def test_v26_source_sculpt_voxel_spacing_threshold_material_block_output_session_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["sculpt_voxel_spacing_threshold_material_block_output_session_generation_identity"].update(
+        {"voxel_sculpt_generation": "sculpt-130", "result_session_id": "headless-sculpt-130",
+         "result_voxel_spacing_m": [0.001, 0.002, 0.002], "result_material_to_block": [[1, 20], [2, 10]],
+         "result_output_mesh_sha256": "d" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sculpt_outputs_use_current_voxels_thresholds_material_blocks_and_session"] is False
+
+
+def test_v26_source_exodus_merge_node_tolerance_global_id_block_sideset_checksum_mismatch():
+    row = _with_v26_sweep_high_order_sculpt_exodus_identity(summary())
+    row["exodus_merge_node_tolerance_global_id_block_sideset_checksum_generation_identity"].update(
+        {"tolerance_merge_generation": "exodus-merge-130", "decoded_merge_tolerance_m": 1.0e-4,
+         "decoded_global_node_ids": [1, 2, 3, 4], "decoded_block_ids": [10, 30],
+         "decoded_sideset_ids": [100, 300], "decoded_exodus_sha256": "f" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_merges_use_current_tolerance_nodes_global_ids_blocks_sidesets_and_checksums"] is False
