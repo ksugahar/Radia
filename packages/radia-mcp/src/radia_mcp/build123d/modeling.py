@@ -3263,6 +3263,98 @@ def _assembly_mate_transform_dof_loop_closure_identity(row):
     )
 
 
+def _valid_identity_digest(value):
+    value = str(value).lower()
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def _fillet_chamfer_selector_generation_identity(row):
+    value = row.get(
+        "fillet_chamfer_edge_selector_topology_naming_tolerance_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("feature_generation", "")).strip()
+    names = [str(item).strip() for item in value.get("edge_selector_names", [])]
+    result_names = [str(item).strip() for item in value.get("result_edge_selector_names", [])]
+    try:
+        edge_ids = [int(item) for item in value.get("persistent_edge_ids", [])]
+        result_edge_ids = [int(item) for item in value.get("result_persistent_edge_ids", [])]
+        radius = float(value.get("feature_radius_m"))
+        result_radius = float(value.get("result_feature_radius_m"))
+        tolerance = float(value.get("linear_tolerance_m"))
+        result_tolerance = float(value.get("result_linear_tolerance_m"))
+        topology = tuple(int(value["topology_signature"][key]) for key in ("solids", "faces", "edges"))
+        result_topology = tuple(int(value["result_topology_signature"][key]) for key in ("solids", "faces", "edges"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    input_digest = str(value.get("input_shape_sha256", "")).lower()
+    feature_digest = str(value.get("feature_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "selector_feature_generation", "topology_feature_generation",
+            "tolerance_feature_generation", "shape_feature_generation",
+            "result_feature_generation"))
+        or value.get("feature_type") not in {"fillet", "chamfer"}
+        or value.get("result_feature_type") != value.get("feature_type")
+        or not names or any(not item for item in names) or len(set(names)) != len(names)
+        or result_names != names
+        or len(edge_ids) != len(names) or any(item <= 0 for item in edge_ids)
+        or len(set(edge_ids)) != len(edge_ids) or result_edge_ids != edge_ids
+        or not math.isfinite(radius) or radius <= 0.0 or result_radius != radius
+        or not math.isfinite(tolerance) or tolerance <= 0.0 or result_tolerance != tolerance
+        or topology[0] < 1 or any(item < 0 for item in topology) or result_topology != topology
+        or not _valid_identity_digest(input_digest) or value.get("result_input_shape_sha256") != input_digest
+        or not _valid_identity_digest(feature_digest) or value.get("result_feature_shape_sha256") != feature_digest
+    ):
+        return None
+    return generation, tuple(names), tuple(edge_ids), radius, tolerance, topology, input_digest, feature_digest
+
+
+def _mass_density_frame_generation_identity(row):
+    value = row.get(
+        "mass_density_center_inertia_reference_frame_assembly_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("mass_generation", "")).strip()
+    try:
+        density = float(value.get("density_kg_m3"))
+        result_density = float(value.get("result_density_kg_m3"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        mass = float(value.get("mass_kg"))
+        result_mass = float(value.get("result_mass_kg"))
+        center = tuple(float(item) for item in value.get("center_of_mass_m", []))
+        result_center = tuple(float(item) for item in value.get("result_center_of_mass_m", []))
+        inertia = tuple(tuple(float(item) for item in row) for row in value.get("inertia_tensor_kg_m2", []))
+        result_inertia = tuple(tuple(float(item) for item in row) for row in value.get("result_inertia_tensor_kg_m2", []))
+    except (TypeError, ValueError):
+        return None
+    frame = str(value.get("reference_frame", "")).strip()
+    transform_digest = str(value.get("assembly_transform_sha256", "")).lower()
+    result_digest = str(value.get("mass_property_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "density_mass_generation", "center_mass_generation", "inertia_mass_generation",
+            "frame_mass_generation", "assembly_mass_generation", "result_mass_generation"))
+        or not all(math.isfinite(item) and item > 0.0 for item in (density, volume, mass))
+        or result_density != density or result_volume != volume or result_mass != mass
+        or not math.isclose(mass, density * volume, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or len(center) != 3 or any(not math.isfinite(item) for item in center) or result_center != center
+        or len(inertia) != 3 or any(len(row) != 3 for row in inertia)
+        or any(not math.isfinite(item) for row in inertia for item in row) or result_inertia != inertia
+        or any(not math.isclose(inertia[i][j], inertia[j][i], rel_tol=0.0, abs_tol=1.0e-15) for i in range(3) for j in range(3))
+        or not frame or value.get("result_reference_frame") != frame
+        or not _valid_identity_digest(transform_digest) or value.get("result_assembly_transform_sha256") != transform_digest
+        or not _valid_identity_digest(result_digest) or value.get("result_mass_property_sha256") != result_digest
+    ):
+        return None
+    return generation, density, volume, mass, center, inertia, frame, transform_digest, result_digest
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -3431,6 +3523,46 @@ def shape_mass_property_crosscheck_summary(
             assembly_kinematics_identity_ok = assembly_kinematics_identity_ok and all(
                 _assembly_mate_transform_dof_loop_closure_identity(row)
                 == reference_assembly_kinematics.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    feature_selection_evidence_present = any(
+        row.get("fillet_chamfer_edge_selector_topology_naming_tolerance_shape_generation_identity")
+        is not None for row in identity_rows
+    )
+    reference_feature_selection = {
+        str(row.get("name", "")): _fillet_chamfer_selector_generation_identity(row)
+        for row in reference
+    }
+    feature_selection_identity_ok = not feature_selection_evidence_present
+    if feature_selection_evidence_present:
+        feature_selection_identity_ok = bool(reference_feature_selection) and all(
+            value is not None for value in reference_feature_selection.values()
+        )
+        for _, rows in normalized_sets:
+            feature_selection_identity_ok = feature_selection_identity_ok and all(
+                _fillet_chamfer_selector_generation_identity(row)
+                == reference_feature_selection.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    mass_frame_evidence_present = any(
+        row.get("mass_density_center_inertia_reference_frame_assembly_generation_identity")
+        is not None for row in identity_rows
+    )
+    reference_mass_frame = {
+        str(row.get("name", "")): _mass_density_frame_generation_identity(row)
+        for row in reference
+    }
+    mass_frame_identity_ok = not mass_frame_evidence_present
+    if mass_frame_evidence_present:
+        mass_frame_identity_ok = bool(reference_mass_frame) and all(
+            value is not None for value in reference_mass_frame.values()
+        )
+        for _, rows in normalized_sets:
+            mass_frame_identity_ok = mass_frame_identity_ok and all(
+                _mass_density_frame_generation_identity(row)
+                == reference_mass_frame.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5325,6 +5457,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "assembly_mates_use_current_transforms_dof_solver_and_loop_closure": (
             assembly_kinematics_identity_ok
+        ),
+        "fillet_chamfer_features_use_current_selectors_topology_names_tolerance_and_shape": (
+            feature_selection_identity_ok
+        ),
+        "mass_properties_use_current_density_center_inertia_frame_and_assembly": (
+            mass_frame_identity_ok
         ),
     }
     issues = []
