@@ -490,6 +490,141 @@ def test_explicit_sampled_laplace_interaction_matches_default_backend():
     assert info["blocks"] == {"volume": [0, 1], "surface": [1, 2]}
 
 
+def test_hacapk_sampled_interaction_keeps_full_hybrid_operator_matrix_free():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0]]),
+        weights=np.array([0.3, 0.4]),
+        current_modes=np.array(
+            [
+                [[1.0, 0.2, 0.0], [0.3, 0.8, 0.1]],
+                [[0.0, 0.7, 0.2], [0.5, 0.0, 0.9]],
+            ]
+        ),
+        names=["T0", "T1"],
+    )
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.1, 1.0, 0.0], [0.9, 1.1, 0.2]]),
+        weights=np.array([0.5, 0.6]),
+        modes=np.array([[[0.4, 0.9, 0.0], [0.2, 0.6, 0.3]]]),
+        kind="surface",
+        names=("Omega0",),
+    )
+    mu = 1.7
+    kernel_epsilon = 0.25
+    dense = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=3.0,
+        interaction=vim.SampledLaplaceInteraction(
+            mu=mu,
+            kernel_epsilon=kernel_epsilon,
+        ),
+    )
+    compressed = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=3.0,
+        interaction=vim.HACApKSampledLaplaceInteraction(
+            mu=mu,
+            kernel_epsilon=kernel_epsilon,
+            aca_eps=1.0e-12,
+            leaf_size=64,
+            cross_only=False,
+        ),
+    )
+
+    assert compressed.diagnostics()["inductance_matrix_free"] is True
+    stats = compressed.diagnostics()["inductance_operator"]
+    assert stats["operator_block_count"] == 1
+    assert stats["operator_blocks"][0]["stats"]["cross_only"] is False
+    np.testing.assert_allclose(
+        compressed.inductance.to_dense(),
+        dense.inductance,
+        rtol=2.0e-12,
+        atol=2.0e-13,
+    )
+
+
+def test_hacapk_cross_operator_preserves_matrix_free_diagonal_backends_and_gmres():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0], [0.7, 0.0, 0.1]]),
+        weights=np.array([0.35, 0.45]),
+        current_modes=np.array(
+            [
+                [[1.0, 0.0, 0.2], [0.4, 0.7, 0.0]],
+                [[0.1, 0.8, 0.0], [0.0, 0.2, 0.9]],
+            ]
+        ),
+        names=["T0", "T1"],
+    )
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.9, 0.0], [0.8, 1.0, 0.2]]),
+        weights=np.array([0.55, 0.65]),
+        modes=np.array([[[0.3, 1.0, 0.0], [0.5, 0.1, 0.4]]]),
+        kind="surface",
+        names=("Omega0",),
+    )
+    mu = 2.3
+    kernel_epsilon = 0.2
+    reference_backend = vim.SampledLaplaceInteraction(
+        mu=mu,
+        kernel_epsilon=kernel_epsilon,
+    )
+    reference = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=4.0,
+        interaction=reference_backend,
+    )
+
+    exact_volume = reference_backend(volume, volume) + np.array(
+        [[0.3, 0.05], [0.05, 0.2]]
+    )
+
+    def exact_diagonal(left, right):
+        assert left is volume
+        assert right is volume
+        return _ToySymmetricOperator(exact_volume)
+
+    compressed = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=4.0,
+        interaction=vim.HACApKSampledLaplaceInteraction(
+            mu=mu,
+            kernel_epsilon=kernel_epsilon,
+            aca_eps=1.0e-12,
+            leaf_size=64,
+            cross_only=True,
+            diagonal_interaction=exact_diagonal,
+            diagonal_bases=(volume,),
+        ),
+    )
+    expected_l = np.array(reference.inductance, copy=True)
+    expected_l[:2, :2] = exact_volume
+    actual_l = compressed.inductance.to_dense()
+    np.testing.assert_allclose(actual_l, expected_l, rtol=2.0e-12, atol=2.0e-13)
+    stats = compressed.inductance.stats()
+    assert stats["operator_block_count"] == 2
+    assert stats["operator_blocks"][-1]["start"] == 0
+    assert stats["operator_blocks"][-1]["stop"] == 3
+    assert stats["operator_blocks"][-1]["stats"]["cross_only"] is True
+
+    s = 0.4 + 2.1j
+    zs = 0.7 + 0.3j
+    rhs = np.array([1.0 + 0.2j, -0.4j, 0.5 - 0.1j])
+    expected = np.linalg.solve(
+        reference.resistance + s * expected_l + zs * reference.surface_mass,
+        rhs,
+    )
+    np.testing.assert_allclose(
+        compressed.solve(s, rhs, surface_impedance=zs),
+        expected,
+        rtol=3.0e-11,
+        atol=3.0e-12,
+    )
+
+
 def test_reduced_interaction_matrix_backend_wires_bem_blocks():
     volume = vim.VolumeCurrentBasis(
         points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
@@ -1309,6 +1444,8 @@ def test_hybrid_vim_public_names_are_exported():
         "CompressHCurlResponseInCurrentGram",
         "BlockKrylovBasis",
         "SampledLaplaceInteraction",
+        "HACApKSampledLaplaceInteraction",
+        "SampledHACApKOperator",
         "ReducedInteractionMatrix",
         "CurrentMagneticFluxDensitySamples",
         "MagnetizationCurrentCoupling",

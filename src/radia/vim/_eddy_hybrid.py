@@ -4902,6 +4902,99 @@ class SampledLaplaceInteraction:
         )
 
 
+@dataclass(frozen=True)
+class HACApKSampledLaplaceInteraction:
+    """Build one projected HACApK operator for hybrid current bases.
+
+    The scalar H-matrix stores the stable full sampled Laplace Gram.  In the
+    default ``cross_only`` composition mode, its small reduced diagonal blocks
+    are subtracted and replaced by ``diagonal_interaction``.  Thus every cross
+    block remains in one HACApK apply without imposing a partition-zero pattern
+    on ACA, while exact high-order HCurl diagonal operators are not double
+    counted.  Set ``cross_only=False`` to use the sampled HACApK diagonal too.
+
+    ``diagonal_interaction`` may be a callable backend for the diagonal basis
+    pairs.  It is useful for retaining an analytic HCurl volume operator while
+    the volume/bridge/SIBC coupling is supplied by this class.  If omitted,
+    diagonal blocks use the sampled Laplace reference quadrature.
+    """
+
+    mu: float = MU0
+    kernel_epsilon: float = 1.0
+    aca_eps: float = 1.0e-11
+    leaf_size: int = 64
+    eta: float = 2.0
+    cross_only: bool = True
+    diagonal_interaction: object | None = None
+    diagonal_bases: tuple[SampledCurrentBasis, ...] = ()
+    name: str = "hacapk-sampled-laplace"
+
+    def __post_init__(self) -> None:
+        positive = {
+            "mu": self.mu,
+            "kernel_epsilon": self.kernel_epsilon,
+            "aca_eps": self.aca_eps,
+            "eta": self.eta,
+        }
+        for key, value in positive.items():
+            number = float(value)
+            if not np.isfinite(number) or number <= 0.0:
+                raise ValueError(f"{key} must be positive")
+            object.__setattr__(self, key, number)
+        leaf_size = int(self.leaf_size)
+        if leaf_size < 1:
+            raise ValueError("leaf_size must be >= 1")
+        object.__setattr__(self, "leaf_size", leaf_size)
+        if self.diagonal_interaction is not None and not callable(self.diagonal_interaction):
+            raise TypeError("diagonal_interaction must be callable")
+        diagonal_bases = tuple(self.diagonal_bases)
+        if any(not isinstance(basis, SampledCurrentBasis) for basis in diagonal_bases):
+            raise TypeError("diagonal_bases must contain SampledCurrentBasis objects")
+        if diagonal_bases and self.diagonal_interaction is None:
+            raise ValueError("diagonal_bases requires diagonal_interaction")
+        object.__setattr__(self, "diagonal_bases", diagonal_bases)
+        if not self.name:
+            raise ValueError("name must not be empty")
+
+    @property
+    def operator_scope(self) -> str:
+        return "cross" if self.cross_only else "full"
+
+    def build_operator(self, bases: tuple[SampledCurrentBasis, ...]):
+        return _build_sampled_hacapk_operator(
+            bases,
+            mu=self.mu,
+            kernel_epsilon=self.kernel_epsilon,
+            aca_eps=self.aca_eps,
+            leaf_size=self.leaf_size,
+            eta=self.eta,
+            cross_only=self.cross_only,
+        )
+
+    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
+        sampled = _interaction_block(
+            left,
+            right,
+            mu=self.mu,
+            kernel_epsilon=self.kernel_epsilon,
+        )
+        if not self.cross_only or left is not right:
+            return sampled
+        use_override = self.diagonal_interaction is not None and (
+            not self.diagonal_bases
+            or any(left is basis for basis in self.diagonal_bases)
+        )
+        if not use_override:
+            return np.zeros_like(sampled)
+        desired = self.diagonal_interaction(left, right)
+        if _is_matrix_free_operator(desired):
+            return ReducedBlockHMatrixOperator(
+                -sampled,
+                [(0, left.n_modes, desired)],
+            )
+        return np.asarray(desired) - sampled
+
+
 def _basis_offsets(bases: tuple[SampledCurrentBasis, ...]) -> list[tuple[int, int]]:
     offsets: list[tuple[int, int]] = []
     start = 0
@@ -4966,8 +5059,196 @@ def _is_matrix_free_operator(value) -> bool:
     )
 
 
+class SampledHACApKOperator:
+    """Projected ``mu * sum_c B_c.T G B_c`` sampled-current operator."""
+
+    def __init__(self, gram, charge_map, *, mu: float, metadata=None):
+        matrix = charge_map.tocsr()
+        if matrix.shape[0] != 3 * int(gram.ndof()):
+            raise ValueError("charge-map rows must equal three times the HACApK point count")
+        if matrix.shape[1] < 1:
+            raise ValueError("charge-map must contain at least one reduced mode")
+        gram.configure_vector_charge_map(
+            np.asarray(matrix.indptr, dtype=np.int32),
+            np.asarray(matrix.indices, dtype=np.int32),
+            np.asarray(matrix.data, dtype=float),
+            int(matrix.shape[1]),
+            3,
+        )
+        self._gram = gram
+        self._mu = float(mu)
+        self._metadata = {} if metadata is None else dict(metadata)
+        self._point_count = int(gram.ndof())
+        self._map_entries = int(matrix.nnz)
+        self._map_bytes = int(
+            matrix.indptr.nbytes + matrix.indices.nbytes + matrix.data.nbytes
+        )
+        self.shape = (int(matrix.shape[1]), int(matrix.shape[1]))
+        self.dtype = np.dtype(float)
+
+    @property
+    def T(self):
+        return self
+
+    @property
+    def H(self):
+        return self
+
+    @property
+    def matrix_free(self) -> bool:
+        return True
+
+    @property
+    def is_hermitian(self) -> bool:
+        return True
+
+    def _apply_real(self, vector) -> np.ndarray:
+        return np.asarray(
+            self._gram.apply_configured_demag(np.asarray(vector, dtype=float), True)
+        )
+
+    def matvec(self, vector):
+        x = np.asarray(vector)
+        if x.ndim != 1 or x.shape[0] != self.shape[1]:
+            raise ValueError(f"vector must have shape ({self.shape[1]},)")
+        if np.iscomplexobj(x):
+            value = self._apply_real(x.real) + 1j * self._apply_real(x.imag)
+        else:
+            value = self._apply_real(x)
+        return self._mu * value
+
+    def matmat(self, matrix):
+        values = np.asarray(matrix)
+        if values.ndim == 1:
+            return self.matvec(values)
+        if values.ndim != 2 or values.shape[0] != self.shape[1]:
+            raise ValueError(f"matrix must have shape ({self.shape[1]}, n_rhs)")
+        return np.column_stack(
+            [self.matvec(values[:, column]) for column in range(values.shape[1])]
+        )
+
+    def __matmul__(self, other):
+        values = np.asarray(other)
+        return self.matvec(values) if values.ndim == 1 else self.matmat(values)
+
+    def to_dense(self):
+        dense = self.matmat(np.eye(self.shape[1]))
+        return 0.5 * (dense + dense.conj().T)
+
+    def __array__(self, dtype=None, copy=None):
+        dense = self.to_dense()
+        if dtype is not None:
+            dense = dense.astype(dtype, copy=False)
+        if copy is False:
+            return dense
+        return np.array(dense, copy=True)
+
+    def __getitem__(self, key):
+        return self.to_dense()[key]
+
+    def stats(self):
+        values = dict(self._metadata)
+        values.update(
+            {
+                "operator": "sampled-sum-component-BtGB",
+                "matrix_free": True,
+                "mode_count": int(self.shape[0]),
+                "sample_point_count": self._point_count,
+                "charge_map_entries": self._map_entries,
+                "charge_map_bytes": self._map_bytes,
+                "charge_map_backend": "native-cpp-component-csr",
+                "hmatrix": dict(self._gram.stats()),
+            }
+        )
+        return values
+
+
+def _build_sampled_hacapk_operator(
+    bases,
+    *,
+    mu: float,
+    kernel_epsilon: float,
+    aca_eps: float,
+    leaf_size: int,
+    eta: float,
+    cross_only: bool,
+):
+    from scipy import sparse
+
+    bases = tuple(bases)
+    active = [
+        (index, basis)
+        for index, basis in enumerate(bases)
+        if basis.n_modes > 0 and basis.n_samples > 0
+    ]
+    total_modes = sum(basis.n_modes for basis in bases)
+    if not active or total_modes < 1:
+        return None
+    for _, basis in active:
+        if np.iscomplexobj(basis.modes) and np.any(np.imag(basis.modes) != 0.0):
+            raise ValueError("sampled HACApK interaction currently requires real current modes")
+
+    points = np.vstack([basis.points for _, basis in active])
+    weights = np.concatenate([basis.weights for _, basis in active])
+    point_offsets = {}
+    cursor = 0
+    for index, basis in active:
+        point_offsets[index] = cursor
+        cursor += basis.n_samples
+    mode_offsets = _basis_offsets(bases)
+
+    rows = []
+    cols = []
+    data = []
+    point_count = points.shape[0]
+    for component in range(3):
+        component_offset = component * point_count
+        for index, basis in active:
+            values = np.asarray(basis.modes[:, :, component].T.real, dtype=float)
+            local_rows, local_cols = np.nonzero(values)
+            rows.extend(component_offset + point_offsets[index] + local_rows)
+            cols.extend(mode_offsets[index][0] + local_cols)
+            data.extend(values[local_rows, local_cols])
+    charge_map = sparse.coo_matrix(
+        (data, (rows, cols)),
+        shape=(3 * point_count, total_modes),
+        dtype=float,
+    ).tocsr()
+
+    gram_type = _radia_cpp_kernel("_ChargeGramHMatrix")
+    if gram_type is None or not hasattr(gram_type, "from_sampled_laplace"):
+        raise RuntimeError(
+            "Radia C++ extension lacks sampled Laplace HACApK support; rebuild _radia_pybind"
+        )
+    gram = gram_type.from_sampled_laplace(
+        np.ascontiguousarray(points.reshape(-1), dtype=float),
+        np.ascontiguousarray(weights, dtype=float),
+        float(kernel_epsilon),
+        float(aca_eps),
+        int(leaf_size),
+        float(eta),
+        True,
+    )
+    return SampledHACApKOperator(
+        gram,
+        charge_map,
+        mu=mu,
+        metadata={
+            "backend": "hacapk-sampled-laplace",
+            "cross_only": bool(cross_only),
+            "kernel_scope": "full-stable-gram",
+            "diagonal_policy": (
+                "reduced-correction" if cross_only else "sampled-hacapk"
+            ),
+            "basis_count": len(bases),
+            "active_basis_count": len(active),
+            "kernel_epsilon": float(kernel_epsilon),
+        },
+    )
+
+
 class ReducedBlockHMatrixOperator:
-    """Dense cross blocks plus symmetric matrix-free diagonal blocks."""
+    """Dense remainder plus additive symmetric matrix-free block operators."""
 
     def __init__(self, dense, operator_blocks):
         base = np.asarray(dense)
@@ -5039,6 +5320,7 @@ class ReducedBlockHMatrixOperator:
             "matrix_free": True,
             "mode_count": int(self.shape[0]),
             "operator_block_count": len(self._operator_blocks),
+            "dense_remainder_bytes": int(self._dense.nbytes),
             "dense_cross_bytes": int(self._dense.nbytes),
             "operator_blocks": [
                 {
@@ -7634,13 +7916,13 @@ def AssembleHybridVIM(
     contribute to ``surface_mass``; multiply that block by ``SkinImpedance`` in
     :meth:`HybridVIMSystem.impedance`.
 
-    ``interaction`` is an optional backend hook.  When supplied, it is called as
-    ``interaction(left_basis, right_basis)`` and must return the inductance
-    block for that pair.  Only upper-triangular basis pairs are requested; the
-    reciprocal block is filled by conjugate transpose.  This is the intended
-    place to connect an ``ngsolve.bem`` or Radia H-matrix single-layer backend
-    without changing the reduced VIM API.  If the backend has a ``name``
-    attribute, it is recorded in :meth:`HybridVIMSystem.diagnostics`.
+    ``interaction`` is an optional backend hook.  The pairwise contract calls
+    ``interaction(left_basis, right_basis)`` for upper-triangular basis pairs.
+    A matrix-free backend may additionally implement ``build_operator(bases)``
+    and declare ``operator_scope`` as ``"full"`` or ``"cross"``.  The latter
+    supplies all reciprocal off-diagonal blocks in one symmetric operator while
+    diagonal pairs continue through the pairwise hook.  This is the production
+    connection point for sampled HACApK and ``ngsolve.bem`` projected operators.
     """
 
     if not bases:
@@ -7669,6 +7951,27 @@ def AssembleHybridVIM(
     blocks: dict[str, tuple[int, int]] = {}
 
     offsets = _basis_offsets(tuple(bases))
+    assembled_interaction_operator = None
+    assembled_operator_scope = None
+    if interaction is not None:
+        operator_builder = getattr(interaction, "build_operator", None)
+        if callable(operator_builder):
+            assembled_interaction_operator = operator_builder(tuple(bases))
+            assembled_operator_scope = str(
+                getattr(interaction, "operator_scope", "full")
+            ).lower()
+            if assembled_operator_scope not in {"full", "cross"}:
+                raise ValueError("interaction.operator_scope must be 'full' or 'cross'")
+            if assembled_interaction_operator is not None:
+                if not _is_matrix_free_operator(assembled_interaction_operator):
+                    raise TypeError("interaction.build_operator must return a matrix-free operator")
+                if tuple(assembled_interaction_operator.shape) != (total, total):
+                    raise ValueError(
+                        "interaction.build_operator returned shape "
+                        f"{assembled_interaction_operator.shape}, expected {(total, total)}"
+                    )
+                if not getattr(assembled_interaction_operator, "is_hermitian", False):
+                    raise ValueError("assembled interaction operator must declare is_hermitian=True")
     for i, basis in enumerate(bases):
         start, stop = offsets[i]
         prefix = basis.kind if basis.kind not in blocks else f"{basis.kind}{i}"
@@ -7680,22 +7983,30 @@ def AssembleHybridVIM(
         for ib in range(ia, len(bases)):
             right = bases[ib]
             b0, b1 = offsets[ib]
-            if interaction is None:
-                block = _interaction_block(
-                    left, right, mu=mu, kernel_epsilon=kernel_epsilon
-                )
-            else:
-                block = _validate_interaction_block(interaction(left, right), left, right)
-            if _is_matrix_free_operator(block):
-                if ia != ib:
-                    raise NotImplementedError(
-                        "matrix-free interaction blocks must currently be diagonal basis blocks"
+            assembled_pair = assembled_interaction_operator is not None and (
+                assembled_operator_scope == "full"
+                or (assembled_operator_scope == "cross" and ia != ib)
+            )
+            if not assembled_pair:
+                if interaction is None:
+                    block = _interaction_block(
+                        left, right, mu=mu, kernel_epsilon=kernel_epsilon
                     )
-                operator_blocks.append((a0, a1, block))
-            else:
-                lmat[a0:a1, b0:b1] = block
-                if ia != ib:
-                    lmat[b0:b1, a0:a1] = block.conj().T
+                else:
+                    block = _validate_interaction_block(
+                        interaction(left, right), left, right
+                    )
+                if _is_matrix_free_operator(block):
+                    if ia != ib:
+                        raise NotImplementedError(
+                            "rectangular pair operators must be supplied through "
+                            "interaction.build_operator(bases)"
+                        )
+                    operator_blocks.append((a0, a1, block))
+                else:
+                    lmat[a0:a1, b0:b1] = block
+                    if ia != ib:
+                        lmat[b0:b1, a0:a1] = block.conj().T
             if left.kind == "volume" and right.kind == "volume":
                 if sigma is None:
                     raise ValueError("sigma is required when volume bases are used")
@@ -7710,6 +8021,8 @@ def AssembleHybridVIM(
     rmat = 0.5 * (rmat + rmat.conj().T)
     lmat = 0.5 * (lmat + lmat.conj().T)
     smat = 0.5 * (smat + smat.conj().T)
+    if assembled_interaction_operator is not None:
+        operator_blocks.append((0, total, assembled_interaction_operator))
     inductance = (
         ReducedBlockHMatrixOperator(lmat, operator_blocks)
         if operator_blocks
@@ -8552,6 +8865,8 @@ __all__ = [
     "NgsolveOperatorBlockKrylovBasis",
     "NgsolveStaticCondensedBlockKrylovBasis",
     "SampledLaplaceInteraction",
+    "HACApKSampledLaplaceInteraction",
+    "SampledHACApKOperator",
     "ReducedInteractionMatrix",
     "CurrentMagneticFluxDensitySamples",
     "MagnetizationCurrentCoupling",
