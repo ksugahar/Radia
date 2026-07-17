@@ -110,7 +110,7 @@ PARAM_JA = {
 
     # --- HDiv-VIM (calc_accel_hdiv) ---
     "ima": {"ja": "IMA 対称性", "physics": "'+x-z'=1/4モデル。符号: 平行=+, 垂直=-"},
-    "hdiv_order": {"ja": "HDiv 次数", "physics": "1=RT1, 2=RT2"},
+    "hdiv_order": {"ja": "HDiv 次数", "physics": "1=BDM1, 2=BDM2"},
     "unit_scale": {"ja": "座標スケール", "physics": "Cubit座標→メートル。0.001=mm→m"},
     "unit-scale": {"ja": "座標スケール", "physics": ""},
 
@@ -157,7 +157,7 @@ PARAM_JA = {
 # overrides after the generic CLI-name metadata above.
 PANEL_PARAM_JA = {
     "motor_hdiv_reduced": {
-        "order": {"ja": "HDiv 次数", "physics": "1=RT1, 2=RT2"},
+        "order": {"ja": "HDiv 次数", "physics": "1=BDM1, 2=BDM2"},
     },
 }
 

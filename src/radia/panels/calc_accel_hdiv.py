@@ -194,7 +194,7 @@ def solve_hdiv(coil_script="", vol_file="",
             The 'hdiv' backend is KELVIN-LESS and iron-only: the .vol must
             contain ONLY the 'yoke' volume material (no air / kelvin elements),
             and IMA symmetry is not supported there yet (both -> fail-loud).
-        hdiv_order: HDiv finite-element order, 1 (RT1) or 2 (RT2).
+        hdiv_order: HDiv finite-element order, 1 (BDM1) or 2 (BDM2).
 
     Returns:
         dict with B_center, n_elem, ndof, iterations, converged, etc.
@@ -500,7 +500,7 @@ def build_argparser():
                         help="Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an "
                              "iron-only .vol, does not support IMA symmetry yet).")
     parser.add_argument("--hdiv-order", type=int, choices=[1, 2], default=1,
-                        help="HDiv finite-element order: 1=RT1, 2=RT2")
+                        help="HDiv finite-element order: 1=BDM1, 2=BDM2")
     parser.add_argument("--max-iter", type=int, default=100,
                         help="Max nonlinear iterations")
     parser.add_argument("--tol", type=float, default=1e-3,
