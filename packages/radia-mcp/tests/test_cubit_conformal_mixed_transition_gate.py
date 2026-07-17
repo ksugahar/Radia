@@ -2470,3 +2470,233 @@ def test_v24_source_exodus_qa_coordinate_name_distribution_factor_checksum_misma
     assert result["checks"][
         "exodus_qa_uses_current_coordinates_distribution_factors_and_checksum"
     ] is False
+
+
+def _with_v25_hybrid_periodic_journal_vol_identity(row):
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(row)
+    row["hybrid_tet_hex_pyramid_interface_conformity_orientation_block_identity"] = {
+        "mesh_generation": "hybrid-111",
+        "tet_mesh_generation": "hybrid-111",
+        "hex_mesh_generation": "hybrid-111",
+        "pyramid_mesh_generation": "hybrid-111",
+        "interface_mesh_generation": "hybrid-111",
+        "orientation_mesh_generation": "hybrid-111",
+        "block_mesh_generation": "hybrid-111",
+        "result_mesh_generation": "hybrid-111",
+        "element_counts": {"tet4": 120, "hex8": 48, "pyramid5": 24},
+        "result_element_counts": {"tet4": 120, "hex8": 48, "pyramid5": 24},
+        "interface_face_node_ids": [[11, 12, 13, 14], [21, 22, 23, 24]],
+        "result_interface_face_node_ids": [[11, 12, 13, 14], [21, 22, 23, 24]],
+        "interface_conforming": True,
+        "result_interface_conforming": True,
+        "orientation_signs": [1, 1, 1],
+        "result_orientation_signs": [1, 1, 1],
+        "block_ids": [10, 20, 30],
+        "result_block_ids": [10, 20, 30],
+        "mesh_sha256": "1" * 64,
+        "result_mesh_sha256": "1" * 64,
+    }
+    row["periodic_sideset_node_pair_transform_tolerance_geometry_generation_identity"] = {
+        "periodic_generation": "periodic-111",
+        "sideset_periodic_generation": "periodic-111",
+        "node_pair_periodic_generation": "periodic-111",
+        "transform_periodic_generation": "periodic-111",
+        "tolerance_periodic_generation": "periodic-111",
+        "geometry_periodic_generation": "periodic-111",
+        "result_periodic_generation": "periodic-111",
+        "master_sideset": "periodic-master",
+        "result_master_sideset": "periodic-master",
+        "slave_sideset": "periodic-slave",
+        "result_slave_sideset": "periodic-slave",
+        "node_pairs": [[101, 201], [102, 202], [103, 203]],
+        "result_node_pairs": [[101, 201], [102, 202], [103, 203]],
+        "rigid_transform": [
+            [1.0, 0.0, 0.0, 10.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ],
+        "result_rigid_transform": [
+            [1.0, 0.0, 0.0, 10.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ],
+        "pairing_tolerance": 1.0e-7,
+        "result_pairing_tolerance": 1.0e-7,
+        "geometry_sha256": "2" * 64,
+        "result_geometry_sha256": "2" * 64,
+        "periodic_table_sha256": "3" * 64,
+        "result_periodic_table_sha256": "3" * 64,
+    }
+    row["journal_reset_entity_id_reuse_undo_replay_session_generation_identity"] = {
+        "session_generation": "journal-111",
+        "reset_session_generation": "journal-111",
+        "entity_session_generation": "journal-111",
+        "undo_session_generation": "journal-111",
+        "replay_session_generation": "journal-111",
+        "topology_session_generation": "journal-111",
+        "result_session_generation": "journal-111",
+        "session_id": "headless-session-111",
+        "result_session_id": "headless-session-111",
+        "reset_applied": True,
+        "result_reset_applied": True,
+        "command_sequence": [
+            "reset",
+            "brick x 1",
+            "webcut volume 1 with plane xplane",
+        ],
+        "result_command_sequence": [
+            "reset",
+            "brick x 1",
+            "webcut volume 1 with plane xplane",
+        ],
+        "entity_id_map": [["body", 1], ["left", 1], ["right", 2]],
+        "result_entity_id_map": [["body", 1], ["left", 1], ["right", 2]],
+        "undo_checkpoint_sha256": "4" * 64,
+        "result_undo_checkpoint_sha256": "4" * 64,
+        "topology_sha256": "5" * 64,
+        "result_topology_sha256": "5" * 64,
+        "journal_sha256": "6" * 64,
+        "result_journal_sha256": "6" * 64,
+    }
+    row["netgen_vol_export_family_order_boundary_material_checksum_identity"] = {
+        "export_generation": "vol-export-111",
+        "family_export_generation": "vol-export-111",
+        "order_export_generation": "vol-export-111",
+        "boundary_export_generation": "vol-export-111",
+        "material_export_generation": "vol-export-111",
+        "entity_export_generation": "vol-export-111",
+        "result_export_generation": "vol-export-111",
+        "volume_element_family": "tet4",
+        "decoded_volume_element_family": "tet4",
+        "surface_element_family": "tri3",
+        "decoded_surface_element_family": "tri3",
+        "polynomial_order": 1,
+        "decoded_polynomial_order": 1,
+        "boundary_names": ["outer", "interface"],
+        "decoded_boundary_names": ["outer", "interface"],
+        "material_indices": [1, 2],
+        "decoded_material_indices": [1, 2],
+        "source_entity_ids": [10, 20],
+        "decoded_source_entity_ids": [10, 20],
+        "source_mesh_sha256": "7" * 64,
+        "export_source_mesh_sha256": "7" * 64,
+        "vol_sha256": "8" * 64,
+        "decoded_vol_sha256": "8" * 64,
+    }
+    return row
+
+
+def test_v25_positive_hybrid_periodic_journal_vol_identity():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v25_public_hybrid_tet_hex_pyramid_interface_conformity_orientation_block_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["hybrid_tet_hex_pyramid_interface_conformity_orientation_block_identity"].update(
+        {
+            "tet_mesh_generation": "hybrid-110",
+            "hex_mesh_generation": "hybrid-109",
+            "pyramid_mesh_generation": "hybrid-108",
+            "interface_mesh_generation": "hybrid-107",
+            "orientation_mesh_generation": "hybrid-106",
+            "result_element_counts": {"tet4": 121, "hex8": 48, "pyramid5": 23},
+            "result_interface_face_node_ids": [
+                [11, 13, 12, 14],
+                [21, 22, 24, 23],
+            ],
+            "result_interface_conforming": False,
+            "result_orientation_signs": [1, -1, 1],
+            "result_block_ids": [10, 20, 40],
+            "result_mesh_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hybrid_interfaces_use_current_families_nodes_orientation_and_blocks"
+    ] is False
+
+
+def test_v25_public_periodic_sideset_node_pair_transform_tolerance_geometry_generation_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["periodic_sideset_node_pair_transform_tolerance_geometry_generation_identity"].update(
+        {
+            "sideset_periodic_generation": "periodic-110",
+            "node_pair_periodic_generation": "periodic-109",
+            "transform_periodic_generation": "periodic-108",
+            "tolerance_periodic_generation": "periodic-107",
+            "geometry_periodic_generation": "periodic-106",
+            "result_slave_sideset": "periodic-old",
+            "result_node_pairs": [[101, 202], [102, 201], [103, 203]],
+            "result_rigid_transform": [
+                [1.0, 0.0, 0.0, 9.5],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+            ],
+            "result_pairing_tolerance": 1.0e-3,
+            "result_geometry_sha256": "a" * 64,
+            "result_periodic_table_sha256": "b" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "periodic_sidesets_use_current_node_pairs_transform_tolerance_and_geometry"
+    ] is False
+
+
+def test_v25_source_journal_reset_entity_id_reuse_undo_replay_session_generation_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["journal_reset_entity_id_reuse_undo_replay_session_generation_identity"].update(
+        {
+            "reset_session_generation": "journal-110",
+            "entity_session_generation": "journal-109",
+            "undo_session_generation": "journal-108",
+            "replay_session_generation": "journal-107",
+            "topology_session_generation": "journal-106",
+            "result_session_id": "headless-session-110",
+            "result_reset_applied": False,
+            "result_command_sequence": [
+                "brick x 1",
+                "reset",
+                "webcut volume 1 with plane xplane",
+            ],
+            "result_entity_id_map": [["body", 2], ["left", 3], ["right", 4]],
+            "result_undo_checkpoint_sha256": "c" * 64,
+            "result_topology_sha256": "d" * 64,
+            "result_journal_sha256": "e" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "journal_reset_replay_uses_current_session_commands_entities_and_topology"
+    ] is False
+
+
+def test_v25_source_netgen_vol_export_family_order_boundary_material_checksum_mismatch():
+    row = _with_v25_hybrid_periodic_journal_vol_identity(summary())
+    row["netgen_vol_export_family_order_boundary_material_checksum_identity"].update(
+        {
+            "family_export_generation": "vol-export-110",
+            "order_export_generation": "vol-export-109",
+            "boundary_export_generation": "vol-export-108",
+            "material_export_generation": "vol-export-107",
+            "entity_export_generation": "vol-export-106",
+            "decoded_volume_element_family": "hex8",
+            "decoded_surface_element_family": "quad4",
+            "decoded_polynomial_order": 2,
+            "decoded_boundary_names": ["interface", "outer-old"],
+            "decoded_material_indices": [1, 3],
+            "decoded_source_entity_ids": [20, 10],
+            "export_source_mesh_sha256": "f" * 64,
+            "decoded_vol_sha256": "0" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "netgen_vol_export_uses_p1_tri_tet_boundaries_materials_and_source_mesh"
+    ] is False
