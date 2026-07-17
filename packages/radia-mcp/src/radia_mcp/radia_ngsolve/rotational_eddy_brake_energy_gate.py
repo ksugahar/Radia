@@ -1425,6 +1425,117 @@ def _degenerate_eigenmode_subspace_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _remesh_field_projection_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "remesh_field_projection_conservation_geometry_dataset_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("projection_generation") or "")
+    try:
+        before = float(identity.get("conserved_integral_before"))
+        after = float(identity.get("conserved_integral_after"))
+    except (TypeError, ValueError):
+        return False
+    source_mesh = str(identity.get("source_mesh_sha256") or "")
+    target_mesh = str(identity.get("target_mesh_sha256") or "")
+    geometry = str(identity.get("geometry_revision_sha256") or "")
+    projection_map = str(identity.get("projection_map_sha256") or "")
+    field = str(identity.get("projected_field_sha256") or "")
+    dataset = str(identity.get("dataset_tag") or "")
+    conservation_scale = max(abs(before), 1.0)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "source_mesh_projection_generation",
+                "target_mesh_projection_generation",
+                "geometry_projection_generation",
+                "dataset_projection_generation",
+                "integral_projection_generation",
+                "result_projection_generation",
+            )
+        )
+        and _is_sha256(source_mesh)
+        and identity.get("projected_source_mesh_sha256") == source_mesh
+        and _is_sha256(target_mesh)
+        and identity.get("result_target_mesh_sha256") == target_mesh
+        and _is_sha256(geometry)
+        and identity.get("result_geometry_revision_sha256") == geometry
+        and bool(dataset)
+        and identity.get("result_dataset_tag") == dataset
+        and math.isfinite(before)
+        and math.isfinite(after)
+        and abs(after - before) <= 1.0e-12 * conservation_scale
+        and _is_sha256(projection_map)
+        and identity.get("result_projection_map_sha256") == projection_map
+        and _is_sha256(field)
+        and identity.get("result_projected_field_sha256") == field
+    )
+
+
+def _nonlinear_continuation_load_step_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "nonlinear_continuation_load_step_branch_state_solver_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        step_ids = [int(value) for value in identity.get("load_step_ids", [])]
+        result_step_ids = [
+            int(value) for value in identity.get("result_load_step_ids", [])
+        ]
+        parameters = [
+            float(value) for value in identity.get("continuation_parameter", [])
+        ]
+        result_parameters = [
+            float(value)
+            for value in identity.get("result_continuation_parameter", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("continuation_generation") or "")
+    branch = str(identity.get("branch_id") or "")
+    initial_state = str(identity.get("initial_state_sha256") or "")
+    solver_settings = str(identity.get("solver_settings_sha256") or "")
+    solution = str(identity.get("solution_table_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "load_step_continuation_generation",
+                "branch_continuation_generation",
+                "initial_state_continuation_generation",
+                "solver_continuation_generation",
+                "result_continuation_generation",
+            )
+        )
+        and len(step_ids) >= 2
+        and all(value > 0 for value in step_ids)
+        and len(set(step_ids)) == len(step_ids)
+        and all(right > left for left, right in zip(step_ids, step_ids[1:]))
+        and result_step_ids == step_ids
+        and len(parameters) == len(step_ids)
+        and all(math.isfinite(value) for value in parameters)
+        and all(right > left for left, right in zip(parameters, parameters[1:]))
+        and result_parameters == parameters
+        and bool(branch)
+        and identity.get("result_branch_id") == branch
+        and _is_sha256(initial_state)
+        and identity.get("result_initial_state_sha256") == initial_state
+        and _is_sha256(solver_settings)
+        and identity.get("result_solver_settings_sha256") == solver_settings
+        and _is_sha256(solution)
+        and identity.get("result_solution_table_sha256") == solution
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1838,6 +1949,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "degenerate_eigenmodes_use_current_subspace_normalization_phase_and_mesh": (
             _degenerate_eigenmode_subspace_identity_ok(summary)
+        ),
+        "remeshed_fields_use_current_projection_geometry_dataset_and_conservation": (
+            _remesh_field_projection_identity_ok(summary)
+        ),
+        "nonlinear_solutions_use_current_load_steps_branch_state_and_solver": (
+            _nonlinear_continuation_load_step_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality

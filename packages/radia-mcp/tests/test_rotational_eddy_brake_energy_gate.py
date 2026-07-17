@@ -1484,3 +1484,101 @@ def test_v24_public_degenerate_eigenmode_subspace_normalization_phase_projection
     assert not result["checks"][
         "degenerate_eigenmodes_use_current_subspace_normalization_phase_and_mesh"
     ]
+
+
+def _with_v25_remesh_and_continuation_identity(summary: dict) -> dict:
+    summary["remesh_field_projection_conservation_geometry_dataset_generation_identity"] = {
+        "projection_generation": "remesh-111",
+        "source_mesh_projection_generation": "remesh-111",
+        "target_mesh_projection_generation": "remesh-111",
+        "geometry_projection_generation": "remesh-111",
+        "dataset_projection_generation": "remesh-111",
+        "integral_projection_generation": "remesh-111",
+        "result_projection_generation": "remesh-111",
+        "source_mesh_sha256": "1" * 64,
+        "projected_source_mesh_sha256": "1" * 64,
+        "target_mesh_sha256": "2" * 64,
+        "result_target_mesh_sha256": "2" * 64,
+        "geometry_revision_sha256": "3" * 64,
+        "result_geometry_revision_sha256": "3" * 64,
+        "dataset_tag": "dset-remesh-2",
+        "result_dataset_tag": "dset-remesh-2",
+        "conserved_integral_before": 18.25,
+        "conserved_integral_after": 18.25,
+        "projection_map_sha256": "4" * 64,
+        "result_projection_map_sha256": "4" * 64,
+        "projected_field_sha256": "5" * 64,
+        "result_projected_field_sha256": "5" * 64,
+    }
+    summary["nonlinear_continuation_load_step_branch_state_solver_generation_identity"] = {
+        "continuation_generation": "continuation-111",
+        "load_step_continuation_generation": "continuation-111",
+        "branch_continuation_generation": "continuation-111",
+        "initial_state_continuation_generation": "continuation-111",
+        "solver_continuation_generation": "continuation-111",
+        "result_continuation_generation": "continuation-111",
+        "load_step_ids": [1, 2, 3, 4],
+        "result_load_step_ids": [1, 2, 3, 4],
+        "continuation_parameter": [0.25, 0.5, 0.75, 1.0],
+        "result_continuation_parameter": [0.25, 0.5, 0.75, 1.0],
+        "branch_id": "stable-positive-slope",
+        "result_branch_id": "stable-positive-slope",
+        "initial_state_sha256": "6" * 64,
+        "result_initial_state_sha256": "6" * 64,
+        "solver_settings_sha256": "7" * 64,
+        "result_solver_settings_sha256": "7" * 64,
+        "solution_table_sha256": "8" * 64,
+        "result_solution_table_sha256": "8" * 64,
+    }
+    return summary
+
+
+def test_v25_public_positive_remesh_and_continuation_identity() -> None:
+    result = gate(_with_v25_remesh_and_continuation_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v25_public_remesh_field_projection_conservation_geometry_dataset_generation_mismatch() -> None:
+    summary = _with_v25_remesh_and_continuation_identity(_summary())
+    summary["remesh_field_projection_conservation_geometry_dataset_generation_identity"].update(
+        {
+            "source_mesh_projection_generation": "remesh-110",
+            "target_mesh_projection_generation": "remesh-109",
+            "geometry_projection_generation": "remesh-108",
+            "dataset_projection_generation": "remesh-107",
+            "result_target_mesh_sha256": "c" * 64,
+            "result_geometry_revision_sha256": "d" * 64,
+            "result_dataset_tag": "dset-remesh-1",
+            "conserved_integral_after": 16.75,
+            "result_projection_map_sha256": "e" * 64,
+            "result_projected_field_sha256": "f" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "remeshed_fields_use_current_projection_geometry_dataset_and_conservation"
+    ]
+
+
+def test_v25_public_nonlinear_continuation_load_step_branch_state_solver_generation_mismatch() -> None:
+    summary = _with_v25_remesh_and_continuation_identity(_summary())
+    summary["nonlinear_continuation_load_step_branch_state_solver_generation_identity"].update(
+        {
+            "load_step_continuation_generation": "continuation-110",
+            "branch_continuation_generation": "continuation-109",
+            "initial_state_continuation_generation": "continuation-108",
+            "solver_continuation_generation": "continuation-107",
+            "result_load_step_ids": [1, 2, 4, 5],
+            "result_continuation_parameter": [0.25, 0.5, 0.9, 1.1],
+            "result_branch_id": "unstable-negative-slope",
+            "result_initial_state_sha256": "0" * 64,
+            "result_solver_settings_sha256": "1" * 64,
+            "result_solution_table_sha256": "2" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "nonlinear_solutions_use_current_load_steps_branch_state_and_solver"
+    ]
