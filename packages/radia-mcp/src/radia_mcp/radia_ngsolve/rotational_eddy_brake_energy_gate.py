@@ -1673,6 +1673,144 @@ def _segregated_iteration_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _nonlinear_state_restart_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "nonlinear_state_time_integrator_tangent_load_step_restart_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        states = [str(value) for value in identity.get("state_variable_names", [])]
+        result_states = [
+            str(value) for value in identity.get("result_state_variable_names", [])
+        ]
+        load_steps = [int(value) for value in identity.get("load_step_ids", [])]
+        result_load_steps = [
+            int(value) for value in identity.get("result_load_step_ids", [])
+        ]
+        order = int(identity.get("integrator_order"))
+        result_order = int(identity.get("result_integrator_order"))
+        restart_time = float(identity.get("restart_time_s"))
+        result_restart_time = float(identity.get("result_restart_time_s"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("nonlinear_generation") or "")
+    integrator = str(identity.get("time_integrator") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "state_nonlinear_generation",
+                "integrator_nonlinear_generation",
+                "tangent_nonlinear_generation",
+                "load_step_nonlinear_generation",
+                "checkpoint_nonlinear_generation",
+                "result_nonlinear_generation",
+            )
+        )
+        and bool(states)
+        and all(states)
+        and len(set(states)) == len(states)
+        and result_states == states
+        and integrator in {"generalized_alpha", "bdf"}
+        and identity.get("result_time_integrator") == integrator
+        and order in {1, 2}
+        and result_order == order
+        and len(load_steps) >= 2
+        and load_steps == list(range(load_steps[0], load_steps[0] + len(load_steps)))
+        and result_load_steps == load_steps
+        and math.isfinite(restart_time)
+        and restart_time >= 0.0
+        and result_restart_time == restart_time
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(result) == identity.get(source)
+            for source, result in (
+                ("state_vector_sha256", "result_state_vector_sha256"),
+                ("consistent_tangent_sha256", "result_consistent_tangent_sha256"),
+                ("checkpoint_sha256", "result_checkpoint_sha256"),
+                ("solution_sha256", "result_solution_sha256"),
+            )
+        )
+    )
+
+
+def _floquet_pair_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "floquet_pair_orientation_phase_wavevector_normalization_dataset_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        pairs = [str(value) for value in identity.get("periodic_pair_tags", [])]
+        result_pairs = [
+            str(value) for value in identity.get("result_periodic_pair_tags", [])
+        ]
+        signs = [int(value) for value in identity.get("pair_orientation_signs", [])]
+        result_signs = [
+            int(value) for value in identity.get("result_pair_orientation_signs", [])
+        ]
+        phases = [float(value) for value in identity.get("phase_shift_rad", [])]
+        result_phases = [
+            float(value) for value in identity.get("result_phase_shift_rad", [])
+        ]
+        wavevector = [float(value) for value in identity.get("wavevector_rad_m", [])]
+        result_wavevector = [
+            float(value) for value in identity.get("result_wavevector_rad_m", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("floquet_generation") or "")
+    normalization = str(identity.get("mode_normalization") or "")
+    dataset = str(identity.get("dataset_tag") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "pair_floquet_generation",
+                "orientation_floquet_generation",
+                "phase_floquet_generation",
+                "wavevector_floquet_generation",
+                "normalization_floquet_generation",
+                "dataset_floquet_generation",
+                "mesh_floquet_generation",
+                "result_floquet_generation",
+            )
+        )
+        and bool(pairs)
+        and all(pairs)
+        and len(set(pairs)) == len(pairs)
+        and result_pairs == pairs
+        and len(signs) == len(pairs)
+        and all(value in {-1, 1} for value in signs)
+        and result_signs == signs
+        and len(phases) == len(pairs)
+        and all(math.isfinite(value) for value in phases)
+        and result_phases == phases
+        and len(wavevector) == 3
+        and all(math.isfinite(value) for value in wavevector)
+        and result_wavevector == wavevector
+        and normalization in {"unit_cell_energy_1j", "unit_power_1w"}
+        and identity.get("result_mode_normalization") == normalization
+        and bool(dataset)
+        and identity.get("result_dataset_tag") == dataset
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(result) == identity.get(source)
+            for source, result in (
+                ("periodic_mesh_map_sha256", "result_periodic_mesh_map_sha256"),
+                ("mode_field_sha256", "result_mode_field_sha256"),
+            )
+        )
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -2098,6 +2236,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "segregated_solution_uses_current_iterations_relaxation_residuals_and_components": (
             _segregated_iteration_identity_ok(summary)
+        ),
+        "nonlinear_restart_uses_current_state_integrator_tangent_load_step_and_checkpoint": (
+            _nonlinear_state_restart_identity_ok(summary)
+        ),
+        "floquet_modes_use_current_pair_orientation_phase_wavevector_normalization_and_dataset": (
+            _floquet_pair_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
