@@ -493,7 +493,11 @@ try {
             if (-not $AxiFemOnly) {
                 $installList += @('_radia_pybind.pyd')
                 if (-not $RadiaOnly) {
-                    $installList += @('peec_matrices.pyd', 'cln_core.pyd')
+                    $installList += @(
+                        'peec_matrices.pyd',
+                        'cln_core.pyd',
+                        'radia_motor_rom.dll'
+                    )
                 }
             }
             foreach ($f in $installList) {

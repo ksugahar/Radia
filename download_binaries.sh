@@ -19,6 +19,14 @@ echo "  -> src/radia/*.pyd"
 python tools/download_release_asset.py --repo ksugahar/Radia --tag binaries \
     --pattern "*.pyd" --dest src/radia
 
+# Standalone C ABI libraries (for Simulink/FMI/native consumers).
+for pattern in "*.dll" "*.so" "*.dylib"; do
+    echo "  -> src/radia/$pattern (optional by platform)"
+    python tools/download_release_asset.py --repo ksugahar/Radia --tag binaries \
+        --pattern "$pattern" --dest src/radia \
+        || echo "  ($pattern not present for this platform)"
+done
+
 # fmm3d.lib is legacy (ExaFMM-t was removed); tolerate its absence.
 echo "  -> src/ext/fmm3d/lib/fmm3d.lib (optional)"
 python tools/download_release_asset.py --repo ksugahar/Radia --tag binaries \
@@ -26,4 +34,5 @@ python tools/download_release_asset.py --repo ksugahar/Radia --tag binaries \
     || echo "  (fmm3d.lib not in release -- ok, FMM was removed)"
 
 echo "Done. Downloaded files:"
-ls -la src/radia/*.pyd src/ext/fmm3d/lib/fmm3d.lib 2>/dev/null || true
+ls -la src/radia/*.pyd src/radia/*.dll src/radia/*.so src/radia/*.dylib \
+    src/ext/fmm3d/lib/fmm3d.lib 2>/dev/null || true

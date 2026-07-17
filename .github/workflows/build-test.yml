@@ -372,7 +372,7 @@ jobs:
           retention-days: 7
 
       # ----------------------------------------------------------------
-      # Verify: Check that .pyd was produced
+      # Verify: Check that Python and standalone C ABI binaries were produced
       # ----------------------------------------------------------------
       - name: Verify .pyd output
         shell: pwsh
@@ -384,6 +384,13 @@ jobs:
           }
           $sz = [math]::Round((Get-Item $pyd).Length / 1MB, 2)
           Write-Host "_radia_pybind.pyd: ${sz} MB"
+          $motorDll = "${{ github.workspace }}\src\radia\radia_motor_rom.dll"
+          if (-not (Test-Path $motorDll)) {
+            Write-Host "::error::radia_motor_rom.dll not found at $motorDll"
+            exit 1
+          }
+          $motorSz = [math]::Round((Get-Item $motorDll).Length / 1KB, 1)
+          Write-Host "radia_motor_rom.dll: ${motorSz} KB"
 
       # ----------------------------------------------------------------
       # Fetch cubit_mesh_curver.pyd from GitHub Releases binaries tag.
@@ -726,14 +733,18 @@ jobs:
           }
 
       # ----------------------------------------------------------------
-      # Upload .pyd as artifact for the CD workflow to consume
+      # Upload native binaries as an artifact for the CD workflow to consume
       # ----------------------------------------------------------------
-      - name: Upload .pyd artifact
+      - name: Upload native binary artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: radia-pyd
-          path: src/radia/*.pyd
+          path: |
+            src/radia/*.pyd
+            src/radia/*.dll
+            src/radia/*.so
+            src/radia/*.dylib
           retention-days: 7
 
       # ----------------------------------------------------------------
