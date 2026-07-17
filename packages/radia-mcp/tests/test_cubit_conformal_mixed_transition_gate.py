@@ -2934,3 +2934,134 @@ def test_v27_source_exodus_64bit_id_qa_time_step_nodal_variable_order_checksum_m
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["exodus_results_use_current_64bit_ids_qa_times_variables_mesh_and_checksum"] is False
+
+
+def _with_v28_sweep_refinement_sideset_python_identity(row):
+    row["hex_sweep_spine_frame_twist_interval_surface_block_quality_identity"] = {
+        "sweep_generation": "spine-sweep-151", "spine_sweep_generation": "spine-sweep-151",
+        "frame_sweep_generation": "spine-sweep-151", "twist_sweep_generation": "spine-sweep-151",
+        "interval_sweep_generation": "spine-sweep-151", "surface_sweep_generation": "spine-sweep-151",
+        "block_sweep_generation": "spine-sweep-151", "quality_sweep_generation": "spine-sweep-151",
+        "result_sweep_generation": "spine-sweep-151", "spine_curve_ids": [31, 32],
+        "result_spine_curve_ids": [31, 32], "frame_method": "parallel_transport",
+        "result_frame_method": "parallel_transport", "twist_angles_deg": [0.0, 5.0, 10.0, 15.0],
+        "result_twist_angles_deg": [0.0, 5.0, 10.0, 15.0], "interval_count": 12,
+        "result_interval_count": 12, "source_surface_id": 101, "result_source_surface_id": 101,
+        "target_surface_id": 102, "result_target_surface_id": 102, "block_id": 30,
+        "result_block_id": 30, "scaled_jacobians": [0.71, 0.66, 0.59, 0.54],
+        "result_scaled_jacobians": [0.71, 0.66, 0.59, 0.54],
+        "sweep_mesh_sha256": "1" * 64, "result_sweep_mesh_sha256": "1" * 64,
+    }
+    row["local_refinement_parent_child_transition_conformity_block_boundary_export_identity"] = {
+        "refinement_generation": "local-refine-151", "parent_refinement_generation": "local-refine-151",
+        "child_refinement_generation": "local-refine-151", "transition_refinement_generation": "local-refine-151",
+        "conformity_refinement_generation": "local-refine-151", "block_refinement_generation": "local-refine-151",
+        "boundary_refinement_generation": "local-refine-151", "jacobian_refinement_generation": "local-refine-151",
+        "export_refinement_generation": "local-refine-151", "result_refinement_generation": "local-refine-151",
+        "parent_element_ids": [201, 202], "result_parent_element_ids": [201, 202],
+        "child_parent_pairs": [[301, 201], [302, 201], [303, 202], [304, 202]],
+        "result_child_parent_pairs": [[301, 201], [302, 201], [303, 202], [304, 202]],
+        "transition_face_pairs": [[401, 501], [402, 502]],
+        "result_transition_face_pairs": [[401, 501], [402, 502]],
+        "conformity_node_pairs": [[11, 11], [12, 12], [13, 13]],
+        "result_conformity_node_pairs": [[11, 11], [12, 12], [13, 13]],
+        "block_ids": [10, 20], "result_block_ids": [10, 20],
+        "boundary_sideset_ids": [100, 200], "result_boundary_sideset_ids": [100, 200],
+        "minimum_scaled_jacobian": 0.43, "result_minimum_scaled_jacobian": 0.43,
+        "refined_mesh_sha256": "2" * 64, "result_refined_mesh_sha256": "2" * 64,
+    }
+    row["sideset_skin_dimension_orientation_namespace_owner_exodus_mesh_identity"] = {
+        "sideset_generation": "sideset-export-151", "skin_sideset_generation": "sideset-export-151",
+        "dimension_sideset_generation": "sideset-export-151", "orientation_sideset_generation": "sideset-export-151",
+        "namespace_sideset_generation": "sideset-export-151", "owner_sideset_generation": "sideset-export-151",
+        "exodus_sideset_generation": "sideset-export-151", "mesh_sideset_generation": "sideset-export-151",
+        "result_sideset_generation": "sideset-export-151", "skin_entity_dimension": 2,
+        "decoded_skin_entity_dimension": 2, "skin_face_ids": [601, 602, 603],
+        "decoded_skin_face_ids": [601, 602, 603], "orientation_signs": [1, 1, -1],
+        "decoded_orientation_signs": [1, 1, -1], "id_namespace": "sideset",
+        "decoded_id_namespace": "sideset", "sideset_id": 120, "decoded_sideset_id": 120,
+        "geometric_owner_surface_ids": [101, 102], "decoded_geometric_owner_surface_ids": [101, 102],
+        "exodus_element_side_pairs": [[701, 1], [702, 3], [703, 5]],
+        "decoded_exodus_element_side_pairs": [[701, 1], [702, 3], [703, 5]],
+        "mesh_sha256": "3" * 64, "decoded_mesh_sha256": "3" * 64,
+        "exodus_sha256": "4" * 64, "decoded_exodus_sha256": "4" * 64,
+    }
+    row["headless_python_interpreter_module_transaction_undo_output_invocation_identity"] = {
+        "invocation_generation": "python-run-151", "interpreter_invocation_generation": "python-run-151",
+        "module_invocation_generation": "python-run-151", "transaction_invocation_generation": "python-run-151",
+        "undo_invocation_generation": "python-run-151", "output_invocation_generation": "python-run-151",
+        "result_invocation_generation": "python-run-151",
+        "interpreter_executable": "C:/Program Files/Coreform Cubit 2026.6/bin/python.exe",
+        "result_interpreter_executable": "C:/Program Files/Coreform Cubit 2026.6/bin/python.exe",
+        "python_version": "3.11.9", "result_python_version": "3.11.9",
+        "cubit_module_version": "2026.6", "result_cubit_module_version": "2026.6",
+        "headless_flags": ["-nographics", "-batch"], "result_headless_flags": ["-nographics", "-batch"],
+        "command_transaction_id": "mesh-export-151", "result_command_transaction_id": "mesh-export-151",
+        "command_log_sha256": "5" * 64, "result_command_log_sha256": "5" * 64,
+        "undo_depth_before": 0, "result_undo_depth_before": 0,
+        "undo_depth_after": 0, "result_undo_depth_after": 0,
+        "output_paths": ["C:/temp/cubit-v28/model.e", "C:/temp/cubit-v28/model.log"],
+        "result_output_paths": ["C:/temp/cubit-v28/model.e", "C:/temp/cubit-v28/model.log"],
+        "output_sha256": ["6" * 64, "7" * 64], "result_output_sha256": ["6" * 64, "7" * 64],
+    }
+    return row
+
+
+def test_v28_positive_sweep_refinement_sideset_python_identity():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v28_public_hex_sweep_spine_frame_twist_interval_source_target_block_quality_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["hex_sweep_spine_frame_twist_interval_surface_block_quality_identity"].update(
+        {"spine_sweep_generation": "spine-sweep-150", "result_frame_method": "frenet",
+         "result_interval_count": 10, "result_source_surface_id": 102, "result_target_surface_id": 101,
+         "result_block_id": 40, "result_scaled_jacobians": [0.71, -0.03, 0.59, 0.54]}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["spine_sweeps_use_current_frame_twist_intervals_surfaces_block_and_quality"] is False
+
+
+def test_v28_public_local_refinement_parent_child_transition_conformity_block_boundary_export_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["local_refinement_parent_child_transition_conformity_block_boundary_export_identity"].update(
+        {"child_refinement_generation": "local-refine-150", "result_parent_element_ids": [201, 203],
+         "result_child_parent_pairs": [[301, 201], [302, 202], [304, 203]],
+         "result_conformity_node_pairs": [[11, 12], [12, 11], [13, 13]],
+         "result_block_ids": [10, 30], "result_boundary_sideset_ids": [100, 300],
+         "result_minimum_scaled_jacobian": -0.02, "result_refined_mesh_sha256": "9" * 64}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["local_refinements_use_current_parent_child_transition_conformity_blocks_boundaries_and_export"] is False
+
+
+def test_v28_source_sideset_skin_entity_dimension_orientation_id_namespace_exodus_export_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["sideset_skin_dimension_orientation_namespace_owner_exodus_mesh_identity"].update(
+        {"dimension_sideset_generation": "sideset-export-150", "decoded_skin_entity_dimension": 3,
+         "decoded_orientation_signs": [1, -1, 1], "decoded_id_namespace": "block",
+         "decoded_sideset_id": 20, "decoded_geometric_owner_surface_ids": [101, 103],
+         "decoded_exodus_sha256": "b" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sideset_exports_use_current_skin_dimension_orientation_namespace_owner_exodus_and_mesh"] is False
+
+
+def test_v28_source_python_interpreter_module_version_command_transaction_undo_output_generation_mismatch():
+    row = _with_v28_sweep_refinement_sideset_python_identity(summary())
+    row["headless_python_interpreter_module_transaction_undo_output_invocation_identity"].update(
+        {"interpreter_invocation_generation": "python-run-150",
+         "result_interpreter_executable": "C:/Python311/python.exe", "result_python_version": "3.11.8",
+         "result_cubit_module_version": "2025.12", "result_headless_flags": ["-batch"],
+         "result_command_transaction_id": "mesh-export-150", "result_undo_depth_before": 2,
+         "result_undo_depth_after": 1, "result_output_paths": ["C:/temp/cubit-v27/model.e"],
+         "result_output_sha256": ["d" * 64]}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["headless_python_runs_use_current_interpreter_module_transaction_undo_outputs_and_invocation"] is False
