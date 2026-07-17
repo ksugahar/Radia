@@ -208,6 +208,12 @@ def regularized_trace_inverse_path_gate(
     multibody_xml_identity_ok = (
         _optional_multibody_xml_import_identity_is_aligned(summary)
     )
+    parallel_pool_identity_ok = (
+        _optional_parallel_pool_identity_is_aligned(summary)
+    )
+    autodiff_tape_identity_ok = (
+        _optional_autodiff_tape_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -327,6 +333,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "multibody_xml_uses_current_joint_axes_transforms_units_and_geometry": (
             multibody_xml_identity_ok
+        ),
+        "parallel_results_use_current_worker_paths_devices_rng_and_code": (
+            parallel_pool_identity_ok
+        ),
+        "autodiff_gradients_use_current_tape_variables_mesh_objective_and_primal": (
+            autodiff_tape_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1729,6 +1741,114 @@ def _optional_multibody_xml_import_identity_is_aligned(
         and _is_sha256(table_digest)
         and str(value.get("result_xml_import_table_sha256", "")).lower()
         == table_digest
+    )
+
+
+def _optional_parallel_pool_identity_is_aligned(summary: Mapping[str, Any]) -> bool:
+    value = summary.get(
+        "parallel_pool_worker_path_device_rng_code_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        worker_ids = tuple(int(item) for item in value["worker_ids"])
+        result_worker_ids = tuple(int(item) for item in value["result_worker_ids"])
+        paths = tuple(str(item) for item in value["worker_code_paths"])
+        result_paths = tuple(str(item) for item in value["result_worker_code_paths"])
+        devices = tuple(str(item) for item in value["device_assignments"])
+        result_devices = tuple(str(item) for item in value["result_device_assignments"])
+        seeds = tuple(int(item) for item in value["random_stream_seeds"])
+        result_seeds = tuple(int(item) for item in value["result_random_stream_seeds"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("pool_generation", "")).strip()
+    code_digest = str(value.get("worker_code_sha256", "")).lower()
+    result_digest = str(value.get("parallel_result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "worker_path_pool_generation",
+                "device_pool_generation",
+                "rng_pool_generation",
+                "code_pool_generation",
+                "result_pool_generation",
+            )
+        )
+        and bool(worker_ids)
+        and all(item > 0 for item in worker_ids)
+        and len(set(worker_ids)) == len(worker_ids)
+        and result_worker_ids == worker_ids
+        and len(paths) == len(worker_ids)
+        and all(paths)
+        and result_paths == paths
+        and len(devices) == len(worker_ids)
+        and all(devices)
+        and result_devices == devices
+        and len(seeds) == len(worker_ids)
+        and all(item >= 0 for item in seeds)
+        and len(set(seeds)) == len(seeds)
+        and result_seeds == seeds
+        and _is_sha256(code_digest)
+        and str(value.get("result_worker_code_sha256", "")).lower() == code_digest
+        and _is_sha256(result_digest)
+        and str(value.get("assembled_parallel_result_sha256", "")).lower()
+        == result_digest
+    )
+
+
+def _optional_autodiff_tape_identity_is_aligned(summary: Mapping[str, Any]) -> bool:
+    value = summary.get(
+        "autodiff_tape_variable_order_mesh_objective_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        variable_ids = tuple(str(item) for item in value["variable_ids"])
+        gradient_ids = tuple(str(item) for item in value["gradient_variable_ids"])
+        scale = float(value["objective_scale"])
+        gradient_scale = float(value["gradient_objective_scale"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("tape_generation", "")).strip()
+    mesh_digest = str(value.get("mesh_sha256", "")).lower()
+    primal_digest = str(value.get("primal_state_sha256", "")).lower()
+    gradient_digest = str(value.get("gradient_table_sha256", "")).lower()
+    objective_id = str(value.get("objective_id", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "variable_order_tape_generation",
+                "mesh_tape_generation",
+                "objective_scaling_tape_generation",
+                "primal_solve_tape_generation",
+                "gradient_result_tape_generation",
+            )
+        )
+        and bool(variable_ids)
+        and all(variable_ids)
+        and len(set(variable_ids)) == len(variable_ids)
+        and gradient_ids == variable_ids
+        and _is_sha256(mesh_digest)
+        and str(value.get("gradient_mesh_sha256", "")).lower() == mesh_digest
+        and bool(objective_id)
+        and value.get("gradient_objective_id") == objective_id
+        and math.isfinite(scale)
+        and scale > 0.0
+        and gradient_scale == scale
+        and _is_sha256(primal_digest)
+        and str(value.get("gradient_primal_state_sha256", "")).lower()
+        == primal_digest
+        and _is_sha256(gradient_digest)
+        and str(value.get("reported_gradient_table_sha256", "")).lower()
+        == gradient_digest
     )
 
 
