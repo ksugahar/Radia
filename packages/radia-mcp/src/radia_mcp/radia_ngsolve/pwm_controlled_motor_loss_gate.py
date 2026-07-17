@@ -124,6 +124,8 @@ def pwm_controlled_motor_loss_gate(
     iron_loss_frequency_harmonic_material_curve_generation_identity_ok = True
     motion_skew_force_harmonic_generation_identity_ok = True
     irreversible_demag_state_generation_identity_ok = True
+    winding_current_torque_identity_ok = True
+    demag_knee_operating_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -155,6 +157,8 @@ def pwm_controlled_motor_loss_gate(
         iron_loss_frequency_harmonic_material_curve_generation_identity_ok = False
         motion_skew_force_harmonic_generation_identity_ok = False
         irreversible_demag_state_generation_identity_ok = False
+        winding_current_torque_identity_ok = False
+        demag_knee_operating_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1719,6 +1723,17 @@ def pwm_controlled_motor_loss_gate(
                 and result_margins == margins
             )
 
+        winding_current_torque_identity_ok = _winding_current_torque_identity_ok(
+            identity_value.get(
+                "winding_current_phase_circuit_sequence_torque_generation_identity"
+            )
+        )
+        demag_knee_operating_identity_ok = _demag_knee_operating_identity_ok(
+            identity_value.get(
+                "demagnetization_knee_temperature_recoil_operating_generation_identity"
+            )
+        )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1996,6 +2011,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "irreversible_demag_uses_current_recoil_temperature_operating_state": (
             irreversible_demag_state_generation_identity_ok
+        ),
+        "motor_torque_uses_current_winding_phase_circuit_sequence_and_angles": (
+            winding_current_torque_identity_ok
+        ),
+        "demag_margin_uses_current_knee_temperature_recoil_and_operating_state": (
+            demag_knee_operating_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
