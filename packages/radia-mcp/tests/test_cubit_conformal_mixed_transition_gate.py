@@ -2287,3 +2287,186 @@ def test_v23_source_exodus64_entity_id_sideset_mapping_schema_generation_mismatc
     assert result["checks"][
         "exodus64_decode_uses_current_entity_sideset_element_map_and_schema"
     ] is False
+
+
+def _with_v24_hex_closure_webcut_exodus_qa_identity(row):
+    row = _with_v23_parallel_sculpt_mixed_transition_replay_exodus_identity(row)
+    row["high_order_hex_jacobian_transform_node_order_block_generation_identity"] = {
+        "mesh_generation": "hex-order-91",
+        "jacobian_mesh_generation": "hex-order-91",
+        "transform_mesh_generation": "hex-order-91",
+        "node_order_mesh_generation": "hex-order-91",
+        "block_mesh_generation": "hex-order-91",
+        "result_mesh_generation": "hex-order-91",
+        "element_ids": [101, 102],
+        "result_element_ids": [101, 102],
+        "minimum_jacobian": [0.62, 0.57],
+        "result_minimum_jacobian": [0.62, 0.57],
+        "coordinate_transform": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        "result_coordinate_transform": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        "canonical_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "exported_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "block_ids": [10, 20],
+        "result_block_ids": [10, 20],
+        "mesh_sha256": "1" * 64,
+        "result_mesh_sha256": "1" * 64,
+    }
+    row["mesh_boundary_cad_volume_area_unit_frame_generation_identity"] = {
+        "geometry_generation": "closure-91",
+        "cad_geometry_generation": "closure-91",
+        "mesh_geometry_generation": "closure-91",
+        "boundary_geometry_generation": "closure-91",
+        "unit_geometry_generation": "closure-91",
+        "frame_geometry_generation": "closure-91",
+        "result_geometry_generation": "closure-91",
+        "length_unit": "mm",
+        "result_length_unit": "mm",
+        "coordinate_frame": "assembly-global",
+        "result_coordinate_frame": "assembly-global",
+        "cad_volume": 125000.0,
+        "mesh_volume": 125000.0,
+        "cad_boundary_area": 15000.0,
+        "mesh_boundary_area": 15000.0,
+        "boundary_closed": True,
+        "result_boundary_closed": True,
+        "cad_shape_sha256": "2" * 64,
+        "mesh_source_shape_sha256": "2" * 64,
+        "closure_table_sha256": "3" * 64,
+        "result_closure_table_sha256": "3" * 64,
+    }
+    row["webcut_imprint_merge_tolerance_topology_entity_generation_identity"] = {
+        "operation_generation": "webcut-91",
+        "webcut_operation_generation": "webcut-91",
+        "imprint_operation_generation": "webcut-91",
+        "merge_operation_generation": "webcut-91",
+        "topology_operation_generation": "webcut-91",
+        "result_operation_generation": "webcut-91",
+        "imprint_tolerance": 1.0e-6,
+        "result_imprint_tolerance": 1.0e-6,
+        "merge_tolerance": 5.0e-7,
+        "result_merge_tolerance": 5.0e-7,
+        "entity_names": ["left", "right", "interface"],
+        "result_entity_names": ["left", "right", "interface"],
+        "topology_counts": {"volume": 2, "surface": 11, "curve": 20, "vertex": 12},
+        "result_topology_counts": {"volume": 2, "surface": 11, "curve": 20, "vertex": 12},
+        "topology_sha256": "4" * 64,
+        "result_topology_sha256": "4" * 64,
+        "command_log_sha256": "5" * 64,
+        "result_command_log_sha256": "5" * 64,
+    }
+    row["exodus_qa_coordinate_distribution_checksum_generation_identity"] = {
+        "export_generation": "exodus-qa-91",
+        "qa_export_generation": "exodus-qa-91",
+        "coordinate_export_generation": "exodus-qa-91",
+        "distribution_export_generation": "exodus-qa-91",
+        "checksum_export_generation": "exodus-qa-91",
+        "result_export_generation": "exodus-qa-91",
+        "qa_records": [["Cubit", "2026.6", "2026-07-17", "13:00:00"]],
+        "decoded_qa_records": [["Cubit", "2026.6", "2026-07-17", "13:00:00"]],
+        "coordinate_names": ["x", "y", "z"],
+        "decoded_coordinate_names": ["x", "y", "z"],
+        "sideset_distribution_factors": [[1.0, 1.0, 0.5]],
+        "decoded_sideset_distribution_factors": [[1.0, 1.0, 0.5]],
+        "payload_sha256": "6" * 64,
+        "decoded_payload_sha256": "6" * 64,
+        "qa_table_sha256": "7" * 64,
+        "decoded_qa_table_sha256": "7" * 64,
+    }
+    return row
+
+
+def test_v24_positive_hex_closure_webcut_exodus_qa_identity():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v24_public_high_order_hex_jacobian_transform_node_order_block_generation_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["high_order_hex_jacobian_transform_node_order_block_generation_identity"].update(
+        {
+            "jacobian_mesh_generation": "hex-order-90",
+            "transform_mesh_generation": "hex-order-89",
+            "node_order_mesh_generation": "hex-order-88",
+            "block_mesh_generation": "hex-order-87",
+            "result_minimum_jacobian": [0.62, -0.03],
+            "result_coordinate_transform": [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]],
+            "exported_node_order": [1, 3, 2, 4, 5, 6, 7, 8, 10, 9],
+            "result_block_ids": [10, 30],
+            "result_mesh_sha256": "8" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "high_order_hex_uses_current_jacobians_transform_node_order_and_blocks"
+    ] is False
+
+
+def test_v24_public_mesh_boundary_closure_cad_volume_area_unit_frame_generation_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["mesh_boundary_cad_volume_area_unit_frame_generation_identity"].update(
+        {
+            "mesh_geometry_generation": "closure-90",
+            "boundary_geometry_generation": "closure-89",
+            "unit_geometry_generation": "closure-88",
+            "frame_geometry_generation": "closure-87",
+            "result_length_unit": "m",
+            "result_coordinate_frame": "part-local",
+            "mesh_volume": 0.125,
+            "mesh_boundary_area": 0.015,
+            "result_boundary_closed": False,
+            "mesh_source_shape_sha256": "9" * 64,
+            "result_closure_table_sha256": "a" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "mesh_boundary_closure_uses_current_cad_units_frame_and_geometry"
+    ] is False
+
+
+def test_v24_source_webcut_imprint_merge_tolerance_topology_entity_generation_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["webcut_imprint_merge_tolerance_topology_entity_generation_identity"].update(
+        {
+            "webcut_operation_generation": "webcut-90",
+            "imprint_operation_generation": "webcut-89",
+            "merge_operation_generation": "webcut-88",
+            "topology_operation_generation": "webcut-87",
+            "result_imprint_tolerance": 1.0e-3,
+            "result_merge_tolerance": 1.0e-2,
+            "result_entity_names": ["right", "left", "interface-old"],
+            "result_topology_counts": {"volume": 1, "surface": 8, "curve": 14, "vertex": 8},
+            "result_topology_sha256": "b" * 64,
+            "result_command_log_sha256": "c" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "webcut_imprint_merge_uses_current_tolerances_topology_and_entities"
+    ] is False
+
+
+def test_v24_source_exodus_qa_coordinate_name_distribution_factor_checksum_mismatch():
+    row = _with_v24_hex_closure_webcut_exodus_qa_identity(summary())
+    row["exodus_qa_coordinate_distribution_checksum_generation_identity"].update(
+        {
+            "qa_export_generation": "exodus-qa-90",
+            "coordinate_export_generation": "exodus-qa-89",
+            "distribution_export_generation": "exodus-qa-88",
+            "checksum_export_generation": "exodus-qa-87",
+            "decoded_qa_records": [["Cubit", "2025.8", "2026-07-16", "12:00:00"]],
+            "decoded_coordinate_names": ["r", "theta", "z"],
+            "decoded_sideset_distribution_factors": [[1.0, 0.5]],
+            "decoded_payload_sha256": "d" * 64,
+            "decoded_qa_table_sha256": "e" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "exodus_qa_uses_current_coordinates_distribution_factors_and_checksum"
+    ] is False
