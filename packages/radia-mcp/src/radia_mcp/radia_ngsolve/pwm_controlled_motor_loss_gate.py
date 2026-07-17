@@ -118,6 +118,8 @@ def pwm_controlled_motor_loss_gate(
     winding_phase_belt_slot_numbering_sequence_generation_identity_ok = True
     iron_loss_harmonic_coefficient_unit_basis_identity_ok = True
     demag_temperature_phase_operating_point_identity_ok = True
+    skew_slice_angle_weight_periodicity_identity_ok = True
+    incremental_inductance_perturbation_phase_state_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -143,6 +145,8 @@ def pwm_controlled_motor_loss_gate(
         winding_phase_belt_slot_numbering_sequence_generation_identity_ok = False
         iron_loss_harmonic_coefficient_unit_basis_identity_ok = False
         demag_temperature_phase_operating_point_identity_ok = False
+        skew_slice_angle_weight_periodicity_identity_ok = False
+        incremental_inductance_perturbation_phase_state_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1203,6 +1207,149 @@ def pwm_controlled_motor_loss_gate(
                 == digest
             )
 
+        skew_average = identity_value.get(
+            "skew_slice_torque_angle_weight_periodicity_generation_identity"
+        )
+        if skew_average is not None:
+            skew_average = skew_average if isinstance(skew_average, dict) else {}
+            generation = str(skew_average.get("skew_generation", "")).strip()
+            try:
+                slice_ids = [int(value) for value in skew_average.get("slice_ids", [])]
+                torque_slice_ids = [
+                    int(value) for value in skew_average.get("torque_slice_ids", [])
+                ]
+                angles = [
+                    float(value) for value in skew_average.get("slice_angles_deg", [])
+                ]
+                torque_angles = [
+                    float(value)
+                    for value in skew_average.get("torque_slice_angles_deg", [])
+                ]
+                weights = [
+                    float(value) for value in skew_average.get("quadrature_weights", [])
+                ]
+                torque_weights = [
+                    float(value)
+                    for value in skew_average.get("torque_quadrature_weights", [])
+                ]
+                wrap = float(skew_average.get("periodic_wrap_deg"))
+                torque_wrap = float(skew_average.get("torque_periodic_wrap_deg"))
+            except (TypeError, ValueError):
+                slice_ids = torque_slice_ids = []
+                angles = torque_angles = weights = torque_weights = []
+                wrap = torque_wrap = math.nan
+            digest = str(
+                skew_average.get("skew_average_table_sha256", "")
+            ).lower()
+            skew_slice_angle_weight_periodicity_identity_ok = (
+                bool(generation)
+                and all(
+                    skew_average.get(key) == generation
+                    for key in (
+                        "torque_skew_generation",
+                        "angle_skew_generation",
+                        "weight_skew_generation",
+                        "periodicity_skew_generation",
+                    )
+                )
+                and bool(slice_ids)
+                and len(set(slice_ids)) == len(slice_ids)
+                and torque_slice_ids == slice_ids
+                and len(angles) == len(slice_ids)
+                and all(math.isfinite(value) for value in angles)
+                and torque_angles == angles
+                and len(weights) == len(slice_ids)
+                and all(math.isfinite(value) and value >= 0.0 for value in weights)
+                and math.isclose(sum(weights), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                and torque_weights == weights
+                and math.isfinite(wrap)
+                and wrap > 0.0
+                and torque_wrap == wrap
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    skew_average.get("torque_skew_average_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
+        incremental = identity_value.get(
+            "incremental_inductance_current_perturbation_phase_state_generation_identity"
+        )
+        if incremental is not None:
+            incremental = incremental if isinstance(incremental, dict) else {}
+            operating_generation = str(
+                incremental.get("operating_point_generation", "")
+            ).strip()
+            base_solve = str(incremental.get("base_solve_generation", "")).strip()
+            perturbation_solves = [
+                str(value)
+                for value in incremental.get("perturbation_solve_generations", [])
+            ]
+            matrix_solves = [
+                str(value)
+                for value in incremental.get(
+                    "matrix_perturbation_solve_generations", []
+                )
+            ]
+            phases = [str(value) for value in incremental.get("phase_names", [])]
+            matrix_phases = [
+                str(value) for value in incremental.get("matrix_phase_names", [])
+            ]
+            try:
+                currents = [
+                    [float(value) for value in row]
+                    for row in incremental.get("perturbation_currents_a", [])
+                ]
+                matrix_currents = [
+                    [float(value) for value in row]
+                    for row in incremental.get(
+                        "matrix_perturbation_currents_a", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                currents = matrix_currents = []
+            digest = str(
+                incremental.get("incremental_inductance_table_sha256", "")
+            ).lower()
+            incremental_inductance_perturbation_phase_state_identity_ok = (
+                bool(operating_generation)
+                and all(
+                    incremental.get(key) == operating_generation
+                    for key in (
+                        "matrix_operating_point_generation",
+                        "perturbation_operating_point_generation",
+                        "phase_state_operating_point_generation",
+                    )
+                )
+                and bool(base_solve)
+                and incremental.get("matrix_base_solve_generation") == base_solve
+                and bool(perturbation_solves)
+                and all(perturbation_solves)
+                and len(set(perturbation_solves)) == len(perturbation_solves)
+                and matrix_solves == perturbation_solves
+                and bool(phases)
+                and len(set(phases)) == len(phases)
+                and all(phase.strip() for phase in phases)
+                and len(phases) == len(perturbation_solves)
+                and matrix_phases == phases
+                and len(currents) == len(phases)
+                and all(
+                    len(row) == len(phases)
+                    and all(math.isfinite(value) for value in row)
+                    for row in currents
+                )
+                and matrix_currents == currents
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    incremental.get(
+                        "resolved_incremental_inductance_table_sha256", ""
+                    )
+                ).lower()
+                == digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1462,6 +1609,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "demag_margin_uses_current_temperature_and_current_phase_state": (
             demag_temperature_phase_operating_point_identity_ok
+        ),
+        "skew_torque_uses_current_slice_angles_weights_and_periodicity": (
+            skew_slice_angle_weight_periodicity_identity_ok
+        ),
+        "incremental_inductance_uses_current_perturbation_phase_and_state": (
+            incremental_inductance_perturbation_phase_state_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
