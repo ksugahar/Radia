@@ -527,6 +527,94 @@ CLN-vs-full convergence is convention-independent (golden locks
 `F_z(dZ=0) = -2.1928 N`).  See `radia_mcp.mor` mor_cln (applications) for the
 same example from the CLN-theory side.
 
+**HCurl Eddy Bubble and CLN are a serial two-level ROM.**  HCurl Eddy Bubble
+reduces the high-order spatial current space while preserving face-adjacency
+classes and conductor-cycle bridges.  The resulting passive `R`, `L`, and
+vector-potential port `P` are then the CLN descriptor used for frequency,
+time, and constant-basis movement coupling.  Radia exposes this handoff as
+`radia.vim.HCurlEddyCLNFromVIM`; position interpolation is
+`radia.maglev.MovingHCurlCLNFamily`.
+
+The HCurl Eddy Bubble parent-space reduction covers all NGSolve HCurl cell
+families at p=6: 3-D TET, HEX, PRISM/WEDGE, and PYRAMID use face adjacency and
+three-component `curl(T)`; 2-D TRIG and QUAD use edge adjacency and
+out-of-plane `Jz`.  `NgsolveHCurlCellFamilies` records pure or mixed-family
+meshes.  The dimensionally matched epsilon-free interactions are analytic
+tetrahedron moments for TET, canonical affine sub-tetrahedra (6/3/2) for
+HEX/WEDGE/PYRAMID, and the planar `-log(r)/(2*pi)` H-matrix interaction for
+TRIG/QUAD.  The 2-D path never falls back to the sampled 3-D Laplace kernel and
+reports net current so the return-current/gauge convention remains explicit.
+
+The high-order non-tet Gram uses a stable tetrahedral Bernstein fit, exact
+conversion to reference monomials, and analytic Newton-potential moments
+through total degree 18.  Automatic degrees are p-1 for TET, 2p for WEDGE,
+and 3p for HEX/PYRAMID.  At p=6, HEX degree 18 has projection residual
+1.90e-11, WEDGE degree 12 has 1.77e-13, and PYRAMID degree 18 has 4.72e-5 on
+the canonical 6/3/2 sub-tetrahedra.  All produce positive epsilon-free Gram
+blocks.  The p=6 HEX 15- versus 125-point outer rules differ by 1.09e-4, so
+`outer_quad=5` is the explicit convergence check above the default 15-point
+rule.
+
+PYRAMID is the qualified case: its HCurl apex modes are rational, not finite
+polynomials.  The default projection tolerance is 1e-4.  For a strict 1e-8
+projection, apex-only midpoint refinement reaches 9.34e-9 at level 8 with 114
+leaf tetrahedra; this is opt-in because the present dense analytic Gram scales
+quadratically in leaf count.  Geometry and projection residuals remain hard
+gates.
+
+P2 curved tetrahedra use a separate exact-geometry path.  The curl-Piola
+reference density `K(xi)=curl(T)(X(xi))*abs(det(dX/dxi))` contains the physical
+measure, so the C++ curved high-order Gram omits the Jacobian factor from both
+integrals while retaining the exact P2 map in the Laplace distance.  The
+102-tet p=2 curved-sphere regression has 1020 scalar reference charges,
+projection residual 4.55e-16, geometry residual 3.55e-16, and a positive
+epsilon-free Gram.  Curved production defaults to a 125-point outer rule and
+an eight-point one-dimensional Duffy rule.
+
+HACApK scope must be stated precisely.  The P2 curved-tet path builds the
+scalar reference-density Gram with `_ChargeGramHMatrix(build=True)` and uses
+symmetric HACApK matvecs for the three component contractions.  The affine and
+residual-controlled TET/HEX/WEDGE/PYRAMID paths still form the exact degree-18
+reduced Gram densely with `_TetHCurlReducedGram`.  Even the curved path
+materializes the final reduced mode matrix after contraction.  Thus HACApK is
+used during curved assembly, but an end-to-end compressed HCurl Eddy Bubble
+operator remains a production scaling gate.
+
+Warped or curved non-tet cells use uniform h refinement until both current and
+piecewise-affine geometry residuals pass.  A warped HEX regression reaches
+current residual 8.63e-6 and geometry residual 6.84e-3 at 48 leaves.  Work is
+guarded by leaf count and `leaf_count^2 * monomial_count`.  Requirements above
+degree 18 are not rejected: p=7 HEX formally requires degree 21, is capped at
+analytic degree 18, and passes the default gate at residual 3.54e-5; a tighter
+gate activates uniform h refinement.  This makes p=6 a studied choice rather
+than an implementation ceiling.
+
+TEAM 28 also demonstrates why adjacency alone must not select SIBC.  Every
+exterior disk face touches air, but at 50 Hz the aluminium skin depth is
+12.21 mm while the disk thickness is 3 mm (`t/delta=0.246`).  The
+`EddySIBCApplicability` gate therefore selects volumetric HCurl-VIM and zero
+SIBC modes.  On the committed coarse 3-D disk mesh, HCurl(p=6) has 22,814 DoF;
+EVRS rank 6 plus 130 conductor-graph cycle modes gives 136 estimated retained
+modes (0.596%).  This is the topology-preserving a priori plan.  The final
+mixed-Galerkin/EVRS response basis for the three TEAM excitation ports has
+rank 3.
+
+The epsilon-free fixed-position 3-D HCurl-VIM force gate passes on mdx.  The
+analytic affine-tetrahedron self interaction (reference moments through degree
+6) gives physical Fz = 1.101889, 1.098167, and 1.092733 N on 25, 20, and 15 mm
+meshes, versus 1.096266 N; the maximum error is 0.513%.  Projection residuals
+are below 3.4e-15, the largest transverse-force ratio is 0.165%, and changing
+the smooth outer rule from 15 to 125 points changes force by 0.0197%.  No
+kernel epsilon is used.  The independent 25-position full-FEM/CLN target also
+passes, so the spatial and temporal ROM levels each have an acceptance gate.
+
+Do not overclaim the remaining boundary: the same 3-D HCurl basis has not yet
+driven the complete moving-position sweep.  P2 TET geometry is exact; curved
+non-tet geometry remains residual-controlled rather than a native parent-cell
+Duffy kernel.  Durable records are
+`validation_test/maglev/team28_hcurl_vim_force_summary.json` and
+`validation_test/maglev/team28_hcurl_eddy_bubble_summary.json`.
+
 ## Multiport CLN (matrix Cauer ladder) -- for multi-axis maglev
 
 A real maglev needs more than the vertical axis: lateral (XY) guidance

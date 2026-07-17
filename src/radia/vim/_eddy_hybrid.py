@@ -21,6 +21,121 @@ import numpy as np
 MU0 = 4.0e-7 * np.pi
 
 
+def SkinDepth(frequency_hz: float, sigma: float, mu: float = MU0) -> float:
+    """Return the plane-conductor skin depth in metres.
+
+    ``delta = sqrt(2 / (omega * mu * sigma))``.  This helper is deliberately
+    separate from :func:`SkinImpedance`: adjacency to air makes a face an SIBC
+    *candidate*, while the thickness-to-skin-depth ratio decides whether the
+    half-space approximation is admissible for the body at this frequency.
+    """
+
+    frequency = float(frequency_hz)
+    conductivity = float(sigma)
+    permeability = float(mu)
+    if not np.isfinite(frequency) or frequency <= 0.0:
+        raise ValueError("frequency_hz must be positive")
+    if not np.isfinite(conductivity) or conductivity <= 0.0:
+        raise ValueError("sigma must be positive")
+    if not np.isfinite(permeability) or permeability <= 0.0:
+        raise ValueError("mu must be positive")
+    omega = 2.0 * np.pi * frequency
+    return float(np.sqrt(2.0 / (omega * permeability * conductivity)))
+
+
+@dataclass(frozen=True)
+class EddySIBCApplicability:
+    """Body-level gate between volumetric VIM and half-space SIBC.
+
+    Face adjacency remains the topology gate: only conductor-air/exterior
+    faces can ever carry SIBC modes.  This second, physical gate prevents a
+    thin conductor whose opposite skin layers overlap from being converted to
+    a surface-only model merely because all its faces touch air.
+
+    ``min_thickness_to_skin_depth`` is an explicit engineering tolerance, not
+    a claim of a universal transition.  The default value three is
+    conservative enough for routing; convergence against the volumetric path
+    remains the acceptance criterion near the transition.
+    """
+
+    frequency_hz: float
+    sigma: float
+    characteristic_thickness_m: float
+    mu: float = MU0
+    min_thickness_to_skin_depth: float = 3.0
+    characteristic_curvature_radius_m: float | None = None
+    min_curvature_radius_to_skin_depth: float = 3.0
+
+    def __post_init__(self) -> None:
+        values = {
+            "frequency_hz": self.frequency_hz,
+            "sigma": self.sigma,
+            "characteristic_thickness_m": self.characteristic_thickness_m,
+            "mu": self.mu,
+            "min_thickness_to_skin_depth": self.min_thickness_to_skin_depth,
+            "min_curvature_radius_to_skin_depth": self.min_curvature_radius_to_skin_depth,
+        }
+        for name, value in values.items():
+            number = float(value)
+            if not np.isfinite(number) or number <= 0.0:
+                raise ValueError(f"{name} must be positive")
+            object.__setattr__(self, name, number)
+        if self.characteristic_curvature_radius_m is not None:
+            radius = float(self.characteristic_curvature_radius_m)
+            if not np.isfinite(radius) or radius <= 0.0:
+                raise ValueError("characteristic_curvature_radius_m must be positive")
+            object.__setattr__(self, "characteristic_curvature_radius_m", radius)
+
+    @property
+    def skin_depth_m(self) -> float:
+        return SkinDepth(self.frequency_hz, self.sigma, self.mu)
+
+    @property
+    def thickness_to_skin_depth(self) -> float:
+        return float(self.characteristic_thickness_m / self.skin_depth_m)
+
+    @property
+    def curvature_radius_to_skin_depth(self) -> float | None:
+        if self.characteristic_curvature_radius_m is None:
+            return None
+        return float(self.characteristic_curvature_radius_m / self.skin_depth_m)
+
+    @property
+    def thickness_separated(self) -> bool:
+        return self.thickness_to_skin_depth >= self.min_thickness_to_skin_depth
+
+    @property
+    def curvature_resolved(self) -> bool:
+        ratio = self.curvature_radius_to_skin_depth
+        return ratio is None or ratio >= self.min_curvature_radius_to_skin_depth
+
+    @property
+    def sibc_applicable(self) -> bool:
+        return self.thickness_separated and self.curvature_resolved
+
+    @property
+    def selected_model(self) -> str:
+        return "sibc" if self.sibc_applicable else "volumetric"
+
+    def diagnostics(self) -> dict[str, float | bool | str | None]:
+        return {
+            "frequency_hz": self.frequency_hz,
+            "sigma_S_per_m": self.sigma,
+            "mu_H_per_m": self.mu,
+            "skin_depth_m": self.skin_depth_m,
+            "characteristic_thickness_m": self.characteristic_thickness_m,
+            "thickness_to_skin_depth": self.thickness_to_skin_depth,
+            "min_thickness_to_skin_depth": self.min_thickness_to_skin_depth,
+            "characteristic_curvature_radius_m": self.characteristic_curvature_radius_m,
+            "curvature_radius_to_skin_depth": self.curvature_radius_to_skin_depth,
+            "min_curvature_radius_to_skin_depth": self.min_curvature_radius_to_skin_depth,
+            "thickness_separated": self.thickness_separated,
+            "curvature_resolved": self.curvature_resolved,
+            "sibc_applicable": self.sibc_applicable,
+            "selected_model": self.selected_model,
+        }
+
+
 def _nonnegative_int(value, name: str) -> int:
     out = int(value)
     if out < 0:
@@ -406,6 +521,108 @@ def _vector_cf_value(value, name: str) -> np.ndarray:
     if not np.all(np.isfinite(arr)):
         raise ValueError(f"{name} evaluated to a non-finite value")
     return arr
+
+
+def _physical_point3(value, name: str) -> np.ndarray:
+    # NGSolve may expose mapped coordinates through a reused temporary buffer.
+    # Own the values before retaining them across quadrature iterations.
+    point = np.array(value, dtype=float, copy=True).reshape(-1)
+    if point.shape == (2,):
+        point = np.array((point[0], point[1], 0.0), dtype=float)
+    if point.shape != (3,):
+        raise ValueError(f"{name} must evaluate to a 2-D or 3-D point")
+    if not np.all(np.isfinite(point)):
+        raise ValueError(f"{name} evaluated to a non-finite point")
+    return point
+
+
+_HCURL_CELL_FAMILY_NAMES = {
+    "ET.TET": "tet",
+    "ET.HEX": "hex",
+    "ET.PRISM": "wedge",
+    "ET.PYRAMID": "pyramid",
+    "ET.TRIG": "trig",
+    "ET.QUAD": "quad",
+}
+
+
+@dataclass(frozen=True)
+class HCurlCellFamilyInventory:
+    """NGSolve cell families carried by one HCurl Eddy Bubble parent mesh."""
+
+    dimension: int
+    counts: dict[str, int]
+
+    def __post_init__(self) -> None:
+        dimension = int(self.dimension)
+        if dimension not in (2, 3):
+            raise ValueError("HCurl Eddy Bubble supports mesh dimension 2 or 3")
+        counts = {str(name): int(count) for name, count in self.counts.items()}
+        if not counts or any(count <= 0 for count in counts.values()):
+            raise ValueError("cell-family counts must be positive")
+        allowed = {"trig", "quad"} if dimension == 2 else {
+            "tet", "hex", "pyramid", "wedge"
+        }
+        unsupported = set(counts) - allowed
+        if unsupported:
+            raise ValueError(f"unsupported HCurl cell families: {sorted(unsupported)}")
+        object.__setattr__(self, "dimension", dimension)
+        object.__setattr__(self, "counts", counts)
+
+    @property
+    def families(self) -> tuple[str, ...]:
+        return tuple(sorted(self.counts))
+
+    @property
+    def cell_count(self) -> int:
+        return int(sum(self.counts.values()))
+
+    @property
+    def mixed(self) -> bool:
+        return len(self.counts) > 1
+
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "dimension": self.dimension,
+            "families": self.families,
+            "family_counts": dict(self.counts),
+            "cell_count": self.cell_count,
+            "mixed_cell_families": self.mixed,
+            "eddy_bubble_supported": True,
+            "current_representation": (
+                "three-component-vector"
+                if self.dimension == 3
+                else "out-of-plane-Jz"
+            ),
+            "vim_interaction_family": (
+                "analytic-tet-decomposition"
+                if self.dimension == 3
+                else "planar-log-kernel"
+            ),
+        }
+
+
+def NgsolveHCurlCellFamilies(mesh, *, materials=None) -> HCurlCellFamilyInventory:
+    """Inventory supported T/HCurl parent cells in an NGSolve mesh."""
+
+    import ngsolve as ng
+
+    dimension = int(mesh.dim)
+    selected = _label_filter(materials)
+    counts: dict[str, int] = {}
+    for element in mesh.Elements(ng.VOL):
+        if selected is not None and str(element.mat) not in selected:
+            continue
+        element_type = str(element.type)
+        family = _HCURL_CELL_FAMILY_NAMES.get(element_type)
+        if family is None:
+            raise NotImplementedError(
+                f"HCurl Eddy Bubble does not support NGSolve cell {element_type}"
+            )
+        counts[family] = counts.get(family, 0) + 1
+    if not counts:
+        raise ValueError("the selected conductor region contains no volume cells")
+    return HCurlCellFamilyInventory(dimension=dimension, counts=counts)
 
 
 @dataclass(frozen=True)
@@ -806,16 +1023,23 @@ def ClassifyNgsolveEddyTopology(
         raise ValueError("conductive_materials must not be empty")
     air = _label_filter(air_materials) or set()
 
+    dimension = int(mesh.dim)
+    if dimension not in (2, 3):
+        raise ValueError("eddy topology requires a 2-D or 3-D mesh")
+
+    def codimension_one_entities(element):
+        return element.faces if dimension == 3 else element.edges
+
     face_to_volume: dict[int, list[tuple[int, str]]] = {}
     for element in mesh.Elements(ng.VOL):
         record = (_element_nr(element), _material_name(element))
-        for face in element.faces:
+        for face in codimension_one_entities(element):
             face_to_volume.setdefault(_node_nr(face), []).append(record)
 
     face_to_boundary: dict[int, list[tuple[int, str]]] = {}
     for element in mesh.Elements(ng.BND):
         record = (_element_nr(element), _material_name(element))
-        for face in element.faces:
+        for face in codimension_one_entities(element):
             face_to_boundary.setdefault(_node_nr(face), []).append(record)
 
     faces: list[EddyFaceTopology] = []
@@ -1312,11 +1536,17 @@ def NgsolveEddyDofPolicy(
     surface = np.zeros(n, dtype=bool)
     bridge = np.zeros(n, dtype=bool)
 
+    dimension = int(mesh.dim)
+
     def mark_face(mask: np.ndarray, face_nr: int) -> None:
-        face_node = mesh.faces[int(face_nr)]
-        _mark_dofs(mask, fes.GetDofNrs(face_node))
-        if include_edge_dofs:
-            for edge in face_node.edges:
+        entity = (
+            mesh.faces[int(face_nr)]
+            if dimension == 3
+            else mesh.edges[int(face_nr)]
+        )
+        _mark_dofs(mask, fes.GetDofNrs(entity))
+        if dimension == 3 and include_edge_dofs:
+            for edge in entity.edges:
                 _mark_dofs(mask, fes.GetDofNrs(edge))
 
     for face in topology.surface_faces:
@@ -1398,6 +1628,17 @@ def _mesh_face_points(mesh, face_nr: int) -> np.ndarray:
     return np.vstack([_mesh_node_point(mesh, vertex) for vertex in face.vertices])
 
 
+def _mesh_edge_center_length(mesh, edge_nr: int) -> tuple[np.ndarray, float]:
+    edge = mesh.edges[int(edge_nr)]
+    points = np.vstack([_mesh_node_point(mesh, vertex) for vertex in edge.vertices])
+    if points.shape[0] != 2:
+        raise ValueError("edge must have exactly two vertices")
+    length = float(np.linalg.norm(points[1] - points[0]))
+    if length <= 0.0:
+        raise ValueError(f"edge {edge_nr} has zero length")
+    return np.mean(points, axis=0), length
+
+
 def _mesh_face_center_area(mesh, face_nr: int) -> tuple[np.ndarray, float]:
     points = _mesh_face_points(mesh, face_nr)
     center = np.mean(points, axis=0)
@@ -1443,7 +1684,10 @@ def _ngsolve_element_centroids(mesh, intorder: int) -> dict[int, np.ndarray]:
             mip = trafo(ip)
             weight = float(ip.weight * mip.measure)
             volume += weight
-            first_moment += weight * np.asarray(mip.point, dtype=float)
+            first_moment += weight * _physical_point3(
+                mip.point,
+                "element quadrature point",
+            )
         if volume <= 0.0:
             raise ValueError(f"element {_element_nr(element)} has zero volume")
         centroids[_element_nr(element)] = first_moment / volume
@@ -1461,14 +1705,28 @@ def _ngsolve_tet_reference_vertices(mesh, element) -> dict[int, np.ndarray]:
     if len(vertices) != 4:
         raise ValueError("curved bridge integration currently requires tetrahedra")
     physical = np.vstack([_mesh_node_point(mesh, vertex) for vertex in vertices])
-    trafo = mesh.GetTrafo(element)
-    mapped = []
-    for point in reference:
-        ip = next(
-            iter(ng.IntegrationRule([tuple(float(value) for value in point)], [1.0]))
-        )
-        mapped.append(np.array(trafo(ip).point, dtype=float, copy=True))
-    mapped = np.asarray(mapped)
+    rule = ng.IntegrationRule(
+        [tuple(float(value) for value in point) for point in reference],
+        [1.0] * len(reference),
+    )
+    coordinate = ng.CF((ng.x, ng.y, ng.z))
+    previous = None
+    mapped = None
+    for _ in range(4):
+        current = np.asarray(
+            coordinate(mesh.GetTrafo(element)(rule)),
+            dtype=float,
+        ).reshape(-1, 3)
+        if (
+            previous is not None
+            and np.array_equal(previous, current)
+            and np.all(np.isfinite(current))
+        ):
+            mapped = current
+            break
+        previous = current
+    if mapped is None:
+        raise RuntimeError("tetrahedron reference-vertex mapping remained unstable")
 
     result: dict[int, np.ndarray] = {}
     used: set[int] = set()
@@ -1539,6 +1797,8 @@ def _ngsolve_face_center_area(
     element,
     intorder: int,
 ) -> tuple[np.ndarray, float]:
+    if int(mesh.dim) == 2:
+        return _mesh_edge_center_length(mesh, face_nr)
     if len(tuple(element.vertices)) == 4 and len(tuple(mesh.faces[int(face_nr)].vertices)) == 3:
         return _ngsolve_curved_tet_face_center_area(
             mesh,
@@ -1666,7 +1926,7 @@ def SampleNgsolveVectorCFs(
         trafo = mesh.GetTrafo(el)
         for ip in ir:
             mip = trafo(ip)
-            points.append(np.array(mip.point, dtype=float, copy=True))
+            points.append(_physical_point3(mip.point, "mapped quadrature point"))
             weights.append(float(ip.weight * mip.measure))
             for i, cf in enumerate(cfs):
                 values[i].append(
@@ -1795,7 +2055,10 @@ def NgsolveHCurlCurlBasis(
         coeffs = gf.vec.FV().NumPy()
         coeffs[:] = arr[:, i]
         gridfunctions.append(gf)
-        curl_modes.append(ng.curl(gf))
+        current = ng.curl(gf)
+        if int(mesh.dim) == 2:
+            current = ng.CF((0.0, 0.0, current))
+        curl_modes.append(current)
     return NgsolveVolumeCurrentBasis(
         mesh,
         curl_modes,
@@ -1818,6 +2081,15 @@ def NgsolveSurfaceOmegaBasis(
 
     import ngsolve as ng
 
+    grad_omega_modes = tuple(grad_omega_modes)
+    if not grad_omega_modes:
+        return SampledCurrentBasis(
+            points=np.zeros((0, 3), dtype=float),
+            weights=np.zeros(0, dtype=float),
+            modes=np.zeros((0, 0, 3), dtype=float),
+            kind="surface",
+            names=_mode_names(names, 0),
+        )
     points, weights, grads = SampleNgsolveVectorCFs(
         mesh,
         grad_omega_modes,
@@ -4252,6 +4524,7 @@ class EddyBubbleHCurlBasis:
     current_basis: SampledCurrentBasis
     eddy_bubbling: EddyBubbleDecomposition
     material_model: object | None = None
+    cell_families: HCurlCellFamilyInventory | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.response_basis, EVRSBasis):
@@ -4260,6 +4533,10 @@ class EddyBubbleHCurlBasis:
             raise TypeError("current_basis must be a SampledCurrentBasis")
         if not isinstance(self.eddy_bubbling, EddyBubbleDecomposition):
             raise TypeError("eddy_bubbling must be an EddyBubbleDecomposition")
+        if self.cell_families is not None and not isinstance(
+            self.cell_families, HCurlCellFamilyInventory
+        ):
+            raise TypeError("cell_families must be an HCurlCellFamilyInventory")
         if self.current_basis.n_modes != self.response_basis.rank:
             raise ValueError("current_basis modes must match response_basis rank")
 
@@ -4296,11 +4573,65 @@ class EddyBubbleHCurlBasis:
     ) -> "HybridVIMSystem":
         """Assemble the reduced HCurl-VIM eddy impedance on this basis."""
 
+        if (
+            self.cell_families is not None
+            and self.cell_families.dimension == 2
+            and interaction is None
+        ):
+            raise ValueError(
+                "2-D HCurl Eddy Bubble requires an explicit planar-log interaction; "
+                "the default sampled 3-D Laplace kernel is not physically admissible"
+            )
+
         return AssembleHybridVIM(
             self.current_basis,
             sigma=sigma,
             kernel_epsilon=kernel_epsilon,
             interaction=interaction,
+        )
+
+    def tet_volume_interaction(self, mesh, fes, **kwargs):
+        """Build the epsilon-free affine-tet inductance backend for this basis.
+
+        The response vectors are the same compressed vectors that generated
+        ``current_basis``, so the analytic Gram and the sampled resistance/port
+        blocks share one reduced coordinate system.
+        """
+
+        from ._hcurl_tet_interaction import NgsolveHCurlTetVolumeInteraction
+
+        return NgsolveHCurlTetVolumeInteraction(
+            mesh,
+            fes,
+            self.response_basis.vectors,
+            self.current_basis,
+            **kwargs,
+        )
+
+    def cell_volume_interaction(self, mesh, fes, **kwargs):
+        """Build the epsilon-free 3-D affine, curved, or hp cell interaction."""
+
+        from ._hcurl_tet_interaction import NgsolveHCurlCellVolumeInteraction
+
+        return NgsolveHCurlCellVolumeInteraction(
+            mesh,
+            fes,
+            self.response_basis.vectors,
+            self.current_basis,
+            **kwargs,
+        )
+
+    def planar_volume_interaction(self, mesh, fes, **kwargs):
+        """Build the epsilon-free planar log interaction for TRIG/QUAD."""
+
+        from ._hcurl_planar_interaction import NgsolveHCurlPlanarVolumeInteraction
+
+        return NgsolveHCurlPlanarVolumeInteraction(
+            mesh,
+            fes,
+            self.response_basis.vectors,
+            self.current_basis,
+            **kwargs,
         )
 
     def couple_hdiv_mmm(
@@ -4339,6 +4670,11 @@ class EddyBubbleHCurlBasis:
             "response_basis": self.response_basis.diagnostics(),
             "current_basis": _sampled_current_basis_diagnostics(self.current_basis),
             "eddy_bubbling": self.eddy_bubbling.diagnostics(),
+            "cell_families": (
+                self.cell_families.diagnostics()
+                if self.cell_families is not None
+                else None
+            ),
             "has_material_model": self.material_model is not None,
             "has_shared_mesh_material_model": isinstance(
                 self.material_model,
@@ -4446,6 +4782,10 @@ def NgsolveEddyBubbleHCurlBasis(
         free_dofs = fes.FreeDofs(bool(condense))
     if volume_materials is None:
         volume_materials = conductive_materials
+    cell_families = NgsolveHCurlCellFamilies(
+        mesh,
+        materials=volume_materials,
+    )
 
     response = _ngsolve_response_basis_for_eddy_bubbling(
         stiffness,
@@ -4499,6 +4839,7 @@ def NgsolveEddyBubbleHCurlBasis(
         current_basis=current,
         eddy_bubbling=bubbling,
         material_model=material_model,
+        cell_families=cell_families,
     )
 
 
@@ -5297,6 +5638,180 @@ class HybridVIMSystem:
                 and smin >= -passive_tol
             ),
         }
+
+
+@dataclass(frozen=True)
+class HCurlEddyCLNModel:
+    """Passive CLN/EVRS descriptor produced by an HCurl Eddy Bubble VIM.
+
+    The spatial reduction has already happened in the high-order HCurl parent
+    space.  This object is the temporal/frequency coupling contract
+
+    ``(R + s L + Zs(s) M_surface) c = P u``.
+
+    For a coil current ``i`` whose incident vector potential is represented by
+    ``P i``, Faraday excitation is ``u = -s i``.  A nonzero SIBC block remains
+    a DtN termination and must be rationalized separately before ordinary
+    state-space export.
+    """
+
+    resistance: np.ndarray
+    inductance: np.ndarray
+    surface_mass: np.ndarray
+    port_rhs: np.ndarray
+    basis_names: tuple[str, ...] = ()
+    blocks: dict[str, tuple[int, int]] | None = None
+
+    def __post_init__(self) -> None:
+        resistance = np.asarray(self.resistance)
+        inductance = np.asarray(self.inductance)
+        surface_mass = np.asarray(self.surface_mass)
+        if resistance.ndim != 2 or resistance.shape[0] != resistance.shape[1]:
+            raise ValueError("resistance must be square")
+        if inductance.shape != resistance.shape:
+            raise ValueError("inductance must match resistance")
+        if surface_mass.shape != resistance.shape:
+            raise ValueError("surface_mass must match resistance")
+        if not (
+            np.all(np.isfinite(resistance))
+            and np.all(np.isfinite(inductance))
+            and np.all(np.isfinite(surface_mass))
+        ):
+            raise ValueError("CLN matrices must contain only finite values")
+        ports = _port_rhs_matrix(self.port_rhs, resistance.shape[0])
+        names = _mode_names(self.basis_names or None, resistance.shape[0])
+        blocks = {} if self.blocks is None else dict(self.blocks)
+        for name, bounds in blocks.items():
+            if len(bounds) != 2:
+                raise ValueError(f"block {name!r} must contain (start, stop)")
+            start, stop = (int(bounds[0]), int(bounds[1]))
+            if start < 0 or stop < start or stop > resistance.shape[0]:
+                raise ValueError(f"block {name!r} is out of range")
+            blocks[name] = (start, stop)
+        object.__setattr__(self, "resistance", np.array(resistance, copy=True))
+        object.__setattr__(self, "inductance", np.array(inductance, copy=True))
+        object.__setattr__(self, "surface_mass", np.array(surface_mass, copy=True))
+        object.__setattr__(self, "port_rhs", np.array(ports, copy=True))
+        object.__setattr__(self, "basis_names", names)
+        object.__setattr__(self, "blocks", blocks)
+
+    @property
+    def state_order(self) -> int:
+        return int(self.resistance.shape[0])
+
+    @property
+    def port_count(self) -> int:
+        return int(self.port_rhs.shape[1])
+
+    @property
+    def has_sibc_termination(self) -> bool:
+        return bool(np.linalg.norm(self.surface_mass) > 1.0e-14)
+
+    def impedance(self, s, *, surface_impedance=0.0) -> np.ndarray:
+        s = complex(s)
+        if not (np.isfinite(s.real) and np.isfinite(s.imag)):
+            raise ValueError("s must be finite")
+        return (
+            self.resistance
+            + s * self.inductance
+            + surface_impedance * self.surface_mass
+        )
+
+    def solve(self, s, drive, *, surface_impedance=0.0) -> np.ndarray:
+        """Solve for reduced current coefficients under generalized drive."""
+
+        values = np.asarray(drive)
+        vector_drive = values.ndim <= 1
+        if values.ndim == 0:
+            if self.port_count != 1:
+                raise ValueError(
+                    f"scalar drive is valid only for one port, not {self.port_count}"
+                )
+            values = values.reshape(1, 1)
+        elif values.ndim == 1:
+            values = values[:, np.newaxis]
+        if values.ndim != 2 or values.shape[0] != self.port_count:
+            raise ValueError(f"drive must have shape ({self.port_count}, n_cases)")
+        solved = _solve_reduced_linear(
+            self.impedance(s, surface_impedance=surface_impedance),
+            self.port_rhs @ values,
+        )
+        return solved[:, 0] if vector_drive else solved
+
+    def solve_vector_potential_drive(
+        self,
+        s,
+        coil_current,
+        *,
+        surface_impedance=0.0,
+    ) -> np.ndarray:
+        """Solve ``(R+sL+ZsMs)c = -s P i`` for coil current ``i``."""
+
+        return self.solve(
+            s,
+            -complex(s) * np.asarray(coil_current),
+            surface_impedance=surface_impedance,
+        )
+
+    def port_admittance(self, s, *, surface_impedance=0.0) -> np.ndarray:
+        z = self.impedance(s, surface_impedance=surface_impedance)
+        response = _solve_reduced_linear(z, self.port_rhs)
+        return self.port_rhs.conj().T @ response
+
+    def derivative_input_state_space(self) -> dict[str, np.ndarray]:
+        """Return ``c_dot=A c+B u``, ``y=C c`` for ``u=-i_dot``."""
+
+        if self.has_sibc_termination:
+            raise ValueError(
+                "SIBC termination must be rationalized before state-space export"
+            )
+        a = -np.linalg.solve(self.inductance, self.resistance)
+        b = np.linalg.solve(self.inductance, self.port_rhs)
+        c = self.port_rhs.conj().T
+        d = np.zeros(
+            (self.port_count, self.port_count),
+            dtype=np.result_type(a, b, c),
+        )
+        return {"A": a, "B": b, "C": c, "D": d}
+
+    def diagnostics(self, *, passive_tol: float = 1.0e-10) -> dict[str, object]:
+        rmin = _min_hermitian_eigenvalue(self.resistance)
+        lmin = _min_hermitian_eigenvalue(self.inductance)
+        smin = _min_hermitian_eigenvalue(self.surface_mass)
+        return {
+            "state_order": self.state_order,
+            "port_count": self.port_count,
+            "blocks": {
+                name: [start, stop]
+                for name, (start, stop) in (self.blocks or {}).items()
+            },
+            "input_convention": "u=-d(coil_current)/dt for vector-potential ports",
+            "has_sibc_termination": self.has_sibc_termination,
+            "finite_rl_state_space": not self.has_sibc_termination,
+            "min_resistance_eigenvalue": rmin,
+            "min_inductance_eigenvalue": lmin,
+            "min_surface_mass_eigenvalue": smin,
+            "passive": (
+                rmin >= -passive_tol
+                and lmin >= -passive_tol
+                and smin >= -passive_tol
+            ),
+        }
+
+
+def HCurlEddyCLNFromVIM(system: HybridVIMSystem, rhs) -> HCurlEddyCLNModel:
+    """Create the CLN coupling descriptor from an HCurl Eddy Bubble VIM."""
+
+    if not isinstance(system, HybridVIMSystem):
+        raise TypeError("system must be a HybridVIMSystem")
+    return HCurlEddyCLNModel(
+        resistance=system.resistance,
+        inductance=system.inductance,
+        surface_mass=system.surface_mass,
+        port_rhs=rhs,
+        basis_names=system.basis_names,
+        blocks=system.blocks,
+    )
 
 
 def ReducedPortAdmittance(
@@ -6898,12 +7413,13 @@ def AssembleHybridVIM(
         raise ValueError("sigma must be positive")
     if mu <= 0.0:
         raise ValueError("mu must be positive")
-    if kernel_epsilon is None:
-        kernel_epsilon = _default_kernel_epsilon(tuple(bases))
-    if kernel_epsilon <= 0.0:
-        raise ValueError("kernel_epsilon must be positive")
     if interaction is not None and not callable(interaction):
         raise TypeError("interaction must be callable")
+    if interaction is None:
+        if kernel_epsilon is None:
+            kernel_epsilon = _default_kernel_epsilon(tuple(bases))
+        if kernel_epsilon <= 0.0:
+            raise ValueError("kernel_epsilon must be positive")
 
     total = sum(basis.n_modes for basis in bases)
     rmat = np.zeros((total, total), dtype=complex)
@@ -7001,6 +7517,7 @@ class TopologyAwareHybridVIM:
     parent_order_ledger: EddyParentOrderLedger | None = None
     response_basis: ResponseBasis | None = None
     conductivity: float | None = None
+    sibc_applicability: EddySIBCApplicability | None = None
 
     def diagnostics(self) -> dict[str, object]:
         """Return complete production diagnostics for the tri-block VIM."""
@@ -7018,6 +7535,16 @@ class TopologyAwareHybridVIM:
             "has_rhs": self.rhs is not None,
             "has_response_basis": self.response_basis is not None,
             "conductivity": self.conductivity,
+            "surface_model": (
+                "explicit"
+                if self.sibc_applicability is None
+                else self.sibc_applicability.selected_model
+            ),
+            "sibc_applicability": (
+                None
+                if self.sibc_applicability is None
+                else self.sibc_applicability.diagnostics()
+            ),
         }
 
     def eddy_bubble_decomposition(self) -> EddyBubbleDecomposition:
@@ -7042,6 +7569,13 @@ class TopologyAwareHybridVIM:
             self.rhs,
             surface_impedance=surface_impedance,
         )
+
+    def cln_model(self) -> HCurlEddyCLNModel:
+        """Return the CLN/EVRS descriptor for the assembled physical ports."""
+
+        if self.rhs is None:
+            raise ValueError("rhs was not assembled; pass port_vector_potentials")
+        return HCurlEddyCLNFromVIM(self.system, self.rhs)
 
     def couple_hdiv_mmm(
         self,
@@ -7101,6 +7635,7 @@ def NgsolveTopologyAwareHybridVIM(
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
     parent_order_ledger: EddyParentOrderLedger | None = None,
+    sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
 ) -> TopologyAwareHybridVIM:
@@ -7117,6 +7652,15 @@ def NgsolveTopologyAwareHybridVIM(
 
     if sigma <= 0.0:
         raise ValueError("sigma must be positive")
+    if sibc_applicability is not None:
+        if not isinstance(sibc_applicability, EddySIBCApplicability):
+            raise TypeError("sibc_applicability must be an EddySIBCApplicability")
+        if not np.isclose(sibc_applicability.sigma, sigma):
+            raise ValueError("sibc_applicability.sigma must match sigma")
+    surface_grad_modes = tuple(surface_grad_modes)
+    if sibc_applicability is not None and not sibc_applicability.sibc_applicable:
+        surface_grad_modes = ()
+        surface_names = None
     if topology is None:
         topology = ClassifyNgsolveEddyTopology(
             mesh,
@@ -7205,6 +7749,7 @@ def NgsolveTopologyAwareHybridVIM(
         parent_order_ledger=parent_order_ledger,
         response_basis=response_basis,
         conductivity=float(sigma),
+        sibc_applicability=sibc_applicability,
     )
 
 
@@ -7238,6 +7783,7 @@ def NgsolveEddyBubbleHybridVIM(
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
     parent_order_ledger: EddyParentOrderLedger | None = None,
+    sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
 ) -> TopologyAwareHybridVIM:
@@ -7297,6 +7843,7 @@ def NgsolveEddyBubbleHybridVIM(
         non_sibc_trace_modes=non_sibc_trace_modes,
         parent_order=parent_order,
         parent_order_ledger=parent_order_ledger,
+        sibc_applicability=sibc_applicability,
         port_vector_potentials=port_vector_potentials,
         interaction=interaction,
     )
@@ -7333,6 +7880,7 @@ def NgsolveHCurlVIMHDivMMM(
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
     parent_order_ledger: EddyParentOrderLedger | None = None,
+    sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
     material_model: object | None = None,
@@ -7397,6 +7945,7 @@ def NgsolveHCurlVIMHDivMMM(
         non_sibc_trace_modes=non_sibc_trace_modes,
         parent_order=parent_order,
         parent_order_ledger=parent_order_ledger,
+        sibc_applicability=sibc_applicability,
         port_vector_potentials=port_vector_potentials,
         interaction=interaction,
     )
@@ -7464,6 +8013,7 @@ def NgsolveBDMEddyBubbleVIM(
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
     parent_order_ledger: EddyParentOrderLedger | None = None,
+    sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
     material_model: SharedMeshMaterialModel | None = None,
@@ -7488,11 +8038,20 @@ def NgsolveBDMEddyBubbleVIM(
             conductive_regions=conductive_materials,
             mu=float(mu) * float(mu_r),
             sigma=sigma,
-            sibc="half-space",
+            sibc=(
+                "half-space"
+                if sibc_applicability is None or sibc_applicability.sibc_applicable
+                else None
+            ),
             metadata={
                 "hdiv_family": "BDM",
                 "hdiv_order": int(hdiv_order),
                 "eddy_reduction": "topology-aware-eddy-bubble",
+                "eddy_surface_model": (
+                    "explicit"
+                    if sibc_applicability is None
+                    else sibc_applicability.selected_model
+                ),
             },
         )
     elif not isinstance(material_model, SharedMeshMaterialModel):
@@ -7556,6 +8115,7 @@ def NgsolveBDMEddyBubbleVIM(
         non_sibc_trace_modes=non_sibc_trace_modes,
         parent_order=parent_order,
         parent_order_ledger=parent_order_ledger,
+        sibc_applicability=sibc_applicability,
         port_vector_potentials=port_vector_potentials,
         interaction=interaction,
         material_model=material_model,
@@ -7685,6 +8245,8 @@ def ExternalVectorPotentialRHS(basis: SampledCurrentBasis, vector_potential) -> 
 
 __all__ = [
     "MU0",
+    "SkinDepth",
+    "EddySIBCApplicability",
     "EddyTracePolynomialDim",
     "EddyParentOrderLedger",
     "SampledCurrentBasis",
@@ -7701,7 +8263,9 @@ __all__ = [
     "EddyReductionPlan",
     "EddyBubbleDecomposition",
     "EddyBubbleHCurlBasis",
+    "HCurlCellFamilyInventory",
     "EddyBubbleReduction",
+    "NgsolveHCurlCellFamilies",
     "ClassifyNgsolveEddyTopology",
     "NgsolveEddyDofPolicy",
     "NgsolveEddyBubbleReduction",
@@ -7754,6 +8318,8 @@ __all__ = [
     "CoupleEddyBubbleHCurlBasisWithHDivMMM",
     "MixedGalerkinOrthogonalization",
     "HybridVIMSystem",
+    "HCurlEddyCLNModel",
+    "HCurlEddyCLNFromVIM",
     "AssembleHybridVIM",
     "TopologyAwareHybridVIM",
     "NgsolveTopologyAwareHybridVIM",

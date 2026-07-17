@@ -904,8 +904,10 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> ref_tet_pts_lo, std::vector<double> ref_tet_w_lo,
     std::vector<double> ref_tri_pts_lo, std::vector<double> ref_tri_w_lo,
     double ho_far_factor,
-    std::vector<int> image_masks, std::vector<double> image_signs)
+    std::vector<int> image_masks, std::vector<double> image_signs,
+    bool reference_density)
     : m_n_el(n_el), m_curved(true), m_curve_order(curve_order),
+      m_curvedReferenceDensity(reference_density),
       m_cellNodes(std::move(cell_nodes)), m_faceNodes(std::move(face_nodes)),
       m_cellVertices(std::move(cell_vertices)), m_faceVertices(std::move(face_vertices)),
       m_gl(std::move(curve_gl)), m_gw(std::move(curve_gw)),
@@ -952,7 +954,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             double X[3], dV;
             rad_hdiv::CurvedTetMapMeasure(nd, ref_tet_pts[3*q], ref_tet_pts[3*q+1], ref_tet_pts[3*q+2], X, dV);
             cellQP[c][q] = { X[0], X[1], X[2] };
-            cellM[c][q]  = ref_tet_w[q] * dV;
+            cellM[c][q]  = ref_tet_w[q] * (m_curvedReferenceDensity ? 1.0 : dV);
         }
         rad_hdiv::Vec3 cen = {0, 0, 0};
         for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) cen[k] += nd[i][k] / 4.0;
@@ -972,7 +974,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             double X[3], dA;
             rad_hdiv::CurvedTriMapMeasure(nd, ref_tri_pts[2*q], ref_tri_pts[2*q+1], X, dA);
             faceQP[f][q] = { X[0], X[1], X[2] };
-            faceM[f][q]  = ref_tri_w[q] * dA;
+            faceM[f][q]  = ref_tri_w[q] * (m_curvedReferenceDensity ? 1.0 : dA);
         }
         rad_hdiv::Vec3 cen = {0, 0, 0};
         for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) cen[k] += nd[i][k] / 3.0;
@@ -1034,7 +1036,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
                 rad_hdiv::CurvedTetMapMeasure(nodes, ref_tet_pts_lo[3*q], ref_tet_pts_lo[3*q+1],
                                               ref_tet_pts_lo[3*q+2], X, dV);
                 cellQP_lo[c][q] = {X[0], X[1], X[2]};
-                cellM_lo[c][q] = ref_tet_w_lo[q]*dV;
+                cellM_lo[c][q] = ref_tet_w_lo[q]*(m_curvedReferenceDensity ? 1.0 : dV);
             }
         }
         for (int f = 0; f < n_bf; ++f) {
@@ -1044,7 +1046,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
                 double X[3], dA;
                 rad_hdiv::CurvedTriMapMeasure(nodes, ref_tri_pts_lo[2*q], ref_tri_pts_lo[2*q+1], X, dA);
                 faceQP_lo[f][q] = {X[0], X[1], X[2]};
-                faceM_lo[f][q] = ref_tri_w_lo[q]*dA;
+                faceM_lo[f][q] = ref_tri_w_lo[q]*(m_curvedReferenceDensity ? 1.0 : dA);
             }
         }
         m_qp_lo.resize(m_n); m_qw_lo.resize(m_n);
@@ -1301,7 +1303,8 @@ void RadHACApKChargeGram::PhiInnerHOCurvedHostVec(
                             const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
                             const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
                             if (r < 1e-300) continue;
-                            const double common = (gw[a]*gw[b]*gw[c]/3.0)*(u*u*v*D)*dV/r;
+                            const double measure = m_curvedReferenceDensity ? 1.0 : dV;
+                            const double common = (gw[a]*gw[b]*gw[c]/3.0)*(u*u*v*D)*measure/r;
                             for (size_t local = 0; local < charges.size(); ++local) {
                                 const int* e = &m_expo[(size_t)3*charges[local]];
                                 values[local] += common * rad_ipow(z[0], e[0]) * rad_ipow(z[1], e[1])
@@ -1336,7 +1339,8 @@ void RadHACApKChargeGram::PhiInnerHOCurvedHostVec(
                 const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
                 const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
                 if (r < 1e-300) continue;
-                const double common = gw[a]*gw[b]*(u*sgn2)*dA/r;
+                const double measure = m_curvedReferenceDensity ? 1.0 : dA;
+                const double common = gw[a]*gw[b]*(u*sgn2)*measure/r;
                 for (size_t local = 0; local < charges.size(); ++local) {
                     const int* e = &m_expo[(size_t)3*charges[local]];
                     values[local] += common * rad_ipow(xi, e[0]) * rad_ipow(eta, e[1]);
@@ -1580,10 +1584,13 @@ double RadHACApKChargeGram::PhiAtHO_Curved(int src, const double p[3]) const
     if (m_kind[src] == 0) {
         const double (*nd)[3] = (const double(*)[3])&m_cellNodes[(size_t)host*30];
         return rad_hdiv::CurvedTetPotential(
-            nd, e[0], e[1], e[2], p, m_gl.data(), m_gw.data(), nq);
+            nd, e[0], e[1], e[2], p, m_gl.data(), m_gw.data(), nq,
+            !m_curvedReferenceDensity);
     }
     const double (*nd)[3] = (const double(*)[3])&m_faceNodes[(size_t)host*18];
-    return rad_hdiv::CurvedTriPotential(nd, e[0], e[1], p, m_gl.data(), m_gw.data(), nq);
+    return rad_hdiv::CurvedTriPotential(
+        nd, e[0], e[1], p, m_gl.data(), m_gw.data(), nq,
+        !m_curvedReferenceDensity);
 }
 
 // Dispatch the high-order inner potential: CURVED -> the curved Duffy; else FLAT -> the EXACT analytic moment

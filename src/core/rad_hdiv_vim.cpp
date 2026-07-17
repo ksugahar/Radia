@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "rad_parallel.h"
+
 namespace rad_hdiv {
 
 static const double PI = 3.14159265358979323846;
@@ -285,7 +287,9 @@ void TetMoment1(const double V[4][3], const double r[3], double out[3])
 
 namespace {
 
-constexpr int POLY_MAX_DEG = 6;
+constexpr int POLY_MAX_DEG = 18;
+constexpr int POLY_MAX_MOMENTS =
+    (POLY_MAX_DEG + 1)*(POLY_MAX_DEG + 2)*(POLY_MAX_DEG + 3)/6;
 
 static inline double small_comb(int n, int k)
 {
@@ -529,9 +533,8 @@ static void SurfacePotentialMomentsUpTo(const double P[3][3], const double r[3],
 static void TetPotentialMomentsUpTo(const double V[4][3], const double r[3],
                                     int degree, double* out)
 {
-    constexpr int NMAX = 84;
     static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
-    double face_moments[4][NMAX] = {};
+    double face_moments[4][POLY_MAX_MOMENTS] = {};
     double h[4] = {};
     double cen[3] = {0,0,0};
     for (int i = 0; i < 4; ++i)
@@ -574,6 +577,140 @@ static void TetPotentialMomentsUpTo(const double V[4][3], const double r[3],
                         s += r[k]*alpha[k]*out[PotentialMomentIndex(lower[0], lower[1], lower[2])];
                     }
                 out[idx] = s/(total + 2.0);
+            }
+}
+
+static bool TetReferenceInverse(const double V[4][3], double invJ[3][3], double& detJ)
+{
+    const double J[3][3] = {
+        {V[1][0]-V[0][0], V[2][0]-V[0][0], V[3][0]-V[0][0]},
+        {V[1][1]-V[0][1], V[2][1]-V[0][1], V[3][1]-V[0][1]},
+        {V[1][2]-V[0][2], V[2][2]-V[0][2], V[3][2]-V[0][2]}
+    };
+    detJ = J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])
+         - J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])
+         + J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
+    if (std::fabs(detJ) < 1e-300) return false;
+    const double id = 1.0/detJ;
+    invJ[0][0] =  (J[1][1]*J[2][2]-J[1][2]*J[2][1])*id;
+    invJ[0][1] = -(J[0][1]*J[2][2]-J[0][2]*J[2][1])*id;
+    invJ[0][2] =  (J[0][1]*J[1][2]-J[0][2]*J[1][1])*id;
+    invJ[1][0] = -(J[1][0]*J[2][2]-J[1][2]*J[2][0])*id;
+    invJ[1][1] =  (J[0][0]*J[2][2]-J[0][2]*J[2][0])*id;
+    invJ[1][2] = -(J[0][0]*J[1][2]-J[0][2]*J[1][0])*id;
+    invJ[2][0] =  (J[1][0]*J[2][1]-J[1][1]*J[2][0])*id;
+    invJ[2][1] = -(J[0][0]*J[2][1]-J[0][1]*J[2][0])*id;
+    invJ[2][2] =  (J[0][0]*J[1][1]-J[0][1]*J[1][0])*id;
+    return true;
+}
+
+static void SurfaceReferencePotentialMomentsUpTo(
+    const double P[3][3], const double r[3], int degree,
+    const double v0[3], const double invJ[3][3], double* out)
+{
+    double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    TriPolySetup g;
+    triangle_inplane_A_moments(P, r, degree, A, g);
+    double rpmv0[3];
+    for (int k = 0; k < 3; ++k) rpmv0[k] = g.rp[k] - v0[k];
+    int idx = 0;
+    for (int total = 0; total <= degree; ++total)
+        for (int ax = 0; ax <= total; ++ax)
+            for (int ay = 0; ay <= total - ax; ++ay) {
+                const int alpha[3] = {ax, ay, total - ax - ay};
+                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+                int poly_degree = 0;
+                poly[0][0] = 1.0;
+                for (int coord = 0; coord < 3; ++coord) {
+                    const double c0 = invJ[coord][0]*rpmv0[0]
+                                    + invJ[coord][1]*rpmv0[1]
+                                    + invJ[coord][2]*rpmv0[2];
+                    const double c1 = invJ[coord][0]*g.e1[0]
+                                    + invJ[coord][1]*g.e1[1]
+                                    + invJ[coord][2]*g.e1[2];
+                    const double c2 = invJ[coord][0]*g.e2[0]
+                                    + invJ[coord][1]*g.e2[1]
+                                    + invJ[coord][2]*g.e2[2];
+                    for (int p = 0; p < alpha[coord]; ++p)
+                        poly2_mul_linear(poly, poly_degree, c0, c1, c2);
+                }
+                double value = 0.0;
+                for (int a = 0; a <= poly_degree; ++a)
+                    for (int b = 0; b <= poly_degree - a; ++b)
+                        value += poly[a][b]*A[a][b];
+                out[idx++] = value;
+            }
+}
+
+/* Stable analogue of TetPotentialMomentsUpTo in the source tetrahedron's
+ * reference coordinates.  Keeping lambda in its natural O(1) frame avoids
+ * the severe cancellation caused by expanding fifth-order lambda monomials
+ * into global x/y/z powers on millimetre-scale cells. */
+static void TetReferencePotentialMomentsUpTo(
+    const double V[4][3], const double r[3], int degree, double* out)
+{
+    static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    double invJ[3][3], detJ = 0.0;
+    if (!TetReferenceInverse(V, invJ, detJ)) {
+        const int count = (degree + 1)*(degree + 2)*(degree + 3)/6;
+        std::fill(out, out + count, 0.0);
+        return;
+    }
+    double xi_r[3] = {};
+    for (int i = 0; i < 3; ++i)
+        for (int k = 0; k < 3; ++k)
+            xi_r[i] += invJ[i][k]*(r[k]-V[0][k]);
+
+    double face_moments[4][POLY_MAX_MOMENTS] = {};
+    double h[4] = {};
+    double cen[3] = {0,0,0};
+    for (int i = 0; i < 4; ++i)
+        for (int k = 0; k < 3; ++k) cen[k] += 0.25*V[i][k];
+    for (int fi = 0; fi < 4; ++fi) {
+        double Fv[3][3];
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k) Fv[j][k] = V[FACES[fi][j]][k];
+        double e1[3], e2[3], nrm[3];
+        for (int k = 0; k < 3; ++k) {
+            e1[k] = Fv[1][k]-Fv[0][k];
+            e2[k] = Fv[2][k]-Fv[0][k];
+        }
+        v3cross(e1, e2, nrm);
+        const double nl = v3nrm(nrm);
+        if (nl < 1e-300) continue;
+        for (int k = 0; k < 3; ++k) nrm[k] /= nl;
+        double fc[3] = {0,0,0};
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k) fc[k] += Fv[j][k]/3.0;
+        double outward[3];
+        for (int k = 0; k < 3; ++k) outward[k] = fc[k]-cen[k];
+        if (v3dot(outward, nrm) < 0.0)
+            for (int k = 0; k < 3; ++k) nrm[k] = -nrm[k];
+        double rmf[3];
+        for (int k = 0; k < 3; ++k) rmf[k] = r[k]-Fv[0][k];
+        h[fi] = v3dot(rmf, nrm);
+        SurfaceReferencePotentialMomentsUpTo(
+            Fv, r, degree, V[0], invJ, face_moments[fi]);
+    }
+
+    out[0] = PhiTet(V, r);
+    for (int total = 1; total <= degree; ++total)
+        for (int ax = 0; ax <= total; ++ax)
+            for (int ay = 0; ay <= total - ax; ++ay) {
+                const int az = total - ax - ay;
+                const int idx = PotentialMomentIndex(ax, ay, az);
+                double value = 0.0;
+                for (int fi = 0; fi < 4; ++fi)
+                    value -= h[fi]*face_moments[fi][idx];
+                const int alpha[3] = {ax, ay, az};
+                for (int k = 0; k < 3; ++k) {
+                    if (alpha[k] <= 0) continue;
+                    int lower[3] = {ax, ay, az};
+                    --lower[k];
+                    value += xi_r[k]*alpha[k]
+                           * out[PotentialMomentIndex(lower[0], lower[1], lower[2])];
+                }
+                out[idx] = value/(total + 2.0);
             }
 }
 
@@ -653,6 +790,152 @@ void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3], double ou
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3], double out[84])
 {
     TetPotentialMomentsUpTo(V, r, 6, out);
+}
+
+std::vector<double> TetHCurlReducedGram(
+    const std::vector<double>& cell_verts,
+    const std::vector<std::array<int,3>>& exponents,
+    const std::vector<double>& coefficients,
+    int n_modes,
+    const std::vector<double>& ref_points,
+    const std::vector<double>& ref_weights)
+{
+    if (cell_verts.empty() || cell_verts.size() % 12 != 0)
+        throw std::invalid_argument("TetHCurlReducedGram: cell_verts must have shape (n_cell,4,3)");
+    if (n_modes <= 0)
+        throw std::invalid_argument("TetHCurlReducedGram: n_modes must be positive");
+    if (exponents.empty())
+        throw std::invalid_argument("TetHCurlReducedGram: exponents must not be empty");
+    if (ref_points.empty() || ref_points.size() % 3 != 0
+        || ref_weights.size() != ref_points.size()/3)
+        throw std::invalid_argument("TetHCurlReducedGram: invalid outer tetrahedron rule");
+    const int n_cells = static_cast<int>(cell_verts.size()/12);
+    const int n_mono = static_cast<int>(exponents.size());
+    const size_t expected = static_cast<size_t>(n_modes)*n_cells*n_mono*3;
+    if (coefficients.size() != expected)
+        throw std::invalid_argument(
+            "TetHCurlReducedGram: coefficients must have shape (n_mode,n_cell,n_mono,3)");
+    int degree = 0;
+    std::vector<int> moment_index(static_cast<size_t>(n_mono));
+    for (int m = 0; m < n_mono; ++m) {
+        const auto& e = exponents[static_cast<size_t>(m)];
+        if (e[0] < 0 || e[1] < 0 || e[2] < 0)
+            throw std::invalid_argument("TetHCurlReducedGram: exponents must be non-negative");
+        const int d = e[0] + e[1] + e[2];
+        if (d > POLY_MAX_DEG)
+            throw std::invalid_argument("TetHCurlReducedGram: polynomial degree exceeds 18");
+        degree = std::max(degree, d);
+        moment_index[static_cast<size_t>(m)] = PotentialMomentIndex(e[0], e[1], e[2]);
+    }
+    for (double value : cell_verts)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("TetHCurlReducedGram: cell_verts contains non-finite values");
+    for (double value : coefficients)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("TetHCurlReducedGram: coefficients contains non-finite values");
+    for (double value : ref_points)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("TetHCurlReducedGram: ref_points contains non-finite values");
+    for (double value : ref_weights)
+        if (!std::isfinite(value) || value <= 0.0)
+            throw std::invalid_argument("TetHCurlReducedGram: ref_weights must be finite and positive");
+
+    auto coeff_at = [&](int mode, int cell, int mono, int component) -> double {
+        const size_t index = (((static_cast<size_t>(mode)*n_cells + cell)*n_mono + mono)*3
+                              + component);
+        return coefficients[index];
+    };
+    auto vertex_at = [&](int cell, int vertex, int component) -> double {
+        return cell_verts[(static_cast<size_t>(cell)*4 + vertex)*3 + component];
+    };
+
+    std::vector<double> cell_blocks(
+        static_cast<size_t>(n_cells)*n_modes*n_modes, 0.0);
+    ngcore::ParallelFor(ngcore::IntRange(n_cells), [&](size_t target_index) {
+        const int target = static_cast<int>(target_index);
+        double Vt[4][3];
+        for (int a = 0; a < 4; ++a)
+            for (int k = 0; k < 3; ++k) Vt[a][k] = vertex_at(target, a, k);
+        double invJ[3][3], detJ = 0.0;
+        if (!TetReferenceInverse(Vt, invJ, detJ))
+            throw std::runtime_error("TetHCurlReducedGram: degenerate target tetrahedron");
+        const double abs_detJ = std::fabs(detJ);
+        std::vector<double> target_values(static_cast<size_t>(n_modes)*3);
+        std::vector<double> source_potential(static_cast<size_t>(n_modes)*3);
+        std::vector<double> monomial_values(static_cast<size_t>(n_mono));
+        double moments[POLY_MAX_MOMENTS] = {};
+
+        for (size_t q = 0; q < ref_weights.size(); ++q) {
+            const double xi[3] = {
+                ref_points[3*q], ref_points[3*q + 1], ref_points[3*q + 2]
+            };
+            double point[3];
+            for (int k = 0; k < 3; ++k) {
+                point[k] = Vt[0][k]
+                         + (Vt[1][k]-Vt[0][k])*xi[0]
+                         + (Vt[2][k]-Vt[0][k])*xi[1]
+                         + (Vt[3][k]-Vt[0][k])*xi[2];
+            }
+            for (int m = 0; m < n_mono; ++m) {
+                const auto& e = exponents[static_cast<size_t>(m)];
+                monomial_values[static_cast<size_t>(m)] =
+                    std::pow(xi[0], e[0])*std::pow(xi[1], e[1])*std::pow(xi[2], e[2]);
+            }
+            std::fill(target_values.begin(), target_values.end(), 0.0);
+            for (int mode = 0; mode < n_modes; ++mode)
+                for (int m = 0; m < n_mono; ++m)
+                    for (int k = 0; k < 3; ++k)
+                        target_values[static_cast<size_t>(mode)*3 + k] +=
+                            coeff_at(mode, target, m, k)*monomial_values[static_cast<size_t>(m)];
+
+            std::fill(source_potential.begin(), source_potential.end(), 0.0);
+            for (int source = 0; source < n_cells; ++source) {
+                double Vs[4][3];
+                for (int a = 0; a < 4; ++a)
+                    for (int k = 0; k < 3; ++k) Vs[a][k] = vertex_at(source, a, k);
+                std::fill(std::begin(moments), std::end(moments), 0.0);
+                TetReferencePotentialMomentsUpTo(Vs, point, degree, moments);
+                for (int mode = 0; mode < n_modes; ++mode)
+                    for (int m = 0; m < n_mono; ++m) {
+                        const double potential = moments[moment_index[static_cast<size_t>(m)]];
+                        for (int k = 0; k < 3; ++k)
+                            source_potential[static_cast<size_t>(mode)*3 + k] +=
+                                coeff_at(mode, source, m, k)*potential;
+                    }
+            }
+
+            const double weight = ref_weights[q]*abs_detJ;
+            double* block = cell_blocks.data()
+                          + static_cast<size_t>(target)*n_modes*n_modes;
+            for (int i = 0; i < n_modes; ++i)
+                for (int j = 0; j < n_modes; ++j) {
+                    double dot = 0.0;
+                    for (int k = 0; k < 3; ++k)
+                        dot += target_values[static_cast<size_t>(i)*3 + k]
+                             * source_potential[static_cast<size_t>(j)*3 + k];
+                    block[static_cast<size_t>(i)*n_modes + j] += weight*dot;
+                }
+        }
+    });
+
+    std::vector<double> result(static_cast<size_t>(n_modes)*n_modes, 0.0);
+    for (int target = 0; target < n_cells; ++target) {
+        const double* block = cell_blocks.data()
+                            + static_cast<size_t>(target)*n_modes*n_modes;
+        for (int i = 0; i < n_modes; ++i)
+            for (int j = 0; j < n_modes; ++j)
+                result[static_cast<size_t>(i)*n_modes + j] +=
+                    block[static_cast<size_t>(i)*n_modes + j];
+    }
+    for (int i = 0; i < n_modes; ++i)
+        for (int j = i; j < n_modes; ++j) {
+            const double value = 0.5*INV_FOUR_PI*(
+                result[static_cast<size_t>(i)*n_modes + j]
+              + result[static_cast<size_t>(j)*n_modes + i]);
+            result[static_cast<size_t>(i)*n_modes + j] = value;
+            result[static_cast<size_t>(j)*n_modes + i] = value;
+        }
+    return result;
 }
 
 void TriPotentialMomentsUpTo4(const double V[3][3], const double r[3], double out[35])
@@ -943,7 +1226,7 @@ void ClosestRefTri(const double nodes[6][3], const double p[3], double xi0[2])
 // the curved map X(xi) and curved area element J=|Xu x Xv| at each reference Duffy point.  gl/gw = an nq-point
 // Gauss-Legendre rule on [0,1].  Validated vs the Python prototype (curved_duffy.py) to ~1e-5..1e-7.
 double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double p[3],
-                          const double* gl, const double* gw, int nq)
+                          const double* gl, const double* gw, int nq, bool include_measure)
 {
     double xi0[2]; ClosestRefTri(nodes, p, xi0);
     static const double C[3][2] = {{0,0},{1,0},{0,1}};        // reference-triangle corners
@@ -965,7 +1248,8 @@ double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double
                 const double dx=p[0]-X[0], dy=p[1]-X[1], dz=p[2]-X[2];
                 const double r = std::sqrt(dx*dx+dy*dy+dz*dz);
                 if (r < 1e-300) continue;
-                acc += gw[a]*gw[b]*(u*sgn2)*J*_ipow(xi, e0)*_ipow(eta, e1)/r;
+                const double measure = include_measure ? J : 1.0;
+                acc += gw[a]*gw[b]*(u*sgn2)*measure*_ipow(xi, e0)*_ipow(eta, e1)/r;
             }
         }
     }
@@ -1041,7 +1325,7 @@ void ClosestRefTet(const double nodes[10][3], const double p[3], double xi0[3])
 // element Jv=|det dX/dxi| per point.  The REFERENCE tet is always +oriented and Jv=|det| -> NO host-sign
 // correction (unlike the flat physical tet Duffy).  gl/gw = an nq-pt Gauss-Legendre rule on [0,1].
 double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, const double p[3],
-                          const double* gl, const double* gw, int nq)
+                          const double* gl, const double* gw, int nq, bool include_measure)
 {
     double xi0[3]; ClosestRefTet(nodes, p, xi0);
     static const double C[4][3] = {{0,0,0},{1,0,0},{0,1,0},{0,0,1}};
@@ -1073,7 +1357,8 @@ double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, con
                         const double dx=p[0]-X[0], dy=p[1]-X[1], dz=p[2]-X[2];
                         const double r=std::sqrt(dx*dx+dy*dy+dz*dz);
                         if (r<1e-300) continue;
-                        acc += (gw[a]*gw[b]*gw[c]/3.0)*(u*u*v*D)*Jv
+                        const double measure = include_measure ? Jv : 1.0;
+                        acc += (gw[a]*gw[b]*gw[c]/3.0)*(u*u*v*D)*measure
                              *_ipow(z[0],e0)*_ipow(z[1],e1)*_ipow(z[2],e2)/r;
                     }}}
         }
