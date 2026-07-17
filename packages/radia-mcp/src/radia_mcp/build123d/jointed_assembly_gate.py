@@ -338,6 +338,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     stl_tolerance_model_length_unit_generation_identity_ok = True
     step_import_tolerance_unit_healing_generation_identity_ok = True
     tessellation_vertex_index_normal_transform_generation_identity_ok = True
+    brep_serialization_shape_digest_occt_location_generation_identity_ok = True
+    dxf_wire_plane_orientation_layer_generation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -363,6 +365,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         stl_tolerance_model_length_unit_generation_identity_ok = False
         step_import_tolerance_unit_healing_generation_identity_ok = False
         tessellation_vertex_index_normal_transform_generation_identity_ok = False
+        brep_serialization_shape_digest_occt_location_generation_identity_ok = False
+        dxf_wire_plane_orientation_layer_generation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -1401,6 +1405,156 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and tessellation_transform.get("rendered_tessellation_sha256")
                 == digest
             )
+
+        brep_serialization = replay_identity_value.get(
+            "brep_serialization_shape_digest_occt_location_generation_identity"
+        )
+        if brep_serialization is not None:
+            brep_serialization = (
+                brep_serialization
+                if isinstance(brep_serialization, Mapping)
+                else {}
+            )
+            serialization_generation = str(
+                brep_serialization.get("serialization_generation", "")
+            ).strip()
+            shape_generation = str(
+                brep_serialization.get("shape_generation", "")
+            ).strip()
+            kernel_version = str(
+                brep_serialization.get("kernel_version", "")
+            ).strip()
+            location_generation = str(
+                brep_serialization.get("location_generation", "")
+            ).strip()
+            digests = {
+                key: str(brep_serialization.get(key, "")).lower()
+                for key in (
+                    "shape_sha256",
+                    "serialized_shape_sha256",
+                    "deserialized_shape_sha256",
+                    "top_level_location_sha256",
+                    "serialized_top_level_location_sha256",
+                    "deserialized_top_level_location_sha256",
+                    "brep_payload_sha256",
+                    "deserialized_brep_payload_sha256",
+                )
+            }
+            digests_valid = all(
+                len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                for digest in digests.values()
+            )
+            brep_serialization_shape_digest_occt_location_generation_identity_ok = (
+                bool(serialization_generation)
+                and brep_serialization.get(
+                    "deserialization_serialization_generation"
+                )
+                == serialization_generation
+                and bool(shape_generation)
+                and brep_serialization.get("serialized_shape_generation")
+                == shape_generation
+                and brep_serialization.get("deserialized_shape_generation")
+                == shape_generation
+                and bool(kernel_version)
+                and brep_serialization.get("serialized_kernel_version")
+                == kernel_version
+                and brep_serialization.get("deserialized_kernel_version")
+                == kernel_version
+                and bool(location_generation)
+                and brep_serialization.get("serialized_location_generation")
+                == location_generation
+                and brep_serialization.get("deserialized_location_generation")
+                == location_generation
+                and digests_valid
+                and digests["serialized_shape_sha256"] == digests["shape_sha256"]
+                and digests["deserialized_shape_sha256"] == digests["shape_sha256"]
+                and digests["serialized_top_level_location_sha256"]
+                == digests["top_level_location_sha256"]
+                and digests["deserialized_top_level_location_sha256"]
+                == digests["top_level_location_sha256"]
+                and digests["deserialized_brep_payload_sha256"]
+                == digests["brep_payload_sha256"]
+            )
+
+        dxf_wire = replay_identity_value.get(
+            "dxf_wire_plane_orientation_layer_generation_identity"
+        )
+        if dxf_wire is not None:
+            dxf_wire = dxf_wire if isinstance(dxf_wire, Mapping) else {}
+            import_generation = str(
+                dxf_wire.get("dxf_import_generation", "")
+            ).strip()
+            plane_generation = str(
+                dxf_wire.get("plane_generation", "")
+            ).strip()
+            layer_generation = str(
+                dxf_wire.get("layer_generation", "")
+            ).strip()
+            closure_generation = str(
+                dxf_wire.get("closure_generation", "")
+            ).strip()
+            try:
+                wire_ids = [int(item) for item in dxf_wire.get("wire_ids", [])]
+                imported_wire_ids = [
+                    int(item) for item in dxf_wire.get("imported_wire_ids", [])
+                ]
+            except (TypeError, ValueError):
+                wire_ids = []
+                imported_wire_ids = []
+            layers = [str(item) for item in dxf_wire.get("wire_layers", [])]
+            imported_layers = [
+                str(item) for item in dxf_wire.get("imported_wire_layers", [])
+            ]
+            closed = list(dxf_wire.get("wire_closed", []))
+            imported_closed = list(dxf_wire.get("imported_wire_closed", []))
+            plane_digest = str(
+                dxf_wire.get("plane_orientation_sha256", "")
+            ).lower()
+            table_digest = str(dxf_wire.get("wire_table_sha256", "")).lower()
+            dxf_wire_plane_orientation_layer_generation_identity_ok = (
+                bool(import_generation)
+                and all(
+                    dxf_wire.get(key) == import_generation
+                    for key in (
+                        "wire_import_generation",
+                        "plane_import_generation",
+                        "layer_import_generation",
+                        "closure_import_generation",
+                    )
+                )
+                and bool(plane_generation)
+                and dxf_wire.get("wire_plane_generation") == plane_generation
+                and dxf_wire.get("extrusion_plane_generation")
+                == plane_generation
+                and bool(layer_generation)
+                and dxf_wire.get("wire_layer_generation") == layer_generation
+                and bool(closure_generation)
+                and dxf_wire.get("wire_closure_generation")
+                == closure_generation
+                and bool(wire_ids)
+                and len(set(wire_ids)) == len(wire_ids)
+                and imported_wire_ids == wire_ids
+                and len(layers) == len(wire_ids)
+                and all(layer.strip() for layer in layers)
+                and imported_layers == layers
+                and len(closed) == len(wire_ids)
+                and all(isinstance(item, bool) for item in closed)
+                and imported_closed == closed
+                and len(plane_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in plane_digest
+                )
+                and dxf_wire.get("imported_plane_orientation_sha256")
+                == plane_digest
+                and len(table_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in table_digest
+                )
+                and dxf_wire.get("imported_wire_table_sha256") == table_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -1488,6 +1642,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "tessellation_vertices_indices_and_normals_use_final_transform": (
             tessellation_vertex_index_normal_transform_generation_identity_ok
+        ),
+        "brep_deserialization_uses_current_shape_kernel_and_location": (
+            brep_serialization_shape_digest_occt_location_generation_identity_ok
+        ),
+        "dxf_wires_use_current_plane_layer_and_closure_generations": (
+            dxf_wire_plane_orientation_layer_generation_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
