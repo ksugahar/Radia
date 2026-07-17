@@ -2159,6 +2159,236 @@ def _netgen_vol_export_identity_ok(identity: object) -> bool:
     )
 
 
+def _hex_sweep_layer_correspondence_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        source = int(identity.get("source_face_id"))
+        result_source = int(identity.get("result_source_face_id"))
+        target = int(identity.get("target_face_id"))
+        result_target = int(identity.get("result_target_face_id"))
+        layers = int(identity.get("layer_count"))
+        result_layers = int(identity.get("result_layer_count"))
+        pairs = [[int(value) for value in row] for row in identity.get("source_target_vertex_pairs", [])]
+        result_pairs = [[int(value) for value in row] for row in identity.get("result_source_target_vertex_pairs", [])]
+        counts = [int(value) for value in identity.get("layer_element_counts", [])]
+        result_counts = [int(value) for value in identity.get("result_layer_element_counts", [])]
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [float(value) for value in identity.get("result_scaled_jacobians", [])]
+        block = int(identity.get("block_id"))
+        result_block = int(identity.get("result_block_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sweep_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "source_sweep_generation",
+                "target_sweep_generation",
+                "layer_sweep_generation",
+                "correspondence_sweep_generation",
+                "jacobian_sweep_generation",
+                "block_sweep_generation",
+                "result_sweep_generation",
+            )
+        )
+        and source > 0
+        and target > 0
+        and source != target
+        and result_source == source
+        and result_target == target
+        and layers > 0
+        and result_layers == layers
+        and len(pairs) >= 3
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 for row in pairs)
+        and len({row[0] for row in pairs}) == len(pairs)
+        and len({row[1] for row in pairs}) == len(pairs)
+        and result_pairs == pairs
+        and len(counts) == layers
+        and all(value > 0 for value in counts)
+        and result_counts == counts
+        and len(jacobians) == layers
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and block > 0
+        and result_block == block
+        and _valid_sha256(identity.get("sweep_mesh_sha256"))
+        and identity.get("result_sweep_mesh_sha256") == identity.get("sweep_mesh_sha256")
+    )
+
+
+def _high_order_hex_export_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        edges = [int(value) for value in identity.get("edge_node_order", [])]
+        decoded_edges = [int(value) for value in identity.get("decoded_edge_node_order", [])]
+        faces = [int(value) for value in identity.get("face_node_order", [])]
+        decoded_faces = [int(value) for value in identity.get("decoded_face_node_order", [])]
+        interior = [int(value) for value in identity.get("interior_node_order", [])]
+        decoded_interior = [int(value) for value in identity.get("decoded_interior_node_order", [])]
+        order = int(identity.get("curved_geometry_order"))
+        decoded_order = int(identity.get("decoded_curved_geometry_order"))
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        decoded_jacobian = float(identity.get("decoded_minimum_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("export_generation") or "")
+    all_nodes = edges + faces + interior
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "edge_export_generation",
+                "face_export_generation",
+                "interior_export_generation",
+                "curvature_export_generation",
+                "jacobian_export_generation",
+                "result_export_generation",
+            )
+        )
+        and identity.get("element_family") == "hex27"
+        and identity.get("decoded_element_family") == "hex27"
+        and len(edges) == 12
+        and len(faces) == 6
+        and len(interior) == 1
+        and all(value > 0 for value in all_nodes)
+        and len(set(all_nodes)) == len(all_nodes)
+        and decoded_edges == edges
+        and decoded_faces == faces
+        and decoded_interior == interior
+        and order == 2
+        and decoded_order == order
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and decoded_jacobian == jacobian
+        and _valid_sha256(identity.get("export_sha256"))
+        and identity.get("decoded_export_sha256") == identity.get("export_sha256")
+    )
+
+
+def _sculpt_input_output_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        spacing = [float(value) for value in identity.get("voxel_spacing_m", [])]
+        result_spacing = [float(value) for value in identity.get("result_voxel_spacing_m", [])]
+        thresholds = [float(value) for value in identity.get("thresholds", [])]
+        result_thresholds = [float(value) for value in identity.get("result_thresholds", [])]
+        material_blocks = [[int(value) for value in row] for row in identity.get("material_to_block", [])]
+        result_material_blocks = [[int(value) for value in row] for row in identity.get("result_material_to_block", [])]
+        block_counts = [[int(value) for value in row] for row in identity.get("element_counts_by_block", [])]
+        result_block_counts = [[int(value) for value in row] for row in identity.get("result_element_counts_by_block", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sculpt_generation") or "")
+    session = str(identity.get("session_id") or "")
+    block_ids = {row[1] for row in material_blocks if len(row) == 2}
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "voxel_sculpt_generation",
+                "threshold_sculpt_generation",
+                "material_sculpt_generation",
+                "block_sculpt_generation",
+                "output_sculpt_generation",
+                "result_sculpt_generation",
+            )
+        )
+        and bool(session)
+        and identity.get("result_session_id") == session
+        and len(spacing) == 3
+        and all(math.isfinite(value) and value > 0.0 for value in spacing)
+        and result_spacing == spacing
+        and bool(thresholds)
+        and all(math.isfinite(value) and 0.0 <= value <= 1.0 for value in thresholds)
+        and all(right > left for left, right in zip(thresholds, thresholds[1:]))
+        and result_thresholds == thresholds
+        and bool(material_blocks)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 for row in material_blocks)
+        and len({row[0] for row in material_blocks}) == len(material_blocks)
+        and len(block_ids) == len(material_blocks)
+        and result_material_blocks == material_blocks
+        and {row[0] for row in block_counts if len(row) == 2} == block_ids
+        and all(len(row) == 2 and row[1] > 0 for row in block_counts)
+        and result_block_counts == block_counts
+        and _valid_sha256(identity.get("input_volume_sha256"))
+        and identity.get("result_input_volume_sha256") == identity.get("input_volume_sha256")
+        and _valid_sha256(identity.get("output_mesh_sha256"))
+        and identity.get("result_output_mesh_sha256") == identity.get("output_mesh_sha256")
+    )
+
+
+def _exodus_merge_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        tolerance = float(identity.get("merge_tolerance_m"))
+        decoded_tolerance = float(identity.get("decoded_merge_tolerance_m"))
+        pairs = [[int(value) for value in row] for row in identity.get("merged_node_pairs", [])]
+        decoded_pairs = [[int(value) for value in row] for row in identity.get("decoded_merged_node_pairs", [])]
+        global_ids = [int(value) for value in identity.get("global_node_ids", [])]
+        decoded_global_ids = [int(value) for value in identity.get("decoded_global_node_ids", [])]
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        decoded_blocks = [int(value) for value in identity.get("decoded_block_ids", [])]
+        sidesets = [int(value) for value in identity.get("sideset_ids", [])]
+        decoded_sidesets = [int(value) for value in identity.get("decoded_sideset_ids", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("merge_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "tolerance_merge_generation",
+                "node_merge_generation",
+                "global_id_merge_generation",
+                "block_merge_generation",
+                "sideset_merge_generation",
+                "result_merge_generation",
+            )
+        )
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and decoded_tolerance == tolerance
+        and bool(pairs)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 for row in pairs)
+        and len({row[0] for row in pairs}) == len(pairs)
+        and len({row[1] for row in pairs}) == len(pairs)
+        and decoded_pairs == pairs
+        and bool(global_ids)
+        and all(value > 0 for value in global_ids)
+        and len(set(global_ids)) == len(global_ids)
+        and decoded_global_ids == global_ids
+        and bool(blocks)
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and decoded_blocks == blocks
+        and bool(sidesets)
+        and all(value > 0 for value in sidesets)
+        and len(set(sidesets)) == len(sidesets)
+        and decoded_sidesets == sidesets
+        and _valid_sha256(identity.get("source_mesh_sha256"))
+        and identity.get("merge_source_mesh_sha256") == identity.get("source_mesh_sha256")
+        and _valid_sha256(identity.get("exodus_sha256"))
+        and identity.get("decoded_exodus_sha256") == identity.get("exodus_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -2921,6 +3151,20 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             _periodic_sideset_pairing_identity_ok(
                 summary.get(
                     "periodic_sideset_node_pair_transform_tolerance_geometry_generation_identity"
+                )
+            )
+        ),
+        "hex_sweeps_use_current_faces_layers_correspondence_jacobians_and_blocks": (
+            _hex_sweep_layer_correspondence_identity_ok(
+                summary.get(
+                    "hex_sweep_source_target_layer_correspondence_jacobian_block_generation_identity"
+                )
+            )
+        ),
+        "high_order_hex_exports_use_current_edge_face_interior_order_curvature_and_jacobian": (
+            _high_order_hex_export_identity_ok(
+                summary.get(
+                    "high_order_hex_edge_face_interior_node_curvature_jacobian_export_generation_identity"
                 )
             )
         ),
@@ -3708,6 +3952,20 @@ def cubit_mixed_transition_source_gate(
             _netgen_vol_export_identity_ok(
                 summary.get(
                     "netgen_vol_export_family_order_boundary_material_checksum_identity"
+                )
+            )
+        ),
+        "sculpt_outputs_use_current_voxels_thresholds_material_blocks_and_session": (
+            _sculpt_input_output_identity_ok(
+                summary.get(
+                    "sculpt_voxel_spacing_threshold_material_block_output_session_generation_identity"
+                )
+            )
+        ),
+        "exodus_merges_use_current_tolerance_nodes_global_ids_blocks_sidesets_and_checksums": (
+            _exodus_merge_identity_ok(
+                summary.get(
+                    "exodus_merge_node_tolerance_global_id_block_sideset_checksum_generation_identity"
                 )
             )
         ),
