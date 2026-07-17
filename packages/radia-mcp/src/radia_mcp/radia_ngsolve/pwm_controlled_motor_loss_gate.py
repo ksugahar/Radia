@@ -116,6 +116,8 @@ def pwm_controlled_motor_loss_gate(
     efficiency_map_power_averaging_window_identity_ok = True
     skew_slice_torque_mechanical_phase_offset_generation_identity_ok = True
     winding_phase_belt_slot_numbering_sequence_generation_identity_ok = True
+    iron_loss_harmonic_coefficient_unit_basis_identity_ok = True
+    demag_temperature_phase_operating_point_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -139,6 +141,8 @@ def pwm_controlled_motor_loss_gate(
         efficiency_map_power_averaging_window_identity_ok = False
         skew_slice_torque_mechanical_phase_offset_generation_identity_ok = False
         winding_phase_belt_slot_numbering_sequence_generation_identity_ok = False
+        iron_loss_harmonic_coefficient_unit_basis_identity_ok = False
+        demag_temperature_phase_operating_point_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1092,6 +1096,113 @@ def pwm_controlled_motor_loss_gate(
                 == slot_map_digest
             )
 
+        harmonic_loss_value = identity_value.get(
+            "iron_loss_harmonic_frequency_coefficient_unit_basis_identity"
+        )
+        if harmonic_loss_value is not None:
+            harmonic_loss = (
+                harmonic_loss_value if isinstance(harmonic_loss_value, dict) else {}
+            )
+            loss_generation = str(harmonic_loss.get("loss_generation", ""))
+            digest = str(harmonic_loss.get("loss_basis_sha256", "")).lower()
+            try:
+                frequencies = [
+                    float(value)
+                    for value in harmonic_loss.get("harmonic_frequencies_hz", [])
+                ]
+                evaluated_frequencies = [
+                    float(value)
+                    for value in harmonic_loss.get(
+                        "evaluated_harmonic_frequencies_hz", []
+                    )
+                ]
+                coefficients = [
+                    float(value)
+                    for value in harmonic_loss.get("loss_coefficients", [])
+                ]
+                evaluated_coefficients = [
+                    float(value)
+                    for value in harmonic_loss.get(
+                        "evaluated_loss_coefficients", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                frequencies = evaluated_frequencies = []
+                coefficients = evaluated_coefficients = []
+            iron_loss_harmonic_coefficient_unit_basis_identity_ok = (
+                bool(loss_generation)
+                and harmonic_loss.get("harmonic_loss_generation") == loss_generation
+                and harmonic_loss.get("coefficient_loss_generation") == loss_generation
+                and harmonic_loss.get("frequency_unit") == "Hz"
+                and harmonic_loss.get("coefficient_frequency_unit") == "Hz"
+                and harmonic_loss.get("flux_density_unit") == "T"
+                and harmonic_loss.get("coefficient_flux_density_unit") == "T"
+                and bool(frequencies)
+                and all(
+                    math.isfinite(value) and value > 0.0 for value in frequencies
+                )
+                and all(
+                    right > left for left, right in zip(frequencies, frequencies[1:])
+                )
+                and evaluated_frequencies == frequencies
+                and len(coefficients) == len(evaluated_coefficients)
+                and bool(coefficients)
+                and all(math.isfinite(value) and value >= 0.0 for value in coefficients)
+                and evaluated_coefficients == coefficients
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    harmonic_loss.get("evaluated_loss_basis_sha256", "")
+                ).lower()
+                == digest
+            )
+
+        demag_operating_value = identity_value.get(
+            "demagnetization_temperature_current_phase_operating_point_identity"
+        )
+        if demag_operating_value is not None:
+            demag_operating = (
+                demag_operating_value
+                if isinstance(demag_operating_value, dict)
+                else {}
+            )
+            generation = str(
+                demag_operating.get("operating_point_generation", "")
+            )
+            digest = str(
+                demag_operating.get("operating_point_sha256", "")
+            ).lower()
+            try:
+                temperature = float(demag_operating.get("magnet_temperature_c"))
+                margin_temperature = float(
+                    demag_operating.get("demag_margin_temperature_c")
+                )
+                phase = float(demag_operating.get("current_phase_deg"))
+                margin_phase = float(
+                    demag_operating.get("demag_margin_current_phase_deg")
+                )
+            except (TypeError, ValueError):
+                temperature = margin_temperature = phase = margin_phase = math.nan
+            demag_temperature_phase_operating_point_identity_ok = (
+                bool(generation)
+                and demag_operating.get("temperature_operating_point_generation")
+                == generation
+                and demag_operating.get("current_phase_operating_point_generation")
+                == generation
+                and demag_operating.get("demag_margin_operating_point_generation")
+                == generation
+                and math.isfinite(temperature)
+                and margin_temperature == temperature
+                and math.isfinite(phase)
+                and margin_phase == phase
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    demag_operating.get("demag_margin_operating_point_sha256", "")
+                ).lower()
+                == digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1345,6 +1456,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "winding_phase_belt_uses_current_slot_numbering_and_sequence": (
             winding_phase_belt_slot_numbering_sequence_generation_identity_ok
+        ),
+        "iron_loss_harmonics_and_coefficients_share_frequency_flux_units": (
+            iron_loss_harmonic_coefficient_unit_basis_identity_ok
+        ),
+        "demag_margin_uses_current_temperature_and_current_phase_state": (
+            demag_temperature_phase_operating_point_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
