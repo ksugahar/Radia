@@ -1811,6 +1811,145 @@ def _floquet_pair_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _thermoelastic_frequency_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        temperature = float(identity.get("reference_temperature_k"))
+        result_temperature = float(identity.get("result_reference_temperature_k"))
+        frequencies = [float(value) for value in identity.get("frequency_grid_hz", [])]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("thermoelastic_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "temperature_thermoelastic_generation",
+                "prestress_thermoelastic_generation",
+                "linearization_thermoelastic_generation",
+                "mesh_thermoelastic_generation",
+                "dataset_thermoelastic_generation",
+                "result_thermoelastic_generation",
+            )
+        )
+        and math.isfinite(temperature)
+        and temperature > 0.0
+        and result_temperature == temperature
+        and len(frequencies) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and bool(str(identity.get("dataset_tag") or ""))
+        and identity.get("result_dataset_tag") == identity.get("dataset_tag")
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("prestress_state_sha256", "result_prestress_state_sha256"),
+                ("linearization_state_sha256", "result_linearization_state_sha256"),
+                ("thermal_mesh_sha256", "result_thermal_mesh_sha256"),
+                ("structural_mesh_sha256", "result_structural_mesh_sha256"),
+                ("frequency_response_sha256", "accepted_frequency_response_sha256"),
+            )
+        )
+    )
+
+
+def _field_circuit_power_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "field_circuit_coil_terminal_orientation_current_sign_gauge_power_balance_mesh_solution_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        terminals = [str(value) for value in identity.get("coil_terminal_ids", [])]
+        result_terminals = [
+            str(value) for value in identity.get("result_coil_terminal_ids", [])
+        ]
+        orientation = [
+            int(value) for value in identity.get("terminal_orientation_signs", [])
+        ]
+        result_orientation = [
+            int(value)
+            for value in identity.get("result_terminal_orientation_signs", [])
+        ]
+        current_signs = [int(value) for value in identity.get("branch_current_signs", [])]
+        result_current_signs = [
+            int(value) for value in identity.get("result_branch_current_signs", [])
+        ]
+        field_power = [
+            float(value) for value in identity.get("field_complex_power_va_ri", [])
+        ]
+        result_field_power = [
+            float(value)
+            for value in identity.get("result_field_complex_power_va_ri", [])
+        ]
+        circuit_power = [
+            float(value) for value in identity.get("circuit_complex_power_va_ri", [])
+        ]
+        result_circuit_power = [
+            float(value)
+            for value in identity.get("result_circuit_complex_power_va_ri", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("coupling_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "terminal_coupling_generation",
+                "orientation_coupling_generation",
+                "current_sign_coupling_generation",
+                "gauge_coupling_generation",
+                "power_coupling_generation",
+                "mesh_coupling_generation",
+                "solution_coupling_generation",
+                "result_coupling_generation",
+            )
+        )
+        and len(terminals) == 2
+        and all(terminals)
+        and len(set(terminals)) == 2
+        and result_terminals == terminals
+        and orientation == [1, -1]
+        and result_orientation == orientation
+        and current_signs == [1, -1]
+        and result_current_signs == current_signs
+        and identity.get("gauge_id") == "magnetic_vector_potential_coulomb"
+        and identity.get("result_gauge_id") == identity.get("gauge_id")
+        and bool(str(identity.get("circuit_branch_id") or ""))
+        and identity.get("result_circuit_branch_id") == identity.get("circuit_branch_id")
+        and len(field_power) == len(circuit_power) == 2
+        and all(math.isfinite(value) for value in field_power + circuit_power)
+        and result_field_power == field_power
+        and result_circuit_power == circuit_power
+        and all(
+            math.isclose(field + circuit, 0.0, rel_tol=1.0e-9, abs_tol=1.0e-12)
+            for field, circuit in zip(field_power, circuit_power)
+        )
+        and _is_sha256(str(identity.get("coupled_mesh_sha256") or ""))
+        and identity.get("result_coupled_mesh_sha256")
+        == identity.get("coupled_mesh_sha256")
+        and _is_sha256(str(identity.get("coupled_solution_sha256") or ""))
+        and identity.get("accepted_coupled_solution_sha256")
+        == identity.get("coupled_solution_sha256")
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -2242,6 +2381,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "floquet_modes_use_current_pair_orientation_phase_wavevector_normalization_and_dataset": (
             _floquet_pair_identity_ok(summary)
+        ),
+        "thermoelastic_frequency_uses_current_temperature_prestress_linearization_mesh_dataset_and_result": (
+            _thermoelastic_frequency_identity_ok(summary)
+        ),
+        "field_circuit_uses_current_terminals_orientation_sign_gauge_power_mesh_and_solution": (
+            _field_circuit_power_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality

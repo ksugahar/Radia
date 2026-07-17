@@ -1773,3 +1773,114 @@ def test_v27_public_floquet_periodic_pair_orientation_phase_wavenumber_mode_norm
     assert not result["checks"][
         "floquet_modes_use_current_pair_orientation_phase_wavevector_normalization_and_dataset"
     ]
+
+
+def _with_v28_thermoelastic_and_field_circuit_identity(summary: dict) -> dict:
+    summary = _with_v27_restart_and_floquet_identity(summary)
+    generation = "thermoelastic-frequency-151"
+    summary[
+        "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
+    ] = {
+        "thermoelastic_generation": generation,
+        "temperature_thermoelastic_generation": generation,
+        "prestress_thermoelastic_generation": generation,
+        "linearization_thermoelastic_generation": generation,
+        "mesh_thermoelastic_generation": generation,
+        "dataset_thermoelastic_generation": generation,
+        "result_thermoelastic_generation": generation,
+        "reference_temperature_k": 293.15,
+        "result_reference_temperature_k": 293.15,
+        "frequency_grid_hz": [100.0, 200.0, 500.0, 1000.0],
+        "result_frequency_grid_hz": [100.0, 200.0, 500.0, 1000.0],
+        "prestress_state_sha256": "1" * 64,
+        "result_prestress_state_sha256": "1" * 64,
+        "linearization_state_sha256": "2" * 64,
+        "result_linearization_state_sha256": "2" * 64,
+        "thermal_mesh_sha256": "3" * 64,
+        "result_thermal_mesh_sha256": "3" * 64,
+        "structural_mesh_sha256": "4" * 64,
+        "result_structural_mesh_sha256": "4" * 64,
+        "dataset_tag": "dset-thermoelastic-151",
+        "result_dataset_tag": "dset-thermoelastic-151",
+        "frequency_response_sha256": "5" * 64,
+        "accepted_frequency_response_sha256": "5" * 64,
+    }
+    generation = "field-circuit-151"
+    summary[
+        "field_circuit_coil_terminal_orientation_current_sign_gauge_power_balance_mesh_solution_generation_identity"
+    ] = {
+        "coupling_generation": generation,
+        "terminal_coupling_generation": generation,
+        "orientation_coupling_generation": generation,
+        "current_sign_coupling_generation": generation,
+        "gauge_coupling_generation": generation,
+        "power_coupling_generation": generation,
+        "mesh_coupling_generation": generation,
+        "solution_coupling_generation": generation,
+        "result_coupling_generation": generation,
+        "coil_terminal_ids": ["coil1:p", "coil1:n"],
+        "result_coil_terminal_ids": ["coil1:p", "coil1:n"],
+        "terminal_orientation_signs": [1, -1],
+        "result_terminal_orientation_signs": [1, -1],
+        "branch_current_signs": [1, -1],
+        "result_branch_current_signs": [1, -1],
+        "gauge_id": "magnetic_vector_potential_coulomb",
+        "result_gauge_id": "magnetic_vector_potential_coulomb",
+        "circuit_branch_id": "branch-coil1",
+        "result_circuit_branch_id": "branch-coil1",
+        "field_complex_power_va_ri": [12.0, 3.0],
+        "result_field_complex_power_va_ri": [12.0, 3.0],
+        "circuit_complex_power_va_ri": [-12.0, -3.0],
+        "result_circuit_complex_power_va_ri": [-12.0, -3.0],
+        "coupled_mesh_sha256": "6" * 64,
+        "result_coupled_mesh_sha256": "6" * 64,
+        "coupled_solution_sha256": "7" * 64,
+        "accepted_coupled_solution_sha256": "7" * 64,
+    }
+    return summary
+
+
+def test_v28_public_positive_thermoelastic_and_field_circuit_identity() -> None:
+    result = gate(_with_v28_thermoelastic_and_field_circuit_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v28_public_thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_mismatch() -> None:
+    summary = _with_v28_thermoelastic_and_field_circuit_identity(_summary())
+    summary[
+        "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
+    ].update(
+        {
+            "temperature_thermoelastic_generation": "thermoelastic-frequency-150",
+            "result_reference_temperature_k": 323.15,
+            "result_frequency_grid_hz": [100.0, 250.0, 1000.0],
+            "result_prestress_state_sha256": "c" * 64,
+            "result_dataset_tag": "dset-old",
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "thermoelastic_frequency_uses_current_temperature_prestress_linearization_mesh_dataset_and_result"
+    ]
+
+
+def test_v28_public_field_circuit_coil_terminal_orientation_current_sign_gauge_power_balance_mismatch() -> None:
+    summary = _with_v28_thermoelastic_and_field_circuit_identity(_summary())
+    summary[
+        "field_circuit_coil_terminal_orientation_current_sign_gauge_power_balance_mesh_solution_generation_identity"
+    ].update(
+        {
+            "terminal_coupling_generation": "field-circuit-150",
+            "result_coil_terminal_ids": ["coil1:n", "coil1:p"],
+            "result_terminal_orientation_signs": [-1, 1],
+            "result_gauge_id": "ungauged",
+            "result_circuit_complex_power_va_ri": [8.0, 1.0],
+            "accepted_coupled_solution_sha256": "2" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "field_circuit_uses_current_terminals_orientation_sign_gauge_power_mesh_and_solution"
+    ]
