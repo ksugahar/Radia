@@ -6763,9 +6763,14 @@ def SkinImpedance(s, sigma: float, mu: float = MU0):
     ``s = 1j*omega`` with ``omega > 0``.
     """
 
-    if sigma <= 0.0:
+    s = complex(s)
+    sigma = float(sigma)
+    mu = float(mu)
+    if not (np.isfinite(s.real) and np.isfinite(s.imag)):
+        raise ValueError("s must be finite")
+    if not np.isfinite(sigma) or sigma <= 0.0:
         raise ValueError("sigma must be positive")
-    if mu <= 0.0:
+    if not np.isfinite(mu) or mu <= 0.0:
         raise ValueError("mu must be positive")
     func = _radia_cpp_kernel("_SkinImpedance")
     if func is not None:
@@ -6780,11 +6785,19 @@ def SIBCAdmittanceTail(s, surface_measure: float, sigma: float, mu: float = MU0)
     surface area for 3-D bodies, matching the IGTE digest convention.
     """
 
-    if surface_measure <= 0.0:
+    s = complex(s)
+    surface_measure = float(surface_measure)
+    sigma = float(sigma)
+    mu = float(mu)
+    if not (np.isfinite(s.real) and np.isfinite(s.imag)):
+        raise ValueError("s must be finite")
+    if s == 0.0:
+        raise ValueError("SIBC admittance tail is undefined at s=0")
+    if not np.isfinite(surface_measure) or surface_measure <= 0.0:
         raise ValueError("surface_measure must be positive")
-    if sigma <= 0.0:
+    if not np.isfinite(sigma) or sigma <= 0.0:
         raise ValueError("sigma must be positive")
-    if mu <= 0.0:
+    if not np.isfinite(mu) or mu <= 0.0:
         raise ValueError("mu must be positive")
     func = _radia_cpp_kernel("_SIBCAdmittanceTail")
     if func is not None:
@@ -6801,10 +6814,19 @@ def SIBCSchurTerminationImpedance(s, k_sibc: float, d: float = 0.0):
     DC when ``d > 0``.
     """
 
-    if k_sibc <= 0.0:
+    s = complex(s)
+    k_sibc = float(k_sibc)
+    d = float(d)
+    if not (np.isfinite(s.real) and np.isfinite(s.imag)):
+        raise ValueError("s must be finite")
+    if not np.isfinite(k_sibc) or k_sibc <= 0.0:
         raise ValueError("k_sibc must be positive")
-    if d < 0.0:
+    if not np.isfinite(d) or d < 0.0:
         raise ValueError("d must be non-negative")
+    if s == 0.0:
+        if d == 0.0:
+            return 0.0j
+        raise ValueError("SIBC termination impedance has a pole at s=0 when d>0")
     func = _radia_cpp_kernel("_SIBCSchurTerminationImpedance")
     if func is not None:
         return func(s, k_sibc, d)
@@ -6814,6 +6836,19 @@ def SIBCSchurTerminationImpedance(s, k_sibc: float, d: float = 0.0):
 def SIBCSchurTerminationAdmittance(s, k_sibc: float, d: float = 0.0):
     """Return the inverse of :func:`SIBCSchurTerminationImpedance`."""
 
+    s = complex(s)
+    k_sibc = float(k_sibc)
+    d = float(d)
+    if not (np.isfinite(s.real) and np.isfinite(s.imag)):
+        raise ValueError("s must be finite")
+    if not np.isfinite(k_sibc) or k_sibc <= 0.0:
+        raise ValueError("k_sibc must be positive")
+    if not np.isfinite(d) or d < 0.0:
+        raise ValueError("d must be non-negative")
+    if s == 0.0:
+        if d > 0.0:
+            return 0.0j
+        raise ValueError("SIBC termination admittance has a pole at s=0 when d=0")
     func = _radia_cpp_kernel("_SIBCSchurTerminationAdmittance")
     if func is not None:
         return func(s, k_sibc, d)

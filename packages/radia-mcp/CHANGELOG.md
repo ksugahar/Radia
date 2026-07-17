@@ -20,13 +20,15 @@ crystallized as its own package.
 - Extended counterfactual coverage for mixed-mesh exports, nonlinear
   inductance, force/coenergy, motor loss, regularized traces, rotational eddy
   braking, PWM loss, and CAD assembly gates.
+- Documented the NGSolve BDM/RT family distinction and the topology-aware
+  HCurl/BDM hybrid VIM, EVRS/T-method, and reduced-response workflow.
 
 ## [1.4.11] - 2026-07-16
 
 - **HDiv-VIM production completeness**: documented the persistent solver,
-  RT2 nonlinear and quadrature-state hysteresis paths, independent-body
+  BDM2 nonlinear and quadrature-state hysteresis paths, independent-body
   coupling, multi-body Radia dispatch, and focused validation contracts.
-- Updated HDiv capability guidance and public API knowledge for RT1/RT2 field
+- Updated HDiv capability guidance and public API knowledge for BDM1/BDM2 field
   reconstruction, restart state, coupled permanent-magnet/iron workflows, and
   accelerator workbench order selection.
 
