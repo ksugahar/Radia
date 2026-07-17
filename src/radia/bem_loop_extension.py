@@ -77,6 +77,20 @@ References
   potential LACKS the harmonic mode (representation deficit) and is
   closed by ONE loop DOF + the Faraday constraint.  Per handle, both
   formulations need exactly one extra DOF and one extra condition.
+* M. Schoebinger and K. Hollaus, "An Effective Interface Approach for
+  Multiply Connected Electromagnetic Shields," IEEE CEFC 2026
+  conference digest, Thessaloniki, June 2026.  The FEM thin-shell
+  sibling of the same topology treatment: the shielding sheet is
+  reduced to a 2-D interface (1-D through-thickness analytic solution
+  + nonlinear mu_eff lookup) and each hole gets ONE extra cohomology
+  jump unknown (constant ``T = s_i e_z`` in the i-th hole), replacing
+  the earlier non-physical auxiliary conductivity inside the holes.
+* P. Dlotko, B. Kapidani, S. Pitassi, and R. Specogna, "Fake
+  Conductivity or Cohomology: Which to Use When Solving Eddy Current
+  Problems With h-Formulations?", IEEE Trans. Magn., vol. 55, no. 6,
+  pp. 1-4, 2019.  The case AGAINST auxiliary-conductivity workarounds
+  and FOR the cohomology treatment this module implements (via
+  ``radia.cohomology``).
 
 Part of the Radia project.
 """
