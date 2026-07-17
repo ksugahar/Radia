@@ -649,6 +649,75 @@ def _with_v21_identity(summary):
     return summary
 
 
+def _with_v22_identity(summary):
+    summary = _with_v21_identity(summary)
+    summary["simscape_file_solid_geometry_density_inertia_frame_generation_identity"] = {
+        "assembly_generation": "multibody-41",
+        "geometry_assembly_generation": "multibody-41",
+        "density_assembly_generation": "multibody-41",
+        "inertia_assembly_generation": "multibody-41",
+        "frame_assembly_generation": "multibody-41",
+        "result_assembly_generation": "multibody-41",
+        "geometry_file": "rotor.step",
+        "result_geometry_file": "rotor.step",
+        "geometry_sha256": "1" * 64,
+        "result_geometry_sha256": "1" * 64,
+        "density_kg_per_m3": 7800.0,
+        "result_density_kg_per_m3": 7800.0,
+        "center_of_mass_frame": "solid-reference",
+        "result_center_of_mass_frame": "solid-reference",
+        "center_of_mass_m": [0.0, 0.0, 0.012],
+        "result_center_of_mass_m": [0.0, 0.0, 0.012],
+        "inertia_tensor_kg_m2": [
+            [0.011, 0.0, 0.0],
+            [0.0, 0.012, 0.0],
+            [0.0, 0.0, 0.004],
+        ],
+        "result_inertia_tensor_kg_m2": [
+            [0.011, 0.0, 0.0],
+            [0.0, 0.012, 0.0],
+            [0.0, 0.0, 0.004],
+        ],
+        "file_solid_table_sha256": "2" * 64,
+        "result_file_solid_table_sha256": "2" * 64,
+    }
+    summary["multibody_xml_joint_axis_transform_unit_geometry_generation_identity"] = {
+        "assembly_generation": "xml-assembly-41",
+        "joint_axis_assembly_generation": "xml-assembly-41",
+        "rigid_transform_assembly_generation": "xml-assembly-41",
+        "length_unit_assembly_generation": "xml-assembly-41",
+        "geometry_file_assembly_generation": "xml-assembly-41",
+        "result_assembly_generation": "xml-assembly-41",
+        "joint_ids": ["revolute-1", "prismatic-1"],
+        "result_joint_ids": ["revolute-1", "prismatic-1"],
+        "joint_axes": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]],
+        "result_joint_axes": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]],
+        "rigid_transforms": [
+            [1.0, 0.0, 0.0, 0.1],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        "result_rigid_transforms": [
+            [1.0, 0.0, 0.0, 0.1],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        "length_unit": "m",
+        "result_length_unit": "m",
+        "length_scale_to_m": 1.0,
+        "result_length_scale_to_m": 1.0,
+        "geometry_files": ["stator.step", "rotor.step"],
+        "result_geometry_files": ["stator.step", "rotor.step"],
+        "geometry_digests": ["3" * 64, "4" * 64],
+        "result_geometry_digests": ["3" * 64, "4" * 64],
+        "xml_import_table_sha256": "5" * 64,
+        "result_xml_import_table_sha256": "5" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -1218,4 +1287,67 @@ def test_v21_public_cq_restart_history_weight_segment_generation_mismatch():
     assert result["status"] == "needs_attention"
     assert not result["checks"][
         "cq_restart_reuses_current_weight_history_segment_and_time_grid"
+    ]
+
+
+def test_accepts_v22_simscape_file_solid_and_multibody_xml_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v22_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v22_public_simscape_file_solid_geometry_density_inertia_frame_generation_mismatch():
+    bad = _with_v22_identity(_summary())
+    bad["simscape_file_solid_geometry_density_inertia_frame_generation_identity"].update(
+        {
+            "geometry_assembly_generation": "multibody-40",
+            "density_assembly_generation": "multibody-39",
+            "inertia_assembly_generation": "multibody-38",
+            "frame_assembly_generation": "multibody-37",
+            "result_geometry_file": "rotor-old.step",
+            "result_geometry_sha256": "a" * 64,
+            "result_density_kg_per_m3": 2700.0,
+            "result_center_of_mass_frame": "assembly-world",
+            "result_center_of_mass_m": [0.0, 0.0, 0.0],
+            "result_inertia_tensor_kg_m2": [
+                [0.004, 0.0, 0.0],
+                [0.0, 0.004, 0.0],
+                [0.0, 0.0, 0.002],
+            ],
+            "result_file_solid_table_sha256": "b" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "simscape_file_solid_uses_current_geometry_density_inertia_and_frame"
+    ]
+
+
+def test_v22_public_multibody_xml_joint_axis_rigid_transform_unit_geometry_generation_mismatch():
+    bad = _with_v22_identity(_summary())
+    bad["multibody_xml_joint_axis_transform_unit_geometry_generation_identity"].update(
+        {
+            "joint_axis_assembly_generation": "xml-assembly-40",
+            "rigid_transform_assembly_generation": "xml-assembly-39",
+            "length_unit_assembly_generation": "xml-assembly-38",
+            "geometry_file_assembly_generation": "xml-assembly-37",
+            "result_joint_ids": ["prismatic-1", "revolute-1"],
+            "result_joint_axes": [[1.0, 0.0, 0.0], [0.0, 0.0, -1.0]],
+            "result_rigid_transforms": [
+                [1.0, 0.0, 0.0, 100.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            "result_length_unit": "mm",
+            "result_length_scale_to_m": 0.001,
+            "result_geometry_files": ["rotor.step", "stator.step"],
+            "result_geometry_digests": ["c" * 64, "d" * 64],
+            "result_xml_import_table_sha256": "e" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "multibody_xml_uses_current_joint_axes_transforms_units_and_geometry"
     ]
