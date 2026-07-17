@@ -8,6 +8,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
+def _valid_sha256(value: object) -> bool:
+    digest = str(value or "").lower()
+    return len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    )
+
+
 def _relative_error(actual: float, expected: float) -> float:
     return abs(actual - expected) / max(abs(actual), abs(expected), 1.0e-300)
 
@@ -1493,6 +1500,140 @@ def _dispersive_causal_pole_fit_is_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _broadband_sparameter_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "broadband_adaptive_mesh_sparam_renormalization_port_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("sweep_generation", "")).strip()
+    modes = identity.get("port_mode_ids")
+    method = str(identity.get("frequency_interpolation", "")).strip()
+    try:
+        frequencies = [
+            float(value) for value in identity.get("frequency_samples_hz", [])
+        ]
+        result_frequencies = [
+            float(value)
+            for value in identity.get("result_frequency_samples_hz", [])
+        ]
+        impedances = [
+            [float(value) for value in row]
+            for row in identity.get("renormalization_impedance_ohm", [])
+        ]
+        result_impedances = [
+            [float(value) for value in row]
+            for row in identity.get("result_renormalization_impedance_ohm", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    mesh_digest = str(identity.get("adaptive_mesh_sha256", "")).lower()
+    table_digest = str(identity.get("sparameter_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "adaptive_mesh_sweep_generation",
+                "frequency_interpolation_sweep_generation",
+                "port_mode_sweep_generation",
+                "renormalization_sweep_generation",
+                "sparameter_result_sweep_generation",
+            )
+        )
+        and _valid_sha256(mesh_digest)
+        and str(identity.get("result_adaptive_mesh_sha256", "")).lower()
+        == mesh_digest
+        and len(frequencies) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and method in {"linear", "vector_fitting", "rational"}
+        and identity.get("result_frequency_interpolation") == method
+        and isinstance(modes, list)
+        and bool(modes)
+        and all(isinstance(value, str) and bool(value.strip()) for value in modes)
+        and len(set(modes)) == len(modes)
+        and identity.get("result_port_mode_ids") == modes
+        and len(impedances) == len(modes)
+        and all(
+            len(row) == 2
+            and all(math.isfinite(value) for value in row)
+            and row[0] > 0.0
+            for row in impedances
+        )
+        and result_impedances == impedances
+        and _valid_sha256(table_digest)
+        and str(identity.get("result_sparameter_table_sha256", "")).lower()
+        == table_digest
+    )
+
+
+def _transient_monitor_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "transient_monitor_time_origin_excitation_waveform_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("transient_generation", "")).strip()
+    frame = str(identity.get("monitor_coordinate_frame", "")).strip()
+    monitor_ids = identity.get("monitor_ids")
+    try:
+        time_origin = float(identity.get("time_origin_s"))
+        result_time_origin = float(identity.get("result_time_origin_s"))
+        times = [float(value) for value in identity.get("time_samples_s", [])]
+        result_times = [
+            float(value) for value in identity.get("result_time_samples_s", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    waveform_digest = str(identity.get("excitation_waveform_sha256", "")).lower()
+    mesh_digest = str(identity.get("mesh_sha256", "")).lower()
+    table_digest = str(identity.get("monitor_field_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "time_origin_transient_generation",
+                "excitation_waveform_transient_generation",
+                "monitor_frame_transient_generation",
+                "mesh_transient_generation",
+                "field_result_transient_generation",
+            )
+        )
+        and math.isfinite(time_origin)
+        and result_time_origin == time_origin
+        and _valid_sha256(waveform_digest)
+        and str(identity.get("result_excitation_waveform_sha256", "")).lower()
+        == waveform_digest
+        and frame in {"global_xyz", "port_local"}
+        and identity.get("result_monitor_coordinate_frame") == frame
+        and isinstance(monitor_ids, list)
+        and bool(monitor_ids)
+        and all(
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
+            for value in monitor_ids
+        )
+        and len(set(monitor_ids)) == len(monitor_ids)
+        and identity.get("result_monitor_ids") == monitor_ids
+        and _valid_sha256(mesh_digest)
+        and str(identity.get("result_mesh_sha256", "")).lower() == mesh_digest
+        and len(times) >= 3
+        and times[0] == time_origin
+        and all(math.isfinite(value) for value in times)
+        and all(left < right for left, right in zip(times, times[1:]))
+        and result_times == times
+        and _valid_sha256(table_digest)
+        and str(identity.get("result_monitor_field_table_sha256", "")).lower()
+        == table_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1740,6 +1881,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "dispersive_fields_use_current_causal_poles_temperature_and_units": (
                 _dispersive_causal_pole_fit_is_current(raw)
+            ),
+            "broadband_sparameters_use_current_mesh_interpolation_modes_and_impedance": (
+                _broadband_sparameter_inputs_are_current(raw)
+            ),
+            "transient_monitors_use_current_time_waveform_frame_and_mesh": (
+                _transient_monitor_inputs_are_current(raw)
             ),
         }
         row = {
