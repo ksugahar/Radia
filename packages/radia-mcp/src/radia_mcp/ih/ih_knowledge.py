@@ -1712,6 +1712,21 @@ coil-current redistribution), vs 17.0-17.7 kW / 46.1 kA/m references;
 the coupled solve dropped 439 -> 228 s (the per-iteration path
 integration was its dominant cost; the loop DOF itself adds ~8 s).
 
+**Weak-vs-strong method choice: WEAK FIRST (Sugahara, 2026-07-17).**
+Run the weak path as the production route -- on Takahashi it is ~10x
+faster on the workpiece stage (~25 s vs 228 s coupled; the coil solve
+is common) and agrees with strong to ~1% on P_wp / H_t.  The weak
+run's OWN output contains the escalation criterion: ``|delta_L_nH| /
+L_coil_nH`` measures the coil back-reaction (Takahashi: 1.4% -> the
+coil-current redistribution is percent-level and strong adds nothing
+but wall-clock).  Escalate to ``--coupling-mode strong`` only when
+that ratio is large (close-coupled / high-mu / small-gap workpiece)
+or when the self-consistent L_total including the workpiece
+magnetic-energy term (the term weak's Telegen form drops) is itself
+the target quantity.  Both routes now carry the identical genus-1
+correction, so this is purely a cost/physics-regime choice, not an
+accuracy fallback.
+
 **psi-Poisson incident -- the P1 weak route, basis-determined
 (2026-07-17).**  Replaces the axis-ray + horizontal-ray path
 integration of phi_inc with a surface-Poisson (Laplace-Beltrami)
