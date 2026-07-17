@@ -25,9 +25,38 @@ from __future__ import annotations
 from collections import Counter
 import math
 
-from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix,
-                       Keep, Line, Mode, Plane, Pos, Rectangle, RectangleRounded, Spline, chamfer,
-                       extrude, fillet, loft, make_face, offset, revolve, split, sweep)
+try:
+    from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder,
+                           Helix, Keep, Line, Mode, Plane, Pos, Rectangle, RectangleRounded, Spline,
+                           chamfer, extrude, fillet, loft, make_face, offset, revolve, split, sweep)
+except ImportError as exc:
+    _BUILD123D_IMPORT_ERROR = exc
+
+    def _missing_build123d(*_args, **_kwargs):
+        raise ImportError(
+            "build123d geometry helpers require the optional 'build123d' dependency"
+        ) from _BUILD123D_IMPORT_ERROR
+
+    class _MissingBuild123dType:
+        def __new__(cls, *_args, **_kwargs):
+            _missing_build123d()
+
+    class _MissingBuild123dNamespace:
+        def __getattr__(self, _name):
+            _missing_build123d()
+
+    Axis = Keep = Mode = Plane = _MissingBuild123dNamespace()
+    Compound = _MissingBuild123dType
+    Box = BuildLine = BuildSketch = CenterArc = Circle = Cylinder = Helix = _missing_build123d
+    Line = Pos = Rectangle = RectangleRounded = Spline = _missing_build123d
+    chamfer = extrude = fillet = loft = make_face = offset = revolve = split = sweep = _missing_build123d
+else:
+    _BUILD123D_IMPORT_ERROR = None
+
+
+def _require_build123d():
+    if _BUILD123D_IMPORT_ERROR is not None:
+        _missing_build123d()
 
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
            "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
@@ -136,12 +165,15 @@ def racetrack_coil(length, width, band, h, corner_radius, label="coil"):
     return coil
 
 
-def polar_array(part, count, total_angle=360.0, axis=Axis.Z, label=None, label_fmt="{base}_{k:02d}"):
+def polar_array(part, count, total_angle=360.0, axis=None, label=None, label_fmt="{base}_{k:02d}"):
     r"""``count`` rotated copies of ``part`` about ``axis``, returned as a labelled
     :class:`~build123d.Compound`.  A full ``360`` deg ring spaces the copies by ``360/count``; a
     partial fan (``total_angle < 360``) spaces them by ``total_angle/(count-1)`` so the first and last
     copies sit at the fan ends.  The "rotate with copies" / segmented-array verb.
     """
+    if axis is None:
+        _require_build123d()
+        axis = Axis.Z
     if count < 1:
         raise ValueError("count must be >= 1")
     base = label or (part.label or "part")
@@ -173,11 +205,14 @@ def linear_array(part, count, spacing, direction=(1, 0, 0), label=None, label_fm
     return Compound(children=children, label=base + "_array")
 
 
-def mirrored(part, about=Plane.XZ, keep_original=True, label=None):
+def mirrored(part, about=None, keep_original=True, label=None):
     r"""The mirror image of ``part`` across plane ``about`` (default ``Plane.XZ``); with
     ``keep_original`` (default) returns a :class:`~build123d.Compound` of the original + its mirror --
     the symmetry-completion verb (build a quarter/half model, then mirror to whole).
     """
+    _require_build123d()
+    if about is None:
+        about = Plane.XZ
     from build123d import mirror as _mirror
     base = label or (part.label or "part")
     mir = _mirror(part, about=about)
@@ -6977,9 +7012,12 @@ def swept(profile, path, label="swept"):
     return s
 
 
-def revolved(profile, axis=Axis.Y, angle=360.0, label="revolved"):
+def revolved(profile, axis=None, angle=360.0, label="revolved"):
     r"""**Revolve** (spin) a 2D ``profile`` about ``axis`` by ``angle`` degrees -- bodies of revolution
     (shafts, vases, toroidal cores, pulleys).  Returns a labelled :class:`~build123d.Solid`."""
+    if axis is None:
+        _require_build123d()
+        axis = Axis.Y
     s = revolve(profile, axis, angle).solid()
     s.label = label
     return s
@@ -7184,10 +7222,13 @@ def common(*parts, label="common"):
     return r
 
 
-def slice_solid(solid, plane=Plane.XY, keep="top", label="slice"):
+def slice_solid(solid, plane=None, keep="top", label="slice"):
     r"""**Slice** a solid by a ``plane`` and keep one side -- ``keep`` is ``"top"`` (the +normal side),
     ``"bottom"`` (the -normal side) or ``"both"`` (returns both halves).  The plane-cut / split verb
     (half models on a symmetry plane, sectioning)."""
+    if plane is None:
+        _require_build123d()
+        plane = Plane.XY
     keepmap = {"top": Keep.TOP, "bottom": Keep.BOTTOM, "both": Keep.BOTH}
     if keep not in keepmap:
         raise ValueError("keep must be 'top', 'bottom' or 'both'")
