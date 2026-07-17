@@ -53,6 +53,8 @@ def force_coenergy_displacement_gate(
     lorentz_current_density_orientation_identity_ok = True
     circuit_current_phasor_convention_identity_ok = True
     incremental_permeability_operating_point_identity_ok = True
+    weighted_stress_air_mask_nodal_weight_identity_ok = True
+    sliding_band_periodic_angle_rotor_position_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -76,6 +78,8 @@ def force_coenergy_displacement_gate(
         lorentz_current_density_orientation_identity_ok = False
         circuit_current_phasor_convention_identity_ok = False
         incremental_permeability_operating_point_identity_ok = False
+        weighted_stress_air_mask_nodal_weight_identity_ok = False
+        sliding_band_periodic_angle_rotor_position_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -1019,6 +1023,121 @@ def force_coenergy_displacement_gate(
                 == operating_digest
             )
 
+        air_mask_weight = artifact_identity.get(
+            "weighted_stress_air_mask_nodal_weight_mesh_generation_identity"
+        )
+        if air_mask_weight is not None:
+            air_mask_weight = air_mask_weight if isinstance(air_mask_weight, dict) else {}
+            mesh_generation = str(
+                air_mask_weight.get("field_mesh_generation", "")
+            ).strip()
+            mask_digest = str(air_mask_weight.get("air_mask_sha256", "")).lower()
+            weight_digest = str(
+                air_mask_weight.get("nodal_weight_sha256", "")
+            ).lower()
+            try:
+                air_regions = [
+                    int(value) for value in air_mask_weight.get("air_region_ids", [])
+                ]
+                mask_regions = [
+                    int(value)
+                    for value in air_mask_weight.get("mask_air_region_ids", [])
+                ]
+                weight_nodes = [
+                    int(value)
+                    for value in air_mask_weight.get("nodal_weight_node_ids", [])
+                ]
+                force_nodes = [
+                    int(value)
+                    for value in air_mask_weight.get("force_weight_node_ids", [])
+                ]
+            except (TypeError, ValueError):
+                air_regions = mask_regions = weight_nodes = force_nodes = []
+            weighted_stress_air_mask_nodal_weight_identity_ok = (
+                bool(mesh_generation)
+                and air_mask_weight.get("air_mask_mesh_generation")
+                == mesh_generation
+                and air_mask_weight.get("nodal_weight_mesh_generation")
+                == mesh_generation
+                and air_mask_weight.get("force_integral_mesh_generation")
+                == mesh_generation
+                and bool(air_regions)
+                and len(set(air_regions)) == len(air_regions)
+                and mask_regions == air_regions
+                and bool(weight_nodes)
+                and len(set(weight_nodes)) == len(weight_nodes)
+                and force_nodes == weight_nodes
+                and len(mask_digest) == 64
+                and all(character in "0123456789abcdef" for character in mask_digest)
+                and str(air_mask_weight.get("force_air_mask_sha256", "")).lower()
+                == mask_digest
+                and len(weight_digest) == 64
+                and all(character in "0123456789abcdef" for character in weight_digest)
+                and str(
+                    air_mask_weight.get("force_nodal_weight_sha256", "")
+                ).lower()
+                == weight_digest
+            )
+
+        sliding_band = artifact_identity.get(
+            "sliding_band_periodic_angle_rotor_position_generation_identity"
+        )
+        if sliding_band is not None:
+            sliding_band = sliding_band if isinstance(sliding_band, dict) else {}
+            rotor_generation = str(
+                sliding_band.get("rotor_position_generation", "")
+            ).strip()
+            angle_generation = str(
+                sliding_band.get("periodic_angle_generation", "")
+            ).strip()
+            map_digest = str(
+                sliding_band.get("sliding_band_map_sha256", "")
+            ).lower()
+            try:
+                rotor_angle = float(sliding_band.get("rotor_angle_deg"))
+                mapped_rotor_angle = float(
+                    sliding_band.get("sliding_band_rotor_angle_deg")
+                )
+                angle_pairs = [
+                    [float(value) for value in row]
+                    for row in sliding_band.get("periodic_angle_pairs_deg", [])
+                ]
+                torque_pairs = [
+                    [float(value) for value in row]
+                    for row in sliding_band.get(
+                        "torque_periodic_angle_pairs_deg", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                rotor_angle = mapped_rotor_angle = math.nan
+                angle_pairs = torque_pairs = []
+            sliding_band_periodic_angle_rotor_position_identity_ok = (
+                bool(rotor_generation)
+                and sliding_band.get("sliding_band_rotor_position_generation")
+                == rotor_generation
+                and sliding_band.get("torque_rotor_position_generation")
+                == rotor_generation
+                and bool(angle_generation)
+                and sliding_band.get("sliding_band_periodic_angle_generation")
+                == angle_generation
+                and sliding_band.get("torque_periodic_angle_generation")
+                == angle_generation
+                and math.isfinite(rotor_angle)
+                and mapped_rotor_angle == rotor_angle
+                and bool(angle_pairs)
+                and all(
+                    len(row) == 2 and all(math.isfinite(value) for value in row)
+                    for row in angle_pairs
+                )
+                and torque_pairs == angle_pairs
+                and len(map_digest) == 64
+                and all(character in "0123456789abcdef" for character in map_digest)
+                and str(
+                    sliding_band.get("torque_sliding_band_map_sha256", "")
+                ).lower()
+                == map_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -1111,6 +1230,12 @@ def force_coenergy_displacement_gate(
         ),
         "incremental_permeability_and_force_use_current_bh_operating_point": (
             incremental_permeability_operating_point_identity_ok
+        ),
+        "weighted_stress_air_mask_and_nodal_weights_use_current_mesh": (
+            weighted_stress_air_mask_nodal_weight_identity_ok
+        ),
+        "sliding_band_angles_and_torque_use_current_rotor_position": (
+            sliding_band_periodic_angle_rotor_position_identity_ok
         ),
     }
     return {
