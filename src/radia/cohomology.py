@@ -49,7 +49,8 @@ import scipy.linalg as sla
 import ngsolve as ng
 
 __all__ = ["chain_complex", "betti_numbers", "cohomology", "cohomology_basis", "circulation",
-           "surface_chain_complex", "surface_cohomology", "surface_homology_loops"]
+           "surface_chain_complex", "surface_cohomology", "surface_fundamental_cycles",
+           "surface_homology_loops"]
 
 
 def _assemble_d0_d1(V, EI, FI, eidx):
