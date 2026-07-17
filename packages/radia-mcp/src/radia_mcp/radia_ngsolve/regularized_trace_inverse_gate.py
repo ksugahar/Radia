@@ -196,6 +196,12 @@ def regularized_trace_inverse_path_gate(
     cq_causality_pair_identity_ok = (
         _optional_cq_causality_conjugate_contour_pair_is_aligned(summary)
     )
+    p1_boundary_row_identity_ok = (
+        _optional_p1_boundary_mass_trace_row_node_identity_is_aligned(summary)
+    )
+    cq_restart_identity_ok = (
+        _optional_cq_restart_history_weight_segment_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -303,6 +309,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_inverse_transform_uses_current_causal_conjugate_contour_pairs": (
             cq_causality_pair_identity_ok
+        ),
+        "p1_boundary_mass_and_trace_rows_match_current_node_and_mesh_generation": (
+            p1_boundary_row_identity_ok
+        ),
+        "cq_restart_reuses_current_weight_history_segment_and_time_grid": (
+            cq_restart_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1423,6 +1435,135 @@ def _optional_cq_causality_conjugate_contour_pair_is_aligned(
         and _is_sha256(pair_digest)
         and str(value.get("inverse_transform_pair_table_sha256", "")).lower()
         == pair_digest
+    )
+
+
+def _optional_p1_boundary_mass_trace_row_node_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "p1_boundary_mass_trace_row_node_mesh_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        boundary_nodes = _positive_integer_sequence(value, "boundary_node_ids")
+        mass_nodes = _positive_integer_sequence(value, "mass_row_node_ids")
+        trace_nodes = _positive_integer_sequence(value, "trace_row_node_ids")
+        mass_rows = _positive_integer_sequence(value, "boundary_mass_row_ids")
+        assembled_mass_rows = _positive_integer_sequence(
+            value, "assembled_boundary_mass_row_ids"
+        )
+        trace_rows = _positive_integer_sequence(value, "trace_row_ids")
+        assembled_trace_rows = _positive_integer_sequence(
+            value, "assembled_trace_row_ids"
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    volume_generation = str(value.get("volume_mesh_generation", "")).strip()
+    boundary_generation = str(value.get("boundary_mesh_generation", "")).strip()
+    mass_digest = str(value.get("boundary_mass_matrix_sha256", "")).lower()
+    trace_digest = str(value.get("p1_trace_matrix_sha256", "")).lower()
+    return (
+        bool(volume_generation)
+        and value.get("boundary_volume_mesh_generation") == volume_generation
+        and bool(boundary_generation)
+        and all(
+            value.get(key) == boundary_generation
+            for key in (
+                "mass_boundary_mesh_generation",
+                "trace_boundary_mesh_generation",
+                "node_map_boundary_mesh_generation",
+            )
+        )
+        and bool(boundary_nodes)
+        and len(set(boundary_nodes)) == len(boundary_nodes)
+        and mass_nodes == boundary_nodes
+        and trace_nodes == boundary_nodes
+        and len(mass_rows) == len(boundary_nodes)
+        and len(set(mass_rows)) == len(mass_rows)
+        and assembled_mass_rows == mass_rows
+        and trace_rows == mass_rows
+        and assembled_trace_rows == trace_rows
+        and _is_sha256(mass_digest)
+        and str(value.get("assembled_boundary_mass_matrix_sha256", "")).lower()
+        == mass_digest
+        and _is_sha256(trace_digest)
+        and str(value.get("assembled_p1_trace_matrix_sha256", "")).lower()
+        == trace_digest
+    )
+
+
+def _optional_cq_restart_history_weight_segment_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_restart_history_weight_segment_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        weights = tuple(
+            tuple(float(component) for component in row)
+            for row in value["convolution_weights_re_im"]
+        )
+        restart_weights = tuple(
+            tuple(float(component) for component in row)
+            for row in value["restart_convolution_weights_re_im"]
+        )
+        history = tuple(
+            str(item).lower() for item in value["history_vector_sha256"]
+        )
+        restart_history = tuple(
+            str(item).lower()
+            for item in value["restart_history_vector_sha256"]
+        )
+        segment_offset = _integer(value, "segment_offset")
+        restart_segment_offset = _integer(value, "restart_segment_offset")
+        time_grid = tuple(float(item) for item in value["time_grid_s"])
+        restart_time_grid = tuple(
+            float(item) for item in value["restart_time_grid_s"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    cq_generation = str(value.get("cq_generation", "")).strip()
+    checkpoint_generation = str(value.get("checkpoint_generation", "")).strip()
+    table_digest = str(value.get("cq_restart_table_sha256", "")).lower()
+    return (
+        bool(cq_generation)
+        and value.get("restart_cq_generation") == cq_generation
+        and bool(checkpoint_generation)
+        and all(
+            value.get(key) == checkpoint_generation
+            for key in (
+                "weight_checkpoint_generation",
+                "history_checkpoint_generation",
+                "segment_checkpoint_generation",
+                "time_grid_checkpoint_generation",
+            )
+        )
+        and bool(weights)
+        and all(
+            len(row) == 2 and all(math.isfinite(component) for component in row)
+            for row in weights
+        )
+        and restart_weights == weights
+        and len(history) == len(weights)
+        and all(_is_sha256(item) for item in history)
+        and restart_history == history
+        and segment_offset >= 0
+        and restart_segment_offset == segment_offset
+        and len(time_grid) == len(weights) + 1
+        and all(math.isfinite(item) and item >= 0.0 for item in time_grid)
+        and all(right > left for left, right in zip(time_grid, time_grid[1:]))
+        and restart_time_grid == time_grid
+        and _is_sha256(table_digest)
+        and str(value.get("assembled_cq_restart_table_sha256", "")).lower()
+        == table_digest
     )
 
 

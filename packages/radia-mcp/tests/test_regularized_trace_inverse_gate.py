@@ -606,6 +606,49 @@ def _with_v20_identity(summary):
     return summary
 
 
+def _with_v21_identity(summary):
+    summary = _with_v20_identity(summary)
+    summary["p1_boundary_mass_trace_row_node_mesh_generation_identity"] = {
+        "volume_mesh_generation": "vol-mesh-31",
+        "boundary_volume_mesh_generation": "vol-mesh-31",
+        "boundary_mesh_generation": "boundary-mesh-31",
+        "mass_boundary_mesh_generation": "boundary-mesh-31",
+        "trace_boundary_mesh_generation": "boundary-mesh-31",
+        "node_map_boundary_mesh_generation": "boundary-mesh-31",
+        "boundary_node_ids": [11, 12, 13, 14],
+        "mass_row_node_ids": [11, 12, 13, 14],
+        "trace_row_node_ids": [11, 12, 13, 14],
+        "boundary_mass_row_ids": [1, 2, 3, 4],
+        "assembled_boundary_mass_row_ids": [1, 2, 3, 4],
+        "trace_row_ids": [1, 2, 3, 4],
+        "assembled_trace_row_ids": [1, 2, 3, 4],
+        "boundary_mass_matrix_sha256": "1" * 64,
+        "assembled_boundary_mass_matrix_sha256": "1" * 64,
+        "p1_trace_matrix_sha256": "2" * 64,
+        "assembled_p1_trace_matrix_sha256": "2" * 64,
+    }
+    summary["cq_restart_history_weight_segment_generation_identity"] = {
+        "cq_generation": "cq-31",
+        "restart_cq_generation": "cq-31",
+        "checkpoint_generation": "cq-checkpoint-31",
+        "weight_checkpoint_generation": "cq-checkpoint-31",
+        "history_checkpoint_generation": "cq-checkpoint-31",
+        "segment_checkpoint_generation": "cq-checkpoint-31",
+        "time_grid_checkpoint_generation": "cq-checkpoint-31",
+        "convolution_weights_re_im": [[1.0, 0.0], [0.5, -0.1], [0.25, -0.05]],
+        "restart_convolution_weights_re_im": [[1.0, 0.0], [0.5, -0.1], [0.25, -0.05]],
+        "history_vector_sha256": ["3" * 64, "4" * 64, "5" * 64],
+        "restart_history_vector_sha256": ["3" * 64, "4" * 64, "5" * 64],
+        "segment_offset": 128,
+        "restart_segment_offset": 128,
+        "time_grid_s": [0.0, 1.0e-5, 2.0e-5, 3.0e-5],
+        "restart_time_grid_s": [0.0, 1.0e-5, 2.0e-5, 3.0e-5],
+        "cq_restart_table_sha256": "6" * 64,
+        "assembled_cq_restart_table_sha256": "6" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -1126,4 +1169,53 @@ def test_v20_public_cq_causality_conjugate_symmetry_contour_pair_generation_mism
     assert result["status"] == "needs_attention"
     assert not result["checks"][
         "cq_inverse_transform_uses_current_causal_conjugate_contour_pairs"
+    ]
+
+
+def test_accepts_v21_p1_boundary_rows_and_cq_restart_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v21_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v21_public_p1_boundary_mass_trace_row_node_mesh_generation_mismatch():
+    bad = _with_v21_identity(_summary())
+    bad["p1_boundary_mass_trace_row_node_mesh_generation_identity"].update(
+        {
+            "mass_boundary_mesh_generation": "boundary-mesh-30",
+            "trace_boundary_mesh_generation": "boundary-mesh-29",
+            "node_map_boundary_mesh_generation": "boundary-mesh-28",
+            "mass_row_node_ids": [14, 13, 12, 11],
+            "trace_row_node_ids": [12, 11, 14, 13],
+            "assembled_boundary_mass_row_ids": [4, 3, 2, 1],
+            "assembled_trace_row_ids": [2, 1, 4, 3],
+            "assembled_boundary_mass_matrix_sha256": "a" * 64,
+            "assembled_p1_trace_matrix_sha256": "b" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "p1_boundary_mass_and_trace_rows_match_current_node_and_mesh_generation"
+    ]
+
+
+def test_v21_public_cq_restart_history_weight_segment_generation_mismatch():
+    bad = _with_v21_identity(_summary())
+    bad["cq_restart_history_weight_segment_generation_identity"].update(
+        {
+            "weight_checkpoint_generation": "cq-checkpoint-30",
+            "history_checkpoint_generation": "cq-checkpoint-29",
+            "segment_checkpoint_generation": "cq-checkpoint-28",
+            "time_grid_checkpoint_generation": "cq-checkpoint-27",
+            "restart_convolution_weights_re_im": [[1.0, 0.0], [0.25, -0.05], [0.5, -0.1]],
+            "restart_history_vector_sha256": ["5" * 64, "4" * 64, "3" * 64],
+            "restart_segment_offset": 64,
+            "restart_time_grid_s": [0.0, 2.0e-5, 1.0e-5, 3.0e-5],
+            "assembled_cq_restart_table_sha256": "c" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "cq_restart_reuses_current_weight_history_segment_and_time_grid"
     ]
