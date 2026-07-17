@@ -151,7 +151,7 @@ class IHDesignSpec:
     # genus-1 solve omits the required cohomology mode, and the incident potential
     # is basis-determined in calc_inductance (P1 -> surface-Poisson),
     # not a panel knob.
-    wp_loop_dof: str = "auto"
+    wp_loop_dof: str | bool = "auto"
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
@@ -193,6 +193,10 @@ class IHDesignSpec:
     vtu_prefix: str = ""
 
     def __post_init__(self) -> None:
+        # Preserve the pre-dropdown constructor contract without reviving the
+        # removed unextended genus-1 route.
+        if isinstance(self.wp_loop_dof, bool):
+            self.wp_loop_dof = "on" if self.wp_loop_dof else "auto"
         if self.wp_loop_dof not in {"auto", "on"}:
             raise ValueError("wp_loop_dof must be auto or on")
 
@@ -234,9 +238,13 @@ class IHDesignSpec:
                 "wp_material", "wp_sigma", "mu_r", "half_thickness",
                 "impedance_model", "fes_order",
             })
-            if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
+            if (
+                self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM)
+                and self.impedance_model_cli() == "sibc"
+                and self.fes_order == 1
+            ):
                 # calc_inductance weak path only (strong / FEM-Kelvin /
-                # FEM-full do not take this flag).
+                # FEM-full do not take this flag; ESIM and P2 cannot apply it).
                 fields.add("wp_loop_dof")
             if self.impedance_model_cli() == "esim":
                 fields.update({
