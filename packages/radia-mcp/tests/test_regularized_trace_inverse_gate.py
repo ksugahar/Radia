@@ -521,6 +521,46 @@ def _with_v18_identity(summary):
     return summary
 
 
+def _with_v19_identity(summary):
+    summary = _with_v18_identity(summary)
+    contour_nodes = [[0.95, 0.0], [0.0, 0.95], [-0.95, 0.0], [0.0, -0.95]]
+    summary["cq_laplace_contour_fft_scaling_timestep_generation_identity"] = {
+        "cq_generation": "cq-21",
+        "laplace_contour_cq_generation": "cq-21",
+        "fft_scaling_cq_generation": "cq-21",
+        "timestep_cq_generation": "cq-21",
+        "inverse_transform_cq_generation": "cq-21",
+        "sample_count": 512,
+        "fft_sample_count": 512,
+        "time_step_s": 1.0e-5,
+        "inverse_transform_time_step_s": 1.0e-5,
+        "fft_scaling": 1.0 / 512.0,
+        "inverse_transform_fft_scaling": 1.0 / 512.0,
+        "laplace_contour_nodes_re_im": contour_nodes,
+        "inverse_transform_laplace_contour_nodes_re_im": contour_nodes,
+        "contour_fft_timestep_sha256": "a" * 64,
+        "inverse_transform_contour_fft_timestep_sha256": "a" * 64,
+    }
+    summary["hmatrix_aca_tolerance_norm_block_rank_generation_identity"] = {
+        "block_generation": "hmatrix-block-21",
+        "aca_tolerance_block_generation": "hmatrix-block-21",
+        "norm_estimate_block_generation": "hmatrix-block-21",
+        "retained_rank_block_generation": "hmatrix-block-21",
+        "assembled_block_generation": "hmatrix-block-21",
+        "block_ids": [101, 102, 103],
+        "aca_block_ids": [101, 102, 103],
+        "aca_tolerances": [1.0e-6, 1.0e-6, 1.0e-7],
+        "applied_aca_tolerances": [1.0e-6, 1.0e-6, 1.0e-7],
+        "block_norm_estimates": [12.0, 8.0, 3.0],
+        "aca_block_norm_estimates": [12.0, 8.0, 3.0],
+        "retained_ranks": [8, 6, 4],
+        "assembled_block_ranks": [8, 6, 4],
+        "aca_block_table_sha256": "b" * 64,
+        "assembled_aca_block_table_sha256": "b" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -938,6 +978,61 @@ def test_v18_public_hmatrix_block_cluster_bounding_box_mesh_scale_generation_mis
     assert (
         result["checks"][
             "hmatrix_block_clusters_use_current_mesh_scale_bounding_boxes"
+        ]
+        is False
+    )
+
+
+def test_accepts_v19_cq_contour_fft_and_hmatrix_aca_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v19_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v19_public_cq_laplace_contour_fft_scaling_timestep_generation_mismatch():
+    bad = _with_v19_identity(_summary())
+    bad["cq_laplace_contour_fft_scaling_timestep_generation_identity"].update(
+        {
+            "fft_scaling_cq_generation": "cq-20",
+            "timestep_cq_generation": "cq-20",
+            "inverse_transform_time_step_s": 2.0e-5,
+            "inverse_transform_fft_scaling": 1.0 / 256.0,
+            "inverse_transform_laplace_contour_nodes_re_im": [
+                [0.9, 0.0],
+                [0.0, 0.9],
+                [-0.9, 0.0],
+                [0.0, -0.9],
+            ],
+            "inverse_transform_contour_fft_timestep_sha256": "9" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cq_inverse_transform_uses_current_contour_fft_scaling_and_timestep"
+        ]
+        is False
+    )
+
+
+def test_v19_public_hmatrix_aca_tolerance_norm_block_rank_generation_mismatch():
+    bad = _with_v19_identity(_summary())
+    bad["hmatrix_aca_tolerance_norm_block_rank_generation_identity"].update(
+        {
+            "aca_tolerance_block_generation": "hmatrix-block-20",
+            "norm_estimate_block_generation": "hmatrix-block-20",
+            "assembled_block_generation": "hmatrix-block-20",
+            "applied_aca_tolerances": [1.0e-3, 1.0e-3, 1.0e-3],
+            "aca_block_norm_estimates": [3.0, 8.0, 12.0],
+            "assembled_block_ranks": [4, 6, 8],
+            "assembled_aca_block_table_sha256": "9" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hmatrix_aca_uses_current_block_tolerance_norm_and_rank"
         ]
         is False
     )
