@@ -6,10 +6,10 @@ The standard radia-motor workflow is an always-on primary comparison:
    product-local handoff contract.
 2. Verify the current supported finite-element rotating-machine path with the
    ``ngsolve_age`` lane contract.
-3. Verify the ``hdiv_vim_reduced_fem`` lane with a solver-ready artifact.  The
-   HDiv-VIM rotor source-field plus fixed-stator reduced-FEM coupling remains
-   experimental, but a motor result is not accepted for MCP learning unless this
-   lane is checked alongside ``ngsolve_age``.
+3. Verify the ``hdiv_mmm_hcurl_eddy_bubble`` lane with a solver-ready artifact.
+   HDiv-MMM material response and the HCurl eddy-bubble subsystem are one mixed
+   lane; a motor result is not accepted for MCP learning unless this lane is
+   checked alongside ``ngsolve_age`` on the same model identity.
 Only the source deck family, public MCP call names, lane IDs, and reduced
 engineering lessons belong in public radia-mcp.  Product solver outputs,
 private paths, and raw commercial benchmark values stay in the private lane.
@@ -23,13 +23,19 @@ from typing import Any
 
 from .age_quality_knowledge import route_age_validation_plan
 from .validation_lanes_knowledge import (
+    LEGACY_LANE_ALIASES,
     lane_template,
     validate_motor_validation_artifact,
 )
 
 
-PRIMARY_COMPARISON_LANES = ("ngsolve_age", "hdiv_vim_reduced_fem")
+PRIMARY_COMPARISON_LANES = ("ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble")
 OPTIONAL_AUXILIARY_LANES: tuple[str, ...] = ()
+IDENTITY_DIGEST_FIELDS = (
+    "geometry_sha256",
+    "material_sha256",
+    "excitation_sha256",
+)
 
 
 def validate_motor_source_deck_review_packet(packet: Mapping[str, Any] | str) -> dict[str, Any]:
@@ -47,6 +53,8 @@ def validate_motor_source_deck_review_packet(packet: Mapping[str, Any] | str) ->
         "solver_version",
         "run_date_utc",
         "timing_breakdown_s",
+        "shared_mesh_material_identity",
+        "solver_ready_artifact",
     }
     checks = {
         "schema_matches": data.get("schema_version") == "motor-source-deck-review-packet/v1",
@@ -159,8 +167,8 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
             "optional_auxiliary_lanes": list(OPTIONAL_AUXILIARY_LANES),
             "rule": (
                 "Every radia-motor validation that claims MCP learning must "
-                "compare the NGSolve+AGE lane with the HDiv-VIM/reduced-FEM "
-                "lane."
+                "compare the NGSolve+AGE lane with the coupled HDiv-MMM + "
+                "HCurl eddy-bubble lane on the same model identity."
             ),
         },
         "source_mcp_seed": {
@@ -185,17 +193,16 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
                 "pytest_targets": age_plan["pytest_targets"],
                 "artifact_template": lane_template("ngsolve_age"),
             },
-            "hdiv_vim_reduced_fem": {
-                "role": "mandatory experimental reduced integral / VIM-to-reduced-FEM comparison lane",
-                "support_status": "experimental_rfc",
+            "hdiv_mmm_hcurl_eddy_bubble": {
+                "role": "mandatory HDiv-MMM material / HCurl eddy-bubble mixed-system lane",
+                "support_status": "required_validation_path",
                 "observable_candidates": list(seed["hdiv_observables"]),
-                "artifact_template": lane_template("hdiv_vim_reduced_fem"),
+                "artifact_template": lane_template("hdiv_mmm_hcurl_eddy_bubble"),
                 "minimum_gate": (
                     "For radia-motor learning, this lane must include a "
                     "solver-ready artifact with a non-empty verification list. "
-                    "The full coupling is still experimental until the rotor "
-                    "VIM source operator, stator reduced basis, and interface "
-                    "operator are regression-tested."
+                    "HDiv-MMM, HCurl eddy-bubble, and their coupling contracts "
+                    "must be non-empty, and model identity must match AGE."
                 ),
             },
         },
@@ -205,16 +212,16 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
             "required_artifacts": [
                 "source_mcp_seed",
                 "ngsolve_age artifact",
-                "hdiv_vim_reduced_fem solver-ready artifact",
+                "hdiv_mmm_hcurl_eddy_bubble solver-ready artifact",
             ],
             "required_gates": [
                 'motor_validation_artifact_gate(..., "ngsolve_age")',
-                'motor_validation_artifact_gate(..., "hdiv_vim_reduced_fem")',
+                'motor_validation_artifact_gate(..., "hdiv_mmm_hcurl_eddy_bubble")',
                 "motor_triple_check_artifact_gate(...)",
             ],
             "learning_rule": (
                 "radia-motor learned only after the supported AGE lane and "
-                "the HDiv-VIM/reduced-FEM lane are both verified in the same "
+                "the HDiv-MMM + HCurl eddy-bubble lane are both verified in the same "
                 "combined artifact, with at least one public-safe MCP "
                 "target/test changed and verified."
             ),
@@ -227,7 +234,7 @@ def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
     src = plan["source_mcp_seed"]
     standard = plan["standard_comparison"]
     age = plan["radia_lanes"]["ngsolve_age"]
-    hdiv = plan["radia_lanes"]["hdiv_vim_reduced_fem"]
+    hdiv = plan["radia_lanes"]["hdiv_mmm_hcurl_eddy_bubble"]
     lines = [
         "# radia-motor triple-check plan",
         "",
@@ -264,7 +271,7 @@ def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
     lines.extend(f"  - `{item}`" for item in age["pytest_targets"])
     lines.extend(
         [
-            "## HDiv-VIM + Reduced FEM RFC Lane",
+            "## HDiv-MMM + HCurl Eddy-Bubble Lane",
             "- role: " + hdiv["role"],
             f"- support status: `{hdiv['support_status']}`",
             "- observable candidates:",
@@ -289,6 +296,24 @@ def _loads_object(value: Mapping[str, Any] | str) -> Mapping[str, Any]:
         msg = "artifact JSON must decode to an object"
         raise TypeError(msg)
     return parsed
+
+
+def _identity_digests(artifact: Any) -> tuple[str, ...] | None:
+    if not isinstance(artifact, Mapping):
+        return None
+    identity = artifact.get("shared_mesh_material_identity")
+    if not isinstance(identity, Mapping):
+        return None
+    values = tuple(
+        str(identity.get(field, "")).strip().lower()
+        for field in IDENTITY_DIGEST_FIELDS
+    )
+    if any(
+        len(value) != 64 or any(character not in "0123456789abcdef" for character in value)
+        for value in values
+    ):
+        return None
+    return values
 
 
 def validate_motor_triple_check_artifact(
@@ -323,14 +348,26 @@ def validate_motor_triple_check_artifact(
         errors.append("lane_artifacts must be an object")
         lane_artifacts = {}
 
+    normalized_lane_artifacts: dict[str, Any] = {}
+    for lane_id, lane_data in lane_artifacts.items():
+        canonical = LEGACY_LANE_ALIASES.get(str(lane_id), str(lane_id))
+        if canonical in normalized_lane_artifacts:
+            errors.append(f"duplicate lane artifact after alias normalization: {canonical}")
+            continue
+        normalized_lane_artifacts[canonical] = lane_data
+        if canonical != lane_id:
+            warnings.append(
+                f"deprecated lane artifact key {lane_id!r}; use {canonical!r}"
+            )
+
     lane_results: dict[str, Any] = {}
     known_lanes = set(PRIMARY_COMPARISON_LANES)
-    for lane_id in lane_artifacts:
+    for lane_id in normalized_lane_artifacts:
         if lane_id not in known_lanes:
             errors.append(f"unknown lane artifact: {lane_id}")
 
     for lane_id in PRIMARY_COMPARISON_LANES:
-        lane_data = lane_artifacts.get(lane_id)
+        lane_data = normalized_lane_artifacts.get(lane_id)
         if lane_data is None:
             errors.append(f"missing lane artifact: {lane_id}")
             continue
@@ -338,6 +375,26 @@ def validate_motor_triple_check_artifact(
         lane_results[lane_id] = result
         if result["status"] != "pass":
             errors.append(f"{lane_id} artifact gate failed")
+
+    lane_identities = {
+        lane_id: _identity_digests(normalized_lane_artifacts.get(lane_id))
+        for lane_id in PRIMARY_COMPARISON_LANES
+    }
+    for lane_id, identity in lane_identities.items():
+        if identity is None:
+            errors.append(
+                f"{lane_id}.shared_mesh_material_identity must contain "
+                "geometry/material/excitation sha256 digests"
+            )
+    shared_model_identity_matches = (
+        all(identity is not None for identity in lane_identities.values())
+        and len(set(lane_identities.values())) == 1
+    )
+    all_identities_present = all(
+        identity is not None for identity in lane_identities.values()
+    )
+    if all_identities_present and not shared_model_identity_matches:
+        errors.append("primary lane geometry/material/excitation identities do not match")
 
     feedback = data.get("mcp_feedback", {})
     if not isinstance(feedback, Mapping):
@@ -356,8 +413,10 @@ def validate_motor_triple_check_artifact(
     research_triple_check_ready = (
         status == "pass"
         and lane_results.get("ngsolve_age", {}).get("validated_solver_path") is True
-        and lane_results.get("hdiv_vim_reduced_fem", {}).get("support_status")
-        == "experimental_rfc"
+        and lane_results.get("hdiv_mmm_hcurl_eddy_bubble", {}).get(
+            "validated_required_solver_path"
+        ) is True
+        and shared_model_identity_matches
     )
     validated_supported_solver_check = (
         status == "pass"
@@ -366,9 +425,10 @@ def validate_motor_triple_check_artifact(
     validated_dual_solver_check = (
         status == "pass"
         and lane_results.get("ngsolve_age", {}).get("validated_solver_path") is True
-        and lane_results.get("hdiv_vim_reduced_fem", {}).get(
-            "validated_experimental_solver_path"
+        and lane_results.get("hdiv_mmm_hcurl_eddy_bubble", {}).get(
+            "validated_required_solver_path"
         ) is True
+        and shared_model_identity_matches
     )
     accepted_for_supported_mcp_learning = (
         status == "pass"
@@ -377,21 +437,14 @@ def validate_motor_triple_check_artifact(
         and lane_results.get("ngsolve_age", {}).get("accepted_for_mcp_learning")
         is True
     )
-    accepted_for_mcp_rfc_learning = (
-        status == "pass"
-        and not warnings
-        and research_triple_check_ready
-        and lane_results.get("hdiv_vim_reduced_fem", {}).get(
-            "accepted_for_mcp_rfc_learning"
-        ) is True
-    )
+    accepted_for_mcp_rfc_learning = False
     accepted_for_primary_dual_learning = (
         status == "pass"
         and not warnings
         and validated_dual_solver_check
         and lane_results.get("ngsolve_age", {}).get("accepted_for_mcp_learning")
         is True
-        and lane_results.get("hdiv_vim_reduced_fem", {}).get(
+        and lane_results.get("hdiv_mmm_hcurl_eddy_bubble", {}).get(
             "accepted_for_mcp_learning"
         ) is True
     )
@@ -403,6 +456,7 @@ def validate_motor_triple_check_artifact(
         "research_triple_check_ready": research_triple_check_ready,
         "validated_supported_solver_check": validated_supported_solver_check,
         "validated_dual_solver_check": validated_dual_solver_check,
+        "shared_model_identity_matches": shared_model_identity_matches,
         "accepted_for_supported_mcp_learning": accepted_for_supported_mcp_learning,
         "accepted_for_mcp_rfc_learning": accepted_for_mcp_rfc_learning,
         "accepted_for_primary_dual_learning": accepted_for_primary_dual_learning,
@@ -427,6 +481,7 @@ def format_triple_check_gate_result(result: Mapping[str, Any]) -> str:
         f"- research triple check ready: `{result.get('research_triple_check_ready', False)}`",
         f"- validated supported solver check: `{result.get('validated_supported_solver_check', False)}`",
         f"- validated dual solver check: `{result.get('validated_dual_solver_check', False)}`",
+        f"- shared model identity matches: `{result.get('shared_model_identity_matches', False)}`",
         f"- accepted for supported MCP learning: `{result.get('accepted_for_supported_mcp_learning', False)}`",
         f"- accepted for MCP RFC learning: `{result.get('accepted_for_mcp_rfc_learning', False)}`",
         f"- accepted for primary dual learning: `{result.get('accepted_for_primary_dual_learning', False)}`",

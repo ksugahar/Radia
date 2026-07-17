@@ -24,12 +24,12 @@ def test_run_artifact_contract_keeps_mao_as_primary_result_log():
     assert "never treat it as the solver result" in doc
 
 
-def test_linear_motor_bridge_requires_age_and_hdiv_vim_lanes():
+def test_linear_motor_bridge_requires_age_and_hdiv_mmm_eddy_lanes():
     doc = get_elf_magic_bridge("linear_motor_dual_lane")
 
     assert "Linear PM motor" in doc
     assert "NGSolve+AGE" in doc
-    assert "HDiv-VIM + reduced FEM" in doc
+    assert "HDiv-MMM + HCurl eddy-bubble" in doc
     assert "linear_thrust" in doc
     assert "linear_pm_flux" in doc
     assert "product_local_reference" in doc
@@ -48,7 +48,7 @@ def test_rotary_motor_family_sweep_bridge_tracks_dual_lane_targets():
     assert "Fractional SPMSM" in doc
     assert "AFPM" in doc
     assert "ngsolve_age" in doc
-    assert "hdiv_vim_reduced_fem" in doc
+    assert "hdiv_mmm_hcurl_eddy_bubble" in doc
     assert "product_local_reference" in doc
     assert "raw product rows" in doc
 

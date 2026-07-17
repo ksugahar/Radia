@@ -688,8 +688,8 @@ def motor_validation_lanes(topic: str = "overview") -> str:
 
     Use this before promoting a private product, lab-local, open-source,
     stored-regression, or analytic comparison into radia-motor knowledge.
-    It keeps the supported NGSolve+AGE finite-element lane and experimental
-    HDiv-VIM + reduced FEM RFC lane separate, so
+    It keeps NGSolve+AGE and the coupled HDiv-MMM + HCurl eddy-bubble lane
+    independent, so
     cross-validation artifacts train the correct solver path.
 
     Args:
@@ -710,7 +710,7 @@ def motor_validation_lane_template(lane_id: str = "all") -> str:
     Return the JSON artifact template for a motor validation lane.
 
     Args:
-        lane_id: "ngsolve_age", "hdiv_vim_reduced_fem", or "all".
+        lane_id: "ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble", or "all".
     """
     return json.dumps(lane_template(lane_id), indent=2, sort_keys=True)
 
@@ -723,7 +723,7 @@ def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") 
     Args:
         artifact_json: JSON object text containing the cross-validation summary.
         expected_lane: Optional lane id to enforce:
-            "ngsolve_age" or "hdiv_vim_reduced_fem".
+            "ngsolve_age" or "hdiv_mmm_hcurl_eddy_bubble".
     """
     result = validate_motor_validation_artifact(artifact_json, expected_lane)
     return format_artifact_gate_result(result)
@@ -734,7 +734,7 @@ def motor_dual_lane_training_catalog(topic: str = "all") -> str:
     """
     Return the public-safe wide motor learning catalog.
 
-    Every case routes to both `radia-motor-age` and `radia-motor-vim`.
+    Every case routes to both `radia-motor-age` and `radia-motor-mmm-eddy`.
     Source-native provenance is deliberately scrubbed from this public surface.
 
     Args:
@@ -761,10 +761,9 @@ def motor_triple_check_plan(goal: str) -> str:
     Plan the standard radia-motor comparison.
 
     The plan uses the public ELF/MAGIC MCP surface for motor examples, the
-    supported `ngsolve_age` lane, and the experimental
-    `hdiv_vim_reduced_fem` lane as the mandatory comparison pair. The
-    HDiv/reduced-FEM lane is not treated as a supported solver path until its
-    coupling contract is implemented and solver-ready verification is attached.
+    `ngsolve_age` lane and the coupled `hdiv_mmm_hcurl_eddy_bubble` lane as the
+    mandatory comparison pair. HDiv-MMM and HCurl eddy-bubble are verified as
+    one mixed system with a solver-ready artifact and matching model identity.
 
     Args:
         goal: Natural-language motor goal, e.g.
@@ -776,9 +775,9 @@ def motor_triple_check_plan(goal: str) -> str:
 @mcp.tool()
 def motor_triple_check_artifact_gate(artifact_json: str) -> str:
     """
-    Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact.
+    Validate a combined AGE and HDiv-MMM/HCurl eddy-bubble motor artifact.
 
-    `ngsolve_age` and `hdiv_vim_reduced_fem` are mandatory for radia-motor
+    `ngsolve_age` and `hdiv_mmm_hcurl_eddy_bubble` are mandatory for radia-motor
     learning claims.
 
     Args:
@@ -1128,35 +1127,36 @@ def main():
         assert "NGSolve AGE" in motor_deck_bridge("age_vs_field_strategy")
         assert "gold_age_invariant" in motor_age_quality("publication_policy")
         assert "tests/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
-        assert "HDiv-VIM" in motor_validation_lanes("lane_matrix")
+        assert "HDiv-MMM + HCurl eddy-bubble" in motor_validation_lanes("lane_matrix")
         assert "NGSolve+AGE" in motor_validation_lanes("overview")
         assert "product_local_reference" in motor_validation_lanes("source_policy")
         dual_catalog = motor_dual_lane_training_catalog("all")
         print(f"  motor_dual_lane_training_catalog('all'): {len(dual_catalog)} chars")
         assert "radia-motor-age" in dual_catalog
-        assert "radia-motor-vim" in dual_catalog
+        assert "radia-motor-mmm-eddy" in dual_catalog
         dual_gate = json.loads(motor_dual_lane_training_gate())
         assert dual_gate["status"] == "PASS"
         assert dual_gate["count"] >= 50
         assert not dual_gate["forbidden_hits"]
         dual_route = motor_dual_lane_training_route("SRM static torque")
         assert "srm_static_torque_curve" in dual_route
-        assert "hdiv_vim_reduced_fem" in dual_route
+        assert "hdiv_mmm_hcurl_eddy_bubble" in dual_route
         outer_route = motor_dual_lane_training_route("BLDC outer rotor polarity")
         assert "bldc_outer_rotor_polarity" in outer_route
         triple_plan = motor_triple_check_plan("IPM hairpin motor flux linkage and MTPA")
         print(f"  motor_triple_check_plan('IPM ...'): {len(triple_plan)} chars")
         assert "elf_motor_hybrid_router" in triple_plan
-        assert "hdiv_vim_reduced_fem" in triple_plan
+        assert "hdiv_mmm_hcurl_eddy_bubble" in triple_plan
         assert "ngsolve_age" in triple_plan
         assert "primary required lanes" in triple_plan
-        lane_tpl = motor_validation_lane_template("hdiv_vim_reduced_fem")
-        assert "vim_operator_contract" in lane_tpl
+        lane_tpl = motor_validation_lane_template("hdiv_mmm_hcurl_eddy_bubble")
+        assert "hdiv_mmm_operator_contract" in lane_tpl
+        assert "hcurl_eddy_bubble_contract" in lane_tpl
         hdiv_selftest_artifact = {
             "schema_version": "radia-motor-validation-artifact/v1",
             "timestamp_utc": "2026-07-03T00:00:00Z",
             "radia_version": "selftest",
-            "motor_validation_lane": "hdiv_vim_reduced_fem",
+            "motor_validation_lane": "hdiv_mmm_hcurl_eddy_bubble",
             "reference_source_class": "analytic_reference",
             "observable_family": "pickup_flux",
             "case_count": 1,
@@ -1166,16 +1166,29 @@ def main():
             "timing_breakdown_s": {"solve": 0.01},
             "artifact_feedback": {
                 "status": "candidate",
-                "public_lesson": "HDiv-VIM lane selftest artifact is complete.",
+                "public_lesson": "HDiv-MMM/HCurl eddy-bubble artifact is complete.",
             },
-            "coupling_design_status": "experimental_rfc",
-            "interface_operator_contract": {
-                "rotor_side": "HDiv-VIM source field",
-                "stator_side": "fixed-stator reduced FEM",
-                "status": "design-only selftest",
+            "coupling_design_status": "solver_validated",
+            "hdiv_mmm_operator_contract": {
+                "space": "HDiv",
+                "observable": "pickup_flux",
             },
-            "reduced_fem_contract": {"basis": "P1", "observable": "pickup_flux"},
-            "vim_operator_contract": {"space": "HDiv", "observable": "pickup_flux"},
+            "hcurl_eddy_bubble_contract": {
+                "space": "HCurl",
+                "basis": "eddy_bubble",
+            },
+            "coupling_operator_contract": {
+                "blocks": ["hdiv_mmm", "hcurl_eddy_bubble"],
+            },
+            "shared_mesh_material_identity": {
+                "geometry_sha256": "1" * 64,
+                "material_sha256": "2" * 64,
+                "excitation_sha256": "3" * 64,
+            },
+            "solver_ready_artifact": {
+                "artifact_id": "hdiv_mmm_hcurl_eddy_bubble_selftest_v1",
+                "verification": ["selftest mixed-system execution"],
+            },
         }
         age_selftest_artifact = {
             "schema_version": "radia-motor-validation-artifact/v1",
@@ -1195,6 +1208,15 @@ def main():
             },
             "age_gate_ids": ["age_rotation_torque"],
             "pytest_targets": ["tests/test_airgap_machine_rotation.py"],
+            "shared_mesh_material_identity": {
+                "geometry_sha256": "1" * 64,
+                "material_sha256": "2" * 64,
+                "excitation_sha256": "3" * 64,
+            },
+            "solver_ready_artifact": {
+                "artifact_id": "ngsolve_age_selftest_v1",
+                "verification": ["selftest AGE execution"],
+            },
         }
         triple_gate = motor_triple_check_artifact_gate(
             json.dumps(
@@ -1208,12 +1230,12 @@ def main():
                         ],
                     },
                     "lane_artifacts": {
-                        "hdiv_vim_reduced_fem": hdiv_selftest_artifact,
+                        "hdiv_mmm_hcurl_eddy_bubble": hdiv_selftest_artifact,
                         "ngsolve_age": age_selftest_artifact,
                     },
                     "mcp_feedback": {
                         "public_status": "verified",
-                        "public_summary": "AGE and HDiv RFC metadata are complete.",
+                        "public_summary": "AGE and mixed-system metadata are complete.",
                         "learning_targets": ["radia_mcp.motor.triple_check_knowledge"],
                         "verification": ["selftest"],
                     },
@@ -1221,10 +1243,10 @@ def main():
             )
         )
         assert "validated supported solver check: `True`" in triple_gate
-        assert "validated dual solver check: `False`" in triple_gate
+        assert "validated dual solver check: `True`" in triple_gate
         assert "accepted for supported MCP learning: `True`" in triple_gate
-        assert "accepted for MCP RFC learning: `True`" in triple_gate
-        assert "accepted for MCP learning: `False`" in triple_gate
+        assert "accepted for MCP RFC learning: `False`" in triple_gate
+        assert "accepted for MCP learning: `True`" in triple_gate
         gate = motor_validation_artifact_gate(
             json.dumps(
                 age_selftest_artifact
