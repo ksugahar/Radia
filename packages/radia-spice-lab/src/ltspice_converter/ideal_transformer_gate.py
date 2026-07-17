@@ -1991,6 +1991,132 @@ def _electrothermal_waveform_closure_identity_ok(
     )
 
 
+def _noise_integration_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "noise_input_output_source_normalization_psd_sidedness_integration_grid_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        frequencies = [float(value) for value in contract.get("frequency_grid_hz", [])]
+        result_frequencies = [
+            float(value) for value in contract.get("result_frequency_grid_hz", [])
+        ]
+        psd_values = [float(value) for value in contract.get("psd_values", [])]
+        result_psd_values = [
+            float(value) for value in contract.get("result_psd_values", [])
+        ]
+        integrated = float(contract.get("integrated_noise_v_rms"))
+        result_integrated = float(contract.get("result_integrated_noise_v_rms"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("noise_generation_id") or "")
+    digest = str(contract.get("noise_result_sha256") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "input_source_noise_generation_id",
+                "output_source_noise_generation_id",
+                "normalization_noise_generation_id",
+                "psd_noise_generation_id",
+                "integration_grid_noise_generation_id",
+                "result_noise_generation_id",
+            )
+        )
+        and bool(str(contract.get("input_source_id") or ""))
+        and contract.get("result_input_source_id") == contract.get("input_source_id")
+        and bool(str(contract.get("input_node") or ""))
+        and contract.get("result_input_node") == contract.get("input_node")
+        and bool(str(contract.get("output_node") or ""))
+        and contract.get("result_output_node") == contract.get("output_node")
+        and contract.get("normalization") == "input_referred_voltage_density"
+        and contract.get("result_normalization") == contract.get("normalization")
+        and contract.get("psd_sidedness") == "one_sided"
+        and contract.get("result_psd_sidedness") == contract.get("psd_sidedness")
+        and contract.get("psd_unit") == "V^2/Hz"
+        and contract.get("result_psd_unit") == contract.get("psd_unit")
+        and len(frequencies) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(psd_values) == len(frequencies)
+        and all(math.isfinite(value) and value >= 0.0 for value in psd_values)
+        and result_psd_values == psd_values
+        and contract.get("integration_rule") == "log_frequency_trapezoid"
+        and contract.get("result_integration_rule") == contract.get("integration_rule")
+        and math.isfinite(integrated)
+        and integrated >= 0.0
+        and result_integrated == integrated
+        and _is_sha256(digest)
+        and contract.get("accepted_noise_result_sha256") == digest
+    )
+
+
+def _switch_event_timing_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "switch_hysteresis_event_order_max_timestep_measure_window_waveform_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        high = float(contract.get("threshold_high_v"))
+        result_high = float(contract.get("result_threshold_high_v"))
+        low = float(contract.get("threshold_low_v"))
+        result_low = float(contract.get("result_threshold_low_v"))
+        max_timestep = float(contract.get("max_timestep_s"))
+        result_max_timestep = float(contract.get("result_max_timestep_s"))
+        window = [float(value) for value in contract.get("measure_window_s", [])]
+        result_window = [
+            float(value) for value in contract.get("result_measure_window_s", [])
+        ]
+        events = [str(value) for value in contract.get("event_order", [])]
+        result_events = [str(value) for value in contract.get("result_event_order", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("switch_generation_id") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "hysteresis_switch_generation_id",
+                "event_order_switch_generation_id",
+                "timestep_switch_generation_id",
+                "measure_window_switch_generation_id",
+                "waveform_switch_generation_id",
+                "result_switch_generation_id",
+            )
+        )
+        and contract.get("switch_model_id") == "voltage_hysteretic_switch"
+        and contract.get("result_switch_model_id") == contract.get("switch_model_id")
+        and all(math.isfinite(value) for value in (high, low))
+        and high > low
+        and result_high == high
+        and result_low == low
+        and events == ["rising_on", "falling_off", "rising_on"]
+        and result_events == events
+        and math.isfinite(max_timestep)
+        and max_timestep > 0.0
+        and result_max_timestep == max_timestep
+        and len(window) == 2
+        and all(math.isfinite(value) for value in window)
+        and 0.0 <= window[0] < window[1]
+        and max_timestep <= (window[1] - window[0]) / 10.0
+        and result_window == window
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("result_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("measure_table_sha256") or ""))
+        and contract.get("accepted_measure_table_sha256")
+        == contract.get("measure_table_sha256")
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -2365,6 +2491,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "electrothermal_waveforms_use_current_power_temperature_model_network_timestep_and_result": (
             _electrothermal_waveform_closure_identity_ok(positive)
+        ),
+        "noise_integration_uses_current_sources_normalization_sidedness_grid_units_and_result": (
+            _noise_integration_owner_identity_ok(positive)
+        ),
+        "switch_timing_uses_current_hysteresis_events_timestep_window_waveform_and_measures": (
+            _switch_event_timing_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
