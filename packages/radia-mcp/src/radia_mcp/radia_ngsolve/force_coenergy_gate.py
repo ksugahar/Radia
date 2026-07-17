@@ -400,6 +400,112 @@ def _open_boundary_decay_multipole_identity_ok(value):
     )
 
 
+def _weighted_stress_tensor_closure_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    body_groups = value.get("body_group_ids", [])
+    mask_nodes = value.get("weighted_mask_node_ids", [])
+    region = str(value.get("integration_region", "")).strip()
+    try:
+        body_groups = [int(item) for item in body_groups]
+        result_body_groups = [int(item) for item in value.get("result_body_group_ids", [])]
+        mask_nodes = [int(item) for item in mask_nodes]
+        result_mask_nodes = [int(item) for item in value.get("result_weighted_mask_node_ids", [])]
+        force = [float(item) for item in value.get("weighted_force_n", [])]
+        result_force = [float(item) for item in value.get("result_weighted_force_n", [])]
+        torque = [float(item) for item in value.get("weighted_torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_weighted_torque_nm", [])]
+        energy = float(value.get("magnetic_energy_j"))
+        result_energy = float(value.get("result_magnetic_energy_j"))
+        coenergy = float(value.get("magnetic_coenergy_j"))
+        result_coenergy = float(value.get("result_magnetic_coenergy_j"))
+    except (TypeError, ValueError):
+        return False
+    digest_pairs = (
+        ("mesh_sha256", "result_mesh_sha256"),
+        ("mask_sha256", "result_mask_sha256"),
+        ("integration_region_sha256", "result_integration_region_sha256"),
+        ("result_sha256", "accepted_result_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "mask_force_generation", "mesh_force_generation", "region_force_generation",
+            "energy_force_generation", "torque_force_generation", "result_force_generation"))
+        and bool(body_groups) and all(item > 0 for item in body_groups)
+        and len(set(body_groups)) == len(body_groups) and result_body_groups == body_groups
+        and bool(mask_nodes) and all(item > 0 for item in mask_nodes)
+        and len(set(mask_nodes)) == len(mask_nodes) and result_mask_nodes == mask_nodes
+        and bool(region) and value.get("result_integration_region") == region
+        and all(_valid_sha256(value.get(source)) and value.get(result) == value.get(source)
+                for source, result in digest_pairs)
+        and len(force) == 3 and all(math.isfinite(item) for item in force) and result_force == force
+        and len(torque) == 3 and all(math.isfinite(item) for item in torque) and result_torque == torque
+        and math.isfinite(energy) and energy >= 0.0
+        and math.isclose(result_energy, energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isfinite(coenergy) and coenergy >= 0.0
+        and math.isclose(result_coenergy, coenergy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+    )
+
+
+def _axisymmetric_planar_normalization_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("normalization_generation", "")).strip()
+    try:
+        depth = float(value.get("planar_depth_m"))
+        result_depth = float(value.get("result_planar_depth_m"))
+        planar_per_m = float(value.get("planar_force_n_per_m"))
+        result_planar_per_m = float(value.get("result_planar_force_n_per_m"))
+        planar_total = float(value.get("planar_total_force_n"))
+        result_planar_total = float(value.get("result_planar_total_force_n"))
+        radius = float(value.get("axisymmetric_radius_m"))
+        result_radius = float(value.get("result_axisymmetric_radius_m"))
+        meridian_force = float(value.get("axisymmetric_meridian_force_n_per_rad"))
+        result_meridian_force = float(value.get("result_axisymmetric_meridian_force_n_per_rad"))
+        axisymmetric_total = float(value.get("axisymmetric_total_force_n"))
+        result_axisymmetric_total = float(value.get("result_axisymmetric_total_force_n"))
+    except (TypeError, ValueError):
+        return False
+    finite_values = (
+        depth, result_depth, planar_per_m, result_planar_per_m, planar_total,
+        result_planar_total, radius, result_radius, meridian_force,
+        result_meridian_force, axisymmetric_total, result_axisymmetric_total,
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "planar_depth_normalization_generation", "radius_normalization_generation",
+            "coordinate_normalization_generation", "unit_normalization_generation",
+            "mesh_normalization_generation", "result_normalization_generation"))
+        and all(math.isfinite(item) for item in finite_values)
+        and depth > 0.0 and result_depth == depth
+        and result_planar_per_m == planar_per_m
+        and math.isclose(planar_total, planar_per_m * depth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(result_planar_total, planar_total, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and radius > 0.0 and result_radius == radius
+        and result_meridian_force == meridian_force
+        and math.isclose(axisymmetric_total, 2.0 * math.pi * meridian_force,
+                         rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(result_axisymmetric_total, axisymmetric_total,
+                         rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(axisymmetric_total, planar_total, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and value.get("radius_measure_convention") == "2*pi*r"
+        and value.get("result_radius_measure_convention") == "2*pi*r"
+        and value.get("coordinate_convention") == "r_z_right_handed"
+        and value.get("result_coordinate_convention") == "r_z_right_handed"
+        and value.get("force_unit") == "N_total_3d"
+        and value.get("result_force_unit") == "N_total_3d"
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -463,6 +569,8 @@ def force_coenergy_displacement_gate(
     axisymmetric_revolved_energy_force_identity_ok = True
     nonlinear_bh_incremental_force_identity_ok = True
     open_boundary_decay_multipole_identity_ok = True
+    weighted_stress_tensor_closure_identity_ok = True
+    axisymmetric_planar_normalization_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -500,6 +608,8 @@ def force_coenergy_displacement_gate(
         axisymmetric_revolved_energy_force_identity_ok = False
         nonlinear_bh_incremental_force_identity_ok = False
         open_boundary_decay_multipole_identity_ok = False
+        weighted_stress_tensor_closure_identity_ok = False
+        axisymmetric_planar_normalization_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2034,6 +2144,20 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        weighted_stress_tensor_closure_identity_ok = (
+            _weighted_stress_tensor_closure_identity_ok(
+                artifact_identity.get(
+                    "weighted_stress_tensor_mask_mesh_region_force_torque_energy_generation_identity"
+                )
+            )
+        )
+        axisymmetric_planar_normalization_identity_ok = (
+            _axisymmetric_planar_normalization_identity_ok(
+                artifact_identity.get(
+                    "axisymmetric_planar_depth_two_pi_r_force_normalization_coordinate_unit_generation_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2169,6 +2293,12 @@ def force_coenergy_displacement_gate(
         ),
         "open_boundary_uses_current_domain_decay_multipole_material_and_mesh": (
             open_boundary_decay_multipole_identity_ok
+        ),
+        "weighted_stress_tensor_uses_current_mask_mesh_region_force_torque_and_energy": (
+            weighted_stress_tensor_closure_identity_ok
+        ),
+        "axisymmetric_and_planar_force_share_depth_two_pi_r_coordinates_units_and_mesh": (
+            axisymmetric_planar_normalization_identity_ok
         ),
     }
     return {
