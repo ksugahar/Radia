@@ -45,9 +45,9 @@ def test_argparse_accepts_flag():
     ns0 = p.parse_args(["--coil-solver", "peec", "--coil-step", "c.step",
                         "--frequency", "7000"])
     assert ns0.wp_loop_dof == "auto"
-    # explicit value spelling also parses
-    ns2 = _args(["off", "--wp-bem-backend", "intree-dense"])
-    assert ns2.wp_loop_dof == "off"
+    # 'off' (the legacy +25-30% genus-1 solve) is deliberately NOT a mode
+    with pytest.raises(SystemExit):
+        _args(["off", "--wp-bem-backend", "intree-dense"])
 
 
 @pytest.mark.parametrize("extra,frag", [
