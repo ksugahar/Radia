@@ -1,4 +1,4 @@
-"""Polynomial exactness of the curved RT2 symmetric outer rules."""
+"""Polynomial exactness of the curved BDM2 symmetric outer rules."""
 
 import math
 

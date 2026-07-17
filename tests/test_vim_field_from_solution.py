@@ -1,4 +1,4 @@
-"""Golden tests for the C++ radia.vim.FieldFromSolution RT1 field path.
+"""Golden tests for the C++ radia.vim.FieldFromSolution BDM1 field path.
 
 Locks:
   * C++ materialization directly from the configured charge map and HDiv coefficients;
