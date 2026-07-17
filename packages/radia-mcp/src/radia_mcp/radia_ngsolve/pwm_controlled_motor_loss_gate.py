@@ -122,6 +122,8 @@ def pwm_controlled_motor_loss_gate(
     incremental_inductance_perturbation_phase_state_identity_ok = True
     dq_transform_rotor_angle_phase_order_generation_identity_ok = True
     iron_loss_frequency_harmonic_material_curve_generation_identity_ok = True
+    motion_skew_force_harmonic_generation_identity_ok = True
+    irreversible_demag_state_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -151,6 +153,8 @@ def pwm_controlled_motor_loss_gate(
         incremental_inductance_perturbation_phase_state_identity_ok = False
         dq_transform_rotor_angle_phase_order_generation_identity_ok = False
         iron_loss_frequency_harmonic_material_curve_generation_identity_ok = False
+        motion_skew_force_harmonic_generation_identity_ok = False
+        irreversible_demag_state_generation_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1522,6 +1526,199 @@ def pwm_controlled_motor_loss_gate(
                 == digest
             )
 
+        motion_force = identity_value.get(
+            "motion_skew_force_harmonic_time_angle_phase_generation_identity"
+        )
+        if motion_force is not None:
+            motion_force = motion_force if isinstance(motion_force, dict) else {}
+            generation = str(
+                motion_force.get("motion_study_generation", "")
+            ).strip()
+            try:
+                time_values = [float(value) for value in motion_force.get("time_s", [])]
+                force_time_values = [
+                    float(value) for value in motion_force.get("force_time_s", [])
+                ]
+                angle_values = [
+                    float(value)
+                    for value in motion_force.get("mechanical_angle_deg", [])
+                ]
+                force_angle_values = [
+                    float(value)
+                    for value in motion_force.get("force_mechanical_angle_deg", [])
+                ]
+                skew_angles = [
+                    float(value)
+                    for value in motion_force.get("skew_slice_angles_deg", [])
+                ]
+                force_skew_angles = [
+                    float(value)
+                    for value in motion_force.get("force_skew_slice_angles_deg", [])
+                ]
+                weights = [
+                    float(value) for value in motion_force.get("slice_weights", [])
+                ]
+                force_weights = [
+                    float(value)
+                    for value in motion_force.get("force_slice_weights", [])
+                ]
+                phase_reference = float(motion_force.get("phase_reference_deg"))
+                force_phase_reference = float(
+                    motion_force.get("force_phase_reference_deg")
+                )
+                harmonic_orders = [
+                    int(value) for value in motion_force.get("harmonic_orders", [])
+                ]
+                force_harmonic_orders = [
+                    int(value)
+                    for value in motion_force.get("force_harmonic_orders", [])
+                ]
+                force_harmonics = [
+                    float(value)
+                    for value in motion_force.get("force_harmonics_n", [])
+                ]
+                reported_force_harmonics = [
+                    float(value)
+                    for value in motion_force.get("reported_force_harmonics_n", [])
+                ]
+            except (TypeError, ValueError):
+                time_values = force_time_values = []
+                angle_values = force_angle_values = []
+                skew_angles = force_skew_angles = []
+                weights = force_weights = []
+                phase_reference = force_phase_reference = math.nan
+                harmonic_orders = force_harmonic_orders = []
+                force_harmonics = reported_force_harmonics = []
+            digest = str(
+                motion_force.get("force_harmonic_table_sha256", "")
+            ).lower()
+            motion_skew_force_harmonic_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    motion_force.get(key) == generation
+                    for key in (
+                        "time_motion_study_generation",
+                        "angle_motion_study_generation",
+                        "skew_motion_study_generation",
+                        "phase_motion_study_generation",
+                        "force_result_motion_study_generation",
+                    )
+                )
+                and len(time_values) >= 2
+                and len(angle_values) == len(time_values)
+                and all(math.isfinite(value) for value in time_values + angle_values)
+                and all(
+                    right > left for left, right in zip(time_values, time_values[1:])
+                )
+                and force_time_values == time_values
+                and force_angle_values == angle_values
+                and bool(skew_angles)
+                and len(weights) == len(skew_angles)
+                and all(math.isfinite(value) for value in skew_angles + weights)
+                and all(value >= 0.0 for value in weights)
+                and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+                and force_skew_angles == skew_angles
+                and force_weights == weights
+                and math.isfinite(phase_reference)
+                and force_phase_reference == phase_reference
+                and bool(harmonic_orders)
+                and all(value > 0 for value in harmonic_orders)
+                and harmonic_orders == sorted(set(harmonic_orders))
+                and force_harmonic_orders == harmonic_orders
+                and len(force_harmonics) == len(harmonic_orders)
+                and all(math.isfinite(value) for value in force_harmonics)
+                and reported_force_harmonics == force_harmonics
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and str(
+                    motion_force.get("resolved_force_harmonic_table_sha256", "")
+                ).lower()
+                == digest
+            )
+
+        demag_state = identity_value.get(
+            "ipm_irreversible_demag_recoil_temperature_operating_generation_identity"
+        )
+        if demag_state is not None:
+            demag_state = demag_state if isinstance(demag_state, dict) else {}
+            generation = str(
+                demag_state.get("demag_study_generation", "")
+            ).strip()
+            operating_point = str(
+                demag_state.get("operating_point_id", "")
+            ).strip()
+            try:
+                temperature = float(demag_state.get("temperature_c"))
+                result_temperature = float(demag_state.get("result_temperature_c"))
+                orientations = [
+                    [float(component) for component in vector]
+                    for vector in demag_state.get("magnet_orientation_vectors", [])
+                ]
+                result_orientations = [
+                    [float(component) for component in vector]
+                    for vector in demag_state.get(
+                        "result_magnet_orientation_vectors", []
+                    )
+                ]
+                margins = [
+                    float(value)
+                    for value in demag_state.get("demag_margin_a_per_m", [])
+                ]
+                result_margins = [
+                    float(value)
+                    for value in demag_state.get(
+                        "reported_demag_margin_a_per_m", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                temperature = result_temperature = math.nan
+                orientations = result_orientations = []
+                margins = result_margins = []
+            recoil_digest = str(
+                demag_state.get("recoil_curve_sha256", "")
+            ).lower()
+            state_digest = str(demag_state.get("magnet_state_sha256", "")).lower()
+            irreversible_demag_state_generation_identity_ok = (
+                bool(generation)
+                and all(
+                    demag_state.get(key) == generation
+                    for key in (
+                        "recoil_curve_demag_study_generation",
+                        "temperature_demag_study_generation",
+                        "operating_point_demag_study_generation",
+                        "magnet_orientation_demag_study_generation",
+                        "result_demag_study_generation",
+                    )
+                )
+                and math.isfinite(temperature)
+                and result_temperature == temperature
+                and bool(operating_point)
+                and demag_state.get("result_operating_point_id") == operating_point
+                and bool(orientations)
+                and all(
+                    len(vector) in {2, 3}
+                    and all(math.isfinite(component) for component in vector)
+                    and any(component != 0.0 for component in vector)
+                    for vector in orientations
+                )
+                and result_orientations == orientations
+                and len(recoil_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in recoil_digest
+                )
+                and str(demag_state.get("result_recoil_curve_sha256", "")).lower()
+                == recoil_digest
+                and len(state_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in state_digest
+                )
+                and str(demag_state.get("result_magnet_state_sha256", "")).lower()
+                == state_digest
+                and bool(margins)
+                and all(math.isfinite(value) for value in margins)
+                and result_margins == margins
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1793,6 +1990,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "iron_loss_uses_current_frequency_harmonics_and_material_curves": (
             iron_loss_frequency_harmonic_material_curve_generation_identity_ok
+        ),
+        "force_harmonics_use_current_motion_skew_time_angle_and_phase": (
+            motion_skew_force_harmonic_generation_identity_ok
+        ),
+        "irreversible_demag_uses_current_recoil_temperature_operating_state": (
+            irreversible_demag_state_generation_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
