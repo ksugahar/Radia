@@ -256,6 +256,155 @@ def _fresh_subprocess_result_identity_ok(value: object) -> bool:
     )
 
 
+def _step_label_color_unit_hierarchy_shape_roundtrip_identity_ok(
+    value: object,
+) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("roundtrip_generation", "")).strip()
+    labels = [str(item).strip() for item in value.get("part_labels", [])]
+    decoded_labels = [
+        str(item).strip() for item in value.get("decoded_part_labels", [])
+    ]
+    colors = value.get("part_colors_rgb", [])
+    decoded_colors = value.get("decoded_part_colors_rgb", [])
+    hierarchy = value.get("assembly_hierarchy", [])
+    decoded_hierarchy = value.get("decoded_assembly_hierarchy", [])
+    if not all(
+        isinstance(rows, list)
+        for rows in (colors, decoded_colors, hierarchy, decoded_hierarchy)
+    ):
+        return False
+    try:
+        colors = [[float(channel) for channel in row] for row in colors]
+        decoded_colors = [
+            [float(channel) for channel in row] for row in decoded_colors
+        ]
+        hierarchy = [[str(item).strip() for item in row] for row in hierarchy]
+        decoded_hierarchy = [
+            [str(item).strip() for item in row] for row in decoded_hierarchy
+        ]
+    except (TypeError, ValueError):
+        return False
+    shape_digests = [
+        str(item).lower() for item in value.get("part_shape_sha256", [])
+    ]
+    decoded_shape_digests = [
+        str(item).lower() for item in value.get("decoded_part_shape_sha256", [])
+    ]
+    unit = str(value.get("length_unit", "")).strip()
+    step_digest = str(value.get("step_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "label_roundtrip_generation",
+                "color_roundtrip_generation",
+                "unit_roundtrip_generation",
+                "hierarchy_roundtrip_generation",
+                "shape_roundtrip_generation",
+                "result_roundtrip_generation",
+            )
+        )
+        and bool(labels)
+        and all(labels)
+        and len(set(labels)) == len(labels)
+        and decoded_labels == labels
+        and len(colors) == len(labels)
+        and all(len(row) == 3 for row in colors)
+        and all(
+            math.isfinite(channel) and 0.0 <= channel <= 1.0
+            for row in colors
+            for channel in row
+        )
+        and decoded_colors == colors
+        and unit in {"m", "cm", "mm"}
+        and value.get("decoded_length_unit") == unit
+        and len(hierarchy) == len(labels)
+        and all(len(row) == 2 and all(row) for row in hierarchy)
+        and [row[1] for row in hierarchy] == labels
+        and decoded_hierarchy == hierarchy
+        and len(shape_digests) == len(labels)
+        and all(_valid_sha256(digest) for digest in shape_digests)
+        and decoded_shape_digests == shape_digests
+        and _valid_sha256(step_digest)
+        and value.get("decoded_step_sha256") == step_digest
+    )
+
+
+def _occ_version_tolerance_tessellation_cache_build_identity_ok(
+    value: object,
+) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("build_generation", "")).strip()
+    occ_version = str(value.get("occ_version", "")).strip()
+    try:
+        tolerance = float(value.get("linear_tolerance"))
+        result_tolerance = float(value.get("result_linear_tolerance"))
+        linear_deflection = float(value.get("tessellation_linear_deflection"))
+        result_linear_deflection = float(
+            value.get("result_tessellation_linear_deflection")
+        )
+        angular_deflection = float(
+            value.get("tessellation_angular_deflection_rad")
+        )
+        result_angular_deflection = float(
+            value.get("result_tessellation_angular_deflection_rad")
+        )
+    except (TypeError, ValueError):
+        return False
+    cache_digest = str(value.get("module_cache_fingerprint_sha256", "")).lower()
+    build_digest = str(value.get("build_fingerprint_sha256", "")).lower()
+    tessellation_digest = str(value.get("tessellation_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "occ_build_generation",
+                "tolerance_build_generation",
+                "tessellation_build_generation",
+                "cache_build_generation",
+                "fingerprint_build_generation",
+                "result_build_generation",
+            )
+        )
+        and bool(occ_version)
+        and value.get("result_occ_version") == occ_version
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and math.isclose(result_tolerance, tolerance, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isfinite(linear_deflection)
+        and linear_deflection > 0.0
+        and math.isclose(
+            result_linear_deflection,
+            linear_deflection,
+            rel_tol=0.0,
+            abs_tol=1.0e-18,
+        )
+        and math.isfinite(angular_deflection)
+        and 0.0 < angular_deflection <= math.pi
+        and math.isclose(
+            result_angular_deflection,
+            angular_deflection,
+            rel_tol=0.0,
+            abs_tol=1.0e-15,
+        )
+        and _valid_sha256(cache_digest)
+        and value.get("result_module_cache_fingerprint_sha256") == cache_digest
+        and _valid_sha256(build_digest)
+        and value.get("result_build_fingerprint_sha256") == build_digest
+        and _valid_sha256(tessellation_digest)
+        and value.get("result_tessellation_sha256") == tessellation_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -584,6 +733,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     mesh_export_facet_normal_identity_ok = True
     brep_step_roundtrip_identity_ok = True
     fresh_subprocess_result_identity_ok = True
+    step_roundtrip_metadata_identity_ok = True
+    occ_build_fingerprint_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -619,6 +770,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         mesh_export_facet_normal_identity_ok = False
         brep_step_roundtrip_identity_ok = False
         fresh_subprocess_result_identity_ok = False
+        step_roundtrip_metadata_identity_ok = False
+        occ_build_fingerprint_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2170,6 +2323,20 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "fresh_subprocess_timeout_exception_cache_output_generation_identity"
             )
         )
+        step_roundtrip_metadata_identity_ok = (
+            _step_label_color_unit_hierarchy_shape_roundtrip_identity_ok(
+                replay_identity_value.get(
+                    "step_label_color_unit_hierarchy_shape_roundtrip_identity"
+                )
+            )
+        )
+        occ_build_fingerprint_identity_ok = (
+            _occ_version_tolerance_tessellation_cache_build_identity_ok(
+                replay_identity_value.get(
+                    "occ_version_tolerance_tessellation_cache_build_fingerprint_identity"
+                )
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2287,6 +2454,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "fresh_subprocess_rejects_timeout_exception_cache_and_stale_output": (
             fresh_subprocess_result_identity_ok
+        ),
+        "step_roundtrip_preserves_labels_colors_units_hierarchy_and_shapes": (
+            step_roundtrip_metadata_identity_ok
+        ),
+        "occ_build_uses_current_version_tolerances_tessellation_cache_and_fingerprint": (
+            occ_build_fingerprint_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
