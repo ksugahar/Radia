@@ -1974,6 +1974,157 @@ def _eigenmode_tracking_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _port_network_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "port_deembedding_reference_plane_impedance_mode_normalization_smatrix_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("network_generation", "")).strip()
+    mode_ids = identity.get("port_mode_ids")
+    smatrix = identity.get("smatrix_ri")
+    try:
+        offsets = [float(value) for value in identity.get("reference_plane_offsets_m", [])]
+        result_offsets = [
+            float(value)
+            for value in identity.get("result_reference_plane_offsets_m", [])
+        ]
+        impedances = [
+            [float(value) for value in pair]
+            for pair in identity.get("reference_impedance_ri_ohm", [])
+        ]
+        result_impedances = [
+            [float(value) for value in pair]
+            for pair in identity.get("result_reference_impedance_ri_ohm", [])
+        ]
+        frequencies = [float(value) for value in identity.get("frequency_grid_hz", [])]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+        numeric_smatrix = [
+            [[float(value) for value in pair] for pair in row]
+            for row in smatrix
+        ]
+        numeric_result_smatrix = [
+            [[float(value) for value in pair] for pair in row]
+            for row in identity.get("result_smatrix_ri", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest = str(identity.get("smatrix_sha256", "")).lower()
+    mode_count = len(mode_ids) if isinstance(mode_ids, list) else 0
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "port_mode_network_generation",
+                "deembedding_network_generation",
+                "reference_impedance_network_generation",
+                "normalization_network_generation",
+                "frequency_grid_network_generation",
+                "result_network_generation",
+            )
+        )
+        and mode_count >= 2
+        and all(isinstance(value, str) and bool(value) for value in mode_ids)
+        and len(set(mode_ids)) == mode_count
+        and identity.get("result_port_mode_ids") == mode_ids
+        and len(offsets) == mode_count
+        and all(math.isfinite(value) for value in offsets)
+        and result_offsets == offsets
+        and len(impedances) == mode_count
+        and all(
+            len(pair) == 2
+            and all(math.isfinite(value) for value in pair)
+            and pair[0] > 0.0
+            for pair in impedances
+        )
+        and result_impedances == impedances
+        and identity.get("wave_normalization") == "power_wave"
+        and identity.get("result_wave_normalization") == "power_wave"
+        and len(frequencies) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(numeric_smatrix) == mode_count
+        and all(
+            len(row) == mode_count
+            and all(
+                len(pair) == 2 and all(math.isfinite(value) for value in pair)
+                for pair in row
+            )
+            for row in numeric_smatrix
+        )
+        and numeric_result_smatrix == numeric_smatrix
+        and _valid_sha256(digest)
+        and str(identity.get("reported_smatrix_sha256", "")).lower() == digest
+    )
+
+
+def _farfield_result_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "farfield_angular_grid_polarization_coordinate_power_normalization_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("farfield_generation", "")).strip()
+    try:
+        theta = [float(value) for value in identity.get("theta_deg", [])]
+        result_theta = [float(value) for value in identity.get("result_theta_deg", [])]
+        phi = [float(value) for value in identity.get("phi_deg", [])]
+        result_phi = [float(value) for value in identity.get("result_phi_deg", [])]
+        radiated_power = float(identity.get("radiated_power_w"))
+        result_radiated_power = float(identity.get("result_radiated_power_w"))
+    except (TypeError, ValueError):
+        return False
+    mesh_digest = str(identity.get("mesh_sha256", "")).lower()
+    result_digest = str(identity.get("farfield_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "angular_grid_farfield_generation",
+                "polarization_farfield_generation",
+                "coordinate_farfield_generation",
+                "power_farfield_generation",
+                "mesh_farfield_generation",
+                "result_farfield_generation",
+            )
+        )
+        and len(theta) >= 2
+        and all(math.isfinite(value) and 0.0 <= value <= 180.0 for value in theta)
+        and all(left < right for left, right in zip(theta, theta[1:]))
+        and result_theta == theta
+        and len(phi) >= 2
+        and all(math.isfinite(value) and 0.0 <= value < 360.0 for value in phi)
+        and all(left < right for left, right in zip(phi, phi[1:]))
+        and result_phi == phi
+        and identity.get("polarization_basis") == "ludwig3_co_cross"
+        and identity.get("result_polarization_basis")
+        == identity.get("polarization_basis")
+        and identity.get("coordinate_frame") == "global_xyz_z_up"
+        and identity.get("result_coordinate_frame")
+        == identity.get("coordinate_frame")
+        and math.isfinite(radiated_power)
+        and radiated_power > 0.0
+        and math.isclose(result_radiated_power, radiated_power, rel_tol=1.0e-12)
+        and identity.get("field_normalization") == "sqrt_radiated_power"
+        and identity.get("result_field_normalization")
+        == identity.get("field_normalization")
+        and _valid_sha256(mesh_digest)
+        and str(identity.get("result_mesh_sha256", "")).lower() == mesh_digest
+        and _valid_sha256(result_digest)
+        and str(identity.get("reported_farfield_sha256", "")).lower()
+        == result_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2239,6 +2390,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "eigenmodes_use_current_subspace_phase_normalization_ports_and_mesh": (
                 _eigenmode_tracking_inputs_are_current(raw)
+            ),
+            "sparameters_use_current_port_modes_planes_impedances_normalization_grid_and_result": (
+                _port_network_inputs_are_current(raw)
+            ),
+            "farfields_use_current_angular_grid_polarization_coordinates_power_mesh_and_result": (
+                _farfield_result_inputs_are_current(raw)
             ),
         }
         row = {
