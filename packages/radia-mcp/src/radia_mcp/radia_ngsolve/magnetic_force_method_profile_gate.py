@@ -578,6 +578,98 @@ def _linear_motor_thrust_ripple_identity_ok(value: object) -> bool:
     )
 
 
+def _levitation_gradient_energy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("levitation_generation", "")).strip()
+    try:
+        displacement = [float(item) for item in value.get("displacement_m", [])]
+        result_displacement = [float(item) for item in value.get("result_displacement_m", [])]
+        force = [float(item) for item in value.get("force_n", [])]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+        energy = [float(item) for item in value.get("magnetic_energy_j", [])]
+        result_energy = [float(item) for item in value.get("result_magnetic_energy_j", [])]
+        derivative_force = [float(item) for item in value.get("negative_energy_derivative_force_n", [])]
+        result_derivative_force = [float(item) for item in value.get("result_negative_energy_derivative_force_n", [])]
+        stiffness = float(value.get("restoring_stiffness_n_m"))
+        result_stiffness = float(value.get("result_restoring_stiffness_n_m"))
+    except (TypeError, ValueError):
+        return False
+    count = len(displacement)
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "displacement_levitation_generation", "force_levitation_generation",
+            "energy_levitation_generation", "gradient_levitation_generation",
+            "frame_levitation_generation", "result_levitation_generation"))
+        and count >= 3 and len(force) == len(energy) == len(derivative_force) == count
+        and all(math.isfinite(item) for item in displacement + force + energy + derivative_force)
+        and all(left < right for left, right in zip(displacement, displacement[1:]))
+        and result_displacement == displacement and result_force == force
+        and result_energy == energy and result_derivative_force == derivative_force
+        and math.isfinite(stiffness) and stiffness > 0.0 and result_stiffness == stiffness
+        and all(math.isclose(item, -stiffness * x, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for x, item in zip(displacement, force))
+        and all(math.isclose(item, 0.5 * stiffness * x * x, rel_tol=1.0e-12, abs_tol=1.0e-15)
+                for x, item in zip(displacement, energy))
+        and derivative_force == force
+        and value.get("coordinate_frame") == "global_z_up"
+        and value.get("result_coordinate_frame") == "global_z_up"
+        and value.get("force_sign_convention") == "restoring_negative_gradient"
+        and value.get("result_force_sign_convention") == "restoring_negative_gradient"
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _cogging_periodic_interpolation_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("cogging_generation", "")).strip()
+    try:
+        positions = [float(item) for item in value.get("mechanical_positions_deg", [])]
+        result_positions = [float(item) for item in value.get("result_mechanical_positions_deg", [])]
+        torque = [float(item) for item in value.get("cogging_torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_cogging_torque_nm", [])]
+        periodicity = int(value.get("periodicity"))
+        result_periodicity = int(value.get("result_periodicity"))
+        period = float(value.get("mechanical_period_deg"))
+        result_period = float(value.get("result_mechanical_period_deg"))
+        reference = float(value.get("reference_angle_deg"))
+        result_reference = float(value.get("result_reference_angle_deg"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "position_cogging_generation", "periodicity_cogging_generation",
+            "mesh_cogging_generation", "interpolation_cogging_generation",
+            "reference_cogging_generation", "result_cogging_generation"))
+        and len(positions) >= 4 and len(torque) == len(positions)
+        and all(math.isfinite(item) for item in positions + torque)
+        and all(left < right for left, right in zip(positions, positions[1:]))
+        and result_positions == positions and result_torque == torque
+        and periodicity > 0 and result_periodicity == periodicity
+        and math.isclose(period, 360.0 / periodicity, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_period == period and result_reference == reference
+        and math.isclose(positions[0], reference, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(positions[-1] - positions[0], period, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(torque[0], torque[-1], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("interpolation_method") == "periodic_cubic"
+        and value.get("result_interpolation_method") == "periodic_cubic"
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -678,6 +770,8 @@ def magnetic_force_method_profile_gate(
     motor_dual_lane_alignment_generation_identity_ok = True
     bem_demag_surface_material_frame_generation_identity_ok = True
     linear_motor_thrust_ripple_generation_identity_ok = True
+    levitation_gradient_energy_identity_ok = True
+    cogging_periodic_interpolation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -715,6 +809,8 @@ def magnetic_force_method_profile_gate(
         motor_dual_lane_alignment_generation_identity_ok = False
         bem_demag_surface_material_frame_generation_identity_ok = False
         linear_motor_thrust_ripple_generation_identity_ok = False
+        levitation_gradient_energy_identity_ok = False
+        cogging_periodic_interpolation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -2385,6 +2481,16 @@ def magnetic_force_method_profile_gate(
                 )
             )
         )
+        levitation_gradient_energy_identity_ok = _levitation_gradient_energy_identity_ok(
+            identity_value.get(
+                "levitation_force_displacement_gradient_stiffness_energy_derivative_frame_generation_identity"
+            )
+        )
+        cogging_periodic_interpolation_identity_ok = _cogging_periodic_interpolation_identity_ok(
+            identity_value.get(
+                "cogging_torque_position_periodicity_mesh_interpolation_reference_angle_generation_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -2551,6 +2657,12 @@ def magnetic_force_method_profile_gate(
         ),
         "linear_motor_thrust_ripple_shares_period_position_phase_frame_and_order": (
             linear_motor_thrust_ripple_generation_identity_ok
+        ),
+        "levitation_force_stiffness_and_energy_derivative_share_displacement_frame_sign_and_generation": (
+            levitation_gradient_energy_identity_ok
+        ),
+        "cogging_torque_uses_current_position_periodicity_mesh_interpolation_reference_and_result": (
+            cogging_periodic_interpolation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
