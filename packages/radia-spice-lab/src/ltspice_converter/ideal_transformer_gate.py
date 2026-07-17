@@ -1165,6 +1165,159 @@ def _fft_window_harmonic_bin_identity_ok(positive: Mapping[str, object]) -> bool
     )
 
 
+def _noise_monte_carlo_psd_integration_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "noise_monte_carlo_sample_filter_psd_integration_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    rows = (
+        contract.get("sample_ids"),
+        contract.get("accepted_sample_mask"),
+        contract.get("psd_sample_ids"),
+        contract.get("integration_sample_ids"),
+        contract.get("frequency_hz"),
+        contract.get("bin_width_hz"),
+        contract.get("integration_bin_width_hz"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        sample_ids = [int(value) for value in rows[0]]
+        accepted = list(rows[1])
+        psd_ids = [int(value) for value in rows[2]]
+        integration_ids = [int(value) for value in rows[3]]
+        frequencies = [_finite(value, "frequency_hz", positive=True) for value in rows[4]]
+        widths = [_finite(value, "bin_width_hz", positive=True) for value in rows[5]]
+        integration_widths = [
+            _finite(value, "integration_bin_width_hz", positive=True)
+            for value in rows[6]
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("monte_carlo_generation_id") or "")
+    digest = str(contract.get("psd_table_sha256") or "")
+    expected_integration_ids = [
+        sample_id for sample_id, keep in zip(sample_ids, accepted) if keep
+    ]
+    return (
+        bool(generation)
+        and contract.get("sample_filter_monte_carlo_generation_id") == generation
+        and contract.get("psd_table_monte_carlo_generation_id") == generation
+        and contract.get("integration_monte_carlo_generation_id") == generation
+        and bool(sample_ids)
+        and all(value > 0 for value in sample_ids)
+        and len(set(sample_ids)) == len(sample_ids)
+        and len(accepted) == len(sample_ids)
+        and all(isinstance(value, bool) for value in accepted)
+        and psd_ids == sample_ids
+        and integration_ids == expected_integration_ids
+        and bool(integration_ids)
+        and len(frequencies) == len(widths) == len(integration_widths)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and integration_widths == widths
+        and contract.get("psd_sidedness") == "one-sided"
+        and contract.get("integration_psd_sidedness")
+        == contract.get("psd_sidedness")
+        and _is_sha256(digest)
+        and contract.get("integration_input_sha256") == digest
+    )
+
+
+def _stepped_transient_measure_row_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "stepped_transient_accepted_grid_measure_row_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    keys = (
+        "step_ids",
+        "parameter_names",
+        "parameter_tuples",
+        "measure_step_ids",
+        "measure_parameter_tuples",
+        "measure_names",
+        "accepted_time_grid_s",
+        "measure_time_grid_s",
+        "measure_row_keys",
+        "decoded_measure_row_keys",
+    )
+    rows = tuple(contract.get(key) for key in keys)
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in rows
+    ):
+        return False
+    try:
+        step_ids = [int(value) for value in rows[0]]
+        names = [str(value) for value in rows[1]]
+        parameter_tuples = [
+            [_finite(value, "parameter_tuple") for value in row] for row in rows[2]
+        ]
+        measure_step_ids = [int(value) for value in rows[3]]
+        measure_tuples = [
+            [_finite(value, "measure_parameter_tuple") for value in row]
+            for row in rows[4]
+        ]
+        measure_names = [str(value) for value in rows[5]]
+        accepted_grid = [_finite(value, "accepted_time_grid_s") for value in rows[6]]
+        measure_grid = [_finite(value, "measure_time_grid_s") for value in rows[7]]
+        row_keys = [str(value) for value in rows[8]]
+        decoded_keys = [str(value) for value in rows[9]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("transient_generation_id") or "")
+    grid_digest = str(contract.get("accepted_grid_sha256") or "")
+    tuple_digest = str(contract.get("parameter_tuple_table_sha256") or "")
+    if len(step_ids) != len(parameter_tuples):
+        return False
+    step_parameters = dict(zip(step_ids, parameter_tuples))
+    expected_measure_tuples = [step_parameters.get(step_id) for step_id in measure_step_ids]
+    expected_keys = [
+        f"{step_id}:{measure_name}"
+        for step_id, measure_name in zip(measure_step_ids, measure_names)
+    ]
+    return (
+        bool(generation)
+        and contract.get("accepted_grid_transient_generation_id") == generation
+        and contract.get("parameter_tuple_transient_generation_id") == generation
+        and contract.get("measure_row_transient_generation_id") == generation
+        and bool(step_ids)
+        and all(value > 0 for value in step_ids)
+        and len(set(step_ids)) == len(step_ids)
+        and bool(names)
+        and all(names)
+        and len(set(names)) == len(names)
+        and all(len(row) == len(names) for row in parameter_tuples)
+        and bool(measure_step_ids)
+        and len(measure_step_ids) == len(measure_tuples) == len(measure_names)
+        and all(name for name in measure_names)
+        and measure_tuples == expected_measure_tuples
+        and len(row_keys) == len(measure_step_ids)
+        and row_keys == expected_keys
+        and decoded_keys == row_keys
+        and len(accepted_grid) >= 2
+        and accepted_grid[0] >= 0.0
+        and all(right > left for left, right in zip(accepted_grid, accepted_grid[1:]))
+        and measure_grid == accepted_grid
+        and _is_sha256(grid_digest)
+        and contract.get("measure_grid_sha256") == grid_digest
+        and _is_sha256(tuple_digest)
+        and contract.get("measure_parameter_tuple_table_sha256") == tuple_digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -1503,6 +1656,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "fft_harmonics_use_current_window_sample_rate_and_bin_table": (
             _fft_window_harmonic_bin_identity_ok(positive)
+        ),
+        "noise_monte_carlo_psd_integration_uses_current_filtered_samples_bins_and_sidedness": (
+            _noise_monte_carlo_psd_integration_identity_ok(positive)
+        ),
+        "stepped_transient_measures_use_current_grid_parameter_tuples_and_row_order": (
+            _stepped_transient_measure_row_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
