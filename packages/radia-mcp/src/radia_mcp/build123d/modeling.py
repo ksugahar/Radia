@@ -3990,6 +3990,221 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    mass_density_location_evidence_present = any(
+        row.get("mass_properties_density_unit_location_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+
+    def mass_properties_density_unit_location_generation_identity(row):
+        value = row.get(
+            "mass_properties_density_unit_location_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        assembly_generation = str(
+            value.get("assembly_generation", "")
+        ).strip()
+        density_generation = str(
+            value.get("density_mapping_generation", "")
+        ).strip()
+        location_generation = str(
+            value.get("part_location_generation", "")
+        ).strip()
+        density_unit = str(value.get("density_unit", "")).strip()
+        part_names = [str(name) for name in value.get("part_names", [])]
+        resolved_names = [
+            str(name) for name in value.get("resolved_part_names", [])
+        ]
+        location_digests = [
+            str(item).lower()
+            for item in value.get("part_location_sha256", [])
+        ]
+        resolved_location_digests = [
+            str(item).lower()
+            for item in value.get("resolved_part_location_sha256", [])
+        ]
+        table_digest = str(
+            value.get("mass_property_table_sha256", "")
+        ).lower()
+        if (
+            not assembly_generation
+            or any(
+                value.get(key) != assembly_generation
+                for key in (
+                    "mass_assembly_generation",
+                    "center_of_mass_assembly_generation",
+                    "inertia_assembly_generation",
+                )
+            )
+            or not density_generation
+            or any(
+                value.get(key) != density_generation
+                for key in (
+                    "mass_density_mapping_generation",
+                    "center_of_mass_density_mapping_generation",
+                    "inertia_density_mapping_generation",
+                )
+            )
+            or not location_generation
+            or any(
+                value.get(key) != location_generation
+                for key in (
+                    "mass_part_location_generation",
+                    "center_of_mass_part_location_generation",
+                    "inertia_part_location_generation",
+                )
+            )
+            or density_unit not in {"kg/m^3", "g/cm^3"}
+            or any(
+                value.get(key) != density_unit
+                for key in (
+                    "mass_density_unit",
+                    "center_of_mass_density_unit",
+                    "inertia_density_unit",
+                )
+            )
+            or not part_names
+            or len(set(part_names)) != len(part_names)
+            or any(not name.strip() for name in part_names)
+            or resolved_names != part_names
+            or len(location_digests) != len(part_names)
+            or not all(valid_sha256(item) for item in location_digests)
+            or resolved_location_digests != location_digests
+            or not valid_sha256(table_digest)
+            or value.get("resolved_mass_property_table_sha256") != table_digest
+        ):
+            return None
+        return (
+            assembly_generation,
+            density_generation,
+            location_generation,
+            density_unit,
+            tuple(part_names),
+            tuple(location_digests),
+            table_digest,
+        )
+
+    reference_mass_density_location_maps = {
+        str(row.get("name", "")): (
+            mass_properties_density_unit_location_generation_identity(row)
+        )
+        for row in reference
+    }
+    mass_density_location_identity_ok = not mass_density_location_evidence_present
+    if mass_density_location_evidence_present:
+        mass_density_location_identity_ok = bool(
+            reference_mass_density_location_maps
+        ) and all(
+            value is not None
+            for value in reference_mass_density_location_maps.values()
+        )
+        for _, rows in normalized_sets:
+            mass_density_location_identity_ok = (
+                mass_density_location_identity_ok
+                and all(
+                    mass_properties_density_unit_location_generation_identity(row)
+                    == reference_mass_density_location_maps.get(
+                        str(row.get("name", ""))
+                    )
+                    for row in rows
+                )
+            )
+
+    sweep_frame_evidence_present = any(
+        row.get(
+            "sweep_path_frame_twist_profile_orientation_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+
+    def sweep_path_frame_twist_profile_orientation_generation_identity(row):
+        value = row.get(
+            "sweep_path_frame_twist_profile_orientation_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        sweep_generation = str(value.get("sweep_generation", "")).strip()
+        path_generation = str(value.get("path_generation", "")).strip()
+        profile_generation = str(value.get("profile_generation", "")).strip()
+        try:
+            parameters = [float(item) for item in value.get("path_parameters", [])]
+            frame_parameters = [
+                float(item) for item in value.get("frame_path_parameters", [])
+            ]
+            twists = [float(item) for item in value.get("twist_degrees", [])]
+            solid_twists = [
+                float(item) for item in value.get("solid_twist_degrees", [])
+            ]
+        except (TypeError, ValueError):
+            return None
+        frame_digests = [
+            str(item).lower() for item in value.get("path_frame_sha256", [])
+        ]
+        solid_frame_digests = [
+            str(item).lower()
+            for item in value.get("solid_path_frame_sha256", [])
+        ]
+        orientation_digest = str(
+            value.get("profile_orientation_sha256", "")
+        ).lower()
+        solid_digest = str(value.get("swept_solid_sha256", "")).lower()
+        if (
+            not sweep_generation
+            or value.get("solid_sweep_generation") != sweep_generation
+            or not path_generation
+            or value.get("frame_path_generation") != path_generation
+            or value.get("twist_path_generation") != path_generation
+            or not profile_generation
+            or value.get("orientation_profile_generation") != profile_generation
+            or value.get("solid_profile_generation") != profile_generation
+            or len(parameters) < 2
+            or not all(math.isfinite(item) for item in parameters)
+            or not all(left < right for left, right in zip(parameters, parameters[1:]))
+            or frame_parameters != parameters
+            or len(twists) != len(parameters)
+            or not all(math.isfinite(item) for item in twists)
+            or solid_twists != twists
+            or len(frame_digests) != len(parameters)
+            or not all(valid_sha256(item) for item in frame_digests)
+            or solid_frame_digests != frame_digests
+            or not valid_sha256(orientation_digest)
+            or value.get("solid_profile_orientation_sha256")
+            != orientation_digest
+            or not valid_sha256(solid_digest)
+            or value.get("resolved_swept_solid_sha256") != solid_digest
+        ):
+            return None
+        return (
+            sweep_generation,
+            path_generation,
+            profile_generation,
+            tuple(parameters),
+            tuple(twists),
+            tuple(frame_digests),
+            orientation_digest,
+            solid_digest,
+        )
+
+    reference_sweep_frame_maps = {
+        str(row.get("name", "")): (
+            sweep_path_frame_twist_profile_orientation_generation_identity(row)
+        )
+        for row in reference
+    }
+    sweep_frame_identity_ok = not sweep_frame_evidence_present
+    if sweep_frame_evidence_present:
+        sweep_frame_identity_ok = bool(reference_sweep_frame_maps) and all(
+            value is not None for value in reference_sweep_frame_maps.values()
+        )
+        for _, rows in normalized_sets:
+            sweep_frame_identity_ok = sweep_frame_identity_ok and all(
+                sweep_path_frame_twist_profile_orientation_generation_identity(row)
+                == reference_sweep_frame_maps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -4091,6 +4306,12 @@ def shape_mass_property_crosscheck_summary(
         "assembly_mates_share_current_frame_unit_and_parent_location": (
             assembly_mate_identity_ok
         ),
+        "assembly_mass_properties_share_density_unit_and_part_locations": (
+            mass_density_location_identity_ok
+        ),
+        "swept_solid_uses_current_path_frames_twist_and_profile_orientation": (
+            sweep_frame_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -4149,6 +4370,18 @@ def shape_mass_property_crosscheck_summary(
         "assembly_mates_share_current_frame_unit_and_parent_location"
     ]:
         issues.append("assembly mates mix stale frames, units, or parent locations")
+    if not checks[
+        "assembly_mass_properties_share_density_unit_and_part_locations"
+    ]:
+        issues.append(
+            "assembly mass properties mix density units or part locations from stale generations"
+        )
+    if not checks[
+        "swept_solid_uses_current_path_frames_twist_and_profile_orientation"
+    ]:
+        issues.append(
+            "swept solid uses stale path frames, twist samples, or profile orientation"
+        )
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
