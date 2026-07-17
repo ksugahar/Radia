@@ -13,6 +13,8 @@ from dataclasses import dataclass
 import math
 
 import numpy as np
+import scipy.linalg as sla
+import scipy.sparse as sp
 
 import radia._radia_pybind as _rp
 
@@ -404,6 +406,7 @@ def _project_cell_currents_to_subtets(
     refinement_strategy: str = "pyramid-apex",
     max_subtets: int = 512,
     max_dense_moment_pairs: int = 20_000_000,
+    enforce_dense_moment_limit: bool = True,
     materials,
 ):
     """Project reduced HCurl currents onto a tetrahedralization of 3-D cells."""
@@ -468,7 +471,7 @@ def _project_cell_currents_to_subtets(
     if max_dense_moment_pairs <= 0:
         raise ValueError("max_dense_moment_pairs must be positive")
     dense_moment_pairs = subtet_count * subtet_count * len(monomials)
-    if dense_moment_pairs > max_dense_moment_pairs:
+    if enforce_dense_moment_limit and dense_moment_pairs > max_dense_moment_pairs:
         raise ValueError(
             "adaptive HCurl analytic interaction would require "
             f"{dense_moment_pairs} leaf-pair polynomial moments, above "
@@ -812,7 +815,259 @@ def _project_curved_tet_reference_currents(
     }
 
 
-def _curved_reference_density_matrix(
+class HCurlHMatrixOperator:
+    """Matrix-free reduced HCurl Gram ``mu * sum_c B_c.T G B_c``.
+
+    ``G`` remains a symmetric HACApK scalar-charge H-matrix.  The three real
+    charge maps contain only local polynomial ranks, so neither the scalar
+    monomial Gram nor the final reduced inductance matrix is materialized.
+    """
+
+    def __init__(self, gram, charge_maps, *, mu: float, metadata=None):
+        maps = np.asarray(charge_maps, dtype=float)
+        if maps.ndim != 3 or maps.shape[0] != 3:
+            raise ValueError("charge_maps must have shape (3, n_charge, n_mode)")
+        if maps.shape[1] != int(gram.ndof()):
+            raise ValueError("charge map row count must match the HACApK Gram")
+        if maps.shape[2] < 1 or not np.all(np.isfinite(maps)):
+            raise ValueError("charge_maps must be finite and contain at least one mode")
+        mu = float(mu)
+        if not np.isfinite(mu) or mu <= 0.0:
+            raise ValueError("mu must be positive")
+        self._gram = gram
+        flat_map = sp.csr_matrix(maps.reshape(-1, maps.shape[2]))
+        gram.configure_vector_charge_map(
+            _i32_buffer(flat_map.indptr),
+            _i32_buffer(flat_map.indices),
+            _f64_buffer(flat_map.data),
+            int(maps.shape[2]),
+            3,
+        )
+        self._mu = mu
+        self._metadata = {} if metadata is None else dict(metadata)
+        self._charge_count = int(maps.shape[1])
+        self._mode_count = int(maps.shape[2])
+        self._map_entries = int(flat_map.nnz)
+        self._map_bytes = int(
+            flat_map.indptr.nbytes + flat_map.indices.nbytes + flat_map.data.nbytes
+        )
+        self.shape = (int(maps.shape[2]), int(maps.shape[2]))
+        self.dtype = np.dtype(float)
+
+    @property
+    def T(self):
+        return self
+
+    @property
+    def H(self):
+        return self
+
+    @property
+    def matrix_free(self) -> bool:
+        return True
+
+    @property
+    def is_hermitian(self) -> bool:
+        return True
+
+    @property
+    def charge_count(self) -> int:
+        return self._charge_count
+
+    @property
+    def mode_count(self) -> int:
+        return self._mode_count
+
+    def _gram_matvec(self, vector: np.ndarray) -> np.ndarray:
+        if np.iscomplexobj(vector):
+            return np.asarray(
+                self._gram.apply_configured_demag(np.asarray(vector.real, dtype=float), True)
+            ) + 1j * np.asarray(
+                self._gram.apply_configured_demag(np.asarray(vector.imag, dtype=float), True)
+            )
+        return np.asarray(
+            self._gram.apply_configured_demag(np.asarray(vector, dtype=float), True)
+        )
+
+    def matvec(self, vector) -> np.ndarray:
+        x = np.asarray(vector)
+        if x.ndim != 1 or x.shape[0] != self.mode_count:
+            raise ValueError(f"vector must have shape ({self.mode_count},)")
+        return self._mu * self._gram_matvec(x)
+
+    def matmat(self, matrix) -> np.ndarray:
+        values = np.asarray(matrix)
+        if values.ndim == 1:
+            return self.matvec(values)
+        if values.ndim != 2 or values.shape[0] != self.mode_count:
+            raise ValueError(f"matrix must have shape ({self.mode_count}, n_rhs)")
+        return np.column_stack([self.matvec(values[:, column]) for column in range(values.shape[1])])
+
+    def __matmul__(self, other):
+        return self.matmat(other)
+
+    def transpose(self):
+        return self
+
+    def to_dense(self) -> np.ndarray:
+        dense = self.matmat(np.eye(self.mode_count))
+        return 0.5 * (dense + dense.T)
+
+    def __array__(self, dtype=None, copy=None):
+        dense = self.to_dense()
+        if dtype is not None:
+            dense = dense.astype(dtype, copy=False)
+        if copy is False:
+            return dense
+        return np.array(dense, copy=True)
+
+    def __getitem__(self, key):
+        return self.to_dense()[key]
+
+    def stats(self) -> dict[str, object]:
+        values = dict(self._metadata)
+        values.update(
+            {
+                "operator": "sum-component-BtGB",
+                "matrix_free": True,
+                "mode_count": self.mode_count,
+                "charge_count": self.charge_count,
+                "charge_map_entries": self._map_entries,
+                "charge_map_bytes": self._map_bytes,
+                "charge_map_backend": "native-cpp-component-csr",
+                "hmatrix": dict(self._gram.stats()),
+            }
+        )
+        return values
+
+
+def _compress_local_polynomial_maps(coefficients, *, rtol: float):
+    """Select a stable scalar-polynomial span for all components on each leaf.
+
+    The high-degree monomial coefficients can be extremely ill-conditioned.
+    An orthogonal coefficient-space basis therefore destroys physical
+    cancellation even when its algebraic SVD residual is tiny.  Pivoted QR is
+    used only for rank revelation; retained charges are original current
+    component polynomials.  A full-rank map is consequently an exact
+    permutation, not a numerically mixed basis.
+    """
+
+    coeff = np.asarray(coefficients, dtype=float)
+    if coeff.ndim != 4 or coeff.shape[-1] != 3:
+        raise ValueError("coefficients must have shape (mode, cell, monomial, 3)")
+    rtol = float(rtol)
+    if not np.isfinite(rtol) or rtol < 0.0:
+        raise ValueError("local_rank_rtol must be finite and non-negative")
+    n_modes, n_cells, n_monomials, _ = coeff.shape
+    polynomial_chunks = []
+    map_chunks = [[], [], []]
+    hosts = []
+    local_ranks = []
+    residual_sq = 0.0
+    total_sq = 0.0
+    for cell in range(n_cells):
+        polynomial_matrix = np.concatenate(
+            [coeff[:, cell, :, component].T for component in range(3)], axis=1
+        )
+        total_sq += float(np.linalg.norm(polynomial_matrix) ** 2)
+        _, triangular, pivots = sla.qr(
+            polynomial_matrix, mode="economic", pivoting=True
+        )
+        diagonal = np.abs(np.diag(triangular))
+        if diagonal.size == 0 or diagonal[0] == 0.0:
+            local_ranks.append(0)
+            continue
+        rank = int(np.count_nonzero(diagonal > rtol * diagonal[0]))
+        rank = max(rank, 1)
+        selected = polynomial_matrix[:, pivots[:rank]]
+        if rank == polynomial_matrix.shape[1]:
+            transform = np.zeros((rank, polynomial_matrix.shape[1]), dtype=float)
+            transform[np.arange(rank), pivots[:rank]] = 1.0
+        else:
+            transform = np.linalg.lstsq(
+                selected, polynomial_matrix, rcond=max(rtol, np.finfo(float).eps)
+            )[0]
+        residual_sq += float(np.linalg.norm(selected @ transform - polynomial_matrix) ** 2)
+        polynomial_chunks.append(selected.T)
+        hosts.extend([cell] * rank)
+        local_ranks.append(rank)
+        for component in range(3):
+            start = component * n_modes
+            map_chunks[component].append(transform[:, start : start + n_modes])
+    if not polynomial_chunks:
+        raise ValueError("all projected HCurl polynomial coefficients are zero")
+    polynomial_coefficients = np.concatenate(polynomial_chunks, axis=0)
+    charge_maps = np.stack(
+        [np.concatenate(chunks, axis=0) for chunks in map_chunks], axis=0
+    )
+    return {
+        "polynomial_coefficients": polynomial_coefficients,
+        "charge_host": np.asarray(hosts, dtype=np.int32),
+        "charge_maps": charge_maps,
+        "local_ranks": tuple(local_ranks),
+        "relative_truncation_error": float(
+            np.sqrt(residual_sq / max(total_sq, np.finfo(float).tiny))
+        ),
+        "uncompressed_charge_count": int(n_cells * n_monomials),
+    }
+
+
+def _affine_polynomial_hmatrix_operator(
+    projected,
+    *,
+    outer_points,
+    outer_weights,
+    eps: float,
+    leafsize: int,
+    eta: float,
+    local_rank_rtol: float,
+    max_charges: int,
+    mu: float,
+) -> HCurlHMatrixOperator:
+    compressed = _compress_local_polynomial_maps(
+        projected["coefficients"], rtol=local_rank_rtol
+    )
+    max_charges = int(max_charges)
+    if max_charges <= 0:
+        raise ValueError("max_charges must be positive")
+    charge_count = len(compressed["charge_host"])
+    if charge_count > max_charges:
+        raise ValueError(
+            f"local-polynomial HACApK Gram requires {charge_count} charges, "
+            f"above max_charges={max_charges}"
+        )
+    gram = _rp._ChargeGramHMatrix.from_local_polynomials(
+        cell_verts=_f64_buffer(projected["cell_verts"]),
+        n_el=int(projected.get("subtet_count", projected["cell_count"])),
+        charge_host=_i32_buffer(compressed["charge_host"]),
+        polynomial_coefficients=_f64_buffer(compressed["polynomial_coefficients"]),
+        polynomial_exponents=_i32_buffer(projected["exponents"]),
+        ref_tet_pts=_f64_buffer(outer_points),
+        ref_tet_w=_f64_buffer(outer_weights),
+        eps=float(eps),
+        leaf=int(leafsize),
+        eta=float(eta),
+        build=True,
+    )
+    return HCurlHMatrixOperator(
+        gram,
+        compressed["charge_maps"],
+        mu=mu,
+        metadata={
+            "scalar_gram_backend": "hacapk-local-polynomial-degree18",
+            "uncompressed_charge_count": compressed["uncompressed_charge_count"],
+            "local_rank_min": int(min(compressed["local_ranks"])),
+            "local_rank_max": int(max(compressed["local_ranks"])),
+            "local_rank_sum": int(sum(compressed["local_ranks"])),
+            "local_rank_algorithm": "pivoted-qr-original-columns",
+            "local_rank_relative_truncation_error": compressed[
+                "relative_truncation_error"
+            ],
+        },
+    )
+
+
+def _curved_reference_density_operator(
     projected,
     *,
     outer_quad: int,
@@ -822,8 +1077,9 @@ def _curved_reference_density_matrix(
     eps: float,
     leafsize: int,
     eta: float,
-) -> np.ndarray:
-    """Contract three scalar curved reference-density Grams."""
+    mu: float,
+) -> HCurlHMatrixOperator:
+    """Keep the curved scalar reference-density Gram as a composed operator."""
 
     outer_quad = int(outer_quad)
     curve_gauss = int(curve_gauss)
@@ -886,16 +1142,27 @@ def _curved_reference_density_matrix(
     )
     coefficients = np.asarray(projected["coefficients"], dtype=float)
     n_modes = int(projected["mode_count"])
-    matrix = np.zeros((n_modes, n_modes), dtype=float)
-    for component in range(3):
-        charge_map = coefficients[:, :, :, component].reshape(
-            n_modes, -1
-        ).T
-        applied = np.column_stack(
-            [gram.matvec_sym(charge_map[:, mode]) for mode in range(n_modes)]
-        )
-        matrix += charge_map.T @ applied
-    return 0.5 * (matrix + matrix.T)
+    charge_maps = np.stack(
+        [
+            coefficients[:, :, :, component].reshape(n_modes, -1).T
+            for component in range(3)
+        ],
+        axis=0,
+    )
+    return HCurlHMatrixOperator(
+        gram,
+        charge_maps,
+        mu=mu,
+        metadata={
+            "scalar_gram_backend": "hacapk-curved-p2-reference-density",
+            "uncompressed_charge_count": int(len(charge_host)),
+            "local_rank_min": int(n_monomials),
+            "local_rank_max": int(n_monomials),
+            "local_rank_sum": int(len(charge_host)),
+            "local_rank_algorithm": "fixed-curved-monomials",
+            "local_rank_relative_truncation_error": 0.0,
+        },
+    )
 
 
 @dataclass(frozen=True)
@@ -903,7 +1170,7 @@ class HCurlTetVolumeInteraction:
     """Precomputed reduced inductance block with analytic tet self terms."""
 
     basis: SampledCurrentBasis
-    matrix: np.ndarray
+    matrix: np.ndarray | HCurlHMatrixOperator
     polynomial_degree: int
     projection_relative_residual: float
     projection_tolerance: float
@@ -917,20 +1184,26 @@ class HCurlTetVolumeInteraction:
     def __post_init__(self) -> None:
         if not isinstance(self.basis, SampledCurrentBasis) or self.basis.kind != "volume":
             raise TypeError("basis must be a volume SampledCurrentBasis")
-        matrix = np.asarray(self.matrix)
+        matrix = self.matrix
         if matrix.shape != (self.basis.n_modes, self.basis.n_modes):
             raise ValueError("matrix shape must match the registered basis")
-        if not np.all(np.isfinite(matrix)):
+        if isinstance(matrix, HCurlHMatrixOperator):
+            return
+        dense = np.asarray(matrix)
+        if not np.all(np.isfinite(dense)):
             raise ValueError("matrix contains non-finite values")
-        object.__setattr__(self, "matrix", np.array(matrix, copy=True))
+        object.__setattr__(self, "matrix", np.array(dense, copy=True))
 
-    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis) -> np.ndarray:
+    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
         if left is not self.basis or right is not self.basis:
             raise ValueError("analytic tet interaction is registered for one volume basis")
+        if isinstance(self.matrix, HCurlHMatrixOperator):
+            return self.matrix
         return np.array(self.matrix, copy=True)
 
     def diagnostics(self) -> dict[str, object]:
-        eigenvalues = np.linalg.eigvalsh(np.real_if_close(self.matrix))
+        matrix_free = isinstance(self.matrix, HCurlHMatrixOperator)
+        eigenvalues = None if matrix_free else np.linalg.eigvalsh(np.real_if_close(self.matrix))
         return {
             "kind": type(self).__name__,
             "backend": self.name,
@@ -944,8 +1217,10 @@ class HCurlTetVolumeInteraction:
             "outer_quadrature_points": int(self.outer_quadrature_points),
             "max_vandermonde_condition": float(self.max_vandermonde_condition),
             "mu_H_per_m": float(self.mu),
-            "minimum_eigenvalue_H": float(eigenvalues[0]),
-            "maximum_eigenvalue_H": float(eigenvalues[-1]),
+            "minimum_eigenvalue_H": None if matrix_free else float(eigenvalues[0]),
+            "maximum_eigenvalue_H": None if matrix_free else float(eigenvalues[-1]),
+            "matrix_free": matrix_free,
+            "hmatrix_operator": self.matrix.stats() if matrix_free else None,
             "kernel_epsilon_m": None,
             "geometry": "affine-tetrahedron",
         }
@@ -956,7 +1231,7 @@ class HCurlCellVolumeInteraction:
     """Reduced 3-D HCurl interaction assembled on analytic sub-tetrahedra."""
 
     basis: SampledCurrentBasis
-    matrix: np.ndarray
+    matrix: np.ndarray | HCurlHMatrixOperator
     polynomial_degree: int
     projection_relative_residual: float
     projection_tolerance: float
@@ -987,12 +1262,14 @@ class HCurlCellVolumeInteraction:
     def __post_init__(self) -> None:
         if not isinstance(self.basis, SampledCurrentBasis) or self.basis.kind != "volume":
             raise TypeError("basis must be a volume SampledCurrentBasis")
-        matrix = np.asarray(self.matrix)
+        matrix = self.matrix
         if matrix.shape != (self.basis.n_modes, self.basis.n_modes):
             raise ValueError("matrix shape must match the registered basis")
-        if not np.all(np.isfinite(matrix)):
-            raise ValueError("matrix contains non-finite values")
-        object.__setattr__(self, "matrix", np.array(matrix, copy=True))
+        if not isinstance(matrix, HCurlHMatrixOperator):
+            dense = np.asarray(matrix)
+            if not np.all(np.isfinite(dense)):
+                raise ValueError("matrix contains non-finite values")
+            object.__setattr__(self, "matrix", np.array(dense, copy=True))
         object.__setattr__(
             self,
             "family_counts",
@@ -1017,13 +1294,16 @@ class HCurlCellVolumeInteraction:
             tuple(float(value) for value in self.geometry_residual_history),
         )
 
-    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis) -> np.ndarray:
+    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
         if left is not self.basis or right is not self.basis:
             raise ValueError("analytic cell interaction is registered for one volume basis")
+        if isinstance(self.matrix, HCurlHMatrixOperator):
+            return self.matrix
         return np.array(self.matrix, copy=True)
 
     def diagnostics(self) -> dict[str, object]:
-        eigenvalues = np.linalg.eigvalsh(np.real_if_close(self.matrix))
+        matrix_free = isinstance(self.matrix, HCurlHMatrixOperator)
+        eigenvalues = None if matrix_free else np.linalg.eigvalsh(np.real_if_close(self.matrix))
         return {
             "kind": type(self).__name__,
             "backend": self.name,
@@ -1059,8 +1339,10 @@ class HCurlCellVolumeInteraction:
             "dense_moment_pairs": int(self.dense_moment_pairs),
             "charge_count": int(self.charge_count),
             "mu_H_per_m": float(self.mu),
-            "minimum_eigenvalue_H": float(eigenvalues[0]),
-            "maximum_eigenvalue_H": float(eigenvalues[-1]),
+            "minimum_eigenvalue_H": None if matrix_free else float(eigenvalues[0]),
+            "maximum_eigenvalue_H": None if matrix_free else float(eigenvalues[-1]),
+            "matrix_free": matrix_free,
+            "hmatrix_operator": self.matrix.stats() if matrix_free else None,
             "kernel_epsilon_m": None,
             "geometry": self.geometry_backend,
         }
@@ -1076,6 +1358,12 @@ def NgsolveHCurlTetVolumeInteraction(
     projection_quad: int | None = None,
     outer_quad: int | None = None,
     projection_tolerance: float = 1.0e-9,
+    matrix_free: bool = True,
+    local_rank_rtol: float = 1.0e-13,
+    max_charges: int = 65_536,
+    hmatrix_eps: float = 1.0e-8,
+    hmatrix_leafsize: int = 32,
+    hmatrix_eta: float = 2.0,
     materials=None,
     mu: float = MU0,
 ) -> HCurlTetVolumeInteraction:
@@ -1136,18 +1424,31 @@ def NgsolveHCurlTetVolumeInteraction(
         )
 
     outer_points, outer_weights = _outer_tet(outer_quad)
-    matrix = mu * np.asarray(
-        _rp._TetHCurlReducedGram(
-            _f64_buffer(projected["cell_verts"]),
-            _i32_buffer(projected["exponents"]),
-            _f64_buffer(projected["coefficients"]),
-            int(basis.n_modes),
-            _f64_buffer(outer_points),
-            _f64_buffer(outer_weights),
-        ),
-        dtype=float,
-    )
-    matrix = 0.5 * (matrix + matrix.T)
+    if matrix_free:
+        matrix = _affine_polynomial_hmatrix_operator(
+            projected,
+            outer_points=outer_points,
+            outer_weights=outer_weights,
+            eps=hmatrix_eps,
+            leafsize=hmatrix_leafsize,
+            eta=hmatrix_eta,
+            local_rank_rtol=local_rank_rtol,
+            max_charges=max_charges,
+            mu=mu,
+        )
+    else:
+        matrix = mu * np.asarray(
+            _rp._TetHCurlReducedGram(
+                _f64_buffer(projected["cell_verts"]),
+                _i32_buffer(projected["exponents"]),
+                _f64_buffer(projected["coefficients"]),
+                int(basis.n_modes),
+                _f64_buffer(outer_points),
+                _f64_buffer(outer_weights),
+            ),
+            dtype=float,
+        )
+        matrix = 0.5 * (matrix + matrix.T)
     return HCurlTetVolumeInteraction(
         basis=basis,
         matrix=matrix,
@@ -1159,6 +1460,11 @@ def NgsolveHCurlTetVolumeInteraction(
         cell_count=int(projected["cell_count"]),
         max_vandermonde_condition=float(projected["max_vandermonde_condition"]),
         mu=mu,
+        name=(
+            "hacapk-local-polynomial-affine-tet-hcurl"
+            if matrix_free
+            else "analytic-affine-tet-hcurl"
+        ),
     )
 
 
@@ -1176,13 +1482,15 @@ def NgsolveHCurlCellVolumeInteraction(
     max_subdivision_levels: int = 8,
     max_subtets: int = 512,
     max_dense_moment_pairs: int = 20_000_000,
-    max_charges: int = 4096,
+    max_charges: int = 65_536,
     curve_gauss: int = 8,
     far_quad: int = 3,
     ho_far_factor: float = 2.0,
     hmatrix_eps: float = 1.0e-8,
     hmatrix_leafsize: int = 32,
     hmatrix_eta: float = 2.0,
+    matrix_free: bool = True,
+    local_rank_rtol: float = 1.0e-13,
     materials=None,
     mu: float = MU0,
 ) -> HCurlCellVolumeInteraction:
@@ -1199,12 +1507,15 @@ def NgsolveHCurlCellVolumeInteraction(
     The default projection tolerance 1e-4 accepts the p=6 pyramid at degree 18
     without refinement.  Tighter tolerances may invoke up to
     ``max_subdivision_levels`` apex refinements and should be paired with an
-    outer-quadrature convergence check.  P2 tetrahedra instead project the
+    outer-quadrature convergence check.  By default the three local current
+    components are rank-revealed per sub-tet and retained as the C++ HACApK
+    operator ``sum_c B_c.T G B_c``; ``matrix_free=False`` is the explicit
+    dense verification path.  P2 tetrahedra instead project the
     curl-Piola reference density ``K=J*abs(det(dX/dxi))`` and use the exact P2
     geometry in Radia's curved Duffy/H-matrix Gram.  Other warped maps use the
     residual-controlled piecewise-affine loop.  ``max_subtets`` and
-    ``max_charges`` prevent accidental Gram explosions.  No diagonal kernel
-    epsilon is used.
+    ``max_charges`` bound geometry refinement and the compressed scalar rank.
+    No diagonal kernel epsilon is used.
     """
 
     if int(mesh.dim) != 3:
@@ -1267,7 +1578,7 @@ def NgsolveHCurlCellVolumeInteraction(
                 f"{projected['charge_count']} scalar charges, "
                 f"above max_charges={max_charges}"
             )
-        matrix = mu * _curved_reference_density_matrix(
+        operator = _curved_reference_density_operator(
             projected,
             outer_quad=curved_outer_quad,
             curve_gauss=int(curve_gauss),
@@ -1276,7 +1587,9 @@ def NgsolveHCurlCellVolumeInteraction(
             eps=float(hmatrix_eps),
             leafsize=int(hmatrix_leafsize),
             eta=float(hmatrix_eta),
+            mu=mu,
         )
+        matrix = operator if matrix_free else operator.to_dense()
         outer_weights = _outer_tet(curved_outer_quad)[1]
         return HCurlCellVolumeInteraction(
             basis=basis,
@@ -1310,7 +1623,11 @@ def NgsolveHCurlCellVolumeInteraction(
             charge_count=int(projected["charge_count"]),
             geometry_backend="curved-p2-reference-density",
             mu=mu,
-            name="curved-p2-reference-density-hcurl-hmatrix",
+            name=(
+                "curved-p2-reference-density-hcurl-hmatrix-operator"
+                if matrix_free
+                else "curved-p2-reference-density-hcurl-hmatrix"
+            ),
         )
     if curve_order > 2 and inventory.families == ("tet",):
         raise NotImplementedError(
@@ -1372,6 +1689,7 @@ def NgsolveHCurlCellVolumeInteraction(
             refinement_strategy=refinement_strategy,
             max_subtets=max_subtets,
             max_dense_moment_pairs=max_dense_moment_pairs,
+            enforce_dense_moment_limit=not matrix_free,
             materials=materials,
         )
         if projected["mode_count"] != basis.n_modes:
@@ -1398,18 +1716,31 @@ def NgsolveHCurlCellVolumeInteraction(
         )
 
     outer_points, outer_weights = _outer_tet(outer_quad)
-    matrix = mu * np.asarray(
-        _rp._TetHCurlReducedGram(
-            _f64_buffer(projected["cell_verts"]),
-            _i32_buffer(projected["exponents"]),
-            _f64_buffer(projected["coefficients"]),
-            int(basis.n_modes),
-            _f64_buffer(outer_points),
-            _f64_buffer(outer_weights),
-        ),
-        dtype=float,
-    )
-    matrix = 0.5 * (matrix + matrix.T)
+    if matrix_free:
+        matrix = _affine_polynomial_hmatrix_operator(
+            projected,
+            outer_points=outer_points,
+            outer_weights=outer_weights,
+            eps=hmatrix_eps,
+            leafsize=hmatrix_leafsize,
+            eta=hmatrix_eta,
+            local_rank_rtol=local_rank_rtol,
+            max_charges=max_charges,
+            mu=mu,
+        )
+    else:
+        matrix = mu * np.asarray(
+            _rp._TetHCurlReducedGram(
+                _f64_buffer(projected["cell_verts"]),
+                _i32_buffer(projected["exponents"]),
+                _f64_buffer(projected["coefficients"]),
+                int(basis.n_modes),
+                _f64_buffer(outer_points),
+                _f64_buffer(outer_weights),
+            ),
+            dtype=float,
+        )
+        matrix = 0.5 * (matrix + matrix.T)
     return HCurlCellVolumeInteraction(
         basis=basis,
         matrix=matrix,
@@ -1434,12 +1765,19 @@ def NgsolveHCurlCellVolumeInteraction(
         geometry_order=curve_order,
         max_subtets=max_subtets,
         max_dense_moment_pairs=max_dense_moment_pairs,
-        dense_moment_pairs=int(projected["dense_moment_pairs"]),
+        dense_moment_pairs=(0 if matrix_free else int(projected["dense_moment_pairs"])),
+        charge_count=(matrix.charge_count if matrix_free else 0),
         mu=mu,
+        name=(
+            "hacapk-local-polynomial-high-order-cell-hcurl"
+            if matrix_free
+            else "analytic-high-order-cell-subtet-hcurl"
+        ),
     )
 
 
 __all__ = [
+    "HCurlHMatrixOperator",
     "HCurlTetVolumeInteraction",
     "HCurlCellVolumeInteraction",
     "NgsolveHCurlTetVolumeInteraction",

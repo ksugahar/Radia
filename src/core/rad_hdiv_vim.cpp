@@ -782,6 +782,27 @@ double TetPotentialPolynomial(const double V[4][3], const double r[3],
     return s;
 }
 
+void TetReferencePotentialMoments(const double V[4][3], const double r[3],
+                                  const std::vector<std::array<int,3>>& exps,
+                                  double* out)
+{
+    if (!out) throw std::invalid_argument("TetReferencePotentialMoments: out is null");
+    int degree = 0;
+    for (const auto& e : exps) {
+        if (e[0] < 0 || e[1] < 0 || e[2] < 0)
+            throw std::invalid_argument("TetReferencePotentialMoments: negative exponent");
+        degree = std::max(degree, e[0] + e[1] + e[2]);
+    }
+    if (degree > POLY_MAX_DEG)
+        throw std::invalid_argument("TetReferencePotentialMoments: degree exceeds 18");
+    double moments[POLY_MAX_MOMENTS] = {};
+    TetReferencePotentialMomentsUpTo(V, r, degree, moments);
+    for (size_t i = 0; i < exps.size(); ++i) {
+        const auto& e = exps[i];
+        out[i] = moments[PotentialMomentIndex(e[0], e[1], e[2])];
+    }
+}
+
 void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3], double out[20])
 {
     TetPotentialMomentsUpTo(V, r, 3, out);

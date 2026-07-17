@@ -198,7 +198,7 @@ class HCurlPlanarVolumeInteraction:
     """Reduced TRIG/QUAD inductance using the planar log Green kernel."""
 
     basis: SampledCurrentBasis
-    matrix: np.ndarray
+    matrix: object
     polynomial_degree: int
     projection_relative_residual: float
     projection_tolerance: float
@@ -213,25 +213,36 @@ class HCurlPlanarVolumeInteraction:
     name: str = "analytic-planar-log-hcurl"
 
     def __post_init__(self) -> None:
-        matrix = np.asarray(self.matrix)
+        from ._hcurl_tet_interaction import HCurlHMatrixOperator
+
+        matrix = self.matrix
         if matrix.shape != (self.basis.n_modes, self.basis.n_modes):
             raise ValueError("matrix shape must match the registered basis")
-        if not np.all(np.isfinite(matrix)):
-            raise ValueError("matrix contains non-finite values")
-        object.__setattr__(self, "matrix", np.array(matrix, copy=True))
+        if not isinstance(matrix, HCurlHMatrixOperator):
+            dense = np.asarray(matrix)
+            if not np.all(np.isfinite(dense)):
+                raise ValueError("matrix contains non-finite values")
+            object.__setattr__(self, "matrix", np.array(dense, copy=True))
         object.__setattr__(
             self,
             "net_current_per_mode",
             np.asarray(self.net_current_per_mode, dtype=float).copy(),
         )
 
-    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis) -> np.ndarray:
+    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
+        from ._hcurl_tet_interaction import HCurlHMatrixOperator
+
         if left is not self.basis or right is not self.basis:
             raise ValueError("planar interaction is registered for one volume basis")
+        if isinstance(self.matrix, HCurlHMatrixOperator):
+            return self.matrix
         return np.array(self.matrix, copy=True)
 
     def diagnostics(self) -> dict[str, object]:
-        eigenvalues = np.linalg.eigvalsh(np.real_if_close(self.matrix))
+        from ._hcurl_tet_interaction import HCurlHMatrixOperator
+
+        matrix_free = isinstance(self.matrix, HCurlHMatrixOperator)
+        eigenvalues = None if matrix_free else np.linalg.eigvalsh(np.real_if_close(self.matrix))
         return {
             "kind": type(self).__name__,
             "backend": self.name,
@@ -248,8 +259,10 @@ class HCurlPlanarVolumeInteraction:
             "max_vandermonde_condition": float(self.max_vandermonde_condition),
             "net_current_per_mode_A_per_m": self.net_current_per_mode.tolist(),
             "mu_H_per_m": float(self.mu),
-            "minimum_eigenvalue_H_per_m": float(eigenvalues[0]),
-            "maximum_eigenvalue_H_per_m": float(eigenvalues[-1]),
+            "minimum_eigenvalue_H_per_m": None if matrix_free else float(eigenvalues[0]),
+            "maximum_eigenvalue_H_per_m": None if matrix_free else float(eigenvalues[-1]),
+            "matrix_free": matrix_free,
+            "hmatrix_operator": self.matrix.stats() if matrix_free else None,
             "kernel_epsilon_m": None,
             "geometry": "planar-trig-quad",
         }
@@ -269,6 +282,7 @@ def NgsolveHCurlPlanarVolumeInteraction(
     eps: float = 1.0e-12,
     leafsize: int = 64,
     eta: float = 2.0,
+    matrix_free: bool = True,
 ) -> HCurlPlanarVolumeInteraction:
     """Build the epsilon-free planar interaction for TRIG/QUAD HCurl modes."""
 
@@ -344,11 +358,28 @@ def NgsolveHCurlPlanarVolumeInteraction(
         build=True,
     )
     coefficients = projected["coefficients"]
-    applied = np.column_stack(
-        [np.asarray(gram.matvec_sym(coefficients[:, mode])) for mode in range(basis.n_modes)]
-    )
-    matrix = mu * (coefficients.T @ applied)
-    matrix = 0.5 * (matrix + matrix.T)
+    if matrix_free:
+        from ._hcurl_tet_interaction import HCurlHMatrixOperator
+
+        charge_maps = np.zeros((3, coefficients.shape[0], basis.n_modes), dtype=float)
+        charge_maps[2, :, :] = coefficients
+        matrix = HCurlHMatrixOperator(
+            gram,
+            charge_maps,
+            mu=mu,
+            metadata={
+                "scalar_gram_backend": "hacapk-planar-log",
+                "uncompressed_charge_count": int(coefficients.shape[0]),
+                "local_rank_algorithm": "fixed-planar-monomials",
+                "local_rank_relative_truncation_error": 0.0,
+            },
+        )
+    else:
+        applied = np.column_stack(
+            [np.asarray(gram.matvec_sym(coefficients[:, mode])) for mode in range(basis.n_modes)]
+        )
+        matrix = mu * (coefficients.T @ applied)
+        matrix = 0.5 * (matrix + matrix.T)
     net_current = np.einsum("ai,i->a", basis.modes[:, :, 2], basis.weights)
     return HCurlPlanarVolumeInteraction(
         basis=basis,
@@ -364,6 +395,11 @@ def NgsolveHCurlPlanarVolumeInteraction(
         max_vandermonde_condition=float(projected["max_vandermonde_condition"]),
         net_current_per_mode=net_current,
         mu=mu,
+        name=(
+            "hacapk-planar-log-hcurl-operator"
+            if matrix_free
+            else "analytic-planar-log-hcurl"
+        ),
     )
 
 

@@ -44,6 +44,13 @@ void TetMoment1(const double V[4][3], const double r[3], double out[3]);        
 double TetPotentialPolynomial(const double V[4][3], const double r[3],
                               const std::vector<std::array<int,3>>& exps,
                               const std::vector<double>& coeffs);                 /* SUM c_a INT_V x^a/R dV */
+/* Selected reference-coordinate moments INT_V xi^a/R dV through total degree
+ * 18.  `out[k]` follows `exps[k]`.  This is the shared hot kernel used by the
+ * HCurl local-polynomial HACApK host blocks, so all polynomial charges on one
+ * source tetrahedron reuse one degree ladder. */
+void TetReferencePotentialMoments(const double V[4][3], const double r[3],
+                                  const std::vector<std::array<int,3>>& exps,
+                                  double* out);
 void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],

@@ -188,6 +188,7 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     ExternalVectorPotentialRHS,
 )
 from ._hcurl_tet_interaction import (  # noqa: F401
+    HCurlHMatrixOperator,
     HCurlTetVolumeInteraction,
     HCurlCellVolumeInteraction,
     NgsolveHCurlTetVolumeInteraction,
@@ -337,7 +338,7 @@ __all__ = [
     "BlockKrylovBasis", "NgsolveBlockKrylovBasis",
     "NgsolveOperatorBlockKrylovBasis", "NgsolveStaticCondensedBlockKrylovBasis",
     "SampledLaplaceInteraction", "ReducedInteractionMatrix", "HybridVIMSystem",
-    "HCurlTetVolumeInteraction", "HCurlCellVolumeInteraction",
+    "HCurlHMatrixOperator", "HCurlTetVolumeInteraction", "HCurlCellVolumeInteraction",
     "NgsolveHCurlTetVolumeInteraction", "NgsolveHCurlCellVolumeInteraction",
     "HCurlPlanarVolumeInteraction", "NgsolveHCurlPlanarVolumeInteraction",
     "HCurlEddyCLNModel", "HCurlEddyCLNFromVIM",
