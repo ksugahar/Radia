@@ -284,25 +284,11 @@
           "default": "auto",
           "choices": [
             "auto",
-            "on",
-            "off"
+            "on"
           ],
-          "help": "Genus-1 loop DOF (net shorted-turn eddy current) for the workpiece scalar BIE (radia.bem_loop_extension).  Recovers the Lenz screening a single-valued potential cannot represent on a ring/tube workpiece whose bore links the coil flux.  auto (default): apply on a genus-1 workpiece when the prerequisites hold (weak coupling, linear SIBC, --wp-bem-backend intree-dense, --h1-order 1); otherwise skip and report wp_loop_dof_skip_reason (genus-1 skips also keep the P_wp_caveat).  on (= bare --wp-loop-dof): require it -- unmet prerequisites or genus != 1 fail loud.  off: plain solver (genus-1 caveat applies).  delta_L (Telegen) keeps the plain-solve phi convention.",
+          "help": "Genus-1 loop DOF (net shorted-turn eddy current) for the workpiece scalar BIE (radia.bem_loop_extension).  Recovers the Lenz screening a single-valued potential cannot represent on a ring/tube workpiece whose bore links the coil flux.  auto (default): apply on a genus-1 workpiece when the prerequisites hold (weak coupling, linear SIBC, --wp-bem-backend intree-dense, --h1-order 1); otherwise skip and report wp_loop_dof_skip_reason (genus-1 skips also keep the P_wp_caveat).  on (= bare --wp-loop-dof): require it -- unmet prerequisites or genus != 1 fail loud.  There is deliberately NO 'off': the legacy un-extended genus-1 solve is a known +25-30% over-estimate and must not be selectable.  delta_L (Telegen) keeps the plain-solve phi convention.",
           "ja": "ループ電流自由度",
           "physics": "種数1ワークピースの短絡周回電流とLenz遮蔽を解く"
-        },
-        {
-          "cli": "--wp-phi-inc",
-          "name": "wp_phi_inc",
-          "default": "auto",
-          "choices": [
-            "auto",
-            "path",
-            "poisson"
-          ],
-          "help": "Workpiece incident-potential reconstruction.  poisson: surface-Poisson (Laplace-Beltrami) projection of the exact vertex H_inc -- wall-free, L2-optimal tangential gradient, and much faster (one batched H evaluation instead of per-vertex quadrature rays); fails loud when grad_S psi misses H_t,inc by > 10% (e.g. coil current piercing the surface).  path: legacy axis-ray + horizontal-ray path integration (accumulates local H errors into a branch-cut wall on the surface).  auto (default): poisson on the weak P1 nodal path, path otherwise (--h1-order 2 / strong driver).",
-          "ja": "入射スカラーポテンシャル",
-          "physics": "path=経路積分, poisson=表面Poisson射影"
         },
         {
           "cli": "--frequency",
