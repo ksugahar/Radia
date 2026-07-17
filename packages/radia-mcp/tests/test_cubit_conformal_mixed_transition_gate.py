@@ -1922,3 +1922,189 @@ def test_v21_source_aprepro_include_variable_expansion_working_directory_generat
     assert result["checks"][
         "aprepro_replay_uses_current_variables_includes_and_working_directory"
     ] is False
+
+
+def _with_v22_step_multibody_and_geometry_ownership_identity(row):
+    row = _with_v21_sweep_quality_group_aprepro_identity(row)
+    row["step_ap214_body_name_unit_frame_mass_property_generation_identity"] = {
+        "export_generation": "step-export-72",
+        "geometry_export_generation": "step-export-72",
+        "body_name_export_generation": "step-export-72",
+        "unit_export_generation": "step-export-72",
+        "placement_export_generation": "step-export-72",
+        "mass_property_export_generation": "step-export-72",
+        "step_schema": "AP214",
+        "exported_step_schema": "AP214",
+        "body_names": ["base", "link", "slider"],
+        "exported_body_names": ["base", "link", "slider"],
+        "length_unit": "m",
+        "exported_length_unit": "m",
+        "body_placement_ids": [101, 102, 103],
+        "exported_body_placement_ids": [101, 102, 103],
+        "geometry_sha256": "7" * 64,
+        "exported_geometry_sha256": "7" * 64,
+        "placement_table_sha256": "8" * 64,
+        "exported_placement_table_sha256": "8" * 64,
+        "mass_property_table_sha256": "9" * 64,
+        "exported_mass_property_table_sha256": "9" * 64,
+    }
+    row[
+        "hybrid_tet_hex_pyramid_transition_topology_block_generation_identity"
+    ] = {
+        "mesh_generation": "hybrid-mesh-72",
+        "pyramid_orientation_mesh_generation": "hybrid-mesh-72",
+        "shared_node_topology_mesh_generation": "hybrid-mesh-72",
+        "material_block_mesh_generation": "hybrid-mesh-72",
+        "pyramid_face_orientations": [1, -1, 1, -1],
+        "exported_pyramid_face_orientations": [1, -1, 1, -1],
+        "shared_node_ids": [201, 202, 203, 204, 205],
+        "exported_shared_node_ids": [201, 202, 203, 204, 205],
+        "material_block_ids": [10, 20, 30],
+        "exported_material_block_ids": [10, 20, 30],
+        "transition_topology_sha256": "a" * 64,
+        "exported_transition_topology_sha256": "a" * 64,
+        "material_block_map_sha256": "b" * 64,
+        "exported_material_block_map_sha256": "b" * 64,
+    }
+    row["headless_step_export_body_transform_name_generation_identity"] = {
+        "model_generation": "cubit-model-72",
+        "selected_body_model_generation": "cubit-model-72",
+        "transform_model_generation": "cubit-model-72",
+        "name_model_generation": "cubit-model-72",
+        "export_log_model_generation": "cubit-model-72",
+        "selected_body_ids": [1, 2, 3],
+        "exported_body_ids": [1, 2, 3],
+        "body_names": ["base", "link", "slider"],
+        "exported_body_names": ["base", "link", "slider"],
+        "transform_ids": [301, 302, 303],
+        "exported_transform_ids": [301, 302, 303],
+        "step_sha256": "c" * 64,
+        "exported_step_sha256": "c" * 64,
+        "transform_table_sha256": "d" * 64,
+        "exported_transform_table_sha256": "d" * 64,
+        "export_log_sha256": "e" * 64,
+        "recorded_export_log_sha256": "e" * 64,
+    }
+    row[
+        "geometry_heal_tolerance_imprint_merge_ownership_generation_identity"
+    ] = {
+        "geometry_generation": "geometry-72",
+        "heal_geometry_generation": "geometry-72",
+        "imprint_geometry_generation": "geometry-72",
+        "merge_geometry_generation": "geometry-72",
+        "ownership_geometry_generation": "geometry-72",
+        "heal_tolerance": 1.0e-6,
+        "ownership_heal_tolerance": 1.0e-6,
+        "source_entity_ids": [401, 402, 403, 404],
+        "owned_entity_ids": [401, 402, 403, 404],
+        "imprint_pair_ids": [501, 502],
+        "owned_imprint_pair_ids": [501, 502],
+        "merge_survivor_ids": [401, 403],
+        "owned_merge_survivor_ids": [401, 403],
+        "ownership_map_sha256": "f" * 64,
+        "recorded_ownership_map_sha256": "f" * 64,
+        "operation_log_sha256": "0" * 64,
+        "recorded_operation_log_sha256": "0" * 64,
+    }
+    return row
+
+
+def test_v22_positive_step_multibody_and_geometry_ownership_identity():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v22_public_step_ap214_body_name_unit_frame_mass_property_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row["step_ap214_body_name_unit_frame_mass_property_generation_identity"].update(
+        {
+            "body_name_export_generation": "step-export-71",
+            "unit_export_generation": "step-export-70",
+            "placement_export_generation": "step-export-69",
+            "mass_property_export_generation": "step-export-68",
+            "exported_step_schema": "AP203",
+            "exported_body_names": ["base", "slider", "link"],
+            "exported_length_unit": "mm",
+            "exported_body_placement_ids": [101, 103, 102],
+            "exported_geometry_sha256": "1" * 64,
+            "exported_placement_table_sha256": "2" * 64,
+            "exported_mass_property_table_sha256": "3" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "step_ap214_multibody_export_uses_current_body_unit_frame_and_mass_properties"
+    ] is False
+
+
+def test_v22_public_hybrid_tet_hex_pyramid_transition_topology_block_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row[
+        "hybrid_tet_hex_pyramid_transition_topology_block_generation_identity"
+    ].update(
+        {
+            "pyramid_orientation_mesh_generation": "hybrid-mesh-71",
+            "shared_node_topology_mesh_generation": "hybrid-mesh-70",
+            "material_block_mesh_generation": "hybrid-mesh-69",
+            "exported_pyramid_face_orientations": [-1, -1, 1, 1],
+            "exported_shared_node_ids": [201, 202, 204, 205, 206],
+            "exported_material_block_ids": [10, 20, 40],
+            "exported_transition_topology_sha256": "4" * 64,
+            "exported_material_block_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hybrid_transition_uses_current_orientation_shared_nodes_and_blocks"
+    ] is False
+
+
+def test_v22_source_headless_step_export_body_transform_name_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row["headless_step_export_body_transform_name_generation_identity"].update(
+        {
+            "selected_body_model_generation": "cubit-model-71",
+            "transform_model_generation": "cubit-model-70",
+            "name_model_generation": "cubit-model-69",
+            "export_log_model_generation": "cubit-model-68",
+            "exported_body_ids": [1, 3],
+            "exported_body_names": ["base", "slider"],
+            "exported_transform_ids": [301, 303],
+            "exported_step_sha256": "6" * 64,
+            "exported_transform_table_sha256": "7" * 64,
+            "recorded_export_log_sha256": "8" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "headless_step_export_uses_current_bodies_transforms_names_and_log"
+    ] is False
+
+
+def test_v22_source_geometry_heal_tolerance_imprint_merge_ownership_generation_mismatch():
+    row = _with_v22_step_multibody_and_geometry_ownership_identity(summary())
+    row[
+        "geometry_heal_tolerance_imprint_merge_ownership_generation_identity"
+    ].update(
+        {
+            "heal_geometry_generation": "geometry-71",
+            "imprint_geometry_generation": "geometry-70",
+            "merge_geometry_generation": "geometry-69",
+            "ownership_geometry_generation": "geometry-68",
+            "ownership_heal_tolerance": 1.0e-4,
+            "owned_entity_ids": [401, 403, 405],
+            "owned_imprint_pair_ids": [501, 503],
+            "owned_merge_survivor_ids": [401, 405],
+            "recorded_ownership_map_sha256": "9" * 64,
+            "recorded_operation_log_sha256": "a" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "healed_geometry_ownership_uses_current_tolerance_imprint_and_merge"
+    ] is False
