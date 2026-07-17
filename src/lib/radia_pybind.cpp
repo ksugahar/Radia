@@ -3426,6 +3426,23 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              "Build the n_charge x n_charge Coulomb Gram G as a HACApK H-matrix over the charge "
              "centroids (G[a!=b] = meas_a meas_b/(4pi r), G[a][a] = self_energy[a]).")
+        .def_static("from_sampled_laplace",
+             [](F64Array points_a, F64Array weights_a, double kernel_epsilon,
+                double eps, int leaf, double eta, bool build) {
+                 auto points = to_1d_vector<double>(points_a, "points");
+                 auto weights = to_1d_vector<double>(weights_a, "weights");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(points), std::move(weights), kernel_epsilon); },
+                     eps, leaf, eta, build,
+                     "sampled Laplace Gram H-matrix build failed");
+             },
+             py::arg("points"), py::arg("weights"), py::arg("kernel_epsilon"),
+             py::arg("eps") = 1e-11, py::arg("leaf") = 64,
+             py::arg("eta") = 2.0, py::arg("build") = true,
+             "Build a stable regularized sampled Laplace HACApK Gram.  Hybrid cross-only "
+             "composition is implemented by reduced diagonal correction, not by placing "
+             "partition zeros inside ACA.  Component CSR maps are configured separately.")
         .def(py::init([](F64Array cell_verts_a, F64Array face_verts_a,
                          int n_el, double eps, int leaf, double eta, double near_factor,
                          I32Array image_masks_a, F64Array image_signs_a, bool build,

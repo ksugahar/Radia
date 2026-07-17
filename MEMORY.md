@@ -1,0 +1,1 @@
+- [HCurl-SIBC HACApK cross composition](memory/hcurl_sibc_hacapk_cross.md): use a stable full current Gram plus reduced diagonal correction; keep HDiv-HCurl coupling separate.
