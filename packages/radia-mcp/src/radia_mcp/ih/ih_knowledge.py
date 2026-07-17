@@ -1637,7 +1637,15 @@ A single-valued scalar potential cannot carry net current through a
 surface cut.  For a flux-linked genus-1 workpiece, the loop extension
 adds the harmonic shorted-turn current.  The extension is closed by
 Faraday's law and is locked by the analytic
-shorted-ring golden plus a frozen-subsystem equivalence check.  It
+shorted-ring golden plus a frozen-subsystem equivalence check.
+Theoretical anchor: K. Sugahara, "Investigation of a Boundary Integral
+Equation n x H = J_s on Torus-Shaped Perfect Conductors," IEEE Trans.
+Antennas Propag. 56(3), pp. 722-725 (2008) -- the DUAL defect of the
+same H^1(S) != 0 topology (there the BIE admits a spurious harmonic
+null-space mode violating B.n=0, closed by one virtual-magnetic-current
+DOF + a one-point constraint; here the representation LACKS the
+harmonic mode, closed by one loop DOF + the Faraday row).  Per handle:
+one extra DOF, one extra condition, in both formulations.  It
 requires linear SIBC, ``--wp-bem-backend intree-dense``, and (on the
 weak path) ``--h1-order 1``; BOTH coupling modes take it -- the weak
 path applies it to its single solve, the strong drivers apply it ONCE
