@@ -1,64 +1,26 @@
-"""
-Graph MCP Server (radia_mcp.figure)
+"""radia_mcp.figure.server -- figure tool implementations.
 
-Surfaces the Sugahara Lab publication-figure style guide via two MCP
-tools:
+Sugahara Lab publication-figure MCP tools.  As of 2026-07-18 figure no
+longer runs a standalone MCP server: it was a shared middle-layer server
+for paper-writing + presentation, and since presentation merged into
+paper-writing (2026-07-17), figure follows.  The mcp-server-figure entry
+point is retired; every figure_* / paper_figure_* tool is now served by
+mcp-server-paper-writing via radia_mcp.figure.register().
 
-    figure_style_guide(target='all'|'paper_single_column'|...)
-        Returns the lab-standard rules (Times New Roman, units in
-        parentheses, no in-figure title, font sizes per embed width,
-        IEEE/IEEJ conventions) plus the numeric profile for the
-        selected target.
+This module only DEFINES the six inline tool functions
+(paper_figure_profiles / paper_figure_recipe / paper_figure_quality_rules
+/ figure_design_principles / figure_diagram_recipes / figure_audit_embeds);
+the figure_* helpers in radia_mcp.figure.tools are registered alongside
+them by register().  Nothing runs at import time except the imports below.
 
-    figure_size_for_target(target, embed_width_cm=None)
-        Computes the recommended figure size + font sizes + a
-        ready-to-paste MATLAB or Matplotlib snippet for the chosen
-        embedding width.
-
-Promoted on 2026-05-26 from
-  legacy private source tree
-into radia-mcp following the standard `radia_mcp.<topic>.server`
-pattern (statusable, --selftest-able, discoverable via the meta
-catalog).
-
-The companion Python helpers (apply_lab_style, lab_figsize,
-lab_savefig, tighten_margins, label_curve_endpoints, add_slope_guide,
-check_legend_overlap, find_best_legend_loc, plot_asymptote_ratio_sweep,
-plot_basis_size_convergence) are NOT registered as MCP tools — they
-have richer signatures (matplotlib objects in/out) than MCP-JSON can
-carry.  They live in `radia_mcp.figure.tools` for direct import by
-analysis scripts.
-
-Usage:
-    mcp-server-figure              # start MCP server (stdio transport)
-    mcp-server-figure --selftest   # smoke check every profile in both tools
+The companion Python helpers (apply_lab_style, lab_figsize, lab_savefig,
+...) are NOT MCP tools -- they have matplotlib-typed signatures that do
+not round-trip through MCP-JSON; they live in radia_mcp.figure.tools for
+direct import by analysis scripts.
 """
 
-import sys
-
-from mcp.server.fastmcp import FastMCP
-
-from ..common import register_status_tool
-
-from . import tools as _tools
+from . import tools as _tools  # noqa: F401  (kept per module contract)
 from . import _paper_figure as _paper
-
-mcp = FastMCP("mcp-server-figure")
-
-
-# ============================================================
-# Tool registration
-# ============================================================
-# Auto-register the MCP-callable subset (graph_*).  The Python helpers
-# (apply_lab_style etc.) have matplotlib-typed signatures that don't
-# round-trip through MCP-JSON, so we skip them deliberately.
-_REGISTERED: list[str] = []
-for _name in dir(_tools):
-    if _name.startswith("figure_"):
-        _fn = getattr(_tools, _name)
-        if callable(_fn):
-            mcp.tool()(_fn)
-            _REGISTERED.append(_name)
 
 
 # ============================================================
@@ -75,7 +37,6 @@ for _name in dir(_tools):
 #   emit_paper_figure(fig, 'out', 'ieee_double_column')
 
 
-@mcp.tool()
 def paper_figure_profiles(query: str = "all") -> str:
     """List paper-quality figure profiles + their exact journal geometry.
 
@@ -138,7 +99,6 @@ def paper_figure_profiles(query: str = "all") -> str:
     return "\n".join(out)
 
 
-@mcp.tool()
 def paper_figure_recipe(
     profile: str = "ieee_double_column",
     nrows: int = 1,
@@ -239,7 +199,6 @@ emit_paper_figure(
     return recipe
 
 
-@mcp.tool()
 def paper_figure_quality_rules(query: str = "all") -> str:
     """Why paper-quality figures need a margin-efficiency gate.
 
@@ -816,7 +775,6 @@ Recipe pipeline:
     )
 
 
-@mcp.tool()
 def figure_design_principles(topic: str = "all") -> str:
     """The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the
     authoritative external scientific-visualization literature (GitHub repos +
@@ -1041,7 +999,6 @@ Layering (see 'sakuzu_vs_graph'):
     )
 
 
-@mcp.tool()
 def figure_diagram_recipes(topic: str = "all") -> str:
     r"""Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill
     (distinct from data-PLOTTING グラフ and from the general 作図 design canon in
@@ -1247,7 +1204,6 @@ figure_design_principles (the 作図 design canon), paper_figure_quality_rules (
     )
 
 
-@mcp.tool()
 def figure_audit_embeds(tex_path: str) -> str:
     """Lint every \\includegraphics in a LaTeX file for figure embeds that
     cannot guarantee on-page 10 pt @ 8 cm (the CEFC-2026 mistake class).
@@ -1290,167 +1246,3 @@ def figure_audit_embeds(tex_path: str) -> str:
                      "lab_figure(embed_width_cm=W) + save_lab_figure, then "
                      "\\includegraphics[width=W cm] at 100%.")
     return "\n".join(lines)
-
-
-# ============================================================
-# Self-introspection (uniform with other radia_mcp servers)
-# ============================================================
-
-register_status_tool(
-    mcp,
-    server_name="mcp-server-figure",
-    description="Sugahara Lab publication-figure style guide: "
-                "IEEE / IEEJ font/size profiles, MATLAB + Matplotlib "
-                "snippets, lab style rules (units in parentheses, no "
-                "in-figure title, Times New Roman serif).",
-    subpackage="radia_mcp.figure",
-    related_servers=["mathematica", "literature-index"],
-    # matplotlib is needed for the python helper functions
-    # (apply_lab_style / lab_figsize / etc.), NOT for the MCP tools.
-    # Server loads without it.
-    optional_deps=["matplotlib"],
-)
-
-
-# ============================================================
-# Entry point
-# ============================================================
-
-def main():
-    if "--selftest" in sys.argv:
-        print("figure MCP server self-test:")
-        print(f"  Registered tools ({len(_REGISTERED)}):")
-        for name in sorted(_REGISTERED):
-            print(f"    - {name}")
-        # Smoke-test both legacy tools across every profile so a typo
-        # in the _PROFILES dict immediately surfaces in CI.
-        profiles = sorted(_tools._PROFILES.keys())
-        print(f"  Lab-style profiles ({len(profiles)}):")
-        for prof in profiles:
-            guide = _tools.figure_style_guide(prof)
-            size = _tools.figure_size_for_target(prof)
-            assert len(guide) > 200, (
-                f"figure_style_guide({prof!r}) returned only "
-                f"{len(guide)} chars (suspiciously short)"
-            )
-            assert "Unknown target" not in guide, (
-                f"figure_style_guide({prof!r}) reported unknown target"
-            )
-            assert "Unknown target" not in size, (
-                f"figure_size_for_target({prof!r}) reported unknown target"
-            )
-            print(f"    {prof:42s} guide={len(guide):4d} ch, "
-                  f"size={len(size):4d} ch")
-        # Sanity: 'all' returns everything
-        full = _tools.figure_style_guide("all")
-        assert all(p in full for p in profiles), \
-            "figure_style_guide('all') missing some profiles"
-        # Sanity: unknown target returns help text (not crash)
-        unk = _tools.figure_style_guide("not-a-real-profile")
-        assert "Unknown target" in unk and "Valid:" in unk
-        print(f"  figure_style_guide('all')               -> "
-              f"{len(full):5d} chars")
-        print(f"  figure_style_guide('not-a-real-profile') -> "
-              f"unknown-target help text emitted")
-
-        # --- paper-figure tier (v0.78.0) ---
-        print(f"  Paper-quality profiles ({len(_paper.PROFILES)}):")
-        for pname, p in _paper.PROFILES.items():
-            print(f"    {pname:24s} {p.width_mm:6.2f} mm  "
-                  f"font={p.font_pt:4.1f} pt  L/R/T/B="
-                  f"{p.margin_left:.3f}/{p.margin_right:.3f}/"
-                  f"{p.margin_top:.3f}/{p.margin_bottom:.3f}")
-        prof_list = paper_figure_profiles("all")
-        assert "ieee_double_column" in prof_list
-        assert "ieej_single_column" in prof_list
-        assert "igte_digest_double" in prof_list
-        print(f"  paper_figure_profiles('all')      -> "
-              f"{len(prof_list):5d} chars")
-
-        # Recipe smoke-test: every layout shape generates a non-empty
-        # recipe that mentions the profile name + the gate.
-        layouts = [(1, 1), (1, 2), (2, 1), (2, 2), (1, 3)]
-        for nrows, ncols in layouts:
-            rec = paper_figure_recipe(
-                profile="ieee_double_column",
-                nrows=nrows, ncols=ncols,
-                panel_labels=(nrows * ncols > 1),
-            )
-            assert "paper_figure(" in rec
-            assert "emit_paper_figure(" in rec
-            assert "ieee_double_column" in rec
-            assert "min_axes_fraction=0.72" in rec
-            print(f"    recipe[{nrows}x{ncols}]       -> "
-                  f"{len(rec):5d} chars")
-        # Quality-rules tool
-        rules = paper_figure_quality_rules("all")
-        for sec in ("efficiency", "margins", "units",
-                    "font_embedding", "multipanel"):
-            assert f"[{sec}]" in rules, f"section {sec!r} missing"
-        print(f"  paper_figure_quality_rules('all') -> "
-              f"{len(rules):5d} chars")
-
-        # Design-principles tool (the 作図 canon, distilled from external refs)
-        principles = figure_design_principles("all")
-        for sec in ("ten_rules", "perception", "color", "chartjunk",
-                    "direct_labeling", "defaults", "external_resources",
-                    "sakuzu_vs_graph"):
-            assert f"[{sec}]" in principles, f"design topic {sec!r} missing"
-        assert ("Rougier" in principles and "Cleveland" in principles
-                and "Crameri" in principles), "design-principles citations missing"
-        assert "Unknown topic" in figure_design_principles("nope"), \
-            "design-principles unknown-topic help missing"
-        print(f"  figure_design_principles('all')   -> "
-              f"{len(principles):5d} chars")
-
-        # Diagram-recipes tool (flowcharts + concept diagrams; TikZ + Graphviz)
-        diagrams = figure_diagram_recipes("all")
-        for sec in ("tool_selection", "tikz_flowchart", "graphviz",
-                    "concept_diagram", "design", "external_resources"):
-            assert f"[{sec}]" in diagrams, f"diagram topic {sec!r} missing"
-        assert ("digraph" in diagrams and "tikzpicture" in diagrams
-                and "ISO 5807" in diagrams), "diagram-recipes content missing"
-        assert "Unknown topic" in figure_diagram_recipes("nope"), \
-            "diagram-recipes unknown-topic help missing"
-        print(f"  figure_diagram_recipes('all')     -> "
-              f"{len(diagrams):5d} chars")
-
-        # Try importing matplotlib + smoke-test the runtime helpers
-        # (paper_figure / measure_figure_efficiency).  Skip if mpl is
-        # absent (the MCP tools above already loaded without mpl).
-        try:
-            import matplotlib
-            matplotlib.use("Agg")
-            from radia_mcp.figure import (
-                paper_figure as _pf,
-                measure_figure_efficiency as _meas,
-                emit_paper_figure as _emit,
-                auto_tighten as _at,
-            )
-            fig, axes = _pf("ieee_double_column", nrows=1, ncols=2)
-            for ax in axes.flat:
-                ax.plot([0, 1], [0, 1])
-                ax.set_xlabel(r"$f$ (Hz)")
-                ax.set_ylabel(r"$|Z|$ ($\Omega$)")
-            m = _meas(fig)
-            print(f"  paper_figure(ieee_double_column, 1, 2):")
-            print(f"    fig {m['fig_size_inches'][0]:.2f} x "
-                  f"{m['fig_size_inches'][1]:.2f} in, "
-                  f"axes_area_fraction = {m['axes_area_fraction']:.3f}")
-            assert m["axes_area_fraction"] > 0.55, (
-                f"baseline IEEE 1x2 fell below 0.55 "
-                f"({m['axes_area_fraction']:.3f}) — profile margins drifted"
-            )
-            import matplotlib.pyplot as plt
-            plt.close(fig)
-        except ImportError:
-            print("  [skipped runtime smoke-test: matplotlib not installed]")
-
-        print("  PASSED")
-        return
-
-    mcp.run(transport="stdio")
-
-
-if __name__ == "__main__":
-    main()
