@@ -1536,6 +1536,143 @@ def _nonlinear_continuation_load_step_identity_ok(summary: dict[str, Any]) -> bo
     )
 
 
+def _ale_force_work_balance_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "ale_moving_mesh_time_step_field_transfer_force_work_balance_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        time_s = [float(value) for value in identity.get("time_s", [])]
+        result_time_s = [float(value) for value in identity.get("result_time_s", [])]
+        displacement = [
+            float(value) for value in identity.get("mesh_displacement_m", [])
+        ]
+        result_displacement = [
+            float(value) for value in identity.get("result_mesh_displacement_m", [])
+        ]
+        force = [float(value) for value in identity.get("force_n", [])]
+        result_force = [float(value) for value in identity.get("result_force_n", [])]
+        reported_work = float(identity.get("reported_mechanical_work_j"))
+        field_energy = float(identity.get("field_energy_change_j"))
+        dissipation = float(identity.get("dissipated_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("ale_generation") or "")
+    mechanical_work = sum(
+        force_value * displacement_value
+        for force_value, displacement_value in zip(force, displacement, strict=True)
+    ) if len(force) == len(displacement) else math.nan
+    scale = max(abs(mechanical_work), 1.0)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "geometry_ale_generation",
+                "time_step_ale_generation",
+                "field_transfer_ale_generation",
+                "force_ale_generation",
+                "work_ale_generation",
+                "result_ale_generation",
+            )
+        )
+        and len(time_s) >= 2
+        and all(math.isfinite(value) and value >= 0.0 for value in time_s)
+        and all(right > left for left, right in zip(time_s, time_s[1:]))
+        and result_time_s == time_s
+        and len(displacement) == len(force) == len(time_s) - 1
+        and all(math.isfinite(value) for value in displacement + force)
+        and result_displacement == displacement
+        and result_force == force
+        and math.isfinite(reported_work)
+        and abs(reported_work - mechanical_work) <= 1.0e-12 * scale
+        and math.isfinite(field_energy)
+        and math.isfinite(dissipation)
+        and abs(field_energy + dissipation - mechanical_work) <= 1.0e-12 * scale
+        and _is_sha256(str(identity.get("geometry_mesh_sha256") or ""))
+        and identity.get("result_geometry_mesh_sha256")
+        == identity.get("geometry_mesh_sha256")
+        and _is_sha256(str(identity.get("field_transfer_sha256") or ""))
+        and identity.get("result_field_transfer_sha256")
+        == identity.get("field_transfer_sha256")
+        and _is_sha256(str(identity.get("force_work_table_sha256") or ""))
+        and identity.get("result_force_work_table_sha256")
+        == identity.get("force_work_table_sha256")
+    )
+
+
+def _segregated_iteration_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "segregated_multiphysics_iteration_relaxation_residual_component_solution_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        iteration_ids = [int(value) for value in identity.get("iteration_ids", [])]
+        result_iteration_ids = [
+            int(value) for value in identity.get("result_iteration_ids", [])
+        ]
+        components = [str(value) for value in identity.get("component_order", [])]
+        result_components = [
+            str(value) for value in identity.get("result_component_order", [])
+        ]
+        relaxation = [
+            float(value) for value in identity.get("relaxation_factors", [])
+        ]
+        result_relaxation = [
+            float(value) for value in identity.get("result_relaxation_factors", [])
+        ]
+        residuals = [float(value) for value in identity.get("residual_history", [])]
+        result_residuals = [
+            float(value) for value in identity.get("result_residual_history", [])
+        ]
+        tolerance = float(identity.get("relative_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("solve_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "iteration_solve_generation",
+                "relaxation_solve_generation",
+                "residual_solve_generation",
+                "component_solve_generation",
+                "solution_solve_generation",
+                "result_solve_generation",
+            )
+        )
+        and len(iteration_ids) >= 2
+        and iteration_ids == list(range(1, len(iteration_ids) + 1))
+        and result_iteration_ids == iteration_ids
+        and bool(components)
+        and all(components)
+        and len(set(components)) == len(components)
+        and result_components == components
+        and len(relaxation) == len(components)
+        and all(math.isfinite(value) and 0.0 < value <= 1.0 for value in relaxation)
+        and result_relaxation == relaxation
+        and identity.get("residual_norm") == "l2"
+        and identity.get("result_residual_norm") == identity.get("residual_norm")
+        and len(residuals) == len(iteration_ids)
+        and all(math.isfinite(value) and value >= 0.0 for value in residuals)
+        and all(right < left for left, right in zip(residuals, residuals[1:]))
+        and result_residuals == residuals
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and residuals[-1] <= tolerance
+        and identity.get("converged") is True
+        and _is_sha256(str(identity.get("solution_sha256") or ""))
+        and identity.get("result_solution_sha256") == identity.get("solution_sha256")
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1955,6 +2092,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "nonlinear_solutions_use_current_load_steps_branch_state_and_solver": (
             _nonlinear_continuation_load_step_identity_ok(summary)
+        ),
+        "ale_force_work_uses_current_geometry_time_transfer_and_energy_balance": (
+            _ale_force_work_balance_identity_ok(summary)
+        ),
+        "segregated_solution_uses_current_iterations_relaxation_residuals_and_components": (
+            _segregated_iteration_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
