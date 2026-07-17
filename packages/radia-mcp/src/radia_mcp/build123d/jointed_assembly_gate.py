@@ -482,6 +482,79 @@ def _builder_context_identity_ok(value: object) -> bool:
     )
 
 
+def _step_import_hierarchy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation", "")).strip()
+    hierarchy = [tuple(str(item).strip() for item in row) for row in value.get("product_hierarchy", [])]
+    decoded_hierarchy = [tuple(str(item).strip() for item in row) for row in value.get("decoded_product_hierarchy", [])]
+    placements = [tuple(row) for row in value.get("placements", [])]
+    decoded_placements = [tuple(row) for row in value.get("decoded_placements", [])]
+    colors = [tuple(row) for row in value.get("colors_rgb", [])]
+    decoded_colors = [tuple(row) for row in value.get("decoded_colors_rgb", [])]
+    shape_ids = [str(item).strip() for item in value.get("shape_ids", [])]
+    decoded_shape_ids = [str(item).strip() for item in value.get("decoded_shape_ids", [])]
+    step_digest = str(value.get("step_sha256", "")).lower()
+    map_digest = str(value.get("shape_map_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "unit_step_generation", "hierarchy_step_generation", "placement_step_generation",
+            "color_step_generation", "shape_step_generation", "result_step_generation"))
+        and value.get("length_unit") in {"m", "cm", "mm"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and bool(hierarchy) and all(len(row) == 2 and all(row) for row in hierarchy)
+        and decoded_hierarchy == hierarchy
+        and len(placements) == len(shape_ids)
+        and all(len(row) == 4 and str(row[0]).strip() in shape_ids for row in placements)
+        and all(math.isfinite(float(item)) for row in placements for item in row[1:])
+        and decoded_placements == placements
+        and len(colors) == len(shape_ids)
+        and all(len(row) == 4 and str(row[0]).strip() in shape_ids for row in colors)
+        and all(0.0 <= float(item) <= 1.0 for row in colors for item in row[1:])
+        and decoded_colors == colors
+        and bool(shape_ids) and all(shape_ids) and len(set(shape_ids)) == len(shape_ids)
+        and decoded_shape_ids == shape_ids
+        and _valid_sha256(step_digest) and value.get("decoded_step_sha256") == step_digest
+        and _valid_sha256(map_digest) and value.get("decoded_shape_map_sha256") == map_digest
+    )
+
+
+def _brep_cache_generation_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("brep_generation", "")).strip()
+    kernel = str(value.get("kernel_version", "")).strip()
+    shape_generation = str(value.get("shape_generation", "")).strip()
+    try:
+        tolerance = float(value.get("modeling_tolerance_m"))
+        decoded_tolerance = float(value.get("decoded_modeling_tolerance_m"))
+        location = [[float(item) for item in row] for row in value.get("location_transform", [])]
+        decoded_location = [[float(item) for item in row] for row in value.get("decoded_location_transform", [])]
+    except (TypeError, ValueError):
+        return False
+    shape_digest = str(value.get("shape_sha256", "")).lower()
+    cache_digest = str(value.get("brep_cache_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "kernel_brep_generation", "tolerance_brep_generation", "location_brep_generation",
+            "shape_brep_generation", "cache_brep_generation", "result_brep_generation"))
+        and kernel.startswith("OCCT-") and value.get("decoded_kernel_version") == kernel
+        and math.isfinite(tolerance) and tolerance > 0.0 and decoded_tolerance == tolerance
+        and len(location) == 3 and all(len(row) == 4 for row in location)
+        and all(math.isfinite(item) for row in location for item in row)
+        and decoded_location == location
+        and bool(shape_generation) and value.get("decoded_shape_generation") == shape_generation
+        and _valid_sha256(shape_digest) and value.get("decoded_shape_sha256") == shape_digest
+        and _valid_sha256(cache_digest) and value.get("decoded_brep_cache_sha256") == cache_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -814,6 +887,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     occ_build_fingerprint_identity_ok = True
     stl_tessellation_component_identity_ok = True
     builder_context_identity_ok = True
+    step_import_hierarchy_identity_ok = True
+    brep_cache_generation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -853,6 +928,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         occ_build_fingerprint_identity_ok = False
         stl_tessellation_component_identity_ok = False
         builder_context_identity_ok = False
+        step_import_hierarchy_identity_ok = False
+        brep_cache_generation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2428,6 +2505,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "builder_context_workplane_local_frame_part_identity_cache_generation_identity"
             )
         )
+        step_import_hierarchy_identity_ok = _step_import_hierarchy_identity_ok(
+            replay_identity_value.get(
+                "step_import_unit_hierarchy_placement_color_shape_checksum_generation_identity"
+            )
+        )
+        brep_cache_generation_identity_ok = _brep_cache_generation_identity_ok(
+            replay_identity_value.get(
+                "brep_serialization_kernel_tolerance_location_cache_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2557,6 +2644,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "builder_replay_uses_current_context_workplane_frame_parts_and_cache": (
             builder_context_identity_ok
+        ),
+        "step_import_uses_current_units_hierarchy_placements_colors_shapes_and_checksums": (
+            step_import_hierarchy_identity_ok
+        ),
+        "brep_cache_uses_current_kernel_tolerance_location_shape_and_digest": (
+            brep_cache_generation_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
