@@ -824,6 +824,54 @@ def test_v17_public_magnetic_bearing_force_harmonic_phase_origin_mismatch() -> N
     )
 
 
+def test_v18_public_bem_near_singular_panel_subdivision_quadrature_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    near_singular = summary["artifact_identity"][
+        "bem_near_singular_panel_subdivision_quadrature_generation_identity"
+    ]
+    near_singular.update(
+        {
+            "panel_subdivision_surface_generation": "surface-19",
+            "quadrature_subdivision_generation": "subdivision-19",
+            "subdivided_interaction_ids": [103, 102, 101],
+            "applied_quadrature_orders": [20, 16, 12],
+            "quadrature_input_subdivision_map_sha256": "9" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "bem_near_singular_quadrature_uses_current_panel_subdivision"
+        ]
+        is False
+    )
+
+
+def test_v18_public_maglev_force_coil_polarity_orientation_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    maglev_coil = summary["artifact_identity"][
+        "maglev_force_coil_polarity_orientation_generation_identity"
+    ]
+    maglev_coil.update(
+        {
+            "current_polarity_coil_generation": "coil-19",
+            "force_result_coil_generation": "coil-19",
+            "force_current_polarities": [-1, 1],
+            "force_winding_orientations": ["counterclockwise", "clockwise"],
+            "force_coil_orientation_map_sha256": "9" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "maglev_force_uses_current_coil_polarity_and_winding_orientation"
+        ]
+        is False
+    )
+
+
 def test_v17_public_magnetic_bearing_phase_origin_is_periodic() -> None:
     summary = _with_artifact_identity(_summary())
     bearing = summary["artifact_identity"][
