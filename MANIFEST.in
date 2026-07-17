@@ -23,6 +23,7 @@ include src/radia/CONVENTIONS.md
 # Note (radia 4.80.0): the .ccl was removed (Qt5 GUI deleted; PySide6
 # toolbar at src/radia/panels/radia_export_menu.py replaces it).
 recursive-include src/radia *.pyd
+recursive-include src/radia *.dll *.so *.dylib
 recursive-include src/radia *.ccm
 
 # Include examples

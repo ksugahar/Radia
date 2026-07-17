@@ -1,0 +1,95 @@
+{
+  "schema": "radia.validation.curved_sphere_geometry.v1",
+  "generated_at_utc": "2026-07-17T02:36:44.118889+00:00",
+  "validation_host": "mdx",
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "configuration": {
+    "curve_orders": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "maxh": 2.0,
+    "intorder": 10
+  },
+  "total_wall_seconds": 3.803257800056599,
+  "cases": [
+    {
+      "mesh_curve_order": 1,
+      "elements": 107,
+      "surface_area_fem": 11.904627662867032,
+      "surface_area_vim_samples": 11.904627662867039,
+      "surface_area_vim_to_fem_relative_error": 5.968626284519828e-16,
+      "volume_fem": 3.7960605764176827,
+      "surface_tangential_defect": 5.551115123125783e-17,
+      "conductor_graph_edges": 158,
+      "conductor_graph_cycle_rank": 52,
+      "bridge_dual_volume_sum": 10.076426714456394,
+      "exact_surface_area": 12.566370614359172,
+      "surface_area_relative_error_to_exact": 0.05265983089309724,
+      "exact_volume": 4.1887902047863905,
+      "volume_relative_error_to_exact": 0.09375729248028436,
+      "requested_curve_order": 1,
+      "bridge_dual_volume_relative_to_highest_order": 0.05894310564775313
+    },
+    {
+      "mesh_curve_order": 2,
+      "elements": 107,
+      "surface_area_fem": 12.551003318918749,
+      "surface_area_vim_samples": 12.55100331891875,
+      "surface_area_vim_to_fem_relative_error": 1.4153106283723627e-16,
+      "volume_fem": 4.180970642869076,
+      "surface_tangential_defect": 1.1102230246251565e-16,
+      "conductor_graph_edges": 158,
+      "conductor_graph_cycle_rank": 52,
+      "bridge_dual_volume_sum": 10.699102381297148,
+      "exact_surface_area": 12.566370614359172,
+      "surface_area_relative_error_to_exact": 0.0012228905156484796,
+      "exact_volume": 4.1887902047863905,
+      "volume_relative_error_to_exact": 0.0018667828979307126,
+      "requested_curve_order": 2,
+      "bridge_dual_volume_relative_to_highest_order": 0.0007902260773401797
+    },
+    {
+      "mesh_curve_order": 3,
+      "elements": 107,
+      "surface_area_fem": 12.567824515715618,
+      "surface_area_vim_samples": 12.567824515715621,
+      "surface_area_vim_to_fem_relative_error": 2.8268326585543573e-16,
+      "volume_fem": 4.189473583339874,
+      "surface_tangential_defect": 1.1102230246251565e-16,
+      "conductor_graph_edges": 158,
+      "conductor_graph_cycle_rank": 52,
+      "bridge_dual_volume_sum": 10.709049675167332,
+      "exact_surface_area": 12.566370614359172,
+      "surface_area_relative_error_to_exact": 0.00011569779382313154,
+      "exact_volume": 4.1887902047863905,
+      "volume_relative_error_to_exact": 0.0001631446121847645,
+      "requested_curve_order": 3,
+      "bridge_dual_volume_relative_to_highest_order": 0.00013877085202310753
+    },
+    {
+      "mesh_curve_order": 4,
+      "elements": 107,
+      "surface_area_fem": 12.566436519361417,
+      "surface_area_vim_samples": 12.566436519361417,
+      "surface_area_vim_to_fem_relative_error": 0.0,
+      "volume_fem": 4.188823035870353,
+      "surface_tangential_defect": 1.6653345369377348e-16,
+      "conductor_graph_edges": 158,
+      "conductor_graph_cycle_rank": 52,
+      "bridge_dual_volume_sum": 10.707563777418848,
+      "exact_surface_area": 12.566370614359172,
+      "surface_area_relative_error_to_exact": 5.2445534408794415e-06,
+      "exact_volume": 4.1887902047863905,
+      "volume_relative_error_to_exact": 7.837843949562115e-06,
+      "requested_curve_order": 4,
+      "bridge_dual_volume_relative_to_highest_order": 0.0
+    }
+  ]
+}

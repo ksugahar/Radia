@@ -254,12 +254,31 @@ to set anything by hand.
 ```bash
 check-vol model.vol                          # basic check
 check-vol model.vol --json model.vol.json    # compare vs CAD values
+check-vol model.vol --quality                 # curved-map Jacobian gate
+check-vol model.vol --quality --tet-only --min-scaled-jacobian 0.05
+check-vol model.vol --quality --conductors copper,magnet \
+  --sibc-boundaries conductor_air,conductor_exterior
 ```
 
 ```python
-from cubit_mesh_export.check import check_consistency
-results = check_consistency("model.vol")
+from cubit_mesh_export.check import check_consistency, check_mesh_quality
+
+results = check_consistency("model.vol", quality=True)
+quality = check_mesh_quality(
+    "model.vol",
+    conductors=("copper", "magnet"),
+    sibc_boundaries=("conductor_air", "conductor_exterior"),
+    tet_only=True,
+)
 ```
+
+The quality gate samples the actual curved NGSolve element mapping; it does not
+infer quality from straight corner nodes.  It checks physical and scaled
+Jacobians, geometry order, tetrahedron-only contracts, required labels, and
+material-aware face roles.  Only conductor-air or conductor-exterior faces may
+be classified as SIBC.  Conductor-insulator faces retain a trace role, while
+conductor-conductor faces retain the interface/loop-bridge role needed by the
+reduced HCurl cycle space.
 
 ## Part of the Radia project
 

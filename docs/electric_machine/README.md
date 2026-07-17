@@ -13,6 +13,9 @@ used to live under `examples/electric_machine`.
 | `planar_vim_motor_result.json` | Sidecar with the executed outputs, versions, and notebook sha. |
 | `em_reference_audit.ipynb` | Executed reference-audit methodology (2026-07-04): the diagnostics that exonerate or convict a FEM cross-validation reference — coil-disk polygon current deficit (−5.4%) + the drive-equivalence probe (uniform 4.9%); the conjugate-potential gradient gate (1e-10) and atan2 branch cuts (72% jumps) vs the single-valued polar construction (closure 4e-15); the finite-Dirichlet dipole image matched by its closed form (0.00%) and the exact n=1 open Robin; the secant-Picard plateau vs the exact Newton (9 iters). Cross-linked to `bug_patterns_lookup(topic="validation")` and MCP `hdiv_vim(topic="reference_audit")`. |
 | `em_reference_audit_result.json` | Sidecar for the audit notebook. |
+| `angle_periodic_motor_rom.ipynb` | Executed angle-periodic motor-ROM study: 8-pole/24-slot curved PMSM cross-section, interlaced holdout angles, Maxwell-stress/virtual-work/ROM torque audit, and the production coupling contract. |
+| `angle_periodic_motor_rom_result.json` | Synchronized benchmark metrics, runtime provenance, and notebook SHA-256. |
+| `angle_periodic_motor_rom_torque.pdf` / `.png` | Publication and preview forms of the torque comparison. |
 
 The solver behind `planar_vim_motor.ipynb` is the promoted 2D layer in `radia.vim`
 (`PlanarDemagBody` / `Solve` on a 2D mesh / `maxwell_torque_circle`), golden-locked in
@@ -27,11 +30,27 @@ the **HDiv Reduced** study through
 `src/radia/panels/calc_motor_hdiv_reduced.py`; its input mesh is a rotor-only 2D
 `.vol`, not the full-motor mesh used by the transient A-formulation.
 
+The production dynamic-machine API is `radia.motor_rom.AnglePeriodicMotorROM`.
+It combines angle-periodic phase and reduced eddy-current ports with the
+HDiv-MMM hysteresis restart contract, rigid-rotation `v x B` flux, cogging
+coenergy, skew, end-winding corrections, temperature-dependent resistance,
+thermal state, and an implicit electromechanical step.  The model bundle writer
+`radia.motor_rom_export.SaveMotorROMBundle` emits NPZ, MAT, JSON, a MATLAB
+loader, and an FMI model-variable fragment; `src/core/rad_motor_rom_c.h`
+provides the deterministic C ABI used by external motion solvers.
+
+The curved 2D qualification uses 33 training and 33 interlaced holdout angles.
+Its saved run reports a maximum holdout flux error of `1.67e-15`, a
+Maxwell-stress versus ROM torque relative RMSE of `1.90e-3`, and a minimum
+inductance eigenvalue of `0.137 H`.  These results establish the periodic-ROM
+contract for that machine-equivalent benchmark; machine-specific 3D end-region
+qualification remains a separate production acceptance task.
+
 `PlanarDemagBody.field_cf(...)` is the native C++/NGSolve source-field bridge.
 It rotates a solved source from its local frame into a target body's local
 frame without a Python point loop.  This is the interface primitive for the
 next fixed-stator reduced-FEM/AGE coupling increment; that full coupled machine
 path is not claimed by the current single-rotor reduced solver.
 
-The executable validation corpus is
-`validation_test/electric_machine/`; this directory is the rendered docs layer.
+The executable validation corpus is `validation_test/electric_machine/`; this
+directory is the rendered, result-bearing docs layer.

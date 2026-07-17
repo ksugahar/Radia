@@ -1,0 +1,2873 @@
+{
+  "schema": "radia.validation.evrs_sibc_mixed_schur.v1",
+  "generated_at_utc": "2026-07-17T02:54:22.319003+00:00",
+  "validation_host": "mdx",
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "note": "Timing fields are wall-clock observations on validation_host; publish them only when generated on a designated compute host.",
+  "configuration": {
+    "order": 6,
+    "orders": [
+      6
+    ],
+    "geometry": "sphere",
+    "krylov_steps": [
+      4,
+      8,
+      12,
+      22
+    ],
+    "reference": {
+      "order": 6,
+      "krylov_steps": 22
+    },
+    "frequencies_Hz": [
+      100.0,
+      1000.0,
+      10000.0,
+      100000.0,
+      1000000.0
+    ],
+    "maxh": 3.0,
+    "curve_order": 4,
+    "sigma": 58000000.0,
+    "intorder": 4,
+    "kernel_epsilon": 0.12,
+    "condense_from": 7,
+    "rtol": 1e-10,
+    "dtn_pole_hz": 1000.0,
+    "parent_order_ledger": {
+      "bulk_degree": 4,
+      "bridge_trace_degree": 0,
+      "surface_current_degree": 2,
+      "surface_omega_degree": 3,
+      "face_family": "simplex",
+      "bridge_trace_dim": 1,
+      "required_parent_order": 4,
+      "parent_order": null,
+      "parent_order_admissible": null,
+      "parent_order_excess": null
+    }
+  },
+  "cases": [
+    {
+      "order": 6,
+      "geometry": "sphere",
+      "krylov_steps": 4,
+      "condensed": false,
+      "ndof": 10970,
+      "active_dofs": 10970,
+      "rank": 8,
+      "bridge_cycle_modes": 52,
+      "surface_modes": 3,
+      "total_reduced_modes": 63,
+      "inactive_dofs": 0,
+      "eddy_visible_dofs": 8,
+      "eddy_invisible_dofs": 10962,
+      "compression_ratio": 0.0007292616226071103,
+      "surface_measure": 12.566360585225942,
+      "response_seconds_lab_smoke": 0.6305623999796808,
+      "volume_samples": 1498,
+      "surface_samples": 672,
+      "blocks": {
+        "volume": [
+          0,
+          8
+        ],
+        "volume1": [
+          8,
+          60
+        ],
+        "surface": [
+          60,
+          63
+        ]
+      },
+      "topology_diagnostics": {
+        "face_count": 270,
+        "roles": [
+          "conductor-conductor",
+          "conductor-exterior"
+        ],
+        "conductive_materials": [
+          "cond"
+        ],
+        "air_materials": [
+          "air",
+          "vacuum"
+        ],
+        "conductive_element_count": 107,
+        "conductive_component_count": 1,
+        "conductive_graph_edge_count": 158,
+        "conductive_graph_cycle_rank": 52,
+        "surface_face_count": 112,
+        "sibc_face_count": 112,
+        "non_sibc_trace_face_count": 0,
+        "loop_bridge_face_count": 158,
+        "conductor_exterior_face_count": 112,
+        "conductor_air_face_count": 0,
+        "conductor_insulator_face_count": 0,
+        "conductor_conductor_face_count": 158,
+        "conductive_interface_face_count": 0
+      },
+      "conductor_graph_diagnostics": {
+        "node_count": 107,
+        "edge_count": 158,
+        "component_count": 1,
+        "cycle_rank": 52,
+        "fundamental_cycle_count": 52,
+        "material_interface_edge_count": 0
+      },
+      "bridge_cycle_basis_diagnostics": {
+        "kind": "volume",
+        "modes": 52,
+        "samples": 158,
+        "mass_trace": 51.1193167619796,
+        "min_mass_eigenvalue": 0.05376140763754973
+      },
+      "bridge_cycle_vim_diagnostics": {
+        "n_modes": 52,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 52,
+        "blocks": {
+          "volume": [
+            0,
+            52
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": 9.269208213370655e-10,
+        "min_inductance_eigenvalue": 1.0251594696294118e-09,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "dof_policy_diagnostics": {
+        "ndof": 10970,
+        "free_dofs": 10970,
+        "sibc_surface_dofs": 2408,
+        "surface_candidate_dofs": 2408,
+        "non_sibc_trace_dofs": 0,
+        "loop_bridge_dofs": 3375,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "sibc_surface_only_dofs": 2245,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "partitioned_free_dofs": 10970,
+        "local_bubble_dofs": 5350,
+        "interface_dofs": 5080,
+        "wirebasket_dofs": 540,
+        "loop_bridge_fraction": 0.3076572470373747,
+        "sibc_surface_fraction": 0.2195077484047402,
+        "non_sibc_trace_fraction": 0.0,
+        "ordinary_evrs_fraction": 0.487693710118505
+      },
+      "reduction_plan_diagnostics": {
+        "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+        "free_dofs": 10970,
+        "loop_bridge_keep_dofs": 3375,
+        "loop_bridge_reduced_modes": 52,
+        "loop_bridge_reduction_strategy": "cycle-basis",
+        "loop_bridge_reduction_savings": 3323,
+        "sibc_surface_trace_dofs": 2408,
+        "sibc_surface_only_dofs": 2245,
+        "non_sibc_trace_dofs": 0,
+        "non_sibc_trace_modes": 0,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "conservative_structural_keep_dofs": 5620,
+        "evrs_rank": 8,
+        "surface_modes": 3,
+        "conservative_estimated_reduced_modes": 3386,
+        "estimated_reduced_modes": 63,
+        "estimated_reduction_ratio": 0.005742935278030993,
+        "ordinary_evrs_candidate_fraction": 0.487693710118505,
+        "conservative_structural_keep_fraction": 0.512306289881495
+      },
+      "topology_aware_hybrid_vim_diagnostics": {
+        "system": {
+          "n_modes": 63,
+          "interaction_backend": "sampled-laplace",
+          "basis_count": 63,
+          "blocks": {
+            "volume": [
+              0,
+              8
+            ],
+            "volume1": [
+              8,
+              60
+            ],
+            "surface": [
+              60,
+              63
+            ]
+          },
+          "resistance_hermitian_error": 0.0,
+          "inductance_hermitian_error": 0.0,
+          "surface_mass_hermitian_error": 0.0,
+          "min_resistance_eigenvalue": 0.0,
+          "min_inductance_eigenvalue": 1.7412378482151987e-15,
+          "min_surface_mass_eigenvalue": 0.0,
+          "passive_blocks": true
+        },
+        "volume_basis": {
+          "kind": "volume",
+          "modes": 8,
+          "samples": 1498,
+          "mass_trace": 52.1160318185621,
+          "min_mass_eigenvalue": 7.772459517706487e-07
+        },
+        "bridge_cycle_basis": {
+          "kind": "volume",
+          "modes": 52,
+          "samples": 158,
+          "mass_trace": 51.1193167619796,
+          "min_mass_eigenvalue": 0.05376140763754973
+        },
+        "surface_basis": {
+          "kind": "surface",
+          "modes": 3,
+          "samples": 672,
+          "mass_trace": 25.132721170451887,
+          "min_mass_eigenvalue": 8.377570003519061
+        },
+        "topology": {
+          "face_count": 270,
+          "roles": [
+            "conductor-conductor",
+            "conductor-exterior"
+          ],
+          "conductive_materials": [
+            "cond"
+          ],
+          "air_materials": [
+            "air",
+            "vacuum"
+          ],
+          "conductive_element_count": 107,
+          "conductive_component_count": 1,
+          "conductive_graph_edge_count": 158,
+          "conductive_graph_cycle_rank": 52,
+          "surface_face_count": 112,
+          "sibc_face_count": 112,
+          "non_sibc_trace_face_count": 0,
+          "loop_bridge_face_count": 158,
+          "conductor_exterior_face_count": 112,
+          "conductor_air_face_count": 0,
+          "conductor_insulator_face_count": 0,
+          "conductor_conductor_face_count": 158,
+          "conductive_interface_face_count": 0
+        },
+        "conductor_graph": {
+          "node_count": 107,
+          "edge_count": 158,
+          "component_count": 1,
+          "cycle_rank": 52,
+          "fundamental_cycle_count": 52,
+          "material_interface_edge_count": 0
+        },
+        "dof_policy": {
+          "ndof": 10970,
+          "free_dofs": 10970,
+          "sibc_surface_dofs": 2408,
+          "surface_candidate_dofs": 2408,
+          "non_sibc_trace_dofs": 0,
+          "loop_bridge_dofs": 3375,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "sibc_surface_only_dofs": 2245,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "partitioned_free_dofs": 10970,
+          "local_bubble_dofs": 5350,
+          "interface_dofs": 5080,
+          "wirebasket_dofs": 540,
+          "loop_bridge_fraction": 0.3076572470373747,
+          "sibc_surface_fraction": 0.2195077484047402,
+          "non_sibc_trace_fraction": 0.0,
+          "ordinary_evrs_fraction": 0.487693710118505
+        },
+        "reduction_plan": {
+          "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+          "free_dofs": 10970,
+          "loop_bridge_keep_dofs": 3375,
+          "loop_bridge_reduced_modes": 52,
+          "loop_bridge_reduction_strategy": "cycle-basis",
+          "loop_bridge_reduction_savings": 3323,
+          "sibc_surface_trace_dofs": 2408,
+          "sibc_surface_only_dofs": 2245,
+          "non_sibc_trace_dofs": 0,
+          "non_sibc_trace_modes": 0,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "conservative_structural_keep_dofs": 5620,
+          "evrs_rank": 8,
+          "surface_modes": 3,
+          "conservative_estimated_reduced_modes": 3386,
+          "estimated_reduced_modes": 63,
+          "estimated_reduction_ratio": 0.005742935278030993,
+          "ordinary_evrs_candidate_fraction": 0.487693710118505,
+          "conservative_structural_keep_fraction": 0.512306289881495
+        },
+        "eddy_bubbling": {
+          "rule": "topology-aware-eddy-bubbling",
+          "free_dofs": 10970,
+          "structural_keep_dofs": 5620,
+          "eddy_bubble_candidate_dofs": 5350,
+          "eddy_bubble_candidate_fraction": 0.487693710118505,
+          "classes": {
+            "sibc_surface": 2245,
+            "non_sibc_trace": 0,
+            "loop_bridge": 3375,
+            "ordinary_bulk_eddy_bubble": 5350
+          },
+          "policy": {
+            "ndof": 10970,
+            "free_dofs": 10970,
+            "sibc_surface_dofs": 2408,
+            "surface_candidate_dofs": 2408,
+            "non_sibc_trace_dofs": 0,
+            "loop_bridge_dofs": 3375,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "sibc_surface_only_dofs": 2245,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "partitioned_free_dofs": 10970,
+            "local_bubble_dofs": 5350,
+            "interface_dofs": 5080,
+            "wirebasket_dofs": 540,
+            "loop_bridge_fraction": 0.3076572470373747,
+            "sibc_surface_fraction": 0.2195077484047402,
+            "non_sibc_trace_fraction": 0.0,
+            "ordinary_evrs_fraction": 0.487693710118505
+          },
+          "plan": {
+            "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+            "free_dofs": 10970,
+            "loop_bridge_keep_dofs": 3375,
+            "loop_bridge_reduced_modes": 52,
+            "loop_bridge_reduction_strategy": "cycle-basis",
+            "loop_bridge_reduction_savings": 3323,
+            "sibc_surface_trace_dofs": 2408,
+            "sibc_surface_only_dofs": 2245,
+            "non_sibc_trace_dofs": 0,
+            "non_sibc_trace_modes": 0,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "conservative_structural_keep_dofs": 5620,
+            "evrs_rank": 8,
+            "surface_modes": 3,
+            "conservative_estimated_reduced_modes": 3386,
+            "estimated_reduced_modes": 63,
+            "estimated_reduction_ratio": 0.005742935278030993,
+            "ordinary_evrs_candidate_fraction": 0.487693710118505,
+            "conservative_structural_keep_fraction": 0.512306289881495
+          },
+          "topology": {
+            "face_count": 270,
+            "roles": [
+              "conductor-conductor",
+              "conductor-exterior"
+            ],
+            "conductive_materials": [
+              "cond"
+            ],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ],
+            "conductive_element_count": 107,
+            "conductive_component_count": 1,
+            "conductive_graph_edge_count": 158,
+            "conductive_graph_cycle_rank": 52,
+            "surface_face_count": 112,
+            "sibc_face_count": 112,
+            "non_sibc_trace_face_count": 0,
+            "loop_bridge_face_count": 158,
+            "conductor_exterior_face_count": 112,
+            "conductor_air_face_count": 0,
+            "conductor_insulator_face_count": 0,
+            "conductor_conductor_face_count": 158,
+            "conductive_interface_face_count": 0
+          },
+          "conductor_graph": {
+            "node_count": 107,
+            "edge_count": 158,
+            "component_count": 1,
+            "cycle_rank": 52,
+            "fundamental_cycle_count": 52,
+            "material_interface_edge_count": 0
+          },
+          "parent_order": 6,
+          "parent_order_ledger": {
+            "bulk_degree": 4,
+            "bridge_trace_degree": 0,
+            "surface_current_degree": 2,
+            "surface_omega_degree": 3,
+            "face_family": "simplex",
+            "bridge_trace_dim": 1,
+            "required_parent_order": 4,
+            "parent_order": 6,
+            "parent_order_admissible": true,
+            "parent_order_excess": 2,
+            "evrs_rank": 8,
+            "cycle_rank": 52,
+            "surface_modes": 3,
+            "non_sibc_trace_modes": 0,
+            "bridge_modes": 52,
+            "estimated_reduced_modes": 63
+          }
+        },
+        "has_rhs": true,
+        "has_response_basis": false,
+        "conductivity": 58000000.0
+      },
+      "system_diagnostics": {
+        "n_modes": 63,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 63,
+        "blocks": {
+          "volume": [
+            0,
+            8
+          ],
+          "volume1": [
+            8,
+            60
+          ],
+          "surface": [
+            60,
+            63
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": 0.0,
+        "min_inductance_eigenvalue": 1.7412378482151987e-15,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "frequency_rows": [
+        {
+          "frequency_Hz": 100.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628.3185307179587
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234867e-06,
+            "imag": 2.6089506942234867e-06
+          },
+          "mixed_impedance_condition": 3116513507.1121907,
+          "bridge_surface_schur_norm": 0.003524881650142952,
+          "surface_schur_norm": 0.0021854069815691554,
+          "surface_schur_inverse_norm": 1414.3320297706264,
+          "evrs_bridge_schur_norm": 0.004389088974298326,
+          "schur_solution_relative_error_to_direct": 1.852037858555775e-08,
+          "schur_residual_relative_error": 2.948551284359824e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 63,
+            "retained_modes": 55,
+            "eliminated_modes": 8,
+            "trial_orthogonality_relative_defect": 1.3447796994099404e-13,
+            "test_orthogonality_relative_defect": 1.2363350787293672e-13,
+            "schur_relative_error": 7.504399031255401e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 3116513507.1121907,
+            "reduced_operator_condition": 3155.0836829144882
+          },
+          "direct_residual_relative_error": 1.6538407355146289e-13,
+          "sibc_tail_admittance": {
+            "real": 2408316.9936958356,
+            "imag": -2408316.9936958356
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.9498084574,
+            "imag": 214602.5043887379
+          },
+          "port_admittance": {
+            "real": [
+              [
+                505.99995705687627,
+                0.7490135292297143
+              ],
+              [
+                0.7490135289565094,
+                463.7479459595618
+              ]
+            ],
+            "imag": [
+              [
+                -37827.01493888509,
+                -8.616684968472045
+              ],
+              [
+                -8.616684967474885,
+                -37640.97876893882
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.002097276588320268
+        },
+        {
+          "frequency_Hz": 1000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283.185307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823715e-06,
+            "imag": 8.250226496823716e-06
+          },
+          "mixed_impedance_condition": 3118778208.3762527,
+          "bridge_surface_schur_norm": 0.03501270089727096,
+          "surface_schur_norm": 0.021594013849157268,
+          "surface_schur_inverse_norm": 143.24050614049668,
+          "evrs_bridge_schur_norm": 0.043887914011289796,
+          "schur_solution_relative_error_to_direct": 2.3126117054227958e-08,
+          "schur_residual_relative_error": 2.96195858890135e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 63,
+            "retained_modes": 55,
+            "eliminated_modes": 8,
+            "trial_orthogonality_relative_defect": 1.2847663527143647e-13,
+            "test_orthogonality_relative_defect": 1.4016628181077163e-13,
+            "schur_relative_error": 7.350619376092808e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 3118778208.3762527,
+            "reduced_operator_condition": 3135.76670202615
+          },
+          "direct_residual_relative_error": 7.829547293585911e-14,
+          "sibc_tail_admittance": {
+            "real": 761576.7027768214,
+            "imag": -761576.7027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 761576.7027768212,
+            "imag": 0.0
+          },
+          "port_admittance": {
+            "real": [
+              [
+                16.445702628660097,
+                0.02478829918809018
+              ],
+              [
+                0.024788299219327244,
+                14.968573846418892
+              ]
+            ],
+            "imag": [
+              [
+                -3818.682382093952,
+                -0.9158389820139466
+              ],
+              [
+                -0.9158389823409899,
+                -3796.755099684869
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.002485786412964665
+        },
+        {
+          "frequency_Hz": 10000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 62831.853071795864
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234868e-05,
+            "imag": 2.6089506942234868e-05
+          },
+          "mixed_impedance_condition": 3119397523.0709486,
+          "bridge_surface_schur_norm": 0.34938533397350624,
+          "surface_schur_norm": 0.21512506338765353,
+          "surface_schur_inverse_norm": 14.381647975416977,
+          "evrs_bridge_schur_norm": 0.4388697428407124,
+          "schur_solution_relative_error_to_direct": 3.3797711242651354e-09,
+          "schur_residual_relative_error": 6.222586518849277e-11,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 63,
+            "retained_modes": 55,
+            "eliminated_modes": 8,
+            "trial_orthogonality_relative_defect": 1.192092369715895e-13,
+            "test_orthogonality_relative_defect": 9.176585402015986e-14,
+            "schur_relative_error": 2.0485601330713826e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 3119397523.0709486,
+            "reduced_operator_condition": 3129.711157651234
+          },
+          "direct_residual_relative_error": 1.0376412835982371e-13,
+          "sibc_tail_admittance": {
+            "real": 240831.69936958357,
+            "imag": -240831.69936958354
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.94980845734,
+            "imag": -214602.50438873784
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.5245663463742128,
+                0.0007966075526378332
+              ],
+              [
+                0.0007966075529072188,
+                0.4764161550457857
+              ]
+            ],
+            "imag": [
+              [
+                -383.00692828860934,
+                -0.0933171704146512
+              ],
+              [
+                -0.09331717042576186,
+                -380.7086824407134
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0026232420918015347
+        },
+        {
+          "frequency_Hz": 100000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628318.5307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823716e-05,
+            "imag": 8.250226496823716e-05
+          },
+          "mixed_impedance_condition": 3119592099.8764296,
+          "bridge_surface_schur_norm": 3.4915127309429934,
+          "surface_schur_norm": 2.1486798908169398,
+          "surface_schur_inverse_norm": 1.4399910158088938,
+          "evrs_bridge_schur_norm": 4.388667723475622,
+          "schur_solution_relative_error_to_direct": 1.2130612903958298e-08,
+          "schur_residual_relative_error": 1.3304693435560675e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 63,
+            "retained_modes": 55,
+            "eliminated_modes": 8,
+            "trial_orthogonality_relative_defect": 1.3446362120852266e-13,
+            "test_orthogonality_relative_defect": 1.1185045817654432e-13,
+            "schur_relative_error": 3.777999044510916e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 3119592099.8764296,
+            "reduced_operator_condition": 3127.8013433157657
+          },
+          "direct_residual_relative_error": 1.0712620925290289e-13,
+          "sibc_tail_admittance": {
+            "real": 76157.67027768213,
+            "imag": -76157.67027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 76911.55582487646,
+            "imag": -75388.55471943336
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.01663351593321855,
+                2.5323588505690504e-05
+              ],
+              [
+                2.532358850292138e-05,
+                0.015096387804864757
+              ]
+            ],
+            "imag": [
+              [
+                -38.33670413935395,
+                -0.009386600459295
+              ],
+              [
+                -0.009386600458554772,
+                -38.103541485998704
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.002668294446645489
+        },
+        {
+          "frequency_Hz": 1000000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283185.307179586
+          },
+          "skin_impedance": {
+            "real": 0.00026089506942234865,
+            "imag": 0.00026089506942234865
+          },
+          "mixed_impedance_condition": 3119653683.974494,
+          "bridge_surface_schur_norm": 34.907730386263275,
+          "surface_schur_norm": 21.47867612358723,
+          "surface_schur_inverse_norm": 0.144056900988517,
+          "evrs_bridge_schur_norm": 43.886583311370245,
+          "schur_solution_relative_error_to_direct": 8.564199248340146e-09,
+          "schur_residual_relative_error": 1.2933564280124826e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 63,
+            "retained_modes": 55,
+            "eliminated_modes": 8,
+            "trial_orthogonality_relative_defect": 1.3730187155020352e-13,
+            "test_orthogonality_relative_defect": 1.4623667895349342e-13,
+            "schur_relative_error": 2.364036812181124e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 3119653683.974494,
+            "reduced_operator_condition": 3127.1979141064967
+          },
+          "direct_residual_relative_error": 1.3857592672629966e-13,
+          "sibc_tail_admittance": {
+            "real": 24083.16993695836,
+            "imag": -24083.16993695836
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 24107.22899966632,
+            "imag": -24059.062707958692
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.0005264512940832528,
+                8.021452622764648e-07
+              ],
+              [
+                8.021452623733767e-07,
+                0.00047769788750136755
+              ]
+            ],
+            "imag": [
+              [
+                -3.834809200487948,
+                -0.0009403957966118966
+              ],
+              [
+                -0.0009403957966787722,
+                -3.8113873718700644
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.002682703418006216
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "geometry": "sphere",
+      "krylov_steps": 8,
+      "condensed": false,
+      "ndof": 10970,
+      "active_dofs": 10970,
+      "rank": 16,
+      "bridge_cycle_modes": 52,
+      "surface_modes": 3,
+      "total_reduced_modes": 71,
+      "inactive_dofs": 0,
+      "eddy_visible_dofs": 16,
+      "eddy_invisible_dofs": 10954,
+      "compression_ratio": 0.0014585232452142207,
+      "surface_measure": 12.566360585225942,
+      "response_seconds_lab_smoke": 1.418274600058794,
+      "volume_samples": 1498,
+      "surface_samples": 672,
+      "blocks": {
+        "volume": [
+          0,
+          16
+        ],
+        "volume1": [
+          16,
+          68
+        ],
+        "surface": [
+          68,
+          71
+        ]
+      },
+      "topology_diagnostics": {
+        "face_count": 270,
+        "roles": [
+          "conductor-conductor",
+          "conductor-exterior"
+        ],
+        "conductive_materials": [
+          "cond"
+        ],
+        "air_materials": [
+          "air",
+          "vacuum"
+        ],
+        "conductive_element_count": 107,
+        "conductive_component_count": 1,
+        "conductive_graph_edge_count": 158,
+        "conductive_graph_cycle_rank": 52,
+        "surface_face_count": 112,
+        "sibc_face_count": 112,
+        "non_sibc_trace_face_count": 0,
+        "loop_bridge_face_count": 158,
+        "conductor_exterior_face_count": 112,
+        "conductor_air_face_count": 0,
+        "conductor_insulator_face_count": 0,
+        "conductor_conductor_face_count": 158,
+        "conductive_interface_face_count": 0
+      },
+      "conductor_graph_diagnostics": {
+        "node_count": 107,
+        "edge_count": 158,
+        "component_count": 1,
+        "cycle_rank": 52,
+        "fundamental_cycle_count": 52,
+        "material_interface_edge_count": 0
+      },
+      "bridge_cycle_basis_diagnostics": {
+        "kind": "volume",
+        "modes": 52,
+        "samples": 158,
+        "mass_trace": 51.1193167619796,
+        "min_mass_eigenvalue": 0.05376140763754973
+      },
+      "bridge_cycle_vim_diagnostics": {
+        "n_modes": 52,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 52,
+        "blocks": {
+          "volume": [
+            0,
+            52
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": 9.269208213370655e-10,
+        "min_inductance_eigenvalue": 1.0251594696294118e-09,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "dof_policy_diagnostics": {
+        "ndof": 10970,
+        "free_dofs": 10970,
+        "sibc_surface_dofs": 2408,
+        "surface_candidate_dofs": 2408,
+        "non_sibc_trace_dofs": 0,
+        "loop_bridge_dofs": 3375,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "sibc_surface_only_dofs": 2245,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "partitioned_free_dofs": 10970,
+        "local_bubble_dofs": 5350,
+        "interface_dofs": 5080,
+        "wirebasket_dofs": 540,
+        "loop_bridge_fraction": 0.3076572470373747,
+        "sibc_surface_fraction": 0.2195077484047402,
+        "non_sibc_trace_fraction": 0.0,
+        "ordinary_evrs_fraction": 0.487693710118505
+      },
+      "reduction_plan_diagnostics": {
+        "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+        "free_dofs": 10970,
+        "loop_bridge_keep_dofs": 3375,
+        "loop_bridge_reduced_modes": 52,
+        "loop_bridge_reduction_strategy": "cycle-basis",
+        "loop_bridge_reduction_savings": 3323,
+        "sibc_surface_trace_dofs": 2408,
+        "sibc_surface_only_dofs": 2245,
+        "non_sibc_trace_dofs": 0,
+        "non_sibc_trace_modes": 0,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "conservative_structural_keep_dofs": 5620,
+        "evrs_rank": 16,
+        "surface_modes": 3,
+        "conservative_estimated_reduced_modes": 3394,
+        "estimated_reduced_modes": 71,
+        "estimated_reduction_ratio": 0.0064721969006381035,
+        "ordinary_evrs_candidate_fraction": 0.487693710118505,
+        "conservative_structural_keep_fraction": 0.512306289881495
+      },
+      "topology_aware_hybrid_vim_diagnostics": {
+        "system": {
+          "n_modes": 71,
+          "interaction_backend": "sampled-laplace",
+          "basis_count": 71,
+          "blocks": {
+            "volume": [
+              0,
+              16
+            ],
+            "volume1": [
+              16,
+              68
+            ],
+            "surface": [
+              68,
+              71
+            ]
+          },
+          "resistance_hermitian_error": 0.0,
+          "inductance_hermitian_error": 0.0,
+          "surface_mass_hermitian_error": 0.0,
+          "min_resistance_eigenvalue": -9.269954689715688e-23,
+          "min_inductance_eigenvalue": -1.6285509218201656e-22,
+          "min_surface_mass_eigenvalue": 0.0,
+          "passive_blocks": true
+        },
+        "volume_basis": {
+          "kind": "volume",
+          "modes": 16,
+          "samples": 1498,
+          "mass_trace": 75.72295483805695,
+          "min_mass_eigenvalue": -7.092422767578169e-15
+        },
+        "bridge_cycle_basis": {
+          "kind": "volume",
+          "modes": 52,
+          "samples": 158,
+          "mass_trace": 51.1193167619796,
+          "min_mass_eigenvalue": 0.05376140763754973
+        },
+        "surface_basis": {
+          "kind": "surface",
+          "modes": 3,
+          "samples": 672,
+          "mass_trace": 25.132721170451887,
+          "min_mass_eigenvalue": 8.377570003519061
+        },
+        "topology": {
+          "face_count": 270,
+          "roles": [
+            "conductor-conductor",
+            "conductor-exterior"
+          ],
+          "conductive_materials": [
+            "cond"
+          ],
+          "air_materials": [
+            "air",
+            "vacuum"
+          ],
+          "conductive_element_count": 107,
+          "conductive_component_count": 1,
+          "conductive_graph_edge_count": 158,
+          "conductive_graph_cycle_rank": 52,
+          "surface_face_count": 112,
+          "sibc_face_count": 112,
+          "non_sibc_trace_face_count": 0,
+          "loop_bridge_face_count": 158,
+          "conductor_exterior_face_count": 112,
+          "conductor_air_face_count": 0,
+          "conductor_insulator_face_count": 0,
+          "conductor_conductor_face_count": 158,
+          "conductive_interface_face_count": 0
+        },
+        "conductor_graph": {
+          "node_count": 107,
+          "edge_count": 158,
+          "component_count": 1,
+          "cycle_rank": 52,
+          "fundamental_cycle_count": 52,
+          "material_interface_edge_count": 0
+        },
+        "dof_policy": {
+          "ndof": 10970,
+          "free_dofs": 10970,
+          "sibc_surface_dofs": 2408,
+          "surface_candidate_dofs": 2408,
+          "non_sibc_trace_dofs": 0,
+          "loop_bridge_dofs": 3375,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "sibc_surface_only_dofs": 2245,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "partitioned_free_dofs": 10970,
+          "local_bubble_dofs": 5350,
+          "interface_dofs": 5080,
+          "wirebasket_dofs": 540,
+          "loop_bridge_fraction": 0.3076572470373747,
+          "sibc_surface_fraction": 0.2195077484047402,
+          "non_sibc_trace_fraction": 0.0,
+          "ordinary_evrs_fraction": 0.487693710118505
+        },
+        "reduction_plan": {
+          "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+          "free_dofs": 10970,
+          "loop_bridge_keep_dofs": 3375,
+          "loop_bridge_reduced_modes": 52,
+          "loop_bridge_reduction_strategy": "cycle-basis",
+          "loop_bridge_reduction_savings": 3323,
+          "sibc_surface_trace_dofs": 2408,
+          "sibc_surface_only_dofs": 2245,
+          "non_sibc_trace_dofs": 0,
+          "non_sibc_trace_modes": 0,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "conservative_structural_keep_dofs": 5620,
+          "evrs_rank": 16,
+          "surface_modes": 3,
+          "conservative_estimated_reduced_modes": 3394,
+          "estimated_reduced_modes": 71,
+          "estimated_reduction_ratio": 0.0064721969006381035,
+          "ordinary_evrs_candidate_fraction": 0.487693710118505,
+          "conservative_structural_keep_fraction": 0.512306289881495
+        },
+        "eddy_bubbling": {
+          "rule": "topology-aware-eddy-bubbling",
+          "free_dofs": 10970,
+          "structural_keep_dofs": 5620,
+          "eddy_bubble_candidate_dofs": 5350,
+          "eddy_bubble_candidate_fraction": 0.487693710118505,
+          "classes": {
+            "sibc_surface": 2245,
+            "non_sibc_trace": 0,
+            "loop_bridge": 3375,
+            "ordinary_bulk_eddy_bubble": 5350
+          },
+          "policy": {
+            "ndof": 10970,
+            "free_dofs": 10970,
+            "sibc_surface_dofs": 2408,
+            "surface_candidate_dofs": 2408,
+            "non_sibc_trace_dofs": 0,
+            "loop_bridge_dofs": 3375,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "sibc_surface_only_dofs": 2245,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "partitioned_free_dofs": 10970,
+            "local_bubble_dofs": 5350,
+            "interface_dofs": 5080,
+            "wirebasket_dofs": 540,
+            "loop_bridge_fraction": 0.3076572470373747,
+            "sibc_surface_fraction": 0.2195077484047402,
+            "non_sibc_trace_fraction": 0.0,
+            "ordinary_evrs_fraction": 0.487693710118505
+          },
+          "plan": {
+            "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+            "free_dofs": 10970,
+            "loop_bridge_keep_dofs": 3375,
+            "loop_bridge_reduced_modes": 52,
+            "loop_bridge_reduction_strategy": "cycle-basis",
+            "loop_bridge_reduction_savings": 3323,
+            "sibc_surface_trace_dofs": 2408,
+            "sibc_surface_only_dofs": 2245,
+            "non_sibc_trace_dofs": 0,
+            "non_sibc_trace_modes": 0,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "conservative_structural_keep_dofs": 5620,
+            "evrs_rank": 16,
+            "surface_modes": 3,
+            "conservative_estimated_reduced_modes": 3394,
+            "estimated_reduced_modes": 71,
+            "estimated_reduction_ratio": 0.0064721969006381035,
+            "ordinary_evrs_candidate_fraction": 0.487693710118505,
+            "conservative_structural_keep_fraction": 0.512306289881495
+          },
+          "topology": {
+            "face_count": 270,
+            "roles": [
+              "conductor-conductor",
+              "conductor-exterior"
+            ],
+            "conductive_materials": [
+              "cond"
+            ],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ],
+            "conductive_element_count": 107,
+            "conductive_component_count": 1,
+            "conductive_graph_edge_count": 158,
+            "conductive_graph_cycle_rank": 52,
+            "surface_face_count": 112,
+            "sibc_face_count": 112,
+            "non_sibc_trace_face_count": 0,
+            "loop_bridge_face_count": 158,
+            "conductor_exterior_face_count": 112,
+            "conductor_air_face_count": 0,
+            "conductor_insulator_face_count": 0,
+            "conductor_conductor_face_count": 158,
+            "conductive_interface_face_count": 0
+          },
+          "conductor_graph": {
+            "node_count": 107,
+            "edge_count": 158,
+            "component_count": 1,
+            "cycle_rank": 52,
+            "fundamental_cycle_count": 52,
+            "material_interface_edge_count": 0
+          },
+          "parent_order": 6,
+          "parent_order_ledger": {
+            "bulk_degree": 4,
+            "bridge_trace_degree": 0,
+            "surface_current_degree": 2,
+            "surface_omega_degree": 3,
+            "face_family": "simplex",
+            "bridge_trace_dim": 1,
+            "required_parent_order": 4,
+            "parent_order": 6,
+            "parent_order_admissible": true,
+            "parent_order_excess": 2,
+            "evrs_rank": 16,
+            "cycle_rank": 52,
+            "surface_modes": 3,
+            "non_sibc_trace_modes": 0,
+            "bridge_modes": 52,
+            "estimated_reduced_modes": 71
+          }
+        },
+        "has_rhs": true,
+        "has_response_basis": false,
+        "conductivity": 58000000.0
+      },
+      "system_diagnostics": {
+        "n_modes": 71,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 71,
+        "blocks": {
+          "volume": [
+            0,
+            16
+          ],
+          "volume1": [
+            16,
+            68
+          ],
+          "surface": [
+            68,
+            71
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": -9.269954689715688e-23,
+        "min_inductance_eigenvalue": -1.6285509218201656e-22,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "frequency_rows": [
+        {
+          "frequency_Hz": 100.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628.3185307179587
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234867e-06,
+            "imag": 2.6089506942234867e-06
+          },
+          "mixed_impedance_condition": 1.1826191621686742e+17,
+          "bridge_surface_schur_norm": 0.003358964278526969,
+          "surface_schur_norm": 0.002089375362173311,
+          "surface_schur_inverse_norm": 1486.5367137019855,
+          "evrs_bridge_schur_norm": 0.005000607337596523,
+          "schur_solution_relative_error_to_direct": 0.2099186963745277,
+          "schur_residual_relative_error": 1.5440475334805843e-05,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 71,
+            "retained_modes": 55,
+            "eliminated_modes": 16,
+            "trial_orthogonality_relative_defect": 3.1970285914022205e-11,
+            "test_orthogonality_relative_defect": 3.374203721059923e-11,
+            "schur_relative_error": 0.00011053831475515456,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.1826191621686742e+17,
+            "reduced_operator_condition": 3033.9625258996152
+          },
+          "direct_residual_relative_error": 4.630404539874138e-12,
+          "sibc_tail_admittance": {
+            "real": 2408316.9936958356,
+            "imag": -2408316.9936958356
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.9498084574,
+            "imag": 214602.5043887379
+          },
+          "port_admittance": {
+            "real": [
+              [
+                510.7784792955096,
+                0.14719521645749412
+              ],
+              [
+                0.14715468482303692,
+                468.0339815174364
+              ]
+            ],
+            "imag": [
+              [
+                -37843.72733836924,
+                -4.8450139934362975
+              ],
+              [
+                -4.844923523498336,
+                -37657.34742060988
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0016611592212266806
+        },
+        {
+          "frequency_Hz": 1000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283.185307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823715e-06,
+            "imag": 8.250226496823716e-06
+          },
+          "mixed_impedance_condition": 1.5569374916358342e+17,
+          "bridge_surface_schur_norm": 0.03335029330123789,
+          "surface_schur_norm": 0.02063186598504129,
+          "surface_schur_inverse_norm": 150.67518044002875,
+          "evrs_bridge_schur_norm": 0.050003456722663396,
+          "schur_solution_relative_error_to_direct": 0.1130170817190211,
+          "schur_residual_relative_error": 1.6911048799531376e-05,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 71,
+            "retained_modes": 55,
+            "eliminated_modes": 16,
+            "trial_orthogonality_relative_defect": 8.097237299352599e-11,
+            "test_orthogonality_relative_defect": 8.303364799735917e-11,
+            "schur_relative_error": 0.00012565275448356145,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.5569374916358342e+17,
+            "reduced_operator_condition": 3013.382699109759
+          },
+          "direct_residual_relative_error": 7.927527530428903e-12,
+          "sibc_tail_admittance": {
+            "real": 761576.7027768214,
+            "imag": -761576.7027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 761576.7027768212,
+            "imag": 0.0
+          },
+          "port_admittance": {
+            "real": [
+              [
+                16.60956461991993,
+                0.0040110157439944135
+              ],
+              [
+                0.004010364827632601,
+                15.11321911410547
+              ]
+            ],
+            "imag": [
+              [
+                -3820.725620651415,
+                -0.49218846201890637
+              ],
+              [
+                -0.49218309514092673,
+                -3798.7192711123002
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.001981198503430939
+        },
+        {
+          "frequency_Hz": 10000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 62831.853071795864
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234868e-05,
+            "imag": 2.6089506942234868e-05
+          },
+          "mixed_impedance_condition": 1.8664168036611645e+17,
+          "bridge_surface_schur_norm": 0.3327475842365233,
+          "surface_schur_norm": 0.20549422544939908,
+          "surface_schur_inverse_norm": 15.13232141445147,
+          "evrs_bridge_schur_norm": 0.5000263046315025,
+          "schur_solution_relative_error_to_direct": 0.005378571593260512,
+          "schur_residual_relative_error": 2.3374201391773484e-05,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 71,
+            "retained_modes": 55,
+            "eliminated_modes": 16,
+            "trial_orthogonality_relative_defect": 6.225378730318049e-11,
+            "test_orthogonality_relative_defect": 5.85129064166323e-11,
+            "schur_relative_error": 0.00017195562691405214,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.8664168036611645e+17,
+            "reduced_operator_condition": 3007.0234483763043
+          },
+          "direct_residual_relative_error": 5.6398718309911025e-12,
+          "sibc_tail_admittance": {
+            "real": 240831.69936958357,
+            "imag": -240831.69936958354
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.94980845734,
+            "imag": -214602.50438873784
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.5298599840068399,
+                0.00012002698279003458
+              ],
+              [
+                0.00012000306748540585,
+                0.48106960990985553
+              ]
+            ],
+            "imag": [
+              [
+                -383.22284044624286,
+                -0.04943813450759855
+              ],
+              [
+                -0.04943748684582791,
+                -380.9153490517928
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0020947089554288266
+        },
+        {
+          "frequency_Hz": 100000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628318.5307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823716e-05,
+            "imag": 8.250226496823716e-05
+          },
+          "mixed_impedance_condition": 6.143226152901162e+16,
+          "bridge_surface_schur_norm": 3.3254780528045793,
+          "surface_schur_norm": 2.0528259712536987,
+          "surface_schur_inverse_norm": 1.514869630991068,
+          "evrs_bridge_schur_norm": 5.0002369282913115,
+          "schur_solution_relative_error_to_direct": 0.07790828650698853,
+          "schur_residual_relative_error": 3.620394898948577e-05,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 71,
+            "retained_modes": 55,
+            "eliminated_modes": 16,
+            "trial_orthogonality_relative_defect": 4.069510691776512e-11,
+            "test_orthogonality_relative_defect": 4.146316010658527e-11,
+            "schur_relative_error": 2.8635343467477488e-05,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 6.143226152901162e+16,
+            "reduced_operator_condition": 3004.922467303413
+          },
+          "direct_residual_relative_error": 4.461595209671383e-12,
+          "sibc_tail_admittance": {
+            "real": 76157.67027768213,
+            "imag": -76157.67027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 76911.55582487646,
+            "imag": -75388.55471943336
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.01680196901743433,
+                3.84915000905419e-06
+              ],
+              [
+                3.84800331824261e-06,
+                0.015243721343345527
+              ]
+            ],
+            "imag": [
+              [
+                -38.35865566890448,
+                -0.00496722691615553
+              ],
+              [
+                -0.004967127777123322,
+                -38.124482615824455
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0021329080635747086
+        },
+        {
+          "frequency_Hz": 1000000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283185.307179586
+          },
+          "skin_impedance": {
+            "real": 0.00026089506942234865,
+            "imag": 0.00026089506942234865
+          },
+          "mixed_impedance_condition": 6.069308691605174e+16,
+          "bridge_surface_schur_norm": 33.24605805221502,
+          "surface_schur_norm": 20.518557847449546,
+          "surface_schur_inverse_norm": 0.15156480038495923,
+          "evrs_bridge_schur_norm": 50.00228670101474,
+          "schur_solution_relative_error_to_direct": 0.10970406740706752,
+          "schur_residual_relative_error": 1.681414666935423e-06,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 71,
+            "retained_modes": 55,
+            "eliminated_modes": 16,
+            "trial_orthogonality_relative_defect": 6.023714622106899e-11,
+            "test_orthogonality_relative_defect": 5.630351301198617e-11,
+            "schur_relative_error": 4.44196068271044e-05,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 6.069308691605174e+16,
+            "reduced_operator_condition": 3004.2884135714507
+          },
+          "direct_residual_relative_error": 4.460570192692488e-12,
+          "sibc_tail_admittance": {
+            "real": 24083.16993695836,
+            "imag": -24083.16993695836
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 24107.22899966632,
+            "imag": -24059.062707958692
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.0005317889759653043,
+                1.1980168912126035e-07
+              ],
+              [
+                1.1981174546248792e-07,
+                0.0004823699291462294
+              ]
+            ],
+            "imag": [
+              [
+                -3.837016096981087,
+                -0.0004964158878912408
+              ],
+              [
+                -0.0004964186345983228,
+                -3.813493230744958
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.002144534289652488
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "geometry": "sphere",
+      "krylov_steps": 12,
+      "condensed": false,
+      "ndof": 10970,
+      "active_dofs": 10970,
+      "rank": 24,
+      "bridge_cycle_modes": 52,
+      "surface_modes": 3,
+      "total_reduced_modes": 79,
+      "inactive_dofs": 0,
+      "eddy_visible_dofs": 24,
+      "eddy_invisible_dofs": 10946,
+      "compression_ratio": 0.0021877848678213308,
+      "surface_measure": 12.566360585225942,
+      "response_seconds_lab_smoke": 2.88127060001716,
+      "volume_samples": 1498,
+      "surface_samples": 672,
+      "blocks": {
+        "volume": [
+          0,
+          24
+        ],
+        "volume1": [
+          24,
+          76
+        ],
+        "surface": [
+          76,
+          79
+        ]
+      },
+      "topology_diagnostics": {
+        "face_count": 270,
+        "roles": [
+          "conductor-conductor",
+          "conductor-exterior"
+        ],
+        "conductive_materials": [
+          "cond"
+        ],
+        "air_materials": [
+          "air",
+          "vacuum"
+        ],
+        "conductive_element_count": 107,
+        "conductive_component_count": 1,
+        "conductive_graph_edge_count": 158,
+        "conductive_graph_cycle_rank": 52,
+        "surface_face_count": 112,
+        "sibc_face_count": 112,
+        "non_sibc_trace_face_count": 0,
+        "loop_bridge_face_count": 158,
+        "conductor_exterior_face_count": 112,
+        "conductor_air_face_count": 0,
+        "conductor_insulator_face_count": 0,
+        "conductor_conductor_face_count": 158,
+        "conductive_interface_face_count": 0
+      },
+      "conductor_graph_diagnostics": {
+        "node_count": 107,
+        "edge_count": 158,
+        "component_count": 1,
+        "cycle_rank": 52,
+        "fundamental_cycle_count": 52,
+        "material_interface_edge_count": 0
+      },
+      "bridge_cycle_basis_diagnostics": {
+        "kind": "volume",
+        "modes": 52,
+        "samples": 158,
+        "mass_trace": 51.1193167619796,
+        "min_mass_eigenvalue": 0.05376140763754973
+      },
+      "bridge_cycle_vim_diagnostics": {
+        "n_modes": 52,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 52,
+        "blocks": {
+          "volume": [
+            0,
+            52
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": 9.269208213370655e-10,
+        "min_inductance_eigenvalue": 1.0251594696294118e-09,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "dof_policy_diagnostics": {
+        "ndof": 10970,
+        "free_dofs": 10970,
+        "sibc_surface_dofs": 2408,
+        "surface_candidate_dofs": 2408,
+        "non_sibc_trace_dofs": 0,
+        "loop_bridge_dofs": 3375,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "sibc_surface_only_dofs": 2245,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "partitioned_free_dofs": 10970,
+        "local_bubble_dofs": 5350,
+        "interface_dofs": 5080,
+        "wirebasket_dofs": 540,
+        "loop_bridge_fraction": 0.3076572470373747,
+        "sibc_surface_fraction": 0.2195077484047402,
+        "non_sibc_trace_fraction": 0.0,
+        "ordinary_evrs_fraction": 0.487693710118505
+      },
+      "reduction_plan_diagnostics": {
+        "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+        "free_dofs": 10970,
+        "loop_bridge_keep_dofs": 3375,
+        "loop_bridge_reduced_modes": 52,
+        "loop_bridge_reduction_strategy": "cycle-basis",
+        "loop_bridge_reduction_savings": 3323,
+        "sibc_surface_trace_dofs": 2408,
+        "sibc_surface_only_dofs": 2245,
+        "non_sibc_trace_dofs": 0,
+        "non_sibc_trace_modes": 0,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "conservative_structural_keep_dofs": 5620,
+        "evrs_rank": 24,
+        "surface_modes": 3,
+        "conservative_estimated_reduced_modes": 3402,
+        "estimated_reduced_modes": 79,
+        "estimated_reduction_ratio": 0.0072014585232452145,
+        "ordinary_evrs_candidate_fraction": 0.487693710118505,
+        "conservative_structural_keep_fraction": 0.512306289881495
+      },
+      "topology_aware_hybrid_vim_diagnostics": {
+        "system": {
+          "n_modes": 79,
+          "interaction_backend": "sampled-laplace",
+          "basis_count": 79,
+          "blocks": {
+            "volume": [
+              0,
+              24
+            ],
+            "volume1": [
+              24,
+              76
+            ],
+            "surface": [
+              76,
+              79
+            ]
+          },
+          "resistance_hermitian_error": 0.0,
+          "inductance_hermitian_error": 0.0,
+          "surface_mass_hermitian_error": 0.0,
+          "min_resistance_eigenvalue": -2.353270615397431e-22,
+          "min_inductance_eigenvalue": -9.718035441475591e-22,
+          "min_surface_mass_eigenvalue": 0.0,
+          "passive_blocks": true
+        },
+        "volume_basis": {
+          "kind": "volume",
+          "modes": 24,
+          "samples": 1498,
+          "mass_trace": 110.70480888730928,
+          "min_mass_eigenvalue": -6.3729688581733674e-15
+        },
+        "bridge_cycle_basis": {
+          "kind": "volume",
+          "modes": 52,
+          "samples": 158,
+          "mass_trace": 51.1193167619796,
+          "min_mass_eigenvalue": 0.05376140763754973
+        },
+        "surface_basis": {
+          "kind": "surface",
+          "modes": 3,
+          "samples": 672,
+          "mass_trace": 25.132721170451887,
+          "min_mass_eigenvalue": 8.377570003519061
+        },
+        "topology": {
+          "face_count": 270,
+          "roles": [
+            "conductor-conductor",
+            "conductor-exterior"
+          ],
+          "conductive_materials": [
+            "cond"
+          ],
+          "air_materials": [
+            "air",
+            "vacuum"
+          ],
+          "conductive_element_count": 107,
+          "conductive_component_count": 1,
+          "conductive_graph_edge_count": 158,
+          "conductive_graph_cycle_rank": 52,
+          "surface_face_count": 112,
+          "sibc_face_count": 112,
+          "non_sibc_trace_face_count": 0,
+          "loop_bridge_face_count": 158,
+          "conductor_exterior_face_count": 112,
+          "conductor_air_face_count": 0,
+          "conductor_insulator_face_count": 0,
+          "conductor_conductor_face_count": 158,
+          "conductive_interface_face_count": 0
+        },
+        "conductor_graph": {
+          "node_count": 107,
+          "edge_count": 158,
+          "component_count": 1,
+          "cycle_rank": 52,
+          "fundamental_cycle_count": 52,
+          "material_interface_edge_count": 0
+        },
+        "dof_policy": {
+          "ndof": 10970,
+          "free_dofs": 10970,
+          "sibc_surface_dofs": 2408,
+          "surface_candidate_dofs": 2408,
+          "non_sibc_trace_dofs": 0,
+          "loop_bridge_dofs": 3375,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "sibc_surface_only_dofs": 2245,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "partitioned_free_dofs": 10970,
+          "local_bubble_dofs": 5350,
+          "interface_dofs": 5080,
+          "wirebasket_dofs": 540,
+          "loop_bridge_fraction": 0.3076572470373747,
+          "sibc_surface_fraction": 0.2195077484047402,
+          "non_sibc_trace_fraction": 0.0,
+          "ordinary_evrs_fraction": 0.487693710118505
+        },
+        "reduction_plan": {
+          "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+          "free_dofs": 10970,
+          "loop_bridge_keep_dofs": 3375,
+          "loop_bridge_reduced_modes": 52,
+          "loop_bridge_reduction_strategy": "cycle-basis",
+          "loop_bridge_reduction_savings": 3323,
+          "sibc_surface_trace_dofs": 2408,
+          "sibc_surface_only_dofs": 2245,
+          "non_sibc_trace_dofs": 0,
+          "non_sibc_trace_modes": 0,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "conservative_structural_keep_dofs": 5620,
+          "evrs_rank": 24,
+          "surface_modes": 3,
+          "conservative_estimated_reduced_modes": 3402,
+          "estimated_reduced_modes": 79,
+          "estimated_reduction_ratio": 0.0072014585232452145,
+          "ordinary_evrs_candidate_fraction": 0.487693710118505,
+          "conservative_structural_keep_fraction": 0.512306289881495
+        },
+        "eddy_bubbling": {
+          "rule": "topology-aware-eddy-bubbling",
+          "free_dofs": 10970,
+          "structural_keep_dofs": 5620,
+          "eddy_bubble_candidate_dofs": 5350,
+          "eddy_bubble_candidate_fraction": 0.487693710118505,
+          "classes": {
+            "sibc_surface": 2245,
+            "non_sibc_trace": 0,
+            "loop_bridge": 3375,
+            "ordinary_bulk_eddy_bubble": 5350
+          },
+          "policy": {
+            "ndof": 10970,
+            "free_dofs": 10970,
+            "sibc_surface_dofs": 2408,
+            "surface_candidate_dofs": 2408,
+            "non_sibc_trace_dofs": 0,
+            "loop_bridge_dofs": 3375,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "sibc_surface_only_dofs": 2245,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "partitioned_free_dofs": 10970,
+            "local_bubble_dofs": 5350,
+            "interface_dofs": 5080,
+            "wirebasket_dofs": 540,
+            "loop_bridge_fraction": 0.3076572470373747,
+            "sibc_surface_fraction": 0.2195077484047402,
+            "non_sibc_trace_fraction": 0.0,
+            "ordinary_evrs_fraction": 0.487693710118505
+          },
+          "plan": {
+            "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+            "free_dofs": 10970,
+            "loop_bridge_keep_dofs": 3375,
+            "loop_bridge_reduced_modes": 52,
+            "loop_bridge_reduction_strategy": "cycle-basis",
+            "loop_bridge_reduction_savings": 3323,
+            "sibc_surface_trace_dofs": 2408,
+            "sibc_surface_only_dofs": 2245,
+            "non_sibc_trace_dofs": 0,
+            "non_sibc_trace_modes": 0,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "conservative_structural_keep_dofs": 5620,
+            "evrs_rank": 24,
+            "surface_modes": 3,
+            "conservative_estimated_reduced_modes": 3402,
+            "estimated_reduced_modes": 79,
+            "estimated_reduction_ratio": 0.0072014585232452145,
+            "ordinary_evrs_candidate_fraction": 0.487693710118505,
+            "conservative_structural_keep_fraction": 0.512306289881495
+          },
+          "topology": {
+            "face_count": 270,
+            "roles": [
+              "conductor-conductor",
+              "conductor-exterior"
+            ],
+            "conductive_materials": [
+              "cond"
+            ],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ],
+            "conductive_element_count": 107,
+            "conductive_component_count": 1,
+            "conductive_graph_edge_count": 158,
+            "conductive_graph_cycle_rank": 52,
+            "surface_face_count": 112,
+            "sibc_face_count": 112,
+            "non_sibc_trace_face_count": 0,
+            "loop_bridge_face_count": 158,
+            "conductor_exterior_face_count": 112,
+            "conductor_air_face_count": 0,
+            "conductor_insulator_face_count": 0,
+            "conductor_conductor_face_count": 158,
+            "conductive_interface_face_count": 0
+          },
+          "conductor_graph": {
+            "node_count": 107,
+            "edge_count": 158,
+            "component_count": 1,
+            "cycle_rank": 52,
+            "fundamental_cycle_count": 52,
+            "material_interface_edge_count": 0
+          },
+          "parent_order": 6,
+          "parent_order_ledger": {
+            "bulk_degree": 4,
+            "bridge_trace_degree": 0,
+            "surface_current_degree": 2,
+            "surface_omega_degree": 3,
+            "face_family": "simplex",
+            "bridge_trace_dim": 1,
+            "required_parent_order": 4,
+            "parent_order": 6,
+            "parent_order_admissible": true,
+            "parent_order_excess": 2,
+            "evrs_rank": 24,
+            "cycle_rank": 52,
+            "surface_modes": 3,
+            "non_sibc_trace_modes": 0,
+            "bridge_modes": 52,
+            "estimated_reduced_modes": 79
+          }
+        },
+        "has_rhs": true,
+        "has_response_basis": false,
+        "conductivity": 58000000.0
+      },
+      "system_diagnostics": {
+        "n_modes": 79,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 79,
+        "blocks": {
+          "volume": [
+            0,
+            24
+          ],
+          "volume1": [
+            24,
+            76
+          ],
+          "surface": [
+            76,
+            79
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": -2.353270615397431e-22,
+        "min_inductance_eigenvalue": -9.718035441475591e-22,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "frequency_rows": [
+        {
+          "frequency_Hz": 100.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628.3185307179587
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234867e-06,
+            "imag": 2.6089506942234867e-06
+          },
+          "mixed_impedance_condition": 1.0830455900489208e+17,
+          "bridge_surface_schur_norm": 0.0032769218010680477,
+          "surface_schur_norm": 0.002014487647327545,
+          "surface_schur_inverse_norm": 1553.0034777414246,
+          "evrs_bridge_schur_norm": 0.005570183005236239,
+          "schur_solution_relative_error_to_direct": 0.26031558906721486,
+          "schur_residual_relative_error": 1.2672508396301059e-14,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 79,
+            "retained_modes": 55,
+            "eliminated_modes": 24,
+            "trial_orthogonality_relative_defect": 1.1192156800303637e-15,
+            "test_orthogonality_relative_defect": 1.1215258619432467e-15,
+            "schur_relative_error": 3.410746377455224e-14,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.0830455900489208e+17,
+            "reduced_operator_condition": 3013.9829445186174
+          },
+          "direct_residual_relative_error": 4.31330998637172e-16,
+          "sibc_tail_admittance": {
+            "real": 2408316.9936958356,
+            "imag": -2408316.9936958356
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.9498084574,
+            "imag": 214602.5043887379
+          },
+          "port_admittance": {
+            "real": [
+              [
+                518.2994970038894,
+                -3.9766459610576472
+              ],
+              [
+                -3.976645961055186,
+                471.4093500477388
+              ]
+            ],
+            "imag": [
+              [
+                -37865.244927112595,
+                8.516911184737902
+              ],
+              [
+                8.516911184712738,
+                -37668.58423827183
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0012893242119189883
+        },
+        {
+          "frequency_Hz": 1000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283.185307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823715e-06,
+            "imag": 8.250226496823716e-06
+          },
+          "mixed_impedance_condition": 1.2811341252097438e+17,
+          "bridge_surface_schur_norm": 0.03252924207623569,
+          "surface_schur_norm": 0.019884423799391635,
+          "surface_schur_inverse_norm": 157.50986021729443,
+          "evrs_bridge_schur_norm": 0.05569939937443312,
+          "schur_solution_relative_error_to_direct": 0.27072371833602343,
+          "schur_residual_relative_error": 8.081308872239734e-15,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 79,
+            "retained_modes": 55,
+            "eliminated_modes": 24,
+            "trial_orthogonality_relative_defect": 7.422010730203907e-16,
+            "test_orthogonality_relative_defect": 7.145506030793701e-16,
+            "schur_relative_error": 1.133503999128523e-14,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.2811341252097438e+17,
+            "reduced_operator_condition": 2993.120341537569
+          },
+          "direct_residual_relative_error": 5.395186517630101e-16,
+          "sibc_tail_admittance": {
+            "real": 761576.7027768214,
+            "imag": -761576.7027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 761576.7027768212,
+            "imag": 0.0
+          },
+          "port_admittance": {
+            "real": [
+              [
+                16.86885186991292,
+                -0.13641461485781234
+              ],
+              [
+                -0.13641461485783063,
+                15.230115289981518
+              ]
+            ],
+            "imag": [
+              [
+                -3823.4699839107716,
+                1.1624023467272901
+              ],
+              [
+                1.1624023467277218,
+                -3800.1075426252914
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0015443855054511984
+        },
+        {
+          "frequency_Hz": 10000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 62831.853071795864
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234868e-05,
+            "imag": 2.6089506942234868e-05
+          },
+          "mixed_impedance_condition": 1.1369624755875898e+17,
+          "bridge_surface_schur_norm": 0.3245404487616612,
+          "surface_schur_norm": 0.19803160742784098,
+          "surface_schur_inverse_norm": 15.821161631149351,
+          "evrs_bridge_schur_norm": 0.5569863192283282,
+          "schur_solution_relative_error_to_direct": 0.15730076505669777,
+          "schur_residual_relative_error": 6.795064973788023e-15,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 79,
+            "retained_modes": 55,
+            "eliminated_modes": 24,
+            "trial_orthogonality_relative_defect": 8.708555138850293e-16,
+            "test_orthogonality_relative_defect": 8.4729793039325225e-16,
+            "schur_relative_error": 1.9741844589512696e-14,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.1369624755875898e+17,
+            "reduced_operator_condition": 2986.5824993139645
+          },
+          "direct_residual_relative_error": 3.9796759858450504e-16,
+          "sibc_tail_admittance": {
+            "real": 240831.69936958357,
+            "imag": -240831.69936958354
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.94980845734,
+            "imag": -214602.50438873784
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.5382385057241444,
+                -0.004403793749276422
+              ],
+              [
+                -0.0044037937492762335,
+                0.48485675122827115
+              ]
+            ],
+            "imag": [
+              [
+                -383.51559978209303,
+                0.12587117651200622
+              ],
+              [
+                0.12587117651220686,
+                -381.06237334957467
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0016349807972849272
+        },
+        {
+          "frequency_Hz": 100000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628318.5307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823716e-05,
+            "imag": 8.250226496823716e-05
+          },
+          "mixed_impedance_condition": 8.168324903695787e+16,
+          "bridge_surface_schur_norm": 3.2430318617650893,
+          "surface_schur_norm": 1.9777543019366979,
+          "surface_schur_inverse_norm": 1.5843412306007478,
+          "evrs_bridge_schur_norm": 5.569838933387709,
+          "schur_solution_relative_error_to_direct": 1.0573986806590376,
+          "schur_residual_relative_error": 6.162952194414228e-14,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 79,
+            "retained_modes": 55,
+            "eliminated_modes": 24,
+            "trial_orthogonality_relative_defect": 2.6520705055004423e-15,
+            "test_orthogonality_relative_defect": 2.662607850005879e-15,
+            "schur_relative_error": 3.9179488352838815e-13,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 8.168324903695787e+16,
+            "reduced_operator_condition": 2984.520104751625
+          },
+          "direct_residual_relative_error": 7.237003166274842e-16,
+          "sibc_tail_admittance": {
+            "real": 76157.67027768213,
+            "imag": -76157.67027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 76911.55582487646,
+            "imag": -75388.55471943336
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.01706862058823698,
+                -0.00014010885605005008
+              ],
+              [
+                -0.0001401088560500431,
+                0.01536493213430887
+              ]
+            ],
+            "imag": [
+              [
+                -38.388515048686635,
+                0.012890981977271109
+              ],
+              [
+                0.01289098197728493,
+                -38.139492957895804
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.001664728193125882
+        },
+        {
+          "frequency_Hz": 1000000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283185.307179586
+          },
+          "skin_impedance": {
+            "real": 0.00026089506942234865,
+            "imag": 0.00026089506942234865
+          },
+          "mixed_impedance_condition": 8.367001664810149e+16,
+          "bridge_surface_schur_norm": 32.42282078598684,
+          "surface_schur_norm": 19.76944940467454,
+          "surface_schur_inverse_norm": 0.15850455083797152,
+          "evrs_bridge_schur_norm": 55.698312630463434,
+          "schur_solution_relative_error_to_direct": 0.08965896994000734,
+          "schur_residual_relative_error": 6.199837564741291e-15,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 79,
+            "retained_modes": 55,
+            "eliminated_modes": 24,
+            "trial_orthogonality_relative_defect": 7.499999550380389e-16,
+            "test_orthogonality_relative_defect": 7.459153843534119e-16,
+            "schur_relative_error": 1.433147426311423e-14,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 8.367001664810149e+16,
+            "reduced_operator_condition": 2983.8684091718214
+          },
+          "direct_residual_relative_error": 5.357037282985231e-16,
+          "sibc_tail_admittance": {
+            "real": 24083.16993695836,
+            "imag": -24083.16993695836
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 24107.22899966632,
+            "imag": -24059.062707958692
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.000540237546003534,
+                -4.4389564301320515e-06
+              ],
+              [
+                -4.438956430132305e-06,
+                0.0004862060763227385
+              ]
+            ],
+            "imag": [
+              [
+                -3.8400201286604885,
+                0.001298704975623118
+              ],
+              [
+                0.0012987049756238666,
+                -3.8150009324560843
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0016742481704343465
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "geometry": "sphere",
+      "krylov_steps": 22,
+      "condensed": false,
+      "ndof": 10970,
+      "active_dofs": 10970,
+      "rank": 44,
+      "bridge_cycle_modes": 52,
+      "surface_modes": 3,
+      "total_reduced_modes": 99,
+      "inactive_dofs": 0,
+      "eddy_visible_dofs": 44,
+      "eddy_invisible_dofs": 10926,
+      "compression_ratio": 0.0040109389243391065,
+      "surface_measure": 12.566360585225942,
+      "response_seconds_lab_smoke": 11.203449600026943,
+      "volume_samples": 1498,
+      "surface_samples": 672,
+      "blocks": {
+        "volume": [
+          0,
+          44
+        ],
+        "volume1": [
+          44,
+          96
+        ],
+        "surface": [
+          96,
+          99
+        ]
+      },
+      "topology_diagnostics": {
+        "face_count": 270,
+        "roles": [
+          "conductor-conductor",
+          "conductor-exterior"
+        ],
+        "conductive_materials": [
+          "cond"
+        ],
+        "air_materials": [
+          "air",
+          "vacuum"
+        ],
+        "conductive_element_count": 107,
+        "conductive_component_count": 1,
+        "conductive_graph_edge_count": 158,
+        "conductive_graph_cycle_rank": 52,
+        "surface_face_count": 112,
+        "sibc_face_count": 112,
+        "non_sibc_trace_face_count": 0,
+        "loop_bridge_face_count": 158,
+        "conductor_exterior_face_count": 112,
+        "conductor_air_face_count": 0,
+        "conductor_insulator_face_count": 0,
+        "conductor_conductor_face_count": 158,
+        "conductive_interface_face_count": 0
+      },
+      "conductor_graph_diagnostics": {
+        "node_count": 107,
+        "edge_count": 158,
+        "component_count": 1,
+        "cycle_rank": 52,
+        "fundamental_cycle_count": 52,
+        "material_interface_edge_count": 0
+      },
+      "bridge_cycle_basis_diagnostics": {
+        "kind": "volume",
+        "modes": 52,
+        "samples": 158,
+        "mass_trace": 51.1193167619796,
+        "min_mass_eigenvalue": 0.05376140763754973
+      },
+      "bridge_cycle_vim_diagnostics": {
+        "n_modes": 52,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 52,
+        "blocks": {
+          "volume": [
+            0,
+            52
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": 9.269208213370655e-10,
+        "min_inductance_eigenvalue": 1.0251594696294118e-09,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "dof_policy_diagnostics": {
+        "ndof": 10970,
+        "free_dofs": 10970,
+        "sibc_surface_dofs": 2408,
+        "surface_candidate_dofs": 2408,
+        "non_sibc_trace_dofs": 0,
+        "loop_bridge_dofs": 3375,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "sibc_surface_only_dofs": 2245,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "partitioned_free_dofs": 10970,
+        "local_bubble_dofs": 5350,
+        "interface_dofs": 5080,
+        "wirebasket_dofs": 540,
+        "loop_bridge_fraction": 0.3076572470373747,
+        "sibc_surface_fraction": 0.2195077484047402,
+        "non_sibc_trace_fraction": 0.0,
+        "ordinary_evrs_fraction": 0.487693710118505
+      },
+      "reduction_plan_diagnostics": {
+        "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+        "free_dofs": 10970,
+        "loop_bridge_keep_dofs": 3375,
+        "loop_bridge_reduced_modes": 52,
+        "loop_bridge_reduction_strategy": "cycle-basis",
+        "loop_bridge_reduction_savings": 3323,
+        "sibc_surface_trace_dofs": 2408,
+        "sibc_surface_only_dofs": 2245,
+        "non_sibc_trace_dofs": 0,
+        "non_sibc_trace_modes": 0,
+        "sibc_loop_bridge_overlap_dofs": 163,
+        "ordinary_evrs_candidate_dofs": 5350,
+        "conservative_structural_keep_dofs": 5620,
+        "evrs_rank": 44,
+        "surface_modes": 3,
+        "conservative_estimated_reduced_modes": 3422,
+        "estimated_reduced_modes": 99,
+        "estimated_reduction_ratio": 0.00902461257976299,
+        "ordinary_evrs_candidate_fraction": 0.487693710118505,
+        "conservative_structural_keep_fraction": 0.512306289881495
+      },
+      "topology_aware_hybrid_vim_diagnostics": {
+        "system": {
+          "n_modes": 99,
+          "interaction_backend": "sampled-laplace",
+          "basis_count": 99,
+          "blocks": {
+            "volume": [
+              0,
+              44
+            ],
+            "volume1": [
+              44,
+              96
+            ],
+            "surface": [
+              96,
+              99
+            ]
+          },
+          "resistance_hermitian_error": 0.0,
+          "inductance_hermitian_error": 0.0,
+          "surface_mass_hermitian_error": 0.0,
+          "min_resistance_eigenvalue": -1.5231766431361774e-22,
+          "min_inductance_eigenvalue": -9.597575589450546e-23,
+          "min_surface_mass_eigenvalue": 0.0,
+          "passive_blocks": true
+        },
+        "volume_basis": {
+          "kind": "volume",
+          "modes": 44,
+          "samples": 1498,
+          "mass_trace": 505.86186741110197,
+          "min_mass_eigenvalue": -3.8983946635548034e-15
+        },
+        "bridge_cycle_basis": {
+          "kind": "volume",
+          "modes": 52,
+          "samples": 158,
+          "mass_trace": 51.1193167619796,
+          "min_mass_eigenvalue": 0.05376140763754973
+        },
+        "surface_basis": {
+          "kind": "surface",
+          "modes": 3,
+          "samples": 672,
+          "mass_trace": 25.132721170451887,
+          "min_mass_eigenvalue": 8.377570003519061
+        },
+        "topology": {
+          "face_count": 270,
+          "roles": [
+            "conductor-conductor",
+            "conductor-exterior"
+          ],
+          "conductive_materials": [
+            "cond"
+          ],
+          "air_materials": [
+            "air",
+            "vacuum"
+          ],
+          "conductive_element_count": 107,
+          "conductive_component_count": 1,
+          "conductive_graph_edge_count": 158,
+          "conductive_graph_cycle_rank": 52,
+          "surface_face_count": 112,
+          "sibc_face_count": 112,
+          "non_sibc_trace_face_count": 0,
+          "loop_bridge_face_count": 158,
+          "conductor_exterior_face_count": 112,
+          "conductor_air_face_count": 0,
+          "conductor_insulator_face_count": 0,
+          "conductor_conductor_face_count": 158,
+          "conductive_interface_face_count": 0
+        },
+        "conductor_graph": {
+          "node_count": 107,
+          "edge_count": 158,
+          "component_count": 1,
+          "cycle_rank": 52,
+          "fundamental_cycle_count": 52,
+          "material_interface_edge_count": 0
+        },
+        "dof_policy": {
+          "ndof": 10970,
+          "free_dofs": 10970,
+          "sibc_surface_dofs": 2408,
+          "surface_candidate_dofs": 2408,
+          "non_sibc_trace_dofs": 0,
+          "loop_bridge_dofs": 3375,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "sibc_surface_only_dofs": 2245,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "partitioned_free_dofs": 10970,
+          "local_bubble_dofs": 5350,
+          "interface_dofs": 5080,
+          "wirebasket_dofs": 540,
+          "loop_bridge_fraction": 0.3076572470373747,
+          "sibc_surface_fraction": 0.2195077484047402,
+          "non_sibc_trace_fraction": 0.0,
+          "ordinary_evrs_fraction": 0.487693710118505
+        },
+        "reduction_plan": {
+          "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+          "free_dofs": 10970,
+          "loop_bridge_keep_dofs": 3375,
+          "loop_bridge_reduced_modes": 52,
+          "loop_bridge_reduction_strategy": "cycle-basis",
+          "loop_bridge_reduction_savings": 3323,
+          "sibc_surface_trace_dofs": 2408,
+          "sibc_surface_only_dofs": 2245,
+          "non_sibc_trace_dofs": 0,
+          "non_sibc_trace_modes": 0,
+          "sibc_loop_bridge_overlap_dofs": 163,
+          "ordinary_evrs_candidate_dofs": 5350,
+          "conservative_structural_keep_dofs": 5620,
+          "evrs_rank": 44,
+          "surface_modes": 3,
+          "conservative_estimated_reduced_modes": 3422,
+          "estimated_reduced_modes": 99,
+          "estimated_reduction_ratio": 0.00902461257976299,
+          "ordinary_evrs_candidate_fraction": 0.487693710118505,
+          "conservative_structural_keep_fraction": 0.512306289881495
+        },
+        "eddy_bubbling": {
+          "rule": "topology-aware-eddy-bubbling",
+          "free_dofs": 10970,
+          "structural_keep_dofs": 5620,
+          "eddy_bubble_candidate_dofs": 5350,
+          "eddy_bubble_candidate_fraction": 0.487693710118505,
+          "classes": {
+            "sibc_surface": 2245,
+            "non_sibc_trace": 0,
+            "loop_bridge": 3375,
+            "ordinary_bulk_eddy_bubble": 5350
+          },
+          "policy": {
+            "ndof": 10970,
+            "free_dofs": 10970,
+            "sibc_surface_dofs": 2408,
+            "surface_candidate_dofs": 2408,
+            "non_sibc_trace_dofs": 0,
+            "loop_bridge_dofs": 3375,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "sibc_surface_only_dofs": 2245,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "partitioned_free_dofs": 10970,
+            "local_bubble_dofs": 5350,
+            "interface_dofs": 5080,
+            "wirebasket_dofs": 540,
+            "loop_bridge_fraction": 0.3076572470373747,
+            "sibc_surface_fraction": 0.2195077484047402,
+            "non_sibc_trace_fraction": 0.0,
+            "ordinary_evrs_fraction": 0.487693710118505
+          },
+          "plan": {
+            "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+            "free_dofs": 10970,
+            "loop_bridge_keep_dofs": 3375,
+            "loop_bridge_reduced_modes": 52,
+            "loop_bridge_reduction_strategy": "cycle-basis",
+            "loop_bridge_reduction_savings": 3323,
+            "sibc_surface_trace_dofs": 2408,
+            "sibc_surface_only_dofs": 2245,
+            "non_sibc_trace_dofs": 0,
+            "non_sibc_trace_modes": 0,
+            "sibc_loop_bridge_overlap_dofs": 163,
+            "ordinary_evrs_candidate_dofs": 5350,
+            "conservative_structural_keep_dofs": 5620,
+            "evrs_rank": 44,
+            "surface_modes": 3,
+            "conservative_estimated_reduced_modes": 3422,
+            "estimated_reduced_modes": 99,
+            "estimated_reduction_ratio": 0.00902461257976299,
+            "ordinary_evrs_candidate_fraction": 0.487693710118505,
+            "conservative_structural_keep_fraction": 0.512306289881495
+          },
+          "topology": {
+            "face_count": 270,
+            "roles": [
+              "conductor-conductor",
+              "conductor-exterior"
+            ],
+            "conductive_materials": [
+              "cond"
+            ],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ],
+            "conductive_element_count": 107,
+            "conductive_component_count": 1,
+            "conductive_graph_edge_count": 158,
+            "conductive_graph_cycle_rank": 52,
+            "surface_face_count": 112,
+            "sibc_face_count": 112,
+            "non_sibc_trace_face_count": 0,
+            "loop_bridge_face_count": 158,
+            "conductor_exterior_face_count": 112,
+            "conductor_air_face_count": 0,
+            "conductor_insulator_face_count": 0,
+            "conductor_conductor_face_count": 158,
+            "conductive_interface_face_count": 0
+          },
+          "conductor_graph": {
+            "node_count": 107,
+            "edge_count": 158,
+            "component_count": 1,
+            "cycle_rank": 52,
+            "fundamental_cycle_count": 52,
+            "material_interface_edge_count": 0
+          },
+          "parent_order": 6,
+          "parent_order_ledger": {
+            "bulk_degree": 4,
+            "bridge_trace_degree": 0,
+            "surface_current_degree": 2,
+            "surface_omega_degree": 3,
+            "face_family": "simplex",
+            "bridge_trace_dim": 1,
+            "required_parent_order": 4,
+            "parent_order": 6,
+            "parent_order_admissible": true,
+            "parent_order_excess": 2,
+            "evrs_rank": 44,
+            "cycle_rank": 52,
+            "surface_modes": 3,
+            "non_sibc_trace_modes": 0,
+            "bridge_modes": 52,
+            "estimated_reduced_modes": 99
+          }
+        },
+        "has_rhs": true,
+        "has_response_basis": false,
+        "conductivity": 58000000.0
+      },
+      "system_diagnostics": {
+        "n_modes": 99,
+        "interaction_backend": "sampled-laplace",
+        "basis_count": 99,
+        "blocks": {
+          "volume": [
+            0,
+            44
+          ],
+          "volume1": [
+            44,
+            96
+          ],
+          "surface": [
+            96,
+            99
+          ]
+        },
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0,
+        "surface_mass_hermitian_error": 0.0,
+        "min_resistance_eigenvalue": -1.5231766431361774e-22,
+        "min_inductance_eigenvalue": -9.597575589450546e-23,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive_blocks": true
+      },
+      "frequency_rows": [
+        {
+          "frequency_Hz": 100.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628.3185307179587
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234867e-06,
+            "imag": 2.6089506942234867e-06
+          },
+          "mixed_impedance_condition": 1.883513293674371e+17,
+          "bridge_surface_schur_norm": 0.002640630479060901,
+          "surface_schur_norm": 0.0017469018786735637,
+          "surface_schur_inverse_norm": 1734.340655798412,
+          "evrs_bridge_schur_norm": 0.006089727419367824,
+          "schur_solution_relative_error_to_direct": 0.6037808629083005,
+          "schur_residual_relative_error": 1.9679047802600532e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 99,
+            "retained_modes": 55,
+            "eliminated_modes": 44,
+            "trial_orthogonality_relative_defect": 1.2738072946700782e-13,
+            "test_orthogonality_relative_defect": 1.1515746879114935e-13,
+            "schur_relative_error": 2.2547249370844213e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.883513293674371e+17,
+            "reduced_operator_condition": 2741.909658148909
+          },
+          "direct_residual_relative_error": 1.256997718204381e-14,
+          "sibc_tail_admittance": {
+            "real": 2408316.9936958356,
+            "imag": -2408316.9936958356
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.9498084574,
+            "imag": 214602.5043887379
+          },
+          "port_admittance": {
+            "real": [
+              [
+                521.8225752497532,
+                -3.118149865747178
+              ],
+              [
+                -3.118149866487997,
+                491.8427226015337
+              ]
+            ],
+            "imag": [
+              [
+                -37874.972052950696,
+                9.112156386363365
+              ],
+              [
+                9.112156391564135,
+                -37733.58960310477
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0
+        },
+        {
+          "frequency_Hz": 1000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283.185307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823715e-06,
+            "imag": 8.250226496823716e-06
+          },
+          "mixed_impedance_condition": 8.696849554595107e+16,
+          "bridge_surface_schur_norm": 0.02616569021538601,
+          "surface_schur_norm": 0.017205164965610885,
+          "surface_schur_inverse_norm": 176.1481636773536,
+          "evrs_bridge_schur_norm": 0.06089489516149984,
+          "schur_solution_relative_error_to_direct": 0.27683537025433463,
+          "schur_residual_relative_error": 1.5015455523718253e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 99,
+            "retained_modes": 55,
+            "eliminated_modes": 44,
+            "trial_orthogonality_relative_defect": 1.1251647872075375e-13,
+            "test_orthogonality_relative_defect": 1.1304403110037425e-13,
+            "schur_relative_error": 1.6279776925040442e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 8.696849554595107e+16,
+            "reduced_operator_condition": 2718.9280488299655
+          },
+          "direct_residual_relative_error": 1.6740075569223872e-14,
+          "sibc_tail_admittance": {
+            "real": 761576.7027768214,
+            "imag": -761576.7027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 761576.7027768212,
+            "imag": 0.0
+          },
+          "port_admittance": {
+            "real": [
+              [
+                16.996301266178257,
+                -0.10259730464463036
+              ],
+              [
+                -0.10259730462331897,
+                15.972880361328965
+              ]
+            ],
+            "imag": [
+              [
+                -3824.7359267247575,
+                1.1414335224959093
+              ],
+              [
+                1.1414335216806477,
+                -3808.3118536019697
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0
+        },
+        {
+          "frequency_Hz": 10000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 62831.853071795864
+          },
+          "skin_impedance": {
+            "real": 2.6089506942234868e-05,
+            "imag": 2.6089506942234868e-05
+          },
+          "mixed_impedance_condition": 9.771993802989795e+16,
+          "bridge_surface_schur_norm": 0.2609073843614874,
+          "surface_schur_norm": 0.1712310206250427,
+          "surface_schur_inverse_norm": 17.700965541847413,
+          "evrs_bridge_schur_norm": 0.6089414547496351,
+          "schur_solution_relative_error_to_direct": 7.507060122678865,
+          "schur_residual_relative_error": 3.179149778197032e-09,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 99,
+            "retained_modes": 55,
+            "eliminated_modes": 44,
+            "trial_orthogonality_relative_defect": 1.6512662158624905e-12,
+            "test_orthogonality_relative_defect": 1.4518545305918606e-12,
+            "schur_relative_error": 4.167323794674988e-08,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 9.771993802989795e+16,
+            "reduced_operator_condition": 2711.745767796912
+          },
+          "direct_residual_relative_error": 5.136507427578268e-14,
+          "sibc_tail_admittance": {
+            "real": 240831.69936958357,
+            "imag": -240831.69936958354
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 262291.94980845734,
+            "imag": -214602.50438873784
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.5424226284041382,
+                -0.0032706949852168202
+              ],
+              [
+                -0.0032706949852227816,
+                0.5092987525081482
+              ]
+            ],
+            "imag": [
+              [
+                -383.6514020992519,
+                0.12125736634647115
+              ],
+              [
+                0.12125736634588417,
+                -381.9366197587062
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0
+        },
+        {
+          "frequency_Hz": 100000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 628318.5307179586
+          },
+          "skin_impedance": {
+            "real": 8.250226496823716e-05,
+            "imag": 8.250226496823716e-05
+          },
+          "mixed_impedance_condition": 1.0637921030425478e+17,
+          "bridge_surface_schur_norm": 2.606710930830458,
+          "surface_schur_norm": 1.7097245484257957,
+          "surface_schur_inverse_norm": 1.7728284297397856,
+          "evrs_bridge_schur_norm": 6.0893908545365365,
+          "schur_solution_relative_error_to_direct": 1.2605242227209064,
+          "schur_residual_relative_error": 2.4590131353828093e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 99,
+            "retained_modes": 55,
+            "eliminated_modes": 44,
+            "trial_orthogonality_relative_defect": 1.3162399484584854e-13,
+            "test_orthogonality_relative_defect": 1.2236361153811035e-13,
+            "schur_relative_error": 1.9300928077671594e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 1.0637921030425478e+17,
+            "reduced_operator_condition": 2709.4812591142445
+          },
+          "direct_residual_relative_error": 5.535997931298897e-14,
+          "sibc_tail_admittance": {
+            "real": 76157.67027768213,
+            "imag": -76157.67027768213
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 76911.55582487646,
+            "imag": -75388.55471943336
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.01720245226794304,
+                -0.00010364928096585801
+              ],
+              [
+                -0.00010364928095814562,
+                0.016147355406402258
+              ]
+            ],
+            "imag": [
+              [
+                -38.40238620349279,
+                0.012350126572756864
+              ],
+              [
+                0.012350126570312021,
+                -38.228618957217584
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0
+        },
+        {
+          "frequency_Hz": 1000000.0,
+          "s_rad_per_s": {
+            "real": 0.0,
+            "imag": 6283185.307179586
+          },
+          "skin_impedance": {
+            "real": 0.00026089506942234865,
+            "imag": 0.00026089506942234865
+          },
+          "mixed_impedance_condition": 4.43743397619123e+17,
+          "bridge_surface_schur_norm": 26.059643643156313,
+          "surface_schur_norm": 17.089077444485255,
+          "surface_schur_inverse_norm": 0.17736931762538993,
+          "evrs_bridge_schur_norm": 60.89383363457804,
+          "schur_solution_relative_error_to_direct": 0.2933261102412038,
+          "schur_residual_relative_error": 1.042845404801158e-10,
+          "mixed_galerkin_orthogonalization": {
+            "full_modes": 99,
+            "retained_modes": 55,
+            "eliminated_modes": 44,
+            "trial_orthogonality_relative_defect": 1.2509864463959361e-13,
+            "test_orthogonality_relative_defect": 1.2208610020949153e-13,
+            "schur_relative_error": 4.849799160896255e-10,
+            "trial_test_relative_difference": 0.0,
+            "full_operator_condition": 4.43743397619123e+17,
+            "reduced_operator_condition": 2708.765764582237
+          },
+          "direct_residual_relative_error": 2.4932846455606925e-14,
+          "sibc_tail_admittance": {
+            "real": 24083.16993695836,
+            "imag": -24083.16993695836
+          },
+          "dtn_sibc_scalar_admittance": {
+            "real": 24107.22899966632,
+            "imag": -24059.062707958692
+          },
+          "port_admittance": {
+            "real": [
+              [
+                0.0005444847930846064,
+                -3.2797538644239322e-06
+              ],
+              [
+                -3.2797538637838087e-06,
+                0.0005110433470821426
+              ]
+            ],
+            "imag": [
+              [
+                -3.841416443061975,
+                0.0012421066344123618
+              ],
+              [
+                0.0012421066335741142,
+                -3.823967332476191
+              ]
+            ]
+          },
+          "relative_error_to_reference": 0.0
+        }
+      ]
+    }
+  ]
+}

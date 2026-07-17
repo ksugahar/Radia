@@ -61,8 +61,8 @@ def test_planar_hdiv_motor_saliency_angle_sweep_contract():
         f"HDiv motor torque {positive[0]:.3g} vs closed form {ref:.3g}"
 
 
-def test_curved_rt2_motor_improves_the_q2_rt1_torque_contract():
-    """Q3+RT2 improves the same curved saliency problem without API drift."""
+def test_curved_bdm2_motor_improves_the_q2_bdm1_torque_contract():
+    """Q3+BDM2 improves the same curved saliency problem without API drift."""
     a_el, b_el = 0.2, 0.1
     chi = 1000.0
     H0 = 8.0e4

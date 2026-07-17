@@ -1,17 +1,19 @@
 {
-  "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v5",
-  "generated_at_utc": "2026-07-16T22:14:11.591907+00:00",
-  "validation_host": "lab",
+  "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v8",
+  "generated_at_utc": "2026-07-17T05:02:44.073289+00:00",
+  "validation_host": "Hibino",
   "runtime": {
     "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
-    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "platform": "Windows-11-10.0.22000-SP0",
     "ngsolve_version": "6.2.2604"
   },
-  "note": "Desktop correctness smoke; elapsed time is not benchmark data.",
+  "note": "Correctness validation; timing fields are publishable only when validation_host is a designated compute host.",
   "configuration": {
     "geometry": "notched-box",
     "parent_order": 6,
     "krylov_steps": 8,
+    "hcurl_rtol": 1e-10,
+    "current_gram_rtol": 1e-10,
     "frequencies_Hz": [
       100.0,
       10000.0
@@ -45,8 +47,12 @@
     }
   },
   "hcurl_parent_ndof": 3557,
+  "hcurl_current_gram_removed_modes": 2,
+  "bulk_current_gram_identity_error": 6.4094074478730076e-15,
   "hdiv_reduction": {
     "parent_space": "HDiv",
+    "parent_family": "RT",
+    "parent_order": 2,
     "parent_ndof": 942,
     "reduced_modes": 15,
     "compression_ratio": 0.01592356687898089,
@@ -58,13 +64,15 @@
     "mass_hermitian_error": 0.0,
     "demag_hermitian_error": 0.0,
     "operator_hermitian_error": 0.0,
-    "min_mass_eigenvalue": 3.665715413292729,
-    "min_demag_eigenvalue": 0.002180859681489777,
-    "min_operator_eigenvalue": 0.9999999999999947,
-    "demag_frobenius_norm": 1.7250401574151093,
+    "min_mass_eigenvalue": 3.6657154132931145,
+    "min_demag_eigenvalue": 0.002180859681488807,
+    "min_operator_eigenvalue": 0.9999999999999961,
+    "demag_frobenius_norm": 1.7250401574151106,
     "has_rhs": true,
     "rhs_columns": 2,
     "demag_backend": "DemagOperator",
+    "demag_hmatrix_backend": "_ChargeGramHMatrix",
+    "demag_hmatrix_active": true,
     "basis_generation": {
       "construction": "hdiv-mmm-response-energy-pod",
       "snapshot_backend": "radia-cpp-mass-riesz-cg",
@@ -130,46 +138,46 @@
         59
       ],
       "snapshot_relative_residuals": [
-        9.393307683783262e-11,
-        9.082114973829456e-11,
-        9.393307086658882e-11,
-        9.082142334237624e-11,
-        6.406437520480696e-11,
-        9.306518502322117e-11,
-        7.435838433035754e-11,
-        5.908858125388688e-11,
-        7.421043178621399e-11,
-        6.988552588330237e-11,
-        9.898800465218251e-11,
-        8.771897502562072e-11,
-        8.136720109445805e-11,
-        9.483766643274735e-11,
-        9.746615353642828e-11,
-        9.738891474534827e-11,
-        9.544450813714936e-11
+        9.393299708500891e-11,
+        9.082143812689626e-11,
+        9.393299708500891e-11,
+        9.082143812689626e-11,
+        6.406444767893512e-11,
+        9.280357902324376e-11,
+        7.28298880693159e-11,
+        5.904951203615716e-11,
+        7.379679733220027e-11,
+        6.98742578646839e-11,
+        9.912183867503235e-11,
+        8.763113997524371e-11,
+        8.022070665802059e-11,
+        9.531502404134016e-11,
+        9.738293527769007e-11,
+        9.643859951200374e-11,
+        9.785123748774442e-11
       ],
-      "max_snapshot_relative_residual": 9.898800465218251e-11,
+      "max_snapshot_relative_residual": 9.912183867503235e-11,
       "pod_rtol": 1e-10,
       "protected_physical_modes": 2,
       "protected_eigenvalues": [
-        1.2258954917062157,
-        0.774104508293783
+        1.225895491706214,
+        0.7741045082937812
       ],
       "training_response_modes": 13,
       "pod_eigenvalues": [
-        1.8489777822682676,
-        1.724549083456925,
-        1.381513692593061,
-        1.3521438096024907,
-        1.188636486583213,
-        1.0309885014020441,
-        0.9574553411838106,
-        0.7769438869098504,
-        0.6914445653477823,
-        0.5774863623416837,
-        0.5513105191283828,
-        0.4916059924062494,
-        0.4269439767762334
+        1.8489777822682656,
+        1.7245490834569275,
+        1.381513692593065,
+        1.3521438096024885,
+        1.1886364865832186,
+        1.0309885014020455,
+        0.9574553411838098,
+        0.7769438869098529,
+        0.691444565347784,
+        0.5774863623416836,
+        0.5513105191283817,
+        0.49160599240624814,
+        0.4269439767762326
       ],
       "available_modes": 15,
       "retained_modes": 15,
@@ -184,115 +192,115 @@
         {
           "rank": 1,
           "max_all_response_relative_energy_error": 0.9999999970532528,
-          "rms_all_response_relative_energy_error": 0.9249959563231885,
-          "max_physical_response_relative_energy_error": 0.6221352378322481
+          "rms_all_response_relative_energy_error": 0.9249959563231888,
+          "max_physical_response_relative_energy_error": 0.6221352378322512
         },
         {
           "rank": 2,
           "max_all_response_relative_energy_error": 0.9999999806838735,
           "rms_all_response_relative_energy_error": 0.8740418377720487,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 3,
           "max_all_response_relative_energy_error": 0.9999386359160378,
-          "rms_all_response_relative_energy_error": 0.8094866414085402,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "rms_all_response_relative_energy_error": 0.8094866414085401,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 4,
-          "max_all_response_relative_energy_error": 0.9986173351013625,
-          "rms_all_response_relative_energy_error": 0.7442176817174444,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.9986173351013631,
+          "rms_all_response_relative_energy_error": 0.7442176817174443,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 5,
-          "max_all_response_relative_energy_error": 0.9985422162201281,
+          "max_all_response_relative_energy_error": 0.9985422162201287,
           "rms_all_response_relative_energy_error": 0.6876571597190891,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 6,
-          "max_all_response_relative_energy_error": 0.9984767736024547,
-          "rms_all_response_relative_energy_error": 0.6272516115506989,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.9984767736024555,
+          "rms_all_response_relative_energy_error": 0.627251611550699,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 7,
-          "max_all_response_relative_energy_error": 0.9970856787942844,
+          "max_all_response_relative_energy_error": 0.9970856787942871,
           "rms_all_response_relative_energy_error": 0.5688076247785541,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 8,
-          "max_all_response_relative_energy_error": 0.769832769826823,
-          "rms_all_response_relative_energy_error": 0.5127341568698933,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.7698327698268185,
+          "rms_all_response_relative_energy_error": 0.5127341568698938,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 9,
-          "max_all_response_relative_energy_error": 0.6609986377813717,
-          "rms_all_response_relative_energy_error": 0.4545070806701421,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.6609986377813728,
+          "rms_all_response_relative_energy_error": 0.45450708067014234,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 10,
-          "max_all_response_relative_energy_error": 0.5561195057811443,
-          "rms_all_response_relative_energy_error": 0.40113576530663825,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.5561195057811394,
+          "rms_all_response_relative_energy_error": 0.40113576530663847,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 11,
-          "max_all_response_relative_energy_error": 0.5149798553521289,
-          "rms_all_response_relative_energy_error": 0.3467827143679197,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.5149798553521262,
+          "rms_all_response_relative_energy_error": 0.34678271436792,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 12,
-          "max_all_response_relative_energy_error": 0.4979927711084898,
-          "rms_all_response_relative_energy_error": 0.29398702602525484,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.49799277110848367,
+          "rms_all_response_relative_energy_error": 0.2939870260252553,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 13,
-          "max_all_response_relative_energy_error": 0.491299897423389,
-          "rms_all_response_relative_energy_error": 0.23239945866425898,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.49129989742339086,
+          "rms_all_response_relative_energy_error": 0.23239945866425954,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 14,
-          "max_all_response_relative_energy_error": 0.4702339699725587,
-          "rms_all_response_relative_energy_error": 0.1584126938445214,
-          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          "max_all_response_relative_energy_error": 0.4702339699725633,
+          "rms_all_response_relative_energy_error": 0.158412693844522,
+          "max_physical_response_relative_energy_error": 5.84772714051567e-12
         },
         {
           "rank": 15,
-          "max_all_response_relative_energy_error": 2.4349425076252604e-11,
-          "rms_all_response_relative_energy_error": 7.213345527730809e-12,
-          "max_physical_response_relative_energy_error": 7.624028902824036e-12
+          "max_all_response_relative_energy_error": 2.4348954844723358e-11,
+          "rms_all_response_relative_energy_error": 7.212794093243866e-12,
+          "max_physical_response_relative_energy_error": 7.626327462682821e-12
         }
       ],
-      "energy_orthonormality_error": 2.028094989345871e-15,
+      "energy_orthonormality_error": 1.5640146956020497e-15,
       "response_relative_energy_errors": [
-        7.624028902824036e-12,
-        4.5492049055079506e-12,
-        7.624095906280583e-12,
-        4.549209519167505e-12,
-        2.4349425076252604e-11,
-        4.564024154240793e-12,
-        4.162288878016502e-12,
-        1.3378375821549153e-12,
-        1.786693926881119e-12,
-        2.982085630771709e-12,
-        3.624370272692214e-12,
-        1.1681412610747472e-12,
-        9.727195124129108e-13,
-        5.895261210668047e-12,
-        5.06748086994792e-12,
-        2.2602860252433676e-12,
-        9.966153438885259e-13
+        7.626327462682821e-12,
+        4.548751089001511e-12,
+        7.626327462682821e-12,
+        4.548751089001511e-12,
+        2.4348954844723358e-11,
+        4.561928113535265e-12,
+        4.153174317304553e-12,
+        1.3447077310933972e-12,
+        1.7841881617620534e-12,
+        2.9827513520916485e-12,
+        3.6249170528319067e-12,
+        1.1756754404869876e-12,
+        9.715640719626003e-13,
+        5.8930180160711135e-12,
+        5.068598694803531e-12,
+        2.2436214983300206e-12,
+        9.860928346117942e-13
       ],
-      "max_response_relative_energy_error": 2.4349425076252604e-11,
+      "max_response_relative_energy_error": 2.4348954844723358e-11,
       "multipole_training": {
         "family": "regular-solid-harmonic-gradient",
         "count": 15,
@@ -347,41 +355,79 @@
   "mixed_system": {
     "hdiv_modes": 15,
     "hdiv_mmm_modes": 15,
-    "hcurl_vim_modes": 33,
-    "evrs_modes": 33,
+    "hcurl_vim_modes": 25,
+    "evrs_modes": 25,
     "hybrid_blocks": {
       "volume": [
         0,
-        16
+        8
       ],
       "volume1": [
-        16,
-        30
+        8,
+        22
       ],
       "surface": [
-        30,
-        33
+        22,
+        25
       ]
     },
     "eddy_basis_count": 3,
     "eddy_basis_modes": [
-      16,
+      8,
       14,
       3
     ],
+    "eddy_block_roles": {
+      "volume": "bulk",
+      "volume1": "bridge",
+      "surface": "sibc"
+    },
     "coupling_rows": 15,
-    "coupling_cols": 33,
-    "coupling_frobenius_norm": 3.624132093112892e-06,
+    "coupling_cols": 25,
+    "coupling_frobenius_norm": 2.6425281590055916e-06,
     "has_shared_material_model": true,
     "has_shared_mesh_material_model": true,
     "has_magnetic_operator": true,
     "has_magnetic_rhs": true,
     "has_eddy_rhs": true,
     "has_response_basis": true,
+    "response_basis": {
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 8,
+      "port_visible_dofs": 8,
+      "eddy_visible_dofs": 8,
+      "compression_ratio": 0.002249086308687096,
+      "inactive_dofs": 0,
+      "port_invisible_dofs": 3549,
+      "eddy_invisible_dofs": 3549,
+      "eliminated_dofs": 3549,
+      "port_count": 2,
+      "krylov_steps": 8,
+      "construction": "ngsolve-operator-block-krylov+current-gram",
+      "parent_space": "HCurl",
+      "pre_current_gram_rank": 10,
+      "current_gram_rank": 8,
+      "current_gram_rtol": 1e-10,
+      "current_gram_relative_eigenvalues": [
+        1.0,
+        0.9176129487547547,
+        0.2618251484865407,
+        0.08426865161878334,
+        0.02985237241081831,
+        0.02114321940952266,
+        0.011407142665516781,
+        0.009573604900391629,
+        -5.3253804321636415e-17,
+        -3.8956598648479446e-16
+      ]
+    },
     "has_eddy_bubbling": true,
     "has_hdiv_reduction": true,
     "hdiv_reduction": {
       "parent_space": "HDiv",
+      "parent_family": "RT",
+      "parent_order": 2,
       "parent_ndof": 942,
       "reduced_modes": 15,
       "compression_ratio": 0.01592356687898089,
@@ -393,13 +439,15 @@
       "mass_hermitian_error": 0.0,
       "demag_hermitian_error": 0.0,
       "operator_hermitian_error": 0.0,
-      "min_mass_eigenvalue": 3.665715413292729,
-      "min_demag_eigenvalue": 0.002180859681489777,
-      "min_operator_eigenvalue": 0.9999999999999947,
-      "demag_frobenius_norm": 1.7250401574151093,
+      "min_mass_eigenvalue": 3.6657154132931145,
+      "min_demag_eigenvalue": 0.002180859681488807,
+      "min_operator_eigenvalue": 0.9999999999999961,
+      "demag_frobenius_norm": 1.7250401574151106,
       "has_rhs": true,
       "rhs_columns": 2,
       "demag_backend": "DemagOperator",
+      "demag_hmatrix_backend": "_ChargeGramHMatrix",
+      "demag_hmatrix_active": true,
       "basis_generation": {
         "construction": "hdiv-mmm-response-energy-pod",
         "snapshot_backend": "radia-cpp-mass-riesz-cg",
@@ -465,46 +513,46 @@
           59
         ],
         "snapshot_relative_residuals": [
-          9.393307683783262e-11,
-          9.082114973829456e-11,
-          9.393307086658882e-11,
-          9.082142334237624e-11,
-          6.406437520480696e-11,
-          9.306518502322117e-11,
-          7.435838433035754e-11,
-          5.908858125388688e-11,
-          7.421043178621399e-11,
-          6.988552588330237e-11,
-          9.898800465218251e-11,
-          8.771897502562072e-11,
-          8.136720109445805e-11,
-          9.483766643274735e-11,
-          9.746615353642828e-11,
-          9.738891474534827e-11,
-          9.544450813714936e-11
+          9.393299708500891e-11,
+          9.082143812689626e-11,
+          9.393299708500891e-11,
+          9.082143812689626e-11,
+          6.406444767893512e-11,
+          9.280357902324376e-11,
+          7.28298880693159e-11,
+          5.904951203615716e-11,
+          7.379679733220027e-11,
+          6.98742578646839e-11,
+          9.912183867503235e-11,
+          8.763113997524371e-11,
+          8.022070665802059e-11,
+          9.531502404134016e-11,
+          9.738293527769007e-11,
+          9.643859951200374e-11,
+          9.785123748774442e-11
         ],
-        "max_snapshot_relative_residual": 9.898800465218251e-11,
+        "max_snapshot_relative_residual": 9.912183867503235e-11,
         "pod_rtol": 1e-10,
         "protected_physical_modes": 2,
         "protected_eigenvalues": [
-          1.2258954917062157,
-          0.774104508293783
+          1.225895491706214,
+          0.7741045082937812
         ],
         "training_response_modes": 13,
         "pod_eigenvalues": [
-          1.8489777822682676,
-          1.724549083456925,
-          1.381513692593061,
-          1.3521438096024907,
-          1.188636486583213,
-          1.0309885014020441,
-          0.9574553411838106,
-          0.7769438869098504,
-          0.6914445653477823,
-          0.5774863623416837,
-          0.5513105191283828,
-          0.4916059924062494,
-          0.4269439767762334
+          1.8489777822682656,
+          1.7245490834569275,
+          1.381513692593065,
+          1.3521438096024885,
+          1.1886364865832186,
+          1.0309885014020455,
+          0.9574553411838098,
+          0.7769438869098529,
+          0.691444565347784,
+          0.5774863623416836,
+          0.5513105191283817,
+          0.49160599240624814,
+          0.4269439767762326
         ],
         "available_modes": 15,
         "retained_modes": 15,
@@ -519,115 +567,115 @@
           {
             "rank": 1,
             "max_all_response_relative_energy_error": 0.9999999970532528,
-            "rms_all_response_relative_energy_error": 0.9249959563231885,
-            "max_physical_response_relative_energy_error": 0.6221352378322481
+            "rms_all_response_relative_energy_error": 0.9249959563231888,
+            "max_physical_response_relative_energy_error": 0.6221352378322512
           },
           {
             "rank": 2,
             "max_all_response_relative_energy_error": 0.9999999806838735,
             "rms_all_response_relative_energy_error": 0.8740418377720487,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 3,
             "max_all_response_relative_energy_error": 0.9999386359160378,
-            "rms_all_response_relative_energy_error": 0.8094866414085402,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "rms_all_response_relative_energy_error": 0.8094866414085401,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 4,
-            "max_all_response_relative_energy_error": 0.9986173351013625,
-            "rms_all_response_relative_energy_error": 0.7442176817174444,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.9986173351013631,
+            "rms_all_response_relative_energy_error": 0.7442176817174443,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 5,
-            "max_all_response_relative_energy_error": 0.9985422162201281,
+            "max_all_response_relative_energy_error": 0.9985422162201287,
             "rms_all_response_relative_energy_error": 0.6876571597190891,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 6,
-            "max_all_response_relative_energy_error": 0.9984767736024547,
-            "rms_all_response_relative_energy_error": 0.6272516115506989,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.9984767736024555,
+            "rms_all_response_relative_energy_error": 0.627251611550699,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 7,
-            "max_all_response_relative_energy_error": 0.9970856787942844,
+            "max_all_response_relative_energy_error": 0.9970856787942871,
             "rms_all_response_relative_energy_error": 0.5688076247785541,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 8,
-            "max_all_response_relative_energy_error": 0.769832769826823,
-            "rms_all_response_relative_energy_error": 0.5127341568698933,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.7698327698268185,
+            "rms_all_response_relative_energy_error": 0.5127341568698938,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 9,
-            "max_all_response_relative_energy_error": 0.6609986377813717,
-            "rms_all_response_relative_energy_error": 0.4545070806701421,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.6609986377813728,
+            "rms_all_response_relative_energy_error": 0.45450708067014234,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 10,
-            "max_all_response_relative_energy_error": 0.5561195057811443,
-            "rms_all_response_relative_energy_error": 0.40113576530663825,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.5561195057811394,
+            "rms_all_response_relative_energy_error": 0.40113576530663847,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 11,
-            "max_all_response_relative_energy_error": 0.5149798553521289,
-            "rms_all_response_relative_energy_error": 0.3467827143679197,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.5149798553521262,
+            "rms_all_response_relative_energy_error": 0.34678271436792,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 12,
-            "max_all_response_relative_energy_error": 0.4979927711084898,
-            "rms_all_response_relative_energy_error": 0.29398702602525484,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.49799277110848367,
+            "rms_all_response_relative_energy_error": 0.2939870260252553,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 13,
-            "max_all_response_relative_energy_error": 0.491299897423389,
-            "rms_all_response_relative_energy_error": 0.23239945866425898,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.49129989742339086,
+            "rms_all_response_relative_energy_error": 0.23239945866425954,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 14,
-            "max_all_response_relative_energy_error": 0.4702339699725587,
-            "rms_all_response_relative_energy_error": 0.1584126938445214,
-            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+            "max_all_response_relative_energy_error": 0.4702339699725633,
+            "rms_all_response_relative_energy_error": 0.158412693844522,
+            "max_physical_response_relative_energy_error": 5.84772714051567e-12
           },
           {
             "rank": 15,
-            "max_all_response_relative_energy_error": 2.4349425076252604e-11,
-            "rms_all_response_relative_energy_error": 7.213345527730809e-12,
-            "max_physical_response_relative_energy_error": 7.624028902824036e-12
+            "max_all_response_relative_energy_error": 2.4348954844723358e-11,
+            "rms_all_response_relative_energy_error": 7.212794093243866e-12,
+            "max_physical_response_relative_energy_error": 7.626327462682821e-12
           }
         ],
-        "energy_orthonormality_error": 2.028094989345871e-15,
+        "energy_orthonormality_error": 1.5640146956020497e-15,
         "response_relative_energy_errors": [
-          7.624028902824036e-12,
-          4.5492049055079506e-12,
-          7.624095906280583e-12,
-          4.549209519167505e-12,
-          2.4349425076252604e-11,
-          4.564024154240793e-12,
-          4.162288878016502e-12,
-          1.3378375821549153e-12,
-          1.786693926881119e-12,
-          2.982085630771709e-12,
-          3.624370272692214e-12,
-          1.1681412610747472e-12,
-          9.727195124129108e-13,
-          5.895261210668047e-12,
-          5.06748086994792e-12,
-          2.2602860252433676e-12,
-          9.966153438885259e-13
+          7.626327462682821e-12,
+          4.548751089001511e-12,
+          7.626327462682821e-12,
+          4.548751089001511e-12,
+          2.4348954844723358e-11,
+          4.561928113535265e-12,
+          4.153174317304553e-12,
+          1.3447077310933972e-12,
+          1.7841881617620534e-12,
+          2.9827513520916485e-12,
+          3.6249170528319067e-12,
+          1.1756754404869876e-12,
+          9.715640719626003e-13,
+          5.8930180160711135e-12,
+          5.068598694803531e-12,
+          2.2436214983300206e-12,
+          9.860928346117942e-13
         ],
-        "max_response_relative_energy_error": 2.4349425076252604e-11,
+        "max_response_relative_energy_error": 2.4348954844723358e-11,
         "multipole_training": {
           "family": "regular-solid-harmonic-gradient",
           "count": 15,
@@ -726,11 +774,11 @@
       "sibc_loop_bridge_overlap_dofs": 48,
       "ordinary_evrs_candidate_dofs": 1700,
       "conservative_structural_keep_dofs": 1857,
-      "evrs_rank": 16,
+      "evrs_rank": 8,
       "surface_modes": 3,
-      "conservative_estimated_reduced_modes": 1021,
-      "estimated_reduced_modes": 33,
-      "estimated_reduction_ratio": 0.009277481023334271,
+      "conservative_estimated_reduced_modes": 1013,
+      "estimated_reduced_modes": 25,
+      "estimated_reduction_ratio": 0.007028394714647174,
       "ordinary_evrs_candidate_fraction": 0.4779308405960079,
       "conservative_structural_keep_fraction": 0.5220691594039921
     },
@@ -781,12 +829,12 @@
       "parent_order": 6,
       "parent_order_admissible": true,
       "parent_order_excess": 2,
-      "evrs_rank": 16,
+      "evrs_rank": 8,
       "cycle_rank": 14,
       "surface_modes": 3,
       "non_sibc_trace_modes": 0,
       "bridge_modes": 14,
-      "estimated_reduced_modes": 33
+      "estimated_reduced_modes": 25
     }
   },
   "frequency_rows": [
@@ -798,11 +846,11 @@
       },
       "surface_impedance": {
         "real": 2.6089506942234867e-06,
-        "imag": 2.6089506942234863e-06
+        "imag": 2.6089506942234867e-06
       },
       "n_excitations": 2,
       "magnetization_modes": 15,
-      "eddy_modes": 33,
+      "eddy_modes": 25,
       "parent_t_dofs": 3557,
       "parent_hdiv_dofs": 942,
       "eddy_blocks": [
@@ -810,26 +858,92 @@
         "volume1",
         "surface"
       ],
+      "eddy_block_roles": [
+        "bulk",
+        "bridge",
+        "sibc"
+      ],
       "eddy_block_sample_counts": [
         136,
         47,
         126
       ],
-      "sampled_magnetization_norm": 147.502089194127,
+      "sampled_magnetization_norm": 147.5099814090929,
       "sampled_eddy_current_norms": [
-        245257.23506092597,
-        23165.721883599683,
-        61879.50729836038
+        206385.81258965348,
+        22880.74727947455,
+        63204.28804345156
       ],
       "average_joule_loss": [
-        97.69252758549831,
-        119.93382676432287
+        104.54465026247897,
+        121.8283663204567
       ],
-      "residual_relative_norm": 1.6864628410380816e-14,
-      "solver_backend": "radia-cpp-dense",
-      "mixed_operator_condition": 5.85873925140057e+16,
-      "parent_t_coefficient_norm": 704703715.3546906,
-      "parent_hdiv_coefficient_norm": 77.98586589930672,
+      "residual_relative_norm": 6.61187749799624e-16,
+      "residual_backward_error": 2.6598871304498768e-20,
+      "solver_backend": "radia-cpp-dense-mixed-galerkin",
+      "orthogonalized_modes": 32,
+      "mixed_galerkin": {
+        "full_modes": 40,
+        "retained_modes": 32,
+        "eliminated_modes": 8,
+        "trial_orthogonality_relative_defect": 2.900023315753748e-21,
+        "test_orthogonality_relative_defect": 2.900023315753748e-21,
+        "schur_relative_error": 6.409875583468215e-17,
+        "trial_test_relative_difference": 0.0,
+        "full_operator_condition": 2518650.3455669605,
+        "reduced_operator_condition": 2502933.2651849277,
+        "kind": "mixed-galerkin-hdiv-hcurl",
+        "full_coupled_schur": true,
+        "hdiv_retained_modes": 15,
+        "hcurl_retained_modes": 17,
+        "hcurl_eliminated_modes": 8,
+        "keep_eddy_blocks": [
+          "volume1",
+          "surface"
+        ],
+        "eliminate_eddy_blocks": [
+          "volume"
+        ],
+        "hdiv_demag_backend": "DemagOperator",
+        "hdiv_demag_hmatrix_backend": "_ChargeGramHMatrix"
+      },
+      "mixed_operator_condition": 2518650.3455669605,
+      "direct_solution_relative_error": 4.299081325703566e-14,
+      "direct_port_response_relative_error": 4.482424291738658e-16,
+      "direct_joule_loss_relative_error": 1.6465935980363585e-15,
+      "parent_t_coefficient_norm": 12220616.84218264,
+      "parent_hdiv_coefficient_norm": 78.06269293947008,
+      "eddy_flux_density_probe_T": {
+        "shape": [
+          2,
+          3
+        ],
+        "real": [
+          [
+            4.86846462139858e-07,
+            3.91426444703315e-07,
+            1.9315884900342463e-07
+          ],
+          [
+            1.006941035051633e-08,
+            6.5874409442642e-07,
+            5.988792872017989e-07
+          ]
+        ],
+        "imag": [
+          [
+            -3.79449669108692e-05,
+            -4.086630416554422e-05,
+            5.4318072511130134e-05
+          ],
+          [
+            4.717835990631195e-05,
+            -3.9026162006561915e-05,
+            -5.1241589690946416e-05
+          ]
+        ]
+      },
+      "eddy_flux_density_probe_norm_T": 0.00011151720968471735,
       "port_response": {
         "shape": [
           2,
@@ -837,22 +951,22 @@
         ],
         "real": [
           [
-            198.24465922316668,
-            10.254057009619602
+            211.94890256608372,
+            6.133036488223364
           ],
           [
-            10.254057009484367,
-            242.72729697375158
+            6.133036488223418,
+            246.5163733200898
           ]
         ],
         "imag": [
           [
-            -9308.261833934184,
-            1586.06398935797
+            -9190.707698589835,
+            1532.0403413261238
           ],
           [
-            1586.0639893563207,
-            -10641.97302009205
+            1532.0403413261233,
+            -10360.968067827594
           ]
         ]
       }
@@ -864,12 +978,12 @@
         "imag": 62831.853071795864
       },
       "surface_impedance": {
-        "real": 2.6089506942234864e-05,
-        "imag": 2.6089506942234864e-05
+        "real": 2.6089506942234868e-05,
+        "imag": 2.6089506942234868e-05
       },
       "n_excitations": 2,
       "magnetization_modes": 15,
-      "eddy_modes": 33,
+      "eddy_modes": 25,
       "parent_t_dofs": 3557,
       "parent_hdiv_dofs": 942,
       "eddy_blocks": [
@@ -877,26 +991,92 @@
         "volume1",
         "surface"
       ],
+      "eddy_block_roles": [
+        "bulk",
+        "bridge",
+        "sibc"
+      ],
       "eddy_block_sample_counts": [
         136,
         47,
         126
       ],
-      "sampled_magnetization_norm": 147.41537376826545,
+      "sampled_magnetization_norm": 147.41537526043365,
       "sampled_eddy_current_norms": [
-        2410.400197719813,
-        240.05736414994718,
-        647.9515068726324
+        2053.996296404755,
+        234.3471332186672,
+        660.4220514869544
       ],
       "average_joule_loss": [
-        0.10570811114238875,
-        0.13013159303650895
+        0.11270991575261445,
+        0.13238386181861914
       ],
-      "residual_relative_norm": 1.456668305520181e-14,
-      "solver_backend": "radia-cpp-dense",
-      "mixed_operator_condition": 2.2495194878346948e+16,
-      "parent_t_coefficient_norm": 8420336.993552824,
-      "parent_hdiv_coefficient_norm": 77.07719122114665,
+      "residual_relative_norm": 3.9537694748765545e-16,
+      "residual_backward_error": 1.5750582547943195e-18,
+      "solver_backend": "radia-cpp-dense-mixed-galerkin",
+      "orthogonalized_modes": 32,
+      "mixed_galerkin": {
+        "full_modes": 40,
+        "retained_modes": 32,
+        "eliminated_modes": 8,
+        "trial_orthogonality_relative_defect": 2.9363922327899345e-19,
+        "test_orthogonality_relative_defect": 2.9363922327899345e-19,
+        "schur_relative_error": 1.1465640447852387e-16,
+        "trial_test_relative_difference": 0.0,
+        "full_operator_condition": 25313.24368052749,
+        "reduced_operator_condition": 25148.94776993907,
+        "kind": "mixed-galerkin-hdiv-hcurl",
+        "full_coupled_schur": true,
+        "hdiv_retained_modes": 15,
+        "hcurl_retained_modes": 17,
+        "hcurl_eliminated_modes": 8,
+        "keep_eddy_blocks": [
+          "volume1",
+          "surface"
+        ],
+        "eliminate_eddy_blocks": [
+          "volume"
+        ],
+        "hdiv_demag_backend": "DemagOperator",
+        "hdiv_demag_hmatrix_backend": "_ChargeGramHMatrix"
+      },
+      "mixed_operator_condition": 25313.24368052749,
+      "direct_solution_relative_error": 2.8096118189951064e-14,
+      "direct_port_response_relative_error": 6.65739615286191e-16,
+      "direct_joule_loss_relative_error": 3.990968231799408e-16,
+      "parent_t_coefficient_norm": 121410.95731897242,
+      "parent_hdiv_coefficient_norm": 77.07717881843062,
+      "eddy_flux_density_probe_T": {
+        "shape": [
+          2,
+          3
+        ],
+        "real": [
+          [
+            5.105796567693257e-10,
+            4.180066408536383e-10,
+            2.3496444270412116e-10
+          ],
+          [
+            5.2234145824835755e-11,
+            7.253079382586719e-10,
+            6.243641832971703e-10
+          ]
+        ],
+        "imag": [
+          [
+            -3.840533460781015e-07,
+            -4.124341193497435e-07,
+            5.410287780016197e-07
+          ],
+          [
+            4.7128815659321695e-07,
+            -3.9682251695852186e-07,
+            -5.180295977185722e-07
+          ]
+        ]
+      },
+      "eddy_flux_density_probe_norm_T": 1.1217164186844984e-06,
       "port_response": {
         "shape": [
           2,
@@ -904,22 +1084,22 @@
         ],
         "real": [
           [
-            3.0710764767249787,
-            -0.6330144639162337
+            3.085080085718337,
+            -0.6375864998993924
           ],
           [
-            -0.6330144639160697,
-            3.119945414607053
+            -0.6375864998993923,
+            3.1244499518827764
           ]
         ],
         "imag": [
           [
-            -94.9916668160486,
-            15.741511654259613
+            -93.9440978902379,
+            15.243115567683802
           ],
           [
-            15.741511654279638,
-            -108.77044006643474
+            15.24311556768379,
+            -106.00218693318396
           ]
         ]
       }
@@ -928,17 +1108,25 @@
   "checks": {
     "parent_order_admissible": true,
     "hdiv_parent_order_admissible": true,
-    "all_residuals_below_1e-10": true,
+    "all_rhs_scaled_residuals_below_1e-8": true,
+    "all_backward_errors_below_1e-12": true,
     "all_losses_nonnegative": true,
+    "all_eddy_flux_density_probes_finite": true,
     "parent_t_reconstructed": true,
     "parent_hdiv_reconstructed": true,
     "demag_operator_is_active": true,
     "reduced_magnetic_operator_is_positive": true,
     "hdiv_response_snapshots_converged": true,
     "hdiv_training_responses_preserved": true,
+    "production_bdm_family_locked": true,
     "physical_hdiv_responses_are_protected": true,
     "all_three_eddy_blocks_reconstructed": true,
+    "current_gram_rank_is_consistent": true,
+    "bulk_current_gram_is_identity": true,
+    "adjacency_roles_drive_reduction": true,
+    "full_coupled_mixed_galerkin_is_exact": true,
+    "hdiv_hacapk_charge_gram_is_active": true,
     "passed": true
   },
-  "elapsed_seconds_desktop_smoke": 3.6668559999670833
+  "elapsed_seconds": 15.383562500122935
 }

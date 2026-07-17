@@ -186,7 +186,7 @@ class HDivReducedMotor:
             })
         return {
             "analysis": "hdiv_reduced_motor",
-            "formulation": f"planar RT{self.order} HDiv-VIM reluctance motor",
+            "formulation": f"planar BDM{self.order} HDiv-VIM reluctance motor",
             "hdiv_order": self.order,
             "geometry_order": self.body.geometry_order,
             "mu_r": self.mu_r,

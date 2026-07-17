@@ -59,6 +59,7 @@ from .simple_field_2d import (
     route_motor_validation,
 )
 from .planar_coupling_knowledge import get_planar_coupling
+from .angle_periodic_rom_knowledge import get_angle_periodic_rom_knowledge
 from .thermal_handoff import (
     motor_electrothermal_result_chain_gate as build_motor_electrothermal_result_chain_gate,
     motor_thermal_handoff_gate as build_motor_thermal_handoff_gate,
@@ -405,6 +406,17 @@ def motor_planar_coupling(topic: str = "overview") -> str:
             "all"           - everything
     """
     return get_planar_coupling(topic)
+
+
+@mcp.tool()
+def motor_angle_periodic_rom(topic: str = "architecture") -> str:
+    """HCurl Eddy Bubble + HDiv-MMM angle-periodic motor ROM knowledge.
+
+    Args:
+        topic: architecture, face_policy, angle_rom, time_domain, ports,
+            mesh_gate, validation, limits, or all.
+    """
+    return get_angle_periodic_rom_knowledge(topic)
 
 
 @mcp.tool()
@@ -1059,6 +1071,7 @@ def main():
         from .deck_bridge_knowledge import SECTIONS as M_SEC
         from .age_quality_knowledge import SECTIONS as A_SEC
         from .validation_lanes_knowledge import SECTIONS as L_SEC
+        from .angle_periodic_rom_knowledge import SECTIONS as R_SEC
         for k in O_SEC:
             r = motor_onelab(k)
             print(f"  motor_onelab({k!r}): {len(r)} chars")
@@ -1099,6 +1112,15 @@ def main():
             r = motor_validation_lanes(k)
             print(f"  motor_validation_lanes({k!r}): {len(r)} chars")
             assert len(r) > 100, f"Motor validation lane topic {k} too short"
+        for k in R_SEC:
+            r = motor_angle_periodic_rom(k)
+            print(f"  motor_angle_periodic_rom({k!r}): {len(r)} chars")
+            assert len(r) > 100, f"Motor angle-ROM topic {k} too short"
+        assert "cycle basis" in motor_angle_periodic_rom("face_policy")
+        assert "positive-real CLN" in motor_angle_periodic_rom("time_domain")
+        ports_text = motor_angle_periodic_rom("ports")
+        assert "FMI source boundary" in ports_text
+        assert "packaged FMU" in ports_text
         bridge = motor_deck_bridge("insufficiency_audit")
         assert "gold_numeric_invariant" in bridge
         assert "radia-motor" in motor_deck_bridge("radia_strengthening_queue")

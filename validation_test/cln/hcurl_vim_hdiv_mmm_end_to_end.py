@@ -7,10 +7,11 @@ The durable path exercised here is:
       -> topology-aware bulk / bridge-cycle / SIBC VIM
       -> protected physical + multipole-trained HDiv response-POD basis
       -> projected Radia HDiv material and demagnetizing operators
-      -> one-frequency mixed solve
+      -> full coupled mixed-Galerkin elimination of bulk eddy bubbles
       -> parent-T, parent-HDiv, J, K, and M reconstruction.
 
-This is a desktop correctness smoke, not a timing benchmark.
+This is a correctness validation.  Solver-heavy runs belong on a designated
+compute host; timing is secondary to the stored algebraic and field checks.
 """
 
 from __future__ import annotations
@@ -130,6 +131,8 @@ def _hdiv_mmm_reduction(
             materials="cond",
             demag_eps=demag_eps,
             demag_eta=demag_eta,
+            parent_family=hdiv_family,
+            parent_order=hdiv_order,
         )
 
 
@@ -227,6 +230,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             intorder=args.intorder,
             kernel_epsilon=args.kernel_epsilon,
             response_backend="operator",
+            rtol=args.hcurl_rtol,
+            current_gram_rtol=args.current_gram_rtol,
             parent_order_ledger=ledger,
             port_vector_potentials=_port_vector_potentials(),
             material_model=material,
@@ -249,6 +254,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             intorder=args.intorder,
             kernel_epsilon=args.kernel_epsilon,
             response_backend="operator",
+            rtol=args.hcurl_rtol,
+            current_gram_rtol=args.current_gram_rtol,
             parent_order_ledger=ledger,
             port_vector_potentials=_port_vector_potentials(),
             material_model=material,
@@ -258,7 +265,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
 
     rows = []
     for frequency in args.frequencies:
-        solution = mixed.solve_frequency(frequency)
+        direct_solution = mixed.solve_frequency(frequency)
+        solution = mixed.solve_frequency_eddy_bubbled(frequency)
         operator = mixed.mixed_operator(
             None,
             solution.s,
@@ -272,6 +280,35 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         diagnostics.update(
             {
                 "mixed_operator_condition": float(np.linalg.cond(operator)),
+                "direct_solution_relative_error": float(
+                    np.linalg.norm(
+                        solution.reduced_solution
+                        - direct_solution.reduced_solution
+                    )
+                    / max(
+                        float(np.linalg.norm(direct_solution.reduced_solution)),
+                        1.0e-300,
+                    )
+                ),
+                "direct_port_response_relative_error": float(
+                    np.linalg.norm(
+                        solution.port_response - direct_solution.port_response
+                    )
+                    / max(
+                        float(np.linalg.norm(direct_solution.port_response)),
+                        1.0e-300,
+                    )
+                ),
+                "direct_joule_loss_relative_error": float(
+                    np.linalg.norm(
+                        solution.average_joule_loss
+                        - direct_solution.average_joule_loss
+                    )
+                    / max(
+                        float(np.linalg.norm(direct_solution.average_joule_loss)),
+                        1.0e-300,
+                    )
+                ),
                 "parent_t_coefficient_norm": float(
                     np.linalg.norm(solution.parent_t_coefficients)
                 ),
@@ -287,13 +324,22 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         )
         rows.append(diagnostics)
 
+    response_info = mixed.response_basis.diagnostics()
+    bulk_current_gram = mixed.eddy_bases[0].mass_matrix()
+    bulk_current_gram_identity_error = float(
+        np.linalg.norm(bulk_current_gram - np.eye(bulk_current_gram.shape[0]))
+        / max(float(np.linalg.norm(bulk_current_gram)), 1.0e-300)
+    )
     checks = {
         "parent_order_admissible": ledger.is_parent_order_admissible(args.order),
         "hdiv_parent_order_admissible": (
             args.hdiv_order >= args.multipole_degree - 1
         ),
-        "all_residuals_below_1e-10": all(
-            row["residual_relative_norm"] < 1.0e-10 for row in rows
+        "all_rhs_scaled_residuals_below_1e-8": all(
+            row["residual_relative_norm"] < 1.0e-8 for row in rows
+        ),
+        "all_backward_errors_below_1e-12": all(
+            row["residual_backward_error"] < 1.0e-12 for row in rows
         ),
         "all_losses_nonnegative": all(
             min(row["average_joule_loss"]) >= -1.0e-12 for row in rows
@@ -338,11 +384,39 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "all_three_eddy_blocks_reconstructed": all(
             row["eddy_blocks"] == ["volume", "volume1", "surface"] for row in rows
         ),
+        "current_gram_rank_is_consistent": (
+            response_info["current_gram_rank"]
+            == sum(
+                value > args.current_gram_rtol
+                for value in response_info["current_gram_relative_eigenvalues"]
+            )
+        ),
+        "bulk_current_gram_is_identity": (
+            bulk_current_gram_identity_error < 1.0e-10
+        ),
+        "adjacency_roles_drive_reduction": (
+            mixed.diagnostics()["eddy_block_roles"]
+            == {"volume": "bulk", "volume1": "bridge", "surface": "sibc"}
+            and mixed.adjacency_class_block_partition()
+            == (("volume1", "surface"), ("volume",))
+        ),
+        "full_coupled_mixed_galerkin_is_exact": all(
+            row["mixed_galerkin"]["full_coupled_schur"]
+            and row["mixed_galerkin"]["schur_relative_error"] < 1.0e-8
+            and row["direct_port_response_relative_error"] < 1.0e-7
+            and row["direct_joule_loss_relative_error"] < 1.0e-7
+            for row in rows
+        ),
+        "hdiv_hacapk_charge_gram_is_active": (
+            hdiv_reduction.diagnostics()["demag_hmatrix_active"]
+            and "ChargeGramHMatrix"
+            in hdiv_reduction.diagnostics()["demag_hmatrix_backend"]
+        ),
     }
     checks["passed"] = all(checks.values())
     elapsed = time.perf_counter() - started
     return {
-        "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v6",
+        "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v8",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "validation_host": platform.node(),
         "runtime": {
@@ -350,11 +424,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "platform": platform.platform(),
             "ngsolve_version": getattr(ng, "__version__", "unknown"),
         },
-        "note": "Desktop correctness smoke; elapsed time is not benchmark data.",
+        "note": (
+            "Correctness validation; timing fields are publishable only when "
+            "validation_host is a designated compute host."
+        ),
         "configuration": {
             "geometry": "notched-box",
             "parent_order": args.order,
             "krylov_steps": args.steps,
+            "hcurl_rtol": args.hcurl_rtol,
+            "current_gram_rtol": args.current_gram_rtol,
             "frequencies_Hz": args.frequencies,
             "maxh": args.maxh,
             "sigma": args.sigma,
@@ -374,12 +453,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "parent_order_ledger": ledger.diagnostics(parent_order=args.order),
         },
         "hcurl_parent_ndof": int(hcurl_fes.ndof),
+        "hcurl_current_gram_removed_modes": int(
+            response_info["pre_current_gram_rank"]
+            - response_info["current_gram_rank"]
+        ),
+        "bulk_current_gram_identity_error": bulk_current_gram_identity_error,
         "hdiv_reduction": hdiv_reduction.diagnostics(),
         "mixed_system": mixed.diagnostics(),
         "eddy_bubbling": mixed.eddy_bubbling.diagnostics(),
         "frequency_rows": rows,
         "checks": checks,
-        "elapsed_seconds_desktop_smoke": float(elapsed),
+        "elapsed_seconds": float(elapsed),
     }
 
 
@@ -387,6 +471,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--order", type=int, default=6)
     parser.add_argument("--steps", type=int, default=8)
+    parser.add_argument("--hcurl-rtol", type=float, default=1.0e-10)
+    parser.add_argument("--current-gram-rtol", type=float, default=1.0e-10)
     parser.add_argument("--frequencies", type=_parse_floats, default=[100.0, 1.0e4])
     parser.add_argument("--maxh", type=float, default=2.5)
     parser.add_argument("--sigma", type=float, default=5.8e7)

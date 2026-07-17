@@ -121,14 +121,17 @@ python validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py
 
 The saved p=6 notched-box result
 `hcurl_vim_hdiv_mmm_end_to_end_smoke.json` reduces 3557 parent HCurl DoFs to
-33 hybrid eddy coordinates: 16 bulk EVRS modes, 14 conductor-cycle bridge
-modes, and 3 exterior-only SIBC modes.  Two ports are solved together at each
-frequency through `_HybridVIMSolve`.
+25 hybrid eddy coordinates.  The response construction first finds 10
+HCurl-Krylov directions, then removes 2 directions in the relative null space
+of the sampled `curl(T)` current Gram matrix.  The resulting 8 current-Gram
+orthonormal bulk modes are combined with 14 conductor-cycle bridge modes and 3
+exterior-only SIBC modes.  Two ports are solved together at each frequency
+through `_HybridVIMSolve`.
 
-| frequency | mixed residual | largest average loss | solver |
-|---:|---:|---:|---|
-| 100 Hz | 2.550e-14 | 1.219e2 | `radia-cpp-dense` |
-| 10 kHz | 7.242e-15 | 1.320e-1 | `radia-cpp-dense` |
+| frequency | RHS-scaled residual | backward error | largest average loss | solver |
+|---:|---:|---:|---:|---|
+| 100 Hz | 4.693e-16 | 2.577e-20 | 1.218e2 | `radia-cpp-dense-mixed-galerkin` |
+| 10 kHz | 4.599e-16 | 2.497e-18 | 1.324e-1 | `radia-cpp-dense-mixed-galerkin` |
 
 The default validation checks reconstruction of all 3557 parent-T coordinates,
 all 267 parent BDM1-HDiv coordinates, sampled magnetization, and the
@@ -139,14 +142,36 @@ Raviart--Thomas is selected only by `--hdiv-family rt`.
 Energy POD protects the two physical-response modes and retains six independent
 training-complement modes, reducing 267 parent DoFs to 8.  The maximum snapshot
 residual is `9.907e-11`; all training responses are reproduced to `3.540e-11`
-in magnetic energy.
+in magnetic energy.  The bulk current Gram differs from the identity by only
+`1.49e-14`.  Adjacency roles retain the 14 conductor-conductor cycle modes and 3
+conductor-air SIBC modes, while the 8 ordinary bulk modes are eliminated by the
+full-coupled mixed Galerkin step.  The complete BDM1/HCurl system therefore
+reduces from 33 to 25 coupled modes.  Its maximum full-coupled Schur error is
+`1.110e-16`; port response and Joule loss agree with the direct coupled solve
+to `6.982e-16` and `8.140e-16`, respectively.
 
 BDM2 is retained as a production option.  The companion
 `hcurl_vim_hdiv_mmm_bdm2_smoke.json`, generated with
 `--hdiv-order 2 --multipole-degree 3`, reduces 738 parent DoFs to 15 modes and
 reproduces all degree-one/two/three training responses to `3.789e-11` in
 magnetic energy.  `hcurl_vim_hdiv_mmm_rt1_smoke.json` and
-`hcurl_vim_hdiv_mmm_rt2_smoke.json` are explicit family comparisons.
+`hcurl_vim_hdiv_mmm_rt2_smoke.json` are explicit family comparisons.  All four
+v8 result files use the same current-Gram and adjacency-driven full-coupled
+reduction and report
+the active HACApK `_ChargeGramHMatrix` demagnetizing backend:
+
+| HDiv parent | parent DoF -> modes | coupled modes -> retained | max backward error | max Schur error | max port error | max loss error |
+|---|---:|---:|---:|---:|---:|---:|
+| BDM1 | 267 -> 8 | 33 -> 25 | 2.497e-18 | 1.110e-16 | 6.982e-16 | 8.140e-16 |
+| BDM2 | 738 -> 15 | 40 -> 32 | 1.759e-18 | 8.600e-17 | 4.238e-16 | 1.252e-15 |
+| RT1 | 369 -> 8 | 33 -> 25 | 9.277e-18 | 7.850e-17 | 9.090e-16 | 2.075e-15 |
+| RT2 | 942 -> 15 | 40 -> 32 | 1.575e-18 | 1.147e-16 | 6.657e-16 | 1.647e-15 |
+
+Before current-Gram compression, the bulk block reached condition numbers near
+`1e18`.  Removing the `curl(T)` null space lowers the complete coupled
+condition number to `2.52e6` at 100 Hz and `2.53e4` at 10 kHz.  Backward error,
+port, loss, and field reconstruction checks then all measure the same stable
+physical response.
 
 ## Planar HDiv-MMM BDM/RT corner smoke
 
@@ -246,34 +271,116 @@ near the re-entrant line at `(x,y)=(0.45,0.45)`.
 
 ```powershell
 python validation_test/cln/evrs_current_field_compare.py `
-  --geometry notched-box --orders 4,6 --steps 22 --shifts 1 `
-  --output validation_test/cln/evrs_current_field_notched_p46_n22_smoke.json
-python validation_test/cln/evrs_current_field_compare.py `
-  --geometry notched-box --orders 6 --steps 2,4,8,12,22 --shifts 1 `
-  --output validation_test/cln/evrs_current_field_notched_p6_depth_smoke.json
+  --geometry notched-box --orders 3,4,5,6 `
+  --steps 2,4,8,12,16,22 --shifts 0.01,0.1,1,10,100 `
+  --output validation_test/cln/evrs_fem_notched_p36.json
 ```
 
 Against the full p=6 solve:
 
 | case | active DoF | rank | max current L2 error | max Joule-loss error | max corner L2 error | max corner peak error |
 |---|---:|---:|---:|---:|---:|---:|
-| p=4, n=22 | 1252 | 44 | 2.101e-01 | 1.545e-01 | 1.567e-01 | 1.387e-01 |
-| p=6, n=22 | 3557 | 44 | 1.605e-06 | 8.435e-08 | 1.112e-06 | 9.454e-07 |
+| p=4, n=22 | 1252 | 44 | 3.047e-01 | 7.260e-02 | 2.457e-01 | 4.184e-01 |
+| p=6, n=22 | 3557 | 44 | 2.554e-06 | 8.379e-11 | 1.826e-06 | 2.252e-06 |
 
 p=6 depth sweep:
 
 | p | n | active DoF | rank | max current L2 error | max Joule-loss error | max corner L2 error |
 |---:|---:|---:|---:|---:|---:|---:|
-| 6 | 2 | 3557 | 4 | 4.578e-02 | 6.011e-02 | 3.590e-02 |
-| 6 | 4 | 3557 | 8 | 1.896e-03 | 1.100e-03 | 1.326e-03 |
-| 6 | 8 | 3557 | 16 | 1.041e-05 | 3.123e-06 | 7.871e-06 |
-| 6 | 12 | 3557 | 24 | 1.791e-06 | 1.161e-07 | 1.172e-06 |
-| 6 | 22 | 3557 | 44 | 1.605e-06 | 8.435e-08 | 1.112e-06 |
+| 6 | 2 | 3557 | 4 | 5.917e-02 | 1.342e-02 | 4.921e-02 |
+| 6 | 4 | 3557 | 8 | 2.571e-03 | 5.220e-05 | 2.159e-03 |
+| 6 | 8 | 3557 | 16 | 1.372e-05 | 2.530e-09 | 1.040e-05 |
+| 6 | 12 | 3557 | 24 | 2.793e-06 | 9.506e-11 | 1.934e-06 |
+| 6 | 22 | 3557 | 44 | 2.554e-06 | 8.379e-11 | 1.826e-06 |
 
 Current interpretation: this is the first direct support for the eddy-bubbling
 claim.  On the notched-box stress, the p=6 parent space can be compressed from
 3557 active DoFs to 44 EVRS coordinates while preserving the full p=6 current
-field, Joule loss, and corner-local current to about 1e-6.  The same rank in a
-p=4 parent space misses the full p=6 current by 10--20%, so the high-order
+field and corner-local current to a few parts in one million.  The same rank in
+a p=4 parent space misses the full p=6 current by 30.5%, so the high-order
 parent space is not cosmetic; it supplies field content that the reduced basis
 can keep after eddy bubbles are removed.
+
+## Compute-host curved and broadband validation
+
+The result-bearing sweeps below were run on `mdx`; the JSON files record the
+host, runtime, NGSolve version, and wall time.  They supersede the desktop smoke
+numbers for paper claims.
+
+```powershell
+python validation_test/cln/curved_sphere_geometry_benchmark.py `
+  --output validation_test/cln/curved_sphere_geometry_benchmark.json
+python validation_test/cln/evrs_current_field_compare.py `
+  --geometry sphere --curve-order 4 --orders 3,4,5,6 `
+  --steps 2,4,8,12,16,22 --shifts 0.01,0.1,1,10,100 `
+  --output validation_test/cln/evrs_fem_sphere_curved_p36.json
+```
+
+| curve order | sphere area error | sphere volume error | VIM/FEM area mismatch | tangent defect |
+|---:|---:|---:|---:|---:|
+| 1 | 5.266e-02 | 9.376e-02 | 5.969e-16 | 5.551e-17 |
+| 2 | 1.223e-03 | 1.867e-03 | 1.415e-16 | 1.110e-16 |
+| 3 | 1.157e-04 | 1.631e-04 | 2.827e-16 | 1.110e-16 |
+| 4 | 5.245e-06 | 7.838e-06 | 0 | 1.665e-16 |
+
+The curved p=6 sphere has 10970 parent DoFs.  At dimensionless shift 1,
+ranks 8, 16, and 24 give current errors `1.296e-3`, `1.506e-5`, and
+`1.484e-7`.  At shift 100, even rank 44 leaves `5.620e-2`.  This is a
+bandwidth limitation of a single low-frequency expansion point, not evidence
+that the curved parent space needs still higher order.
+
+## Mixed Galerkin orthogonalization and DtN-SIBC
+
+`HybridVIMSystem.mixed_galerkin_orthogonalization()` constructs separate trial
+and test transformations for retained modes `s` and eliminated modes `b`:
+
+```text
+P_trial = [-Z_bb^-1 Z_bs; I]
+P_test  = [-Z_bb^-T Z_sb^T; I]
+P_test^T Z P_trial = Z_ss - Z_sb Z_bb^-1 Z_bs.
+```
+
+Thus the projected operator is the exact block Schur complement.  Reciprocal
+complex-symmetric VIM systems satisfy `P_trial == P_test`, reducing the method
+to operator-Gram orthogonalization.  The curved-sphere rank-8 hybrid case has
+63 modes before bulk elimination and 55 after it.  At 100 Hz its condition
+number drops from `3.117e9` to `3.155e3`; trial/test orthogonality defects are
+below `1.4e-13`, and the Schur identity error is `7.50e-10`.
+
+```powershell
+python validation_test/cln/evrs_sibc_mixed_schur.py `
+  --geometry sphere --curve-order 4 --order 6 --steps 4,8,12,22 `
+  --frequencies 100,1000,10000,100000,1000000 `
+  --output validation_test/cln/evrs_dtn_sibc_mixed_sphere_p6.json
+```
+
+With graph-cycle and exterior-only SIBC modes included, the rank-8 port error
+relative to the run-local rank-44 hybrid reference is `0.2097%` at 100 Hz and
+`0.2683%` at 1 MHz.  The nearly flat four-decade response is the practical
+reason the DtN-SIBC branch is mandatory for the broadband formulation.
+
+For the coupled BDM-MMM/HCurl formulation the elimination must be performed on
+the complete block matrix, not on `Z_e` alone.  Radia records the adjacency
+roles `bulk`, `bridge`, and `sibc`, then
+`CoupledHDivHybridVIMSystem.solve_frequency_eddy_bubbled()` always retains the
+HDiv modes plus conductor-conductor cycle and conductor-air SIBC modes.  Only
+the ordinary bulk eddy-bubble block is eliminated.  The reduced matrix is the
+exact full coupled Schur complement; a nonzero eliminated RHS is recovered by
+the affine lift `A_bb^-1 f_b`.  The production BDM demag block remains backed
+by the HACApK `_ChargeGramHMatrix`.
+
+## Corner mesh and Gmsh views
+
+`hcurl_corner_gmsh_visualization.py` exports a Gmsh v4.1 mesh with nine views:
+FEM and EVRS current vectors/magnitudes, current error, local EVRS rank, basis
+energy density, element size, and corner distance.  OCC re-entrant-edge
+refinement with `corner_edge_maxh=0.2` produces 85 tetrahedra and an 8574-DoF
+p=6 parent, then reduces it to rank 44.  At shift 10 the global and corner
+current errors are `4.855e-3` and `3.666e-3`; corner basis-energy density is
+1.426 times the far-field value.
+
+```powershell
+python validation_test/cln/hcurl_corner_gmsh_visualization.py `
+  --corner-edge-maxh 0.2 --order 6 --steps 22 --shift 10 `
+  --output C:\temp\hcurl_gmsh\corner_edge_h02_p6_n44_shift10.msh
+```

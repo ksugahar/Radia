@@ -1,0 +1,535 @@
+{
+  "schema": "radia.motor.pmsm_angle_periodic_rom_validation.v1",
+  "generated_at_utc": "2026-07-17T06:36:09.461217+00:00",
+  "validation_host": "Hibino",
+  "python_version": "3.12.10",
+  "ngsolve_version": "6.2.2604",
+  "numpy_version": "2.4.3",
+  "geometry": {
+    "machine": "8-pole 24-physical-slot PMSM benchmark",
+    "pm_model": "smooth radial remanence fundamental",
+    "mesh_elements": 4350,
+    "mesh_vertices": 2238,
+    "maxh_m": 0.004,
+    "geometry_order": 4,
+    "fes_order": 3,
+    "maxwell_circle_radius_m": 0.0502,
+    "maxwell_circle_points": 8191
+  },
+  "mapping_quality": {
+    "curve_order": 4,
+    "integration_order": 10,
+    "samples": 156600,
+    "minimum_jacobian": 4.0592652839628255e-07,
+    "minimum_scaled_jacobian": 0.02622654564975212,
+    "nonpositive_jacobian_samples": 0
+  },
+  "rom": {
+    "angle_samples": 33,
+    "held_out_angles": 33,
+    "mechanical_period_rad": 1.5707963267948966,
+    "generalized_current_order": [
+      "A",
+      "B",
+      "C"
+    ],
+    "current_operating_point_A": [
+      5.0,
+      -2.5,
+      -2.5
+    ],
+    "passive": true,
+    "includes_cogging_coenergy": true
+  },
+  "metrics": {
+    "pm_flux_max_relative_error": 1.6658182787186744e-15,
+    "maxwell_vs_rom_torque_relative_rmse": 0.0019010256513739064,
+    "maxwell_vs_fem_virtual_torque_relative_rmse": 0.0019010260749907043,
+    "fem_virtual_vs_rom_torque_relative_rmse": 3.971365049541934e-09,
+    "rom_derivative_vs_virtual_max_abs_Nm": 2.3139945515282534e-10,
+    "minimum_inductance_eigenvalue_H": 0.13651598648357532,
+    "maximum_torque_abs_Nm": 0.7859708857794775
+  },
+  "thresholds": {
+    "pm_flux_max_relative_error": 1e-10,
+    "maxwell_vs_rom_torque_relative_rmse": 0.003,
+    "maxwell_vs_fem_virtual_torque_relative_rmse": 0.003,
+    "fem_virtual_vs_rom_torque_relative_rmse": 2e-07,
+    "rom_derivative_vs_virtual_max_abs_Nm": 2e-08
+  },
+  "checks": {
+    "pm_flux_max_relative_error": true,
+    "maxwell_vs_rom_torque_relative_rmse": true,
+    "maxwell_vs_fem_virtual_torque_relative_rmse": true,
+    "fem_virtual_vs_rom_torque_relative_rmse": true,
+    "rom_derivative_vs_virtual_max_abs_Nm": true,
+    "positive_curved_mapping": true,
+    "positive_inductance": true
+  },
+  "passed": true,
+  "elapsed_s": 9.34177549998276,
+  "holdout_rows": [
+    {
+      "rotor_angle_rad": 0.02379994434537722,
+      "pm_flux_linkage_Wb": [
+        -0.015185580576905146,
+        0.0260610185550973,
+        -0.010875406300958141
+      ],
+      "pm_flux_relative_error": 1.3208260681198456e-15,
+      "pm_coenergy_J": 69.35836855311409,
+      "torque_maxwell_Nm": -0.6392322848072367,
+      "torque_fem_virtual_work_Nm": -0.6397534008328876,
+      "torque_rom_derivative_Nm": -0.6397534023988558,
+      "torque_rom_virtual_work_Nm": -0.6397534022095641
+    },
+    {
+      "rotor_angle_rad": 0.07139983303613166,
+      "pm_flux_linkage_Wb": [
+        -0.018946974039044554,
+        0.025119103963995918,
+        -0.006172095210366523
+      ],
+      "pm_flux_relative_error": 6.542905664711365e-16,
+      "pm_coenergy_J": 69.35836878390113,
+      "torque_maxwell_Nm": -0.5420057967682412,
+      "torque_fem_virtual_work_Nm": -0.5419701778919261,
+      "torque_rom_derivative_Nm": -0.5419701701578237,
+      "torque_rom_virtual_work_Nm": -0.5419701699871382
+    },
+    {
+      "rotor_angle_rad": 0.1189997217268861,
+      "pm_flux_linkage_Wb": [
+        -0.02202357449355355,
+        0.023269319508448728,
+        -0.0012457085176350309
+      ],
+      "pm_flux_relative_error": 5.668343155756329e-16,
+      "pm_coenergy_J": 69.35836924230114,
+      "torque_maxwell_Nm": -0.42518542604395915,
+      "torque_fem_virtual_work_Nm": -0.4245995206986208,
+      "torque_rom_derivative_Nm": -0.42459951843330734,
+      "torque_rom_virtual_work_Nm": -0.42459951830053905
+    },
+    {
+      "rotor_angle_rad": 0.16659961041764054,
+      "pm_flux_linkage_Wb": [
+        -0.02430418558400187,
+        0.020578521218245535,
+        0.003725701326585701
+      ],
+      "pm_flux_relative_error": 8.00768893647358e-16,
+      "pm_coenergy_J": 69.35836986264162,
+      "torque_maxwell_Nm": -0.2929347599696984,
+      "torque_fem_virtual_work_Nm": -0.291883978320584,
+      "torque_rom_derivative_Nm": -0.29188397750186795,
+      "torque_rom_virtual_work_Nm": -0.2918839774102011
+    },
+    {
+      "rotor_angle_rad": 0.21419949910839498,
+      "pm_flux_linkage_Wb": [
+        -0.025706380083506477,
+        0.017143961554400927,
+        0.008562454617643479
+      ],
+      "pm_flux_relative_error": 4.869292378881991e-16,
+      "pm_coenergy_J": 69.35837055605037,
+      "torque_maxwell_Nm": -0.149984074238577,
+      "torque_fem_virtual_work_Nm": -0.14862050221609024,
+      "torque_rom_derivative_Nm": -0.14862050373226898,
+      "torque_rom_virtual_work_Nm": -0.14862050368158464
+    },
+    {
+      "rotor_angle_rad": 0.2617993877991494,
+      "pm_flux_linkage_Wb": [
+        -0.026179479029473145,
+        0.013089774451824118,
+        0.013089738489561714
+      ],
+      "pm_flux_relative_error": 2.650507636139648e-16,
+      "pm_coenergy_J": 69.35837122318657,
+      "torque_maxwell_Nm": -0.0014664754558555892,
+      "torque_fem_virtual_work_Nm": 1.2934009419041102e-05,
+      "torque_rom_derivative_Nm": 1.2933702369312518e-05,
+      "torque_rom_virtual_work_Nm": 1.2933698556594207e-05
+    },
+    {
+      "rotor_angle_rad": 0.3093992764899039,
+      "pm_flux_linkage_Wb": [
+        -0.025706383393347354,
+        0.008562488795483691,
+        0.017143925107486226
+      ],
+      "pm_flux_relative_error": 3.4642990605350896e-16,
+      "pm_coenergy_J": 69.35837176847348,
+      "torque_maxwell_Nm": 0.1472628228409813,
+      "torque_fem_virtual_work_Nm": 0.14864450363916148,
+      "torque_rom_derivative_Nm": 0.14864450589985,
+      "torque_rom_virtual_work_Nm": 0.14864450585960753
+    },
+    {
+      "rotor_angle_rad": 0.35699916518065833,
+      "pm_flux_linkage_Wb": [
+        -0.024304192084057343,
+        0.003725732484727537,
+        0.020578485603964983
+      ],
+      "pm_flux_relative_error": 2.4830091930330097e-16,
+      "pm_coenergy_J": 69.3583721137912,
+      "torque_maxwell_Nm": 0.2908182465022031,
+      "torque_fem_virtual_work_Nm": 0.2919026520942225,
+      "torque_rom_derivative_Nm": 0.29190265158323364,
+      "torque_rom_virtual_work_Nm": 0.29190265149470207
+    },
+    {
+      "rotor_angle_rad": 0.40459905387141276,
+      "pm_flux_linkage_Wb": [
+        -0.02202358394889467,
+        -0.0012456815053279704,
+        0.023269286013995187
+      ],
+      "pm_flux_relative_error": 5.0432404274586915e-16,
+      "pm_coenergy_J": 69.35837220966805,
+      "torque_maxwell_Nm": 0.4239799578207971,
+      "torque_fem_virtual_work_Nm": 0.42461016462880247,
+      "torque_rom_derivative_Nm": 0.4246101662508572,
+      "torque_rom_virtual_work_Nm": 0.4246101661387058
+    },
+    {
+      "rotor_angle_rad": 0.4521989425621672,
+      "pm_flux_linkage_Wb": [
+        -0.018946986107930667,
+        -0.0061720733201894315,
+        0.02511907379994625
+      ],
+      "pm_flux_relative_error": 6.3614419999048e-16,
+      "pm_coenergy_J": 69.35837204236819,
+      "torque_maxwell_Nm": 0.541887008358003,
+      "torque_fem_virtual_work_Nm": 0.5419712437060298,
+      "torque_rom_derivative_Nm": 0.5419712455403207,
+      "torque_rom_virtual_work_Nm": 0.5419712454157732
+    },
+    {
+      "rotor_angle_rad": 0.4997988312529216,
+      "pm_flux_linkage_Wb": [
+        -0.015185594823135229,
+        -0.010875390324079059,
+        0.02606099281165881
+      ],
+      "pm_flux_relative_error": 8.939311906493784e-16,
+      "pm_coenergy_J": 69.35837163585987,
+      "torque_maxwell_Nm": 0.6402199226252497,
+      "torque_fem_virtual_work_Nm": 0.6397447350536822,
+      "torque_rom_derivative_Nm": 0.6397447334618115,
+      "torque_rom_virtual_work_Nm": 0.6397447332995299
+    },
+    {
+      "rotor_angle_rad": 0.5473987199436761,
+      "pm_flux_linkage_Wb": [
+        -0.010875356575750322,
+        -0.015185642386103359,
+        0.026060999641903577
+      ],
+      "pm_flux_relative_error": 8.790721177474596e-16,
+      "pm_coenergy_J": 69.35837104838099,
+      "torque_maxwell_Nm": 0.715365125574597,
+      "torque_fem_virtual_work_Nm": 0.714397324230731,
+      "torque_rom_derivative_Nm": 0.7143973258374211,
+      "torque_rom_virtual_work_Nm": 0.7143973256518165
+    },
+    {
+      "rotor_angle_rad": 0.5949986086344305,
+      "pm_flux_linkage_Wb": [
+        -0.006172054606252583,
+        -0.01894704576648856,
+        0.025119094043817673
+      ],
+      "pm_flux_relative_error": 6.864917088329e-16,
+      "pm_coenergy_J": 69.35837036409632,
+      "torque_maxwell_Nm": 0.7645540804749141,
+      "torque_fem_virtual_work_Nm": 0.7632312041039312,
+      "torque_rom_derivative_Nm": 0.7632312037124225,
+      "torque_rom_virtual_work_Nm": 0.7632312035044108
+    },
+    {
+      "rotor_angle_rad": 0.6425984973251849,
+      "pm_flux_linkage_Wb": [
+        -0.001245678502153489,
+        -0.022023653546826644,
+        0.02326931893982702
+      ],
+      "pm_flux_relative_error": 9.918186481524533e-16,
+      "pm_coenergy_J": 69.35836968103935,
+      "torque_maxwell_Nm": 0.7859708857794775,
+      "torque_fem_virtual_work_Nm": 0.7844814923885223,
+      "torque_rom_derivative_Nm": 0.7844814937079403,
+      "torque_rom_virtual_work_Nm": 0.7844814934765408
+    },
+    {
+      "rotor_angle_rad": 0.6901983860159394,
+      "pm_flux_linkage_Wb": [
+        0.0037257196685971166,
+        -0.024304269105912768,
+        0.020578530021731867
+      ],
+      "pm_flux_relative_error": 3.5503554161351708e-16,
+      "pm_coenergy_J": 69.3583690970674,
+      "torque_maxwell_Nm": 0.7788233626897754,
+      "torque_fem_virtual_work_Nm": 0.7773800362542714,
+      "torque_rom_derivative_Nm": 0.7773800393148412,
+      "torque_rom_virtual_work_Nm": 0.7773800391186468
+    },
+    {
+      "rotor_angle_rad": 0.7377982747066938,
+      "pm_flux_linkage_Wb": [
+        0.008562460623256716,
+        -0.025706465055355725,
+        0.017143979411814336
+      ],
+      "pm_flux_relative_error": 5.951342637054042e-16,
+      "pm_coenergy_J": 69.35836869584305,
+      "torque_maxwell_Nm": 0.7433742824557167,
+      "torque_fem_virtual_work_Nm": 0.7421831824672153,
+      "torque_rom_derivative_Nm": 0.7421831806817942,
+      "torque_rom_virtual_work_Nm": 0.7421831804688138
+    },
+    {
+      "rotor_angle_rad": 0.7853981633974483,
+      "pm_flux_linkage_Wb": [
+        0.013089731941718266,
+        -0.0261795623801567,
+        0.013089800717751158
+      ],
+      "pm_flux_relative_error": 8.740628495678218e-16,
+      "pm_coenergy_J": 69.35836853484702,
+      "torque_maxwell_Nm": 0.6809312328842707,
+      "torque_fem_virtual_work_Nm": 0.6801625339392102,
+      "torque_rom_derivative_Nm": 0.6801625363380875,
+      "torque_rom_virtual_work_Nm": 0.6801625361596563
+    },
+    {
+      "rotor_angle_rad": 0.8329980520882028,
+      "pm_flux_linkage_Wb": [
+        0.017143906242842222,
+        -0.02570646211035436,
+        0.008562522520605341
+      ],
+      "pm_flux_relative_error": 8.311484685164991e-16,
+      "pm_coenergy_J": 69.35836863714452,
+      "torque_maxwell_Nm": 0.5937955814510435,
+      "torque_fem_virtual_work_Nm": 0.5935591133265916,
+      "torque_rom_derivative_Nm": 0.5935591134587337,
+      "torque_rom_virtual_work_Nm": 0.5935591133043872
+    },
+    {
+      "rotor_angle_rad": 0.8805979407789571,
+      "pm_flux_linkage_Wb": [
+        0.020578455104337787,
+        -0.024304263322350046,
+        0.003725772450130031
+      ],
+      "pm_flux_relative_error": 4.3807714081007927e-16,
+      "pm_coenergy_J": 69.3583689880799,
+      "torque_maxwell_Nm": 0.4851729207701276,
+      "torque_fem_virtual_work_Nm": 0.48550239313271953,
+      "torque_rom_derivative_Nm": 0.48550239518742566,
+      "torque_rom_virtual_work_Nm": 0.48550239504230314
+    },
+    {
+      "rotor_angle_rad": 0.9281978294697116,
+      "pm_flux_linkage_Wb": [
+        0.023269244981720807,
+        -0.022023645133735604,
+        -0.0012456367440984168
+      ],
+      "pm_flux_relative_error": 7.054520309808295e-16,
+      "pm_coenergy_J": 69.35836953737667,
+      "torque_maxwell_Nm": 0.35904914677242644,
+      "torque_fem_virtual_work_Nm": 0.35989731586028023,
+      "torque_rom_derivative_Nm": 0.3598973175178668,
+      "torque_rom_virtual_work_Nm": 0.35989731741459247
+    },
+    {
+      "rotor_angle_rad": 0.975797718160466,
+      "pm_flux_linkage_Wb": [
+        0.025119023718037977,
+        -0.018947035027940227,
+        -0.006172025380920281
+      ],
+      "pm_flux_relative_error": 9.79851334898851e-16,
+      "pm_coenergy_J": 69.35837020634035,
+      "torque_maxwell_Nm": 0.2200378036284525,
+      "torque_fem_virtual_work_Nm": 0.22128321077730104,
+      "torque_rom_derivative_Nm": 0.22128320857614603,
+      "torque_rom_virtual_work_Nm": 0.22128320853465053
+    },
+    {
+      "rotor_angle_rad": 1.0233976068512205,
+      "pm_flux_linkage_Wb": [
+        0.02606093549020732,
+        -0.015185629710216838,
+        -0.010875340939420374
+      ],
+      "pm_flux_relative_error": 6.692203161743269e-16,
+      "pm_coenergy_J": 69.35837089913241,
+      "torque_maxwell_Nm": 0.0732054440510725,
+      "torque_fem_virtual_work_Nm": 0.07466977933745511,
+      "torque_rom_derivative_Nm": 0.07466977796505958,
+      "torque_rom_virtual_work_Nm": 0.07466977796077856
+    },
+    {
+      "rotor_angle_rad": 1.0709974955419748,
+      "pm_flux_linkage_Wb": [
+        0.02606093715265546,
+        -0.010875376168993933,
+        -0.015185593340945425
+      ],
+      "pm_flux_relative_error": 1.6658182787186744e-15,
+      "pm_coenergy_J": 69.35837151650064,
+      "torque_maxwell_Nm": -0.07611755214238113,
+      "torque_fem_virtual_work_Nm": -0.07464392552947174,
+      "torque_rom_derivative_Nm": -0.07464392343925812,
+      "torque_rom_virtual_work_Nm": -0.07464392344225246
+    },
+    {
+      "rotor_angle_rad": 1.1185973842327293,
+      "pm_flux_linkage_Wb": [
+        0.025119028645297158,
+        -0.006172058197507372,
+        -0.018946998833451138
+      ],
+      "pm_flux_relative_error": 4.839142511019647e-16,
+      "pm_coenergy_J": 69.35837196999827,
+      "torque_maxwell_Nm": -0.22253299508219365,
+      "torque_fem_virtual_work_Nm": -0.2212610354490607,
+      "torque_rom_derivative_Nm": -0.2212610335567426,
+      "torque_rom_virtual_work_Nm": -0.22126103347286372
+    },
+    {
+      "rotor_angle_rad": 1.1661972729234837,
+      "pm_flux_linkage_Wb": [
+        0.02326925299570706,
+        -0.001245665961622086,
+        -0.02202361042219199
+      ],
+      "pm_flux_relative_error": 3.629355881668014e-16,
+      "pm_coenergy_J": 69.35837219465537,
+      "torque_maxwell_Nm": -0.3607701711110216,
+      "torque_fem_virtual_work_Nm": -0.35988197453207244,
+      "torque_rom_derivative_Nm": -0.3598819752737164,
+      "torque_rom_virtual_work_Nm": -0.3598819751760018
+    },
+    {
+      "rotor_angle_rad": 1.2137971616142382,
+      "pm_flux_linkage_Wb": [
+        0.020578465915404773,
+        0.0037257478876672233,
+        -0.02430423134831756
+      ],
+      "pm_flux_relative_error": 1.732148191996686e-16,
+      "pm_coenergy_J": 69.35837215828661,
+      "torque_maxwell_Nm": -0.48587331409542994,
+      "torque_fem_virtual_work_Nm": -0.48549605864423023,
+      "torque_rom_derivative_Nm": -0.4854960618129304,
+      "torque_rom_virtual_work_Nm": -0.4854960616862413
+    },
+    {
+      "rotor_angle_rad": 1.2613970503049925,
+      "pm_flux_linkage_Wb": [
+        0.017143919460249776,
+        0.00856250350095477,
+        -0.02570643402945781
+      ],
+      "pm_flux_relative_error": 9.495071594980971e-16,
+      "pm_coenergy_J": 69.35837186610253,
+      "torque_maxwell_Nm": -0.5933749195928173,
+      "torque_fem_virtual_work_Nm": -0.5935626788300397,
+      "torque_rom_derivative_Nm": -0.5935626769481979,
+      "torque_rom_virtual_work_Nm": -0.5935626767872293
+    },
+    {
+      "rotor_angle_rad": 1.308996938995747,
+      "pm_flux_linkage_Wb": [
+        0.013089747087754887,
+        0.013089787928332566,
+        -0.02617953920731288
+      ],
+      "pm_flux_relative_error": 6.048917451694639e-16,
+      "pm_coenergy_J": 69.3583713599622,
+      "torque_maxwell_Nm": -0.6794494688041776,
+      "torque_fem_virtual_work_Nm": -0.6801754679486293,
+      "torque_rom_derivative_Nm": -0.6801754700428925,
+      "torque_rom_virtual_work_Nm": -0.6801754698582129
+    },
+    {
+      "rotor_angle_rad": 1.3565968276865015,
+      "pm_flux_linkage_Wb": [
+        0.00856247715050516,
+        0.017143973314870657,
+        -0.025706447628091576
+      ],
+      "pm_flux_relative_error": 1.1140517659932194e-15,
+      "pm_coenergy_J": 69.35837071237778,
+      "torque_maxwell_Nm": -0.7410431156677371,
+      "torque_fem_virtual_work_Nm": -0.7422036212290094,
+      "torque_rom_derivative_Nm": -0.742203619355339,
+      "torque_rom_virtual_work_Nm": -0.7422036191639946
+    },
+    {
+      "rotor_angle_rad": 1.404196716377256,
+      "pm_flux_linkage_Wb": [
+        0.0037257369797195714,
+        0.020578530837622497,
+        -0.024304258054095026
+      ],
+      "pm_flux_relative_error": 6.482504053588637e-16,
+      "pm_coenergy_J": 69.35837001612462,
+      "torque_maxwell_Nm": -0.7759758786483986,
+      "torque_fem_virtual_work_Nm": -0.7774050473585702,
+      "torque_rom_derivative_Nm": -0.7774050467704918,
+      "torque_rom_virtual_work_Nm": -0.7774050465592096
+    },
+    {
+      "rotor_angle_rad": 1.4517966050680102,
+      "pm_flux_linkage_Wb": [
+        -0.0012456610328261245,
+        0.02326932663906356,
+        -0.02202364926989677
+      ],
+      "pm_flux_relative_error": 1.1732393432593558e-15,
+      "pm_coenergy_J": 69.35836937095111,
+      "torque_maxwell_Nm": -0.7830138159687448,
+      "torque_fem_virtual_work_Nm": -0.7845074861734246,
+      "torque_rom_derivative_Nm": -0.7845074837699052,
+      "torque_rom_virtual_work_Nm": -0.7845074835532982
+    },
+    {
+      "rotor_angle_rad": 1.4993964937587647,
+      "pm_flux_linkage_Wb": [
+        -0.006172037610107312,
+        0.025119108348129658,
+        -0.018947048419025978
+      ],
+      "pm_flux_relative_error": 8.790714855862712e-16,
+      "pm_coenergy_J": 69.3583688692872,
+      "torque_maxwell_Nm": -0.7619095233622292,
+      "torque_fem_virtual_work_Nm": -0.7632544559044162,
+      "torque_rom_derivative_Nm": -0.7632544541142032,
+      "torque_rom_virtual_work_Nm": -0.7632544539060148
+    },
+    {
+      "rotor_angle_rad": 1.5469963824495192,
+      "pm_flux_linkage_Wb": [
+        -0.010875340667072061,
+        0.026061020034295893,
+        -0.015185651872238425
+      ],
+      "pm_flux_relative_error": 5.21751617328123e-16,
+      "pm_coenergy_J": 69.35836858300347,
+      "torque_maxwell_Nm": -0.7134100780520014,
+      "torque_fem_virtual_work_Nm": -0.7144145108384236,
+      "torque_rom_derivative_Nm": -0.7144145114283778,
+      "torque_rom_virtual_work_Nm": -0.7144145112603083
+    }
+  ]
+}

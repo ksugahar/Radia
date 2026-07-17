@@ -1413,14 +1413,140 @@ def _mesh_face_center_area(mesh, face_nr: int) -> tuple[np.ndarray, float]:
     return center, area
 
 
-def _ngsolve_element_centroids(mesh) -> dict[int, np.ndarray]:
+def _ngsolve_curve_order(mesh) -> int:
+    getter = getattr(mesh, "GetCurveOrder", None)
+    if getter is None:
+        return 1
+    try:
+        return max(1, int(getter()))
+    except (TypeError, ValueError, RuntimeError):
+        return 1
+
+
+def _ngsolve_geometry_intorder(mesh, intorder: int | None) -> int:
+    if intorder is not None:
+        if intorder < 0:
+            raise ValueError("geometry_intorder must be non-negative")
+        return int(intorder)
+    return max(2, 2 * _ngsolve_curve_order(mesh) + 2)
+
+
+def _ngsolve_element_centroids(mesh, intorder: int) -> dict[int, np.ndarray]:
     import ngsolve as ng
 
     centroids: dict[int, np.ndarray] = {}
     for element in mesh.Elements(ng.VOL):
-        points = np.vstack([_mesh_node_point(mesh, vertex) for vertex in element.vertices])
-        centroids[_element_nr(element)] = np.mean(points, axis=0)
+        trafo = mesh.GetTrafo(element)
+        volume = 0.0
+        first_moment = np.zeros(3, dtype=float)
+        for ip in ng.IntegrationRule(element.type, intorder):
+            mip = trafo(ip)
+            weight = float(ip.weight * mip.measure)
+            volume += weight
+            first_moment += weight * np.asarray(mip.point, dtype=float)
+        if volume <= 0.0:
+            raise ValueError(f"element {_element_nr(element)} has zero volume")
+        centroids[_element_nr(element)] = first_moment / volume
     return centroids
+
+
+def _ngsolve_tet_reference_vertices(mesh, element) -> dict[int, np.ndarray]:
+    import ngsolve as ng
+
+    reference = np.array(
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+        dtype=float,
+    )
+    vertices = tuple(element.vertices)
+    if len(vertices) != 4:
+        raise ValueError("curved bridge integration currently requires tetrahedra")
+    physical = np.vstack([_mesh_node_point(mesh, vertex) for vertex in vertices])
+    trafo = mesh.GetTrafo(element)
+    mapped = []
+    for point in reference:
+        ip = next(
+            iter(ng.IntegrationRule([tuple(float(value) for value in point)], [1.0]))
+        )
+        mapped.append(np.array(trafo(ip).point, dtype=float, copy=True))
+    mapped = np.asarray(mapped)
+
+    result: dict[int, np.ndarray] = {}
+    used: set[int] = set()
+    scale = max(1.0, float(np.max(np.linalg.norm(physical, axis=1))))
+    for local_index, point in enumerate(mapped):
+        distances = np.linalg.norm(physical - point, axis=1)
+        vertex_index = int(np.argmin(distances))
+        if vertex_index in used or distances[vertex_index] > 1.0e-9 * scale:
+            raise ValueError("could not match tetrahedron reference and mesh vertices")
+        used.add(vertex_index)
+        result[_node_nr(vertices[vertex_index])] = reference[local_index]
+    return result
+
+
+def _ngsolve_curved_tet_face_center_area(
+    mesh,
+    face_nr: int,
+    element,
+    intorder: int,
+) -> tuple[np.ndarray, float]:
+    import ngsolve as ng
+
+    face_vertices = tuple(mesh.faces[int(face_nr)].vertices)
+    if len(face_vertices) != 3:
+        raise ValueError("curved tetrahedron face must have three vertices")
+    reference_vertices = _ngsolve_tet_reference_vertices(mesh, element)
+    try:
+        r0, r1, r2 = (
+            reference_vertices[_node_nr(vertex)] for vertex in face_vertices
+        )
+    except KeyError as exc:
+        raise ValueError(f"face {face_nr} does not belong to the supplied element") from exc
+
+    tangent0 = r1 - r0
+    tangent1 = r2 - r0
+    triangle_rule = ng.IntegrationRule(ng.ET.TRIG, intorder)
+    reference_points = [
+        tuple(
+            float(value)
+            for value in r0 + ip.point[0] * tangent0 + ip.point[1] * tangent1
+        )
+        for ip in triangle_rule
+    ]
+    mapped_rule = ng.IntegrationRule(
+        reference_points,
+        [float(ip.weight) for ip in triangle_rule],
+    )
+    trafo = mesh.GetTrafo(element)
+    area = 0.0
+    first_moment = np.zeros(3, dtype=float)
+    for ip in mapped_rule:
+        mip = trafo(ip)
+        jacobian = np.asarray(mip.jacobi, dtype=float)
+        surface_measure = float(
+            np.linalg.norm(np.cross(jacobian @ tangent0, jacobian @ tangent1))
+        )
+        weight = float(ip.weight) * surface_measure
+        area += weight
+        first_moment += weight * np.asarray(mip.point, dtype=float)
+    if area <= 0.0:
+        raise ValueError(f"face {face_nr} has zero curved area")
+    return first_moment / area, area
+
+
+def _ngsolve_face_center_area(
+    mesh,
+    face_nr: int,
+    element,
+    intorder: int,
+) -> tuple[np.ndarray, float]:
+    if len(tuple(element.vertices)) == 4 and len(tuple(mesh.faces[int(face_nr)].vertices)) == 3:
+        return _ngsolve_curved_tet_face_center_area(
+            mesh,
+            face_nr,
+            element,
+            intorder,
+        )
+    return _mesh_face_center_area(mesh, face_nr)
 
 
 def NgsolveBridgeCycleCurrentBasis(
@@ -1430,15 +1556,17 @@ def NgsolveBridgeCycleCurrentBasis(
     conductive_materials=None,
     air_materials=("air", "vacuum"),
     current_scale: float = 1.0,
+    geometry_intorder: int | None = None,
     names=None,
 ) -> SampledCurrentBasis:
     """Build a coarse bridge-current basis from conductor graph cycles.
 
-    Each conductor-conductor face is sampled at its face center.  A cycle mode
+    Each conductor-conductor face is sampled at its area centroid.  A cycle mode
     places oriented current density along the segment between adjacent element
-    centroids, with a dual-volume weight ``area(face) * centroid_distance``.
-    This is the first production hook that turns the topological bridge class
-    into an actual VIM-compatible current basis.
+    volume centroids, with a dual-volume weight
+    ``area(face) * centroid_distance``.  Curved tetrahedral maps are integrated
+    with their pointwise Jacobian; ``geometry_intorder=None`` selects an order
+    from ``mesh.GetCurveOrder()``.
     """
 
     if current_scale == 0.0 or not np.isfinite(current_scale):
@@ -1462,12 +1590,21 @@ def NgsolveBridgeCycleCurrentBasis(
             names=_mode_names(names, len(cycles)),
         )
 
-    centroids = _ngsolve_element_centroids(mesh)
+    import ngsolve as ng
+
+    geometry_intorder = _ngsolve_geometry_intorder(mesh, geometry_intorder)
+    elements = {_element_nr(element): element for element in mesh.Elements(ng.VOL)}
+    centroids = _ngsolve_element_centroids(mesh, geometry_intorder)
     points = np.zeros((graph.edge_count, 3), dtype=float)
     weights = np.zeros(graph.edge_count, dtype=float)
     directions = np.zeros((graph.edge_count, 3), dtype=float)
     for i, edge in enumerate(graph.edges):
-        center, area = _mesh_face_center_area(mesh, edge.face_nr)
+        center, area = _ngsolve_face_center_area(
+            mesh,
+            edge.face_nr,
+            elements[edge.left_element],
+            geometry_intorder,
+        )
         left_center = centroids[edge.left_element]
         right_center = centroids[edge.right_element]
         direction = right_center - left_center
@@ -1906,8 +2043,11 @@ class EVRSBasis(ResponseBasis):
     krylov_steps: int | None = None
     construction: str = "block-krylov"
     parent_space: str = "HCurl"
+    pre_current_gram_rank: int | None = None
+    current_gram_rtol: float | None = None
+    current_gram_relative_eigenvalues: tuple[float, ...] | None = None
 
-    def diagnostics(self) -> dict[str, int | float | str | None]:
+    def diagnostics(self) -> dict[str, object]:
         """Return DoF-reduction diagnostics plus EVRS construction metadata."""
 
         info = dict(super().diagnostics())
@@ -1919,7 +2059,95 @@ class EVRSBasis(ResponseBasis):
                 "parent_space": self.parent_space,
             }
         )
+        if self.pre_current_gram_rank is not None:
+            info.update(
+                {
+                    "pre_current_gram_rank": self.pre_current_gram_rank,
+                    "current_gram_rank": self.rank,
+                    "current_gram_rtol": self.current_gram_rtol,
+                    "current_gram_relative_eigenvalues": list(
+                        self.current_gram_relative_eigenvalues or ()
+                    ),
+                }
+            )
         return info
+
+
+def CompressHCurlResponseInCurrentGram(
+    response_basis: ResponseBasis,
+    current_basis: SampledCurrentBasis,
+    *,
+    rtol: float = 1.0e-10,
+) -> tuple[ResponseBasis, SampledCurrentBasis]:
+    """Remove response directions that are dependent after ``curl(T)``.
+
+    The parent response vectors may be independent in an HCurl mass metric but
+    map to zero or nearly dependent current fields.  This helper eigendecomposes
+    the sampled current Gram matrix, drops its relative null space, and applies
+    the same whitening transform to both parent ``T`` vectors and current
+    samples.  The retained current basis therefore has an identity Gram matrix.
+    """
+
+    if not isinstance(response_basis, ResponseBasis):
+        raise TypeError("response_basis must be a ResponseBasis")
+    if not isinstance(current_basis, SampledCurrentBasis):
+        raise TypeError("current_basis must be a SampledCurrentBasis")
+    rtol = float(rtol)
+    if not np.isfinite(rtol) or rtol <= 0.0:
+        raise ValueError("rtol must be positive")
+    if response_basis.rank != current_basis.n_modes:
+        raise ValueError("response and current basis mode counts must match")
+
+    gram = current_basis.mass_matrix()
+    gram = 0.5 * (gram + gram.conj().T)
+    eigenvalues, eigenvectors = np.linalg.eigh(gram)
+    scale = max(float(np.max(eigenvalues)), 0.0)
+    if scale <= 0.0:
+        raise ValueError("current response space has zero Gram energy")
+    negative_tolerance = (
+        100.0 * max(gram.shape[0], 1) * np.finfo(float).eps * scale
+    )
+    if float(np.min(eigenvalues)) < -negative_tolerance:
+        raise ValueError("current Gram matrix is not positive semidefinite")
+    keep = eigenvalues > rtol * scale
+    if not np.any(keep):
+        raise ValueError("current Gram rank tolerance eliminated every response")
+
+    retained_values = eigenvalues[keep]
+    transform = eigenvectors[:, keep] / np.sqrt(retained_values)[np.newaxis, :]
+    response_vectors = response_basis.vectors @ transform
+    current_modes = np.einsum("mk,mpc->kpc", transform, current_basis.modes)
+    current = SampledCurrentBasis(
+        points=current_basis.points,
+        weights=current_basis.weights,
+        modes=current_modes,
+        kind=current_basis.kind,
+        names=tuple(
+            f"{current_basis.kind}_current_gram_{index}"
+            for index in range(retained_values.size)
+        ),
+    )
+    relative_eigenvalues = tuple(
+        float(value / scale) for value in eigenvalues[::-1]
+    )
+    if isinstance(response_basis, EVRSBasis):
+        response = EVRSBasis(
+            vectors=response_vectors,
+            active_dofs=response_basis.active_dofs,
+            port_count=response_basis.port_count,
+            krylov_steps=response_basis.krylov_steps,
+            construction=response_basis.construction + "+current-gram",
+            parent_space=response_basis.parent_space,
+            pre_current_gram_rank=response_basis.rank,
+            current_gram_rtol=rtol,
+            current_gram_relative_eigenvalues=relative_eigenvalues,
+        )
+    else:
+        response = ResponseBasis(
+            vectors=response_vectors,
+            active_dofs=response_basis.active_dofs,
+        )
+    return response, current
 
 
 def _active_indices(free_dofs, n: int) -> np.ndarray:
@@ -1948,12 +2176,20 @@ def _append_metric_orthonormal(
     rtol: float,
 ) -> None:
     v = np.array(candidate, copy=True)
+    candidate_norm2 = _metric_inner(metric, v, v)
+    candidate_norm = float(np.sqrt(max(np.real(candidate_norm2), 0.0)))
+    if candidate_norm == 0.0:
+        return
     for _ in range(2):
         for q in columns:
             v -= q * _metric_inner(metric, q, v)
     norm2 = _metric_inner(metric, v, v)
     norm = float(np.sqrt(max(np.real(norm2), 0.0)))
-    if norm > rtol:
+    relative_floor = max(
+        rtol,
+        10.0 * candidate.size * np.finfo(float).eps,
+    )
+    if norm > relative_floor * candidate_norm:
         columns.append(v / norm)
 
 
@@ -2573,6 +2809,7 @@ class HDivMMMReducedModel:
         return self.parent_vectors @ coefficients
 
     def diagnostics(self) -> dict[str, object]:
+        native_gram = getattr(self.demag_backend, "_G", None)
         return {
             "parent_space": "HDiv",
             "parent_family": self.parent_family,
@@ -2599,6 +2836,10 @@ class HDivMMMReducedModel:
                 0 if self.magnetic_rhs is None else int(self.magnetic_rhs.shape[1])
             ),
             "demag_backend": self.demag_backend.__class__.__name__,
+            "demag_hmatrix_backend": (
+                None if native_gram is None else native_gram.__class__.__name__
+            ),
+            "demag_hmatrix_active": native_gram is not None,
             "basis_generation": self.basis_generation,
         }
 
@@ -3802,12 +4043,20 @@ def _append_inner_orthonormal(
     rtol: float,
 ) -> None:
     v = np.array(candidate, copy=True)
+    candidate_norm2 = inner(v, v)
+    candidate_norm = float(np.sqrt(max(np.real(candidate_norm2), 0.0)))
+    if candidate_norm == 0.0:
+        return
     for _ in range(2):
         for q in columns:
             v -= q * inner(q, v)
     norm2 = inner(v, v)
     norm = float(np.sqrt(max(np.real(norm2), 0.0)))
-    if norm > rtol:
+    relative_floor = max(
+        rtol,
+        10.0 * candidate.size * np.finfo(float).eps,
+    )
+    if norm > relative_floor * candidate_norm:
         columns.append(v / norm)
 
 
@@ -4165,7 +4414,8 @@ def NgsolveEddyBubbleHCurlBasis(
     condense: bool = False,
     response_backend: str = "auto",
     inverse: str = "sparsecholesky",
-    rtol: float = 1.0e-12,
+    rtol: float = 1.0e-10,
+    current_gram_rtol: float = 1.0e-10,
     names=None,
     include_edge_dofs: bool = True,
     parent_order: int | None = None,
@@ -4219,6 +4469,11 @@ def NgsolveEddyBubbleHCurlBasis(
         intorder=intorder,
         materials=volume_materials,
         names=names,
+    )
+    response, current = CompressHCurlResponseInCurrentGram(
+        response,
+        current,
+        rtol=current_gram_rtol,
     )
     graph = topology.conductor_graph()
     if loop_bridge_modes is None:
@@ -4681,6 +4936,98 @@ def _interaction_backend_name(interaction) -> str:
 
 
 @dataclass(frozen=True)
+class MixedGalerkinOrthogonalization:
+    """Block-biorthogonal trial/test bases for an IGTE mixed reduction."""
+
+    trial_transform: np.ndarray
+    test_transform: np.ndarray
+    reduced_operator: np.ndarray
+    keep_indices: np.ndarray
+    eliminate_indices: np.ndarray
+    diagnostics_data: dict[str, float | int]
+
+    @property
+    def rank(self) -> int:
+        return int(self.trial_transform.shape[1])
+
+    def diagnostics(self) -> dict[str, float | int]:
+        return dict(self.diagnostics_data)
+
+
+def _mixed_galerkin_orthogonalize_operator(
+    operator,
+    keep_indices,
+    eliminate_indices,
+) -> MixedGalerkinOrthogonalization:
+    """Return exact block-biorthogonal bases for a square operator."""
+
+    matrix = np.asarray(operator)
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("operator must be square")
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("operator contains non-finite values")
+    keep = np.asarray(keep_indices, dtype=int).reshape(-1)
+    eliminate = np.asarray(eliminate_indices, dtype=int).reshape(-1)
+    if keep.size == 0:
+        raise ValueError("keep_indices must not be empty")
+    if eliminate.size == 0:
+        raise ValueError("eliminate_indices must not be empty")
+    combined = np.concatenate((keep, eliminate))
+    if np.any(combined < 0) or np.any(combined >= matrix.shape[0]):
+        raise ValueError("mixed Galerkin indices are out of range")
+    if np.unique(combined).size != combined.size:
+        raise ValueError("keep_indices and eliminate_indices must not overlap or repeat")
+    if combined.size != matrix.shape[0]:
+        raise ValueError("keep_indices and eliminate_indices must cover all modes")
+
+    z_kk = matrix[np.ix_(keep, keep)]
+    z_ke = matrix[np.ix_(keep, eliminate)]
+    z_ek = matrix[np.ix_(eliminate, keep)]
+    z_ee = matrix[np.ix_(eliminate, eliminate)]
+    trial = np.zeros((matrix.shape[0], keep.size), dtype=matrix.dtype)
+    test = np.zeros_like(trial)
+    trial[keep, :] = np.eye(keep.size, dtype=matrix.dtype)
+    test[keep, :] = np.eye(keep.size, dtype=matrix.dtype)
+    trial[eliminate, :] = -np.linalg.solve(z_ee, z_ek)
+    test[eliminate, :] = -np.linalg.solve(z_ee.T, z_ke.T)
+
+    reduced = test.T @ matrix @ trial
+    schur = z_kk - z_ke @ np.linalg.solve(z_ee, z_ek)
+    scale = max(float(np.linalg.norm(matrix)), np.finfo(float).tiny)
+    reduced_scale = max(float(np.linalg.norm(schur)), np.finfo(float).tiny)
+    diagnostics = {
+        "full_modes": int(matrix.shape[0]),
+        "retained_modes": int(keep.size),
+        "eliminated_modes": int(eliminate.size),
+        "trial_orthogonality_relative_defect": float(
+            np.linalg.norm(matrix[np.ix_(eliminate, np.arange(matrix.shape[0]))] @ trial)
+            / scale
+        ),
+        "test_orthogonality_relative_defect": float(
+            np.linalg.norm(test.T @ matrix[np.ix_(np.arange(matrix.shape[0]), eliminate)])
+            / scale
+        ),
+        "schur_relative_error": float(
+            np.linalg.norm(reduced - schur) / reduced_scale
+        ),
+        "trial_test_relative_difference": float(
+            np.linalg.norm(trial - test)
+            / max(float(np.linalg.norm(trial)), np.finfo(float).tiny)
+        ),
+        "full_operator_condition": float(np.linalg.cond(matrix)),
+        "reduced_operator_condition": float(np.linalg.cond(reduced)),
+    }
+    return MixedGalerkinOrthogonalization(
+        trial_transform=trial,
+        test_transform=test,
+        reduced_operator=reduced,
+        keep_indices=keep,
+        eliminate_indices=eliminate,
+        diagnostics_data=diagnostics,
+    )
+
+
+@dataclass(frozen=True)
 class HybridVIMSystem:
     """Reduced eddy-current VIM matrices on bulk-T plus surface-Omega bases."""
 
@@ -4821,6 +5168,37 @@ class HybridVIMSystem:
                 np.ascontiguousarray(z_ee, dtype=np.complex128),
             )
         return z_kk - z_ke @ np.linalg.solve(z_ee, z_ek)
+
+    def mixed_galerkin_orthogonalization(
+        self,
+        keep_blocks,
+        eliminate_blocks,
+        s,
+        *,
+        surface_impedance=0.0,
+    ) -> MixedGalerkinOrthogonalization:
+        """Biorthogonalize kept trial/test bases against eliminated blocks.
+
+        The trial transform enforces ``Z_elim @ T = 0`` and the test transform
+        enforces ``W.T @ Z[:, elim] = 0``.  Their mixed Galerkin projection
+        ``W.T @ Z @ T`` is exactly the block Schur complement.  For reciprocal
+        complex-symmetric VIM operators, ``W == T`` and this becomes ordinary
+        block Gram orthogonalization.
+        """
+
+        z = self.impedance(s, surface_impedance=surface_impedance)
+        keep = self.block_indices(keep_blocks)
+        eliminate = self.block_indices(eliminate_blocks)
+        if np.intersect1d(keep, eliminate).size:
+            raise ValueError("keep_blocks and eliminate_blocks must not overlap")
+        if keep.size + eliminate.size != self.n_modes:
+            raise ValueError("keep_blocks and eliminate_blocks must cover all modes")
+
+        return _mixed_galerkin_orthogonalize_operator(
+            z,
+            keep,
+            eliminate,
+        )
 
     def block_rhs(self, **block_rhs) -> np.ndarray:
         """Assemble a full reduced right-hand side from named block pieces.
@@ -5058,6 +5436,11 @@ class HCurlVIMHDivMMMSolution:
     average_joule_loss: np.ndarray
     residual_relative_norm: float
     solver_backend: str
+    orthogonalized_rhs: np.ndarray | None = None
+    orthogonalized_solution: np.ndarray | None = None
+    mixed_galerkin_diagnostics: dict[str, object] | None = None
+    residual_backward_error: float | None = None
+    eddy_block_roles: tuple[str, ...] | None = None
 
     @property
     def n_excitations(self) -> int:
@@ -5067,14 +5450,19 @@ class HCurlVIMHDivMMMSolution:
         try:
             return self.eddy_block_names.index(block)
         except ValueError:
-            if len(self.eddy_block_names) == 3:
-                semantic = {"bulk": 0, "bridge": 1, "sibc": 2}
-                if block in semantic:
-                    return semantic[block]
+            if self.eddy_block_roles is not None:
+                try:
+                    return self.eddy_block_roles.index(block)
+                except ValueError:
+                    pass
             known = ", ".join(self.eddy_block_names)
+            roles = (
+                ""
+                if self.eddy_block_roles is None
+                else "; adjacency roles: " + ", ".join(self.eddy_block_roles)
+            )
             raise KeyError(
-                f"unknown eddy block {block!r}; known blocks: {known}; "
-                "tri-block semantic aliases are bulk, bridge, sibc"
+                f"unknown eddy block {block!r}; known blocks: {known}{roles}"
             ) from None
 
     def current_samples(self, block: str) -> np.ndarray:
@@ -5110,13 +5498,19 @@ class HCurlVIMHDivMMMSolution:
         )
         for index in indices:
             currents = self.sampled_eddy_currents[index]
+            role = (
+                None
+                if self.eddy_block_roles is None
+                else self.eddy_block_roles[index]
+            )
             sampled = SampledCurrentBasis(
                 points=self.eddy_sample_points[index],
                 weights=self.eddy_sample_weights[index],
                 modes=currents,
                 kind=(
                     "surface"
-                    if self.eddy_block_names[index] == "surface"
+                    if role in ("sibc", "non_sibc_trace")
+                    or self.eddy_block_names[index] == "surface"
                     else "volume"
                 ),
                 names=tuple(
@@ -5155,9 +5549,9 @@ class HCurlVIMHDivMMMSolution:
             ),
             "eddy_blocks": list(self.eddy_block_names),
             "eddy_block_roles": (
-                ["bulk", "bridge", "sibc"]
-                if len(self.eddy_block_names) == 3
-                else None
+                None
+                if self.eddy_block_roles is None
+                else list(self.eddy_block_roles)
             ),
             "eddy_block_sample_counts": [
                 int(values.shape[1]) for values in self.sampled_eddy_currents
@@ -5168,7 +5562,22 @@ class HCurlVIMHDivMMMSolution:
             ],
             "average_joule_loss": [float(value) for value in self.average_joule_loss],
             "residual_relative_norm": float(self.residual_relative_norm),
+            "residual_backward_error": (
+                None
+                if self.residual_backward_error is None
+                else float(self.residual_backward_error)
+            ),
             "solver_backend": self.solver_backend,
+            "orthogonalized_modes": (
+                None
+                if self.orthogonalized_solution is None
+                else int(self.orthogonalized_solution.shape[0])
+            ),
+            "mixed_galerkin": (
+                None
+                if self.mixed_galerkin_diagnostics is None
+                else dict(self.mixed_galerkin_diagnostics)
+            ),
         }
 
 
@@ -5466,6 +5875,7 @@ class CoupledHDivHybridVIMSystem:
     eddy_bubbling: EddyBubbleDecomposition | None = None
     hdiv_reduction: HDivMMMReducedModel | None = None
     conductivity: float | None = None
+    eddy_block_roles: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.magnetization_basis, SampledMagnetizationBasis):
@@ -5522,11 +5932,25 @@ class CoupledHDivHybridVIMSystem:
             )
         if self.conductivity is not None and self.conductivity <= 0.0:
             raise ValueError("conductivity must be positive")
+        roles = None
+        if self.eddy_block_roles is not None:
+            roles = {str(name): str(role) for name, role in self.eddy_block_roles.items()}
+            if set(roles) != set(self.eddy_system.blocks):
+                raise ValueError(
+                    "eddy_block_roles must classify every HCurl-VIM block"
+                )
+            allowed_roles = {"bulk", "bridge", "sibc", "non_sibc_trace"}
+            unknown = set(roles.values()) - allowed_roles
+            if unknown:
+                raise ValueError(
+                    "unknown eddy block roles: " + ", ".join(sorted(unknown))
+                )
         object.__setattr__(self, "eddy_bases", bases)
         object.__setattr__(self, "coupling", coupling)
         object.__setattr__(self, "magnetic_operator", magnetic_operator)
         object.__setattr__(self, "magnetic_rhs", magnetic_rhs)
         object.__setattr__(self, "eddy_rhs", eddy_rhs)
+        object.__setattr__(self, "eddy_block_roles", roles)
 
     @property
     def n_hdiv_modes(self) -> int:
@@ -5630,6 +6054,108 @@ class CoupledHDivHybridVIMSystem:
         out[mh:, mh:] = eddy
         return out
 
+    def mixed_galerkin_orthogonalization(
+        self,
+        keep_eddy_blocks,
+        eliminate_eddy_blocks,
+        magnetic_operator=None,
+        s=None,
+        *,
+        eddy_operator=None,
+        surface_impedance=0.0,
+        coupling_scale=1.0,
+        adjoint_coupling_scale=None,
+    ) -> "MixedGalerkinHDivHybridVIMSystem":
+        """Eliminate HCurl blocks in the complete HDiv/HCurl operator.
+
+        HDiv-MMM modes are always retained.  Consequently, the eliminated
+        HCurl correction contains both the retained eddy-current response and
+        the magnetic coupling response.  The resulting Galerkin matrix is the
+        exact Schur complement of the full coupled operator.
+        """
+
+        full_operator = self.mixed_operator(
+            magnetic_operator,
+            s,
+            eddy_operator=eddy_operator,
+            surface_impedance=surface_impedance,
+            coupling_scale=coupling_scale,
+            adjoint_coupling_scale=adjoint_coupling_scale,
+        )
+        eddy_keep = self.eddy_system.block_indices(keep_eddy_blocks)
+        eddy_eliminate = self.eddy_system.block_indices(eliminate_eddy_blocks)
+        mh = self.n_hdiv_modes
+        keep = np.concatenate(
+            (np.arange(mh, dtype=int), mh + eddy_keep),
+        )
+        eliminate = mh + eddy_eliminate
+        orthogonalization = _mixed_galerkin_orthogonalize_operator(
+            full_operator,
+            keep,
+            eliminate,
+        )
+
+        def block_names(value) -> tuple[str, ...]:
+            return (value,) if isinstance(value, str) else tuple(value)
+
+        return MixedGalerkinHDivHybridVIMSystem(
+            parent_system=self,
+            full_operator=full_operator,
+            orthogonalization=orthogonalization,
+            keep_eddy_blocks=block_names(keep_eddy_blocks),
+            eliminate_eddy_blocks=block_names(eliminate_eddy_blocks),
+        )
+
+    def adjacency_class_block_partition(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Return retained/eliminated blocks from neighboring-material roles."""
+
+        if self.eddy_block_roles is None:
+            raise ValueError(
+                "eddy_block_roles are required for adjacency-class eddy bubbling"
+            )
+        ordered = tuple(
+            name
+            for name, _ in sorted(
+                self.eddy_system.blocks.items(),
+                key=lambda item: item[1][0],
+            )
+        )
+        eliminate = tuple(
+            name for name in ordered if self.eddy_block_roles[name] == "bulk"
+        )
+        keep = tuple(
+            name for name in ordered if self.eddy_block_roles[name] != "bulk"
+        )
+        if not eliminate:
+            raise ValueError("adjacency classification has no bulk eddy-bubble block")
+        if not keep:
+            raise ValueError("adjacency classification has no protected HCurl block")
+        return keep, eliminate
+
+    def eddy_bubble_mixed_galerkin_orthogonalization(
+        self,
+        magnetic_operator=None,
+        s=None,
+        *,
+        eddy_operator=None,
+        surface_impedance=0.0,
+        coupling_scale=1.0,
+        adjoint_coupling_scale=None,
+    ) -> "MixedGalerkinHDivHybridVIMSystem":
+        """Apply full coupled reduction using face-adjacency block roles."""
+
+        keep, eliminate = self.adjacency_class_block_partition()
+        return self.mixed_galerkin_orthogonalization(
+            keep,
+            eliminate,
+            magnetic_operator,
+            s,
+            eddy_operator=eddy_operator,
+            surface_impedance=surface_impedance,
+            coupling_scale=coupling_scale,
+            adjoint_coupling_scale=adjoint_coupling_scale,
+        )
+
     def solve(
         self,
         magnetic_operator=None,
@@ -5680,8 +6206,16 @@ class CoupledHDivHybridVIMSystem:
         mu: float = MU0,
         coupling_scale=1.0,
         adjoint_coupling_scale=None,
+        mixed_galerkin_keep_blocks=None,
+        mixed_galerkin_eliminate_blocks=None,
     ) -> HCurlVIMHDivMMMSolution:
-        """Solve one harmonic excitation and reconstruct all retained fields."""
+        """Solve one harmonic excitation and reconstruct all retained fields.
+
+        When both mixed-Galerkin block arguments are supplied, the elimination
+        is performed on the complete HDiv-MMM/HCurl-VIM operator.  This updates
+        the magnetic block, both coupling blocks, the RHS, and the HCurl field
+        lift together.
+        """
 
         frequency = float(frequency_hz)
         if not np.isfinite(frequency) or frequency <= 0.0:
@@ -5713,19 +6247,61 @@ class CoupledHDivHybridVIMSystem:
             np.complex128,
             require_excitation=True,
         )
-        solved = self.solve(
-            magnetic_operator,
-            s,
-            magnetic_rhs=magnetic_rhs,
-            eddy_rhs=eddy_rhs,
-            eddy_operator=eddy_operator,
-            surface_impedance=surface_impedance,
-            coupling_scale=coupling_scale,
-            adjoint_coupling_scale=adjoint_coupling_scale,
-            return_operator=True,
+        use_mixed_galerkin = (
+            mixed_galerkin_keep_blocks is not None
+            or mixed_galerkin_eliminate_blocks is not None
         )
-        op = solved["operator"]
-        rhs = solved["rhs"]
+        if (
+            mixed_galerkin_keep_blocks is None
+            and mixed_galerkin_eliminate_blocks is not None
+        ) or (
+            mixed_galerkin_keep_blocks is not None
+            and mixed_galerkin_eliminate_blocks is None
+        ):
+            raise ValueError(
+                "mixed_galerkin_keep_blocks and "
+                "mixed_galerkin_eliminate_blocks must be supplied together"
+            )
+
+        orthogonalized_rhs = None
+        orthogonalized_solution = None
+        mixed_galerkin_diagnostics = None
+        if use_mixed_galerkin:
+            reduction = self.mixed_galerkin_orthogonalization(
+                mixed_galerkin_keep_blocks,
+                mixed_galerkin_eliminate_blocks,
+                magnetic_operator,
+                s,
+                eddy_operator=eddy_operator,
+                surface_impedance=surface_impedance,
+                coupling_scale=coupling_scale,
+                adjoint_coupling_scale=adjoint_coupling_scale,
+            )
+            solved = reduction.solve(
+                magnetic_rhs=magnetic_rhs,
+                eddy_rhs=eddy_rhs,
+                require_excitation=True,
+                return_operator=True,
+            )
+            op = solved["operator"]
+            rhs = solved["full_rhs"]
+            orthogonalized_rhs = solved["reduced_rhs"]
+            orthogonalized_solution = solved["reduced_solution"]
+            mixed_galerkin_diagnostics = reduction.diagnostics()
+        else:
+            solved = self.solve(
+                magnetic_operator,
+                s,
+                magnetic_rhs=magnetic_rhs,
+                eddy_rhs=eddy_rhs,
+                eddy_operator=eddy_operator,
+                surface_impedance=surface_impedance,
+                coupling_scale=coupling_scale,
+                adjoint_coupling_scale=adjoint_coupling_scale,
+                return_operator=True,
+            )
+            op = solved["operator"]
+            rhs = solved["rhs"]
         coefficients = solved["solution"]
         magnetic_coefficients = solved["magnetization"]
         eddy_coefficients = solved["eddy"]
@@ -5744,6 +6320,11 @@ class CoupledHDivHybridVIMSystem:
         )
         if len(ordered_blocks) != len(self.eddy_bases):
             raise RuntimeError("eddy basis/block metadata is inconsistent")
+        ordered_roles = (
+            None
+            if self.eddy_block_roles is None
+            else tuple(self.eddy_block_roles[name] for name in ordered_blocks)
+        )
         sampled_currents = []
         sample_points = []
         sample_weights = []
@@ -5773,6 +6354,13 @@ class CoupledHDivHybridVIMSystem:
         residual = op @ coefficients - rhs
         rhs_norm = float(np.linalg.norm(rhs))
         residual_relative = float(np.linalg.norm(residual) / max(rhs_norm, 1.0e-300))
+        residual_backward = float(
+            np.linalg.norm(residual)
+            / max(
+                float(np.linalg.norm(op) * np.linalg.norm(coefficients) + rhs_norm),
+                1.0e-300,
+            )
+        )
         dissipative = (
             self.eddy_system.resistance
             + surface_impedance.real * self.eddy_system.surface_mass
@@ -5791,6 +6379,8 @@ class CoupledHDivHybridVIMSystem:
             if _radia_cpp_kernel("_HybridVIMSolve") is not None
             else "numpy-linalg"
         )
+        if use_mixed_galerkin:
+            backend += "-mixed-galerkin"
         return HCurlVIMHDivMMMSolution(
             frequency_hz=frequency,
             s=s,
@@ -5810,6 +6400,35 @@ class CoupledHDivHybridVIMSystem:
             average_joule_loss=np.asarray(average_loss),
             residual_relative_norm=residual_relative,
             solver_backend=backend,
+            orthogonalized_rhs=orthogonalized_rhs,
+            orthogonalized_solution=orthogonalized_solution,
+            mixed_galerkin_diagnostics=mixed_galerkin_diagnostics,
+            residual_backward_error=residual_backward,
+            eddy_block_roles=ordered_roles,
+        )
+
+    def solve_frequency_eddy_bubbled(
+        self,
+        frequency_hz: float,
+        **kwargs,
+    ) -> HCurlVIMHDivMMMSolution:
+        """Solve with adjacency-class-protected mixed Galerkin elimination."""
+
+        forbidden = {
+            "mixed_galerkin_keep_blocks",
+            "mixed_galerkin_eliminate_blocks",
+        } & set(kwargs)
+        if forbidden:
+            raise TypeError(
+                "solve_frequency_eddy_bubbled selects mixed Galerkin blocks "
+                "from eddy_block_roles"
+            )
+        keep, eliminate = self.adjacency_class_block_partition()
+        return self.solve_frequency(
+            frequency_hz,
+            mixed_galerkin_keep_blocks=keep,
+            mixed_galerkin_eliminate_blocks=eliminate,
+            **kwargs,
         )
 
     def schur_magnetic_operator(
@@ -5907,6 +6526,9 @@ class CoupledHDivHybridVIMSystem:
             "hybrid_blocks": self.eddy_system.diagnostics()["blocks"],
             "eddy_basis_count": len(self.eddy_bases),
             "eddy_basis_modes": [basis.n_modes for basis in self.eddy_bases],
+            "eddy_block_roles": (
+                None if self.eddy_block_roles is None else dict(self.eddy_block_roles)
+            ),
             "coupling_rows": int(self.coupling.shape[0]),
             "coupling_cols": int(self.coupling.shape[1]),
             "coupling_frobenius_norm": float(np.linalg.norm(self.coupling)),
@@ -5916,6 +6538,11 @@ class CoupledHDivHybridVIMSystem:
             "has_magnetic_rhs": self.magnetic_rhs is not None,
             "has_eddy_rhs": self.eddy_rhs is not None,
             "has_response_basis": self.response_basis is not None,
+            "response_basis": (
+                None
+                if self.response_basis is None
+                else self.response_basis.diagnostics()
+            ),
             "has_eddy_bubbling": self.eddy_bubbling is not None,
             "has_hdiv_reduction": self.hdiv_reduction is not None,
             "hdiv_reduction": (
@@ -5924,6 +6551,159 @@ class CoupledHDivHybridVIMSystem:
                 else self.hdiv_reduction.diagnostics()
             ),
             "conductivity": self.conductivity,
+        }
+
+
+@dataclass(frozen=True)
+class MixedGalerkinHDivHybridVIMSystem:
+    """Frequency-specific exact reduction of a coupled HDiv/HCurl system."""
+
+    parent_system: CoupledHDivHybridVIMSystem
+    full_operator: np.ndarray
+    orthogonalization: MixedGalerkinOrthogonalization
+    keep_eddy_blocks: tuple[str, ...]
+    eliminate_eddy_blocks: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.parent_system, CoupledHDivHybridVIMSystem):
+            raise TypeError("parent_system must be a CoupledHDivHybridVIMSystem")
+        full = np.asarray(self.full_operator)
+        expected = self.parent_system.n_hdiv_modes + self.parent_system.n_hcurl_vim_modes
+        if full.shape != (expected, expected):
+            raise ValueError(f"full_operator must have shape ({expected}, {expected})")
+        if self.orthogonalization.trial_transform.shape[0] != expected:
+            raise ValueError("orthogonalization does not match the full coupled operator")
+        object.__setattr__(self, "full_operator", np.array(full, copy=True))
+        object.__setattr__(self, "keep_eddy_blocks", tuple(self.keep_eddy_blocks))
+        object.__setattr__(
+            self,
+            "eliminate_eddy_blocks",
+            tuple(self.eliminate_eddy_blocks),
+        )
+
+    @property
+    def reduced_operator(self) -> np.ndarray:
+        return self.orthogonalization.reduced_operator
+
+    @property
+    def n_modes(self) -> int:
+        return self.orthogonalization.rank
+
+    @property
+    def n_hdiv_modes(self) -> int:
+        return self.parent_system.n_hdiv_modes
+
+    @property
+    def n_hcurl_retained_modes(self) -> int:
+        return self.n_modes - self.n_hdiv_modes
+
+    @property
+    def n_hcurl_eliminated_modes(self) -> int:
+        return int(self.orthogonalization.eliminate_indices.size)
+
+    def project_rhs(
+        self,
+        *,
+        magnetic_rhs=None,
+        eddy_rhs=None,
+        require_excitation: bool = False,
+    ) -> dict[str, np.ndarray]:
+        """Project a coupled RHS and build its eliminated-block affine lift."""
+
+        m_rhs, e_rhs = self.parent_system._resolved_rhs(
+            magnetic_rhs,
+            eddy_rhs,
+            self.full_operator.dtype,
+            require_excitation=require_excitation,
+        )
+        full_rhs = np.vstack((m_rhs, e_rhs)).astype(
+            self.full_operator.dtype,
+            copy=False,
+        )
+        orth = self.orthogonalization
+        reduced_rhs = orth.test_transform.T @ full_rhs
+        particular = np.zeros_like(full_rhs)
+        eliminated = orth.eliminate_indices
+        z_ee = self.full_operator[np.ix_(eliminated, eliminated)]
+        particular[eliminated, :] = np.linalg.solve(
+            z_ee,
+            full_rhs[eliminated, :],
+        )
+        return {
+            "full_rhs": full_rhs,
+            "reduced_rhs": reduced_rhs,
+            "particular_solution": particular,
+        }
+
+    def solve(
+        self,
+        *,
+        magnetic_rhs=None,
+        eddy_rhs=None,
+        require_excitation: bool = False,
+        return_operator: bool = False,
+    ) -> dict[str, np.ndarray | float]:
+        """Solve the Schur system and reconstruct the exact full coefficients."""
+
+        projected = self.project_rhs(
+            magnetic_rhs=magnetic_rhs,
+            eddy_rhs=eddy_rhs,
+            require_excitation=require_excitation,
+        )
+        reduced_solution = _solve_reduced_linear(
+            self.reduced_operator,
+            projected["reduced_rhs"],
+        )
+        full_solution = (
+            projected["particular_solution"]
+            + self.orthogonalization.trial_transform @ reduced_solution
+        )
+        residual = self.full_operator @ full_solution - projected["full_rhs"]
+        rhs_norm = max(float(np.linalg.norm(projected["full_rhs"])), 1.0e-300)
+        projected_residual = (
+            self.orthogonalization.test_transform.T @ residual
+        )
+        reduced_rhs_norm = max(
+            float(np.linalg.norm(projected["reduced_rhs"])),
+            1.0e-300,
+        )
+        mh = self.n_hdiv_modes
+        result = {
+            **projected,
+            "reduced_solution": reduced_solution,
+            "full_solution": full_solution,
+            "solution": full_solution,
+            "magnetization": full_solution[:mh, :],
+            "eddy": full_solution[mh:, :],
+            "full_residual_relative_norm": float(np.linalg.norm(residual) / rhs_norm),
+            "projected_residual_relative_norm": float(
+                np.linalg.norm(projected_residual) / reduced_rhs_norm
+            ),
+        }
+        if return_operator:
+            result["operator"] = self.full_operator
+            result["reduced_operator"] = self.reduced_operator
+        return result
+
+    def diagnostics(self) -> dict[str, object]:
+        info = self.orthogonalization.diagnostics()
+        hdiv_reduction = self.parent_system.hdiv_reduction
+        demag = None if hdiv_reduction is None else hdiv_reduction.diagnostics()
+        return {
+            **info,
+            "kind": "mixed-galerkin-hdiv-hcurl",
+            "full_coupled_schur": True,
+            "hdiv_retained_modes": self.n_hdiv_modes,
+            "hcurl_retained_modes": self.n_hcurl_retained_modes,
+            "hcurl_eliminated_modes": self.n_hcurl_eliminated_modes,
+            "keep_eddy_blocks": list(self.keep_eddy_blocks),
+            "eliminate_eddy_blocks": list(self.eliminate_eddy_blocks),
+            "hdiv_demag_backend": (
+                None if demag is None else demag["demag_backend"]
+            ),
+            "hdiv_demag_hmatrix_backend": (
+                None if demag is None else demag.get("demag_hmatrix_backend")
+            ),
         }
 
 
@@ -5996,6 +6776,7 @@ def CoupleHybridVIMWithHDivMMM(
     eddy_bubbling: EddyBubbleDecomposition | None = None,
     hdiv_reduction: HDivMMMReducedModel | None = None,
     conductivity: float | None = None,
+    eddy_block_roles: dict[str, str] | None = None,
     mu: float = MU0,
     kernel_epsilon: float = 0.0,
 ) -> CoupledHDivHybridVIMSystem:
@@ -6027,6 +6808,7 @@ def CoupleHybridVIMWithHDivMMM(
         eddy_bubbling=eddy_bubbling,
         hdiv_reduction=hdiv_reduction,
         conductivity=conductivity,
+        eddy_block_roles=eddy_block_roles,
     )
 
 
@@ -6286,6 +7068,11 @@ class TopologyAwareHybridVIM:
             eddy_bubbling=self.eddy_bubble_decomposition(),
             hdiv_reduction=hdiv_reduction,
             conductivity=self.conductivity,
+            eddy_block_roles={
+                "volume": "bulk",
+                "volume1": "bridge",
+                "surface": "sibc",
+            },
             mu=mu,
             kernel_epsilon=kernel_epsilon,
         )
@@ -6303,6 +7090,8 @@ def NgsolveTopologyAwareHybridVIM(
     volume_materials=None,
     surface_boundaries=None,
     intorder: int = 2,
+    current_gram_rtol: float = 1.0e-10,
+    geometry_intorder: int | None = None,
     kernel_epsilon: float | None = None,
     topology: EddyMeshTopology | None = None,
     free_dofs=None,
@@ -6350,12 +7139,19 @@ def NgsolveTopologyAwareHybridVIM(
         materials=volume_materials,
         names=volume_names,
     )
+    if response_basis is not None:
+        response_basis, volume = CompressHCurlResponseInCurrentGram(
+            response_basis,
+            volume,
+            rtol=current_gram_rtol,
+        )
     graph = topology.conductor_graph()
     if bridge_names is None:
         bridge_names = [f"bridge_cycle_{i}" for i in range(graph.cycle_rank)]
     bridge = NgsolveBridgeCycleCurrentBasis(
         mesh,
         topology,
+        geometry_intorder=geometry_intorder,
         names=bridge_names,
     )
     surface = NgsolveSurfaceOmegaBasis(
@@ -6427,13 +7223,15 @@ def NgsolveEddyBubbleHybridVIM(
     volume_materials=None,
     surface_boundaries=None,
     intorder: int = 2,
+    geometry_intorder: int | None = None,
     kernel_epsilon: float | None = None,
     topology: EddyMeshTopology | None = None,
     free_dofs=None,
     condense: bool = False,
     response_backend: str = "auto",
     inverse: str = "sparsecholesky",
-    rtol: float = 1.0e-12,
+    rtol: float = 1.0e-10,
+    current_gram_rtol: float = 1.0e-10,
     volume_names=None,
     bridge_names=None,
     surface_names=None,
@@ -6488,6 +7286,8 @@ def NgsolveEddyBubbleHybridVIM(
         volume_materials=volume_materials,
         surface_boundaries=surface_boundaries,
         intorder=intorder,
+        current_gram_rtol=current_gram_rtol,
+        geometry_intorder=geometry_intorder,
         kernel_epsilon=kernel_epsilon,
         topology=topology,
         free_dofs=free_dofs,
@@ -6518,13 +7318,15 @@ def NgsolveHCurlVIMHDivMMM(
     volume_materials=None,
     surface_boundaries=None,
     intorder: int = 2,
+    geometry_intorder: int | None = None,
     kernel_epsilon: float | None = None,
     topology: EddyMeshTopology | None = None,
     free_dofs=None,
     condense: bool = False,
     response_backend: str = "auto",
     inverse: str = "sparsecholesky",
-    rtol: float = 1.0e-12,
+    rtol: float = 1.0e-10,
+    current_gram_rtol: float = 1.0e-10,
     volume_names=None,
     bridge_names=None,
     surface_names=None,
@@ -6580,6 +7382,7 @@ def NgsolveHCurlVIMHDivMMM(
         volume_materials=volume_materials,
         surface_boundaries=surface_boundaries,
         intorder=intorder,
+        geometry_intorder=geometry_intorder,
         kernel_epsilon=kernel_epsilon,
         topology=topology,
         free_dofs=free_dofs,
@@ -6587,6 +7390,7 @@ def NgsolveHCurlVIMHDivMMM(
         response_backend=response_backend,
         inverse=inverse,
         rtol=rtol,
+        current_gram_rtol=current_gram_rtol,
         volume_names=volume_names,
         bridge_names=bridge_names,
         surface_names=surface_names,
@@ -6645,13 +7449,15 @@ def NgsolveBDMEddyBubbleVIM(
     volume_materials=None,
     surface_boundaries=None,
     intorder: int = 2,
+    geometry_intorder: int | None = None,
     kernel_epsilon: float | None = None,
     topology: EddyMeshTopology | None = None,
     free_dofs=None,
     condense: bool = False,
     response_backend: str = "auto",
     inverse: str = "sparsecholesky",
-    rtol: float = 1.0e-12,
+    rtol: float = 1.0e-10,
+    current_gram_rtol: float = 1.0e-10,
     volume_names=None,
     bridge_names=None,
     surface_names=None,
@@ -6735,6 +7541,7 @@ def NgsolveBDMEddyBubbleVIM(
         volume_materials=volume_materials,
         surface_boundaries=surface_boundaries,
         intorder=intorder,
+        geometry_intorder=geometry_intorder,
         kernel_epsilon=kernel_epsilon,
         topology=topology,
         free_dofs=free_dofs,
@@ -6742,6 +7549,7 @@ def NgsolveBDMEddyBubbleVIM(
         response_backend=response_backend,
         inverse=inverse,
         rtol=rtol,
+        current_gram_rtol=current_gram_rtol,
         volume_names=volume_names,
         bridge_names=bridge_names,
         surface_names=surface_names,
@@ -6922,6 +7730,7 @@ __all__ = [
     "NgsolveCouplingDofMasks",
     "ResponseBasis",
     "EVRSBasis",
+    "CompressHCurlResponseInCurrentGram",
     "BlockKrylovBasis",
     "NgsolveBlockKrylovBasis",
     "NgsolveOperatorBlockKrylovBasis",
@@ -6937,11 +7746,13 @@ __all__ = [
     "HCurlVIMHDivMMMSolution",
     "CoupledHDivEVRSSystem",
     "CoupledHDivHybridVIMSystem",
+    "MixedGalerkinHDivHybridVIMSystem",
     "HCurlVIMHDivMMMSystem",
     "CoupleHDivMagnetizationToEVRS",
     "CoupleHCurlVIMWithHDivMMM",
     "CoupleHybridVIMWithHDivMMM",
     "CoupleEddyBubbleHCurlBasisWithHDivMMM",
+    "MixedGalerkinOrthogonalization",
     "HybridVIMSystem",
     "AssembleHybridVIM",
     "TopologyAwareHybridVIM",
