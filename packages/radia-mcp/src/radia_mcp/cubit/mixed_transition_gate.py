@@ -2805,6 +2805,221 @@ def _headless_python_invocation_identity_ok(identity: object) -> bool:
     )
 
 
+def _hex_map_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        curves = [int(value) for value in identity.get("boundary_curve_ids", [])]
+        result_curves = [int(value) for value in identity.get("result_boundary_curve_ids", [])]
+        intervals = [int(value) for value in identity.get("curve_intervals", [])]
+        result_intervals = [int(value) for value in identity.get("result_curve_intervals", [])]
+        vertices = [int(value) for value in identity.get("corner_vertex_ids", [])]
+        result_vertices = [int(value) for value in identity.get("result_corner_vertex_ids", [])]
+        valences = [int(value) for value in identity.get("corner_valences", [])]
+        result_valences = [int(value) for value in identity.get("result_corner_valences", [])]
+        pairs = [[int(value) for value in row] for row in identity.get("source_target_face_pairs", [])]
+        result_pairs = [[int(value) for value in row] for row in identity.get("result_source_target_face_pairs", [])]
+        logical = [[int(value) for value in row] for row in identity.get("logical_corner_coordinates", [])]
+        result_logical = [[int(value) for value in row] for row in identity.get("result_logical_corner_coordinates", [])]
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [float(value) for value in identity.get("result_scaled_jacobians", [])]
+        block = int(identity.get("block_id"))
+        result_block = int(identity.get("result_block_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("map_generation") or "")
+    logical_cube = {(x, y, z) for x in (0, 1) for y in (0, 1) for z in (0, 1)}
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "interval_map_generation", "valence_map_generation", "pairing_map_generation",
+            "logical_map_generation", "jacobian_map_generation", "block_map_generation",
+            "result_map_generation",
+        ))
+        and len(curves) == len(intervals) == 4
+        and all(value > 0 for value in curves)
+        and len(set(curves)) == 4
+        and result_curves == curves
+        and all(value > 0 and value % 2 == 0 for value in intervals)
+        and intervals[0] == intervals[2]
+        and intervals[1] == intervals[3]
+        and result_intervals == intervals
+        and len(vertices) == len(valences) == 8
+        and len(set(vertices)) == 8
+        and all(value > 0 for value in vertices)
+        and result_vertices == vertices
+        and valences == [3] * 8
+        and result_valences == valences
+        and bool(pairs)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 and row[0] != row[1] for row in pairs)
+        and result_pairs == pairs
+        and len(logical) == 8
+        and {tuple(row) for row in logical} == logical_cube
+        and result_logical == logical
+        and bool(jacobians)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and block > 0
+        and result_block == block
+        and _valid_sha256(identity.get("map_mesh_sha256"))
+        and identity.get("result_map_mesh_sha256") == identity.get("map_mesh_sha256")
+    )
+
+
+def _mesh_morph_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        nodes = [int(value) for value in identity.get("boundary_node_ids", [])]
+        result_nodes = [int(value) for value in identity.get("result_boundary_node_ids", [])]
+        displacements = [[float(value) for value in row] for row in identity.get("boundary_displacements", [])]
+        result_displacements = [[float(value) for value in row] for row in identity.get("result_boundary_displacements", [])]
+        fixed = [int(value) for value in identity.get("fixed_node_ids", [])]
+        result_fixed = [int(value) for value in identity.get("result_fixed_node_ids", [])]
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        sidesets = [int(value) for value in identity.get("sideset_ids", [])]
+        result_sidesets = [int(value) for value in identity.get("result_sideset_ids", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("morph_generation") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "boundary_morph_generation", "constraint_morph_generation", "frame_morph_generation",
+            "smoothing_morph_generation", "jacobian_morph_generation", "sideset_morph_generation",
+            "export_morph_generation", "result_morph_generation",
+        ))
+        and bool(nodes)
+        and all(value > 0 for value in nodes)
+        and len(set(nodes)) == len(nodes)
+        and result_nodes == nodes
+        and len(displacements) == len(nodes)
+        and all(len(row) == 3 and all(math.isfinite(value) for value in row) for row in displacements)
+        and result_displacements == displacements
+        and bool(fixed)
+        and all(value > 0 for value in fixed)
+        and len(set(fixed)) == len(fixed)
+        and not set(fixed).intersection(nodes)
+        and result_fixed == fixed
+        and identity.get("coordinate_frame") == "global_cartesian"
+        and identity.get("result_coordinate_frame") == identity.get("coordinate_frame")
+        and identity.get("interior_smoothing") == "winslow_volume"
+        and identity.get("result_interior_smoothing") == identity.get("interior_smoothing")
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and bool(sidesets)
+        and len(set(sidesets)) == len(sidesets)
+        and result_sidesets == sidesets
+        and _valid_sha256(identity.get("morphed_mesh_sha256"))
+        and identity.get("result_morphed_mesh_sha256") == identity.get("morphed_mesh_sha256")
+        and _valid_sha256(identity.get("export_sha256"))
+        and identity.get("accepted_export_sha256") == identity.get("export_sha256")
+    )
+
+
+def _exodus_truth_table_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        variables = [str(value) for value in identity.get("element_variable_names", [])]
+        decoded_variables = [str(value) for value in identity.get("decoded_element_variable_names", [])]
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        decoded_blocks = [int(value) for value in identity.get("decoded_block_ids", [])]
+        table = [[int(value) for value in row] for row in identity.get("truth_table", [])]
+        decoded_table = [[int(value) for value in row] for row in identity.get("decoded_truth_table", [])]
+        times = [int(value) for value in identity.get("time_step_indices", [])]
+        decoded_times = [int(value) for value in identity.get("decoded_time_step_indices", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("truth_generation") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "variable_truth_generation", "block_truth_generation", "table_truth_generation",
+            "timestep_truth_generation", "layout_truth_generation", "file_truth_generation",
+            "result_truth_generation",
+        ))
+        and bool(variables)
+        and all(variables)
+        and len(set(variables)) == len(variables)
+        and decoded_variables == variables
+        and bool(blocks)
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and decoded_blocks == blocks
+        and len(table) == len(blocks)
+        and all(len(row) == len(variables) and set(row).issubset({0, 1}) for row in table)
+        and decoded_table == table
+        and bool(times)
+        and all(value > 0 for value in times)
+        and all(right > left for left, right in zip(times, times[1:]))
+        and decoded_times == times
+        and identity.get("value_layout") == "time_block_variable_element"
+        and identity.get("decoded_value_layout") == identity.get("value_layout")
+        and _valid_sha256(identity.get("exodus_sha256"))
+        and identity.get("decoded_exodus_sha256") == identity.get("exodus_sha256")
+        and _valid_sha256(identity.get("truth_table_sha256"))
+        and identity.get("decoded_truth_table_sha256") == identity.get("truth_table_sha256")
+    )
+
+
+def _cad_import_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        bodies = [int(value) for value in identity.get("body_ids", [])]
+        result_bodies = [int(value) for value in identity.get("result_body_ids", [])]
+        sheets = [int(value) for value in identity.get("sheet_ids", [])]
+        result_sheets = [int(value) for value in identity.get("result_sheet_ids", [])]
+        lumps = [int(value) for value in identity.get("lump_ids", [])]
+        result_lumps = [int(value) for value in identity.get("result_lump_ids", [])]
+        matrix = [[float(value) for value in row] for row in identity.get("placement_matrix", [])]
+        result_matrix = [[float(value) for value in row] for row in identity.get("result_placement_matrix", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("cad_generation") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "classification_cad_generation", "transform_cad_generation", "unit_cad_generation",
+            "heal_cad_generation", "topology_cad_generation", "session_cad_generation",
+            "result_cad_generation",
+        ))
+        and bool(bodies)
+        and all(value > 0 for value in bodies + sheets + lumps)
+        and len(set(bodies + sheets)) == len(bodies) + len(sheets)
+        and result_bodies == bodies
+        and result_sheets == sheets
+        and result_lumps == lumps
+        and len(matrix) == 4
+        and all(len(row) == 4 and all(math.isfinite(value) for value in row) for row in matrix)
+        and matrix[3] == [0.0, 0.0, 0.0, 1.0]
+        and result_matrix == matrix
+        and identity.get("length_unit") in {"m", "mm", "cm", "in"}
+        and identity.get("result_length_unit") == identity.get("length_unit")
+        and all(bool(str(identity.get(key) or "")) for key in (
+            "heal_transaction_id", "topology_revision", "cubit_session_id"
+        ))
+        and identity.get("result_heal_transaction_id") == identity.get("heal_transaction_id")
+        and identity.get("result_topology_revision") == identity.get("topology_revision")
+        and identity.get("result_cubit_session_id") == identity.get("cubit_session_id")
+        and _valid_sha256(identity.get("cad_sha256"))
+        and identity.get("loaded_cad_sha256") == identity.get("cad_sha256")
+        and _valid_sha256(identity.get("import_result_sha256"))
+        and identity.get("accepted_import_result_sha256") == identity.get("import_result_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -3602,6 +3817,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "local_refinements_use_current_parent_child_transition_conformity_blocks_boundaries_and_export": (
             _local_refinement_identity_ok(
                 summary.get("local_refinement_parent_child_transition_conformity_block_boundary_export_identity")
+            )
+        ),
+        "mapped_hexes_use_current_intervals_valence_face_pairing_logical_coordinates_jacobians_and_blocks": (
+            _hex_map_identity_ok(
+                summary.get("hex_map_curve_interval_parity_vertex_valence_face_pairing_logical_jacobian_block_generation_identity")
+            )
+        ),
+        "mesh_morphs_use_current_boundaries_constraints_frame_smoothing_jacobians_sidesets_and_export": (
+            _mesh_morph_identity_ok(
+                summary.get("mesh_morph_boundary_displacement_constraint_frame_smoothing_jacobian_sideset_export_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -4423,6 +4648,16 @@ def cubit_mixed_transition_source_gate(
         "headless_python_runs_use_current_interpreter_module_transaction_undo_outputs_and_invocation": (
             _headless_python_invocation_identity_ok(
                 summary.get("headless_python_interpreter_module_transaction_undo_output_invocation_identity")
+            )
+        ),
+        "exodus_element_variables_use_current_truth_table_blocks_timesteps_layout_and_file": (
+            _exodus_truth_table_identity_ok(
+                summary.get("exodus_truth_table_element_variable_block_timestep_layout_file_generation_identity")
+            )
+        ),
+        "cad_imports_use_current_classification_transform_units_heal_topology_session_and_result": (
+            _cad_import_identity_ok(
+                summary.get("cad_import_body_sheet_lump_transform_unit_heal_topology_session_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
