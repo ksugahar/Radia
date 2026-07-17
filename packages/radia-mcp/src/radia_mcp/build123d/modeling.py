@@ -4383,6 +4383,167 @@ def shape_mass_property_crosscheck_summary(
                 )
             )
 
+    connector_evidence_present = any(
+        row.get("joint_connector_frame_labeled_face_subshape_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+
+    def connector_frame_subshape_identity(row):
+        value = row.get(
+            "joint_connector_frame_labeled_face_subshape_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("shape_generation", "")).strip()
+        face_id = str(value.get("labeled_face_subshape_id", "")).strip()
+        face_digest = str(value.get("labeled_face_geometry_sha256", "")).lower()
+        location_digest = str(value.get("parent_location_sha256", "")).lower()
+        frame_digest = str(value.get("connector_frame_sha256", "")).lower()
+        try:
+            origin = tuple(float(item) for item in value.get("connector_origin", []))
+            evaluated_origin = tuple(
+                float(item) for item in value.get("evaluated_connector_origin", [])
+            )
+            axis = tuple(float(item) for item in value.get("connector_axis", []))
+            evaluated_axis = tuple(
+                float(item) for item in value.get("evaluated_connector_axis", [])
+            )
+        except (TypeError, ValueError):
+            return None
+        if (
+            not generation
+            or any(
+                value.get(key) != generation
+                for key in (
+                    "label_table_shape_generation",
+                    "connector_shape_generation",
+                    "location_shape_generation",
+                )
+            )
+            or not face_id
+            or value.get("resolved_labeled_face_subshape_id") != face_id
+            or not valid_sha256(face_digest)
+            or value.get("resolved_labeled_face_geometry_sha256") != face_digest
+            or len(origin) != 3
+            or not all(math.isfinite(item) for item in origin)
+            or evaluated_origin != origin
+            or len(axis) != 3
+            or not all(math.isfinite(item) for item in axis)
+            or math.isclose(sum(item * item for item in axis), 0.0)
+            or evaluated_axis != axis
+            or not valid_sha256(location_digest)
+            or value.get("evaluated_parent_location_sha256") != location_digest
+            or not valid_sha256(frame_digest)
+            or value.get("evaluated_connector_frame_sha256") != frame_digest
+        ):
+            return None
+        return generation, face_id, face_digest, origin, axis, location_digest, frame_digest
+
+    reference_connector_maps = {
+        str(row.get("name", "")): connector_frame_subshape_identity(row)
+        for row in reference
+    }
+    connector_identity_ok = not connector_evidence_present
+    if connector_evidence_present:
+        connector_identity_ok = bool(reference_connector_maps) and all(
+            value is not None for value in reference_connector_maps.values()
+        )
+        for _, rows in normalized_sets:
+            connector_identity_ok = connector_identity_ok and all(
+                connector_frame_subshape_identity(row)
+                == reference_connector_maps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    inertia_evidence_present = any(
+        row.get(
+            "inertia_tensor_principal_axes_density_unit_location_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+
+    def inertia_density_location_identity(row):
+        value = row.get(
+            "inertia_tensor_principal_axes_density_unit_location_generation_identity"
+        )
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("shape_generation", "")).strip()
+        unit = str(value.get("density_unit", "")).strip()
+        location_digest = str(value.get("shape_location_sha256", "")).lower()
+        tensor_digest = str(value.get("inertia_tensor_sha256", "")).lower()
+        axes_digest = str(value.get("principal_axes_sha256", "")).lower()
+        mass_digest = str(value.get("mass_property_sha256", "")).lower()
+        try:
+            density = float(value.get("density_value"))
+            evaluated_density = float(value.get("evaluated_density_value"))
+            center = tuple(float(item) for item in value.get("center_of_mass", []))
+            evaluated_center = tuple(
+                float(item) for item in value.get("evaluated_center_of_mass", [])
+            )
+        except (TypeError, ValueError):
+            return None
+        if (
+            not generation
+            or any(
+                value.get(key) != generation
+                for key in (
+                    "density_shape_generation",
+                    "mass_property_shape_generation",
+                    "location_shape_generation",
+                    "principal_axis_shape_generation",
+                )
+            )
+            or not math.isfinite(density)
+            or density <= 0.0
+            or not math.isclose(evaluated_density, density, rel_tol=0.0, abs_tol=1.0e-12)
+            or unit not in {"kg/m^3", "g/cm^3"}
+            or value.get("evaluated_density_unit") != unit
+            or not valid_sha256(location_digest)
+            or value.get("evaluated_shape_location_sha256") != location_digest
+            or len(center) != 3
+            or not all(math.isfinite(item) for item in center)
+            or evaluated_center != center
+            or not valid_sha256(tensor_digest)
+            or value.get("evaluated_inertia_tensor_sha256") != tensor_digest
+            or not valid_sha256(axes_digest)
+            or value.get("evaluated_principal_axes_sha256") != axes_digest
+            or not valid_sha256(mass_digest)
+            or value.get("evaluated_mass_property_sha256") != mass_digest
+        ):
+            return None
+        return (
+            generation,
+            density,
+            unit,
+            location_digest,
+            center,
+            tensor_digest,
+            axes_digest,
+            mass_digest,
+        )
+
+    reference_inertia_maps = {
+        str(row.get("name", "")): inertia_density_location_identity(row)
+        for row in reference
+    }
+    inertia_density_location_identity_ok = not inertia_evidence_present
+    if inertia_evidence_present:
+        inertia_density_location_identity_ok = bool(reference_inertia_maps) and all(
+            value is not None for value in reference_inertia_maps.values()
+        )
+        for _, rows in normalized_sets:
+            inertia_density_location_identity_ok = (
+                inertia_density_location_identity_ok
+                and all(
+                    inertia_density_location_identity(row)
+                    == reference_inertia_maps.get(str(row.get("name", "")))
+                    for row in rows
+                )
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -4496,6 +4657,12 @@ def shape_mass_property_crosscheck_summary(
         "tessellation_uses_current_tolerances_units_and_object_location": (
             tessellation_generation_identity_ok
         ),
+        "joint_connectors_use_current_labeled_face_frame_and_parent_location": (
+            connector_identity_ok
+        ),
+        "inertia_uses_current_density_unit_location_and_principal_axes": (
+            inertia_density_location_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -4566,6 +4733,14 @@ def shape_mass_property_crosscheck_summary(
         issues.append(
             "swept solid uses stale path frames, twist samples, or profile orientation"
         )
+    if not checks[
+        "joint_connectors_use_current_labeled_face_frame_and_parent_location"
+    ]:
+        issues.append("joint connector uses a stale labeled face, frame, or parent location")
+    if not checks[
+        "inertia_uses_current_density_unit_location_and_principal_axes"
+    ]:
+        issues.append("inertia properties mix stale density, unit, location, or principal axes")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
