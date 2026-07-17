@@ -501,6 +501,197 @@ def _skew_slice_phase_angle_mesh_identity_ok(value: object) -> bool:
     )
 
 
+def _rotating_sector_torque_frame_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("sector_generation", "")).strip()
+    try:
+        pole_pairs = int(value.get("pole_pairs"))
+        result_pole_pairs = int(value.get("result_pole_pairs"))
+        sector_angle = float(value.get("sector_angle_deg"))
+        result_sector_angle = float(value.get("result_sector_angle_deg"))
+        periodic_phase = float(value.get("periodic_phase_deg"))
+        result_periodic_phase = float(value.get("result_periodic_phase_deg"))
+        pairs = [[int(item) for item in pair] for pair in value.get("periodic_pair_ids", [])]
+        result_pairs = [
+            [int(item) for item in pair]
+            for pair in value.get("result_periodic_pair_ids", [])
+        ]
+        orientations = [int(item) for item in value.get("periodic_pair_orientation", [])]
+        result_orientations = [
+            int(item) for item in value.get("result_periodic_pair_orientation", [])
+        ]
+        skew = [float(item) for item in value.get("skew_slice_deg", [])]
+        result_skew = [float(item) for item in value.get("result_skew_slice_deg", [])]
+        weights = [float(item) for item in value.get("skew_slice_weights", [])]
+        result_weights = [
+            float(item) for item in value.get("result_skew_slice_weights", [])
+        ]
+        angles = [float(item) for item in value.get("rotor_mechanical_angle_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_rotor_mechanical_angle_deg", [])
+        ]
+        torque = [float(item) for item in value.get("slice_torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_slice_torque_nm", [])]
+        average = float(value.get("torque_average_nm"))
+        result_average = float(value.get("result_torque_average_nm"))
+    except (TypeError, ValueError):
+        return False
+    count = len(skew)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "pole_pair_sector_generation",
+                "periodic_sector_generation",
+                "skew_sector_generation",
+                "rotor_frame_sector_generation",
+                "torque_sector_generation",
+                "mesh_sector_generation",
+                "result_sector_generation",
+            )
+        )
+        and pole_pairs > 0
+        and result_pole_pairs == pole_pairs
+        and math.isfinite(sector_angle)
+        and math.isclose(
+            sector_angle, 360.0 / (2.0 * pole_pairs), rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and result_sector_angle == sector_angle
+        and periodic_phase in {0.0, 180.0}
+        and result_periodic_phase == periodic_phase
+        and bool(pairs)
+        and all(len(pair) == 2 and pair[0] > 0 and pair[1] > 0 for pair in pairs)
+        and len({tuple(pair) for pair in pairs}) == len(pairs)
+        and result_pairs == pairs
+        and len(orientations) == len(pairs)
+        and all(item in {-1, 1} for item in orientations)
+        and result_orientations == orientations
+        and count >= 2
+        and len(weights) == len(torque) == count
+        and all(math.isfinite(item) for item in skew + weights + torque)
+        and all(item >= 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_skew == skew
+        and result_weights == weights
+        and bool(angles)
+        and all(math.isfinite(item) for item in angles)
+        and result_angles == angles
+        and value.get("torque_frame") == "rotor-mechanical-ccw"
+        and value.get("result_torque_frame") == "rotor-mechanical-ccw"
+        and result_torque == torque
+        and math.isclose(
+            average,
+            sum(weight * item for weight, item in zip(weights, torque)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(result_average, average, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("sector_mesh_sha256"))
+        and value.get("result_sector_mesh_sha256") == value.get("sector_mesh_sha256")
+        and _valid_sha256(value.get("torque_result_sha256"))
+        and value.get("accepted_torque_result_sha256") == value.get("torque_result_sha256")
+    )
+
+
+def _iron_loss_decomposition_element_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("decomposition_generation", "")).strip()
+    try:
+        temperature = float(value.get("material_temperature_c"))
+        result_temperature = float(value.get("result_material_temperature_c"))
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        result_orders = [int(item) for item in value.get("result_harmonic_orders", [])]
+        frequencies = [float(item) for item in value.get("frequency_hz", [])]
+        result_frequencies = [float(item) for item in value.get("result_frequency_hz", [])]
+        element_ids = [int(item) for item in value.get("element_ids", [])]
+        result_element_ids = [int(item) for item in value.get("result_element_ids", [])]
+        volumes = [float(item) for item in value.get("element_volume_m3", [])]
+        result_volumes = [float(item) for item in value.get("result_element_volume_m3", [])]
+        volume = float(value.get("integration_volume_m3"))
+        result_volume = float(value.get("result_integration_volume_m3"))
+    except (TypeError, ValueError):
+        return False
+    components = value.get("harmonic_loss_w")
+    result_components = value.get("result_harmonic_loss_w")
+    component_rows_ok = isinstance(components, dict) and set(components) == {
+        "hysteresis",
+        "eddy",
+        "excess",
+    }
+    if component_rows_ok:
+        try:
+            component_rows = {
+                key: [float(item) for item in components[key]] for key in components
+            }
+            result_component_rows = {
+                key: [float(item) for item in result_components[key]]
+                for key in result_components
+            }
+        except (TypeError, ValueError):
+            component_rows_ok = False
+            component_rows = result_component_rows = {}
+    else:
+        component_rows = result_component_rows = {}
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "model_decomposition_generation",
+                "temperature_decomposition_generation",
+                "frequency_decomposition_generation",
+                "volume_decomposition_generation",
+                "material_decomposition_generation",
+                "result_decomposition_generation",
+            )
+        )
+        and value.get("loss_model") == "bertotti-three-term"
+        and value.get("result_loss_model") == "bertotti-three-term"
+        and math.isfinite(temperature)
+        and result_temperature == temperature
+        and bool(orders)
+        and all(item > 0 for item in orders)
+        and len(set(orders)) == len(orders)
+        and result_orders == orders
+        and len(frequencies) == len(orders)
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(
+            math.isclose(frequency, frequencies[0] * order / orders[0], rel_tol=1.0e-12)
+            for order, frequency in zip(orders, frequencies)
+        )
+        and result_frequencies == frequencies
+        and component_rows_ok
+        and all(
+            len(row) == len(orders)
+            and all(math.isfinite(item) and item >= 0.0 for item in row)
+            for row in component_rows.values()
+        )
+        and result_component_rows == component_rows
+        and bool(element_ids)
+        and all(item > 0 for item in element_ids)
+        and len(set(element_ids)) == len(element_ids)
+        and result_element_ids == element_ids
+        and len(volumes) == len(element_ids)
+        and all(math.isfinite(item) and item > 0.0 for item in volumes)
+        and result_volumes == volumes
+        and math.isclose(volume, sum(volumes), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and result_volume == volume
+        and _valid_sha256(value.get("material_state_sha256"))
+        and value.get("result_material_state_sha256") == value.get("material_state_sha256")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("loss_result_sha256"))
+        and value.get("accepted_loss_result_sha256") == value.get("loss_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -578,6 +769,8 @@ def pwm_controlled_motor_loss_gate(
     demagnetization_margin_identity_ok = True
     iron_loss_component_harmonic_identity_ok = True
     skew_slice_phase_angle_mesh_identity_ok = True
+    rotating_sector_torque_frame_identity_ok = True
+    iron_loss_decomposition_element_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -617,6 +810,8 @@ def pwm_controlled_motor_loss_gate(
         demagnetization_margin_identity_ok = False
         iron_loss_component_harmonic_identity_ok = False
         skew_slice_phase_angle_mesh_identity_ok = False
+        rotating_sector_torque_frame_identity_ok = False
+        iron_loss_decomposition_element_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -2221,6 +2416,16 @@ def pwm_controlled_motor_loss_gate(
                 "skew_slice_torque_phase_angle_weight_periodicity_mesh_generation_identity"
             )
         )
+        rotating_sector_torque_frame_identity_ok = _rotating_sector_torque_frame_identity_ok(
+            identity_value.get(
+                "rotating_sector_pole_pair_periodic_phase_skew_slice_torque_frame_generation_identity"
+            )
+        )
+        iron_loss_decomposition_element_identity_ok = _iron_loss_decomposition_element_identity_ok(
+            identity_value.get(
+                "iron_loss_harmonic_decomposition_model_temperature_frequency_element_volume_result_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -2523,6 +2728,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "skew_torque_uses_current_slice_phases_angles_weights_periodicity_meshes_and_result": (
             skew_slice_phase_angle_mesh_identity_ok
+        ),
+        "rotating_sector_torque_uses_current_pole_pairs_periodic_phase_skew_frame_mesh_and_result": (
+            rotating_sector_torque_frame_identity_ok
+        ),
+        "iron_loss_decomposition_uses_current_model_temperature_frequency_elements_volume_and_result": (
+            iron_loss_decomposition_element_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
