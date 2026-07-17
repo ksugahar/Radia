@@ -55,7 +55,9 @@ Scope / limitations (fail-loud, not silent)
 ===========================================
 * genus-1 with ONE flux-linked handle (one cut, one alpha).  genus >= 2
   raises.
-* The tree-cotree cut generator is used as-is; the Theta single-valued
+* The cut loop comes from ``radia.cohomology.surface_homology_loops``
+  (the repo's single, gmsh-free cohomology engine: harmonic-1-cochain
+  period matrix + QR-pivoted cotree selection); the Theta single-valued
   check (uniform jump) raises if the mid-wall ring construction fails
   (e.g. the ray cast finds no opposite wall, or the smoothed ring
   pierces the surface).
@@ -133,67 +135,6 @@ def A_from_filaments(points, filament_paths, currents):
 # ----------------------------------------------------------------------
 # topology
 # ----------------------------------------------------------------------
-def surface_homology_generators(pts, tris):
-    """Tree-cotree homology generator loops of a closed triangulated
-    surface.  Returns a list of vertex loops (each a list of vertex ids,
-    implicitly closed).  Length is 2*genus."""
-    pts = np.asarray(pts, dtype=float)
-    tris = np.asarray(tris, dtype=np.int64)
-    E = {(min(a, b), max(a, b)) for t in tris for a, b in
-         ((t[0], t[1]), (t[1], t[2]), (t[2], t[0]))}
-    adj = defaultdict(list)
-    for (a, b) in E:
-        adj[a].append(b)
-        adj[b].append(a)
-    parent = {int(tris[0, 0]): None}
-    dq = deque([int(tris[0, 0])])
-    while dq:
-        u = dq.popleft()
-        for w in adj[u]:
-            if w not in parent:
-                parent[w] = u
-                dq.append(w)
-    tree = {(min(u, parent[u]), max(u, parent[u]))
-            for u in parent if parent[u] is not None}
-    edge_tris = defaultdict(list)
-    for ti, t in enumerate(tris):
-        for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
-            edge_tris[(min(a, b), max(a, b))].append(ti)
-    nontree = [e for e in E if e not in tree]
-    vis = {0}
-    dq = deque([0])
-    used = set()
-    tE = defaultdict(list)
-    for e in nontree:
-        for ti in edge_tris[e]:
-            tE[ti].append(e)
-    while dq:
-        ti = dq.popleft()
-        for e in tE[ti]:
-            for tj in edge_tris[e]:
-                if tj not in vis:
-                    vis.add(tj)
-                    used.add(e)
-                    dq.append(tj)
-    gens = [e for e in nontree if e not in used]
-
-    def tree_path(a, b):
-        anc = []
-        u = a
-        while u is not None:
-            anc.append(u)
-            u = parent[u]
-        s = set(anc)
-        pb = []
-        u = b
-        while u not in s:
-            pb.append(u)
-            u = parent[u]
-        return anc[:anc.index(u) + 1] + pb[::-1]
-
-    return [tree_path(a, b) for (a, b) in gens]
-
-
 def cut_open_surface(pts, tris, cut_loop):
     """Duplicate the cut-loop vertices and reattach the R-side vertex
     fans (per-vertex side resolution -- robust to zig-zag cuts).
@@ -440,12 +381,65 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
             f"{genus}, chi={chi}).  genus 0 needs no extension; "
             f"genus >= 2 needs one DOF per flux-linked handle (not "
             f"implemented).")
-    loops = surface_homology_generators(pts, tris)
-    winds = []
-    for p in loops:
-        th = np.unwrap(np.arctan2(pts[p][:, 1], pts[p][:, 0]))
-        winds.append(abs((th[-1] - th[0]) / (2 * math.pi)))
-    cut = loops[int(np.argmax(winds))]
+    # Cut selection through the repo's single cohomology engine
+    # (radia.cohomology, the gmsh-free port).  The flux-linked cut must
+    # be the PURE toroidal class (w_tor, w_pol) = (+-1, 0): a mixed
+    # representative like (1, -1) is a valid basis element but forces
+    # alpha to carry an equal poloidal component (wrong physics) and its
+    # zig-zag geometry breaks the mid-wall Theta ray-cast.  A fixed
+    # 2-loop generator basis is NOT guaranteed class-pure (measured on
+    # Takahashi: {(1,-1), (0,1)}), so classify ALL cotree fundamental
+    # cycles instead: the class map is a linear image of the harmonic
+    # period vector, calibrated on one independent (QR-pivoted) pair, so
+    # every cycle costs O(1) -- then take the geometrically shortest
+    # pure-toroidal simple loop.  Winding numbers of a CLOSED loop are
+    # exact integers: toroidal about the z axis, poloidal about the
+    # wall-section centroid (rho0, z0) -- valid for any z-axis genus-1
+    # workpiece (torus, tube, ring), whose section centroid lies inside
+    # the material wall.
+    import scipy.linalg as sla
+    from radia.cohomology import surface_fundamental_cycles
+
+    _b1, Pi, expand, _cotree = surface_fundamental_cycles(tris, nv=nv)
+    rho_all = np.sqrt(pts[:, 0] ** 2 + pts[:, 1] ** 2)
+    rho0, z0 = float(rho_all.mean()), float(pts[:, 2].mean())
+
+    def _windings(p):
+        q = pts[list(p) + [p[0]]]
+        th = np.unwrap(np.arctan2(q[:, 1], q[:, 0]))
+        rho = np.sqrt(q[:, 0] ** 2 + q[:, 1] ** 2)
+        ph = np.unwrap(np.arctan2(q[:, 2] - z0, rho - rho0))
+        return np.array([(th[-1] - th[0]) / (2 * math.pi),
+                         (ph[-1] - ph[0]) / (2 * math.pi)])
+
+    _, _, piv = sla.qr(Pi.T, pivoting=True, mode="economic")
+    sel = piv[:2]
+    W_sel = np.array([_windings(expand(k)) for k in sel])      # (2, 2)
+    if abs(np.linalg.det(W_sel)) < 0.5:
+        raise ValueError(
+            f"loop extension: winding map is singular on the generator "
+            f"pair (windings {np.rint(W_sel).astype(int).tolist()}) -- "
+            f"the workpiece is not a z-axis genus-1 body in the assumed "
+            f"sense (toroidal about z, poloidal about the wall section).")
+    # windings(cycle e) = Wmap @ Pi[e]  (linear class map, calibrated once)
+    Wmap = W_sel.T @ np.linalg.inv(Pi[sel].T)
+    W_all = Pi @ Wmap.T                                        # (nc, 2)
+    W_int = np.rint(W_all)
+    cands = np.where((np.abs(W_all - W_int) < 0.2).all(axis=1)
+                     & (np.abs(W_int[:, 0]) == 1)
+                     & (W_int[:, 1] == 0))[0]
+    if len(cands) == 0:
+        raise ValueError(
+            f"loop extension: no PURE toroidal fundamental cycle found "
+            f"among {Pi.shape[0]} cotree candidates (generator windings "
+            f"{np.rint(W_sel).astype(int).tolist()}).  Re-meshing "
+            f"usually resolves this.")
+
+    def _geo_len(p):
+        q = pts[list(p) + [p[0]]]
+        return float(np.sum(np.linalg.norm(np.diff(q, axis=0), axis=1)))
+
+    cut = min((expand(int(k)) for k in cands), key=_geo_len)
     n_cut = len(cut)
 
     pts_o, tris_o, dup = cut_open_surface(pts, tris, cut)
