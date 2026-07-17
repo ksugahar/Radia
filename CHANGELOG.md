@@ -5,7 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.17 - Production-hardened HCurl/BDM hybrid VIM
+
+Released 2026-07-17.
+
+- Hardened native hybrid-VIM dense solves for empty elimination blocks and
+  scale-relative pivots, and made SIBC helpers fail loud at undefined DC poles
+  and non-finite Laplace frequencies.
+- Locked the parent-order-six end-to-end path from 3,557 HCurl DoFs to 33
+  topology-aware eddy modes and from 267 BDM1 DoFs to eight protected/response
+  modes, with native mixed solves at both smoke frequencies.
+- Synchronized BDM1/BDM2 terminology across runtime diagnostics, docs, MCP
+  knowledge, and generated panel metadata, and removed the known-invalid IH
+  incident-potential and loop-current selections from the registry contract.
+
 ## 4.95.16 - Genus-aware IH and topology-aware hybrid VIM
+
 
 Released 2026-07-17.
 

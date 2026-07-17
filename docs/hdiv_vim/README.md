@@ -32,7 +32,7 @@ H_ext=..., image=...)`.
 `rad.Solve` also accepts a container with multiple independently registered
 `vim.MeshSoftIron` bodies.  Eligible pure TET/HEX/WEDGE bodies dispatch through
 `vim.SolveCoupled`; each body keeps its own HDiv normal trace, and `rad.Fld` on
-the top container sums all persistent C++ RT1/RT2 fields plus ordinary Radia
+the top container sums all persistent C++ BDM1/BDM2 fields plus ordinary Radia
 source objects.  A single registered iron retains the ordinary `vim.Solve`
 result shape.
 
@@ -177,8 +177,8 @@ The returned final state owns the same persistent C++ field evaluator as
 without collapsing the BDM1/BDM2 magnetization to element constants.
 
 This history-dependent path currently solves PM self-demagnetization under an
-arbitrary prescribed NGSolve applied field.  RT1 keeps one committed
-constitutive state per element.  RT2 stores and updates state on an NGSolve
+arbitrary prescribed NGSolve applied field.  BDM1 keeps one committed
+constitutive state per element.  BDM2 stores and updates state on an NGSolve
 `IntegrationRuleSpace` and returns the constitutive source through the matching
 weak-form transpose; the public step result remains element-averaged for a
 stable reporting contract.
