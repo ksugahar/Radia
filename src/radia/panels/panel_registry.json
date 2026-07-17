@@ -785,9 +785,9 @@
             2
           ],
           "default": 1,
-          "help": "HDiv finite-element order: 1=RT1, 2=RT2",
+          "help": "HDiv finite-element order: 1=BDM1, 2=BDM2",
           "ja": "HDiv 次数",
-          "physics": "1=RT1, 2=RT2"
+          "physics": "1=BDM1, 2=BDM2"
         },
         {
           "cli": "--max-iter",
@@ -1986,9 +1986,9 @@
             2
           ],
           "default": 1,
-          "help": "HDiv order: RT1 or RT2",
+          "help": "HDiv order: BDM1 or BDM2",
           "ja": "HDiv 次数",
-          "physics": "1=RT1, 2=RT2"
+          "physics": "1=BDM1, 2=BDM2"
         }
       ]
     }

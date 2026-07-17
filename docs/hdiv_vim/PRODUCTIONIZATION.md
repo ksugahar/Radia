@@ -38,7 +38,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
   B/BT, the geometric and material mass matrices, Krylov iterations, and field
   source evaluation; Python is not in the per-iteration solve/field path.
 - NGSolve owns element orientation, Piola maps, curved geometry, local/global
-  DOF transforms, quadrature, and weak assembly.  RT2 hysteresis therefore uses
+  DOF transforms, quadrature, and weak assembly.  BDM2 hysteresis therefore uses
   `IntegrationRuleSpace` interpolation and mixed weak forms instead of a
   Python reconstruction of the physical high-order basis.
 - Production FAR Gram blocks average both directed quadrature evaluations.
@@ -85,7 +85,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 - `validation_test/hysteresis/test_linear_recoil_permanent_magnet.py` locks the
   level-2 curved-sphere load line against its analytic `N=I/3` solution.
 - `vim.SolveHysteresis(..., order=2)` keeps constitutive state at NGSolve
-  integration-rule points and records that layout/order in restart state.  RT1
+  integration-rule points and records that layout/order in restart state.  BDM1
   retains the established element-average state contract.
 - `vim.CoupledBody` and `vim.SolveCoupled` couple independent linear-recoil PM,
   linear iron, and nonlinear iron spaces.  Persistent C++ field
@@ -94,7 +94,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
   path for normal-discontinuous `B_r`.
 - A `rad.Solve` container with multiple eligible `vim.MeshSoftIron` bodies
   dispatches to the same coupled solve.  Per-body magnetization is written back
-  independently, while top-level `rad.Fld` sums every persistent RT1/RT2 field
+  independently, while top-level `rad.Fld` sums every persistent BDM1/BDM2 field
   and the ordinary Radia source objects.
 - `vim.CoupledHistoryBody` and `vim.SolveCoupledHysteresis` couple one or more
   stateful EnergyStop/Play PMs to independent linear/nonlinear HDiv bodies.
@@ -102,9 +102,9 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
   states commit together only after global convergence.  Every body's
   `HDivSolver` builds its ChargeGram once across outer iterations and physical
   history steps.
-- The planar motor application locks curved Q2+RT1 and Q3+RT2 against the
+- The planar motor application locks curved Q2+BDM1 and Q3+BDM2 against the
   analytic ellipse torque.  Maxwell stress, magnetization-volume torque, and
-  fixed-current coenergy agree, and Q3+RT2 reduces the same-mesh-family error.
+  fixed-current coenergy agree, and Q3+BDM2 reduces the same-mesh-family error.
 
 ## Release Gate
 

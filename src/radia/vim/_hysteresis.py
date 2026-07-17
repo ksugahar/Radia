@@ -40,10 +40,10 @@ solves the SPD system
 
     ( W(nu0) + N ) m^{k+1} = M_mass h_ext + INT (nu0 M^k - H_mat(M^k)) . v dx
 
-whose LHS is CONSTANT across iterations AND steps (assembled once).  RT1 uses
-the historical ONE POINT PER ELEMENT closure.  RT2 evaluates the material at
+whose LHS is CONSTANT across iterations AND steps (assembled once).  BDM1 uses
+the historical ONE POINT PER ELEMENT closure.  BDM2 evaluates the material at
 volume quadrature points and returns it through the matching weighted transpose
-of the physical Piola evaluation map.  The RT1 fixed point satisfies the
+of the physical Piola evaluation map.  The BDM1 fixed point satisfies the
 constitutive equation in the element-averaged sense
 
     INT H_mat(M_avg).v + N m = M_mass h_ext - nu0 INT (m - M_avg).v dx
@@ -300,7 +300,7 @@ def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=200):
 
 
 class _QuadratureCoupling:
-    """NGSolve-native RT2 state evaluation and weak-load projection."""
+    """NGSolve-native BDM2 state evaluation and weak-load projection."""
 
     def __init__(self, fes, integration_order):
         from ngsolve.comp import IntegrationRuleSpace
@@ -317,7 +317,7 @@ class _QuadratureCoupling:
         self.sample_field = ng.GridFunction(self.source_space)
         self.npoints = int(self.scalar_space.ndof)
         if self.npoints == 0:
-            raise RuntimeError("vim.SolveHysteresis: empty RT2 integration-rule space")
+            raise RuntimeError("vim.SolveHysteresis: empty BDM2 integration-rule space")
 
         trial = self.source_space.TrialFunction()
         test = fes.TestFunction()
@@ -409,10 +409,10 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     initial_state : optional state dict returned by an earlier call.  Restarts
               material history, RT coefficients, B cache, and convergence
               scale without hidden mutable material state.
-    order   : HDiv order 1 or 2.  RT1 retains one constitutive state per element;
-              RT2 stores state at physical volume quadrature points and returns
+    order   : HDiv order 1 or 2.  BDM1 retains one constitutive state per element;
+              BDM2 stores state at physical volume quadrature points and returns
               its nonlinear source through the matching weighted weak load.
-    state_quadrature_order : NGSolve ``IntegrationRuleSpace`` order for RT2.
+    state_quadrature_order : NGSolve ``IntegrationRuleSpace`` order for BDM2.
               The production default is 3 and is recorded in the restart state.
 
     Returns dict with `steps` = per-step records (M (n_el,3), B, H, M_avg,
@@ -435,7 +435,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     validate_hdiv_configuration(mesh.dim, _vtx, order, mesh.GetCurveOrder())
     if state_quadrature_order is not None and order != 2:
         raise ValueError(
-            "vim.SolveHysteresis: state_quadrature_order is an RT2-only setting")
+            "vim.SolveHysteresis: state_quadrature_order is a BDM2-only setting")
     if (play is None) == (material is None):
         raise ValueError("vim.SolveHysteresis: provide EXACTLY ONE of play=(K, eta, f_k_tables) "
                          "or material=<duck-typed B-input material>")
@@ -552,14 +552,14 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                             else int(state_quadrature_order))
         if quadrature_order < 3:
             raise ValueError(
-                "vim.SolveHysteresis: RT2 state_quadrature_order must be >= 3")
+                "vim.SolveHysteresis: BDM2 state_quadrature_order must be >= 3")
         coupling = _QuadratureCoupling(fes, quadrature_order)
         n_state_points = coupling.npoints
         constant_average = coupling.element_average(
             np.ones((n_state_points, 3), dtype=float), vol_el)
         if not np.allclose(constant_average, 1.0, rtol=1.0e-12, atol=1.0e-12):
             raise RuntimeError(
-                "vim.SolveHysteresis: RT2 integration-rule measure does not match the mesh volume")
+                "vim.SolveHysteresis: BDM2 integration-rule measure does not match the mesh volume")
         state_layout = "quadrature"
 
         def _M_state(m_coefficients):
