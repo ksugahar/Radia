@@ -1297,3 +1297,92 @@ def test_v22_public_acoustic_structure_trace_impedance_order_frame_generation_mi
     assert not result["checks"][
         "acoustic_structure_trace_uses_current_frame_impedance_and_interface"
     ]
+
+
+def _with_v23_continuation_and_sweep_identity(summary: dict) -> dict:
+    summary = _with_v22_contact_and_acoustic_structure_identity(summary)
+    summary["nonlinear_continuation_branch_load_step_mesh_generation_identity"] = {
+        "solve_generation": "continuation-81",
+        "branch_solve_generation": "continuation-81",
+        "load_step_solve_generation": "continuation-81",
+        "tangent_state_solve_generation": "continuation-81",
+        "adapted_mesh_solve_generation": "continuation-81",
+        "result_solve_generation": "continuation-81",
+        "branch_id": "stable-positive",
+        "result_branch_id": "stable-positive",
+        "load_parameters": [0.0, 0.25, 0.5, 0.75, 1.0],
+        "result_load_parameters": [0.0, 0.25, 0.5, 0.75, 1.0],
+        "tangent_state_sha256": ["1" * 64, "2" * 64, "3" * 64, "4" * 64, "5" * 64],
+        "result_tangent_state_sha256": ["1" * 64, "2" * 64, "3" * 64, "4" * 64, "5" * 64],
+        "adapted_mesh_sha256": "6" * 64,
+        "result_mesh_sha256": "6" * 64,
+        "continuation_table_sha256": "7" * 64,
+        "result_continuation_table_sha256": "7" * 64,
+    }
+    summary["parametric_sequence_initial_solution_dataset_generation_identity"] = {
+        "sweep_generation": "parametric-81",
+        "sequence_sweep_generation": "parametric-81",
+        "parameter_row_sweep_generation": "parametric-81",
+        "initial_solution_sweep_generation": "parametric-81",
+        "dataset_sweep_generation": "parametric-81",
+        "result_sweep_generation": "parametric-81",
+        "sequence_id": "continuation-from-previous-row",
+        "result_sequence_id": "continuation-from-previous-row",
+        "parameter_names": ["current_a", "speed_rpm"],
+        "parameter_rows": [[0.0, 0.0], [5.0, 500.0], [10.0, 1000.0]],
+        "result_parameter_rows": [[0.0, 0.0], [5.0, 500.0], [10.0, 1000.0]],
+        "initial_solution_sha256": ["8" * 64, "9" * 64, "a" * 64],
+        "result_initial_solution_sha256": ["8" * 64, "9" * 64, "a" * 64],
+        "dataset_sha256": "b" * 64,
+        "result_dataset_sha256": "b" * 64,
+    }
+    return summary
+
+
+def test_v23_public_positive_continuation_and_parametric_sequence_identity() -> None:
+    assert gate(_with_v23_continuation_and_sweep_identity(copy.deepcopy(_summary())))[
+        "status"
+    ] == "ok"
+
+
+def test_v23_public_nonlinear_continuation_branch_load_step_mesh_generation_mismatch() -> None:
+    summary = _with_v23_continuation_and_sweep_identity(copy.deepcopy(_summary()))
+    summary["nonlinear_continuation_branch_load_step_mesh_generation_identity"].update(
+        {
+            "branch_solve_generation": "continuation-80",
+            "load_step_solve_generation": "continuation-79",
+            "tangent_state_solve_generation": "continuation-78",
+            "adapted_mesh_solve_generation": "continuation-77",
+            "result_branch_id": "unstable-negative",
+            "result_load_parameters": [0.0, 0.5, 0.25, 0.75, 1.0],
+            "result_tangent_state_sha256": ["5" * 64, "4" * 64, "3" * 64, "2" * 64, "1" * 64],
+            "result_mesh_sha256": "1" * 64,
+            "result_continuation_table_sha256": "2" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "nonlinear_continuation_result_uses_current_branch_load_tangent_and_mesh"
+    ]
+
+
+def test_v23_public_parametric_sweep_sequence_initial_solution_result_generation_mismatch() -> None:
+    summary = _with_v23_continuation_and_sweep_identity(copy.deepcopy(_summary()))
+    summary["parametric_sequence_initial_solution_dataset_generation_identity"].update(
+        {
+            "sequence_sweep_generation": "parametric-80",
+            "parameter_row_sweep_generation": "parametric-79",
+            "initial_solution_sweep_generation": "parametric-78",
+            "dataset_sweep_generation": "parametric-77",
+            "result_sequence_id": "independent-rows",
+            "result_parameter_rows": [[10.0, 1000.0], [5.0, 500.0], [0.0, 0.0]],
+            "result_initial_solution_sha256": ["a" * 64, "9" * 64, "8" * 64],
+            "result_dataset_sha256": "3" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "parametric_sequence_uses_current_rows_initial_solutions_and_dataset"
+    ]
