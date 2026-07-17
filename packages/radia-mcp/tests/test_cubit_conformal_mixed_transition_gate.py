@@ -2813,3 +2813,124 @@ def test_v26_source_exodus_merge_node_tolerance_global_id_block_sideset_checksum
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["exodus_merges_use_current_tolerance_nodes_global_ids_blocks_sidesets_and_checksums"] is False
+
+
+def _with_v27_sheet_pyramid_journal_exodus_identity(row):
+    row["hex_sheet_pillow_layer_topology_block_interface_orientation_jacobian_identity"] = {
+        "layer_generation": "sheet-pillow-141", "topology_layer_generation": "sheet-pillow-141",
+        "block_layer_generation": "sheet-pillow-141", "interface_layer_generation": "sheet-pillow-141",
+        "orientation_layer_generation": "sheet-pillow-141", "jacobian_layer_generation": "sheet-pillow-141",
+        "result_layer_generation": "sheet-pillow-141", "operation": "pillow", "result_operation": "pillow",
+        "inserted_layer_element_ids": [101, 102, 103, 104],
+        "result_inserted_layer_element_ids": [101, 102, 103, 104],
+        "block_interface_pairs": [[10, 20], [20, 30]],
+        "result_block_interface_pairs": [[10, 20], [20, 30]],
+        "orientation_signs": [1, 1, 1, 1], "result_orientation_signs": [1, 1, 1, 1],
+        "scaled_jacobians": [0.62, 0.58, 0.55, 0.51],
+        "result_scaled_jacobians": [0.62, 0.58, 0.55, 0.51],
+        "layer_topology_sha256": "1" * 64, "result_layer_topology_sha256": "1" * 64,
+        "interface_map_sha256": "2" * 64, "result_interface_map_sha256": "2" * 64,
+    }
+    row["pyramid_transition_orientation_interface_jacobian_block_export_identity"] = {
+        "transition_generation": "pyramid-transition-141", "base_transition_generation": "pyramid-transition-141",
+        "side_transition_generation": "pyramid-transition-141", "interface_transition_generation": "pyramid-transition-141",
+        "jacobian_transition_generation": "pyramid-transition-141", "block_transition_generation": "pyramid-transition-141",
+        "export_transition_generation": "pyramid-transition-141", "result_transition_generation": "pyramid-transition-141",
+        "pyramid_base_node_order": [1, 2, 3, 4], "result_pyramid_base_node_order": [1, 2, 3, 4],
+        "pyramid_side_orientations": [1, 1, 1, 1], "result_pyramid_side_orientations": [1, 1, 1, 1],
+        "interface_node_ids": [1, 2, 3, 4, 5], "result_interface_node_ids": [1, 2, 3, 4, 5],
+        "adjacent_element_families": ["hex8", "pyramid5", "tet4"],
+        "result_adjacent_element_families": ["hex8", "pyramid5", "tet4"],
+        "minimum_scaled_jacobian": 0.41, "result_minimum_scaled_jacobian": 0.41,
+        "block_ids": [10, 15, 20], "result_block_ids": [10, 15, 20],
+        "transition_export_sha256": "3" * 64, "result_transition_export_sha256": "3" * 64,
+    }
+    row["journal_include_aprepro_scope_workdir_version_output_invocation_identity"] = {
+        "invocation_generation": "journal-141", "include_invocation_generation": "journal-141",
+        "aprepro_invocation_generation": "journal-141", "workdir_invocation_generation": "journal-141",
+        "version_invocation_generation": "journal-141", "output_invocation_generation": "journal-141",
+        "result_invocation_generation": "journal-141",
+        "include_order": ["geometry.jou", "mesh.jou", "export.jou"],
+        "result_include_order": ["geometry.jou", "mesh.jou", "export.jou"],
+        "aprepro_scope": [["mesh_size", "0.002"], ["layers", "4"]],
+        "result_aprepro_scope": [["mesh_size", "0.002"], ["layers", "4"]],
+        "working_directory": "C:/temp/cubit-v27", "result_working_directory": "C:/temp/cubit-v27",
+        "cubit_version": "2026.6", "result_cubit_version": "2026.6",
+        "headless_flags": ["-nographics", "-batch"], "result_headless_flags": ["-nographics", "-batch"],
+        "journal_sha256": "4" * 64, "result_journal_sha256": "4" * 64,
+        "output_sha256": "5" * 64, "result_output_sha256": "5" * 64,
+    }
+    row["exodus_64bit_id_qa_time_nodal_variable_mesh_checksum_identity"] = {
+        "exodus_generation": "exodus-result-141", "id_exodus_generation": "exodus-result-141",
+        "qa_exodus_generation": "exodus-result-141", "time_exodus_generation": "exodus-result-141",
+        "variable_exodus_generation": "exodus-result-141", "mesh_exodus_generation": "exodus-result-141",
+        "result_exodus_generation": "exodus-result-141", "integer_width_bits": 64,
+        "decoded_integer_width_bits": 64, "global_node_ids": [4294967301, 4294967302, 4294967303],
+        "decoded_global_node_ids": [4294967301, 4294967302, 4294967303],
+        "qa_records": [["cubit", "2026.6", "2026-07-18", "00:00:00"]],
+        "decoded_qa_records": [["cubit", "2026.6", "2026-07-18", "00:00:00"]],
+        "time_steps_s": [0.0, 0.1, 0.2], "decoded_time_steps_s": [0.0, 0.1, 0.2],
+        "nodal_variable_order": ["displacement_x", "displacement_y", "pressure"],
+        "decoded_nodal_variable_order": ["displacement_x", "displacement_y", "pressure"],
+        "mesh_sha256": "6" * 64, "decoded_mesh_sha256": "6" * 64,
+        "exodus_sha256": "7" * 64, "decoded_exodus_sha256": "7" * 64,
+    }
+    return row
+
+
+def test_v27_positive_sheet_pyramid_journal_exodus_identity():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v27_public_hex_sheet_pillow_layer_topology_block_interface_scaled_jacobian_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["hex_sheet_pillow_layer_topology_block_interface_orientation_jacobian_identity"].update(
+        {"topology_layer_generation": "sheet-pillow-140", "result_operation": "sheet",
+         "result_orientation_signs": [1, -1, 1, 1],
+         "result_scaled_jacobians": [0.62, -0.05, 0.55, 0.51]}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sheet_pillow_layers_use_current_topology_blocks_interfaces_orientation_and_jacobians"] is False
+
+
+def test_v27_public_pyramid_transition_base_side_orientation_tet_hex_interface_jacobian_export_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["pyramid_transition_orientation_interface_jacobian_block_export_identity"].update(
+        {"base_transition_generation": "pyramid-transition-140",
+         "result_pyramid_base_node_order": [1, 4, 3, 2],
+         "result_pyramid_side_orientations": [1, -1, 1, -1],
+         "result_minimum_scaled_jacobian": -0.03,
+         "result_transition_export_sha256": "9" * 64}
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["pyramid_transitions_use_current_base_sides_interface_jacobian_blocks_and_export"] is False
+
+
+def test_v27_source_journal_include_aprepro_scope_working_directory_version_output_generation_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["journal_include_aprepro_scope_workdir_version_output_invocation_identity"].update(
+        {"include_invocation_generation": "journal-140",
+         "result_include_order": ["mesh.jou", "geometry.jou", "export.jou"],
+         "result_working_directory": "C:/temp/cubit-old", "result_cubit_version": "2025.8",
+         "result_headless_flags": ["-batch"], "result_output_sha256": "a" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal_replays_use_current_includes_aprepro_scope_workdir_version_and_output"] is False
+
+
+def test_v27_source_exodus_64bit_id_qa_time_step_nodal_variable_order_checksum_mismatch():
+    row = _with_v27_sheet_pyramid_journal_exodus_identity(summary())
+    row["exodus_64bit_id_qa_time_nodal_variable_mesh_checksum_identity"].update(
+        {"id_exodus_generation": "exodus-result-140", "decoded_integer_width_bits": 32,
+         "decoded_global_node_ids": [5, 6, 7], "decoded_time_steps_s": [0.0, 0.2, 0.1],
+         "decoded_nodal_variable_order": ["pressure", "displacement_y", "displacement_x"],
+         "decoded_exodus_sha256": "c" * 64}
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_results_use_current_64bit_ids_qa_times_variables_mesh_and_checksum"] is False
