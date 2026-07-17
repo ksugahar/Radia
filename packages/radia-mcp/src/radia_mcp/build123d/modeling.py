@@ -2906,6 +2906,195 @@ def _loft_spline_watertight_volume_identity(row):
     return generation, spline_digest, chord, angle, unit, shell_digest, volume, volume_digest
 
 
+def _transformed_assembly_mass_identity(row):
+    value = row.get(
+        "transformed_assembly_com_inertia_axis_density_unit_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("assembly_generation", "")).strip()
+    part_ids = [str(item).strip() for item in value.get("part_ids", [])]
+    result_part_ids = [
+        str(item).strip() for item in value.get("result_part_ids", [])
+    ]
+    transforms = [
+        str(item).lower()
+        for item in value.get("local_to_global_transform_sha256", [])
+    ]
+    result_transforms = [
+        str(item).lower()
+        for item in value.get("result_local_to_global_transform_sha256", [])
+    ]
+    try:
+        densities = [float(item) for item in value.get("density_kg_m3", [])]
+        result_densities = [
+            float(item) for item in value.get("result_density_kg_m3", [])
+        ]
+        center = [float(item) for item in value.get("center_of_mass_m", [])]
+        result_center = [
+            float(item) for item in value.get("result_center_of_mass_m", [])
+        ]
+        inertia = [
+            [float(component) for component in matrix_row]
+            for matrix_row in value.get("inertia_tensor_kg_m2", [])
+        ]
+        result_inertia = [
+            [float(component) for component in matrix_row]
+            for matrix_row in value.get("result_inertia_tensor_kg_m2", [])
+        ]
+    except (TypeError, ValueError):
+        return None
+
+    def valid_digest(digest):
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    axes_digest = str(value.get("principal_axes_sha256", "")).lower()
+    mass_digest = str(value.get("mass_property_sha256", "")).lower()
+    unit = str(value.get("length_unit", "")).strip()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "transform_assembly_generation",
+                "density_assembly_generation",
+                "unit_assembly_generation",
+                "mass_property_assembly_generation",
+                "result_assembly_generation",
+            )
+        )
+        or not part_ids
+        or any(not item for item in part_ids)
+        or len(set(part_ids)) != len(part_ids)
+        or result_part_ids != part_ids
+        or len(transforms) != len(part_ids)
+        or not all(valid_digest(digest) for digest in transforms)
+        or result_transforms != transforms
+        or len(densities) != len(part_ids)
+        or not all(math.isfinite(item) and item > 0.0 for item in densities)
+        or result_densities != densities
+        or unit not in {"m", "cm", "mm"}
+        or value.get("result_length_unit") != unit
+        or len(center) != 3
+        or not all(math.isfinite(item) for item in center)
+        or result_center != center
+        or len(inertia) != 3
+        or any(len(matrix_row) != 3 for matrix_row in inertia)
+        or not all(
+            math.isfinite(component)
+            for matrix_row in inertia
+            for component in matrix_row
+        )
+        or any(inertia[index][index] <= 0.0 for index in range(3))
+        or any(
+            not math.isclose(
+                inertia[row_index][column_index],
+                inertia[column_index][row_index],
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-18,
+            )
+            for row_index in range(3)
+            for column_index in range(3)
+        )
+        or result_inertia != inertia
+        or not valid_digest(axes_digest)
+        or value.get("result_principal_axes_sha256") != axes_digest
+        or not valid_digest(mass_digest)
+        or value.get("result_mass_property_sha256") != mass_digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(part_ids),
+        tuple(transforms),
+        tuple(densities),
+        unit,
+        tuple(center),
+        tuple(tuple(matrix_row) for matrix_row in inertia),
+        axes_digest,
+        mass_digest,
+    )
+
+
+def _fillet_chamfer_topology_identity(row):
+    value = row.get(
+        "fillet_chamfer_topology_naming_edge_selection_fingerprint_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("build_generation", "")).strip()
+    operation_order = [
+        str(item).strip() for item in value.get("operation_order", [])
+    ]
+    result_operation_order = [
+        str(item).strip() for item in value.get("result_operation_order", [])
+    ]
+    try:
+        edge_ids = [int(item) for item in value.get("selected_edge_ids", [])]
+        result_edge_ids = [
+            int(item) for item in value.get("result_selected_edge_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return None
+    names = [
+        str(item).strip() for item in value.get("persistent_edge_names", [])
+    ]
+    result_names = [
+        str(item).strip()
+        for item in value.get("result_persistent_edge_names", [])
+    ]
+
+    def valid_digest(digest):
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    pre_digest = str(value.get("pre_operation_topology_sha256", "")).lower()
+    final_digest = str(value.get("final_topology_sha256", "")).lower()
+    fingerprint = str(value.get("build_fingerprint_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "selection_build_generation",
+                "fillet_build_generation",
+                "chamfer_build_generation",
+                "naming_build_generation",
+                "result_build_generation",
+            )
+        )
+        or operation_order != ["fillet", "chamfer"]
+        or result_operation_order != operation_order
+        or not edge_ids
+        or any(item <= 0 for item in edge_ids)
+        or len(set(edge_ids)) != len(edge_ids)
+        or result_edge_ids != edge_ids
+        or len(names) != len(edge_ids)
+        or any(not item for item in names)
+        or len(set(names)) != len(names)
+        or result_names != names
+        or not valid_digest(pre_digest)
+        or value.get("result_pre_operation_topology_sha256") != pre_digest
+        or not valid_digest(final_digest)
+        or value.get("result_final_topology_sha256") != final_digest
+        or not valid_digest(fingerprint)
+        or value.get("result_build_fingerprint_sha256") != fingerprint
+    ):
+        return None
+    return (
+        generation,
+        tuple(operation_order),
+        tuple(edge_ids),
+        tuple(names),
+        pre_digest,
+        final_digest,
+        fingerprint,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -2975,6 +3164,59 @@ def shape_mass_property_crosscheck_summary(
             loft_volume_identity_ok = loft_volume_identity_ok and all(
                 _loft_spline_watertight_volume_identity(row)
                 == reference_loft_volumes.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    transformed_assembly_evidence_present = any(
+        row.get(
+            "transformed_assembly_com_inertia_axis_density_unit_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_transformed_assemblies = {
+        str(row.get("name", "")): _transformed_assembly_mass_identity(row)
+        for row in reference
+    }
+    transformed_assembly_identity_ok = not transformed_assembly_evidence_present
+    if transformed_assembly_evidence_present:
+        transformed_assembly_identity_ok = bool(
+            reference_transformed_assemblies
+        ) and all(
+            value is not None for value in reference_transformed_assemblies.values()
+        )
+        for _, rows in normalized_sets:
+            transformed_assembly_identity_ok = (
+                transformed_assembly_identity_ok
+                and all(
+                    _transformed_assembly_mass_identity(row)
+                    == reference_transformed_assemblies.get(
+                        str(row.get("name", ""))
+                    )
+                    for row in rows
+                )
+            )
+
+    fillet_chamfer_evidence_present = any(
+        row.get(
+            "fillet_chamfer_topology_naming_edge_selection_fingerprint_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_fillet_chamfer = {
+        str(row.get("name", "")): _fillet_chamfer_topology_identity(row)
+        for row in reference
+    }
+    fillet_chamfer_identity_ok = not fillet_chamfer_evidence_present
+    if fillet_chamfer_evidence_present:
+        fillet_chamfer_identity_ok = bool(reference_fillet_chamfer) and all(
+            value is not None for value in reference_fillet_chamfer.values()
+        )
+        for _, rows in normalized_sets:
+            fillet_chamfer_identity_ok = fillet_chamfer_identity_ok and all(
+                _fillet_chamfer_topology_identity(row)
+                == reference_fillet_chamfer.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -4858,6 +5100,12 @@ def shape_mass_property_crosscheck_summary(
         "loft_volume_uses_current_spline_tolerances_and_watertight_shell": (
             loft_volume_identity_ok
         ),
+        "transformed_assembly_mass_properties_use_current_transforms_density_units_and_axes": (
+            transformed_assembly_identity_ok
+        ),
+        "fillet_chamfer_topology_uses_current_selection_names_order_and_fingerprint": (
+            fillet_chamfer_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -4947,6 +5195,18 @@ def shape_mass_property_crosscheck_summary(
     ]:
         issues.append(
             "loft volume belongs to a stale spline, tessellation tolerance, or non-watertight shell"
+        )
+    if not checks[
+        "transformed_assembly_mass_properties_use_current_transforms_density_units_and_axes"
+    ]:
+        issues.append(
+            "transformed assembly mass properties mix stale transforms, densities, units, or principal axes"
+        )
+    if not checks[
+        "fillet_chamfer_topology_uses_current_selection_names_order_and_fingerprint"
+    ]:
+        issues.append(
+            "fillet/chamfer topology uses stale edge selections, names, order, or build fingerprints"
         )
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
