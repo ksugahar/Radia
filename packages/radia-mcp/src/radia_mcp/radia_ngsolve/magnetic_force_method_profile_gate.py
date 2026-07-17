@@ -873,6 +873,177 @@ def _motor_reduced_basis_torque_identity_ok(value: object) -> bool:
     )
 
 
+def _maglev_force_stiffness_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("stiffness_generation", "")).strip()
+    try:
+        displacement = [float(item) for item in value.get("displacement_m", [])]
+        result_displacement = [
+            float(item) for item in value.get("result_displacement_m", [])
+        ]
+        step = float(value.get("displacement_step_m"))
+        result_step = float(value.get("result_displacement_step_m"))
+        force = [float(item) for item in value.get("force_n", [])]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+        stiffness = float(value.get("stiffness_n_m"))
+        result_stiffness = float(value.get("result_stiffness_n_m"))
+    except (TypeError, ValueError):
+        return False
+    slopes = [
+        -(right_force - left_force) / (right_x - left_x)
+        for left_x, right_x, left_force, right_force in zip(
+            displacement, displacement[1:], force, force[1:]
+        )
+    ] if len(displacement) == len(force) and len(displacement) >= 3 else []
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "displacement_stiffness_generation",
+                "coordinate_stiffness_generation",
+                "geometry_stiffness_generation",
+                "mesh_stiffness_generation",
+                "force_stiffness_generation",
+                "derivative_stiffness_generation",
+                "solution_stiffness_generation",
+                "result_stiffness_generation",
+            )
+        )
+        and len(displacement) >= 3
+        and len(force) == len(displacement)
+        and all(math.isfinite(item) for item in displacement + force)
+        and all(right > left for left, right in zip(displacement, displacement[1:]))
+        and math.isfinite(step)
+        and step > 0.0
+        and all(
+            math.isclose(right - left, step, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for left, right in zip(displacement, displacement[1:])
+        )
+        and result_displacement == displacement
+        and math.isclose(result_step, step, rel_tol=0.0, abs_tol=1.0e-15)
+        and value.get("coordinate_direction") == "global-z-positive"
+        and value.get("result_coordinate_direction") == "global-z-positive"
+        and result_force == force
+        and value.get("derivative_convention")
+        == "stiffness-equals-negative-force-derivative"
+        and value.get("result_derivative_convention")
+        == "stiffness-equals-negative-force-derivative"
+        and slopes
+        and all(math.isfinite(item) and item > 0.0 for item in slopes)
+        and all(
+            math.isclose(item, stiffness, rel_tol=1.0e-12, abs_tol=1.0e-9)
+            for item in slopes
+        )
+        and math.isclose(result_stiffness, stiffness, rel_tol=0.0, abs_tol=1.0e-9)
+        and _valid_sha256(value.get("geometry_sha256"))
+        and value.get("result_geometry_sha256") == value.get("geometry_sha256")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("solution_sha256"))
+        and value.get("accepted_solution_sha256") == value.get("solution_sha256")
+    )
+
+
+def _motor_coenergy_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("torque_generation", "")).strip()
+    phase_order = value.get("phase_order")
+    try:
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        result_orders = [int(item) for item in value.get("result_harmonic_orders", [])]
+        currents = [
+            [float(component) for component in row]
+            for row in value.get("phase_current_harmonic_a", [])
+        ]
+        result_currents = [
+            [float(component) for component in row]
+            for row in value.get("result_phase_current_harmonic_a", [])
+        ]
+        phases = [float(item) for item in value.get("current_phase_deg", [])]
+        result_phases = [
+            float(item) for item in value.get("result_current_phase_deg", [])
+        ]
+        angles = [
+            float(item) for item in value.get("rotor_mechanical_angle_deg", [])
+        ]
+        result_angles = [
+            float(item)
+            for item in value.get("result_rotor_mechanical_angle_deg", [])
+        ]
+        coenergy = [float(item) for item in value.get("coenergy_j", [])]
+        result_coenergy = [float(item) for item in value.get("result_coenergy_j", [])]
+        torque = [float(item) for item in value.get("torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_torque_nm", [])]
+    except (TypeError, ValueError):
+        return False
+    derived_torque = [
+        (right_energy - left_energy) / math.radians(right_angle - left_angle)
+        for left_angle, right_angle, left_energy, right_energy in zip(
+            angles, angles[1:], coenergy, coenergy[1:]
+        )
+    ] if len(angles) == len(coenergy) and len(angles) >= 3 else []
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "winding_torque_generation",
+                "harmonic_torque_generation",
+                "current_torque_generation",
+                "phase_torque_generation",
+                "angle_torque_generation",
+                "coenergy_torque_generation",
+                "mesh_torque_generation",
+                "result_torque_generation",
+            )
+        )
+        and phase_order == ["U", "V", "W"]
+        and value.get("result_phase_order") == phase_order
+        and bool(orders)
+        and all(item > 0 for item in orders)
+        and len(set(orders)) == len(orders)
+        and result_orders == orders
+        and len(currents) == len(orders)
+        and all(
+            len(row) == 3
+            and all(math.isfinite(item) for item in row)
+            and math.isclose(sum(row), 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+            for row in currents
+        )
+        and result_currents == currents
+        and len(phases) == 3
+        and all(math.isfinite(item) for item in phases)
+        and result_phases == phases
+        and len(angles) >= 3
+        and len(coenergy) == len(angles)
+        and all(math.isfinite(item) for item in angles + coenergy)
+        and all(right > left for left, right in zip(angles, angles[1:]))
+        and result_angles == angles
+        and result_coenergy == coenergy
+        and value.get("torque_convention") == "positive-coenergy-angle-derivative"
+        and value.get("result_torque_convention")
+        == "positive-coenergy-angle-derivative"
+        and len(torque) == len(angles) - 1
+        and all(math.isfinite(item) for item in torque)
+        and all(
+            math.isclose(item, derived, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for item, derived in zip(torque, derived_torque)
+        )
+        and result_torque == torque
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -977,6 +1148,8 @@ def magnetic_force_method_profile_gate(
     cogging_periodic_interpolation_identity_ok = True
     bem_panel_self_term_energy_force_identity_ok = True
     motor_reduced_basis_torque_identity_ok = True
+    maglev_force_stiffness_identity_ok = True
+    motor_coenergy_torque_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1018,6 +1191,8 @@ def magnetic_force_method_profile_gate(
         cogging_periodic_interpolation_identity_ok = False
         bem_panel_self_term_energy_force_identity_ok = False
         motor_reduced_basis_torque_identity_ok = False
+        maglev_force_stiffness_identity_ok = False
+        motor_coenergy_torque_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -2710,6 +2885,16 @@ def magnetic_force_method_profile_gate(
                 "motor_reduced_basis_snapshot_operating_point_interpolation_torque_residual_generation_identity"
             )
         )
+        maglev_force_stiffness_identity_ok = _maglev_force_stiffness_identity_ok(
+            identity_value.get(
+                "maglev_force_stiffness_displacement_step_coordinate_mesh_solution_derivative_generation_identity"
+            )
+        )
+        motor_coenergy_torque_identity_ok = _motor_coenergy_torque_identity_ok(
+            identity_value.get(
+                "motor_winding_harmonic_current_phase_rotor_angle_coenergy_torque_result_generation_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -2888,6 +3073,12 @@ def magnetic_force_method_profile_gate(
         ),
         "motor_reduced_torque_uses_current_basis_snapshots_operating_point_weights_residual_and_result": (
             motor_reduced_basis_torque_identity_ok
+        ),
+        "maglev_stiffness_uses_current_displacement_coordinate_force_geometry_mesh_and_solution": (
+            maglev_force_stiffness_identity_ok
+        ),
+        "motor_torque_uses_current_winding_harmonics_currents_phases_angles_coenergy_mesh_and_result": (
+            motor_coenergy_torque_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
