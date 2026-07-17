@@ -2761,6 +2761,151 @@ def shape_cubit_meshing_scheme_intent_gate(
     }
 
 
+def _assembly_location_boolean_mass_identity(row):
+    value = row.get(
+        "assembly_location_boolean_operand_revision_mass_property_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("assembly_generation", "")).strip()
+    part_ids = [str(item).strip() for item in value.get("part_ids", [])]
+    evaluated_part_ids = [
+        str(item).strip() for item in value.get("evaluated_part_ids", [])
+    ]
+    locations = [
+        str(item).lower() for item in value.get("part_location_sha256", [])
+    ]
+    evaluated_locations = [
+        str(item).lower()
+        for item in value.get("evaluated_part_location_sha256", [])
+    ]
+    operands = [
+        str(item).strip() for item in value.get("boolean_operand_revisions", [])
+    ]
+    evaluated_operands = [
+        str(item).strip()
+        for item in value.get("evaluated_boolean_operand_revisions", [])
+    ]
+    try:
+        members = [int(item) for item in value.get("compound_member_ids", [])]
+        evaluated_members = [
+            int(item) for item in value.get("evaluated_compound_member_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return None
+
+    def valid_digest(digest):
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    density_digest = str(value.get("density_map_sha256", "")).lower()
+    mass_digest = str(value.get("mass_property_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "location_assembly_generation",
+                "boolean_operand_assembly_generation",
+                "compound_membership_assembly_generation",
+                "density_map_assembly_generation",
+                "mass_property_assembly_generation",
+            )
+        )
+        or not part_ids
+        or any(not item for item in part_ids)
+        or len(set(part_ids)) != len(part_ids)
+        or evaluated_part_ids != part_ids
+        or len(locations) != len(part_ids)
+        or not all(valid_digest(digest) for digest in locations)
+        or evaluated_locations != locations
+        or len(operands) < 2
+        or any(not item for item in operands)
+        or len(set(operands)) != len(operands)
+        or evaluated_operands != operands
+        or not members
+        or any(item <= 0 for item in members)
+        or len(set(members)) != len(members)
+        or evaluated_members != members
+        or not valid_digest(density_digest)
+        or value.get("evaluated_density_map_sha256") != density_digest
+        or not valid_digest(mass_digest)
+        or value.get("evaluated_mass_property_sha256") != mass_digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(part_ids),
+        tuple(locations),
+        tuple(operands),
+        tuple(members),
+        density_digest,
+        mass_digest,
+    )
+
+
+def _loft_spline_watertight_volume_identity(row):
+    value = row.get(
+        "loft_spline_tessellation_watertight_volume_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("shape_generation", "")).strip()
+    spline_digest = str(value.get("spline_sha256", "")).lower()
+    shell_digest = str(value.get("tessellated_shell_sha256", "")).lower()
+    volume_digest = str(value.get("volume_result_sha256", "")).lower()
+    try:
+        chord = float(value.get("chord_tolerance"))
+        evaluated_chord = float(value.get("evaluated_chord_tolerance"))
+        angle = float(value.get("angular_tolerance_deg"))
+        evaluated_angle = float(value.get("evaluated_angular_tolerance_deg"))
+        volume = float(value.get("volume"))
+        evaluated_volume = float(value.get("evaluated_volume"))
+    except (TypeError, ValueError):
+        return None
+
+    def valid_digest(digest):
+        return len(digest) == 64 and all(
+            character in "0123456789abcdef" for character in digest
+        )
+
+    unit = str(value.get("length_unit", "")).strip()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "spline_shape_generation",
+                "tessellation_shape_generation",
+                "watertight_shape_generation",
+                "volume_shape_generation",
+            )
+        )
+        or not valid_digest(spline_digest)
+        or value.get("evaluated_spline_sha256") != spline_digest
+        or not math.isfinite(chord)
+        or chord <= 0.0
+        or not math.isclose(evaluated_chord, chord, rel_tol=0.0, abs_tol=1.0e-18)
+        or not math.isfinite(angle)
+        or not 0.0 < angle <= 180.0
+        or not math.isclose(evaluated_angle, angle, rel_tol=0.0, abs_tol=1.0e-12)
+        or unit not in {"m", "cm", "mm"}
+        or value.get("evaluated_length_unit") != unit
+        or value.get("watertight") is not True
+        or value.get("evaluated_watertight") is not True
+        or not valid_digest(shell_digest)
+        or value.get("evaluated_tessellated_shell_sha256") != shell_digest
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or not math.isclose(evaluated_volume, volume, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        or not valid_digest(volume_digest)
+        or value.get("evaluated_volume_result_sha256") != volume_digest
+    ):
+        return None
+    return generation, spline_digest, chord, angle, unit, shell_digest, volume, volume_digest
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -2788,6 +2933,50 @@ def shape_mass_property_crosscheck_summary(
     identity_rows = [*reference]
     for _, rows in normalized_sets:
         identity_rows.extend(rows)
+
+    assembly_location_evidence_present = any(
+        row.get(
+            "assembly_location_boolean_operand_revision_mass_property_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_assembly_locations = {
+        str(row.get("name", "")): _assembly_location_boolean_mass_identity(row)
+        for row in reference
+    }
+    assembly_location_identity_ok = not assembly_location_evidence_present
+    if assembly_location_evidence_present:
+        assembly_location_identity_ok = bool(reference_assembly_locations) and all(
+            value is not None for value in reference_assembly_locations.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_location_identity_ok = assembly_location_identity_ok and all(
+                _assembly_location_boolean_mass_identity(row)
+                == reference_assembly_locations.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    loft_volume_evidence_present = any(
+        row.get("loft_spline_tessellation_watertight_volume_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_loft_volumes = {
+        str(row.get("name", "")): _loft_spline_watertight_volume_identity(row)
+        for row in reference
+    }
+    loft_volume_identity_ok = not loft_volume_evidence_present
+    if loft_volume_evidence_present:
+        loft_volume_identity_ok = bool(reference_loft_volumes) and all(
+            value is not None for value in reference_loft_volumes.values()
+        )
+        for _, rows in normalized_sets:
+            loft_volume_identity_ok = loft_volume_identity_ok and all(
+                _loft_spline_watertight_volume_identity(row)
+                == reference_loft_volumes.get(str(row.get("name", "")))
+                for row in rows
+            )
 
     revision_evidence_present = any(
         row.get("brep_identity") is not None
@@ -4663,6 +4852,12 @@ def shape_mass_property_crosscheck_summary(
         "inertia_uses_current_density_unit_location_and_principal_axes": (
             inertia_density_location_identity_ok
         ),
+        "assembly_mass_properties_use_current_locations_operands_members_and_density": (
+            assembly_location_identity_ok
+        ),
+        "loft_volume_uses_current_spline_tolerances_and_watertight_shell": (
+            loft_volume_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -4741,6 +4936,18 @@ def shape_mass_property_crosscheck_summary(
         "inertia_uses_current_density_unit_location_and_principal_axes"
     ]:
         issues.append("inertia properties mix stale density, unit, location, or principal axes")
+    if not checks[
+        "assembly_mass_properties_use_current_locations_operands_members_and_density"
+    ]:
+        issues.append(
+            "assembly mass properties mix stale locations, Boolean operands, compound members, or density maps"
+        )
+    if not checks[
+        "loft_volume_uses_current_spline_tolerances_and_watertight_shell"
+    ]:
+        issues.append(
+            "loft volume belongs to a stale spline, tessellation tolerance, or non-watertight shell"
+        )
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]

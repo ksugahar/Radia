@@ -20,6 +20,139 @@ def _timestamp(value: object) -> datetime | None:
         return None
 
 
+def _valid_sha256(value: object) -> bool:
+    digest = str(value or "").lower()
+    return len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    )
+
+
+def _step_import_metadata_topology_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("import_generation", "")).strip()
+    labels = [str(item).strip() for item in value.get("shape_labels", [])]
+    decoded_labels = [
+        str(item).strip() for item in value.get("decoded_shape_labels", [])
+    ]
+    colors = value.get("shape_colors_rgb", [])
+    decoded_colors = value.get("decoded_shape_colors_rgb", [])
+    if not isinstance(colors, list) or not isinstance(decoded_colors, list):
+        return False
+    try:
+        colors = [[int(channel) for channel in row] for row in colors]
+        decoded_colors = [
+            [int(channel) for channel in row] for row in decoded_colors
+        ]
+        unit_scale = float(value.get("unit_scale_to_m"))
+        decoded_unit_scale = float(value.get("decoded_unit_scale_to_m"))
+    except (TypeError, ValueError):
+        return False
+    source_digest = str(value.get("source_content_sha256", "")).lower()
+    topology_digest = str(value.get("brep_topology_sha256", "")).lower()
+    unit = str(value.get("length_unit", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "source_content_import_generation",
+                "label_import_generation",
+                "color_import_generation",
+                "unit_import_generation",
+                "topology_import_generation",
+            )
+        )
+        and _valid_sha256(source_digest)
+        and value.get("imported_source_content_sha256") == source_digest
+        and bool(labels)
+        and all(labels)
+        and len(set(labels)) == len(labels)
+        and decoded_labels == labels
+        and len(colors) == len(labels)
+        and all(len(row) == 3 for row in colors)
+        and all(0 <= channel <= 255 for row in colors for channel in row)
+        and decoded_colors == colors
+        and unit in {"m", "cm", "mm"}
+        and value.get("decoded_length_unit") == unit
+        and math.isfinite(unit_scale)
+        and unit_scale > 0.0
+        and math.isclose(decoded_unit_scale, unit_scale, rel_tol=0.0, abs_tol=1.0e-18)
+        and _valid_sha256(topology_digest)
+        and value.get("decoded_brep_topology_sha256") == topology_digest
+    )
+
+
+def _mesh_export_facet_normal_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("mesh_export_generation", "")).strip()
+    try:
+        facet_ids = [int(item) for item in value.get("facet_ids", [])]
+        exported_facet_ids = [
+            int(item) for item in value.get("exported_facet_ids", [])
+        ]
+        normals = [
+            [float(component) for component in row]
+            for row in value.get("facet_normals", [])
+        ]
+        exported_normals = [
+            [float(component) for component in row]
+            for row in value.get("exported_facet_normals", [])
+        ]
+        chord = float(value.get("chord_tolerance"))
+        exported_chord = float(value.get("exported_chord_tolerance"))
+        angle = float(value.get("angular_tolerance_deg"))
+        exported_angle = float(value.get("exported_angular_tolerance_deg"))
+    except (TypeError, ValueError):
+        return False
+    shape_digest = str(value.get("source_shape_sha256", "")).lower()
+    topology_digest = str(value.get("facet_topology_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "shape_mesh_export_generation",
+                "facet_mesh_export_generation",
+                "normal_mesh_export_generation",
+                "tolerance_mesh_export_generation",
+            )
+        )
+        and _valid_sha256(shape_digest)
+        and value.get("exported_source_shape_sha256") == shape_digest
+        and bool(facet_ids)
+        and all(item > 0 for item in facet_ids)
+        and len(set(facet_ids)) == len(facet_ids)
+        and exported_facet_ids == facet_ids
+        and len(normals) == len(facet_ids)
+        and all(len(row) == 3 for row in normals)
+        and all(math.isfinite(component) for row in normals for component in row)
+        and all(
+            math.isclose(
+                sum(component * component for component in row),
+                1.0,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-12,
+            )
+            for row in normals
+        )
+        and exported_normals == normals
+        and math.isfinite(chord)
+        and chord > 0.0
+        and math.isclose(exported_chord, chord, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isfinite(angle)
+        and 0.0 < angle <= 180.0
+        and math.isclose(exported_angle, angle, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(topology_digest)
+        and value.get("exported_facet_topology_sha256") == topology_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -344,6 +477,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     sketch_constraint_entity_solver_order_generation_identity_ok = True
     step_ap242_component_identity_ok = True
     curved_mesh_export_identity_ok = True
+    step_import_metadata_topology_identity_ok = True
+    mesh_export_facet_normal_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -375,6 +510,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         sketch_constraint_entity_solver_order_generation_identity_ok = False
         step_ap242_component_identity_ok = False
         curved_mesh_export_identity_ok = False
+        step_import_metadata_topology_identity_ok = False
+        mesh_export_facet_normal_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -1904,6 +2041,18 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and all(character in "0123456789abcdef" for character in mesh_digest)
                 and curved_mesh.get("exported_curved_mesh_sha256") == mesh_digest
             )
+        step_import_metadata_topology_identity_ok = (
+            _step_import_metadata_topology_identity_ok(
+                replay_identity_value.get(
+                    "step_import_label_color_unit_topology_generation_identity"
+                )
+            )
+        )
+        mesh_export_facet_normal_identity_ok = _mesh_export_facet_normal_identity_ok(
+            replay_identity_value.get(
+                "mesh_export_facet_normal_tolerance_shape_digest_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2009,6 +2158,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "curved_mesh_export_uses_current_edges_chord_and_surface_labels": (
             curved_mesh_export_identity_ok
+        ),
+        "step_import_uses_current_source_labels_colors_units_and_topology": (
+            step_import_metadata_topology_identity_ok
+        ),
+        "mesh_export_uses_current_shape_facets_normals_and_tolerances": (
+            mesh_export_facet_normal_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
