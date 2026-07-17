@@ -594,6 +594,97 @@ def _harmonic_eddy_loss_identity_ok(value):
     )
 
 
+def _axisymmetric_aphi_force_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("axisymmetric_generation", "")).strip()
+    try:
+        regions = [int(item) for item in value.get("region_ids", [])]
+        result_regions = [int(item) for item in value.get("result_region_ids", [])]
+        displacement = [float(item) for item in value.get("displacement_m", [])]
+        coenergy = [float(item) for item in value.get("magnetic_coenergy_j", [])]
+        result_coenergy = [float(item) for item in value.get("result_magnetic_coenergy_j", [])]
+        force = float(value.get("force_from_energy_n"))
+        result_force = float(value.get("result_force_from_energy_n"))
+    except (TypeError, ValueError):
+        return False
+    derivative = (
+        (coenergy[2] - coenergy[0]) / (displacement[2] - displacement[0])
+        if len(displacement) == len(coenergy) == 3 and displacement[2] != displacement[0]
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "aphi_axisymmetric_generation", "weight_axisymmetric_generation",
+            "region_axisymmetric_generation", "energy_axisymmetric_generation",
+            "force_axisymmetric_generation", "mesh_axisymmetric_generation",
+            "solution_axisymmetric_generation", "result_axisymmetric_generation"))
+        and value.get("formulation") == "Aphi" and value.get("result_formulation") == "Aphi"
+        and value.get("radial_weighting") == "2*pi*r"
+        and value.get("result_radial_weighting") == "2*pi*r"
+        and bool(regions) and all(item > 0 for item in regions)
+        and len(set(regions)) == len(regions) and result_regions == regions
+        and len(displacement) == 3 and all(math.isfinite(item) for item in displacement)
+        and displacement[0] < displacement[1] < displacement[2]
+        and len(coenergy) == 3 and all(math.isfinite(item) and item >= 0.0 for item in coenergy)
+        and result_coenergy == coenergy
+        and value.get("force_axis") == "z" and value.get("result_force_axis") == "z"
+        and math.isfinite(force) and result_force == force
+        and math.isclose(force, derivative, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("solution_sha256"))
+        and value.get("accepted_solution_sha256") == value.get("solution_sha256")
+    )
+
+
+def _permanent_magnet_operating_point_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("magnet_generation", "")).strip()
+    try:
+        recoil_mu = float(value.get("recoil_relative_permeability"))
+        result_recoil_mu = float(value.get("result_recoil_relative_permeability"))
+        remanence = float(value.get("remanence_t"))
+        result_remanence = float(value.get("result_remanence_t"))
+        temperature = float(value.get("magnet_temperature_c"))
+        result_temperature = float(value.get("result_magnet_temperature_c"))
+        operating_point = [float(item) for item in value.get("operating_point_bh", [])]
+        result_operating_point = [float(item) for item in value.get("result_operating_point_bh", [])]
+        margin = float(value.get("demag_margin_a_m"))
+        result_margin = float(value.get("result_demag_margin_a_m"))
+        force = [float(item) for item in value.get("force_n", [])]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "recoil_magnet_generation", "temperature_magnet_generation",
+            "operating_point_magnet_generation", "frame_magnet_generation",
+            "demag_magnet_generation", "force_magnet_generation",
+            "mesh_magnet_generation", "result_magnet_generation"))
+        and math.isfinite(recoil_mu) and recoil_mu > 0.0 and result_recoil_mu == recoil_mu
+        and math.isfinite(remanence) and remanence > 0.0 and result_remanence == remanence
+        and math.isfinite(temperature) and result_temperature == temperature
+        and len(operating_point) == 2 and all(math.isfinite(item) for item in operating_point)
+        and operating_point[0] > 0.0 and result_operating_point == operating_point
+        and math.isfinite(margin) and margin > 0.0 and result_margin == margin
+        and _valid_sha256(value.get("magnetization_frame_sha256"))
+        and value.get("result_magnetization_frame_sha256") == value.get("magnetization_frame_sha256")
+        and len(force) == 2 and all(math.isfinite(item) for item in force) and result_force == force
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -661,6 +752,8 @@ def force_coenergy_displacement_gate(
     axisymmetric_planar_normalization_identity_ok = True
     nonlinear_minor_loop_force_identity_ok = True
     harmonic_eddy_loss_identity_ok = True
+    axisymmetric_aphi_force_identity_ok = True
+    permanent_magnet_operating_point_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -702,6 +795,8 @@ def force_coenergy_displacement_gate(
         axisymmetric_planar_normalization_identity_ok = False
         nonlinear_minor_loop_force_identity_ok = False
         harmonic_eddy_loss_identity_ok = False
+        axisymmetric_aphi_force_identity_ok = False
+        permanent_magnet_operating_point_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2260,6 +2355,18 @@ def force_coenergy_displacement_gate(
                 "harmonic_eddy_phasor_conductivity_skin_depth_frequency_loss_mesh_generation_identity"
             )
         )
+        axisymmetric_aphi_force_identity_ok = _axisymmetric_aphi_force_identity_ok(
+            artifact_identity.get(
+                "axisymmetric_aphi_radial_weight_region_energy_force_mesh_solution_generation_identity"
+            )
+        )
+        permanent_magnet_operating_point_identity_ok = (
+            _permanent_magnet_operating_point_identity_ok(
+                artifact_identity.get(
+                    "permanent_magnet_recoil_temperature_operating_point_demag_force_generation_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2407,6 +2514,12 @@ def force_coenergy_displacement_gate(
         ),
         "harmonic_eddy_loss_uses_current_phasor_conductivity_skin_depth_frequency_and_mesh": (
             harmonic_eddy_loss_identity_ok
+        ),
+        "axisymmetric_force_uses_current_aphi_weight_regions_energy_axis_mesh_and_solution": (
+            axisymmetric_aphi_force_identity_ok
+        ),
+        "permanent_magnet_force_uses_current_recoil_temperature_operating_point_frame_demag_and_mesh": (
+            permanent_magnet_operating_point_identity_ok
         ),
     }
     return {
