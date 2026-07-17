@@ -184,6 +184,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_bbox_mesh_scale_identity_ok = (
         _optional_hmatrix_bounding_box_mesh_scale_is_aligned(summary)
     )
+    cq_contour_fft_timestep_identity_ok = (
+        _optional_cq_contour_fft_timestep_generation_is_aligned(summary)
+    )
+    hmatrix_aca_tolerance_rank_identity_ok = (
+        _optional_hmatrix_aca_tolerance_norm_rank_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -279,6 +285,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_block_clusters_use_current_mesh_scale_bounding_boxes": (
             hmatrix_bbox_mesh_scale_identity_ok
+        ),
+        "cq_inverse_transform_uses_current_contour_fft_scaling_and_timestep": (
+            cq_contour_fft_timestep_identity_ok
+        ),
+        "hmatrix_aca_uses_current_block_tolerance_norm_and_rank": (
+            hmatrix_aca_tolerance_rank_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -1167,6 +1179,119 @@ def _optional_hmatrix_bounding_box_mesh_scale_is_aligned(
             value.get("block_admissibility_bounding_box_sha256", "")
         ).lower()
         == bbox_digest
+    )
+
+
+def _optional_cq_contour_fft_timestep_generation_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_laplace_contour_fft_scaling_timestep_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        sample_count = _positive_integer(value, "sample_count")
+        fft_count = _positive_integer(value, "fft_sample_count")
+        time_step = _finite_float(value, "time_step_s")
+        inverse_time_step = _finite_float(
+            value, "inverse_transform_time_step_s"
+        )
+        fft_scaling = _finite_float(value, "fft_scaling")
+        inverse_fft_scaling = _finite_float(
+            value, "inverse_transform_fft_scaling"
+        )
+        contour_nodes = tuple(
+            tuple(float(component) for component in node)
+            for node in value["laplace_contour_nodes_re_im"]
+        )
+        inverse_nodes = tuple(
+            tuple(float(component) for component in node)
+            for node in value[
+                "inverse_transform_laplace_contour_nodes_re_im"
+            ]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    digest = str(value.get("contour_fft_timestep_sha256", "")).lower()
+    return (
+        bool(generation)
+        and value.get("laplace_contour_cq_generation") == generation
+        and value.get("fft_scaling_cq_generation") == generation
+        and value.get("timestep_cq_generation") == generation
+        and value.get("inverse_transform_cq_generation") == generation
+        and sample_count == fft_count
+        and time_step > 0.0
+        and _close(inverse_time_step, time_step)
+        and fft_scaling > 0.0
+        and _close(fft_scaling, 1.0 / sample_count)
+        and _close(inverse_fft_scaling, fft_scaling)
+        and bool(contour_nodes)
+        and all(
+            len(node) == 2 and all(math.isfinite(component) for component in node)
+            for node in contour_nodes
+        )
+        and inverse_nodes == contour_nodes
+        and _is_sha256(digest)
+        and str(
+            value.get("inverse_transform_contour_fft_timestep_sha256", "")
+        ).lower()
+        == digest
+    )
+
+
+def _optional_hmatrix_aca_tolerance_norm_rank_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_aca_tolerance_norm_block_rank_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        block_ids = _positive_integer_sequence(value, "block_ids")
+        aca_block_ids = _positive_integer_sequence(value, "aca_block_ids")
+        tolerances = tuple(float(item) for item in value["aca_tolerances"])
+        applied_tolerances = tuple(
+            float(item) for item in value["applied_aca_tolerances"]
+        )
+        norm_estimates = tuple(
+            float(item) for item in value["block_norm_estimates"]
+        )
+        aca_norm_estimates = tuple(
+            float(item) for item in value["aca_block_norm_estimates"]
+        )
+        ranks = _positive_integer_sequence(value, "retained_ranks")
+        assembled_ranks = _positive_integer_sequence(
+            value, "assembled_block_ranks"
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("block_generation", "")).strip()
+    table_digest = str(value.get("aca_block_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and value.get("aca_tolerance_block_generation") == generation
+        and value.get("norm_estimate_block_generation") == generation
+        and value.get("retained_rank_block_generation") == generation
+        and value.get("assembled_block_generation") == generation
+        and bool(block_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and aca_block_ids == block_ids
+        and len(tolerances) == len(norm_estimates) == len(ranks) == len(block_ids)
+        and all(math.isfinite(item) and 0.0 < item < 1.0 for item in tolerances)
+        and applied_tolerances == tolerances
+        and all(math.isfinite(item) and item > 0.0 for item in norm_estimates)
+        and aca_norm_estimates == norm_estimates
+        and assembled_ranks == ranks
+        and _is_sha256(table_digest)
+        and str(value.get("assembled_aca_block_table_sha256", "")).lower()
+        == table_digest
     )
 
 
