@@ -1386,3 +1386,101 @@ def test_v23_public_parametric_sweep_sequence_initial_solution_result_generation
     assert not result["checks"][
         "parametric_sequence_uses_current_rows_initial_solutions_and_dataset"
     ]
+
+
+def _with_v24_balance_and_degenerate_mode_identity(summary: dict) -> dict:
+    summary["multiphysics_power_work_heat_balance_frame_time_generation_identity"] = {
+        "balance_generation": "balance-91",
+        "electromagnetic_balance_generation": "balance-91",
+        "mechanical_balance_generation": "balance-91",
+        "thermal_balance_generation": "balance-91",
+        "stored_energy_balance_generation": "balance-91",
+        "result_balance_generation": "balance-91",
+        "coordinate_frame": "global-xyz",
+        "result_coordinate_frame": "global-xyz",
+        "time_window_s": [0.0, 0.02],
+        "result_time_window_s": [0.0, 0.02],
+        "electromagnetic_input_j": 120.0,
+        "mechanical_work_j": 45.0,
+        "heat_source_j": 60.0,
+        "stored_energy_change_j": 15.0,
+        "reported_balance_j": 0.0,
+        "balance_table_sha256": "1" * 64,
+        "result_balance_table_sha256": "1" * 64,
+    }
+    summary[
+        "degenerate_eigenmode_subspace_normalization_phase_projection_identity"
+    ] = {
+        "eigensolve_generation": "eigensolve-91",
+        "subspace_eigensolve_generation": "eigensolve-91",
+        "normalization_eigensolve_generation": "eigensolve-91",
+        "phase_eigensolve_generation": "eigensolve-91",
+        "projection_eigensolve_generation": "eigensolve-91",
+        "mesh_eigensolve_generation": "eigensolve-91",
+        "result_eigensolve_generation": "eigensolve-91",
+        "eigenvalues_hz": [1000.0, 1000.0001],
+        "result_eigenvalues_hz": [1000.0, 1000.0001],
+        "normalization": "unit-energy",
+        "result_normalization": "unit-energy",
+        "complex_phase_rad": [0.0, 0.0],
+        "result_complex_phase_rad": [0.0, 0.0],
+        "subspace_projection": [[1.0, 0.0], [0.0, 1.0]],
+        "result_subspace_projection": [[1.0, 0.0], [0.0, 1.0]],
+        "mesh_sha256": "2" * 64,
+        "result_mesh_sha256": "2" * 64,
+        "modal_table_sha256": "3" * 64,
+        "result_modal_table_sha256": "3" * 64,
+    }
+    return summary
+
+
+def test_v24_public_positive_balance_and_degenerate_mode_identity() -> None:
+    result = gate(_with_v24_balance_and_degenerate_mode_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v24_public_multiphysics_power_work_heat_balance_frame_time_generation_mismatch() -> None:
+    summary = _with_v24_balance_and_degenerate_mode_identity(_summary())
+    summary[
+        "multiphysics_power_work_heat_balance_frame_time_generation_identity"
+    ].update(
+        {
+            "mechanical_balance_generation": "balance-90",
+            "thermal_balance_generation": "balance-89",
+            "stored_energy_balance_generation": "balance-88",
+            "result_coordinate_frame": "rotor-local",
+            "result_time_window_s": [0.005, 0.025],
+            "reported_balance_j": 12.0,
+            "result_balance_table_sha256": "8" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "multiphysics_energy_balance_uses_current_frame_time_and_generation"
+    ]
+
+
+def test_v24_public_degenerate_eigenmode_subspace_normalization_phase_projection_generation_mismatch() -> None:
+    summary = _with_v24_balance_and_degenerate_mode_identity(_summary())
+    summary[
+        "degenerate_eigenmode_subspace_normalization_phase_projection_identity"
+    ].update(
+        {
+            "subspace_eigensolve_generation": "eigensolve-90",
+            "normalization_eigensolve_generation": "eigensolve-89",
+            "phase_eigensolve_generation": "eigensolve-88",
+            "projection_eigensolve_generation": "eigensolve-87",
+            "result_eigenvalues_hz": [1000.0001, 1000.0],
+            "result_normalization": "unit-maximum",
+            "result_complex_phase_rad": [1.5707963268, 0.0],
+            "result_subspace_projection": [[0.0, 1.0], [1.0, 0.0]],
+            "result_mesh_sha256": "9" * 64,
+            "result_modal_table_sha256": "a" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "degenerate_eigenmodes_use_current_subspace_normalization_phase_and_mesh"
+    ]
