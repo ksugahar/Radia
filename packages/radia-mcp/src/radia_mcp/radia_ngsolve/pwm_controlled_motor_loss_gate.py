@@ -285,6 +285,130 @@ def _skew_slice_quadrature_identity_ok(value: object) -> bool:
     )
 
 
+def _torque_map_interpolation_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("map_generation", "")).strip()
+    method = str(value.get("interpolation_method", "")).strip()
+    try:
+        current = [float(item) for item in value.get("current_axis_a", [])]
+        result_current = [float(item) for item in value.get("result_current_axis_a", [])]
+        angle = [float(item) for item in value.get("electrical_angle_axis_deg", [])]
+        result_angle = [float(item) for item in value.get("result_electrical_angle_axis_deg", [])]
+        temperature = [float(item) for item in value.get("temperature_axis_c", [])]
+        result_temperature = [float(item) for item in value.get("result_temperature_axis_c", [])]
+        speed = [float(item) for item in value.get("speed_axis_rpm", [])]
+        result_speed = [float(item) for item in value.get("result_speed_axis_rpm", [])]
+        period = float(value.get("angle_period_deg"))
+        result_period = float(value.get("result_angle_period_deg"))
+        query = [float(item) for item in value.get("query_point", [])]
+        result_query = [float(item) for item in value.get("result_query_point", [])]
+        torque = float(value.get("interpolated_torque_nm"))
+        result_torque = float(value.get("result_interpolated_torque_nm"))
+    except (TypeError, ValueError):
+        return False
+    tensor_digest = str(value.get("torque_tensor_sha256", "")).lower()
+    result_digest = str(value.get("result_sha256", "")).lower()
+    axes = (current, angle, temperature, speed)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "current_map_generation",
+                "angle_map_generation",
+                "temperature_map_generation",
+                "speed_map_generation",
+                "interpolation_map_generation",
+                "query_map_generation",
+                "result_map_generation",
+            )
+        )
+        and all(len(axis) >= 2 for axis in axes)
+        and all(all(math.isfinite(item) for item in axis) for axis in axes)
+        and all(all(left < right for left, right in zip(axis, axis[1:])) for axis in axes)
+        and result_current == current
+        and result_angle == angle
+        and result_temperature == temperature
+        and result_speed == speed
+        and math.isfinite(period)
+        and period > 0.0
+        and math.isclose(result_period, period, rel_tol=0.0, abs_tol=1.0e-12)
+        and method == "multilinear_periodic_angle"
+        and value.get("result_interpolation_method") == method
+        and _valid_sha256(tensor_digest)
+        and value.get("result_torque_tensor_sha256") == tensor_digest
+        and len(query) == 4
+        and all(math.isfinite(item) for item in query)
+        and result_query == query
+        and math.isfinite(torque)
+        and math.isclose(result_torque, torque, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(result_digest)
+        and value.get("accepted_result_sha256") == result_digest
+    )
+
+
+def _demagnetization_margin_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    magnet_ids = [str(item).strip() for item in value.get("magnet_ids", [])]
+    result_magnet_ids = [str(item).strip() for item in value.get("result_magnet_ids", [])]
+    try:
+        temperature = float(value.get("temperature_c"))
+        result_temperature = float(value.get("result_temperature_c"))
+        coercivity = float(value.get("coercivity_a_m"))
+        result_coercivity = float(value.get("result_coercivity_a_m"))
+        recoil = float(value.get("recoil_relative_permeability"))
+        result_recoil = float(value.get("result_recoil_relative_permeability"))
+        operating_h = float(value.get("minimum_operating_h_a_m"))
+        result_operating_h = float(value.get("result_minimum_operating_h_a_m"))
+        margin = float(value.get("demagnetization_margin_a_m"))
+        result_margin = float(value.get("result_demagnetization_margin_a_m"))
+    except (TypeError, ValueError):
+        return False
+    curve_digest = str(value.get("material_curve_sha256", "")).lower()
+    field_digest = str(value.get("operating_point_field_sha256", "")).lower()
+    result_digest = str(value.get("result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "material_demag_generation",
+                "temperature_demag_generation",
+                "recoil_demag_generation",
+                "operating_point_demag_generation",
+                "margin_demag_generation",
+                "result_demag_generation",
+            )
+        )
+        and bool(magnet_ids)
+        and all(magnet_ids)
+        and len(set(magnet_ids)) == len(magnet_ids)
+        and result_magnet_ids == magnet_ids
+        and all(math.isfinite(item) for item in (temperature, coercivity, recoil, operating_h, margin))
+        and coercivity > 0.0
+        and recoil > 0.0
+        and margin >= 0.0
+        and math.isclose(result_temperature, temperature, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_coercivity, coercivity, rel_tol=0.0, abs_tol=1.0e-9)
+        and math.isclose(result_recoil, recoil, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_operating_h, operating_h, rel_tol=0.0, abs_tol=1.0e-9)
+        and math.isclose(result_margin, margin, rel_tol=0.0, abs_tol=1.0e-9)
+        and _valid_sha256(curve_digest)
+        and value.get("result_material_curve_sha256") == curve_digest
+        and _valid_sha256(field_digest)
+        and value.get("result_operating_point_field_sha256") == field_digest
+        and _valid_sha256(result_digest)
+        and value.get("accepted_result_sha256") == result_digest
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -358,6 +482,8 @@ def pwm_controlled_motor_loss_gate(
     demag_knee_operating_identity_ok = True
     loss_power_balance_identity_ok = True
     skew_slice_quadrature_identity_ok = True
+    torque_map_interpolation_identity_ok = True
+    demagnetization_margin_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -393,6 +519,8 @@ def pwm_controlled_motor_loss_gate(
         demag_knee_operating_identity_ok = False
         loss_power_balance_identity_ok = False
         skew_slice_quadrature_identity_ok = False
+        torque_map_interpolation_identity_ok = False
+        demagnetization_margin_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -1977,6 +2105,16 @@ def pwm_controlled_motor_loss_gate(
                 "skew_slice_weight_rotor_angle_phase_periodicity_generation_identity"
             )
         )
+        torque_map_interpolation_identity_ok = _torque_map_interpolation_identity_ok(
+            identity_value.get(
+                "torque_map_current_angle_temperature_speed_interpolation_generation_identity"
+            )
+        )
+        demagnetization_margin_identity_ok = _demagnetization_margin_identity_ok(
+            identity_value.get(
+                "demagnetization_margin_operating_point_temperature_recoil_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -2267,6 +2405,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "skew_slice_result_uses_current_weights_angles_phases_and_periodicity": (
             skew_slice_quadrature_identity_ok
+        ),
+        "torque_map_uses_current_axes_interpolation_query_and_result_generation": (
+            torque_map_interpolation_identity_ok
+        ),
+        "demagnetization_margin_uses_current_temperature_recoil_material_and_operating_point": (
+            demagnetization_margin_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
