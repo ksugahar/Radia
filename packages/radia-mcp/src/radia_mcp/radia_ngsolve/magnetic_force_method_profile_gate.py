@@ -123,6 +123,8 @@ def magnetic_force_method_profile_gate(
     maglev_stiffness_force_displacement_generation_identity_ok = True
     bem_demag_tensor_coordinate_basis_generation_identity_ok = True
     magnetic_bearing_force_harmonic_phase_origin_identity_ok = True
+    bem_near_singular_panel_subdivision_quadrature_generation_identity_ok = True
+    maglev_force_coil_polarity_orientation_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -144,6 +146,8 @@ def magnetic_force_method_profile_gate(
         maglev_stiffness_force_displacement_generation_identity_ok = False
         bem_demag_tensor_coordinate_basis_generation_identity_ok = False
         magnetic_bearing_force_harmonic_phase_origin_identity_ok = False
+        bem_near_singular_panel_subdivision_quadrature_generation_identity_ok = False
+        maglev_force_coil_polarity_orientation_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -940,6 +944,132 @@ def magnetic_force_method_profile_gate(
                 == angle_digest
             )
 
+        near_singular_value = identity_value.get(
+            "bem_near_singular_panel_subdivision_quadrature_generation_identity"
+        )
+        if near_singular_value is not None:
+            near_singular = (
+                near_singular_value
+                if isinstance(near_singular_value, Mapping)
+                else {}
+            )
+            surface_generation = str(
+                near_singular.get("surface_generation", "")
+            )
+            subdivision_generation = str(
+                near_singular.get("subdivision_generation", "")
+            )
+            quadrature_generation = str(
+                near_singular.get("quadrature_generation", "")
+            )
+            interaction_ids = near_singular.get("interaction_ids")
+            quadrature_orders = near_singular.get("quadrature_orders")
+            subdivision_digest = str(
+                near_singular.get("subdivision_map_sha256", "")
+            ).lower()
+            bem_near_singular_panel_subdivision_quadrature_generation_identity_ok = (
+                bool(surface_generation)
+                and near_singular.get("near_singular_interaction_surface_generation")
+                == surface_generation
+                and near_singular.get("panel_subdivision_surface_generation")
+                == surface_generation
+                and bool(subdivision_generation)
+                and near_singular.get("quadrature_subdivision_generation")
+                == subdivision_generation
+                and bool(quadrature_generation)
+                and near_singular.get("interaction_quadrature_generation")
+                == quadrature_generation
+                and isinstance(interaction_ids, list)
+                and bool(interaction_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in interaction_ids
+                )
+                and len(set(interaction_ids)) == len(interaction_ids)
+                and near_singular.get("subdivided_interaction_ids")
+                == interaction_ids
+                and isinstance(quadrature_orders, list)
+                and len(quadrature_orders) == len(interaction_ids)
+                and all(
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value > 0
+                    for value in quadrature_orders
+                )
+                and near_singular.get("applied_quadrature_orders")
+                == quadrature_orders
+                and len(subdivision_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in subdivision_digest
+                )
+                and str(
+                    near_singular.get(
+                        "quadrature_input_subdivision_map_sha256", ""
+                    )
+                ).lower()
+                == subdivision_digest
+            )
+
+        maglev_coil_value = identity_value.get(
+            "maglev_force_coil_polarity_orientation_generation_identity"
+        )
+        if maglev_coil_value is not None:
+            maglev_coil = (
+                maglev_coil_value
+                if isinstance(maglev_coil_value, Mapping)
+                else {}
+            )
+            force_generation = str(maglev_coil.get("force_generation", ""))
+            coil_generation = str(maglev_coil.get("coil_generation", ""))
+            coil_ids = maglev_coil.get("coil_ids")
+            current_polarities = maglev_coil.get("current_polarities")
+            winding_orientations = maglev_coil.get("winding_orientations")
+            orientation_digest = str(
+                maglev_coil.get("coil_orientation_map_sha256", "")
+            ).lower()
+            maglev_force_coil_polarity_orientation_generation_identity_ok = (
+                bool(force_generation)
+                and maglev_coil.get("coil_force_generation") == force_generation
+                and bool(coil_generation)
+                and maglev_coil.get("current_polarity_coil_generation")
+                == coil_generation
+                and maglev_coil.get("winding_orientation_coil_generation")
+                == coil_generation
+                and maglev_coil.get("force_result_coil_generation")
+                == coil_generation
+                and isinstance(coil_ids, list)
+                and bool(coil_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in coil_ids
+                )
+                and len(set(coil_ids)) == len(coil_ids)
+                and maglev_coil.get("force_coil_ids") == coil_ids
+                and isinstance(current_polarities, list)
+                and len(current_polarities) == len(coil_ids)
+                and all(value in (-1, 1) for value in current_polarities)
+                and maglev_coil.get("force_current_polarities")
+                == current_polarities
+                and isinstance(winding_orientations, list)
+                and len(winding_orientations) == len(coil_ids)
+                and all(
+                    value in {"clockwise", "counterclockwise"}
+                    for value in winding_orientations
+                )
+                and maglev_coil.get("force_winding_orientations")
+                == winding_orientations
+                and len(orientation_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in orientation_digest
+                )
+                and str(
+                    maglev_coil.get("force_coil_orientation_map_sha256", "")
+                ).lower()
+                == orientation_digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -1057,6 +1187,12 @@ def magnetic_force_method_profile_gate(
         ),
         "magnetic_bearing_force_harmonics_share_rotor_phase_origin": (
             magnetic_bearing_force_harmonic_phase_origin_identity_ok
+        ),
+        "bem_near_singular_quadrature_uses_current_panel_subdivision": (
+            bem_near_singular_panel_subdivision_quadrature_generation_identity_ok
+        ),
+        "maglev_force_uses_current_coil_polarity_and_winding_orientation": (
+            maglev_force_coil_polarity_orientation_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
