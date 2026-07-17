@@ -1647,6 +1647,25 @@ DOF + a one-point constraint; here the representation LACKS the
 harmonic mode, closed by one loop DOF + the Faraday row).  Per handle:
 one extra DOF, one extra condition, in both formulations.
 
+Related work (cite BOTH, the digest regardless of whether a journal
+version appears): M. Schoebinger and K. Hollaus, "An Effective
+Interface Approach for Multiply Connected Electromagnetic Shields,"
+IEEE CEFC 2026 conference digest (Thessaloniki, June 2026) -- the FEM
+thin-shell sibling of the same topology treatment: the shield becomes
+a 2-D effective interface (1-D through-thickness analytic solution,
+nonlinear mu_eff lookup -- the ESIM idea) and each HOLE gets one
+cohomology jump unknown (constant T = s_i e_z in hole i), replacing
+the earlier non-physical auxiliary conductivity inside the holes.
+P. Dlotko, B. Kapidani, S. Pitassi, R. Specogna, "Fake Conductivity
+or Cohomology: Which to Use When Solving Eddy Current Problems With
+h-Formulations?", IEEE Trans. Magn. 55(6), 1-4 (2019) -- established
+that the cohomology treatment (the route ``radia.cohomology``
+implements) is the stable, physical choice.  Differentiators of the
+radia route: surface-only BIE (no volume mesh, exact open boundary) +
+Leontovich SIBC + the surface-H^1 period-matrix engine with
+class-pure cut selection + the Faraday closure and per-run screening
+diagnostics.
+
 **Why the MISSING mode makes the workpiece heat MORE (not less).**
 Counter-intuitive on first sight ("an extra current should add Joule
 heat"), resolved by the PHASE.  The tube is a shorted one-turn
