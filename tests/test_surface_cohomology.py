@@ -12,7 +12,9 @@ import math
 
 import numpy as np
 
+import radia.cohomology as cohomology_module
 from radia.cohomology import (surface_chain_complex, surface_cohomology,
+                              surface_fundamental_cycles,
                               surface_homology_loops)
 
 
@@ -96,6 +98,17 @@ def test_torus_has_two_independent_generators():
     Wi = np.rint(W)
     assert np.allclose(W, Wi, atol=1e-6), f"non-integer windings {W}"
     assert abs(round(np.linalg.det(Wi))) >= 1, f"dependent classes {Wi}"
+
+
+def test_fundamental_cycle_api_is_public_and_full_rank():
+    pts, tris = _torus()
+    assert "surface_fundamental_cycles" in cohomology_module.__all__
+    b1, periods, expand, cotree = surface_fundamental_cycles(
+        tris, nv=len(pts))
+    assert b1 == 2
+    assert periods.shape == (len(cotree), b1)
+    assert np.linalg.matrix_rank(periods) == b1
+    assert all(len(expand(k)) >= 3 for k in range(len(cotree)))
 
 
 def test_isolated_vertices_keep_id_space():

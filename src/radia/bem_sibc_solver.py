@@ -1102,6 +1102,11 @@ class SurfacePoissonPhiInc:
             raise ValueError(
                 f"H_vertices shape {H.shape} != (nv={nv}, 3): H must be "
                 f"evaluated at every surface vertex in DOF order.")
+        if not (np.all(np.isfinite(H.real)) and
+                np.all(np.isfinite(H.imag))):
+            raise ValueError(
+                "H_vertices must contain only finite values; refusing to "
+                "project NaN or Inf incident fields.")
 
         # Tangential incident field per triangle (corner mean; the
         # gradients are constant so the 3-corner rule reduces to the

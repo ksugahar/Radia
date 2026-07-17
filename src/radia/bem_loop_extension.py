@@ -55,9 +55,9 @@ Scope / limitations (fail-loud, not silent)
 ===========================================
 * genus-1 with ONE flux-linked handle (one cut, one alpha).  genus >= 2
   raises.
-* The cut loop comes from ``radia.cohomology.surface_homology_loops``
+* The cut loop comes from ``radia.cohomology.surface_fundamental_cycles``
   (the repo's single, gmsh-free cohomology engine: harmonic-1-cochain
-  period matrix + QR-pivoted cotree selection); the Theta single-valued
+  period matrix + class-pure cotree selection); the Theta single-valued
   check (uniform jump) raises if the mid-wall ring construction fails
   (e.g. the ray cast finds no opposite wall, or the smoothed ring
   pierces the surface).
@@ -69,7 +69,7 @@ References
 ==========
 * K. Sugahara, "Investigation of a Boundary Integral Equation
   n x H = J_s on Torus-Shaped Perfect Conductors," IEEE Trans.
-  Antennas Propag., vol. 56, no. 3, pp. 722-725, Mar. 2008.  The dual
+  Antennas Propag., vol. 56, no. 3, pp. 722-727, Mar. 2008.  The dual
   defect of the same H^1(S) != 0 topology: on a torus the n x H = J_s
   BIE admits a spurious solution violating B . n = 0 (a harmonic
   null-space mode), closed there by ONE virtual-magnetic-current DOF +
@@ -401,8 +401,8 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     # representative like (1, -1) is a valid basis element but forces
     # alpha to carry an equal poloidal component (wrong physics) and its
     # zig-zag geometry breaks the mid-wall Theta ray-cast.  A fixed
-    # 2-loop generator basis is NOT guaranteed class-pure (measured on
-    # Takahashi: {(1,-1), (0,1)}), so classify ALL cotree fundamental
+    # 2-loop generator basis is NOT guaranteed class-pure, so classify
+    # ALL cotree fundamental
     # cycles instead: the class map is a linear image of the harmonic
     # period vector, calibrated on one independent (QR-pivoted) pair, so
     # every cycle costs O(1) -- then take the geometrically shortest
@@ -453,7 +453,15 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
         q = pts[list(p) + [p[0]]]
         return float(np.sum(np.linalg.norm(np.diff(q, axis=0), axis=1)))
 
-    cut = min((expand(int(k)) for k in cands), key=_geo_len)
+    cut_k = min((int(k) for k in cands),
+                key=lambda k: _geo_len(expand(k)))
+    cut = expand(cut_k)
+    # A loop current coefficient changes sign when the cut orientation
+    # changes.  Canonicalize the selected representative to positive
+    # toroidal winding so alpha phase, and therefore the reported regime,
+    # is independent of the spanning-tree orientation.
+    if int(W_int[cut_k, 0]) < 0:
+        cut = list(reversed(cut))
     n_cut = len(cut)
 
     pts_o, tris_o, dup = cut_open_surface(pts, tris, cut)

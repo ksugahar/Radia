@@ -743,8 +743,9 @@ def _loop_regime(alpha_deg):
     quadrature and anti-phase: ``I_2 = -j omega M I_1 / (R + j omega L)``
     has phase in (-180, -90) deg.  Near anti-phase (|phase| -> 180,
     omega L >> R) the turn is a nearly lossless FLUX CANCELLER -- Lenz
-    screening REDUCES the total surface |H_t|^2 and hence P_wp
-    (Takahashi: -174 deg, P/P_frozen = 0.857 = (H_t/H_t_frozen)^2).
+    screening REDUCES the total surface |H_t|^2 and hence P_wp.
+    In the inductive-screening regime, P/P_frozen is below one and
+    follows the corresponding squared H_t ratio.
     Near quadrature (|phase| -> 90, omega L << R) the screening is weak
     and the turn mostly ADDS its own dissipation -- the classic
     "shorted turn overheats" regime.  Thresholds split the continuum at

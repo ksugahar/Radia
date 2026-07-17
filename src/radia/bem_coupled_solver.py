@@ -353,10 +353,7 @@ class CoupledBEMSolver:
         else:
             # In-tree Sauter-Schwab Galerkin dense operators -- the SAME
             # assembler configuration as the weak path's intree-dense
-            # backend.  (The former default here was the ngsolve.bem
-            # column-matvec dense extraction: O(N^3), ~an hour at 3k DOF,
-            # with a NaN incident on record -- a superseded route, removed
-            # 2026-07-17.)  Dense SL/DL also enables the genus-1
+            # backend.  Dense SL/DL also enables the genus-1
             # loop-DOF extension (``loop_dof=True`` in ``solve``).
             self.wp_solver = ScalarBIESIBCSolver(
                 mesh_wp, order=wp_order, assemble_dense=True,
@@ -373,7 +370,7 @@ class CoupledBEMSolver:
         # cached stiffness factorization is what makes iterations cheap).
         # The former per-iteration path integration (two
         # compute_phi_inc_from_surface_J calls, the dominant per-iteration
-        # cost) was removed 2026-07-17 with the weak path's legacy route.
+        # cost) is no longer part of the production route.
         if int(wp_order) != 1:
             raise ValueError(
                 f"CoupledBEMSolver supports wp_order=1 only (got "
@@ -415,7 +412,7 @@ class CoupledBEMSolver:
                 (``radia.bem_loop_extension.solve_loop_extended``) ONCE on
                 the CONVERGED state: the Picard loop itself runs the plain
                 scalar BIE (whose L_total / Delta_L convention is the
-                validated one), then the shorted-turn current alpha is
+                established one), then the shorted-turn current alpha is
                 solved against the converged coil current and the reported
                 ``P_total`` / ``H_t_rms`` are replaced by the loop-extended
                 values (the same dissipation-only convention as the weak
