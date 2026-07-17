@@ -1119,3 +1119,97 @@ def test_v19_public_measure_trigger_target_crossing_edge_count_generation_mismat
         ]
         is False
     )
+
+
+def _with_v20_monte_carlo_and_fft_identity(summary: dict) -> dict:
+    summary = _with_v19_stepped_ac_and_measure_crossing_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["monte_carlo_seed_sample_tuple_trace_row_generation_identity"] = {
+        "monte_carlo_generation_id": "monte-carlo-60",
+        "seed_order_generation_id": "monte-carlo-60",
+        "sample_tuple_generation_id": "monte-carlo-60",
+        "trace_row_generation_id": "monte-carlo-60",
+        "sample_ids": [1, 2, 3],
+        "seed_order": [1101, 1102, 1103],
+        "trace_seed_order": [1101, 1102, 1103],
+        "parameter_names": ["RLOAD", "CLOAD"],
+        "sample_parameter_tuples": [[100.0, 1.0e-9], [110.0, 0.9e-9], [90.0, 1.1e-9]],
+        "trace_sample_ids": [1, 2, 3],
+        "trace_parameter_tuples": [[100.0, 1.0e-9], [110.0, 0.9e-9], [90.0, 1.1e-9]],
+        "sample_table_sha256": "1" * 64,
+        "trace_sample_table_sha256": "1" * 64,
+    }
+    positive["fft_window_sample_rate_harmonic_bin_generation_identity"] = {
+        "transient_generation_id": "transient-60",
+        "window_transient_generation_id": "transient-60",
+        "sample_rate_transient_generation_id": "transient-60",
+        "harmonic_bin_transient_generation_id": "transient-60",
+        "fft_result_transient_generation_id": "transient-60",
+        "sample_count": 1024,
+        "window_sample_count": 1024,
+        "sample_rate_hz": 1.0e6,
+        "fft_sample_rate_hz": 1.0e6,
+        "window_name": "hann",
+        "coherent_gain": 0.5,
+        "applied_coherent_gain": 0.5,
+        "harmonic_bin_indices": [1, 2, 3],
+        "fft_harmonic_bin_indices": [1, 2, 3],
+        "harmonic_frequencies_hz": [976.5625, 1953.125, 2929.6875],
+        "fft_harmonic_frequencies_hz": [976.5625, 1953.125, 2929.6875],
+        "fft_contract_sha256": "2" * 64,
+        "result_fft_contract_sha256": "2" * 64,
+    }
+    return summary
+
+
+def test_accepts_v20_monte_carlo_and_fft_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v20_monte_carlo_and_fft_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v20_public_monte_carlo_seed_sample_tuple_trace_row_generation_mismatch() -> None:
+    bad = _with_v20_monte_carlo_and_fft_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "monte_carlo_seed_sample_tuple_trace_row_generation_identity"
+    ]
+    identity.update(
+        {
+            "seed_order_generation_id": "monte-carlo-59",
+            "trace_row_generation_id": "monte-carlo-59",
+            "trace_seed_order": [1103, 1102, 1101],
+            "trace_sample_ids": [3, 2, 1],
+            "trace_parameter_tuples": [[90.0, 1.1e-9], [110.0, 0.9e-9], [100.0, 1.0e-9]],
+            "trace_sample_table_sha256": "f" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "monte_carlo_traces_use_current_seed_sample_tuple_row_order"
+    ]
+
+
+def test_v20_public_fft_window_sample_rate_harmonic_bin_generation_mismatch() -> None:
+    bad = _with_v20_monte_carlo_and_fft_identity(_summary())
+    identity = bad["metrics"]["positive"][
+        "fft_window_sample_rate_harmonic_bin_generation_identity"
+    ]
+    identity.update(
+        {
+            "window_transient_generation_id": "transient-59",
+            "harmonic_bin_transient_generation_id": "transient-59",
+            "window_sample_count": 512,
+            "fft_sample_rate_hz": 2.0e6,
+            "applied_coherent_gain": 1.0,
+            "fft_harmonic_bin_indices": [2, 4, 6],
+            "fft_harmonic_frequencies_hz": [3906.25, 7812.5, 11718.75],
+            "result_fft_contract_sha256": "f" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert not result["checks"][
+        "fft_harmonics_use_current_window_sample_rate_and_bin_table"
+    ]
