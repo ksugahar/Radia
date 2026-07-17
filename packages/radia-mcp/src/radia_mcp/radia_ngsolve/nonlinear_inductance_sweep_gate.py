@@ -1798,6 +1798,182 @@ def _field_circuit_cosim_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _adaptive_mesh_convergence_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "adaptive_mesh_pass_sparameter_energy_convergence_grid_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("adaptive_generation", "")).strip()
+    pass_ids = identity.get("mesh_pass_ids")
+    try:
+        cells = [float(value) for value in identity.get("mesh_cell_counts", [])]
+        result_cells = [
+            float(value) for value in identity.get("result_mesh_cell_counts", [])
+        ]
+        frequencies = [
+            float(value) for value in identity.get("frequency_grid_hz", [])
+        ]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequency_grid_hz", [])
+        ]
+        s_deltas = [
+            float(value) for value in identity.get("maximum_sparameter_delta", [])
+        ]
+        result_s_deltas = [
+            float(value)
+            for value in identity.get("result_maximum_sparameter_delta", [])
+        ]
+        energy_residuals = [
+            float(value)
+            for value in identity.get("stored_energy_closure_residual", [])
+        ]
+        result_energy_residuals = [
+            float(value)
+            for value in identity.get("result_stored_energy_closure_residual", [])
+        ]
+        s_tolerance = float(identity.get("sparameter_delta_tolerance"))
+        energy_tolerance = float(identity.get("energy_closure_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    digest = str(identity.get("adaptive_result_sha256", "")).lower()
+    count = len(pass_ids) if isinstance(pass_ids, list) else 0
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mesh_pass_adaptive_generation",
+                "sparameter_adaptive_generation",
+                "energy_adaptive_generation",
+                "frequency_grid_adaptive_generation",
+                "stopping_rule_adaptive_generation",
+                "result_adaptive_generation",
+            )
+        )
+        and count >= 2
+        and pass_ids == list(range(count))
+        and identity.get("result_mesh_pass_ids") == pass_ids
+        and len(cells) == count
+        and all(math.isfinite(value) and value > 0.0 for value in cells)
+        and all(left < right for left, right in zip(cells, cells[1:]))
+        and result_cells == cells
+        and len(frequencies) >= 3
+        and all(math.isfinite(value) and value > 0.0 for value in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(s_deltas) == count
+        and all(math.isfinite(value) and value >= 0.0 for value in s_deltas)
+        and all(left > right for left, right in zip(s_deltas, s_deltas[1:]))
+        and result_s_deltas == s_deltas
+        and len(energy_residuals) == count
+        and all(
+            math.isfinite(value) and value >= 0.0 for value in energy_residuals
+        )
+        and all(
+            left > right
+            for left, right in zip(energy_residuals, energy_residuals[1:])
+        )
+        and result_energy_residuals == energy_residuals
+        and math.isfinite(s_tolerance)
+        and s_tolerance > 0.0
+        and math.isfinite(energy_tolerance)
+        and energy_tolerance > 0.0
+        and s_deltas[-1] <= s_tolerance
+        and energy_residuals[-1] <= energy_tolerance
+        and identity.get("converged_pass_id") == pass_ids[-1]
+        and identity.get("result_converged_pass_id") == pass_ids[-1]
+        and _valid_sha256(digest)
+        and str(identity.get("reported_adaptive_result_sha256", "")).lower()
+        == digest
+    )
+
+
+def _eigenmode_tracking_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "eigenmode_tracking_phase_normalization_port_coupling_mesh_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("tracking_generation", "")).strip()
+    mode_ids = identity.get("tracked_mode_ids")
+    subspaces = identity.get("modal_subspace_sha256")
+    anchors = identity.get("phase_anchor_ids")
+    meshes = identity.get("mesh_sha256")
+    normalization = str(identity.get("normalization", "")).strip()
+    try:
+        sweep = [float(value) for value in identity.get("sweep_parameters", [])]
+        result_sweep = [
+            float(value) for value in identity.get("result_sweep_parameters", [])
+        ]
+        coupling = [
+            [float(value) for value in row]
+            for row in identity.get("port_coupling_magnitudes", [])
+        ]
+        result_coupling = [
+            [float(value) for value in row]
+            for row in identity.get("result_port_coupling_magnitudes", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    digest = str(identity.get("eigenmode_track_sha256", "")).lower()
+    modes_ok = (
+        isinstance(mode_ids, list)
+        and len(mode_ids) >= 2
+        and all(isinstance(value, str) and bool(value) for value in mode_ids)
+        and len(set(mode_ids)) == len(mode_ids)
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "modal_subspace_tracking_generation",
+                "phase_tracking_generation",
+                "normalization_tracking_generation",
+                "port_coupling_tracking_generation",
+                "mesh_tracking_generation",
+                "result_tracking_generation",
+            )
+        )
+        and len(sweep) >= 3
+        and all(math.isfinite(value) for value in sweep)
+        and all(left < right for left, right in zip(sweep, sweep[1:]))
+        and result_sweep == sweep
+        and modes_ok
+        and identity.get("result_tracked_mode_ids") == mode_ids
+        and isinstance(subspaces, list)
+        and len(subspaces) == len(sweep)
+        and all(_valid_sha256(value) for value in subspaces)
+        and identity.get("result_modal_subspace_sha256") == subspaces
+        and isinstance(anchors, list)
+        and modes_ok
+        and len(anchors) == len(mode_ids)
+        and all(isinstance(value, str) and bool(value) for value in anchors)
+        and identity.get("result_phase_anchor_ids") == anchors
+        and normalization == "stored_energy_1j"
+        and identity.get("result_normalization") == normalization
+        and len(coupling) == len(sweep)
+        and all(
+            len(row) == len(mode_ids)
+            and all(math.isfinite(value) and value >= 0.0 for value in row)
+            for row in coupling
+        )
+        and result_coupling == coupling
+        and isinstance(meshes, list)
+        and len(meshes) == len(sweep)
+        and all(_valid_sha256(value) for value in meshes)
+        and identity.get("result_mesh_sha256") == meshes
+        and _valid_sha256(digest)
+        and str(identity.get("reported_eigenmode_track_sha256", "")).lower()
+        == digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2057,6 +2233,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "field_circuit_cosim_uses_current_sign_impedance_and_power_balance": (
                 _field_circuit_cosim_inputs_are_current(raw)
+            ),
+            "adaptive_results_use_current_mesh_pass_sparameter_energy_grid_and_stop_rule": (
+                _adaptive_mesh_convergence_inputs_are_current(raw)
+            ),
+            "eigenmodes_use_current_subspace_phase_normalization_ports_and_mesh": (
+                _eigenmode_tracking_inputs_are_current(raw)
             ),
         }
         row = {
