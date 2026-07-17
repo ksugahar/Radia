@@ -1379,6 +1379,292 @@ def _geometry_heal_imprint_merge_ownership_generation_ok(identity: object) -> bo
     )
 
 
+def _parallel_sculpt_partition_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("partition_ids"),
+        identity.get("assembled_partition_ids"),
+        identity.get("ghost_interface_ids"),
+        identity.get("assembled_ghost_interface_ids"),
+        identity.get("refinement_levels"),
+        identity.get("assembled_refinement_levels"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        partitions = [int(value) for value in fields[0]]
+        assembled_partitions = [int(value) for value in fields[1]]
+        ghost_interfaces = [int(value) for value in fields[2]]
+        assembled_ghost_interfaces = [int(value) for value in fields[3]]
+        refinement_levels = [int(value) for value in fields[4]]
+        assembled_refinement_levels = [int(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mesh_generation") or "")
+    digest_pairs = (
+        ("partition_map_sha256", "assembled_partition_map_sha256"),
+        ("ghost_interface_sha256", "assembled_ghost_interface_sha256"),
+        ("sculpt_mesh_sha256", "assembled_sculpt_mesh_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "partition_mesh_generation",
+                "ghost_interface_mesh_generation",
+                "refinement_mesh_generation",
+                "assembly_mesh_generation",
+            )
+        )
+        and bool(partitions)
+        and all(value > 0 for value in partitions)
+        and len(set(partitions)) == len(partitions)
+        and assembled_partitions == partitions
+        and bool(ghost_interfaces)
+        and all(value > 0 for value in ghost_interfaces)
+        and len(set(ghost_interfaces)) == len(ghost_interfaces)
+        and assembled_ghost_interfaces == ghost_interfaces
+        and len(refinement_levels) == len(partitions)
+        and all(value >= 0 for value in refinement_levels)
+        and assembled_refinement_levels == refinement_levels
+        and all(
+            len(str(identity.get(source) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(source) or "")
+            )
+            and identity.get(assembled) == identity.get(source)
+            for source, assembled in digest_pairs
+        )
+    )
+
+
+def _mixed_transition_interface_ownership_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("element_families"),
+        identity.get("exported_element_families"),
+        identity.get("interface_face_ids"),
+        identity.get("exported_interface_face_ids"),
+        identity.get("block_ids"),
+        identity.get("exported_block_ids"),
+        identity.get("sideset_ids"),
+        identity.get("exported_sideset_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        families = [str(value) for value in fields[0]]
+        exported_families = [str(value) for value in fields[1]]
+        interface_faces = [int(value) for value in fields[2]]
+        exported_interface_faces = [int(value) for value in fields[3]]
+        blocks = [int(value) for value in fields[4]]
+        exported_blocks = [int(value) for value in fields[5]]
+        sidesets = [int(value) for value in fields[6]]
+        exported_sidesets = [int(value) for value in fields[7]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mesh_generation") or "")
+    digest_pairs = (
+        ("transition_table_sha256", "exported_transition_table_sha256"),
+        ("ownership_table_sha256", "exported_ownership_table_sha256"),
+    )
+    id_pairs = (
+        (interface_faces, exported_interface_faces),
+        (blocks, exported_blocks),
+        (sidesets, exported_sidesets),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "interface_mesh_generation",
+                "element_family_mesh_generation",
+                "block_mesh_generation",
+                "sideset_mesh_generation",
+            )
+        )
+        and families == ["tet", "pyramid", "hex"]
+        and exported_families == families
+        and all(
+            bool(source)
+            and all(value > 0 for value in source)
+            and len(set(source)) == len(source)
+            and exported == source
+            for source, exported in id_pairs
+        )
+        and all(
+            len(str(identity.get(source) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(source) or "")
+            )
+            and identity.get(exported) == identity.get(source)
+            for source, exported in digest_pairs
+        )
+    )
+
+
+def _journal_replay_entity_version_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("geometry_entity_ids"),
+        identity.get("replay_geometry_entity_ids"),
+        identity.get("entity_names"),
+        identity.get("replay_entity_names"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        entity_ids = [int(value) for value in fields[0]]
+        replay_entity_ids = [int(value) for value in fields[1]]
+        names = [str(value) for value in fields[2]]
+        replay_names = [str(value) for value in fields[3]]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("replay_generation") or "")
+    version = str(identity.get("application_version") or "")
+    digest_pairs = (
+        ("entity_map_sha256", "replay_entity_map_sha256"),
+        ("journal_sha256", "replay_journal_sha256"),
+        ("command_log_sha256", "replay_command_log_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "geometry_replay_generation",
+                "entity_map_replay_generation",
+                "application_version_replay_generation",
+                "command_log_replay_generation",
+            )
+        )
+        and bool(version)
+        and identity.get("replay_application_version") == version
+        and bool(entity_ids)
+        and all(value > 0 for value in entity_ids)
+        and len(set(entity_ids)) == len(entity_ids)
+        and replay_entity_ids == entity_ids
+        and len(names) == len(entity_ids)
+        and all(names)
+        and len(set(names)) == len(names)
+        and replay_names == names
+        and all(
+            len(str(identity.get(source) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(source) or "")
+            )
+            and identity.get(replay) == identity.get(source)
+            for source, replay in digest_pairs
+        )
+    )
+
+
+def _exodus64_mapping_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    flat_fields = (
+        identity.get("entity_ids"),
+        identity.get("decoded_entity_ids"),
+        identity.get("sideset_ids"),
+        identity.get("decoded_sideset_ids"),
+    )
+    nested_fields = (
+        identity.get("sideset_entity_ids"),
+        identity.get("decoded_sideset_entity_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in (*flat_fields, *nested_fields)
+    ):
+        return False
+    if not all(
+        isinstance(row, Sequence) and not isinstance(row, (str, bytes))
+        for values in nested_fields
+        for row in values
+    ):
+        return False
+    try:
+        entity_ids = [int(value) for value in flat_fields[0]]
+        decoded_entity_ids = [int(value) for value in flat_fields[1]]
+        sideset_ids = [int(value) for value in flat_fields[2]]
+        decoded_sideset_ids = [int(value) for value in flat_fields[3]]
+        sideset_entities = [
+            [int(value) for value in row] for row in nested_fields[0]
+        ]
+        decoded_sideset_entities = [
+            [int(value) for value in row] for row in nested_fields[1]
+        ]
+        integer_width = int(identity.get("integer_width_bits"))
+        decoded_integer_width = int(identity.get("decoded_integer_width_bits"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("export_generation") or "")
+    digest_pairs = (
+        ("element_map_sha256", "decoded_element_map_sha256"),
+        ("schema_sha256", "decoded_schema_sha256"),
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "entity_id_export_generation",
+                "sideset_export_generation",
+                "element_map_export_generation",
+                "schema_export_generation",
+            )
+        )
+        and integer_width == 64
+        and decoded_integer_width == integer_width
+        and bool(entity_ids)
+        and all(value > 2**32 for value in entity_ids)
+        and len(set(entity_ids)) == len(entity_ids)
+        and decoded_entity_ids == entity_ids
+        and bool(sideset_ids)
+        and all(value > 0 for value in sideset_ids)
+        and len(set(sideset_ids)) == len(sideset_ids)
+        and decoded_sideset_ids == sideset_ids
+        and len(sideset_entities) == len(sideset_ids)
+        and all(row for row in sideset_entities)
+        and all(value in entity_ids for row in sideset_entities for value in row)
+        and decoded_sideset_entities == sideset_entities
+        and all(
+            len(str(identity.get(source) or "")) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in str(identity.get(source) or "")
+            )
+            and identity.get(decoded) == identity.get(source)
+            for source, decoded in digest_pairs
+        )
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -2099,6 +2385,20 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             _hybrid_transition_topology_block_generation_ok(
                 summary.get(
                     "hybrid_tet_hex_pyramid_transition_topology_block_generation_identity"
+                )
+            )
+        ),
+        "parallel_sculpt_assembly_uses_current_partitions_ghosts_and_refinement": (
+            _parallel_sculpt_partition_identity_ok(
+                summary.get(
+                    "parallel_sculpt_partition_ghost_refinement_generation_identity"
+                )
+            )
+        ),
+        "mixed_transition_export_uses_current_interfaces_families_blocks_and_sidesets": (
+            _mixed_transition_interface_ownership_ok(
+                summary.get(
+                    "mixed_transition_interface_block_sideset_generation_identity"
                 )
             )
         ),
@@ -2844,6 +3144,20 @@ def cubit_mixed_transition_source_gate(
             _geometry_heal_imprint_merge_ownership_generation_ok(
                 summary.get(
                     "geometry_heal_tolerance_imprint_merge_ownership_generation_identity"
+                )
+            )
+        ),
+        "journal_replay_uses_current_geometry_entity_map_version_and_command_log": (
+            _journal_replay_entity_version_identity_ok(
+                summary.get(
+                    "journal_replay_geometry_entity_map_version_generation_identity"
+                )
+            )
+        ),
+        "exodus64_decode_uses_current_entity_sideset_element_map_and_schema": (
+            _exodus64_mapping_identity_ok(
+                summary.get(
+                    "exodus64_entity_sideset_element_map_schema_generation_identity"
                 )
             )
         ),
