@@ -3355,6 +3355,98 @@ def _mass_density_frame_generation_identity(row):
     return generation, density, volume, mass, center, inertia, frame, transform_digest, result_digest
 
 
+def _boolean_imprint_generation_identity(row):
+    value = row.get(
+        "boolean_imprint_interface_owner_topology_name_tolerance_mass_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("boolean_generation", "")).strip()
+    faces = [str(item).strip() for item in value.get("interface_face_names", [])]
+    result_faces = [str(item).strip() for item in value.get("result_interface_face_names", [])]
+    owners = [tuple(str(item).strip() for item in pair) for pair in value.get("interface_owner_pairs", [])]
+    result_owners = [tuple(str(item).strip() for item in pair) for pair in value.get("result_interface_owner_pairs", [])]
+    names = [str(item).strip() for item in value.get("persistent_topology_names", [])]
+    result_names = [str(item).strip() for item in value.get("result_persistent_topology_names", [])]
+    try:
+        tolerance = float(value.get("linear_tolerance_m"))
+        result_tolerance = float(value.get("result_linear_tolerance_m"))
+        solids = int(value.get("solid_count"))
+        result_solids = int(value.get("result_solid_count"))
+        volume = float(value.get("total_volume_m3"))
+        result_volume = float(value.get("result_total_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    interface_digest = str(value.get("interface_map_sha256", "")).lower()
+    mass_digest = str(value.get("mass_property_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "interface_boolean_generation", "owner_boolean_generation",
+            "topology_boolean_generation", "tolerance_boolean_generation",
+            "mass_boolean_generation", "result_boolean_generation"))
+        or value.get("operation") != "imprint"
+        or value.get("result_operation") != "imprint"
+        or not faces or any(not item for item in faces) or len(set(faces)) != len(faces)
+        or result_faces != faces
+        or len(owners) != len(faces)
+        or any(len(pair) != 2 or not all(pair) or pair[0] == pair[1] for pair in owners)
+        or result_owners != owners
+        or not names or any(not item for item in names) or len(set(names)) != len(names)
+        or result_names != names
+        or not math.isfinite(tolerance) or tolerance <= 0.0 or result_tolerance != tolerance
+        or solids < 1 or result_solids != solids
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or not _valid_identity_digest(interface_digest)
+        or value.get("result_interface_map_sha256") != interface_digest
+        or not _valid_identity_digest(mass_digest)
+        or value.get("result_mass_property_sha256") != mass_digest
+    ):
+        return None
+    return generation, tuple(faces), tuple(owners), tuple(names), tolerance, solids, volume, interface_digest, mass_digest
+
+
+def _loft_section_generation_identity(row):
+    value = row.get("loft_section_wire_seam_continuity_solid_volume_generation_identity")
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("loft_generation", "")).strip()
+    sections = [str(item).strip() for item in value.get("section_names", [])]
+    result_sections = [str(item).strip() for item in value.get("result_section_names", [])]
+    seams = [str(item).strip() for item in value.get("seam_vertex_names", [])]
+    result_seams = [str(item).strip() for item in value.get("result_seam_vertex_names", [])]
+    try:
+        orientations = [int(item) for item in value.get("wire_orientation_signs", [])]
+        result_orientations = [int(item) for item in value.get("result_wire_orientation_signs", [])]
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    digest = str(value.get("loft_shape_sha256", "")).lower()
+    continuity = str(value.get("continuity", ""))
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "section_loft_generation", "wire_loft_generation", "seam_loft_generation",
+            "continuity_loft_generation", "solid_loft_generation",
+            "volume_loft_generation", "result_loft_generation"))
+        or len(sections) < 2 or any(not item for item in sections)
+        or len(set(sections)) != len(sections) or result_sections != sections
+        or len(orientations) != len(sections) or any(item != 1 for item in orientations)
+        or result_orientations != orientations
+        or len(seams) != len(sections) or any(not item for item in seams)
+        or len(set(seams)) != len(seams) or result_seams != seams
+        or continuity not in {"C1", "C2"} or value.get("result_continuity") != continuity
+        or value.get("is_valid_solid") is not True
+        or value.get("result_is_valid_solid") is not True
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or not _valid_identity_digest(digest)
+        or value.get("result_loft_shape_sha256") != digest
+    ):
+        return None
+    return generation, tuple(sections), tuple(orientations), tuple(seams), continuity, volume, digest
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -3563,6 +3655,46 @@ def shape_mass_property_crosscheck_summary(
             mass_frame_identity_ok = mass_frame_identity_ok and all(
                 _mass_density_frame_generation_identity(row)
                 == reference_mass_frame.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    boolean_imprint_evidence_present = any(
+        row.get("boolean_imprint_interface_owner_topology_name_tolerance_mass_generation_identity")
+        is not None for row in identity_rows
+    )
+    reference_boolean_imprints = {
+        str(row.get("name", "")): _boolean_imprint_generation_identity(row)
+        for row in reference
+    }
+    boolean_imprint_identity_ok = not boolean_imprint_evidence_present
+    if boolean_imprint_evidence_present:
+        boolean_imprint_identity_ok = bool(reference_boolean_imprints) and all(
+            value is not None for value in reference_boolean_imprints.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_imprint_identity_ok = boolean_imprint_identity_ok and all(
+                _boolean_imprint_generation_identity(row)
+                == reference_boolean_imprints.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    loft_section_evidence_present = any(
+        row.get("loft_section_wire_seam_continuity_solid_volume_generation_identity")
+        is not None for row in identity_rows
+    )
+    reference_loft_sections = {
+        str(row.get("name", "")): _loft_section_generation_identity(row)
+        for row in reference
+    }
+    loft_section_identity_ok = not loft_section_evidence_present
+    if loft_section_evidence_present:
+        loft_section_identity_ok = bool(reference_loft_sections) and all(
+            value is not None for value in reference_loft_sections.values()
+        )
+        for _, rows in normalized_sets:
+            loft_section_identity_ok = loft_section_identity_ok and all(
+                _loft_section_generation_identity(row)
+                == reference_loft_sections.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5463,6 +5595,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "mass_properties_use_current_density_center_inertia_frame_and_assembly": (
             mass_frame_identity_ok
+        ),
+        "boolean_imprints_use_current_interfaces_owners_topology_names_tolerance_and_mass": (
+            boolean_imprint_identity_ok
+        ),
+        "lofts_use_current_sections_wire_orientation_seams_continuity_solid_and_volume": (
+            loft_section_identity_ok
         ),
     }
     issues = []
