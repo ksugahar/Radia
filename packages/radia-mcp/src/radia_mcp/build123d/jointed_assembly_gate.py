@@ -555,6 +555,104 @@ def _brep_cache_generation_identity_ok(value: object) -> bool:
     )
 
 
+def _step_ap242_import_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation", "")).strip()
+    context = str(value.get("representation_context", "")).strip()
+    products = [tuple(str(item).strip() for item in row) for row in value.get("product_uuid_map", [])]
+    decoded_products = [tuple(str(item).strip() for item in row) for row in value.get("decoded_product_uuid_map", [])]
+    colors = [tuple(row) for row in value.get("colors_rgb", [])]
+    decoded_colors = [tuple(row) for row in value.get("decoded_colors_rgb", [])]
+    placements = [tuple(row) for row in value.get("placements", [])]
+    decoded_placements = [tuple(row) for row in value.get("decoded_placements", [])]
+    owners = [tuple(str(item).strip() for item in row) for row in value.get("shape_owner_map", [])]
+    decoded_owners = [tuple(str(item).strip() for item in row) for row in value.get("decoded_shape_owner_map", [])]
+    names = [row[0] for row in products if len(row) == 2]
+    uuids = [row[1] for row in products if len(row) == 2]
+    step_digest = str(value.get("step_sha256", "")).lower()
+    map_digest = str(value.get("shape_map_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "context_step_generation", "product_step_generation",
+            "unit_step_generation", "color_step_generation",
+            "placement_step_generation", "shape_step_generation",
+            "file_step_generation", "result_step_generation"))
+        and context == "mechanical_design_3d"
+        and value.get("decoded_representation_context") == context
+        and bool(products) and all(len(row) == 2 and all(row) for row in products)
+        and len(set(names)) == len(names) and len(set(uuids)) == len(uuids)
+        and all(len(uuid) == 36 and uuid.count("-") == 4 for uuid in uuids)
+        and decoded_products == products
+        and value.get("length_unit") in {"m", "cm", "mm"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and len(colors) == len(products)
+        and all(len(row) == 4 and str(row[0]).strip() in names for row in colors)
+        and all(0.0 <= float(item) <= 1.0 for row in colors for item in row[1:])
+        and decoded_colors == colors
+        and len(placements) == len(products)
+        and all(len(row) == 4 and str(row[0]).strip() in names for row in placements)
+        and all(math.isfinite(float(item)) for row in placements for item in row[1:])
+        and decoded_placements == placements
+        and bool(owners) and all(len(row) == 2 and all(row) and row[1] in names for row in owners)
+        and len({row[0] for row in owners}) == len(owners)
+        and decoded_owners == owners
+        and _valid_sha256(step_digest) and value.get("decoded_step_sha256") == step_digest
+        and _valid_sha256(map_digest) and value.get("decoded_shape_map_sha256") == map_digest
+    )
+
+
+def _occt_shape_cache_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("cache_generation", "")).strip()
+    kernel = str(value.get("kernel_version", "")).strip()
+    try:
+        location = [[float(item) for item in row] for row in value.get("location_transform", [])]
+        decoded_location = [[float(item) for item in row] for row in value.get("decoded_location_transform", [])]
+        tolerance = float(value.get("modeling_tolerance_m"))
+        decoded_tolerance = float(value.get("decoded_modeling_tolerance_m"))
+        triangulation = [float(item) for item in value.get("triangulation_parameters", [])]
+        decoded_triangulation = [float(item) for item in value.get("decoded_triangulation_parameters", [])]
+    except (TypeError, ValueError):
+        return False
+    shape_digest = str(value.get("shape_sha256", "")).lower()
+    triangulation_digest = str(value.get("triangulation_sha256", "")).lower()
+    serialization_digest = str(value.get("serialization_sha256", "")).lower()
+    cache_digest = str(value.get("cache_sha256", "")).lower()
+    serialization_format = str(value.get("serialization_format", "")).strip()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "kernel_cache_generation", "shape_cache_generation",
+            "location_cache_generation", "tolerance_cache_generation",
+            "triangulation_cache_generation", "serialization_cache_generation",
+            "result_cache_generation"))
+        and kernel.startswith("OCCT-") and value.get("decoded_kernel_version") == kernel
+        and _valid_sha256(shape_digest) and value.get("decoded_shape_sha256") == shape_digest
+        and len(location) == 3 and all(len(row) == 4 for row in location)
+        and all(math.isfinite(item) for row in location for item in row)
+        and decoded_location == location
+        and math.isfinite(tolerance) and tolerance > 0.0 and decoded_tolerance == tolerance
+        and len(triangulation) == 3
+        and triangulation[0] > 0.0 and 0.0 < triangulation[1] <= math.pi
+        and triangulation[2] in {0.0, 1.0}
+        and decoded_triangulation == triangulation
+        and _valid_sha256(triangulation_digest)
+        and value.get("decoded_triangulation_sha256") == triangulation_digest
+        and serialization_format == "brep-binary-v1"
+        and value.get("decoded_serialization_format") == serialization_format
+        and _valid_sha256(serialization_digest)
+        and value.get("decoded_serialization_sha256") == serialization_digest
+        and _valid_sha256(cache_digest) and value.get("decoded_cache_sha256") == cache_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -889,6 +987,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     builder_context_identity_ok = True
     step_import_hierarchy_identity_ok = True
     brep_cache_generation_identity_ok = True
+    step_ap242_import_identity_ok = True
+    occt_shape_cache_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -930,6 +1030,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         builder_context_identity_ok = False
         step_import_hierarchy_identity_ok = False
         brep_cache_generation_identity_ok = False
+        step_ap242_import_identity_ok = False
+        occt_shape_cache_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2515,6 +2617,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "brep_serialization_kernel_tolerance_location_cache_generation_identity"
             )
         )
+        step_ap242_import_identity_ok = _step_ap242_import_identity_ok(
+            replay_identity_value.get(
+                "step_ap242_context_product_uuid_unit_color_placement_shape_file_generation_identity"
+            )
+        )
+        occt_shape_cache_identity_ok = _occt_shape_cache_identity_ok(
+            replay_identity_value.get(
+                "occt_kernel_shape_location_tolerance_triangulation_serialization_cache_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2650,6 +2762,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "brep_cache_uses_current_kernel_tolerance_location_shape_and_digest": (
             brep_cache_generation_identity_ok
+        ),
+        "step_ap242_import_uses_current_context_products_units_colors_placements_shapes_and_file": (
+            step_ap242_import_identity_ok
+        ),
+        "occt_shape_cache_uses_current_kernel_shape_location_tolerance_triangulation_and_serialization": (
+            occt_shape_cache_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"

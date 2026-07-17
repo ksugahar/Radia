@@ -3447,6 +3447,108 @@ def _loft_section_generation_identity(row):
     return generation, tuple(sections), tuple(orientations), tuple(seams), continuity, volume, digest
 
 
+def _shell_offset_generation_identity(row):
+    value = row.get(
+        "shell_offset_face_normal_thickness_join_self_intersection_mass_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("shell_generation", "")).strip()
+    faces = [str(item).strip() for item in value.get("selected_face_names", [])]
+    result_faces = [
+        str(item).strip() for item in value.get("result_selected_face_names", [])
+    ]
+    try:
+        thickness = float(value.get("thickness_m"))
+        result_thickness = float(value.get("result_thickness_m"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    direction = str(value.get("normal_direction", "")).strip()
+    join_mode = str(value.get("join_mode", "")).strip()
+    shape_generation = str(value.get("shape_generation", "")).strip()
+    digest = str(value.get("mass_property_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "face_shell_generation", "normal_shell_generation",
+            "thickness_shell_generation", "join_shell_generation",
+            "intersection_shell_generation", "shape_shell_generation",
+            "mass_shell_generation", "result_shell_generation"))
+        or not faces or any(not item for item in faces) or len(set(faces)) != len(faces)
+        or result_faces != faces
+        or direction not in {"outward", "inward"}
+        or value.get("result_normal_direction") != direction
+        or not math.isfinite(thickness) or thickness <= 0.0 or result_thickness != thickness
+        or join_mode not in {"arc", "intersection", "tangent"}
+        or value.get("result_join_mode") != join_mode
+        or value.get("self_intersection") is not False
+        or value.get("result_self_intersection") is not False
+        or not shape_generation
+        or value.get("result_shape_generation") != shape_generation
+        or value.get("is_valid_solid") is not True
+        or value.get("result_is_valid_solid") is not True
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or not _valid_identity_digest(digest)
+        or value.get("result_mass_property_sha256") != digest
+    ):
+        return None
+    return (
+        generation, tuple(faces), direction, thickness, join_mode,
+        shape_generation, volume, digest,
+    )
+
+
+def _path_sweep_generation_identity(row):
+    value = row.get(
+        "path_sweep_frame_transition_profile_orientation_solid_volume_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("sweep_generation", "")).strip()
+    paths = [str(item).strip() for item in value.get("path_edge_names", [])]
+    result_paths = [str(item).strip() for item in value.get("result_path_edge_names", [])]
+    profiles = [str(item).strip() for item in value.get("profile_wire_names", [])]
+    result_profiles = [str(item).strip() for item in value.get("result_profile_wire_names", [])]
+    try:
+        orientations = [float(item) for item in value.get("profile_orientation_deg", [])]
+        result_orientations = [float(item) for item in value.get("result_profile_orientation_deg", [])]
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    frame = str(value.get("moving_frame", "")).strip()
+    transition = str(value.get("transition_mode", "")).strip()
+    digest = str(value.get("sweep_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "path_sweep_generation", "frame_sweep_generation",
+            "transition_sweep_generation", "profile_sweep_generation",
+            "orientation_sweep_generation", "solid_sweep_generation",
+            "volume_sweep_generation", "result_sweep_generation"))
+        or not paths or any(not item for item in paths) or len(set(paths)) != len(paths)
+        or result_paths != paths
+        or frame not in {"parallel_transport", "frenet", "fixed"}
+        or value.get("result_moving_frame") != frame
+        or transition not in {"round", "right", "transformed"}
+        or value.get("result_transition_mode") != transition
+        or not profiles or any(not item for item in profiles) or len(set(profiles)) != len(profiles)
+        or result_profiles != profiles
+        or len(orientations) != len(paths)
+        or any(not math.isfinite(item) for item in orientations)
+        or result_orientations != orientations
+        or value.get("is_valid_solid") is not True
+        or value.get("result_is_valid_solid") is not True
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or not _valid_identity_digest(digest)
+        or value.get("result_sweep_shape_sha256") != digest
+    ):
+        return None
+    return generation, tuple(paths), frame, transition, tuple(profiles), tuple(orientations), volume, digest
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -3695,6 +3797,46 @@ def shape_mass_property_crosscheck_summary(
             loft_section_identity_ok = loft_section_identity_ok and all(
                 _loft_section_generation_identity(row)
                 == reference_loft_sections.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    shell_offset_evidence_present = any(
+        row.get("shell_offset_face_normal_thickness_join_self_intersection_mass_generation_identity")
+        is not None for row in identity_rows
+    )
+    reference_shell_offsets = {
+        str(row.get("name", "")): _shell_offset_generation_identity(row)
+        for row in reference
+    }
+    shell_offset_identity_ok = not shell_offset_evidence_present
+    if shell_offset_evidence_present:
+        shell_offset_identity_ok = bool(reference_shell_offsets) and all(
+            value is not None for value in reference_shell_offsets.values()
+        )
+        for _, rows in normalized_sets:
+            shell_offset_identity_ok = shell_offset_identity_ok and all(
+                _shell_offset_generation_identity(row)
+                == reference_shell_offsets.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    path_sweep_evidence_present = any(
+        row.get("path_sweep_frame_transition_profile_orientation_solid_volume_generation_identity")
+        is not None for row in identity_rows
+    )
+    reference_path_sweeps = {
+        str(row.get("name", "")): _path_sweep_generation_identity(row)
+        for row in reference
+    }
+    path_sweep_identity_ok = not path_sweep_evidence_present
+    if path_sweep_evidence_present:
+        path_sweep_identity_ok = bool(reference_path_sweeps) and all(
+            value is not None for value in reference_path_sweeps.values()
+        )
+        for _, rows in normalized_sets:
+            path_sweep_identity_ok = path_sweep_identity_ok and all(
+                _path_sweep_generation_identity(row)
+                == reference_path_sweeps.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5601,6 +5743,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "lofts_use_current_sections_wire_orientation_seams_continuity_solid_and_volume": (
             loft_section_identity_ok
+        ),
+        "shell_offsets_use_current_faces_normals_thickness_join_intersection_shape_and_mass": (
+            shell_offset_identity_ok
+        ),
+        "path_sweeps_use_current_path_frame_transition_profile_orientation_solid_and_volume": (
+            path_sweep_identity_ok
         ),
     }
     issues = []
