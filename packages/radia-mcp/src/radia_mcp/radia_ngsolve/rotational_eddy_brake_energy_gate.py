@@ -716,6 +716,102 @@ def _adaptive_bdf_restart_history_event_identity_ok(summary: dict[str, Any]) -> 
     )
 
 
+def _nonlinear_continuation_branch_tangent_checkpoint_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("nonlinear_continuation_branch_tangent_checkpoint_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    tangent = identity.get("tangent_vector")
+    checkpoint_tangent = identity.get("checkpoint_tangent_vector")
+    if not isinstance(tangent, list) or not isinstance(checkpoint_tangent, list):
+        return False
+    try:
+        load_value = float(identity.get("load_parameter_value"))
+        tangent_load = float(identity.get("tangent_load_parameter_value"))
+        checkpoint_load = float(identity.get("checkpoint_load_parameter_value"))
+        tangent_values = [float(value) for value in tangent]
+        checkpoint_values = [float(value) for value in checkpoint_tangent]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("continuation_state_generation") or "")
+    branch = str(identity.get("branch_id") or "")
+    digest = str(identity.get("continuation_tangent_sha256") or "")
+    return (
+        bool(str(identity.get("nonlinear_solve_generation") or ""))
+        and bool(generation)
+        and identity.get("tangent_continuation_state_generation") == generation
+        and identity.get("checkpoint_continuation_state_generation") == generation
+        and bool(branch)
+        and identity.get("tangent_branch_id") == branch
+        and identity.get("checkpoint_branch_id") == branch
+        and bool(str(identity.get("load_parameter_name") or ""))
+        and math.isfinite(load_value)
+        and math.isclose(tangent_load, load_value, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(checkpoint_load, load_value, rel_tol=0.0, abs_tol=1.0e-15)
+        and bool(tangent_values)
+        and all(math.isfinite(value) for value in tangent_values)
+        and checkpoint_values == tangent_values
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("checkpoint_tangent_sha256") == digest
+    )
+
+
+def _nonconforming_mortar_projection_quadrature_mesh_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("nonconforming_mortar_projection_quadrature_mesh_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    fields = (
+        identity.get("source_trace_dof_ids"),
+        identity.get("projection_source_trace_dof_ids"),
+        identity.get("target_trace_dof_ids"),
+        identity.get("projection_target_trace_dof_ids"),
+        identity.get("projection_shape"),
+        identity.get("quadrature_projection_shape"),
+    )
+    if not all(isinstance(values, list) for values in fields):
+        return False
+    try:
+        source_ids = [int(value) for value in fields[0]]
+        projected_source_ids = [int(value) for value in fields[1]]
+        target_ids = [int(value) for value in fields[2]]
+        projected_target_ids = [int(value) for value in fields[3]]
+        shape = [int(value) for value in fields[4]]
+        quadrature_shape = [int(value) for value in fields[5]]
+    except (TypeError, ValueError):
+        return False
+    source_generation = str(identity.get("source_mesh_generation") or "")
+    target_generation = str(identity.get("target_mesh_generation") or "")
+    digest = str(identity.get("projection_operator_sha256") or "")
+    return (
+        bool(str(identity.get("interface_generation") or ""))
+        and bool(source_generation)
+        and identity.get("projection_source_mesh_generation") == source_generation
+        and identity.get("quadrature_source_mesh_generation") == source_generation
+        and bool(target_generation)
+        and identity.get("projection_target_mesh_generation") == target_generation
+        and identity.get("quadrature_target_mesh_generation") == target_generation
+        and bool(source_ids)
+        and len(set(source_ids)) == len(source_ids)
+        and projected_source_ids == source_ids
+        and bool(target_ids)
+        and len(set(target_ids)) == len(target_ids)
+        and projected_target_ids == target_ids
+        and shape == [len(target_ids), len(source_ids)]
+        and quadrature_shape == shape
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("quadrature_projection_operator_sha256") == digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -1091,6 +1187,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "adaptive_bdf_restart_uses_current_history_and_event_generation": (
             adaptive_bdf_restart_identity_ok
+        ),
+        "nonlinear_continuation_uses_current_branch_tangent_checkpoint": (
+            _nonlinear_continuation_branch_tangent_checkpoint_identity_ok(summary)
+        ),
+        "mortar_projection_uses_current_interface_mesh_and_quadrature": (
+            _nonconforming_mortar_projection_quadrature_mesh_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
