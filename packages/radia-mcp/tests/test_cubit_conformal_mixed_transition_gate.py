@@ -1744,3 +1744,181 @@ def test_v20_source_netgen_vol_element_block_order_curving_generation_mismatch()
     assert result["checks"][
         "netgen_export_uses_current_block_order_and_curving_generation"
     ] is False
+
+
+def _with_v21_sweep_quality_group_aprepro_identity(row):
+    row = _with_v20_jacobian_interface_journal_vol_identity(row)
+    row["hex_sweep_source_target_face_vertex_twist_generation_identity"] = {
+        "sweep_generation": "hex-sweep-71",
+        "source_face_sweep_generation": "hex-sweep-71",
+        "target_face_sweep_generation": "hex-sweep-71",
+        "vertex_map_sweep_generation": "hex-sweep-71",
+        "twist_path_sweep_generation": "hex-sweep-71",
+        "source_face_id": 11,
+        "mapped_source_face_id": 11,
+        "target_face_id": 21,
+        "mapped_target_face_id": 21,
+        "source_vertex_ids": [101, 102, 103, 104],
+        "mapped_source_vertex_ids": [101, 102, 103, 104],
+        "target_vertex_ids": [201, 202, 203, 204],
+        "mapped_target_vertex_ids": [201, 202, 203, 204],
+        "twist_path_vertex_ids": [101, 201, 102, 202, 103, 203, 104, 204],
+        "mapped_twist_path_vertex_ids": [101, 201, 102, 202, 103, 203, 104, 204],
+        "face_vertex_map_sha256": "1" * 64,
+        "applied_face_vertex_map_sha256": "1" * 64,
+        "twist_path_sha256": "2" * 64,
+        "applied_twist_path_sha256": "2" * 64,
+    }
+    row["quality_histogram_metric_element_set_unit_generation_identity"] = {
+        "mesh_generation": "quality-mesh-71",
+        "metric_mesh_generation": "quality-mesh-71",
+        "element_set_mesh_generation": "quality-mesh-71",
+        "coordinate_unit_mesh_generation": "quality-mesh-71",
+        "metric_name": "scaled_jacobian",
+        "evaluated_metric_name": "scaled_jacobian",
+        "coordinate_unit": "m",
+        "evaluated_coordinate_unit": "m",
+        "element_ids": [301, 302, 303, 304],
+        "evaluated_element_ids": [301, 302, 303, 304],
+        "metric_values": [0.62, 0.74, 0.83, 0.91],
+        "evaluated_metric_values": [0.62, 0.74, 0.83, 0.91],
+        "histogram_bin_edges": [0.0, 0.5, 0.75, 1.0],
+        "histogram_counts": [0, 2, 2],
+        "evaluated_histogram_counts": [0, 2, 2],
+        "quality_table_sha256": "3" * 64,
+        "evaluated_quality_table_sha256": "3" * 64,
+    }
+    row["block_sideset_group_entity_merge_renumber_generation_identity"] = {
+        "topology_generation": "topology-71",
+        "block_topology_generation": "topology-71",
+        "sideset_topology_generation": "topology-71",
+        "group_topology_generation": "topology-71",
+        "renumber_topology_generation": "topology-71",
+        "merge_transaction_generation": "merge-71",
+        "group_merge_transaction_generation": "merge-71",
+        "block_ids": [10, 20],
+        "exported_block_ids": [10, 20],
+        "block_entity_ids": [[401, 402], [403]],
+        "exported_block_entity_ids": [[401, 402], [403]],
+        "sideset_ids": [30, 40],
+        "exported_sideset_ids": [30, 40],
+        "sideset_entity_ids": [[501, 502], [503, 504]],
+        "exported_sideset_entity_ids": [[501, 502], [503, 504]],
+        "group_entity_ids": [401, 402, 403, 501, 502, 503, 504],
+        "exported_group_entity_ids": [401, 402, 403, 501, 502, 503, 504],
+        "ownership_table_sha256": "4" * 64,
+        "exported_ownership_table_sha256": "4" * 64,
+    }
+    row[
+        "aprepro_include_variable_expansion_working_directory_generation_identity"
+    ] = {
+        "journal_transaction_generation": "journal-71",
+        "variable_table_transaction_generation": "journal-71",
+        "include_expansion_transaction_generation": "journal-71",
+        "working_directory_transaction_generation": "journal-71",
+        "working_directory": "model/input",
+        "replay_working_directory": "model/input",
+        "variable_names": ["radius", "height", "intervals"],
+        "expanded_variable_names": ["radius", "height", "intervals"],
+        "variable_values": [0.025, 0.08, 12.0],
+        "expanded_variable_values": [0.025, 0.08, 12.0],
+        "include_paths": ["common/units.inc", "mesh/sweep.inc"],
+        "expanded_include_paths": ["common/units.inc", "mesh/sweep.inc"],
+        "variable_table_sha256": "5" * 64,
+        "expanded_variable_table_sha256": "5" * 64,
+        "include_tree_sha256": "6" * 64,
+        "expanded_include_tree_sha256": "6" * 64,
+    }
+    return row
+
+
+def test_v21_positive_sweep_quality_group_aprepro_identity():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    assert json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))["status"] == "ok"
+    assert json.loads(cubit_mixed_transition_source_gate(row))["status"] == "ok"
+
+
+def test_v21_public_hex_sweep_source_target_face_vertex_twist_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row["hex_sweep_source_target_face_vertex_twist_generation_identity"].update(
+        {
+            "target_face_sweep_generation": "hex-sweep-70",
+            "vertex_map_sweep_generation": "hex-sweep-69",
+            "twist_path_sweep_generation": "hex-sweep-68",
+            "mapped_target_face_id": 22,
+            "mapped_source_vertex_ids": [104, 103, 102, 101],
+            "mapped_twist_path_vertex_ids": [101, 202, 102, 203, 103, 204, 104, 201],
+            "applied_face_vertex_map_sha256": "a" * 64,
+            "applied_twist_path_sha256": "b" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "hex_sweep_uses_current_source_target_vertex_map_and_twist_path"
+    ] is False
+
+
+def test_v21_public_quality_histogram_metric_element_set_unit_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row["quality_histogram_metric_element_set_unit_generation_identity"].update(
+        {
+            "metric_mesh_generation": "quality-mesh-70",
+            "element_set_mesh_generation": "quality-mesh-69",
+            "coordinate_unit_mesh_generation": "quality-mesh-68",
+            "evaluated_metric_name": "aspect_ratio",
+            "evaluated_coordinate_unit": "mm",
+            "evaluated_element_ids": [301, 303, 305],
+            "evaluated_metric_values": [1.2, 2.1, 3.4],
+            "evaluated_histogram_counts": [1, 1, 1],
+            "evaluated_quality_table_sha256": "c" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "quality_histogram_uses_current_metric_element_set_and_units"
+    ] is False
+
+
+def test_v21_source_block_sideset_group_entity_merge_renumber_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row["block_sideset_group_entity_merge_renumber_generation_identity"].update(
+        {
+            "group_topology_generation": "topology-70",
+            "renumber_topology_generation": "topology-69",
+            "group_merge_transaction_generation": "merge-70",
+            "exported_block_entity_ids": [[401, 405], [403]],
+            "exported_sideset_entity_ids": [[501], [503, 505]],
+            "exported_group_entity_ids": [401, 403, 405, 501, 503, 505],
+            "exported_ownership_table_sha256": "d" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "block_sideset_groups_use_current_merge_and_renumber_generation"
+    ] is False
+
+
+def test_v21_source_aprepro_include_variable_expansion_working_directory_generation_mismatch():
+    row = _with_v21_sweep_quality_group_aprepro_identity(summary())
+    row[
+        "aprepro_include_variable_expansion_working_directory_generation_identity"
+    ].update(
+        {
+            "variable_table_transaction_generation": "journal-70",
+            "include_expansion_transaction_generation": "journal-69",
+            "working_directory_transaction_generation": "journal-68",
+            "replay_working_directory": "archive/input",
+            "expanded_variable_values": [25.0, 80.0, 10.0],
+            "expanded_include_paths": ["old/units.inc", "mesh/tet.inc"],
+            "expanded_variable_table_sha256": "e" * 64,
+            "expanded_include_tree_sha256": "f" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][
+        "aprepro_replay_uses_current_variables_includes_and_working_directory"
+    ] is False
