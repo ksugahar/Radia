@@ -933,6 +933,136 @@ def _time_domain_port_signal_gate_window_is_current(
     )
 
 
+def _sparameter_renormalization_reference_impedance_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get(
+        "sparameter_port_renormalization_reference_impedance_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    sparameter_generation = str(
+        identity.get("sparameter_generation", "")
+    ).strip()
+    calibration_generation = str(
+        identity.get("port_calibration_generation", "")
+    ).strip()
+    port_ids = identity.get("port_ids")
+    impedances = identity.get("reference_impedances_ohm")
+    applied_impedances = identity.get("applied_reference_impedances_ohm")
+    grid_digest = str(identity.get("frequency_grid_sha256", "")).lower()
+    map_digest = str(
+        identity.get("reference_impedance_map_sha256", "")
+    ).lower()
+    try:
+        impedance_values = [float(value) for value in impedances]
+        applied_values = [float(value) for value in applied_impedances]
+    except (TypeError, ValueError):
+        impedance_values = []
+        applied_values = []
+    return (
+        bool(sparameter_generation)
+        and identity.get("renormalized_result_sparameter_generation")
+        == sparameter_generation
+        and bool(calibration_generation)
+        and identity.get(
+            "reference_impedance_port_calibration_generation"
+        )
+        == calibration_generation
+        and identity.get("renormalization_port_calibration_generation")
+        == calibration_generation
+        and identity.get(
+            "renormalized_result_port_calibration_generation"
+        )
+        == calibration_generation
+        and isinstance(port_ids, list)
+        and bool(port_ids)
+        and all(isinstance(value, str) and bool(value) for value in port_ids)
+        and len(set(port_ids)) == len(port_ids)
+        and identity.get("reference_impedance_port_ids") == port_ids
+        and len(impedance_values) == len(port_ids)
+        and all(math.isfinite(value) and value > 0.0 for value in impedance_values)
+        and applied_values == impedance_values
+        and len(grid_digest) == 64
+        and all(character in "0123456789abcdef" for character in grid_digest)
+        and str(identity.get("renormalized_frequency_grid_sha256", "")).lower()
+        == grid_digest
+        and len(map_digest) == 64
+        and all(character in "0123456789abcdef" for character in map_digest)
+        and str(
+            identity.get("renormalized_reference_impedance_map_sha256", "")
+        ).lower()
+        == map_digest
+    )
+
+
+def _realized_gain_excitation_and_accepted_power_are_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get(
+        "realized_gain_accepted_power_port_excitation_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    gain_generation = str(
+        identity.get("realized_gain_generation", "")
+    ).strip()
+    excitation_generation = str(
+        identity.get("excitation_generation", "")
+    ).strip()
+    port_ids = identity.get("port_ids")
+    accepted_power = identity.get("accepted_power_w")
+    coefficients = identity.get("excitation_coefficients_re_im")
+    table_digest = str(identity.get("excitation_table_sha256", "")).lower()
+    try:
+        power_values = [float(value) for value in accepted_power]
+        coefficient_values = [
+            [float(component) for component in value]
+            for value in coefficients
+        ]
+    except (TypeError, ValueError):
+        power_values = []
+        coefficient_values = []
+    return (
+        bool(gain_generation)
+        and identity.get("result_realized_gain_generation") == gain_generation
+        and bool(excitation_generation)
+        and identity.get("accepted_power_excitation_generation")
+        == excitation_generation
+        and identity.get("port_coefficient_excitation_generation")
+        == excitation_generation
+        and identity.get("realized_gain_excitation_generation")
+        == excitation_generation
+        and isinstance(port_ids, list)
+        and bool(port_ids)
+        and all(isinstance(value, str) and bool(value) for value in port_ids)
+        and len(set(port_ids)) == len(port_ids)
+        and identity.get("accepted_power_port_ids") == port_ids
+        and identity.get("excitation_coefficient_port_ids") == port_ids
+        and len(power_values) == len(port_ids)
+        and all(math.isfinite(value) and value >= 0.0 for value in power_values)
+        and any(value > 0.0 for value in power_values)
+        and identity.get("realized_gain_accepted_power_w") == accepted_power
+        and len(coefficient_values) == len(port_ids)
+        and all(
+            len(value) == 2 and all(math.isfinite(component) for component in value)
+            for value in coefficient_values
+        )
+        and identity.get("realized_gain_excitation_coefficients_re_im")
+        == coefficients
+        and identity.get("accepted_power_unit") == "W"
+        and identity.get("gain_unit") == "dBi"
+        and len(table_digest) == 64
+        and all(character in "0123456789abcdef" for character in table_digest)
+        and str(identity.get("realized_gain_excitation_table_sha256", "")).lower()
+        == table_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -1156,6 +1286,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "time_domain_port_transform_uses_current_gate_window": (
                 _time_domain_port_signal_gate_window_is_current(raw)
+            ),
+            "sparameter_renormalization_uses_current_port_reference_impedances": (
+                _sparameter_renormalization_reference_impedance_is_current(raw)
+            ),
+            "realized_gain_uses_current_excitation_and_accepted_power": (
+                _realized_gain_excitation_and_accepted_power_are_current(raw)
             ),
         }
         row = {

@@ -352,6 +352,48 @@ def _with_v14_bindings(summary):
             "gate_window_sha256": "6" * 64,
             "transform_gate_window_sha256": "6" * 64,
         }
+        row[
+            "sparameter_port_renormalization_reference_impedance_generation_identity"
+        ] = {
+            "sparameter_generation": "sparameter-21",
+            "renormalized_result_sparameter_generation": "sparameter-21",
+            "port_calibration_generation": "port-calibration-21",
+            "reference_impedance_port_calibration_generation": "port-calibration-21",
+            "renormalization_port_calibration_generation": "port-calibration-21",
+            "renormalized_result_port_calibration_generation": "port-calibration-21",
+            "port_ids": ["P1", "P2"],
+            "reference_impedance_port_ids": ["P1", "P2"],
+            "reference_impedances_ohm": [50.0, 75.0],
+            "applied_reference_impedances_ohm": [50.0, 75.0],
+            "frequency_grid_sha256": "a" * 64,
+            "renormalized_frequency_grid_sha256": "a" * 64,
+            "reference_impedance_map_sha256": "b" * 64,
+            "renormalized_reference_impedance_map_sha256": "b" * 64,
+        }
+        row[
+            "realized_gain_accepted_power_port_excitation_generation_identity"
+        ] = {
+            "realized_gain_generation": "realized-gain-21",
+            "result_realized_gain_generation": "realized-gain-21",
+            "excitation_generation": "excitation-21",
+            "accepted_power_excitation_generation": "excitation-21",
+            "port_coefficient_excitation_generation": "excitation-21",
+            "realized_gain_excitation_generation": "excitation-21",
+            "port_ids": ["P1", "P2"],
+            "accepted_power_port_ids": ["P1", "P2"],
+            "excitation_coefficient_port_ids": ["P1", "P2"],
+            "accepted_power_w": [0.6, 0.4],
+            "realized_gain_accepted_power_w": [0.6, 0.4],
+            "excitation_coefficients_re_im": [[1.0, 0.0], [0.0, 0.0]],
+            "realized_gain_excitation_coefficients_re_im": [
+                [1.0, 0.0],
+                [0.0, 0.0],
+            ],
+            "accepted_power_unit": "W",
+            "gain_unit": "dBi",
+            "excitation_table_sha256": "c" * 64,
+            "realized_gain_excitation_table_sha256": "c" * 64,
+        }
     return summary
 
 
