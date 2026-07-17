@@ -609,6 +609,244 @@ def _exodus_block_namespace_qa_mesh_generation_ok(identity: object) -> bool:
     )
 
 
+def _high_order_hex_jacobian_node_order_scale_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("corner_node_ids"),
+        identity.get("jacobian_corner_node_ids"),
+        identity.get("reference_corner_coordinates"),
+        identity.get("jacobian_reference_corner_coordinates"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        node_ids = [int(value) for value in fields[0]]
+        jacobian_node_ids = [int(value) for value in fields[1]]
+        reference = [[float(value) for value in row] for row in fields[2]]
+        jacobian_reference = [[float(value) for value in row] for row in fields[3]]
+        order = int(identity.get("element_order"))
+        jacobian_order = int(identity.get("jacobian_element_order"))
+        scale = float(identity.get("coordinate_scale_m"))
+        jacobian_scale = float(identity.get("jacobian_coordinate_scale_m"))
+        minimum_jacobian = float(identity.get("minimum_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    order_generation = str(identity.get("node_order_generation") or "")
+    scale_generation = str(identity.get("coordinate_scale_generation") or "")
+    digest = str(identity.get("jacobian_table_sha256") or "")
+    return (
+        bool(mesh_generation)
+        and identity.get("curving_mesh_generation") == mesh_generation
+        and identity.get("jacobian_mesh_generation") == mesh_generation
+        and bool(order_generation)
+        and identity.get("jacobian_node_order_generation") == order_generation
+        and bool(scale_generation)
+        and identity.get("jacobian_coordinate_scale_generation") == scale_generation
+        and order >= 2
+        and jacobian_order == order
+        and len(node_ids) == 8
+        and len(set(node_ids)) == 8
+        and jacobian_node_ids == node_ids
+        and len(reference) == 8
+        and all(len(row) == 3 for row in reference)
+        and all(value in {-1.0, 1.0} for row in reference for value in row)
+        and len({tuple(row) for row in reference}) == 8
+        and jacobian_reference == reference
+        and math.isfinite(scale)
+        and scale > 0.0
+        and math.isclose(jacobian_scale, scale, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isfinite(minimum_jacobian)
+        and minimum_jacobian > 0.0
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("evaluated_jacobian_table_sha256") == digest
+    )
+
+
+def _tet_hex_pyramid_interface_orientation_conformity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("quad_face_node_ids"),
+        identity.get("interface_quad_face_node_ids"),
+        identity.get("pyramid_base_node_ids"),
+        identity.get("interface_pyramid_base_node_ids"),
+        identity.get("pyramid_apex_node_ids"),
+        identity.get("interface_pyramid_apex_node_ids"),
+        identity.get("face_orientation_signs"),
+        identity.get("interface_face_orientation_signs"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        quad_faces = [[int(value) for value in face] for face in fields[0]]
+        interface_quads = [[int(value) for value in face] for face in fields[1]]
+        pyramid_bases = [[int(value) for value in face] for face in fields[2]]
+        interface_bases = [[int(value) for value in face] for face in fields[3]]
+        apex_ids = [int(value) for value in fields[4]]
+        interface_apex_ids = [int(value) for value in fields[5]]
+        signs = [int(value) for value in fields[6]]
+        interface_signs = [int(value) for value in fields[7]]
+    except (TypeError, ValueError):
+        return False
+    tet_generation = str(identity.get("tet_mesh_generation") or "")
+    hex_generation = str(identity.get("hex_mesh_generation") or "")
+    pyramid_generation = str(identity.get("pyramid_transition_generation") or "")
+    digest = str(identity.get("interface_conformity_sha256") or "")
+    return (
+        bool(str(identity.get("interface_generation") or ""))
+        and bool(tet_generation)
+        and identity.get("interface_tet_mesh_generation") == tet_generation
+        and bool(hex_generation)
+        and identity.get("interface_hex_mesh_generation") == hex_generation
+        and bool(pyramid_generation)
+        and identity.get("interface_pyramid_transition_generation") == pyramid_generation
+        and bool(quad_faces)
+        and all(len(face) == 4 and len(set(face)) == 4 for face in quad_faces)
+        and interface_quads == quad_faces
+        and pyramid_bases == quad_faces
+        and interface_bases == pyramid_bases
+        and len(apex_ids) == len(quad_faces)
+        and all(
+            apex not in face for apex, face in zip(apex_ids, pyramid_bases)
+        )
+        and interface_apex_ids == apex_ids
+        and len(signs) == len(quad_faces)
+        and all(sign in {-1, 1} for sign in signs)
+        and interface_signs == signs
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("exported_interface_conformity_sha256") == digest
+    )
+
+
+def _journal_transaction_undo_entity_reuse_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("created_entity_ids"),
+        identity.get("replay_created_entity_ids"),
+        identity.get("group_entity_ids"),
+        identity.get("replay_group_entity_ids"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        created = [int(value) for value in fields[0]]
+        replay_created = [int(value) for value in fields[1]]
+        grouped = [int(value) for value in fields[2]]
+        replay_grouped = [int(value) for value in fields[3]]
+        reset_epoch = int(identity.get("reset_epoch"))
+        replay_epoch = int(identity.get("replay_reset_epoch"))
+        undo_depth = int(identity.get("undo_depth"))
+        replay_undo = int(identity.get("replay_undo_depth"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("journal_generation") or "")
+    transaction = str(identity.get("transaction_id") or "")
+    digest = str(identity.get("transaction_entity_table_sha256") or "")
+    return (
+        bool(generation)
+        and identity.get("transaction_journal_generation") == generation
+        and identity.get("entity_table_journal_generation") == generation
+        and identity.get("group_table_journal_generation") == generation
+        and bool(transaction)
+        and identity.get("replay_transaction_id") == transaction
+        and reset_epoch >= 0
+        and replay_epoch == reset_epoch
+        and undo_depth >= 0
+        and replay_undo == undo_depth
+        and bool(created)
+        and len(set(created)) == len(created)
+        and replay_created == created
+        and set(grouped).issubset(created)
+        and replay_grouped == grouped
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("replay_transaction_entity_table_sha256") == digest
+    )
+
+
+def _netgen_vol_block_order_curving_generation_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    fields = (
+        identity.get("element_block_ids"),
+        identity.get("element_block_types"),
+        identity.get("writer_element_block_types"),
+        identity.get("element_orders"),
+        identity.get("writer_element_orders"),
+        identity.get("curving_node_counts"),
+        identity.get("writer_curving_node_counts"),
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in fields
+    ):
+        return False
+    try:
+        block_ids = [int(value) for value in fields[0]]
+        block_types = [str(value) for value in fields[1]]
+        writer_types = [str(value) for value in fields[2]]
+        orders = [int(value) for value in fields[3]]
+        writer_orders = [int(value) for value in fields[4]]
+        node_counts = [int(value) for value in fields[5]]
+        writer_counts = [int(value) for value in fields[6]]
+    except (TypeError, ValueError):
+        return False
+    mesh_generation = str(identity.get("mesh_generation") or "")
+    export_generation = str(identity.get("export_generation") or "")
+    curving_generation = str(identity.get("curving_generation") or "")
+    digest = str(identity.get("element_block_table_sha256") or "")
+    allowed_counts = {
+        ("tet", 1): 4,
+        ("tet", 2): 10,
+        ("hex", 1): 8,
+        ("hex", 2): 20,
+        ("pyramid", 1): 5,
+    }
+    return (
+        bool(mesh_generation)
+        and identity.get("writer_mesh_generation") == mesh_generation
+        and bool(export_generation)
+        and identity.get("writer_export_generation") == export_generation
+        and bool(curving_generation)
+        and identity.get("writer_curving_generation") == curving_generation
+        and bool(block_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and len(block_ids) == len(block_types) == len(orders) == len(node_counts)
+        and writer_types == block_types
+        and writer_orders == orders
+        and writer_counts == node_counts
+        and all(
+            allowed_counts.get((family, order)) == count
+            for family, order, count in zip(block_types, orders, node_counts)
+        )
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+        and identity.get("writer_element_block_table_sha256") == digest
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -1296,6 +1534,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "hex_boundary_layers_follow_current_healed_surface_normals": (
             _hex_boundary_layer_thickness_surface_normal_generation_ok(
                 summary.get("hex_boundary_layer_thickness_surface_normal_generation_identity")
+            )
+        ),
+        "high_order_hex_jacobians_use_current_node_order_and_coordinate_scale": (
+            _high_order_hex_jacobian_node_order_scale_generation_ok(
+                summary.get("high_order_hex_jacobian_node_order_coordinate_scale_identity")
+            )
+        ),
+        "tet_hex_pyramid_interface_uses_current_face_orientation_and_conformity": (
+            _tet_hex_pyramid_interface_orientation_conformity_ok(
+                summary.get("tet_hex_pyramid_interface_face_orientation_conformity_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -2007,6 +2255,16 @@ def cubit_mixed_transition_source_gate(
         "exodus_blocks_and_qa_use_current_mesh_namespace": (
             _exodus_block_namespace_qa_mesh_generation_ok(
                 summary.get("exodus_block_id_namespace_qa_record_mesh_generation_identity")
+            )
+        ),
+        "journal_replay_uses_current_transaction_undo_and_entity_ids": (
+            _journal_transaction_undo_entity_reuse_generation_ok(
+                summary.get("journal_transaction_undo_entity_id_reuse_generation_identity")
+            )
+        ),
+        "netgen_export_uses_current_block_order_and_curving_generation": (
+            _netgen_vol_block_order_curving_generation_ok(
+                summary.get("netgen_vol_element_block_order_curving_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
