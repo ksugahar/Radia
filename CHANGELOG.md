@@ -5,7 +5,7 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
-## 4.95.16 - Genus-aware BEM-SIBC induction heating
+## 4.95.16 - Genus-aware IH and topology-aware hybrid VIM
 
 Released 2026-07-17.
 
@@ -17,9 +17,12 @@ Released 2026-07-17.
   tangential-gradient residual gate and exact batched incident-field inputs.
 - Corrected strong-coupling terminal-current scaling and routed volume coil
   meshes through the validated surface extractor before HDivSurface assembly.
-- Exposed the loop-current and incident-potential controls through the IH
-  notebook workbench, command builder, and generated panel registry, with
-  automatic topology-aware defaults and explicit legacy modes.
+- Made the weak P1 incident-potential route basis-determined, exposed the
+  supported loop-current `auto`/`on` modes through the IH notebook workbench,
+  and removed the known-invalid legacy selections.
+- Added topology-aware HCurl/BDM hybrid VIM primitives, EVRS/T-method and
+  Schur/SIBC native kernels, reduced HDiv multipole ports, and focused
+  response-compression contracts for conductive and magnetic regions.
 
 ## 4.95.15 - Complete BDM2 HDiv-VIM production paths
 
