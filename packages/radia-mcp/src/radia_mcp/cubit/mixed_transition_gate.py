@@ -3552,6 +3552,161 @@ def _periodic_high_order_identity_ok(identity: object) -> bool:
     )
 
 
+def _hex_boundary_layer_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        first = float(identity.get("first_layer_thickness_m"))
+        result_first = float(identity.get("result_first_layer_thickness_m"))
+        ratio = float(identity.get("growth_ratio"))
+        result_ratio = float(identity.get("result_growth_ratio"))
+        count = int(identity.get("layer_count"))
+        result_count = int(identity.get("result_layer_count"))
+        thicknesses = [
+            float(value) for value in identity.get("layer_thicknesses_m", [])
+        ]
+        result_thicknesses = [
+            float(value) for value in identity.get("result_layer_thicknesses_m", [])
+        ]
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        block = int(identity.get("block_id"))
+        result_block = int(identity.get("result_block_id"))
+        sideset = int(identity.get("wall_sideset_id"))
+        result_sideset = int(identity.get("result_wall_sideset_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("boundary_layer_generation") or "")
+    expected = [first * ratio**index for index in range(count)]
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "thickness_generation",
+                "growth_generation",
+                "collision_generation",
+                "jacobian_generation",
+                "block_generation",
+                "sideset_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(first)
+        and first > 0.0
+        and result_first == first
+        and identity.get("growth_law") == "geometric"
+        and identity.get("result_growth_law") == identity.get("growth_law")
+        and math.isfinite(ratio)
+        and ratio >= 1.0
+        and result_ratio == ratio
+        and count >= 1
+        and result_count == count
+        and len(thicknesses) == count
+        and all(math.isfinite(value) and value > 0.0 for value in thicknesses)
+        and all(
+            math.isclose(actual, target, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, target in zip(thicknesses, expected, strict=True)
+        )
+        and result_thicknesses == thicknesses
+        and identity.get("collision_handling") in {
+            "truncate_and_rebalance",
+            "stop_before_collision",
+        }
+        and identity.get("result_collision_handling")
+        == identity.get("collision_handling")
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and block > 0
+        and result_block == block
+        and sideset > 0
+        and result_sideset == sideset
+        and _valid_sha256(identity.get("boundary_layer_mesh_sha256"))
+        and identity.get("accepted_boundary_layer_mesh_sha256")
+        == identity.get("boundary_layer_mesh_sha256")
+    )
+
+
+def _pyramid_transition_closure_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        diagonal = [int(value) for value in identity.get("interface_diagonal", [])]
+        result_diagonal = [
+            int(value) for value in identity.get("result_interface_diagonal", [])
+        ]
+        orientations = [
+            int(value) for value in identity.get("pyramid_orientation_signs", [])
+        ]
+        result_orientations = [
+            int(value)
+            for value in identity.get("result_pyramid_orientation_signs", [])
+        ]
+        faces = [
+            [int(value) for value in row]
+            for row in identity.get("shared_face_connectivity", [])
+        ]
+        result_faces = [
+            [int(value) for value in row]
+            for row in identity.get("result_shared_face_connectivity", [])
+        ]
+        owners = [str(value) for value in identity.get("region_owners", [])]
+        result_owners = [
+            str(value) for value in identity.get("result_region_owners", [])
+        ]
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [
+            float(value) for value in identity.get("result_scaled_jacobians", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("transition_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "diagonal_generation",
+                "orientation_generation",
+                "face_generation",
+                "region_generation",
+                "jacobian_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and len(diagonal) == 2
+        and diagonal == sorted(set(diagonal))
+        and all(value > 0 for value in diagonal)
+        and result_diagonal == diagonal
+        and bool(orientations)
+        and all(value == 1 for value in orientations)
+        and result_orientations == orientations
+        and bool(faces)
+        and all(
+            len(face) in {3, 4}
+            and len(set(face)) == len(face)
+            and all(value > 0 for value in face)
+            for face in faces
+        )
+        and result_faces == faces
+        and owners == ["hex_region", "transition_region", "tet_region"]
+        and result_owners == owners
+        and len(jacobians) == len(owners)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and _valid_sha256(identity.get("transition_export_sha256"))
+        and identity.get("accepted_transition_export_sha256")
+        == identity.get("transition_export_sha256")
+    )
+
+
 def _boolean_entity_lineage_identity_ok(identity: object) -> bool:
     if identity is None:
         return True
@@ -3728,6 +3883,158 @@ def _exodus_high_order_restart_identity_ok(identity: object) -> bool:
         and _valid_sha256(identity.get("connectivity_table_sha256"))
         and identity.get("decoded_connectivity_table_sha256")
         == identity.get("connectivity_table_sha256")
+    )
+
+
+def _journal_transaction_restore_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        undo_count = int(identity.get("undo_count"))
+        replayed_undo_count = int(identity.get("replayed_undo_count"))
+        redo_count = int(identity.get("redo_count"))
+        replayed_redo_count = int(identity.get("replayed_redo_count"))
+        entity_ids = [int(value) for value in identity.get("allocated_entity_ids", [])]
+        replayed_entity_ids = [
+            int(value) for value in identity.get("replayed_allocated_entity_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("transaction_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "undo_generation",
+                "allocation_generation",
+                "idempotency_generation",
+                "save_generation",
+                "restore_generation",
+                "session_generation",
+                "result_generation",
+            )
+        )
+        and all(
+            bool(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("transaction_id", "replayed_transaction_id"),
+                ("save_point_id", "restored_save_point_id"),
+                ("session_owner", "restored_session_owner"),
+            )
+        )
+        and undo_count >= 0
+        and replayed_undo_count == undo_count
+        and redo_count >= 0
+        and replayed_redo_count == redo_count
+        and bool(entity_ids)
+        and entity_ids == sorted(set(entity_ids))
+        and all(value > 0 for value in entity_ids)
+        and replayed_entity_ids == entity_ids
+        and all(
+            _valid_sha256(identity.get(source))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("idempotency_sha256", "replayed_idempotency_sha256"),
+                ("saved_model_sha256", "restored_model_sha256"),
+                ("journal_result_sha256", "accepted_journal_result_sha256"),
+            )
+        )
+    )
+
+
+def _exodus_assembly_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        assembly_ids = [int(value) for value in identity.get("assembly_ids", [])]
+        decoded_assembly_ids = [
+            int(value) for value in identity.get("decoded_assembly_ids", [])
+        ]
+        members = [
+            [int(value) for value in row]
+            for row in identity.get("assembly_members", [])
+        ]
+        decoded_members = [
+            [int(value) for value in row]
+            for row in identity.get("decoded_assembly_members", [])
+        ]
+        qa = [str(value) for value in identity.get("qa_record", [])]
+        decoded_qa = [str(value) for value in identity.get("decoded_qa_record", [])]
+        times = [float(value) for value in identity.get("time_values_s", [])]
+        decoded_times = [
+            float(value) for value in identity.get("decoded_time_values_s", [])
+        ]
+        block_owners = [
+            [int(value) for value in row]
+            for row in identity.get("block_owners", [])
+        ]
+        decoded_block_owners = [
+            [int(value) for value in row]
+            for row in identity.get("decoded_block_owners", [])
+        ]
+        sideset_owners = [
+            [int(value) for value in row]
+            for row in identity.get("sideset_owners", [])
+        ]
+        decoded_sideset_owners = [
+            [int(value) for value in row]
+            for row in identity.get("decoded_sideset_owners", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("exodus_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "assembly_generation",
+                "frame_generation",
+                "qa_generation",
+                "time_generation",
+                "block_generation",
+                "sideset_generation",
+                "file_generation",
+                "result_generation",
+            )
+        )
+        and bool(assembly_ids)
+        and assembly_ids == sorted(set(assembly_ids))
+        and all(value > 0 for value in assembly_ids)
+        and decoded_assembly_ids == assembly_ids
+        and len(members) == len(assembly_ids)
+        and all(bool(row) and len(set(row)) == len(row) and min(row) > 0 for row in members)
+        and decoded_members == members
+        and identity.get("coordinate_frame") == "global_cartesian_m"
+        and identity.get("decoded_coordinate_frame") == identity.get("coordinate_frame")
+        and len(qa) == 4
+        and all(qa)
+        and decoded_qa == qa
+        and len(times) >= 2
+        and all(math.isfinite(value) and value >= 0.0 for value in times)
+        and all(right > left for left, right in zip(times, times[1:]))
+        and decoded_times == times
+        and bool(block_owners and sideset_owners)
+        and all(
+            len(pair) == 2 and pair[0] > 0 and pair[1] in assembly_ids
+            for pair in block_owners + sideset_owners
+        )
+        and decoded_block_owners == block_owners
+        and decoded_sideset_owners == sideset_owners
+        and all(
+            _valid_sha256(identity.get(source))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("exodus_file_sha256", "decoded_exodus_file_sha256"),
+                ("assembly_table_sha256", "decoded_assembly_table_sha256"),
+            )
+        )
     )
 
 
@@ -4558,6 +4865,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "periodic_high_order_meshes_use_current_affine_corner_edge_face_pairs_orientation_sidesets_and_residual": (
             _periodic_high_order_identity_ok(
                 summary.get("periodic_high_order_affine_corner_edge_face_node_pair_orientation_sideset_residual_generation_identity")
+            )
+        ),
+        "hex_boundary_layers_use_current_thickness_growth_count_collision_jacobian_block_sideset_and_mesh": (
+            _hex_boundary_layer_identity_ok(
+                summary.get("hex_boundary_layer_thickness_growth_count_collision_jacobian_block_sideset_mesh_generation_identity")
+            )
+        ),
+        "pyramid_transitions_use_current_diagonal_orientation_faces_regions_jacobians_and_export": (
+            _pyramid_transition_closure_identity_ok(
+                summary.get("pyramid_transition_diagonal_orientation_shared_face_region_jacobian_export_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -5409,6 +5726,16 @@ def cubit_mixed_transition_source_gate(
         "high_order_exodus_uses_current_blocks_midnodes_int64_qa_restart_sideset_owners_and_digests": (
             _exodus_high_order_restart_identity_ok(
                 summary.get("exodus_high_order_block_midnode_order_int64_qa_restart_sideset_digest_generation_identity")
+            )
+        ),
+        "journal_replays_use_current_transaction_undo_allocation_idempotency_save_restore_session_and_result": (
+            _journal_transaction_restore_identity_ok(
+                summary.get("journal_undo_transaction_idempotency_entity_allocation_save_restore_session_result_generation_identity")
+            )
+        ),
+        "exodus_assemblies_use_current_membership_frame_qa_time_block_sideset_file_and_result": (
+            _exodus_assembly_identity_ok(
+                summary.get("exodus_assembly_membership_frame_qa_time_block_sideset_file_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
