@@ -1541,6 +1541,228 @@ def _bem_surface_charge_closure_identity_ok(value: object) -> bool:
     )
 
 
+def _halbach_harmonic_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("halbach_generation", "")).strip()
+    try:
+        angles = [float(item) for item in value.get("magnetization_angles_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_magnetization_angles_deg", [])
+        ]
+        pitch = float(value.get("pole_pitch_m"))
+        result_pitch = float(value.get("result_pole_pitch_m"))
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        result_orders = [int(item) for item in value.get("result_harmonic_orders", [])]
+        phases = [float(item) for item in value.get("harmonic_phase_deg", [])]
+        result_phases = [
+            float(item) for item in value.get("result_harmonic_phase_deg", [])
+        ]
+        grid = [float(item) for item in value.get("sampling_grid_m", [])]
+        result_grid = [
+            float(item) for item in value.get("result_sampling_grid_m", [])
+        ]
+        amplitudes = [
+            float(item) for item in value.get("field_harmonic_amplitude_t", [])
+        ]
+        result_amplitudes = [
+            float(item)
+            for item in value.get("result_field_harmonic_amplitude_t", [])
+        ]
+        energy = float(value.get("magnetic_energy_j"))
+        result_energy = float(value.get("result_magnetic_energy_j"))
+        force = float(value.get("force_n"))
+        result_force = float(value.get("result_force_n"))
+    except (TypeError, ValueError):
+        return False
+    wrapped_steps = [
+        (angles[(index + 1) % len(angles)] - angles[index]) % 360.0
+        for index in range(len(angles))
+    ] if angles else []
+    expected_step = 360.0 / len(angles) if angles else math.nan
+    direction = value.get("force_direction")
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "magnetization_generation",
+                "pitch_generation",
+                "phase_generation",
+                "grid_generation",
+                "field_generation",
+                "energy_generation",
+                "force_generation",
+                "geometry_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and len(angles) >= 4
+        and all(math.isfinite(item) for item in angles)
+        and all(
+            math.isclose(step, expected_step, rel_tol=0.0, abs_tol=1.0e-12)
+            for step in wrapped_steps
+        )
+        and result_angles == angles
+        and math.isfinite(pitch)
+        and pitch > 0.0
+        and math.isclose(result_pitch, pitch, rel_tol=0.0, abs_tol=1.0e-15)
+        and bool(orders)
+        and orders == sorted(set(orders))
+        and all(item > 0 and item % 2 == 1 for item in orders)
+        and result_orders == orders
+        and len(phases) == len(orders)
+        and all(math.isfinite(item) for item in phases)
+        and result_phases == phases
+        and len(grid) >= 5
+        and all(math.isfinite(item) for item in grid)
+        and all(left < right for left, right in zip(grid, grid[1:]))
+        and math.isclose(grid[0], 0.0, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(grid[-1], pitch, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and result_grid == grid
+        and len(amplitudes) == len(orders)
+        and all(math.isfinite(item) and item >= 0.0 for item in amplitudes)
+        and all(
+            left >= right for left, right in zip(amplitudes, amplitudes[1:])
+        )
+        and result_amplitudes == amplitudes
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and math.isclose(result_energy, energy, rel_tol=0.0, abs_tol=1.0e-12)
+        and direction in {"+x", "-x"}
+        and value.get("result_force_direction") == direction
+        and math.isfinite(force)
+        and ((direction == "+x" and force >= 0.0) or (direction == "-x" and force <= 0.0))
+        and math.isclose(result_force, force, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("geometry_sha256"))
+        and value.get("result_geometry_sha256") == value.get("geometry_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _magnetic_bearing_linearization_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("bearing_generation", "")).strip()
+    try:
+        currents = [float(item) for item in value.get("bias_currents_a", [])]
+        result_currents = [
+            float(item) for item in value.get("result_bias_currents_a", [])
+        ]
+        displacement = [
+            float(item) for item in value.get("bias_displacement_m", [])
+        ]
+        result_displacement = [
+            float(item) for item in value.get("result_bias_displacement_m", [])
+        ]
+        current_jacobian = [
+            [float(item) for item in row]
+            for row in value.get("force_current_jacobian_n_per_a", [])
+        ]
+        result_current_jacobian = [
+            [float(item) for item in row]
+            for row in value.get("result_force_current_jacobian_n_per_a", [])
+        ]
+        displacement_jacobian = [
+            [float(item) for item in row]
+            for row in value.get("force_displacement_jacobian_n_per_m", [])
+        ]
+        result_displacement_jacobian = [
+            [float(item) for item in row]
+            for row in value.get("result_force_displacement_jacobian_n_per_m", [])
+        ]
+        stiffness = [
+            [float(item) for item in row]
+            for row in value.get("stiffness_matrix_n_per_m", [])
+        ]
+        result_stiffness = [
+            [float(item) for item in row]
+            for row in value.get("result_stiffness_matrix_n_per_m", [])
+        ]
+        eigenvalues = [
+            float(item) for item in value.get("stiffness_eigenvalues_n_per_m", [])
+        ]
+        result_eigenvalues = [
+            float(item)
+            for item in value.get("result_stiffness_eigenvalues_n_per_m", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    matrices_are_2d = (
+        len(current_jacobian) == 2
+        and all(len(row) == len(currents) for row in current_jacobian)
+        and len(displacement_jacobian) == 2
+        and all(len(row) == 2 for row in displacement_jacobian)
+        and len(stiffness) == 2
+        and all(len(row) == 2 for row in stiffness)
+    )
+    if not matrices_are_2d:
+        return False
+    trace = stiffness[0][0] + stiffness[1][1]
+    discriminant = (stiffness[0][0] - stiffness[1][1]) ** 2 + 4.0 * stiffness[0][1] * stiffness[1][0]
+    derived_eigenvalues = sorted(
+        ((trace - math.sqrt(discriminant)) / 2.0, (trace + math.sqrt(discriminant)) / 2.0)
+    ) if discriminant >= 0.0 else []
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "current_generation",
+                "displacement_generation",
+                "jacobian_generation",
+                "stiffness_generation",
+                "reciprocity_generation",
+                "bias_generation",
+                "frame_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and value.get("coordinate_frame") == "global_xy_right_handed"
+        and value.get("result_coordinate_frame") == value.get("coordinate_frame")
+        and len(currents) >= 2
+        and all(math.isfinite(item) for item in currents)
+        and result_currents == currents
+        and len(displacement) == 2
+        and all(math.isfinite(item) for item in displacement)
+        and result_displacement == displacement
+        and all(math.isfinite(item) for row in current_jacobian for item in row)
+        and result_current_jacobian == current_jacobian
+        and all(
+            math.isfinite(item) for row in displacement_jacobian for item in row
+        )
+        and result_displacement_jacobian == displacement_jacobian
+        and all(math.isfinite(item) for row in stiffness for item in row)
+        and all(
+            math.isclose(stiffness[row][column], -displacement_jacobian[row][column], rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for row in range(2)
+            for column in range(2)
+        )
+        and math.isclose(stiffness[0][1], stiffness[1][0], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_stiffness == stiffness
+        and len(eigenvalues) == 2
+        and all(math.isfinite(item) and item > 0.0 for item in eigenvalues)
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-12, abs_tol=1.0e-9)
+            for observed, expected in zip(sorted(eigenvalues), derived_eigenvalues)
+        )
+        and result_eigenvalues == eigenvalues
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1657,6 +1879,8 @@ def magnetic_force_method_profile_gate(
     hysteresis_minor_loop_identity_ok = True
     maglev_equilibrium_closure_identity_ok = True
     bem_surface_charge_closure_identity_ok = True
+    halbach_harmonic_closure_identity_ok = True
+    magnetic_bearing_linearization_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1710,6 +1934,8 @@ def magnetic_force_method_profile_gate(
         hysteresis_minor_loop_identity_ok = False
         maglev_equilibrium_closure_identity_ok = False
         bem_surface_charge_closure_identity_ok = False
+        halbach_harmonic_closure_identity_ok = False
+        magnetic_bearing_linearization_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3464,6 +3690,18 @@ def magnetic_force_method_profile_gate(
                 "bem_surface_charge_gauge_normal_energy_reciprocity_geometry_owner_result_identity"
             )
         )
+        halbach_harmonic_closure_identity_ok = _halbach_harmonic_closure_identity_ok(
+            identity_value.get(
+                "halbach_harmonic_magnetization_order_pitch_phase_grid_field_energy_force_geometry_owner_result_identity"
+            )
+        )
+        magnetic_bearing_linearization_identity_ok = (
+            _magnetic_bearing_linearization_identity_ok(
+                identity_value.get(
+                    "magnetic_bearing_force_current_displacement_stiffness_reciprocity_bias_frame_mesh_result_identity"
+                )
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3678,6 +3916,12 @@ def magnetic_force_method_profile_gate(
         ),
         "bem_surface_charge_uses_neutral_charge_mean_zero_gauge_opposed_normals_energy_reciprocity_geometry_and_result": (
             bem_surface_charge_closure_identity_ok
+        ),
+        "halbach_harmonics_use_current_magnetization_pitch_phase_grid_field_energy_force_geometry_owner_and_result": (
+            halbach_harmonic_closure_identity_ok
+        ),
+        "magnetic_bearing_uses_current_force_jacobians_bias_frame_reciprocal_positive_stiffness_mesh_and_result": (
+            magnetic_bearing_linearization_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
