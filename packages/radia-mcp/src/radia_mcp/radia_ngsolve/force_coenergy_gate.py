@@ -1505,6 +1505,112 @@ def _nonlinear_bh_energy_identity_ok(value):
     )
 
 
+def _nonlinear_incremental_energy_inductance_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("nonlinear_generation", "")).strip()
+    try:
+        currents = [float(item) for item in value.get("current_points_a", [])]
+        flux = [float(item) for item in value.get("flux_linkages_wb_turn", [])]
+        incremental_mu = float(value.get("incremental_permeability_h_m"))
+        differential_inductance = float(value.get("differential_inductance_h"))
+        energy = float(value.get("magnetic_energy_j"))
+        coenergy = float(value.get("magnetic_coenergy_j"))
+    except (TypeError, ValueError):
+        return False
+    if len(currents) < 3 or len(flux) != len(currents):
+        return False
+    values = currents + flux + [incremental_mu, differential_inductance, energy, coenergy]
+    if not all(math.isfinite(item) for item in values):
+        return False
+    slopes = [
+        (flux[index + 1] - flux[index]) / (currents[index + 1] - currents[index])
+        for index in range(len(currents) - 1)
+    ]
+    mirrored = (
+        "bh_branch", "current_points_a", "flux_linkages_wb_turn",
+        "incremental_permeability_h_m", "differential_inductance_h",
+        "magnetic_energy_j", "magnetic_coenergy_j", "mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "branch_generation", "incremental_generation", "energy_generation",
+            "coenergy_generation", "inductance_generation", "current_generation",
+            "mesh_generation", "owner_generation", "solution_generation", "result_generation"))
+        and value.get("bh_branch") in {"ascending", "descending"}
+        and all(right > left >= 0.0 for left, right in zip(currents, currents[1:]))
+        and all(right > left >= 0.0 for left, right in zip(flux, flux[1:]))
+        and incremental_mu > 0.0
+        and all(item > 0.0 for item in slopes)
+        and math.isclose(differential_inductance, slopes[-1], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and energy > 0.0 and coenergy >= 0.0
+        and math.isclose(energy + coenergy, currents[-1] * flux[-1], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("mesh_sha256"))
+        and bool(str(value.get("field_owner", "")).strip())
+        and value.get("accepted_field_owner") == value.get("field_owner")
+        and _valid_sha256(value.get("solution_sha256"))
+        and value.get("accepted_solution_sha256") == value.get("solution_sha256")
+    )
+
+
+def _weighted_stress_force_convergence_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    try:
+        force = [float(item) for item in value.get("weighted_force_n", [])]
+        contours = [[float(item) for item in row] for row in value.get("contour_force_samples_n", [])]
+        mesh_sizes = [float(item) for item in value.get("mesh_sizes_m", [])]
+        mesh_forces = [[float(item) for item in row] for row in value.get("mesh_force_sequence_n", [])]
+        direction = [float(item) for item in value.get("force_direction_unit", [])]
+    except (TypeError, ValueError):
+        return False
+    vectors = [force, direction, *contours, *mesh_forces]
+    if (
+        len(force) != 2 or len(direction) != 2 or len(contours) < 3
+        or len(mesh_sizes) < 3 or len(mesh_forces) != len(mesh_sizes)
+        or any(len(row) != 2 for row in vectors)
+        or not all(math.isfinite(item) for row in vectors for item in row)
+        or not all(math.isfinite(item) for item in mesh_sizes)
+    ):
+        return False
+    force_scale = max(math.hypot(*force), 1.0e-30)
+    contour_errors = [math.dist(row, force) for row in contours]
+    mesh_errors = [math.dist(row, force) for row in mesh_forces]
+    mirrored = (
+        "weighting_region_id", "air_enclosure_id", "weighted_force_n",
+        "contour_force_samples_n", "mesh_sizes_m", "mesh_force_sequence_n",
+        "force_direction_unit",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "weighting_generation", "air_generation", "contour_generation",
+            "convergence_generation", "direction_generation", "field_generation",
+            "owner_generation", "result_generation"))
+        and bool(str(value.get("weighting_region_id", "")).strip())
+        and bool(str(value.get("air_enclosure_id", "")).strip())
+        and value.get("weighting_region_id") != value.get("air_enclosure_id")
+        and max(contour_errors) <= 0.02 * force_scale
+        and all(right < left for left, right in zip(mesh_sizes, mesh_sizes[1:]))
+        and all(right <= left for left, right in zip(mesh_errors, mesh_errors[1:]))
+        and mesh_errors[-1] <= 1.0e-12 * force_scale
+        and math.isclose(math.hypot(*direction), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and sum(item * axis for item, axis in zip(force, direction)) > 0.0
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("field_owner", "")).strip())
+        and value.get("accepted_field_owner") == value.get("field_owner")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256") == value.get("force_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -1588,6 +1694,8 @@ def force_coenergy_displacement_gate(
     airgap_force_closure_identity_ok = True
     inductance_matrix_identity_ok = True
     nonlinear_bh_energy_identity_ok = True
+    nonlinear_incremental_energy_inductance_identity_ok = True
+    weighted_stress_force_convergence_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -1645,6 +1753,8 @@ def force_coenergy_displacement_gate(
         airgap_force_closure_identity_ok = False
         inductance_matrix_identity_ok = False
         nonlinear_bh_energy_identity_ok = False
+        nonlinear_incremental_energy_inductance_identity_ok = False
+        weighted_stress_force_convergence_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -3299,6 +3409,20 @@ def force_coenergy_displacement_gate(
                 "nonlinear_bh_interpolation_differential_permeability_branch_energy_coenergy_operating_material_solution_identity"
             )
         )
+        nonlinear_incremental_energy_inductance_identity_ok = (
+            _nonlinear_incremental_energy_inductance_identity_ok(
+                artifact_identity.get(
+                    "nonlinear_bh_incremental_permeability_energy_coenergy_differential_inductance_current_mesh_owner_solution_identity"
+                )
+            )
+        )
+        weighted_stress_force_convergence_identity_ok = (
+            _weighted_stress_force_convergence_identity_ok(
+                artifact_identity.get(
+                    "weighted_stress_force_region_air_contour_mesh_convergence_direction_owner_result_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -3494,6 +3618,12 @@ def force_coenergy_displacement_gate(
         ),
         "nonlinear_bh_closes_interpolation_differential_mu_branch_energy_coenergy_operating_material_and_solution": (
             nonlinear_bh_energy_identity_ok
+        ),
+        "nonlinear_incremental_solution_closes_branch_mu_energy_coenergy_differential_inductance_current_mesh_owner_and_result": (
+            nonlinear_incremental_energy_inductance_identity_ok
+        ),
+        "weighted_stress_force_closes_region_air_contours_mesh_convergence_direction_owner_and_result": (
+            weighted_stress_force_convergence_identity_ok
         ),
     }
     return {
