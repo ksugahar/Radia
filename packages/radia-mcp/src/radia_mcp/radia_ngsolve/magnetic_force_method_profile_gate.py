@@ -1276,6 +1276,96 @@ def _linear_motor_wave_end_effect_identity_ok(value: object) -> bool:
     )
 
 
+def _maglev_stiffness_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("maglev_generation", "")).strip()
+    try:
+        position = [float(item) for item in value.get("position_m", [])]
+        currents = [float(item) for item in value.get("current_a", [])]
+        force = [float(item) for item in value.get("force_z_n", [])]
+        stiffness = float(value.get("stiffness_n_per_m"))
+    except (TypeError, ValueError):
+        return False
+    derivative = (
+        (force[2] - force[0]) / (position[2] - position[0])
+        if len(force) == 3 and len(position) == 3 and position[2] != position[0]
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "position_maglev_generation", "current_maglev_generation", "force_maglev_generation",
+            "derivative_maglev_generation", "frame_maglev_generation", "mesh_maglev_generation",
+            "result_maglev_generation"))
+        and len(position) == 3 and position[0] < position[1] < position[2]
+        and math.isclose(position[1], 0.0, abs_tol=1.0e-15)
+        and math.isclose(position[2], -position[0], rel_tol=1.0e-12)
+        and value.get("result_position_m") == position
+        and len(currents) == 3 and all(math.isfinite(item) for item in currents)
+        and len(set(currents)) == 1 and value.get("result_current_a") == currents
+        and len(force) == 3 and all(math.isfinite(item) for item in force)
+        and value.get("result_force_z_n") == force
+        and math.isfinite(stiffness) and stiffness < 0.0
+        and math.isclose(stiffness, derivative, rel_tol=1.0e-10)
+        and value.get("result_stiffness_n_per_m") == stiffness
+        and value.get("coordinate_frame") == "global_z_positive_up"
+        and value.get("result_coordinate_frame") == value.get("coordinate_frame")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _cogging_torque_sampling_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("cogging_generation", "")).strip()
+    try:
+        slots = int(value.get("slot_count")); poles = int(value.get("pole_count"))
+        period = float(value.get("cogging_period_mechanical_deg"))
+        origin = float(value.get("angular_origin_deg"))
+        angles = [float(item) for item in value.get("sample_angles_deg", [])]
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        phases = [float(item) for item in value.get("harmonic_phase_deg", [])]
+        torque = [float(item) for item in value.get("torque_nm", [])]
+    except (TypeError, ValueError):
+        return False
+    expected_period = 360.0 / math.lcm(slots, poles) if slots > 0 and poles > 0 else math.nan
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "slot_cogging_generation", "pole_cogging_generation", "period_cogging_generation",
+            "sampling_cogging_generation", "harmonic_cogging_generation", "mesh_cogging_generation",
+            "result_cogging_generation"))
+        and slots > 0 and value.get("result_slot_count") == slots
+        and poles > 0 and poles % 2 == 0 and value.get("result_pole_count") == poles
+        and math.isclose(period, expected_period, rel_tol=1.0e-12)
+        and value.get("result_cogging_period_mechanical_deg") == period
+        and math.isfinite(origin) and value.get("result_angular_origin_deg") == origin
+        and len(angles) >= 5 and angles[0] == origin
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and math.isclose(angles[-1] - angles[0], period, rel_tol=1.0e-12)
+        and value.get("result_sample_angles_deg") == angles
+        and bool(orders) and all(item > 0 for item in orders) and len(set(orders)) == len(orders)
+        and value.get("result_harmonic_orders") == orders
+        and len(phases) == len(orders) and all(math.isfinite(item) for item in phases)
+        and value.get("result_harmonic_phase_deg") == phases
+        and len(torque) == len(angles) and all(math.isfinite(item) for item in torque)
+        and value.get("result_torque_nm") == torque
+        and math.isclose(torque[0], torque[-1], rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1386,6 +1476,8 @@ def magnetic_force_method_profile_gate(
     laminated_core_loss_identity_ok = True
     magnet_demag_volume_fraction_identity_ok = True
     linear_motor_wave_end_effect_identity_ok = True
+    maglev_stiffness_identity_ok = True
+    cogging_torque_sampling_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1433,6 +1525,8 @@ def magnetic_force_method_profile_gate(
         laminated_core_loss_identity_ok = False
         magnet_demag_volume_fraction_identity_ok = False
         linear_motor_wave_end_effect_identity_ok = False
+        maglev_stiffness_identity_ok = False
+        cogging_torque_sampling_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3157,6 +3251,16 @@ def magnetic_force_method_profile_gate(
                 "linear_motor_end_phase_wave_pitch_force_generation_identity"
             )
         )
+        maglev_stiffness_identity_ok = _maglev_stiffness_identity_ok(
+            identity_value.get(
+                "maglev_force_stiffness_position_current_derivative_frame_mesh_result_identity"
+            )
+        )
+        cogging_torque_sampling_identity_ok = _cogging_torque_sampling_identity_ok(
+            identity_value.get(
+                "cogging_torque_slot_pole_period_origin_sampling_harmonic_phase_mesh_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3353,6 +3457,12 @@ def magnetic_force_method_profile_gate(
         ),
         "linear_motor_force_uses_current_end_effect_phase_wave_pitch_positions_ripple_and_result": (
             linear_motor_wave_end_effect_identity_ok
+        ),
+        "maglev_stiffness_uses_fixed_current_symmetric_positions_force_derivative_frame_mesh_and_result": (
+            maglev_stiffness_identity_ok
+        ),
+        "cogging_torque_uses_slot_pole_period_origin_sampling_harmonics_phase_mesh_and_result": (
+            cogging_torque_sampling_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
