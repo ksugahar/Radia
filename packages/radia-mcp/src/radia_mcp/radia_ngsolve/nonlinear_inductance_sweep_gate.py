@@ -3673,6 +3673,203 @@ def _emc_probe_fft_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _microstrip_quasitem_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "microstrip_quasitem_geometry_permittivity_impedance_delay_loss_sparameter_frequency_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("microstrip_generation", "")).strip()
+    try:
+        width = float(identity.get("trace_width_m"))
+        height = float(identity.get("substrate_height_m"))
+        copper_thickness = float(identity.get("copper_thickness_m"))
+        relative_permittivity = float(identity.get("relative_permittivity"))
+        length = float(identity.get("line_length_m"))
+        effective_permittivity = float(identity.get("effective_permittivity"))
+        impedance = float(identity.get("characteristic_impedance_ohm"))
+        delay = float(identity.get("propagation_delay_s"))
+        frequencies = [float(item) for item in identity.get("frequency_hz", [])]
+        conductor_loss = float(identity.get("conductor_loss_fraction"))
+        dielectric_loss = float(identity.get("dielectric_loss_fraction"))
+        s11 = float(identity.get("s11_magnitude"))
+        s21 = float(identity.get("s21_magnitude"))
+        incident_power = float(identity.get("incident_power_w"))
+        mesh_dof = [int(item) for item in identity.get("mesh_dof", [])]
+        mesh_impedance = [float(item) for item in identity.get("mesh_impedance_ohm", [])]
+        maximum_change = float(identity.get("maximum_final_relative_change"))
+    except (TypeError, ValueError):
+        return False
+    ratio = width / height if height > 0.0 else math.nan
+    expected_permittivity = (
+        (relative_permittivity + 1.0) / 2.0
+        + (relative_permittivity - 1.0)
+        / (2.0 * math.sqrt(1.0 + 12.0 / ratio))
+        if ratio > 0.0 and relative_permittivity > 1.0
+        else math.nan
+    )
+    expected_impedance = (
+        120.0
+        * math.pi
+        / (
+            math.sqrt(effective_permittivity)
+            * (ratio + 1.393 + 0.667 * math.log(ratio + 1.444))
+        )
+        if ratio >= 1.0 and effective_permittivity > 0.0
+        else math.nan
+    )
+    expected_delay = (
+        length * math.sqrt(effective_permittivity) / 299_792_458.0
+        if effective_permittivity > 0.0
+        else math.nan
+    )
+    mesh_errors = [abs(item - impedance) for item in mesh_impedance]
+    mirrored = (
+        "trace_width_m", "substrate_height_m", "copper_thickness_m",
+        "relative_permittivity", "line_length_m", "quasitem_model",
+        "effective_permittivity", "characteristic_impedance_ohm",
+        "propagation_delay_s", "frequency_hz", "conductor_loss_fraction",
+        "dielectric_loss_fraction", "s11_magnitude", "s21_magnitude",
+        "incident_power_w", "mesh_dof", "mesh_impedance_ohm",
+        "maximum_final_relative_change", "microstrip_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "geometry_generation", "material_generation", "impedance_generation",
+            "delay_generation", "loss_generation", "sparameter_generation",
+            "frequency_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and all(math.isfinite(item) and item > 0.0 for item in (
+            width, height, copper_thickness, length, effective_permittivity,
+            impedance, delay, incident_power))
+        and relative_permittivity > 1.0
+        and identity.get("quasitem_model") == "hammerstad_zero_thickness_core"
+        and ratio >= 1.0
+        and 1.0 < effective_permittivity < relative_permittivity
+        and math.isclose(effective_permittivity, expected_permittivity, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(impedance, expected_impedance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(delay, expected_delay, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and len(frequencies) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and conductor_loss >= 0.0 and dielectric_loss >= 0.0
+        and 0.0 <= s11 <= 1.0 and 0.0 <= s21 <= 1.0
+        and math.isclose(
+            s11**2 + s21**2 + conductor_loss + dielectric_loss,
+            1.0,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and len(mesh_dof) == len(mesh_impedance) >= 3
+        and all(item > 0 for item in mesh_dof)
+        and all(left < right for left, right in zip(mesh_dof, mesh_dof[1:]))
+        and all(math.isfinite(item) and item > 0.0 for item in mesh_impedance)
+        and all(right <= left for left, right in zip(mesh_errors, mesh_errors[1:]))
+        and maximum_change > 0.0
+        and abs(mesh_impedance[-1] - mesh_impedance[-2])
+        / max(abs(mesh_impedance[-1]), 1.0e-300) <= maximum_change
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("microstrip_mesh_sha256"))
+        and bool(str(identity.get("microstrip_owner", "")).strip())
+        and identity.get("accepted_microstrip_owner") == identity.get("microstrip_owner")
+        and _valid_sha256(identity.get("microstrip_result_sha256"))
+        and identity.get("accepted_microstrip_result_sha256")
+        == identity.get("microstrip_result_sha256")
+    )
+
+
+def _shielding_aperture_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "shielding_aperture_orientation_polarization_field_power_se_frequency_probe_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("shield_generation", "")).strip()
+    try:
+        frequencies = [float(item) for item in identity.get("frequency_hz", [])]
+        incident_field = [float(item) for item in identity.get("incident_field_v_m", [])]
+        transmitted_field = [float(item) for item in identity.get("transmitted_field_v_m", [])]
+        incident_power = [float(item) for item in identity.get("incident_power_density_normalized", [])]
+        transmitted_power = [float(item) for item in identity.get("transmitted_power_density_normalized", [])]
+        field_se = [float(item) for item in identity.get("shielding_effectiveness_field_db", [])]
+        power_se = [float(item) for item in identity.get("shielding_effectiveness_power_db", [])]
+        mesh_dof = [int(item) for item in identity.get("mesh_dof", [])]
+        mesh_se = [float(item) for item in identity.get("mesh_selected_se_db", [])]
+        maximum_change = float(identity.get("maximum_final_se_change_db"))
+    except (TypeError, ValueError):
+        return False
+    count = len(frequencies)
+    expected_incident_power = [item**2 for item in incident_field]
+    expected_transmitted_power = [item**2 for item in transmitted_field]
+    expected_field_se = [
+        20.0 * math.log10(source / target)
+        for source, target in zip(incident_field, transmitted_field)
+    ] if all(item > 0.0 for item in incident_field + transmitted_field) else []
+    expected_power_se = [
+        10.0 * math.log10(source / target)
+        for source, target in zip(incident_power, transmitted_power)
+    ] if all(item > 0.0 for item in incident_power + transmitted_power) else []
+    selected_se = power_se[count // 2] if count else math.nan
+    mesh_errors = [abs(item - selected_se) for item in mesh_se]
+    mirrored = (
+        "aperture_plane", "incident_polarization", "frequency_hz",
+        "incident_field_v_m", "transmitted_field_v_m",
+        "incident_power_density_normalized", "transmitted_power_density_normalized",
+        "shielding_effectiveness_field_db", "shielding_effectiveness_power_db",
+        "probe_frame", "mesh_dof", "mesh_selected_se_db",
+        "maximum_final_se_change_db", "shield_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "aperture_generation", "polarization_generation", "field_generation",
+            "power_generation", "se_generation", "frequency_generation",
+            "probe_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and identity.get("aperture_plane") == "xy_normal_positive_z"
+        and identity.get("incident_polarization") == "x_linear"
+        and identity.get("probe_frame") == "global_cartesian_xyz_m"
+        and count == len(incident_field) == len(transmitted_field)
+        == len(incident_power) == len(transmitted_power) == len(field_se)
+        == len(power_se) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and all(
+            math.isfinite(source) and math.isfinite(target) and source >= target > 0.0
+            for source, target in zip(incident_field, transmitted_field)
+        )
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for value, expected in zip(incident_power, expected_incident_power))
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for value, expected in zip(transmitted_power, expected_transmitted_power))
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for value, expected in zip(field_se, expected_field_se))
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for value, expected in zip(power_se, expected_power_se))
+        and all(math.isclose(field, power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for field, power in zip(field_se, power_se))
+        and len(mesh_dof) == len(mesh_se) >= 3
+        and all(item > 0 for item in mesh_dof)
+        and all(left < right for left, right in zip(mesh_dof, mesh_dof[1:]))
+        and all(math.isfinite(item) for item in mesh_se)
+        and all(right <= left for left, right in zip(mesh_errors, mesh_errors[1:]))
+        and maximum_change > 0.0
+        and abs(mesh_se[-1] - mesh_se[-2]) <= maximum_change
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("shield_mesh_sha256"))
+        and bool(str(identity.get("shield_owner", "")).strip())
+        and identity.get("accepted_shield_owner") == identity.get("shield_owner")
+        and _valid_sha256(identity.get("shield_result_sha256"))
+        and identity.get("accepted_shield_result_sha256")
+        == identity.get("shield_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -4170,6 +4367,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "emc_probes_use_current_coordinates_interpolation_time_fft_window_parseval_mesh_owner_and_result": (
                 _emc_probe_fft_closure_inputs_are_current(raw)
+            ),
+            "microstrip_results_use_current_quasitem_impedance_permittivity_delay_loss_passivity_mesh_owner_and_result": (
+                _microstrip_quasitem_inputs_are_current(raw)
+            ),
+            "shielding_results_use_current_aperture_polarization_field_power_se_frequency_probe_mesh_owner_and_result": (
+                _shielding_aperture_inputs_are_current(raw)
             ),
         }
         row = {
