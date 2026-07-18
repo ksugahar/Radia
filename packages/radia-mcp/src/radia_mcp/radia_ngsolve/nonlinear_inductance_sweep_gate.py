@@ -2939,6 +2939,194 @@ def _transient_farfield_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _eigenmode_q_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "eigenmode_frequency_branch_energy_conductor_dielectric_radiation_q_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("eigenmode_generation", "")).strip()
+    try:
+        frequency = float(identity.get("frequency_hz"))
+        electric_energy = float(identity.get("electric_energy_j"))
+        magnetic_energy = float(identity.get("magnetic_energy_j"))
+        stored_energy = float(identity.get("stored_energy_j"))
+        q_conductor = float(identity.get("q_conductor"))
+        q_dielectric = float(identity.get("q_dielectric"))
+        q_radiation = float(identity.get("q_radiation"))
+        q_total = float(identity.get("q_total"))
+    except (TypeError, ValueError):
+        return False
+    q_terms = (q_conductor, q_dielectric, q_radiation)
+    if not all(math.isfinite(value) and value > 0.0 for value in q_terms):
+        return False
+    expected_q_total = 1.0 / sum(1.0 / value for value in q_terms)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "frequency_generation",
+                "branch_generation",
+                "energy_generation",
+                "conductor_q_generation",
+                "dielectric_q_generation",
+                "radiation_q_generation",
+                "inverse_sum_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and bool(str(identity.get("mode_id", "")).strip())
+        and identity.get("result_mode_id") == identity.get("mode_id")
+        and bool(str(identity.get("mode_branch", "")).strip())
+        and identity.get("result_mode_branch") == identity.get("mode_branch")
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and identity.get("result_frequency_hz") == frequency
+        and all(
+            math.isfinite(value) and value >= 0.0
+            for value in (electric_energy, magnetic_energy)
+        )
+        and math.isfinite(stored_energy)
+        and stored_energy > 0.0
+        and math.isclose(
+            stored_energy,
+            electric_energy + magnetic_energy,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and identity.get("result_electric_energy_j") == electric_energy
+        and identity.get("result_magnetic_energy_j") == magnetic_energy
+        and identity.get("result_stored_energy_j") == stored_energy
+        and identity.get("result_q_conductor") == q_conductor
+        and identity.get("result_q_dielectric") == q_dielectric
+        and identity.get("result_q_radiation") == q_radiation
+        and math.isfinite(q_total)
+        and q_total > 0.0
+        and math.isclose(
+            q_total, expected_q_total, rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and identity.get("result_q_total") == q_total
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+        and bool(str(identity.get("mode_owner", "")).strip())
+        and identity.get("accepted_mode_owner") == identity.get("mode_owner")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _tdr_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "tdr_reference_plane_velocity_time_zero_impedance_arrival_window_causality_energy_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("tdr_generation", "")).strip()
+    try:
+        reference_plane = float(identity.get("reference_plane_m"))
+        velocity = float(identity.get("propagation_velocity_m_per_s"))
+        time_zero = float(identity.get("time_zero_s"))
+        impedance = float(identity.get("characteristic_impedance_ohm"))
+        distance = float(identity.get("reflection_distance_m"))
+        arrival = float(identity.get("reflection_arrival_s"))
+        window = [float(item) for item in identity.get("time_window_s", [])]
+        times = [float(item) for item in identity.get("time_samples_s", [])]
+        waveform = [
+            float(item) for item in identity.get("reflection_waveform", [])
+        ]
+        pre_arrival_max = float(identity.get("pre_arrival_max_abs"))
+        incident_energy = float(identity.get("incident_energy_j"))
+        reflected_energy = float(identity.get("reflected_energy_j"))
+        accepted_energy = float(identity.get("accepted_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    expected_arrival = (
+        time_zero + 2.0 * distance / velocity if velocity > 0.0 else math.nan
+    )
+    pre_arrival_values = [
+        abs(value) for time, value in zip(times, waveform) if time < arrival
+    ]
+    expected_pre_arrival_max = max(pre_arrival_values, default=0.0)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "reference_generation",
+                "velocity_generation",
+                "time_zero_generation",
+                "impedance_generation",
+                "arrival_generation",
+                "window_generation",
+                "causality_generation",
+                "energy_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(reference_plane)
+        and identity.get("result_reference_plane_m") == reference_plane
+        and math.isfinite(velocity)
+        and velocity > 0.0
+        and identity.get("result_propagation_velocity_m_per_s") == velocity
+        and math.isfinite(time_zero)
+        and time_zero >= 0.0
+        and identity.get("result_time_zero_s") == time_zero
+        and math.isfinite(impedance)
+        and impedance > 0.0
+        and identity.get("result_characteristic_impedance_ohm") == impedance
+        and math.isfinite(distance)
+        and distance > 0.0
+        and identity.get("result_reflection_distance_m") == distance
+        and math.isfinite(arrival)
+        and math.isclose(arrival, expected_arrival, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and identity.get("result_reflection_arrival_s") == arrival
+        and len(window) == 2
+        and 0.0 <= window[0] < window[1]
+        and identity.get("result_time_window_s") == window
+        and len(times) >= 5
+        and len(waveform) == len(times)
+        and all(math.isfinite(value) for value in (*times, *waveform))
+        and all(left < right for left, right in zip(times, times[1:]))
+        and window[0] <= times[0] <= arrival <= times[-1] <= window[1]
+        and identity.get("result_time_samples_s") == times
+        and identity.get("result_reflection_waveform") == waveform
+        and math.isfinite(pre_arrival_max)
+        and math.isclose(
+            pre_arrival_max,
+            expected_pre_arrival_max,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and identity.get("result_pre_arrival_max_abs") == pre_arrival_max
+        and all(
+            math.isfinite(value) and value >= 0.0
+            for value in (incident_energy, reflected_energy, accepted_energy)
+        )
+        and reflected_energy <= incident_energy
+        and math.isclose(
+            accepted_energy,
+            incident_energy - reflected_energy,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and identity.get("result_incident_energy_j") == incident_energy
+        and identity.get("result_reflected_energy_j") == reflected_energy
+        and identity.get("result_accepted_energy_j") == accepted_energy
+        and bool(str(identity.get("waveform_owner", "")).strip())
+        and identity.get("accepted_waveform_owner") == identity.get("waveform_owner")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -3246,6 +3434,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "transient_farfields_use_current_time_gate_fft_phase_center_angles_energy_monitor_owner_and_result": (
                 _transient_farfield_inputs_are_current(raw)
+            ),
+            "eigenmodes_use_current_frequency_branch_energy_q_inverse_sum_mesh_owner_and_result": (
+                _eigenmode_q_closure_inputs_are_current(raw)
+            ),
+            "tdr_uses_current_reference_velocity_time_zero_impedance_arrival_causality_energy_owner_and_result": (
+                _tdr_closure_inputs_are_current(raw)
             ),
         }
         row = {
