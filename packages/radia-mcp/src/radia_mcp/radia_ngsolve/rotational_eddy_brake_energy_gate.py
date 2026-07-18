@@ -2516,6 +2516,204 @@ def _degenerate_eigenmode_closure_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _contact_complementarity_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "contact_gap_pressure_active_set_friction_dissipation_normal_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        active_ids = [int(value) for value in identity.get("active_contact_ids", [])]
+        result_active_ids = [
+            int(value) for value in identity.get("result_active_contact_ids", [])
+        ]
+        gaps = [float(value) for value in identity.get("normal_gap_m", [])]
+        result_gaps = [
+            float(value) for value in identity.get("result_normal_gap_m", [])
+        ]
+        pressures = [
+            float(value) for value in identity.get("normal_pressure_pa", [])
+        ]
+        result_pressures = [
+            float(value) for value in identity.get("result_normal_pressure_pa", [])
+        ]
+        slips = [float(value) for value in identity.get("tangential_slip_m", [])]
+        result_slips = [
+            float(value) for value in identity.get("result_tangential_slip_m", [])
+        ]
+        tractions = [
+            float(value) for value in identity.get("friction_traction_pa", [])
+        ]
+        result_tractions = [
+            float(value) for value in identity.get("result_friction_traction_pa", [])
+        ]
+        areas = [float(value) for value in identity.get("contact_area_m2", [])]
+        result_areas = [
+            float(value) for value in identity.get("result_contact_area_m2", [])
+        ]
+        coefficient = float(identity.get("friction_coefficient"))
+        result_coefficient = float(identity.get("result_friction_coefficient"))
+        dissipation = float(identity.get("friction_dissipation_j"))
+        result_dissipation = float(identity.get("result_friction_dissipation_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("contact_generation") or "")
+    count = len(active_ids)
+    recomputed_dissipation = sum(
+        abs(traction * slip) * area
+        for traction, slip, area in zip(tractions, slips, areas, strict=True)
+    ) if count and len(tractions) == len(slips) == len(areas) == count else math.inf
+    dissipation_scale = max(abs(dissipation), abs(recomputed_dissipation), 1.0e-30)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "gap_generation",
+                "pressure_generation",
+                "active_set_generation",
+                "friction_generation",
+                "dissipation_generation",
+                "normal_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and bool(str(identity.get("contact_pair") or ""))
+        and identity.get("result_contact_pair") == identity.get("contact_pair")
+        and count > 0
+        and active_ids == sorted(set(active_ids))
+        and all(value > 0 for value in active_ids)
+        and result_active_ids == active_ids
+        and len(gaps) == len(pressures) == len(slips) == len(tractions) == len(areas) == count
+        and all(math.isfinite(value) for value in gaps + pressures + slips + tractions + areas)
+        and all(abs(gap) <= 1.0e-9 for gap in gaps)
+        and all(pressure >= 0.0 for pressure in pressures)
+        and all(abs(gap * pressure) <= 1.0e-9 * max(pressure, 1.0) for gap, pressure in zip(gaps, pressures, strict=True))
+        and all(area > 0.0 for area in areas)
+        and result_gaps == gaps
+        and result_pressures == pressures
+        and result_slips == slips
+        and result_tractions == tractions
+        and result_areas == areas
+        and math.isfinite(coefficient)
+        and coefficient >= 0.0
+        and result_coefficient == coefficient
+        and all(
+            abs(traction) <= coefficient * pressure + 1.0e-9 * max(pressure, 1.0)
+            for traction, pressure in zip(tractions, pressures, strict=True)
+        )
+        and math.isfinite(dissipation)
+        and dissipation >= 0.0
+        and abs(dissipation - recomputed_dissipation) <= 1.0e-12 * dissipation_scale
+        and result_dissipation == dissipation
+        and identity.get("normal_orientation") == "outward_slave_to_master"
+        and identity.get("result_normal_orientation") == identity.get("normal_orientation")
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("contact_mesh_sha256", "result_contact_mesh_sha256"),
+                ("contact_result_sha256", "accepted_contact_result_sha256"),
+            )
+        )
+    )
+
+
+def _field_circuit_dae_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "field_circuit_dae_charge_current_event_energy_time_dataset_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        times = [float(value) for value in identity.get("time_s", [])]
+        result_times = [float(value) for value in identity.get("result_time_s", [])]
+        event_time = float(identity.get("switch_event_time_s"))
+        result_event_time = float(identity.get("result_switch_event_time_s"))
+        charge = [float(value) for value in identity.get("charge_c", [])]
+        result_charge = [float(value) for value in identity.get("result_charge_c", [])]
+        integrated_current = [
+            float(value) for value in identity.get("integrated_current_c", [])
+        ]
+        result_integrated_current = [
+            float(value) for value in identity.get("result_integrated_current_c", [])
+        ]
+        residuals = [
+            float(value) for value in identity.get("algebraic_residual_c", [])
+        ]
+        accepted_residuals = [
+            float(value) for value in identity.get("accepted_algebraic_residual_c", [])
+        ]
+        tolerance = float(identity.get("algebraic_tolerance_c"))
+        energy_before = float(identity.get("stored_energy_before_j"))
+        result_energy_before = float(identity.get("result_stored_energy_before_j"))
+        energy_after = float(identity.get("stored_energy_after_j"))
+        result_energy_after = float(identity.get("result_stored_energy_after_j"))
+        dissipation = float(identity.get("switch_dissipation_j"))
+        result_dissipation = float(identity.get("result_switch_dissipation_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("dae_generation") or "")
+    count = len(times)
+    charge_scale = max(max((abs(value) for value in charge), default=0.0), 1.0e-30)
+    energy_scale = max(abs(energy_before), 1.0e-30)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "charge_generation",
+                "current_generation",
+                "event_generation",
+                "energy_generation",
+                "time_generation",
+                "dataset_generation",
+                "result_generation",
+            )
+        )
+        and count >= 3
+        and all(math.isfinite(value) and value >= 0.0 for value in times)
+        and all(right > left for left, right in zip(times, times[1:]))
+        and result_times == times
+        and math.isfinite(event_time)
+        and any(math.isclose(value, event_time, rel_tol=0.0, abs_tol=1.0e-15) for value in times)
+        and result_event_time == event_time
+        and identity.get("event_side") == "right_limit_after_event"
+        and identity.get("result_event_side") == identity.get("event_side")
+        and len(charge) == len(integrated_current) == len(residuals) == count
+        and all(math.isfinite(value) for value in charge + integrated_current + residuals)
+        and all(abs(left - right) <= 1.0e-12 * charge_scale for left, right in zip(charge, integrated_current, strict=True))
+        and result_charge == charge
+        and result_integrated_current == integrated_current
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and all(abs(value) <= tolerance for value in residuals)
+        and accepted_residuals == residuals
+        and identity.get("current_sign_convention") == "positive_into_field_device"
+        and identity.get("result_current_sign_convention") == identity.get("current_sign_convention")
+        and all(math.isfinite(value) and value >= 0.0 for value in (energy_before, energy_after, dissipation))
+        and abs(energy_before - energy_after - dissipation) <= 1.0e-12 * energy_scale
+        and result_energy_before == energy_before
+        and result_energy_after == energy_after
+        and result_dissipation == dissipation
+        and bool(str(identity.get("dataset_owner") or ""))
+        and identity.get("result_dataset_owner") == identity.get("dataset_owner")
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("dae_dataset_sha256", "result_dae_dataset_sha256"),
+                ("dae_result_sha256", "accepted_dae_result_sha256"),
+            )
+        )
+    )
+
+
 def _thermoelastic_frequency_identity_ok(summary: dict[str, Any]) -> bool:
     identity = summary.get(
         "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
@@ -3116,6 +3314,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "degenerate_eigenmodes_use_current_subspace_phase_normalization_participation_mass_mesh_owner_and_result": (
             _degenerate_eigenmode_closure_identity_ok(summary)
+        ),
+        "contact_results_satisfy_current_complementarity_active_set_friction_dissipation_normal_mesh_and_result": (
+            _contact_complementarity_identity_ok(summary)
+        ),
+        "field_circuit_dae_results_use_current_charge_current_event_energy_time_dataset_and_result": (
+            _field_circuit_dae_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
