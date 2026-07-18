@@ -5053,6 +5053,210 @@ def _shell_offset_contract_identity(row):
     return (generation, thickness, value.get("offset_side"), normals, removed, topology, volume, value.get("input_owner"), digest)
 
 
+def _revolve_axis_volume_topology_identity(row):
+    value = row.get(
+        "revolve_axis_angle_profile_crossing_orientation_volume_centroid_topology_shape_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("revolve_generation", "")).strip()
+    try:
+        axis_origin = [float(item) for item in value.get("axis_origin_m", [])]
+        axis_direction = [float(item) for item in value.get("axis_direction", [])]
+        result_axis_origin = [float(item) for item in value.get("result_axis_origin_m", [])]
+        result_axis_direction = [float(item) for item in value.get("result_axis_direction", [])]
+        angle = float(value.get("sweep_angle_deg"))
+        result_angle = float(value.get("result_sweep_angle_deg"))
+        area = float(value.get("profile_area_m2"))
+        result_area = float(value.get("result_profile_area_m2"))
+        radius = float(value.get("profile_centroid_radius_m"))
+        result_radius = float(value.get("result_profile_centroid_radius_m"))
+        volume = float(value.get("analytic_volume_m3"))
+        result_volume = float(value.get("result_analytic_volume_m3"))
+        tolerance = float(value.get("volume_tolerance_m3"))
+        result_tolerance = float(value.get("result_volume_tolerance_m3"))
+        centroid = [float(item) for item in value.get("centroid_world_m", [])]
+        result_centroid = [float(item) for item in value.get("result_centroid_world_m", [])]
+        solid_count = int(value.get("solid_count"))
+        result_solid_count = int(value.get("result_solid_count"))
+        shell_count = int(value.get("shell_count"))
+        result_shell_count = int(value.get("result_shell_count"))
+        genus = int(value.get("boundary_genus"))
+        result_genus = int(value.get("result_boundary_genus"))
+        euler = int(value.get("boundary_euler_characteristic"))
+        result_euler = int(value.get("result_boundary_euler_characteristic"))
+    except (TypeError, ValueError):
+        return None
+    if len(axis_origin) != 3 or len(axis_direction) != 3 or len(centroid) != 3:
+        return None
+    direction_norm = math.sqrt(sum(item * item for item in axis_direction))
+    centroid_offset = [centroid[index] - axis_origin[index] for index in range(3)]
+    centroid_cross = (
+        centroid_offset[1] * axis_direction[2] - centroid_offset[2] * axis_direction[1],
+        centroid_offset[2] * axis_direction[0] - centroid_offset[0] * axis_direction[2],
+        centroid_offset[0] * axis_direction[1] - centroid_offset[1] * axis_direction[0],
+    )
+    pappus_volume = area * 2.0 * math.pi * radius * abs(angle) / 360.0
+    digest = str(value.get("revolve_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "axis_generation",
+                "angle_generation",
+                "profile_generation",
+                "orientation_generation",
+                "volume_generation",
+                "centroid_generation",
+                "topology_generation",
+                "owner_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or result_axis_origin != axis_origin
+        or result_axis_direction != axis_direction
+        or not math.isclose(direction_norm, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        or not math.isfinite(angle)
+        or not 0.0 < abs(angle) <= 360.0
+        or result_angle != angle
+        or value.get("profile_axis_crossing") is not False
+        or value.get("result_profile_axis_crossing") is not False
+        or value.get("profile_loop_orientation") != "counterclockwise_outward"
+        or value.get("result_profile_loop_orientation") != value.get("profile_loop_orientation")
+        or not all(math.isfinite(item) and item > 0.0 for item in (area, radius, volume, tolerance))
+        or result_area != area
+        or result_radius != radius
+        or result_tolerance != tolerance
+        or not math.isclose(volume, pappus_volume, rel_tol=1.0e-12, abs_tol=tolerance)
+        or not math.isclose(result_volume, volume, rel_tol=1.0e-12, abs_tol=tolerance)
+        or result_centroid != centroid
+        or not math.isclose(
+            sum(item * item for item in centroid_cross), 0.0, rel_tol=0.0, abs_tol=1.0e-18
+        )
+        or solid_count != 1
+        or result_solid_count != solid_count
+        or shell_count != 1
+        or result_shell_count != shell_count
+        or genus < 0
+        or result_genus != genus
+        or euler != 2 - 2 * genus
+        or result_euler != euler
+        or not str(value.get("shape_owner", "")).strip()
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_revolve_brep_sha256") != digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(axis_origin),
+        tuple(axis_direction),
+        angle,
+        area,
+        radius,
+        volume,
+        tuple(centroid),
+        genus,
+        euler,
+        value.get("shape_owner"),
+        digest,
+    )
+
+
+def _involute_gear_identity(row):
+    value = row.get(
+        "involute_gear_module_teeth_pressure_backlash_pitch_base_addendum_periodicity_volume_shape_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("gear_generation", "")).strip()
+    try:
+        module = float(value.get("module_m"))
+        result_module = float(value.get("result_module_m"))
+        teeth = int(value.get("tooth_count"))
+        result_teeth = int(value.get("result_tooth_count"))
+        pressure = float(value.get("pressure_angle_deg"))
+        result_pressure = float(value.get("result_pressure_angle_deg"))
+        backlash = float(value.get("backlash_m"))
+        result_backlash = float(value.get("result_backlash_m"))
+        pitch = float(value.get("pitch_diameter_m"))
+        result_pitch = float(value.get("result_pitch_diameter_m"))
+        base = float(value.get("base_diameter_m"))
+        result_base = float(value.get("result_base_diameter_m"))
+        addendum = float(value.get("addendum_diameter_m"))
+        result_addendum = float(value.get("result_addendum_diameter_m"))
+        period = float(value.get("tooth_period_angle_deg"))
+        result_period = float(value.get("result_tooth_period_angle_deg"))
+        volume = float(value.get("gear_volume_m3"))
+        result_volume = float(value.get("result_gear_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    digest = str(value.get("gear_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "module_generation",
+                "tooth_generation",
+                "pressure_generation",
+                "backlash_generation",
+                "diameter_generation",
+                "periodicity_generation",
+                "volume_generation",
+                "owner_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or not math.isfinite(module)
+        or module <= 0.0
+        or result_module != module
+        or teeth < 4
+        or result_teeth != teeth
+        or not math.isfinite(pressure)
+        or not 0.0 < pressure < 45.0
+        or result_pressure != pressure
+        or not math.isfinite(backlash)
+        or not 0.0 <= backlash < 0.5 * module
+        or result_backlash != backlash
+        or not math.isclose(pitch, module * teeth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or result_pitch != pitch
+        or not math.isclose(
+            base, pitch * math.cos(math.radians(pressure)), rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        or result_base != base
+        or not math.isclose(addendum, pitch + 2.0 * module, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or result_addendum != addendum
+        or not math.isclose(period, 360.0 / teeth, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        or result_period != period
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or result_volume != volume
+        or not str(value.get("shape_owner", "")).strip()
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_gear_brep_sha256") != digest
+    ):
+        return None
+    return (
+        generation,
+        module,
+        teeth,
+        pressure,
+        backlash,
+        pitch,
+        base,
+        addendum,
+        period,
+        volume,
+        value.get("shape_owner"),
+        digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -5074,23 +5278,19 @@ def shape_mass_property_crosscheck_summary(
         raise ValueError("worst_limit must be non-negative")
     reference = list(reference_rows)
     normalized_sets = [
-        (label, list(rows))
-        for label, rows in _normalize_shape_measurement_sets(measured_sets)
+        (label, list(rows)) for label, rows in _normalize_shape_measurement_sets(measured_sets)
     ]
     identity_rows = [*reference]
     for _, rows in normalized_sets:
         identity_rows.extend(rows)
 
     assembly_location_evidence_present = any(
-        row.get(
-            "assembly_location_boolean_operand_revision_mass_property_generation_identity"
-        )
+        row.get("assembly_location_boolean_operand_revision_mass_property_generation_identity")
         is not None
         for row in identity_rows
     )
     reference_assembly_locations = {
-        str(row.get("name", "")): _assembly_location_boolean_mass_identity(row)
-        for row in reference
+        str(row.get("name", "")): _assembly_location_boolean_mass_identity(row) for row in reference
     }
     assembly_location_identity_ok = not assembly_location_evidence_present
     if assembly_location_evidence_present:
@@ -5105,13 +5305,11 @@ def shape_mass_property_crosscheck_summary(
             )
 
     loft_volume_evidence_present = any(
-        row.get("loft_spline_tessellation_watertight_volume_generation_identity")
-        is not None
+        row.get("loft_spline_tessellation_watertight_volume_generation_identity") is not None
         for row in identity_rows
     )
     reference_loft_volumes = {
-        str(row.get("name", "")): _loft_spline_watertight_volume_identity(row)
-        for row in reference
+        str(row.get("name", "")): _loft_spline_watertight_volume_identity(row) for row in reference
     }
     loft_volume_identity_ok = not loft_volume_evidence_present
     if loft_volume_evidence_present:
@@ -5702,9 +5900,49 @@ def shape_mass_property_crosscheck_summary(
         for _, rows in normalized_sets:
             shell_offset_contract_identity_ok = shell_offset_contract_identity_ok and all(_shell_offset_contract_identity(row) == reference_shell_offsets.get(str(row.get("name", ""))) for row in rows)
 
+    revolve_evidence_present = any(
+        row.get(
+            "revolve_axis_angle_profile_crossing_orientation_volume_centroid_topology_shape_brep_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_revolves = {
+        str(row.get("name", "")): _revolve_axis_volume_topology_identity(row) for row in reference
+    }
+    revolve_identity_ok = not revolve_evidence_present
+    if revolve_evidence_present:
+        revolve_identity_ok = bool(reference_revolves) and all(
+            value is not None for value in reference_revolves.values()
+        )
+        for _, rows in normalized_sets:
+            revolve_identity_ok = revolve_identity_ok and all(
+                _revolve_axis_volume_topology_identity(row)
+                == reference_revolves.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    gear_evidence_present = any(
+        row.get(
+            "involute_gear_module_teeth_pressure_backlash_pitch_base_addendum_periodicity_volume_shape_brep_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_gears = {str(row.get("name", "")): _involute_gear_identity(row) for row in reference}
+    gear_identity_ok = not gear_evidence_present
+    if gear_evidence_present:
+        gear_identity_ok = bool(reference_gears) and all(
+            value is not None for value in reference_gears.values()
+        )
+        for _, rows in normalized_sets:
+            gear_identity_ok = gear_identity_ok and all(
+                _involute_gear_identity(row) == reference_gears.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     revision_evidence_present = any(
-        row.get("brep_identity") is not None
-        or row.get("mass_property_identity") is not None
+        row.get("brep_identity") is not None or row.get("mass_property_identity") is not None
         for row in identity_rows
     )
 
@@ -7508,65 +7746,39 @@ def shape_mass_property_crosscheck_summary(
         "assembly_children_match_reference_revision_map": assembly_identity_ok,
         "mass_property_centers_share_reference_frames": frame_identity_ok,
         "face_adjacency_matches_current_brep_revision": topology_identity_ok,
-        "compound_volume_uses_physical_union_not_child_sum": (
-            compound_volume_identity_ok
-        ),
-        "center_of_mass_uses_final_placement_transform": (
-            placement_transform_identity_ok
-        ),
+        "compound_volume_uses_physical_union_not_child_sum": (compound_volume_identity_ok),
+        "center_of_mass_uses_final_placement_transform": (placement_transform_identity_ok),
         "mass_properties_follow_final_healed_brep": shape_healing_identity_ok,
-        "mirrored_inertia_tensor_uses_final_global_frame": (
-            inertia_tensor_identity_ok
-        ),
-        "assembly_mass_properties_use_final_coordinate_frame": (
-            assembly_coordinate_identity_ok
-        ),
-        "boolean_validity_topology_and_mass_share_final_healed_shape": (
-            final_shape_identity_ok
-        ),
+        "mirrored_inertia_tensor_uses_final_global_frame": (inertia_tensor_identity_ok),
+        "assembly_mass_properties_use_final_coordinate_frame": (assembly_coordinate_identity_ok),
+        "boolean_validity_topology_and_mass_share_final_healed_shape": (final_shape_identity_ok),
         "tessellated_area_uses_one_length_unit_tolerance": tessellation_unit_identity_ok,
         "compound_labels_resolve_on_final_boolean_topology": label_topology_identity_ok,
         "center_of_mass_density_and_volume_share_length_unit_covariance": mass_unit_identity_ok,
         "periodic_face_selectors_follow_final_fillet_topology": periodic_selector_identity_ok,
-        "boolean_tolerance_uses_one_physical_model_length_basis": (
-            boolean_tolerance_identity_ok
-        ),
-        "nested_assembly_placements_use_parent_then_child_order": (
-            nested_placement_identity_ok
-        ),
-        "mass_inertia_uses_final_world_placement_frame": (
-            mass_inertia_frame_identity_ok
-        ),
-        "loft_sections_use_current_seam_normalized_correspondence": (
-            loft_seam_identity_ok
-        ),
+        "boolean_tolerance_uses_one_physical_model_length_basis": (boolean_tolerance_identity_ok),
+        "nested_assembly_placements_use_parent_then_child_order": (nested_placement_identity_ok),
+        "mass_inertia_uses_final_world_placement_frame": (mass_inertia_frame_identity_ok),
+        "loft_sections_use_current_seam_normalized_correspondence": (loft_seam_identity_ok),
         "boolean_tolerance_uses_current_model_length_unit_generation": (
             boolean_unit_generation_identity_ok
         ),
-        "assembly_center_of_mass_uses_current_part_density_mapping": (
-            assembly_density_identity_ok
-        ),
+        "assembly_center_of_mass_uses_current_part_density_mapping": (assembly_density_identity_ok),
         "nested_assembly_locations_use_current_transform_composition_order": (
             nested_transform_identity_ok
         ),
         "boolean_retained_face_names_follow_post_refine_topology_history": (
             retained_face_history_identity_ok
         ),
-        "boolean_subshape_labels_follow_current_fillet_edge_order": (
-            boolean_subshape_identity_ok
-        ),
-        "assembly_mates_share_current_frame_unit_and_parent_location": (
-            assembly_mate_identity_ok
-        ),
+        "boolean_subshape_labels_follow_current_fillet_edge_order": (boolean_subshape_identity_ok),
+        "assembly_mates_share_current_frame_unit_and_parent_location": (assembly_mate_identity_ok),
         "assembly_mass_properties_share_density_unit_and_part_locations": (
             mass_density_location_identity_ok
         ),
         "swept_solid_uses_current_path_frames_twist_and_profile_orientation": (
             sweep_frame_identity_ok
         ),
-        "boolean_result_uses_current_orientation_location_and_labels": (
-            boolean_result_identity_ok
-        ),
+        "boolean_result_uses_current_orientation_location_and_labels": (boolean_result_identity_ok),
         "tessellation_uses_current_tolerances_units_and_object_location": (
             tessellation_generation_identity_ok
         ),
@@ -7662,6 +7874,8 @@ def shape_mass_property_crosscheck_summary(
         ),
         "placed_mass_properties_use_current_density_mass_centroid_inertia_principal_axes_placement_owner_and_brep": placed_mass_identity_ok,
         "shell_offsets_use_current_thickness_side_normals_removed_faces_topology_volume_owner_and_brep": shell_offset_contract_identity_ok,
+        "revolved_solids_use_current_axis_angle_profile_orientation_pappus_volume_centroid_topology_owner_and_brep": revolve_identity_ok,
+        "involute_gears_use_current_module_teeth_pressure_backlash_diameters_periodicity_volume_owner_and_brep": gear_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
