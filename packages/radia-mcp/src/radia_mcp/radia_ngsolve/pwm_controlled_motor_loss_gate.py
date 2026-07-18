@@ -1425,6 +1425,214 @@ def _synrm_dq_map_closure_identity_ok(value: object) -> bool:
     )
 
 
+def _srm_commutation_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("srm_generation", "")).strip()
+    try:
+        turn_on = [float(item) for item in value.get("turn_on_deg", [])]
+        result_turn_on = [
+            float(item) for item in value.get("result_turn_on_deg", [])
+        ]
+        turn_off = [float(item) for item in value.get("turn_off_deg", [])]
+        result_turn_off = [
+            float(item) for item in value.get("result_turn_off_deg", [])
+        ]
+        chop = float(value.get("current_chop_a"))
+        result_chop = float(value.get("result_current_chop_a"))
+        overlap = float(value.get("overlap_deg"))
+        result_overlap = float(value.get("result_overlap_deg"))
+        angles = [float(item) for item in value.get("angle_grid_rad", [])]
+        result_angles = [
+            float(item) for item in value.get("result_angle_grid_rad", [])
+        ]
+        coenergy = [float(item) for item in value.get("coenergy_j", [])]
+        result_coenergy = [
+            float(item) for item in value.get("result_coenergy_j", [])
+        ]
+        torque = [float(item) for item in value.get("torque_nm", [])]
+        result_torque = [
+            float(item) for item in value.get("result_torque_nm", [])
+        ]
+        copper_loss = float(value.get("copper_loss_w"))
+        result_copper_loss = float(value.get("result_copper_loss_w"))
+        iron_loss = float(value.get("iron_loss_w"))
+        result_iron_loss = float(value.get("result_iron_loss_w"))
+        total_loss = float(value.get("total_loss_w"))
+        result_total_loss = float(value.get("result_total_loss_w"))
+    except (TypeError, ValueError):
+        return False
+    phases = [str(item).strip() for item in value.get("phase_sequence", [])]
+    result_phases = [
+        str(item).strip() for item in value.get("result_phase_sequence", [])
+    ]
+    derivatives: list[float] = []
+    if len(angles) == len(coenergy) and len(angles) >= 3:
+        for index in range(len(angles)):
+            left = max(index - 1, 0)
+            right = min(index + 1, len(angles) - 1)
+            width = angles[right] - angles[left]
+            derivatives.append(
+                (coenergy[right] - coenergy[left]) / width
+                if width > 0.0
+                else math.nan
+            )
+    dwell = [off - on for on, off in zip(turn_on, turn_off)]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "phase_generation",
+                "dwell_generation",
+                "chop_generation",
+                "overlap_generation",
+                "coenergy_generation",
+                "torque_generation",
+                "loss_generation",
+                "angle_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and len(phases) >= 2
+        and all(phases)
+        and len(set(phases)) == len(phases)
+        and result_phases == phases
+        and len(turn_on) == len(turn_off) == len(phases)
+        and all(math.isfinite(item) for item in turn_on + turn_off)
+        and all(item > 0.0 for item in dwell)
+        and result_turn_on == turn_on
+        and result_turn_off == turn_off
+        and math.isfinite(chop)
+        and chop > 0.0
+        and math.isclose(result_chop, chop, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isfinite(overlap)
+        and 0.0 <= overlap < min(dwell)
+        and math.isclose(result_overlap, overlap, rel_tol=0.0, abs_tol=1.0e-12)
+        and len(angles) >= 3
+        and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and result_angles == angles
+        and len(coenergy) == len(angles)
+        and all(math.isfinite(item) for item in coenergy)
+        and result_coenergy == coenergy
+        and len(torque) == len(angles) == len(derivatives)
+        and all(math.isfinite(item) for item in torque + derivatives)
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-10, abs_tol=1.0e-12)
+            for observed, expected in zip(torque, derivatives)
+        )
+        and result_torque == torque
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (copper_loss, iron_loss, total_loss)
+        )
+        and math.isclose(
+            total_loss,
+            copper_loss + iron_loss,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            result_copper_loss, copper_loss, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and math.isclose(
+            result_iron_loss, iron_loss, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and math.isclose(
+            result_total_loss, total_loss, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _axial_flux_pm_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("axial_generation", "")).strip()
+    try:
+        sector_multiplier = int(value.get("sector_multiplier"))
+        result_sector_multiplier = int(value.get("result_sector_multiplier"))
+        air_gaps = [float(item) for item in value.get("air_gaps_m", [])]
+        result_air_gaps = [
+            float(item) for item in value.get("result_air_gaps_m", [])
+        ]
+        end_effect = float(value.get("end_effect_factor"))
+        result_end_effect = float(value.get("result_end_effect_factor"))
+        coordinates = [
+            [float(item) for item in row]
+            for row in value.get("surface_coordinates", [])
+        ]
+        result_coordinates = [
+            [float(item) for item in row]
+            for row in value.get("result_surface_coordinates", [])
+        ]
+        torque = [float(item) for item in value.get("torque_surface_nm", [])]
+        result_torque = [
+            float(item) for item in value.get("result_torque_surface_nm", [])
+        ]
+        force = [
+            float(item) for item in value.get("axial_force_surface_n", [])
+        ]
+        result_force = [
+            float(item) for item in value.get("result_axial_force_surface_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    coordinate_keys = [tuple(row) for row in coordinates]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "sector_generation",
+                "airgap_generation",
+                "end_effect_generation",
+                "torque_generation",
+                "force_generation",
+                "direction_generation",
+                "frame_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and sector_multiplier > 0
+        and result_sector_multiplier == sector_multiplier
+        and len(air_gaps) == 2
+        and all(math.isfinite(item) and item > 0.0 for item in air_gaps)
+        and result_air_gaps == air_gaps
+        and math.isfinite(end_effect)
+        and 0.0 < end_effect <= 1.0
+        and math.isclose(result_end_effect, end_effect, rel_tol=0.0, abs_tol=1.0e-12)
+        and len(coordinates) >= 3
+        and all(len(row) == 2 for row in coordinates)
+        and all(math.isfinite(item) for row in coordinates for item in row)
+        and len(set(coordinate_keys)) == len(coordinate_keys)
+        and result_coordinates == coordinates
+        and len(torque) == len(force) == len(coordinates)
+        and all(math.isfinite(item) for item in torque + force)
+        and result_torque == torque
+        and result_force == force
+        and value.get("force_direction") in {"+z", "-z"}
+        and value.get("result_force_direction") == value.get("force_direction")
+        and value.get("axial_frame") == "rotor_global_z"
+        and value.get("result_axial_frame") == value.get("axial_frame")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_lineage_sha256"))
+        and value.get("accepted_result_lineage_sha256")
+        == value.get("result_lineage_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1514,6 +1722,8 @@ def pwm_controlled_motor_loss_gate(
     skew_slice_torque_v31_identity_ok = True
     ipm_demagnetization_closure_identity_ok = True
     synrm_dq_map_closure_identity_ok = True
+    srm_commutation_closure_identity_ok = True
+    axial_flux_pm_closure_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -1565,6 +1775,8 @@ def pwm_controlled_motor_loss_gate(
         skew_slice_torque_v31_identity_ok = False
         ipm_demagnetization_closure_identity_ok = False
         synrm_dq_map_closure_identity_ok = False
+        srm_commutation_closure_identity_ok = False
+        axial_flux_pm_closure_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -3231,6 +3443,16 @@ def pwm_controlled_motor_loss_gate(
                 "synrm_dq_map_angle_saturation_cross_coupling_mtpa_torque_mesh_result_identity"
             )
         )
+        srm_commutation_closure_identity_ok = _srm_commutation_closure_identity_ok(
+            identity_value.get(
+                "srm_commutation_phase_dwell_chop_overlap_coenergy_torque_loss_angle_mesh_result_identity"
+            )
+        )
+        axial_flux_pm_closure_identity_ok = _axial_flux_pm_closure_identity_ok(
+            identity_value.get(
+                "axial_flux_pm_sector_airgap_end_effect_torque_force_surface_direction_frame_mesh_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -3569,6 +3791,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "synrm_dq_map_uses_current_angles_saturation_cross_coupling_mtpa_torque_mesh_and_result": (
             synrm_dq_map_closure_identity_ok
+        ),
+        "srm_commutation_uses_current_phases_dwell_chop_overlap_coenergy_torque_loss_mesh_and_result": (
+            srm_commutation_closure_identity_ok
+        ),
+        "axial_flux_pm_uses_current_sector_airgaps_end_effect_torque_force_surface_frame_mesh_and_result": (
+            axial_flux_pm_closure_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
