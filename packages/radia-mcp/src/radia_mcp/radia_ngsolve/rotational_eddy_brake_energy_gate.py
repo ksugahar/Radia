@@ -3455,6 +3455,186 @@ def _acoustic_modal_participation_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _capacitance_matrix_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "capacitance_matrix_charge_energy_gauge_reciprocity_terminal_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        terminals = [str(value) for value in identity["terminal_names"]]
+        result_terminals = [str(value) for value in identity["result_terminal_names"]]
+        matrix = [[float(value) for value in row] for row in identity["capacitance_matrix_f"]]
+        result_matrix = [
+            [float(value) for value in row]
+            for row in identity["result_capacitance_matrix_f"]
+        ]
+        potentials = [float(value) for value in identity["terminal_potential_v"]]
+        result_potentials = [
+            float(value) for value in identity["result_terminal_potential_v"]
+        ]
+        charges = [float(value) for value in identity["terminal_charge_c"]]
+        result_charges = [float(value) for value in identity["result_terminal_charge_c"]]
+        energy = float(identity["stored_energy_j"])
+        result_energy = float(identity["result_stored_energy_j"])
+        tolerance = float(identity["reciprocity_tolerance"])
+        result_tolerance = float(identity["result_reciprocity_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    size = len(matrix)
+    matrix_scale = max((abs(value) for row in matrix for value in row), default=0.0)
+    absolute_closure_tolerance = max(matrix_scale * tolerance, 1.0e-24)
+    expected_charges = [
+        sum(matrix[row][column] * potentials[column] for column in range(size))
+        for row in range(size)
+    ] if size and len(potentials) == size else []
+    expected_energy = 0.5 * sum(
+        potential * charge for potential, charge in zip(potentials, charges, strict=True)
+    ) if len(potentials) == len(charges) else math.nan
+    generation = str(identity.get("capacitance_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "matrix_generation",
+                "charge_generation",
+                "energy_generation",
+                "gauge_generation",
+                "reciprocity_generation",
+                "terminal_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and size >= 2
+        and len(terminals) == size
+        and len(set(terminals)) == size
+        and result_terminals == terminals
+        and identity.get("reference_terminal") in terminals
+        and identity.get("result_reference_terminal") == identity.get("reference_terminal")
+        and all(len(row) == size for row in matrix)
+        and all(math.isfinite(value) for row in matrix for value in row)
+        and result_matrix == matrix
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance <= 1.0e-6
+        and result_tolerance == tolerance
+        and all(
+            math.isclose(
+                matrix[row][column],
+                matrix[column][row],
+                rel_tol=0.0,
+                abs_tol=absolute_closure_tolerance,
+            )
+            for row in range(size)
+            for column in range(size)
+        )
+        and all(abs(sum(row)) <= absolute_closure_tolerance for row in matrix)
+        and len(potentials) == len(charges) == size
+        and all(math.isfinite(value) for value in potentials + charges)
+        and result_potentials == potentials
+        and result_charges == charges
+        and all(
+            math.isclose(
+                actual,
+                expected,
+                rel_tol=1.0e-12,
+                abs_tol=absolute_closure_tolerance,
+            )
+            for actual, expected in zip(charges, expected_charges, strict=True)
+        )
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and math.isclose(
+            energy,
+            expected_energy,
+            rel_tol=1.0e-12,
+            abs_tol=absolute_closure_tolerance,
+        )
+        and result_energy == energy
+        and bool(str(identity.get("terminal_owner") or ""))
+        and identity.get("accepted_terminal_owner") == identity.get("terminal_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _thermoelastic_harmonic_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "thermoelastic_harmonic_heat_phase_temperature_displacement_work_loss_frequency_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        frequency = float(identity["frequency_hz"])
+        result_frequency = float(identity["result_frequency_hz"])
+        heat = [float(value) for value in identity["heat_source_complex_w"]]
+        result_heat = [float(value) for value in identity["result_heat_source_complex_w"]]
+        phase = float(identity["heat_source_phase_rad"])
+        result_phase = float(identity["result_heat_source_phase_rad"])
+        temperature = [float(value) for value in identity["temperature_complex_k"]]
+        result_temperature = [float(value) for value in identity["result_temperature_complex_k"]]
+        displacement = [float(value) for value in identity["displacement_complex_m"]]
+        result_displacement = [float(value) for value in identity["result_displacement_complex_m"]]
+        work = float(identity["thermal_expansion_work_j"])
+        result_work = float(identity["result_thermal_expansion_work_j"])
+        loss = float(identity["mechanical_loss_j"])
+        result_loss = float(identity["result_mechanical_loss_j"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(identity.get("thermoelastic_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "heat_generation",
+                "phase_generation",
+                "temperature_generation",
+                "displacement_generation",
+                "work_generation",
+                "loss_generation",
+                "frequency_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and result_frequency == frequency
+        and len(heat) == len(temperature) == len(displacement) == 2
+        and all(math.isfinite(value) for value in heat + temperature + displacement)
+        and result_heat == heat
+        and result_temperature == temperature
+        and result_displacement == displacement
+        and math.hypot(*heat) > 0.0
+        and math.hypot(*temperature) > 0.0
+        and math.hypot(*displacement) > 0.0
+        and math.isclose(phase, math.atan2(heat[1], heat[0]), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_phase == phase
+        and math.isfinite(work)
+        and work > 0.0
+        and result_work == work
+        and math.isfinite(loss)
+        and 0.0 <= loss <= work
+        and result_loss == loss
+        and identity.get("loss_convention") == "positive_dissipated_per_cycle"
+        and identity.get("result_loss_convention") == identity.get("loss_convention")
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -3940,6 +4120,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "acoustic_modes_use_current_normalization_mass_participation_damping_reconstruction_mesh_and_result": (
             _acoustic_modal_participation_identity_ok(summary)
+        ),
+        "capacitance_results_use_current_matrix_charge_energy_gauge_reciprocity_terminals_mesh_and_result": (
+            _capacitance_matrix_identity_ok(summary)
+        ),
+        "thermoelastic_harmonics_use_current_heat_phase_temperature_displacement_work_loss_frequency_mesh_and_result": (
+            _thermoelastic_harmonic_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
