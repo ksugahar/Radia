@@ -2794,6 +2794,151 @@ def _farfield_basis_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _dispersive_port_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "dispersive_port_mode_branch_cutoff_normalization_beta_phase_group_delay_mesh_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("port_generation", "")).strip()
+    try:
+        cutoff = float(identity.get("cutoff_frequency_hz"))
+        frequencies = [float(item) for item in identity.get("frequency_hz", [])]
+        beta = [
+            float(item)
+            for item in identity.get("propagation_constant_rad_per_m", [])
+        ]
+        phases = [float(item) for item in identity.get("deembedded_phase_rad", [])]
+        group_delay = float(identity.get("group_delay_s"))
+    except (TypeError, ValueError):
+        return False
+    if len(frequencies) < 3 or len(beta) != len(frequencies) or len(phases) != len(
+        frequencies
+    ):
+        return False
+    expected_delay = -(phases[-1] - phases[0]) / (
+        2.0 * math.pi * (frequencies[-1] - frequencies[0])
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mode_port_generation",
+                "branch_port_generation",
+                "cutoff_port_generation",
+                "normalization_port_generation",
+                "beta_port_generation",
+                "phase_port_generation",
+                "delay_port_generation",
+                "mesh_port_generation",
+                "result_port_generation",
+            )
+        )
+        and bool(str(identity.get("mode_id", "")).strip())
+        and identity.get("result_mode_id") == identity.get("mode_id")
+        and bool(str(identity.get("tracked_branch_id", "")).strip())
+        and identity.get("result_tracked_branch_id")
+        == identity.get("tracked_branch_id")
+        and math.isfinite(cutoff)
+        and cutoff > 0.0
+        and identity.get("result_cutoff_frequency_hz") == cutoff
+        and all(math.isfinite(item) and item > cutoff for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and identity.get("result_frequency_hz") == frequencies
+        and identity.get("modal_normalization") == "unit_forward_power"
+        and identity.get("result_modal_normalization") == "unit_forward_power"
+        and identity.get("propagation_constant_sign") == "positive_forward"
+        and identity.get("result_propagation_constant_sign") == "positive_forward"
+        and all(math.isfinite(item) and item > 0.0 for item in beta)
+        and all(left < right for left, right in zip(beta, beta[1:]))
+        and identity.get("result_propagation_constant_rad_per_m") == beta
+        and all(math.isfinite(item) for item in phases)
+        and identity.get("result_deembedded_phase_rad") == phases
+        and math.isfinite(group_delay)
+        and group_delay >= 0.0
+        and math.isclose(
+            group_delay, expected_delay, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and identity.get("result_group_delay_s") == group_delay
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+        and bool(str(identity.get("result_owner", "")).strip())
+        and identity.get("accepted_result_owner") == identity.get("result_owner")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _transient_farfield_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "transient_farfield_time_gate_fft_window_phase_center_angular_energy_monitor_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("farfield_generation", "")).strip()
+    try:
+        gate = [float(item) for item in identity.get("time_gate_s", [])]
+        phase_center = [float(item) for item in identity.get("phase_center_m", [])]
+        theta = [float(item) for item in identity.get("theta_deg", [])]
+        phi = [float(item) for item in identity.get("phi_deg", [])]
+        accepted_energy = float(identity.get("accepted_energy_j"))
+        radiated_energy = float(identity.get("radiated_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "gate_farfield_generation",
+                "fft_farfield_generation",
+                "phase_center_farfield_generation",
+                "angular_farfield_generation",
+                "energy_farfield_generation",
+                "monitor_farfield_generation",
+                "owner_farfield_generation",
+                "result_farfield_generation",
+            )
+        )
+        and len(gate) == 2
+        and all(math.isfinite(item) for item in gate)
+        and 0.0 <= gate[0] < gate[1]
+        and identity.get("result_time_gate_s") == gate
+        and identity.get("fft_window") == "hann"
+        and identity.get("result_fft_window") == "hann"
+        and identity.get("fft_normalization") == "one_sided_energy_preserving"
+        and identity.get("result_fft_normalization")
+        == "one_sided_energy_preserving"
+        and len(phase_center) == 3
+        and all(math.isfinite(item) for item in phase_center)
+        and identity.get("result_phase_center_m") == phase_center
+        and len(theta) >= 2
+        and len(phi) >= 2
+        and all(math.isfinite(item) for item in (*theta, *phi))
+        and all(left < right for left, right in zip(theta, theta[1:]))
+        and all(left < right for left, right in zip(phi, phi[1:]))
+        and identity.get("result_theta_deg") == theta
+        and identity.get("result_phi_deg") == phi
+        and math.isfinite(accepted_energy)
+        and accepted_energy > 0.0
+        and identity.get("result_accepted_energy_j") == accepted_energy
+        and math.isfinite(radiated_energy)
+        and 0.0 <= radiated_energy <= accepted_energy
+        and identity.get("result_radiated_energy_j") == radiated_energy
+        and bool(str(identity.get("monitor_owner", "")).strip())
+        and identity.get("result_monitor_owner") == identity.get("monitor_owner")
+        and bool(str(identity.get("result_owner", "")).strip())
+        and identity.get("accepted_result_owner") == identity.get("result_owner")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -3095,6 +3240,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "farfields_use_current_spherical_basis_handedness_order_polarization_weights_power_owner_and_result": (
                 _farfield_basis_inputs_are_current(raw)
+            ),
+            "dispersive_ports_use_current_mode_branch_cutoff_power_normalization_beta_phase_group_delay_mesh_and_result": (
+                _dispersive_port_inputs_are_current(raw)
+            ),
+            "transient_farfields_use_current_time_gate_fft_phase_center_angles_energy_monitor_owner_and_result": (
+                _transient_farfield_inputs_are_current(raw)
             ),
         }
         row = {
