@@ -2434,6 +2434,118 @@ def _wake_impedance_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _dispersive_vector_fit_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "dispersive_vector_fit_passivity_causality_temperature_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("fit_generation", "")).strip()
+    try:
+        temperature = float(identity.get("temperature_c"))
+        result_temperature = float(identity.get("result_temperature_c"))
+        frequencies = [float(item) for item in identity.get("frequency_grid_hz", [])]
+        result_frequencies = [float(item) for item in identity.get("result_frequency_grid_hz", [])]
+        poles = [[float(item) for item in row] for row in identity.get("poles_rad_s", [])]
+        result_poles = [[float(item) for item in row] for row in identity.get("result_poles_rad_s", [])]
+        residues = [[float(item) for item in row] for row in identity.get("residues", [])]
+        result_residues = [[float(item) for item in row] for row in identity.get("result_residues", [])]
+        minimum_dissipation = float(identity.get("minimum_dissipation"))
+        result_minimum_dissipation = float(identity.get("result_minimum_dissipation"))
+        causality_residual = float(identity.get("causality_residual"))
+        result_causality_residual = float(identity.get("result_causality_residual"))
+        residual_limit = float(identity.get("causality_residual_limit"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "pole_fit_generation", "residue_fit_generation", "passivity_fit_generation",
+            "causality_fit_generation", "temperature_fit_generation", "frequency_fit_generation",
+            "material_fit_generation", "result_fit_generation"))
+        and math.isfinite(temperature)
+        and math.isclose(result_temperature, temperature, rel_tol=0.0, abs_tol=1.0e-12)
+        and len(frequencies) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and len(poles) == len(residues) >= 1
+        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in poles + residues)
+        and all(row[0] < 0.0 for row in poles)
+        and result_poles == poles and result_residues == residues
+        and identity.get("passivity_enforced") is True
+        and identity.get("result_passivity_enforced") is True
+        and math.isfinite(minimum_dissipation) and minimum_dissipation >= 0.0
+        and result_minimum_dissipation == minimum_dissipation
+        and math.isfinite(causality_residual) and causality_residual >= 0.0
+        and math.isfinite(residual_limit) and residual_limit >= 0.0
+        and causality_residual <= residual_limit
+        and result_causality_residual == causality_residual
+        and _valid_sha256(identity.get("material_table_sha256"))
+        and identity.get("result_material_table_sha256") == identity.get("material_table_sha256")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _array_scan_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "array_embedded_pattern_feed_phase_active_reflection_scan_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("array_generation", "")).strip()
+    element_order = identity.get("element_order")
+    patterns = identity.get("embedded_pattern_sha256")
+    try:
+        scan_angles = [float(item) for item in identity.get("scan_angles_deg", [])]
+        result_scan_angles = [float(item) for item in identity.get("result_scan_angles_deg", [])]
+        feed_phase = [[float(item) for item in row] for row in identity.get("feed_phase_deg", [])]
+        result_feed_phase = [[float(item) for item in row] for row in identity.get("result_feed_phase_deg", [])]
+        reflection = [float(item) for item in identity.get("active_reflection_magnitude", [])]
+        result_reflection = [float(item) for item in identity.get("result_active_reflection_magnitude", [])]
+        accepted_power = [float(item) for item in identity.get("accepted_power_fraction", [])]
+        result_accepted_power = [float(item) for item in identity.get("result_accepted_power_fraction", [])]
+    except (TypeError, ValueError):
+        return False
+    element_count = len(element_order) if isinstance(element_order, list) else 0
+    scan_count = len(scan_angles)
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "pattern_array_generation", "element_array_generation", "phase_array_generation",
+            "reflection_array_generation", "scan_array_generation", "power_array_generation",
+            "mesh_array_generation", "result_array_generation"))
+        and element_count >= 2
+        and all(isinstance(item, int) and not isinstance(item, bool) and item > 0 for item in element_order)
+        and len(set(element_order)) == element_count
+        and identity.get("result_element_order") == element_order
+        and isinstance(patterns, list) and len(patterns) == element_count
+        and all(_valid_sha256(item) for item in patterns)
+        and identity.get("result_embedded_pattern_sha256") == patterns
+        and scan_count >= 3
+        and all(math.isfinite(item) for item in scan_angles)
+        and all(right > left for left, right in zip(scan_angles, scan_angles[1:]))
+        and result_scan_angles == scan_angles
+        and len(feed_phase) == scan_count
+        and all(len(row) == element_count and all(math.isfinite(item) for item in row) for row in feed_phase)
+        and result_feed_phase == feed_phase
+        and len(reflection) == len(accepted_power) == scan_count
+        and all(math.isfinite(item) and 0.0 <= item < 1.0 for item in reflection)
+        and all(math.isfinite(item) and 0.0 <= item <= 1.0 for item in accepted_power)
+        and all(math.isclose(power, 1.0 - gamma**2, rel_tol=1.0e-12, abs_tol=1.0e-12) for power, gamma in zip(accepted_power, reflection))
+        and result_reflection == reflection and result_accepted_power == accepted_power
+        and _valid_sha256(identity.get("array_mesh_sha256"))
+        and identity.get("result_array_mesh_sha256") == identity.get("array_mesh_sha256")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2717,6 +2829,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "wake_impedance_uses_current_bunch_time_grid_transform_frequency_normalization_mesh_and_result": (
                 _wake_impedance_inputs_are_current(raw)
+            ),
+            "dispersive_vector_fit_uses_current_stable_poles_residues_passivity_causality_temperature_and_result": (
+                _dispersive_vector_fit_inputs_are_current(raw)
+            ),
+            "array_scan_uses_current_embedded_patterns_element_order_phases_reflection_power_mesh_and_result": (
+                _array_scan_inputs_are_current(raw)
             ),
         }
         row = {
