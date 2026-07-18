@@ -1990,6 +1990,176 @@ def _moving_conductor_drag_identity_ok(value: object) -> bool:
     )
 
 
+def _magnetic_bearing_bias_sweep_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("bearing_generation", "")).strip()
+    try:
+        bias_current = float(value.get("bias_current_a"))
+        displacement = [
+            float(item) for item in value.get("displacement_samples_m", [])
+        ]
+        force = [float(item) for item in value.get("force_x_samples_n", [])]
+        stiffness = [
+            [float(item) for item in row]
+            for row in value.get("stiffness_matrix_n_m", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    if (
+        len(displacement) != 3
+        or len(force) != 3
+        or len(stiffness) != 2
+        or any(len(row) != 2 for row in stiffness)
+    ):
+        return False
+    span = displacement[2] - displacement[0]
+    derived_stiffness = -(force[2] - force[0]) / span if span > 0.0 else math.nan
+    determinant = stiffness[0][0] * stiffness[1][1] - stiffness[0][1] * stiffness[1][0]
+    mirrored_fields = (
+        "bias_current_a",
+        "displacement_samples_m",
+        "force_x_samples_n",
+        "stiffness_matrix_n_m",
+        "coordinate_frame",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "bias_generation",
+                "displacement_generation",
+                "force_generation",
+                "stiffness_generation",
+                "crosscoupling_generation",
+                "frame_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(bias_current)
+        and bias_current > 0.0
+        and all(math.isfinite(item) for item in displacement + force)
+        and displacement[0] < displacement[1] < displacement[2]
+        and math.isclose(displacement[1], 0.0, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(displacement[0], -displacement[2], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(force[1], 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(force[0], -force[2], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(math.isfinite(item) for row in stiffness for item in row)
+        and stiffness[0][0] > 0.0
+        and stiffness[1][1] > 0.0
+        and determinant > 0.0
+        and math.isclose(stiffness[0][1], stiffness[1][0], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(stiffness[0][0], derived_stiffness, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and value.get("coordinate_frame") == "global_xyz_right_handed"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored_fields)
+        and bool(str(value.get("bearing_owner", "")).strip())
+        and value.get("accepted_bearing_owner") == value.get("bearing_owner")
+        and _valid_sha256(value.get("bearing_result_sha256"))
+        and value.get("accepted_bearing_result_sha256")
+        == value.get("bearing_result_sha256")
+    )
+
+
+def _pm_demag_recoil_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    try:
+        reference_temperature = float(value.get("reference_temperature_c"))
+        operating_temperature = float(value.get("operating_temperature_c"))
+        remanence_reference = float(value.get("remanence_reference_t"))
+        coefficient = float(value.get("remanence_temperature_coefficient_per_c"))
+        remanence_temperature = float(value.get("temperature_adjusted_remanence_t"))
+        recoil_mu = float(value.get("recoil_relative_permeability"))
+        knee_field = float(value.get("knee_field_a_m"))
+        h_points = [float(item) for item in value.get("loadline_h_a_m", [])]
+        b_points = [float(item) for item in value.get("loadline_b_t", [])]
+        irreversible_loss = float(value.get("irreversible_flux_loss_fraction"))
+    except (TypeError, ValueError):
+        return False
+    expected_remanence = remanence_reference * (
+        1.0 + coefficient * (operating_temperature - reference_temperature)
+    )
+    expected_b = [
+        remanence_temperature + 4.0e-7 * math.pi * recoil_mu * field
+        for field in h_points
+    ]
+    knee_crossed = bool(h_points) and min(h_points) <= knee_field
+    mirrored_fields = (
+        "reference_temperature_c",
+        "operating_temperature_c",
+        "remanence_reference_t",
+        "remanence_temperature_coefficient_per_c",
+        "temperature_adjusted_remanence_t",
+        "recoil_relative_permeability",
+        "knee_field_a_m",
+        "loadline_h_a_m",
+        "loadline_b_t",
+        "knee_crossed",
+        "irreversible_flux_loss_fraction",
+        "field_orientation",
+        "mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "recoil_generation",
+                "knee_generation",
+                "loadline_generation",
+                "temperature_generation",
+                "irreversible_generation",
+                "orientation_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and all(
+            math.isfinite(item)
+            for item in (
+                reference_temperature,
+                operating_temperature,
+                remanence_reference,
+                coefficient,
+                remanence_temperature,
+                recoil_mu,
+                knee_field,
+                irreversible_loss,
+            )
+        )
+        and remanence_reference > 0.0
+        and recoil_mu > 0.0
+        and coefficient <= 0.0
+        and math.isclose(remanence_temperature, expected_remanence, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and len(h_points) >= 3
+        and len(b_points) == len(h_points)
+        and all(math.isfinite(item) for item in h_points + b_points)
+        and all(right > left for left, right in zip(h_points, h_points[1:]))
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for observed, expected in zip(b_points, expected_b)
+        )
+        and value.get("knee_crossed") is knee_crossed
+        and 0.0 <= irreversible_loss <= 1.0
+        and ((knee_crossed and irreversible_loss > 0.0) or (not knee_crossed and irreversible_loss == 0.0))
+        and value.get("field_orientation") == "magnetization_antiparallel_h"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored_fields)
+        and _valid_sha256(value.get("mesh_sha256"))
+        and bool(str(value.get("demag_owner", "")).strip())
+        and value.get("accepted_demag_owner") == value.get("demag_owner")
+        and _valid_sha256(value.get("demag_result_sha256"))
+        and value.get("accepted_demag_result_sha256") == value.get("demag_result_sha256")
+    )
+
+
 def _magnetic_gear_identity_ok(value: object) -> bool:
     if value is None:
         return True
@@ -2313,6 +2483,8 @@ def magnetic_force_method_profile_gate(
     moving_conductor_drag_identity_ok = True
     magnetic_gear_identity_ok = True
     demag_bem_charge_identity_ok = True
+    magnetic_bearing_bias_sweep_identity_ok = True
+    pm_demag_recoil_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -2372,6 +2544,8 @@ def magnetic_force_method_profile_gate(
         moving_conductor_drag_identity_ok = False
         magnetic_gear_identity_ok = False
         demag_bem_charge_identity_ok = False
+        magnetic_bearing_bias_sweep_identity_ok = False
+        pm_demag_recoil_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -4158,6 +4332,18 @@ def magnetic_force_method_profile_gate(
                 "demag_bem_surface_charge_normal_jump_farfield_energy_mesh_owner_solution_identity"
             )
         )
+        magnetic_bearing_bias_sweep_identity_ok = (
+            _magnetic_bearing_bias_sweep_identity_ok(
+                identity_value.get(
+                    "magnetic_bearing_bias_displacement_force_stiffness_crosscoupling_frame_owner_result_identity"
+                )
+            )
+        )
+        pm_demag_recoil_identity_ok = _pm_demag_recoil_identity_ok(
+            identity_value.get(
+                "pm_demag_recoil_knee_loadline_temperature_irreversible_orientation_mesh_owner_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -4390,6 +4576,12 @@ def magnetic_force_method_profile_gate(
         ),
         "demag_bem_uses_neutral_surface_charge_outward_normals_jump_farfield_energy_mesh_owner_and_solution": (
             demag_bem_charge_identity_ok
+        ),
+        "magnetic_bearing_bias_sweep_uses_current_bias_symmetric_force_derivative_crosscoupling_frame_owner_and_result": (
+            magnetic_bearing_bias_sweep_identity_ok
+        ),
+        "pm_demag_uses_temperature_adjusted_recoil_knee_loadline_irreversible_loss_orientation_mesh_owner_and_result": (
+            pm_demag_recoil_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
