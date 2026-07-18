@@ -5354,6 +5354,342 @@ def _exodus_semantic_export_identity_ok(identity: object) -> bool:
     )
 
 
+def _periodic_hex_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        transform = [
+            [float(value) for value in row]
+            for row in identity.get("rigid_transform", [])
+        ]
+        result_transform = [
+            [float(value) for value in row]
+            for row in identity.get("result_rigid_transform", [])
+        ]
+        pairs = [
+            [int(value) for value in row]
+            for row in identity.get("periodic_node_pairs", [])
+        ]
+        result_pairs = [
+            [int(value) for value in row]
+            for row in identity.get("result_periodic_node_pairs", [])
+        ]
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        minimum_jacobian = float(identity.get("minimum_allowed_scaled_jacobian"))
+        result_minimum_jacobian = float(
+            identity.get("result_minimum_allowed_scaled_jacobian")
+        )
+    except (TypeError, ValueError):
+        return False
+    rotation = [row[:3] for row in transform[:3]]
+    determinant = (
+        rotation[0][0]
+        * (rotation[1][1] * rotation[2][2] - rotation[1][2] * rotation[2][1])
+        - rotation[0][1]
+        * (rotation[1][0] * rotation[2][2] - rotation[1][2] * rotation[2][0])
+        + rotation[0][2]
+        * (rotation[1][0] * rotation[2][1] - rotation[1][1] * rotation[2][0])
+    ) if len(rotation) == 3 and all(len(row) == 3 for row in rotation) else math.nan
+    rotation_is_orthonormal = len(rotation) == 3 and all(
+        math.isclose(
+            sum(rotation[row][axis] * rotation[column][axis] for axis in range(3)),
+            1.0 if row == column else 0.0,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        )
+        for row in range(3)
+        for column in range(3)
+    )
+    generation = str(identity.get("periodic_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "pair_generation",
+                "transform_generation",
+                "node_order_generation",
+                "orientation_generation",
+                "jacobian_generation",
+                "region_generation",
+                "export_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and bool(str(identity.get("source_surface") or ""))
+        and identity.get("result_source_surface") == identity.get("source_surface")
+        and bool(str(identity.get("target_surface") or ""))
+        and identity.get("target_surface") != identity.get("source_surface")
+        and identity.get("result_target_surface") == identity.get("target_surface")
+        and len(transform) == 4
+        and all(len(row) == 4 for row in transform)
+        and all(math.isfinite(value) for row in transform for value in row)
+        and transform[3] == [0.0, 0.0, 0.0, 1.0]
+        and rotation_is_orthonormal
+        and math.isclose(determinant, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_transform == transform
+        and len(pairs) >= 4
+        and all(len(pair) == 2 and all(value > 0 for value in pair) for pair in pairs)
+        and len({pair[0] for pair in pairs}) == len(pairs)
+        and len({pair[1] for pair in pairs}) == len(pairs)
+        and result_pairs == pairs
+        and identity.get("face_orientation") == "source_outward_target_inward"
+        and identity.get("result_face_orientation") == identity.get("face_orientation")
+        and math.isfinite(jacobian)
+        and math.isfinite(minimum_jacobian)
+        and jacobian >= minimum_jacobian > 0.0
+        and result_jacobian == jacobian
+        and result_minimum_jacobian == minimum_jacobian
+        and bool(str(identity.get("region_owner") or ""))
+        and identity.get("result_region_owner") == identity.get("region_owner")
+        and str(identity.get("export_owner") or "").startswith("headless:")
+        and identity.get("result_export_owner") == identity.get("export_owner")
+        and _valid_sha256(identity.get("periodic_mesh_sha256"))
+        and identity.get("accepted_periodic_mesh_sha256")
+        == identity.get("periodic_mesh_sha256")
+        and _valid_sha256(identity.get("periodic_result_sha256"))
+        and identity.get("accepted_periodic_result_sha256")
+        == identity.get("periodic_result_sha256")
+    )
+
+
+def _curved_hex_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        order = int(identity.get("polynomial_order"))
+        result_order = int(identity.get("result_polynomial_order"))
+        projection = float(identity.get("maximum_cad_projection_distance_m"))
+        result_projection = float(
+            identity.get("result_maximum_cad_projection_distance_m")
+        )
+        allowed_projection = float(identity.get("allowed_cad_projection_distance_m"))
+        result_allowed_projection = float(
+            identity.get("result_allowed_cad_projection_distance_m")
+        )
+        cad_volume = float(identity.get("cad_volume_m3"))
+        volume = float(identity.get("curved_mesh_volume_m3"))
+        result_volume = float(identity.get("result_curved_mesh_volume_m3"))
+        tolerance = float(identity.get("volume_tolerance_m3"))
+        result_tolerance = float(identity.get("result_volume_tolerance_m3"))
+        jacobian = float(identity.get("minimum_high_order_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_high_order_jacobian"))
+        minimum_jacobian = float(
+            identity.get("minimum_allowed_high_order_jacobian")
+        )
+        result_minimum_jacobian = float(
+            identity.get("result_minimum_allowed_high_order_jacobian")
+        )
+    except (TypeError, ValueError):
+        return False
+    edge_roles = identity.get("edge_midnode_roles")
+    result_edge_roles = identity.get("result_edge_midnode_roles")
+    face_roles = identity.get("face_midnode_roles")
+    result_face_roles = identity.get("result_face_midnode_roles")
+    generation = str(identity.get("curve_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "edge_generation",
+                "face_generation",
+                "projection_generation",
+                "volume_generation",
+                "jacobian_generation",
+                "order_generation",
+                "cad_generation",
+                "mesh_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and identity.get("element_family") == "HEX27"
+        and identity.get("result_element_family") == identity.get("element_family")
+        and order == 2
+        and result_order == order
+        and isinstance(edge_roles, list)
+        and edge_roles == ["edge_mid"] * 12
+        and result_edge_roles == edge_roles
+        and isinstance(face_roles, list)
+        and face_roles == ["face_mid"] * 6
+        and result_face_roles == face_roles
+        and all(
+            math.isfinite(value)
+            for value in (
+                projection,
+                result_projection,
+                allowed_projection,
+                result_allowed_projection,
+                cad_volume,
+                volume,
+                result_volume,
+                tolerance,
+                result_tolerance,
+                jacobian,
+                result_jacobian,
+                minimum_jacobian,
+                result_minimum_jacobian,
+            )
+        )
+        and 0.0 <= projection <= allowed_projection
+        and allowed_projection > 0.0
+        and result_projection == projection
+        and result_allowed_projection == allowed_projection
+        and cad_volume > 0.0
+        and volume > 0.0
+        and tolerance > 0.0
+        and abs(volume - cad_volume) <= tolerance
+        and result_volume == volume
+        and result_tolerance == tolerance
+        and jacobian >= minimum_jacobian > 0.0
+        and result_jacobian == jacobian
+        and result_minimum_jacobian == minimum_jacobian
+        and bool(str(identity.get("cad_owner") or ""))
+        and identity.get("result_cad_owner") == identity.get("cad_owner")
+        and str(identity.get("mesh_owner") or "").startswith("headless:")
+        and identity.get("result_mesh_owner") == identity.get("mesh_owner")
+        and _valid_sha256(identity.get("curved_export_sha256"))
+        and identity.get("accepted_curved_export_sha256")
+        == identity.get("curved_export_sha256")
+    )
+
+
+def _imprint_merge_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        tolerance = float(identity.get("merge_tolerance_m"))
+        replay_tolerance = float(identity.get("replay_merge_tolerance_m"))
+        count = int(identity.get("coincident_topology_count"))
+        replay_count = int(identity.get("replay_coincident_topology_count"))
+        lineage = [
+            [int(value) for value in row]
+            for row in identity.get("merged_entity_lineage", [])
+        ]
+        replay_lineage = [
+            [int(value) for value in row]
+            for row in identity.get("replay_merged_entity_lineage", [])
+        ]
+        model_generation = int(identity.get("model_generation_id"))
+        replay_model_generation = int(identity.get("replay_model_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    commands = identity.get("command_sequence")
+    replay_commands = identity.get("replay_command_sequence")
+    topology = identity.get("final_topology_counts")
+    replay_topology = identity.get("replay_final_topology_counts")
+    generation = str(identity.get("imprint_merge_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "tolerance_generation",
+                "topology_generation",
+                "lineage_generation",
+                "command_generation",
+                "checkpoint_generation",
+                "model_generation",
+                "final_generation",
+                "database_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and replay_tolerance == tolerance
+        and count > 0
+        and replay_count == count
+        and len(lineage) == count
+        and all(len(pair) == 2 and all(value > 0 for value in pair) for pair in lineage)
+        and len({pair[0] for pair in lineage}) == count
+        and len({pair[1] for pair in lineage}) == count
+        and replay_lineage == lineage
+        and commands == ["imprint all", "merge all", "compress all"]
+        and replay_commands == commands
+        and str(identity.get("checkpoint_owner") or "").startswith("headless:")
+        and identity.get("replay_checkpoint_owner") == identity.get("checkpoint_owner")
+        and model_generation >= 0
+        and replay_model_generation == model_generation
+        and isinstance(topology, Mapping)
+        and set(topology) == {"volume", "surface", "curve"}
+        and all(isinstance(value, int) and value > 0 for value in topology.values())
+        and replay_topology == topology
+        and _valid_sha256(identity.get("database_sha256"))
+        and identity.get("replay_database_sha256") == identity.get("database_sha256")
+        and _valid_sha256(identity.get("imprint_result_sha256"))
+        and identity.get("accepted_imprint_result_sha256")
+        == identity.get("imprint_result_sha256")
+    )
+
+
+def _headless_batch_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        exit_code = int(identity.get("process_exit_code"))
+        result_exit_code = int(identity.get("result_process_exit_code"))
+        save_generation = int(identity.get("database_save_generation_id"))
+        result_save_generation = int(
+            identity.get("result_database_save_generation_id")
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("batch_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "process_generation",
+                "license_generation",
+                "journal_generation",
+                "log_generation",
+                "database_generation",
+                "command_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and identity.get("execution_mode") == "nographics_batch"
+        and identity.get("result_execution_mode") == identity.get("execution_mode")
+        and identity.get("gui_launched") is False
+        and identity.get("result_gui_launched") is False
+        and exit_code == 0
+        and result_exit_code == exit_code
+        and identity.get("result_license_warning") == identity.get("license_warning")
+        and identity.get("license_fallback") == "limited_mode_batch_completed"
+        and identity.get("result_license_fallback") == identity.get("license_fallback")
+        and identity.get("journal_completion_marker") == "CAEAI_BATCH_COMPLETE"
+        and identity.get("result_journal_completion_marker")
+        == identity.get("journal_completion_marker")
+        and str(identity.get("log_owner") or "").startswith("headless:")
+        and identity.get("result_log_owner") == identity.get("log_owner")
+        and save_generation >= 0
+        and result_save_generation == save_generation
+        and _valid_sha256(identity.get("command_sha256"))
+        and identity.get("result_command_sha256") == identity.get("command_sha256")
+        and str(identity.get("process_owner") or "").startswith("coreform_cubit:")
+        and "-nographics" in str(identity.get("process_owner") or "")
+        and "-batch" in str(identity.get("process_owner") or "")
+        and identity.get("result_process_owner") == identity.get("process_owner")
+        and _valid_sha256(identity.get("batch_result_sha256"))
+        and identity.get("accepted_batch_result_sha256")
+        == identity.get("batch_result_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -6231,6 +6567,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "mixed_transitions_use_current_counts_interface_nodes_orientation_regions_volume_owner_and_mesh": (
             _mixed_transition_contract_identity_ok(
                 summary.get("mixed_hex_tet_pyramid_count_interface_conformity_face_orientation_node_region_volume_mesh_result_generation_identity")
+            )
+        ),
+        "periodic_hex_pairs_use_current_transform_node_order_orientation_jacobian_region_export_mesh_and_result": (
+            _periodic_hex_contract_identity_ok(
+                summary.get("periodic_hex_pair_transform_node_order_face_orientation_jacobian_region_export_mesh_result_generation_identity")
+            )
+        ),
+        "high_order_curved_hexes_use_current_midnodes_projection_volume_jacobian_order_cad_mesh_and_export": (
+            _curved_hex_contract_identity_ok(
+                summary.get("high_order_hex_curve_midnode_projection_volume_jacobian_order_cad_mesh_export_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -7132,6 +7478,16 @@ def cubit_mixed_transition_source_gate(
         "exodus_exports_use_current_blocks_sets_int64_topology_map_owner_mesh_and_file": (
             _exodus_semantic_export_identity_ok(
                 summary.get("exodus_block_sideset_nodeset_int64_topology_element_map_owner_mesh_export_generation_identity")
+            )
+        ),
+        "imprint_merge_replays_use_current_tolerance_topology_lineage_order_checkpoint_model_database_and_result": (
+            _imprint_merge_contract_identity_ok(
+                summary.get("imprint_merge_tolerance_topology_count_entity_lineage_command_checkpoint_model_final_database_result_generation_identity")
+            )
+        ),
+        "headless_batches_use_current_exit_license_fallback_journal_log_database_command_process_and_result": (
+            _headless_batch_contract_identity_ok(
+                summary.get("headless_batch_exit_license_fallback_journal_log_database_command_process_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
