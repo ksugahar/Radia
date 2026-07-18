@@ -2853,6 +2853,233 @@ def _field_circuit_power_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _nonlinear_arclength_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "nonlinear_arclength_tangent_branch_turning_residual_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        previous = [float(value) for value in identity.get("previous_augmented_state", [])]
+        result_previous = [
+            float(value) for value in identity.get("result_previous_augmented_state", [])
+        ]
+        tangent = [float(value) for value in identity.get("predictor_tangent", [])]
+        result_tangent = [
+            float(value) for value in identity.get("result_predictor_tangent", [])
+        ]
+        step = float(identity.get("arclength_step"))
+        result_step = float(identity.get("result_arclength_step"))
+        predictor = [
+            float(value) for value in identity.get("predictor_augmented_state", [])
+        ]
+        result_predictor = [
+            float(value) for value in identity.get("result_predictor_augmented_state", [])
+        ]
+        corrected = [
+            float(value) for value in identity.get("corrected_augmented_state", [])
+        ]
+        result_corrected = [
+            float(value) for value in identity.get("result_corrected_augmented_state", [])
+        ]
+        residual = float(identity.get("corrected_residual_norm"))
+        result_residual = float(identity.get("result_corrected_residual_norm"))
+        tolerance = float(identity.get("residual_tolerance"))
+        result_tolerance = float(identity.get("result_residual_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("continuation_generation") or "")
+    count = len(previous)
+    tangent_norm = math.sqrt(sum(value * value for value in tangent))
+    expected_predictor = [
+        value + step * direction for value, direction in zip(previous, tangent, strict=True)
+    ] if count and len(tangent) == count else []
+    correction = [
+        value - old for value, old in zip(corrected, previous, strict=True)
+    ] if len(corrected) == count else []
+    projected_arclength = sum(
+        delta * direction for delta, direction in zip(correction, tangent, strict=True)
+    ) if len(correction) == count and len(tangent) == count else math.inf
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "arclength_generation",
+                "tangent_generation",
+                "branch_generation",
+                "turning_generation",
+                "residual_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and count >= 2
+        and len(tangent) == len(predictor) == len(corrected) == count
+        and all(math.isfinite(value) for value in previous + tangent + predictor + corrected)
+        and result_previous == previous
+        and result_tangent == tangent
+        and result_predictor == predictor
+        and result_corrected == corrected
+        and math.isclose(tangent_norm, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isfinite(step)
+        and step > 0.0
+        and result_step == step
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, expected in zip(predictor, expected_predictor, strict=True)
+        )
+        and math.isclose(projected_arclength, step, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and bool(str(identity.get("branch_id") or ""))
+        and identity.get("result_branch_id") == identity.get("branch_id")
+        and identity.get("turning_point_side")
+        == "pre_turn_positive_parameter_tangent"
+        and tangent[-1] > 0.0
+        and identity.get("result_turning_point_side")
+        == identity.get("turning_point_side")
+        and math.isfinite(residual)
+        and residual >= 0.0
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and residual <= tolerance
+        and result_residual == residual
+        and result_tolerance == tolerance
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("continuation_mesh_sha256", "result_continuation_mesh_sha256"),
+                ("continuation_result_sha256", "accepted_continuation_result_sha256"),
+            )
+        )
+    )
+
+
+def _electrochemical_conservation_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "electrochemical_species_flux_charge_mass_reaction_energy_time_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        species = [str(value) for value in identity.get("species_order", [])]
+        result_species = [str(value) for value in identity.get("result_species_order", [])]
+        charge = [float(value) for value in identity.get("charge_numbers", [])]
+        result_charge = [float(value) for value in identity.get("result_charge_numbers", [])]
+        mass = [float(value) for value in identity.get("molar_mass_basis", [])]
+        result_mass = [float(value) for value in identity.get("result_molar_mass_basis", [])]
+        stoichiometry = [
+            float(value) for value in identity.get("reaction_stoichiometry", [])
+        ]
+        result_stoichiometry = [
+            float(value) for value in identity.get("result_reaction_stoichiometry", [])
+        ]
+        extent = float(identity.get("reaction_extent_mol"))
+        result_extent = float(identity.get("result_reaction_extent_mol"))
+        initial = [float(value) for value in identity.get("initial_inventory_mol", [])]
+        result_initial = [
+            float(value) for value in identity.get("result_initial_inventory_mol", [])
+        ]
+        final = [float(value) for value in identity.get("final_inventory_mol", [])]
+        result_final = [
+            float(value) for value in identity.get("result_final_inventory_mol", [])
+        ]
+        boundary = [
+            float(value) for value in identity.get("integrated_boundary_flux_mol", [])
+        ]
+        result_boundary = [
+            float(value)
+            for value in identity.get("result_integrated_boundary_flux_mol", [])
+        ]
+        current = float(identity.get("integrated_electric_current_c"))
+        result_current = float(identity.get("result_integrated_electric_current_c"))
+        energy_initial = float(identity.get("initial_free_energy_j"))
+        result_energy_initial = float(identity.get("result_initial_free_energy_j"))
+        energy_final = float(identity.get("final_free_energy_j"))
+        result_energy_final = float(identity.get("result_final_free_energy_j"))
+        dissipation = float(identity.get("dissipated_free_energy_j"))
+        result_dissipation = float(identity.get("result_dissipated_free_energy_j"))
+        times = [float(value) for value in identity.get("time_s", [])]
+        result_times = [float(value) for value in identity.get("result_time_s", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("electrochemical_generation") or "")
+    count = len(species)
+    expected_final = [
+        old + extent * coefficient + flux
+        for old, coefficient, flux in zip(initial, stoichiometry, boundary, strict=True)
+    ] if count and len(initial) == len(stoichiometry) == len(boundary) == count else []
+    initial_mass = sum(value * weight for value, weight in zip(initial, mass, strict=True)) if len(initial) == len(mass) == count else math.inf
+    final_mass = sum(value * weight for value, weight in zip(final, mass, strict=True)) if len(final) == len(mass) == count else math.inf
+    boundary_mass = sum(value * weight for value, weight in zip(boundary, mass, strict=True)) if len(boundary) == len(mass) == count else math.inf
+    initial_charge = sum(value * number for value, number in zip(initial, charge, strict=True)) if len(initial) == len(charge) == count else math.inf
+    final_charge = sum(value * number for value, number in zip(final, charge, strict=True)) if len(final) == len(charge) == count else math.inf
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "species_generation",
+                "flux_generation",
+                "charge_generation",
+                "mass_generation",
+                "reaction_generation",
+                "energy_generation",
+                "time_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and count >= 2
+        and all(species)
+        and len(set(species)) == count
+        and result_species == species
+        and len(charge) == len(mass) == len(stoichiometry) == len(initial) == len(final) == len(boundary) == count
+        and all(math.isfinite(value) for value in charge + mass + stoichiometry + initial + final + boundary)
+        and all(value > 0.0 for value in mass)
+        and all(value >= 0.0 for value in initial + final)
+        and result_charge == charge
+        and result_mass == mass
+        and result_stoichiometry == stoichiometry
+        and math.isfinite(extent)
+        and extent >= 0.0
+        and result_extent == extent
+        and result_initial == initial
+        and result_final == final
+        and result_boundary == boundary
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, expected in zip(final, expected_final, strict=True)
+        )
+        and math.isclose(initial_mass + boundary_mass, final_mass, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(initial_charge, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(final_charge, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(current, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_current == current
+        and all(math.isfinite(value) and value >= 0.0 for value in (energy_initial, energy_final, dissipation))
+        and math.isclose(energy_initial - energy_final, dissipation, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and result_energy_initial == energy_initial
+        and result_energy_final == energy_final
+        and result_dissipation == dissipation
+        and len(times) >= 2
+        and all(math.isfinite(value) and value >= 0.0 for value in times)
+        and all(right > left for left, right in zip(times, times[1:]))
+        and result_times == times
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("electrochemical_mesh_sha256", "result_electrochemical_mesh_sha256"),
+                ("electrochemical_result_sha256", "accepted_electrochemical_result_sha256"),
+            )
+        )
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -3320,6 +3547,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "field_circuit_dae_results_use_current_charge_current_event_energy_time_dataset_and_result": (
             _field_circuit_dae_identity_ok(summary)
+        ),
+        "nonlinear_continuation_uses_current_arclength_tangent_branch_turning_residual_mesh_and_result": (
+            _nonlinear_arclength_identity_ok(summary)
+        ),
+        "electrochemical_results_use_current_species_flux_charge_mass_reaction_energy_time_mesh_and_result": (
+            _electrochemical_conservation_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
