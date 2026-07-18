@@ -1869,6 +1869,119 @@ def _ironloss_separation_identity_ok(value: object) -> bool:
     )
 
 
+def _dq_mtpa_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("dq_generation", "")).strip()
+    try:
+        pole_pairs = int(value.get("pole_pairs"))
+        current = [float(item) for item in value.get("current_dq_a", [])]
+        current_magnitude = float(value.get("current_magnitude_a"))
+        current_angle = float(value.get("current_angle_rad"))
+        pm_flux = float(value.get("pm_flux_linkage_wb_turn"))
+        flux = [float(item) for item in value.get("flux_linkage_dq_wb_turn", [])]
+        inductance = [float(item) for item in value.get("differential_inductance_dq_h", [])]
+        torque = float(value.get("torque_nm"))
+        mechanical_speed = float(value.get("mechanical_speed_rad_s"))
+        electrical_speed = float(value.get("electrical_speed_rad_s"))
+    except (TypeError, ValueError):
+        return False
+    if len(current) != 2 or len(flux) != 2 or len(inductance) != 2:
+        return False
+    values = current + flux + inductance + [current_magnitude, current_angle, pm_flux, torque, mechanical_speed, electrical_speed]
+    if not all(math.isfinite(item) for item in values):
+        return False
+    i_d, i_q = current
+    l_d, l_q = inductance
+    expected_flux = [pm_flux + l_d * i_d, l_q * i_q]
+    expected_torque = 1.5 * pole_pairs * (flux[0] * i_q - flux[1] * i_d)
+    mtpa_residual = pm_flux * i_d + (l_d - l_q) * (i_d**2 - i_q**2)
+    mirrored = (
+        "park_convention", "pole_pairs", "current_dq_a", "current_magnitude_a",
+        "current_angle_rad", "pm_flux_linkage_wb_turn", "flux_linkage_dq_wb_turn",
+        "differential_inductance_dq_h", "torque_nm", "mechanical_speed_rad_s",
+        "electrical_speed_rad_s",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "park_generation", "flux_generation", "inductance_generation", "torque_generation",
+            "mtpa_generation", "current_generation", "angle_generation", "speed_generation",
+            "owner_generation", "result_generation"))
+        and value.get("park_convention") == "power_invariant_q_leads_d"
+        and pole_pairs > 0 and l_d > 0.0 and l_q > 0.0 and pm_flux > 0.0
+        and math.isclose(current_magnitude, math.hypot(i_d, i_q), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(current_angle, math.atan2(i_q, i_d), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-15) for item, expected in zip(flux, expected_flux))
+        and math.isclose(torque, expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(mtpa_residual) <= 1.0e-12 * max(abs(pm_flux * i_d), 1.0)
+        and mechanical_speed >= 0.0
+        and math.isclose(electrical_speed, pole_pairs * mechanical_speed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("dq_owner", "")).strip())
+        and value.get("accepted_dq_owner") == value.get("dq_owner")
+        and _valid_sha256(value.get("dq_result_sha256"))
+        and value.get("accepted_dq_result_sha256") == value.get("dq_result_sha256")
+    )
+
+
+def _iron_loss_energy_balance_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("iron_loss_generation", "")).strip()
+    try:
+        frequency = float(value.get("frequency_hz"))
+        flux_peak = float(value.get("flux_peak_t"))
+        coefficients = [float(item) for item in value.get("loss_coefficients", [])]
+        components = [float(item) for item in value.get("loss_components_w_m3", [])]
+        regions = [[str(row[0]), float(row[1])] for row in value.get("regional_volumes_m3", [])]
+        temperature = float(value.get("temperature_c"))
+        temperature_factor = float(value.get("temperature_factor"))
+        total_power = float(value.get("total_iron_loss_w"))
+        duration = float(value.get("integration_duration_s"))
+        energy = float(value.get("loss_energy_j"))
+    except (IndexError, TypeError, ValueError):
+        return False
+    if len(coefficients) != 3 or len(components) != 3 or not regions:
+        return False
+    values = coefficients + components + [row[1] for row in regions] + [frequency, flux_peak, temperature, temperature_factor, total_power, duration, energy]
+    if not all(math.isfinite(item) for item in values):
+        return False
+    expected_components = [
+        coefficients[0] * frequency * flux_peak**2 * temperature_factor,
+        coefficients[1] * frequency**2 * flux_peak**2,
+        coefficients[2] * frequency**1.5 * flux_peak**1.5,
+    ]
+    expected_power = sum(expected_components) * sum(row[1] for row in regions)
+    mirrored = (
+        "frequency_hz", "flux_peak_t", "loss_coefficients", "loss_components_w_m3",
+        "regional_volumes_m3", "temperature_c", "temperature_factor",
+        "total_iron_loss_w", "integration_duration_s", "loss_energy_j",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "component_generation", "frequency_generation", "flux_generation", "region_generation",
+            "thermal_generation", "power_generation", "energy_generation", "owner_generation",
+            "result_generation"))
+        and frequency > 0.0 and flux_peak > 0.0 and temperature_factor > 0.0
+        and coefficients[0] > 0.0 and coefficients[1] >= 0.0 and coefficients[2] >= 0.0
+        and len({row[0] for row in regions}) == len(regions) and all(row[0] and row[1] > 0.0 for row in regions)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for item, expected in zip(components, expected_components))
+        and math.isclose(total_power, expected_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and duration > 0.0 and math.isclose(energy, total_power * duration, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("iron_loss_owner", "")).strip())
+        and value.get("accepted_iron_loss_owner") == value.get("iron_loss_owner")
+        and _valid_sha256(value.get("iron_loss_result_sha256"))
+        and value.get("accepted_iron_loss_result_sha256") == value.get("iron_loss_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1964,6 +2077,8 @@ def pwm_controlled_motor_loss_gate(
     eccentricity_ump_identity_ok = True
     skew_harmonic_torque_identity_ok = True
     ironloss_separation_identity_ok = True
+    dq_mtpa_torque_identity_ok = True
+    iron_loss_energy_balance_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -2021,6 +2136,8 @@ def pwm_controlled_motor_loss_gate(
         eccentricity_ump_identity_ok = False
         skew_harmonic_torque_identity_ok = False
         ironloss_separation_identity_ok = False
+        dq_mtpa_torque_identity_ok = False
+        iron_loss_energy_balance_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -3717,6 +3834,16 @@ def pwm_controlled_motor_loss_gate(
                 "ironloss_hysteresis_eddy_excess_waveform_frequency_coeff_volume_temperature_total_owner_result_identity"
             )
         )
+        dq_mtpa_torque_identity_ok = _dq_mtpa_torque_identity_ok(
+            identity_value.get(
+                "dq_flux_inductance_torque_mtpa_current_angle_speed_convention_owner_result_identity"
+            )
+        )
+        iron_loss_energy_balance_identity_ok = _iron_loss_energy_balance_identity_ok(
+            identity_value.get(
+                "iron_loss_component_frequency_flux_region_thermal_energy_balance_owner_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -4073,6 +4200,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "iron_loss_closes_hysteresis_eddy_excess_waveform_frequency_coefficients_volume_temperature_total_owner_and_result": (
             ironloss_separation_identity_ok
+        ),
+        "dq_map_closes_park_flux_inductance_torque_mtpa_current_angle_speed_owner_and_result": (
+            dq_mtpa_torque_identity_ok
+        ),
+        "iron_loss_closes_components_frequency_flux_regions_thermal_power_energy_owner_and_result": (
+            iron_loss_energy_balance_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
