@@ -1780,6 +1780,153 @@ def _topological_naming_identity_ok(value: object) -> bool:
     )
 
 
+def _brep_roundtrip_topology_bounds_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("brep_generation") or "")
+    try:
+        tolerance = float(value.get("serialization_tolerance_m"))
+        restored_tolerance = float(value.get("restored_serialization_tolerance_m"))
+        counts = {str(key): int(item) for key, item in value.get("subshape_counts", {}).items()}
+        restored_counts = {
+            str(key): int(item) for key, item in value.get("restored_subshape_counts", {}).items()
+        }
+        bounds_min = [float(item) for item in value.get("bounding_box_min_m", [])]
+        restored_bounds_min = [float(item) for item in value.get("restored_bounding_box_min_m", [])]
+        bounds_max = [float(item) for item in value.get("bounding_box_max_m", [])]
+        restored_bounds_max = [float(item) for item in value.get("restored_bounding_box_max_m", [])]
+        volume = float(value.get("volume_m3"))
+        restored_volume = float(value.get("restored_volume_m3"))
+    except (AttributeError, TypeError, ValueError):
+        return False
+    expected_count_keys = {"solid", "shell", "face", "edge", "vertex"}
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "tolerance_generation",
+                "ocp_generation",
+                "topology_generation",
+                "bounds_generation",
+                "volume_generation",
+                "owner_generation",
+                "source_generation",
+                "restored_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance <= 1.0e-3
+        and restored_tolerance == tolerance
+        and bool(str(value.get("ocp_version") or ""))
+        and value.get("restored_ocp_version") == value.get("ocp_version")
+        and set(counts) == expected_count_keys
+        and counts["solid"] >= 1
+        and counts["shell"] >= 1
+        and all(counts[key] > 0 for key in ("face", "edge", "vertex"))
+        and counts["vertex"] - counts["edge"] + counts["face"] == 2 * counts["shell"]
+        and restored_counts == counts
+        and len(bounds_min) == len(bounds_max) == 3
+        and all(math.isfinite(item) for item in bounds_min + bounds_max)
+        and all(low < high for low, high in zip(bounds_min, bounds_max))
+        and restored_bounds_min == bounds_min
+        and restored_bounds_max == bounds_max
+        and math.isfinite(volume)
+        and volume > 0.0
+        and math.isclose(restored_volume, volume, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and bool(str(value.get("shape_owner") or ""))
+        and value.get("restored_shape_owner") == value.get("shape_owner")
+        and _valid_sha256(value.get("source_brep_sha256"))
+        and value.get("restored_source_brep_sha256") == value.get("source_brep_sha256")
+        and _valid_sha256(value.get("restored_brep_sha256"))
+        and value.get("accepted_restored_brep_sha256") == value.get("restored_brep_sha256")
+    )
+
+
+def _svg_extrusion_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("svg_generation") or "")
+    commands = value.get("path_commands")
+    transform = value.get("curve_transform")
+    try:
+        matrix = [[float(item) for item in row] for row in transform]
+        scale = float(value.get("document_to_meter_scale"))
+        replayed_scale = float(value.get("replayed_document_to_meter_scale"))
+        area = float(value.get("profile_area_m2"))
+        replayed_area = float(value.get("replayed_profile_area_m2"))
+        distance = float(value.get("extrusion_distance_m"))
+        replayed_distance = float(value.get("replayed_extrusion_distance_m"))
+        volume = float(value.get("extrusion_volume_m3"))
+        replayed_volume = float(value.get("replayed_extrusion_volume_m3"))
+    except (TypeError, ValueError):
+        return False
+    unit_scales = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+    determinant = (
+        matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+        if len(matrix) == 3 and all(len(row) == 3 for row in matrix)
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "path_generation",
+                "fill_generation",
+                "transform_generation",
+                "unit_generation",
+                "wire_generation",
+                "face_generation",
+                "volume_generation",
+                "owner_generation",
+                "digest_generation",
+                "result_generation",
+            )
+        )
+        and isinstance(commands, list)
+        and len(commands) >= 3
+        and commands[0] == "M"
+        and commands[-1] == "Z"
+        and all(
+            command in {"M", "L", "H", "V", "C", "S", "Q", "T", "A", "Z"} for command in commands
+        )
+        and value.get("replayed_path_commands") == commands
+        and value.get("fill_rule") in {"nonzero", "evenodd"}
+        and value.get("replayed_fill_rule") == value.get("fill_rule")
+        and len(matrix) == 3
+        and all(len(row) == 3 and all(math.isfinite(item) for item in row) for row in matrix)
+        and matrix[2] == [0.0, 0.0, 1.0]
+        and math.isfinite(determinant)
+        and determinant > 0.0
+        and value.get("replayed_curve_transform") == value.get("curve_transform")
+        and value.get("document_unit") in unit_scales
+        and math.isclose(scale, unit_scales[value.get("document_unit")], rel_tol=0.0, abs_tol=0.0)
+        and value.get("replayed_document_unit") == value.get("document_unit")
+        and replayed_scale == scale
+        and value.get("wire_closed") is True
+        and value.get("replayed_wire_closed") is True
+        and value.get("face_orientation") == "counterclockwise_positive"
+        and value.get("replayed_face_orientation") == value.get("face_orientation")
+        and all(math.isfinite(item) and item > 0.0 for item in (area, distance, volume))
+        and replayed_area == area
+        and replayed_distance == distance
+        and math.isclose(volume, area * distance, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and replayed_volume == volume
+        and bool(str(value.get("source_owner") or ""))
+        and value.get("replayed_source_owner") == value.get("source_owner")
+        and _valid_sha256(value.get("svg_source_sha256"))
+        and value.get("replayed_svg_source_sha256") == value.get("svg_source_sha256")
+        and _valid_sha256(value.get("svg_result_sha256"))
+        and value.get("accepted_svg_result_sha256") == value.get("svg_result_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -2134,6 +2281,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     dxf_profile_roundtrip_identity_ok = True
     sketch_solve_identity_ok = True
     topological_naming_identity_ok = True
+    brep_roundtrip_topology_bounds_identity_ok = True
+    svg_extrusion_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2189,20 +2338,18 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         brep_periodic_seam_identity_ok = False
         sketch_solve_identity_ok = False
         topological_naming_identity_ok = False
+        brep_roundtrip_topology_bounds_identity_ok = False
+        svg_extrusion_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
-        replayed_commit = str(
-            replay_identity_value.get("replayed_source_commit", "")
-        ).lower()
+        replayed_commit = str(replay_identity_value.get("replayed_source_commit", "")).lower()
         artifacts = replay_identity_value.get("cad_artifacts") or []
         kernel = replay_identity_value.get("external_kernel") or {}
         artifact_rows_valid = isinstance(artifacts, list) and all(
             isinstance(row, Mapping) for row in artifacts
         )
         artifact_names = (
-            [str(row.get("name", "")).strip() for row in artifacts]
-            if artifact_rows_valid
-            else []
+            [str(row.get("name", "")).strip() for row in artifacts] if artifact_rows_valid else []
         )
         valid_commit = (
             len(source_commit) == 40
@@ -3882,16 +4029,21 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "topological_naming_edge_face_history_ocp_selector_shape_feature_source_brep_generation_identity"
             )
         )
+        brep_roundtrip_topology_bounds_identity_ok = _brep_roundtrip_topology_bounds_identity_ok(
+            replay_identity_value.get(
+                "brep_roundtrip_tolerance_ocp_version_subshape_count_bounds_volume_shape_owner_source_restored_generation_identity"
+            )
+        )
+        svg_extrusion_identity_ok = _svg_extrusion_identity_ok(
+            replay_identity_value.get(
+                "svg_path_fillrule_curve_transform_unit_wire_face_extrusion_source_digest_generation_identity"
+            )
+        )
     joint_names = {
-        str(name)
-        for row in components
-        for name in (row.get("joint_names") or [])
-        if str(name)
+        str(name) for row in components for name in (row.get("joint_names") or []) if str(name)
     }
     connection_endpoints = {
-        str(connection.get(side, ""))
-        for connection in connections
-        for side in ("from", "to")
+        str(connection.get(side, "")) for connection in connections for side in ("from", "to")
     }
     checks = {
         "upstream_source_identity_recorded": str(summary.get("source_kind", "")).startswith(
@@ -4077,6 +4229,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "topological_names_use_current_edges_faces_history_ocp_selector_shape_owner_source_and_brep": (
             topological_naming_identity_ok
+        ),
+        "brep_roundtrips_use_current_tolerance_ocp_topology_bounds_volume_owner_source_and_restored_shape": (
+            brep_roundtrip_topology_bounds_identity_ok
+        ),
+        "svg_extrusions_use_current_paths_fill_transform_units_wire_face_volume_owner_and_digests": (
+            svg_extrusion_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
