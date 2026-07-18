@@ -2363,6 +2363,159 @@ def _rotating_force_balance_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _nonlinear_segregated_closure_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "nonlinear_segregated_group_relaxation_residual_jacobian_continuation_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        groups = [str(value) for value in identity.get("segregated_group_order", [])]
+        result_groups = [
+            str(value) for value in identity.get("result_segregated_group_order", [])
+        ]
+        relaxation = [
+            float(value) for value in identity.get("relaxation_schedule", [])
+        ]
+        result_relaxation = [
+            float(value) for value in identity.get("result_relaxation_schedule", [])
+        ]
+        residuals = [float(value) for value in identity.get("residual_norms", [])]
+        accepted_residuals = [
+            float(value) for value in identity.get("accepted_residual_norms", [])
+        ]
+        residual_tolerance = float(identity.get("residual_relative_tolerance"))
+        continuation = float(identity.get("continuation_parameter"))
+        accepted_continuation = float(
+            identity.get("accepted_continuation_parameter")
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("nonlinear_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "segregated_group_generation",
+                "relaxation_generation",
+                "residual_generation",
+                "jacobian_generation",
+                "continuation_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and bool(groups)
+        and len(set(groups)) == len(groups)
+        and result_groups == groups
+        and len(relaxation) == len(groups)
+        and all(math.isfinite(value) and 0.0 < value <= 1.0 for value in relaxation)
+        and result_relaxation == relaxation
+        and len(residuals) >= 2
+        and all(math.isfinite(value) and value >= 0.0 for value in residuals)
+        and accepted_residuals == residuals
+        and all(right <= left for left, right in zip(residuals, residuals[1:]))
+        and math.isfinite(residual_tolerance)
+        and 0.0 < residual_tolerance < 1.0
+        and residuals[-1] <= residual_tolerance
+        and math.isfinite(continuation)
+        and accepted_continuation == continuation
+        and bool(str(identity.get("continuation_unit") or ""))
+        and identity.get("accepted_continuation_unit")
+        == identity.get("continuation_unit")
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("jacobian_sha256", "accepted_jacobian_sha256"),
+                ("nonlinear_mesh_sha256", "accepted_nonlinear_mesh_sha256"),
+                ("nonlinear_solution_sha256", "accepted_nonlinear_solution_sha256"),
+            )
+        )
+    )
+
+
+def _degenerate_eigenmode_closure_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "degenerate_eigenmode_subspace_phase_normalization_participation_mass_mesh_owner_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        eigenvalues = [float(value) for value in identity.get("eigenvalues", [])]
+        result_eigenvalues = [
+            float(value) for value in identity.get("result_eigenvalues", [])
+        ]
+        anchors = [int(value) for value in identity.get("phase_anchor_dofs", [])]
+        result_anchors = [
+            int(value) for value in identity.get("result_phase_anchor_dofs", [])
+        ]
+        participation = [
+            float(value) for value in identity.get("participation_factors", [])
+        ]
+        result_participation = [
+            float(value) for value in identity.get("result_participation_factors", [])
+        ]
+        masses = [float(value) for value in identity.get("effective_masses_kg", [])]
+        result_masses = [
+            float(value) for value in identity.get("result_effective_masses_kg", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("mode_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "subspace_generation",
+                "phase_generation",
+                "normalization_generation",
+                "participation_generation",
+                "mass_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and len(eigenvalues) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in eigenvalues)
+        and result_eigenvalues == eigenvalues
+        and _is_sha256(str(identity.get("degenerate_subspace_sha256") or ""))
+        and identity.get("result_degenerate_subspace_sha256")
+        == identity.get("degenerate_subspace_sha256")
+        and len(anchors) == len(eigenvalues)
+        and len(set(anchors)) == len(anchors)
+        and all(value >= 0 for value in anchors)
+        and result_anchors == anchors
+        and identity.get("normalization") == "mass_orthonormal"
+        and identity.get("result_normalization") == identity.get("normalization")
+        and len(participation) == len(masses) == len(eigenvalues)
+        and all(math.isfinite(value) for value in participation + masses)
+        and all(value >= 0.0 for value in masses)
+        and result_participation == participation
+        and result_masses == masses
+        and all(
+            math.isclose(mass, factor * factor, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for factor, mass in zip(participation, masses, strict=True)
+        )
+        and bool(str(identity.get("mode_owner") or ""))
+        and identity.get("result_mode_owner") == identity.get("mode_owner")
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("eigenmode_mesh_sha256", "result_eigenmode_mesh_sha256"),
+                ("eigenmode_result_sha256", "accepted_eigenmode_result_sha256"),
+            )
+        )
+    )
+
+
 def _thermoelastic_frequency_identity_ok(summary: dict[str, Any]) -> bool:
     identity = summary.get(
         "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
@@ -2957,6 +3110,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "rotating_force_uses_current_virtual_work_stress_phase_frame_angle_power_mesh_and_result": (
             _rotating_force_balance_identity_ok(summary)
+        ),
+        "nonlinear_segregated_solutions_use_current_groups_relaxation_residual_jacobian_continuation_mesh_and_result": (
+            _nonlinear_segregated_closure_identity_ok(summary)
+        ),
+        "degenerate_eigenmodes_use_current_subspace_phase_normalization_participation_mass_mesh_owner_and_result": (
+            _degenerate_eigenmode_closure_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
