@@ -690,6 +690,155 @@ def _permanent_magnet_operating_point_identity_ok(value):
     )
 
 
+def _nonlinear_coenergy_central_difference_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    try:
+        nominal_current = float(value.get("nominal_current_a"))
+        currents = [float(item) for item in value.get("branch_currents_a", [])]
+        result_currents = [
+            float(item) for item in value.get("result_branch_currents_a", [])
+        ]
+        displacement = [float(item) for item in value.get("displacements_m", [])]
+        result_displacement = [
+            float(item) for item in value.get("result_displacements_m", [])
+        ]
+        coenergy = [float(item) for item in value.get("coenergy_j", [])]
+        result_coenergy = [float(item) for item in value.get("result_coenergy_j", [])]
+        force = float(value.get("force_n"))
+        result_force = float(value.get("result_force_n"))
+    except (TypeError, ValueError):
+        return False
+    derivative_force = (
+        -(coenergy[2] - coenergy[0]) / (displacement[2] - displacement[0])
+        if len(coenergy) == 3
+        and len(displacement) == 3
+        and displacement[2] != displacement[0]
+        else math.nan
+    )
+    meshes = [str(item).strip() for item in value.get("branch_mesh_generations", [])]
+    result_meshes = [
+        str(item).strip() for item in value.get("result_branch_mesh_generations", [])
+    ]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "current_force_generation",
+                "coenergy_force_generation",
+                "remesh_force_generation",
+                "difference_force_generation",
+                "frame_force_generation",
+                "result_force_generation",
+            )
+        )
+        and value.get("nonlinear_material") is True
+        and value.get("result_nonlinear_material") is True
+        and value.get("current_constraint") == "fixed_current"
+        and value.get("result_current_constraint") == "fixed_current"
+        and math.isfinite(nominal_current)
+        and len(currents) == 3
+        and all(
+            math.isfinite(item)
+            and math.isclose(item, nominal_current, rel_tol=0.0, abs_tol=1.0e-15)
+            for item in currents
+        )
+        and result_currents == currents
+        and len(displacement) == 3
+        and all(math.isfinite(item) for item in displacement)
+        and displacement[0] < displacement[1] < displacement[2]
+        and math.isclose(displacement[1], 0.0, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(
+            displacement[2], -displacement[0], rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and result_displacement == displacement
+        and len(coenergy) == 3
+        and all(math.isfinite(item) for item in coenergy)
+        and result_coenergy == coenergy
+        and value.get("difference_rule") == "negative_central_difference"
+        and value.get("result_difference_rule") == "negative_central_difference"
+        and len(meshes) == 3
+        and all(meshes)
+        and len(set(meshes)) == 3
+        and result_meshes == meshes
+        and value.get("displacement_frame") == "global_x"
+        and value.get("result_displacement_frame") == "global_x"
+        and math.isfinite(force)
+        and math.isclose(force, derivative_force, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and math.isclose(result_force, force, rel_tol=0.0, abs_tol=1.0e-15)
+        and _valid_sha256(value.get("branch_result_sha256"))
+        and value.get("accepted_branch_result_sha256")
+        == value.get("branch_result_sha256")
+    )
+
+
+def _axisymmetric_stress_contour_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("axisymmetric_generation", "")).strip()
+    try:
+        radius = float(value.get("radius_m"))
+        result_radius = float(value.get("result_radius_m"))
+        radial_weight = float(value.get("radial_weight"))
+        result_radial_weight = float(value.get("result_radial_weight"))
+        jacobian = float(value.get("line_jacobian_m"))
+        result_jacobian = float(value.get("result_line_jacobian_m"))
+        stress = float(value.get("stress_normal_pa"))
+        result_stress = float(value.get("result_stress_normal_pa"))
+        force = float(value.get("force_n"))
+        result_force = float(value.get("result_force_n"))
+    except (TypeError, ValueError):
+        return False
+    expected_force = stress * radial_weight * jacobian
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "radial_weight_generation",
+                "jacobian_generation",
+                "coordinate_generation",
+                "stress_contour_generation",
+                "material_side_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and value.get("coordinate_convention") == "r_z_axisymmetric"
+        and value.get("result_coordinate_convention") == "r_z_axisymmetric"
+        and math.isfinite(radius)
+        and radius > 0.0
+        and result_radius == radius
+        and math.isclose(radial_weight, 2.0 * math.pi * radius, rel_tol=1.0e-12)
+        and math.isclose(result_radial_weight, radial_weight, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and math.isfinite(stress)
+        and result_stress == stress
+        and value.get("stress_contour_closed") is True
+        and value.get("result_stress_contour_closed") is True
+        and value.get("stress_contour_orientation") == "counterclockwise"
+        and value.get("result_stress_contour_orientation") == "counterclockwise"
+        and value.get("stress_contour_material_side") == "air"
+        and value.get("result_stress_contour_material_side") == "air"
+        and math.isfinite(force)
+        and math.isclose(force, expected_force, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(result_force, force, rel_tol=0.0, abs_tol=1.0e-15)
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256")
+        == value.get("force_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -761,6 +910,8 @@ def force_coenergy_displacement_gate(
     permanent_magnet_operating_point_identity_ok = True
     airgap_stress_harmonic_torque_identity_ok = True
     laminated_core_loss_identity_ok = True
+    nonlinear_coenergy_central_difference_identity_ok = True
+    axisymmetric_stress_contour_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -806,6 +957,8 @@ def force_coenergy_displacement_gate(
         permanent_magnet_operating_point_identity_ok = False
         airgap_stress_harmonic_torque_identity_ok = False
         laminated_core_loss_identity_ok = False
+        nonlinear_coenergy_central_difference_identity_ok = False
+        axisymmetric_stress_contour_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2388,6 +2541,20 @@ def force_coenergy_displacement_gate(
                 "laminated_core_hysteresis_eddy_excess_frequency_flux_lamination_volume_result_generation_identity"
             )
         )
+        nonlinear_coenergy_central_difference_identity_ok = (
+            _nonlinear_coenergy_central_difference_identity_ok(
+                artifact_identity.get(
+                    "nonlinear_coenergy_force_current_perturbation_remesh_central_difference_frame_result_identity"
+                )
+            )
+        )
+        axisymmetric_stress_contour_identity_ok = (
+            _axisymmetric_stress_contour_identity_ok(
+                artifact_identity.get(
+                    "axisymmetric_force_radial_weight_jacobian_coordinate_stress_contour_material_mesh_result_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2547,6 +2714,12 @@ def force_coenergy_displacement_gate(
         ),
         "laminated_core_loss_uses_current_frequency_flux_lamination_volume_components_and_result": (
             laminated_core_loss_identity_ok
+        ),
+        "nonlinear_coenergy_force_uses_fixed_current_symmetric_displacement_remesh_frame_and_result": (
+            nonlinear_coenergy_central_difference_identity_ok
+        ),
+        "axisymmetric_stress_force_uses_two_pi_r_jacobian_air_contour_mesh_and_result": (
+            axisymmetric_stress_contour_identity_ok
         ),
     }
     return {
