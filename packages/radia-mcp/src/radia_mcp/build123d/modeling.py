@@ -3406,7 +3406,7 @@ def _boolean_imprint_generation_identity(row):
     return generation, tuple(faces), tuple(owners), tuple(names), tolerance, solids, volume, interface_digest, mass_digest
 
 
-def _loft_section_generation_identity(row):
+def _loft_wire_section_generation_identity(row):
     value = row.get("loft_section_wire_seam_continuity_solid_volume_generation_identity")
     if not isinstance(value, dict):
         return None
@@ -4867,6 +4867,128 @@ def _offset_thicken_generation_identity(row):
     return (generation, radius, offset, samples, original, removed, thickened, solids, shells, tolerances, convergence, digest)
 
 
+def _fillet_chamfer_feature_identity(row):
+    value = row.get(
+        "fillet_chamfer_edge_selection_radius_distance_tolerance_euler_volume_area_owner_brep_result_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("feature_generation", "")).strip()
+    try:
+        edges = tuple(int(item) for item in value.get("selected_edge_ids", []))
+        radius = float(value.get("radius_m"))
+        distance = float(value.get("distance_m"))
+        tolerance = float(value.get("modeling_tolerance_m"))
+        topology_before = tuple(int(item) for item in value.get("topology_before_v_e_f", []))
+        topology_after = tuple(int(item) for item in value.get("topology_after_v_e_f", []))
+        volume_before = float(value.get("volume_before_m3"))
+        volume_after = float(value.get("volume_after_m3"))
+        area_before = float(value.get("surface_area_before_m2"))
+        area_after = float(value.get("surface_area_after_m2"))
+    except (TypeError, ValueError):
+        return None
+    mirrored_fields = (
+        "feature_kind",
+        "selected_edge_ids",
+        "radius_m",
+        "distance_m",
+        "modeling_tolerance_m",
+        "topology_before_v_e_f",
+        "topology_after_v_e_f",
+        "volume_before_m3",
+        "volume_after_m3",
+        "surface_area_before_m2",
+        "surface_area_after_m2",
+        "shape_owner",
+    )
+    digest = str(value.get("feature_brep_sha256", "")).lower()
+    kind = value.get("feature_kind")
+    if (
+        not generation
+        or any(value.get(key) != generation for key in ("selection_generation", "size_generation", "tolerance_generation", "topology_generation", "volume_generation", "area_generation", "owner_generation", "brep_generation", "result_generation"))
+        or kind not in {"fillet", "chamfer"}
+        or not edges
+        or any(item <= 0 for item in edges)
+        or len(set(edges)) != len(edges)
+        or not all(math.isfinite(item) and item >= 0.0 for item in (radius, distance))
+        or (kind == "fillet" and not (radius > 0.0 and distance == 0.0))
+        or (kind == "chamfer" and not (distance > 0.0 and radius == 0.0))
+        or not math.isfinite(tolerance)
+        or tolerance <= 0.0
+        or tolerance >= max(radius, distance)
+        or len(topology_before) != 3
+        or len(topology_after) != 3
+        or any(item <= 0 for item in topology_before + topology_after)
+        or topology_before[0] - topology_before[1] + topology_before[2] != 2
+        or topology_after[0] - topology_after[1] + topology_after[2] != 2
+        or any(not math.isfinite(item) or item <= 0.0 for item in (volume_before, volume_after, area_before, area_after))
+        or volume_after > volume_before
+        or area_after > area_before
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored_fields)
+        or not str(value.get("shape_owner", "")).strip()
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_feature_brep_sha256") != digest
+    ):
+        return None
+    return (generation, kind, edges, radius, distance, tolerance, topology_before, topology_after, volume_before, volume_after, area_before, area_after, value.get("shape_owner"), digest)
+
+
+def _loft_section_owner_brep_identity(row):
+    value = row.get(
+        "loft_section_order_orientation_guide_continuity_volume_centroid_owner_brep_result_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("loft_generation", "")).strip()
+    try:
+        sections = tuple(str(item) for item in value.get("section_ids", []))
+        parameters = tuple(float(item) for item in value.get("section_parameters", []))
+        orientations = tuple(int(item) for item in value.get("section_orientation_signs", []))
+        guides = tuple(tuple(int(item) for item in pair) for pair in value.get("guide_correspondence", []))
+        volume = float(value.get("loft_volume_m3"))
+        centroid = tuple(float(item) for item in value.get("loft_centroid_m", []))
+    except (TypeError, ValueError):
+        return None
+    mirrored_fields = (
+        "section_ids",
+        "section_parameters",
+        "section_orientation_signs",
+        "guide_correspondence",
+        "continuity",
+        "loft_volume_m3",
+        "loft_centroid_m",
+        "loft_owner",
+    )
+    digest = str(value.get("loft_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in ("section_generation", "orientation_generation", "guide_generation", "continuity_generation", "volume_generation", "centroid_generation", "owner_generation", "brep_generation", "result_generation"))
+        or len(sections) < 2
+        or not all(sections)
+        or len(set(sections)) != len(sections)
+        or len(parameters) != len(sections)
+        or any(not math.isfinite(item) for item in parameters)
+        or any(right <= left for left, right in zip(parameters, parameters[1:]))
+        or len(orientations) != len(sections)
+        or any(item != 1 for item in orientations)
+        or len(guides) < 2
+        or any(len(pair) != 2 or pair[0] < 0 or pair[1] < 0 for pair in guides)
+        or len({pair[0] for pair in guides}) != len(guides)
+        or len({pair[1] for pair in guides}) != len(guides)
+        or value.get("continuity") not in {"G1", "G2"}
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or len(centroid) != 3
+        or any(not math.isfinite(item) for item in centroid)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored_fields)
+        or not str(value.get("loft_owner", "")).strip()
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_loft_brep_sha256") != digest
+    ):
+        return None
+    return (generation, sections, parameters, orientations, guides, value.get("continuity"), volume, centroid, value.get("loft_owner"), digest)
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -5098,23 +5220,23 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
-    loft_section_evidence_present = any(
+    loft_wire_section_evidence_present = any(
         row.get("loft_section_wire_seam_continuity_solid_volume_generation_identity")
         is not None for row in identity_rows
     )
-    reference_loft_sections = {
-        str(row.get("name", "")): _loft_section_generation_identity(row)
+    reference_loft_wire_sections = {
+        str(row.get("name", "")): _loft_wire_section_generation_identity(row)
         for row in reference
     }
-    loft_section_identity_ok = not loft_section_evidence_present
-    if loft_section_evidence_present:
-        loft_section_identity_ok = bool(reference_loft_sections) and all(
-            value is not None for value in reference_loft_sections.values()
+    loft_wire_section_identity_ok = not loft_wire_section_evidence_present
+    if loft_wire_section_evidence_present:
+        loft_wire_section_identity_ok = bool(reference_loft_wire_sections) and all(
+            value is not None for value in reference_loft_wire_sections.values()
         )
         for _, rows in normalized_sets:
-            loft_section_identity_ok = loft_section_identity_ok and all(
-                _loft_section_generation_identity(row)
-                == reference_loft_sections.get(str(row.get("name", "")))
+            loft_wire_section_identity_ok = loft_wire_section_identity_ok and all(
+                _loft_wire_section_generation_identity(row)
+                == reference_loft_wire_sections.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5463,6 +5585,40 @@ def shape_mass_property_crosscheck_summary(
         for _, rows in normalized_sets:
             offset_thicken_identity_ok = offset_thicken_identity_ok and all(
                 _offset_thicken_generation_identity(row) == reference_offset_thicken.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    feature_evidence_present = any(
+        row.get("fillet_chamfer_edge_selection_radius_distance_tolerance_euler_volume_area_owner_brep_result_generation_identity") is not None
+        for row in identity_rows
+    )
+    reference_features = {
+        str(row.get("name", "")): _fillet_chamfer_feature_identity(row)
+        for row in reference
+    }
+    feature_identity_ok = not feature_evidence_present
+    if feature_evidence_present:
+        feature_identity_ok = bool(reference_features) and all(value is not None for value in reference_features.values())
+        for _, rows in normalized_sets:
+            feature_identity_ok = feature_identity_ok and all(
+                _fillet_chamfer_feature_identity(row) == reference_features.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    loft_section_owner_brep_evidence_present = any(
+        row.get("loft_section_order_orientation_guide_continuity_volume_centroid_owner_brep_result_generation_identity") is not None
+        for row in identity_rows
+    )
+    reference_loft_section_owner_brep = {
+        str(row.get("name", "")): _loft_section_owner_brep_identity(row)
+        for row in reference
+    }
+    loft_section_owner_brep_identity_ok = not loft_section_owner_brep_evidence_present
+    if loft_section_owner_brep_evidence_present:
+        loft_section_owner_brep_identity_ok = bool(reference_loft_section_owner_brep) and all(value is not None for value in reference_loft_section_owner_brep.values())
+        for _, rows in normalized_sets:
+            loft_section_owner_brep_identity_ok = loft_section_owner_brep_identity_ok and all(
+                _loft_section_owner_brep_identity(row) == reference_loft_section_owner_brep.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -7368,7 +7524,7 @@ def shape_mass_property_crosscheck_summary(
             boolean_imprint_identity_ok
         ),
         "lofts_use_current_sections_wire_orientation_seams_continuity_solid_and_volume": (
-            loft_section_identity_ok
+            loft_wire_section_identity_ok
         ),
         "shell_offsets_use_current_faces_normals_thickness_join_intersection_shape_and_mass": (
             shell_offset_identity_ok
@@ -7417,6 +7573,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "offset_thickens_use_current_curvature_sign_intersections_repair_thickness_volume_topology_convergence_and_brep": (
             offset_thicken_identity_ok
+        ),
+        "fillet_chamfer_features_use_current_edges_size_tolerance_topology_volume_area_owner_and_brep": (
+            feature_identity_ok
+        ),
+        "lofts_use_current_sections_order_orientation_guides_continuity_volume_centroid_owner_and_brep": (
+            loft_section_owner_brep_identity_ok
         ),
     }
     issues = []

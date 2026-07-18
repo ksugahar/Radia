@@ -1630,6 +1630,102 @@ def _dxf_profile_roundtrip_identity_ok(value: object) -> bool:
     )
 
 
+def _step_assembly_hierarchy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("assembly_generation") or "")
+    try:
+        paths = [str(item) for item in value.get("occurrence_paths", [])]
+        parts = [str(item) for item in value.get("part_ids", [])]
+        transforms = [str(item) for item in value.get("transform_sha256", [])]
+        names = [str(item) for item in value.get("product_names", [])]
+        colors = [[float(channel) for channel in row] for row in value.get("colors_rgb", [])]
+    except (TypeError, ValueError):
+        return False
+    count = len(paths)
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("hierarchy_generation", "occurrence_generation", "transform_generation", "part_generation", "name_generation", "color_generation", "unit_generation", "owner_generation", "file_generation", "result_generation"))
+        and count >= 2
+        and all(path.startswith("root/") for path in paths)
+        and len(set(paths)) == count
+        and value.get("decoded_occurrence_paths") == value.get("occurrence_paths")
+        and len(parts) == count
+        and all(parts)
+        and len(set(parts)) < count
+        and value.get("decoded_part_ids") == value.get("part_ids")
+        and len(transforms) == count
+        and all(_valid_sha256(item) for item in transforms)
+        and value.get("decoded_transform_sha256") == value.get("transform_sha256")
+        and len(names) == count
+        and all(names)
+        and value.get("decoded_product_names") == value.get("product_names")
+        and len(colors) == count
+        and all(len(row) == 3 and all(0.0 <= channel <= 1.0 for channel in row) for row in colors)
+        and value.get("decoded_colors_rgb") == value.get("colors_rgb")
+        and value.get("length_unit") == "m"
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and bool(str(value.get("assembly_owner") or ""))
+        and value.get("decoded_assembly_owner") == value.get("assembly_owner")
+        and _valid_sha256(value.get("step_file_sha256"))
+        and value.get("decoded_step_file_sha256") == value.get("step_file_sha256")
+    )
+
+
+def _boolean_history_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("boolean_generation") or "")
+    try:
+        tolerance = float(value.get("fuzzy_tolerance_m"))
+        slivers = int(value.get("sliver_face_count"))
+        nonmanifold = int(value.get("nonmanifold_edge_count"))
+        inputs = [str(item) for item in value.get("input_shape_ids", [])]
+        history = [[str(item) for item in row] for row in value.get("operation_history", [])]
+    except (TypeError, ValueError):
+        return False
+    output = str(value.get("output_shape_id") or "")
+    healing = value.get("healing_actions")
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("tolerance_generation", "healing_generation", "sliver_generation", "manifold_generation", "history_generation", "input_generation", "output_generation", "owner_generation", "brep_generation", "result_generation"))
+        and value.get("operation") in {"fuse", "cut", "intersect"}
+        and value.get("decoded_operation") == value.get("operation")
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance <= 1.0e-3
+        and float(value.get("decoded_fuzzy_tolerance_m", math.nan)) == tolerance
+        and isinstance(healing, list)
+        and bool(healing)
+        and all(isinstance(item, str) and item for item in healing)
+        and len(set(healing)) == len(healing)
+        and value.get("decoded_healing_actions") == healing
+        and slivers == 0
+        and int(value.get("decoded_sliver_face_count", -1)) == slivers
+        and nonmanifold == 0
+        and int(value.get("decoded_nonmanifold_edge_count", -1)) == nonmanifold
+        and len(inputs) >= 2
+        and all(inputs)
+        and len(set(inputs)) == len(inputs)
+        and value.get("decoded_input_shape_ids") == value.get("input_shape_ids")
+        and bool(output)
+        and value.get("decoded_output_shape_id") == output
+        and len(history) == len(inputs)
+        and {row[0] for row in history if len(row) == 2} == set(inputs)
+        and all(len(row) == 2 and row[1] == output for row in history)
+        and value.get("decoded_operation_history") == value.get("operation_history")
+        and bool(str(value.get("input_owner") or ""))
+        and value.get("decoded_input_owner") == value.get("input_owner")
+        and bool(str(value.get("output_owner") or ""))
+        and value.get("decoded_output_owner") == value.get("output_owner")
+        and _valid_sha256(value.get("boolean_brep_sha256"))
+        and value.get("decoded_boolean_brep_sha256") == value.get("boolean_brep_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1979,6 +2075,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     step_semantic_roundtrip_identity_ok = True
     brep_periodic_seam_identity_ok = True
     step_ap242_pmi_roundtrip_identity_ok = True
+    step_assembly_hierarchy_identity_ok = True
+    boolean_history_roundtrip_identity_ok = True
     dxf_profile_roundtrip_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
@@ -3706,6 +3804,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "dxf_profile_unit_plane_layer_arc_bulge_loop_winding_extrusion_topology_owner_file_result_generation_identity"
             )
         )
+        step_assembly_hierarchy_identity_ok = _step_assembly_hierarchy_identity_ok(
+            replay_identity_value.get(
+                "step_assembly_hierarchy_occurrence_transform_repeated_part_name_color_unit_owner_file_result_generation_identity"
+            )
+        )
+        boolean_history_roundtrip_identity_ok = _boolean_history_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "boolean_tolerance_healing_sliver_nonmanifold_operation_history_input_output_owner_brep_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -3889,6 +3997,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "dxf_profiles_use_current_units_plane_layers_arcs_bulges_winding_extrusion_topology_owner_and_file": (
             dxf_profile_roundtrip_identity_ok
+        ),
+        "step_assemblies_use_current_hierarchy_occurrences_repeated_parts_transforms_names_colors_units_owner_and_file": (
+            step_assembly_hierarchy_identity_ok
+        ),
+        "boolean_roundtrips_use_current_operation_tolerance_healing_slivers_manifold_history_owners_and_brep": (
+            boolean_history_roundtrip_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
