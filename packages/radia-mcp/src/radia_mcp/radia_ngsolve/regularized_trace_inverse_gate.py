@@ -270,6 +270,10 @@ def regularized_trace_inverse_path_gate(
     nonlinear_eigen_contour_identity_ok = (
         _optional_nonlinear_eigen_contour_identity_is_aligned(summary)
     )
+    cq_acoustic_identity_ok = _optional_cq_acoustic_identity_is_aligned(summary)
+    fembem_autodiff_identity_ok = (
+        _optional_fembem_autodiff_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -461,6 +465,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "nonlinear_eigenpairs_use_current_contour_orientation_quadrature_moments_rank_count_residual_biorthogonality_poles_and_result": (
             nonlinear_eigen_contour_identity_ok
+        ),
+        "cq_acoustics_use_current_bdf2_laplace_contour_weights_passivity_trace_timestep_history_mesh_and_result": (
+            cq_acoustic_identity_ok
+        ),
+        "fembem_autodiff_uses_current_wirtinger_objective_shape_fd_trace_mesh_and_gradient": (
+            fembem_autodiff_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -3852,6 +3862,188 @@ def _optional_nonlinear_eigen_contour_identity_is_aligned(
         and value.get("accepted_result_owner") == value.get("result_owner")
         and _is_sha256(str(value.get("result_sha256", "")).lower())
         and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_cq_acoustic_identity_is_aligned(summary: Mapping[str, Any]) -> bool:
+    value = summary.get(
+        "cq_acoustic_laplace_contour_weight_passivity_trace_timestep_history_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        radius = float(value["contour_radius"])
+        result_radius = float(value["result_contour_radius"])
+        zeta = tuple(complex(float(row[0]), float(row[1])) for row in value["zeta_points_ri"])
+        result_zeta = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["result_zeta_points_ri"]
+        )
+        laplace = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["laplace_points_ri"]
+        )
+        result_laplace = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["result_laplace_points_ri"]
+        )
+        weights = tuple(float(item) for item in value["cq_weights"])
+        result_weights = tuple(float(item) for item in value["result_cq_weights"])
+        impedances = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["boundary_impedance_ri"]
+        )
+        result_impedances = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["result_boundary_impedance_ri"]
+        )
+        fem_nodes = tuple(_integer({"item": item}, "item") for item in value["fem_trace_node_ids"])
+        result_fem_nodes = tuple(
+            _integer({"item": item}, "item") for item in value["result_fem_trace_node_ids"]
+        )
+        bem_nodes = tuple(_integer({"item": item}, "item") for item in value["bem_trace_node_ids"])
+        result_bem_nodes = tuple(
+            _integer({"item": item}, "item") for item in value["result_bem_trace_node_ids"]
+        )
+        trace_sign = _integer(value, "trace_sign")
+        result_trace_sign = _integer(value, "result_trace_sign")
+        timestep = float(value["time_step_s"])
+        result_timestep = float(value["result_time_step_s"])
+        history_length = _integer(value, "history_length")
+        result_history_length = _integer(value, "result_history_length")
+        times = tuple(float(item) for item in value["time_samples_s"])
+        result_times = tuple(float(item) for item in value["result_time_samples_s"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    expected_laplace = tuple(
+        (1.5 - 2.0 * point + 0.5 * point * point) / timestep
+        for point in zeta
+    ) if math.isfinite(timestep) and timestep > 0.0 else ()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "contour_cq_generation", "weight_cq_generation",
+                "passivity_cq_generation", "trace_cq_generation",
+                "timestep_cq_generation", "history_cq_generation",
+                "mesh_cq_generation", "owner_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and value.get("cq_method") == "bdf2"
+        and value.get("result_cq_method") == value.get("cq_method")
+        and math.isfinite(radius) and 0.0 < radius < 1.0
+        and result_radius == radius
+        and len(zeta) >= 2 and result_zeta == zeta
+        and all(math.isclose(abs(point), radius, rel_tol=1.0e-12, abs_tol=1.0e-12) for point in zeta)
+        and len(laplace) == len(zeta) and result_laplace == laplace
+        and all(abs(actual - expected) <= 1.0e-10 * max(abs(expected), 1.0) for actual, expected in zip(laplace, expected_laplace))
+        and len(weights) == history_length and result_weights == weights
+        and all(math.isfinite(item) and item >= 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and len(impedances) == len(zeta) and result_impedances == impedances
+        and all(math.isfinite(item.real) and math.isfinite(item.imag) and item.real >= 0.0 for item in impedances)
+        and value.get("trace_orientation") == "outward_volume_to_boundary"
+        and value.get("result_trace_orientation") == value.get("trace_orientation")
+        and bool(fem_nodes) and fem_nodes == bem_nodes
+        and all(item > 0 for item in fem_nodes) and len(set(fem_nodes)) == len(fem_nodes)
+        and result_fem_nodes == fem_nodes and result_bem_nodes == bem_nodes
+        and trace_sign == 1 and result_trace_sign == trace_sign
+        and math.isfinite(timestep) and timestep > 0.0 and result_timestep == timestep
+        and history_length >= 2 and result_history_length == history_length
+        and len(times) == history_length and result_times == times
+        and all(math.isfinite(item) for item in times)
+        and all(math.isclose(item, index * timestep, rel_tol=1.0e-12, abs_tol=1.0e-15) for index, item in enumerate(times))
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_fembem_autodiff_identity_is_aligned(summary: Mapping[str, Any]) -> bool:
+    value = summary.get(
+        "fembem_autodiff_wirtinger_objective_shape_fd_trace_mesh_owner_gradient_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        design = tuple(float(item) for item in value["complex_design_ri"])
+        result_design = tuple(float(item) for item in value["result_complex_design_ri"])
+        objective = float(value["objective_value"])
+        result_objective = float(value["result_objective_value"])
+        wirtinger = tuple(float(item) for item in value["wirtinger_gradient_ri"])
+        result_wirtinger = tuple(float(item) for item in value["result_wirtinger_gradient_ri"])
+        real_gradient = tuple(float(item) for item in value["real_gradient_ri"])
+        result_real_gradient = tuple(float(item) for item in value["result_real_gradient_ri"])
+        direction = tuple(float(item) for item in value["shape_direction_ri"])
+        result_direction = tuple(float(item) for item in value["result_shape_direction_ri"])
+        step = float(value["shape_step"])
+        result_step = float(value["result_shape_step"])
+        finite_difference = float(value["finite_difference_directional_derivative"])
+        result_finite_difference = float(value["result_finite_difference_directional_derivative"])
+        trace_map = tuple(_integer({"item": item}, "item") for item in value["trace_node_map"])
+        result_trace_map = tuple(
+            _integer({"item": item}, "item") for item in value["result_trace_node_map"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("autodiff_generation", "")).strip()
+    finite_vectors = all(
+        math.isfinite(item)
+        for vector in (design, wirtinger, real_gradient, direction)
+        for item in vector
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "complex_autodiff_generation", "wirtinger_autodiff_generation",
+                "objective_autodiff_generation", "shape_autodiff_generation",
+                "finite_difference_autodiff_generation", "trace_autodiff_generation",
+                "mesh_autodiff_generation", "owner_autodiff_generation",
+                "gradient_autodiff_generation", "result_autodiff_generation",
+            )
+        )
+        and len(design) == 2 and result_design == design and finite_vectors
+        and value.get("objective_scaling") == "one_half_l2_squared"
+        and value.get("result_objective_scaling") == value.get("objective_scaling")
+        and math.isfinite(objective)
+        and math.isclose(objective, 0.5 * sum(item * item for item in design), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_objective == objective
+        and value.get("wirtinger_convention") == "dJ_dconjugate_z"
+        and value.get("result_wirtinger_convention") == value.get("wirtinger_convention")
+        and len(wirtinger) == len(design)
+        and all(math.isclose(actual, 0.5 * expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for actual, expected in zip(wirtinger, design))
+        and result_wirtinger == wirtinger
+        and real_gradient == design and result_real_gradient == real_gradient
+        and len(direction) == len(design) and result_direction == direction
+        and math.isclose(sum(item * item for item in direction), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isfinite(step) and step > 0.0 and result_step == step
+        and math.isfinite(finite_difference)
+        and math.isclose(finite_difference, sum(gradient * tangent for gradient, tangent in zip(real_gradient, direction)), rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and result_finite_difference == finite_difference
+        and bool(trace_map) and all(item > 0 for item in trace_map)
+        and len(set(trace_map)) == len(trace_map) and result_trace_map == trace_map
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
+        and bool(str(value.get("gradient_owner", "")).strip())
+        and value.get("accepted_gradient_owner") == value.get("gradient_owner")
+        and _is_sha256(str(value.get("gradient_sha256", "")).lower())
+        and value.get("accepted_gradient_sha256") == value.get("gradient_sha256")
     )
 
 
