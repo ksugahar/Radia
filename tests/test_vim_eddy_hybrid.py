@@ -78,7 +78,8 @@ def test_empty_surface_basis_keeps_a_volume_only_vim_well_formed():
     assert system.diagnostics()["passive_blocks"] is True
 
 
-def test_matrix_free_inductance_uses_gmres_without_materializing():
+@pytest.mark.parametrize("solver", ["gmres", "cocr"])
+def test_matrix_free_inductance_uses_native_ngsolve_krylov(solver):
     basis = vim.VolumeCurrentBasis(
         points=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
         weights=np.ones(2),
@@ -90,25 +91,162 @@ def test_matrix_free_inductance_uses_gmres_without_materializing():
         ),
         names=["bulk0", "bulk1"],
     )
-    inductance = np.array([[3.0, 0.4], [0.4, 2.0]])
-    operator = _ToySymmetricOperator(inductance)
     system = vim.AssembleHybridVIM(
         basis,
         sigma=2.0,
-        interaction=lambda _left, _right: operator,
+        interaction=vim.HACApKSampledLaplaceInteraction(
+            kernel_epsilon=0.2,
+            cross_only=False,
+            leaf_size=2,
+        ),
     )
     s = 1j * 7.0
     rhs = np.array([1.0 + 0.5j, -0.25j])
+    inductance = system.inductance.to_dense()
     expected = np.linalg.solve(
         system.resistance + s * inductance,
         rhs,
     )
 
-    np.testing.assert_allclose(system.solve(s, rhs), expected, rtol=2.0e-12)
+    actual, solve_info = system.solve(
+        s,
+        rhs,
+        solver=solver,
+        return_diagnostics=True,
+    )
+    np.testing.assert_allclose(actual, expected, rtol=2.0e-10, atol=2.0e-12)
+    assert solve_info["backend"] == f"ngsolve-base-matrix-{solver}"
+    assert solve_info["native_term_count"] == 1
+    assert solve_info["relative_residual_max"] < 1.0e-10
     info = system.diagnostics()
     assert info["inductance_matrix_free"] is True
     assert info["inductance_operator"]["operator_block_count"] == 1
     assert info["passive_blocks"] is True
+
+
+def test_sampled_planar_log_hacapk_matches_dense_reference():
+    basis = vim.VolumeCurrentBasis(
+        points=np.array(
+            [[0.0, 0.0, 0.0], [0.7, 0.0, 0.0], [0.0, 0.6, 0.0]]
+        ),
+        weights=np.array([0.2, 0.3, 0.25]),
+        current_modes=np.array(
+            [
+                [[0.0, 0.0, 1.0], [0.0, 0.0, -0.5], [0.0, 0.0, 0.2]],
+                [[0.0, 0.0, 0.1], [0.0, 0.0, 0.4], [0.0, 0.0, -0.8]],
+            ]
+        ),
+        names=("jz0", "jz1"),
+    )
+    backend = vim.HACApKSampledPlanarLogInteraction(
+        mu=1.7,
+        kernel_epsilon=0.05,
+        reference_length=1.0,
+        cross_only=False,
+        leaf_size=2,
+    )
+    system = vim.AssembleHybridVIM(basis, sigma=3.0, interaction=backend)
+
+    diff = basis.points[:, None, :2] - basis.points[None, :, :2]
+    distance = np.sqrt(np.einsum("ijk,ijk->ij", diff, diff) + 0.05**2)
+    kernel = -(1.7 / (2.0 * np.pi)) * (
+        basis.weights[:, None] * basis.weights[None, :]
+    ) * np.log(distance)
+    expected = np.einsum(
+        "aik,bjk,ij->ab", basis.modes, basis.modes, kernel
+    )
+    np.testing.assert_allclose(
+        system.inductance.to_dense(), expected, rtol=2.0e-12, atol=2.0e-13
+    )
+
+
+def test_coupled_hdiv_hcurl_keeps_two_independent_native_hmatrices():
+    points = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+    )
+    weights = np.ones(3) / 3.0
+    modes = np.array(
+        [
+            [[1.0, 0.0, 0.0], [0.5, 0.0, 0.0], [-0.2, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0], [0.0, -0.3, 0.0], [0.0, 0.4, 0.0]],
+        ]
+    )
+    current = vim.VolumeCurrentBasis(
+        points, weights, modes, names=("e0", "e1")
+    )
+    magnetization = vim.MagnetizationBasis(
+        points, weights, modes, names=("m0", "m1")
+    )
+
+    def hmatrix_system():
+        return vim.AssembleHybridVIM(
+            current,
+            sigma=2.0,
+            interaction=vim.HACApKSampledLaplaceInteraction(
+                kernel_epsilon=0.1,
+                cross_only=False,
+                leaf_size=2,
+            ),
+        )
+
+    eddy = hmatrix_system()
+    magnetic = hmatrix_system().impedance_operator(0.75)
+    coupling = np.array([[0.02, 0.01], [-0.01, 0.03]])
+    coupled = vim.CoupledHDivHybridVIMSystem(
+        magnetization,
+        eddy,
+        (current,),
+        coupling,
+        magnetic_operator=magnetic,
+    )
+    operator = coupled.mixed_operator(s=2j)
+    expected = np.array([1.0 + 0.2j, -0.4j, 0.3 + 0.1j, -0.2 + 0.5j])
+    rhs = operator.matvec(expected)
+    result = coupled.solve(
+        s=2j,
+        magnetic_rhs=rhs[:2],
+        eddy_rhs=rhs[2:],
+        tolerance=1.0e-9,
+    )
+
+    np.testing.assert_allclose(
+        result["solution"][:, 0], expected, rtol=5.0e-8, atol=5.0e-10
+    )
+    assert result["solver_diagnostics"]["native_term_count"] == 2
+    assert result["solver_diagnostics"]["backend"] == "ngsolve-base-matrix-gmres"
+
+
+def test_ngsolve_bem_laplace_sl_projection_stays_as_base_matrix():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    mesh = ng.Mesh(occ.unit_cube.GenerateMesh(maxh=1.5))
+    fes = ng.HDivSurface(mesh, order=0)
+    basis = vim.SampledCurrentBasis(
+        points=np.array([[0.5, 0.5, 0.0]]),
+        weights=np.ones(1),
+        modes=np.array(
+            [[[1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0]]]
+        ),
+        kind="surface",
+        names=("s0", "s1"),
+    )
+    projection = np.zeros((fes.ndof, 2))
+    projection[0, 0] = 1.0
+    projection[min(1, fes.ndof - 1), 1] = 1.0
+    with ng.TaskManager():
+        interaction = vim.NGSolveProjectedInteraction.from_laplace_sl(
+            fes,
+            (basis,),
+            (projection,),
+        )
+        operator = interaction.build_operator((basis,))
+        value = operator.matvec(np.array([1.0 + 0.2j, -0.3 + 0.1j]))
+
+    assert operator.shape == (2, 2)
+    assert np.all(np.isfinite(value))
+    assert np.linalg.norm(value) > 0.0
+    assert operator.stats()["backend"] == "ngsolve-base-matrix"
 
 
 def test_hcurl_eddy_cln_model_preserves_vim_response_and_faraday_drive():
@@ -430,6 +568,298 @@ def test_hybrid_vim_mixes_t_volume_and_surface_omega_sibc_blocks():
     np.testing.assert_allclose(rhs_s, [-1.0])
 
 
+def test_local_surface_impedance_gram_preserves_esim_sample_variation():
+    volume = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[0.0, 0.0, 1.0]]]),
+        names=["bulk"],
+    )
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]),
+        weights=np.array([1.0, 2.0]),
+        modes=np.array([
+            [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+        ]),
+        kind="surface",
+        names=("skin_left", "skin_right"),
+    )
+    system = vim.AssembleHybridVIM(
+        volume,
+        surface,
+        sigma=2.0,
+        kernel_epsilon=0.2,
+    )
+    values = np.array([2.0 + 1.0j, 5.0 + 3.0j])
+
+    gram = vim.AssembleSurfaceImpedanceGram(
+        system,
+        surface,
+        lambda points: values,
+        label="esim-per-sample",
+    )
+
+    expected = np.diag([0.0, 2.0 + 1.0j, 10.0 + 6.0j])
+    np.testing.assert_allclose(gram.matrix, expected)
+    np.testing.assert_allclose(
+        system.impedance(0.0, surface_impedance=gram),
+        system.resistance + expected,
+    )
+    assert isinstance(gram, vim.SurfaceImpedanceGram)
+    info = gram.diagnostics()
+    assert info["label"] == "esim-per-sample"
+    assert info["samples"] == 2
+    assert info["real_min"] == pytest.approx(2.0)
+    assert info["real_max"] == pytest.approx(5.0)
+    assert info["passive"]
+
+    orthogonalized = system.mixed_galerkin_orthogonalization(
+        "surface",
+        "volume",
+        0.5j,
+        surface_impedance=gram,
+    )
+    np.testing.assert_allclose(
+        orthogonalized.reduced_operator,
+        system.schur_complement(
+            "surface",
+            "volume",
+            0.5j,
+            surface_impedance=gram,
+        ),
+    )
+
+
+def test_local_surface_impedance_gram_rejects_implicit_mode_diagonal():
+    system = vim.HybridVIMSystem(
+        resistance=np.eye(2),
+        inductance=np.eye(2),
+        surface_mass=np.diag([0.0, 1.0]),
+        basis_names=("bulk", "surface"),
+        blocks={"volume": (0, 1), "surface": (1, 2)},
+    )
+
+    with pytest.raises(TypeError, match="AssembleSurfaceImpedanceGram"):
+        system.impedance(1j, surface_impedance=np.array([1.0, 2.0]))
+
+
+def test_local_surface_impedance_gram_rejects_a_different_surface_mass():
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        modes=np.array([[[1.0, 0.0, 0.0]]]),
+        kind="surface",
+        names=("skin",),
+    )
+    source = vim.HybridVIMSystem(
+        resistance=np.zeros((1, 1)),
+        inductance=np.zeros((1, 1)),
+        surface_mass=np.ones((1, 1)),
+        basis_names=("skin",),
+        blocks={"surface": (0, 1)},
+    )
+    target = vim.HybridVIMSystem(
+        resistance=np.zeros((1, 1)),
+        inductance=np.zeros((1, 1)),
+        surface_mass=np.array([[2.0]]),
+        basis_names=("skin",),
+        blocks={"surface": (0, 1)},
+    )
+    gram = vim.AssembleSurfaceImpedanceGram(source, surface, 1.0 + 0.5j)
+
+    with pytest.raises(ValueError, match="different hybrid system"):
+        target.impedance(0.0, surface_impedance=gram)
+    with pytest.raises(ValueError, match="quadrature/modes"):
+        vim.AssembleSurfaceImpedanceGram(target, surface, 1.0 + 0.5j)
+
+
+def test_local_esim_surface_vim_runs_the_scipy_cell_problem_and_is_consistent():
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        modes=np.array([[[1.0, 0.0, 0.0]]]),
+        kind="surface",
+        names=("skin",),
+    )
+    system = vim.HybridVIMSystem(
+        resistance=np.zeros((1, 1)),
+        inductance=np.array([[1.0e-10]]),
+        surface_mass=np.ones((1, 1)),
+        basis_names=("skin",),
+        blocks={"surface": (0, 1)},
+    )
+    model = vim.LocalESIMSurfaceModel(
+        bh_curve=np.array([
+            [0.0, 0.0],
+            [100.0, 0.1],
+            [500.0, 0.45],
+            [2_000.0, 1.2],
+            [10_000.0, 1.6],
+        ]),
+        sigma=2.0e6,
+        bins=2,
+        n_nodes=30,
+        cell_tolerance=1.0e-4,
+        cell_max_iterations=60,
+    )
+    rhs = np.array([1.0])
+    frequency_hz = 10_000.0
+
+    solved = vim.SolveLocalESIMSurfaceVIM(
+        system,
+        surface,
+        rhs,
+        model,
+        frequency_hz,
+        outer_tolerance=5.0e-3,
+        outer_max_iterations=12,
+        outer_relaxation=0.7,
+    )
+
+    assert solved.converged
+    assert solved.iterations >= 1
+    assert solved.surface_impedance.diagnostics()["passive"]
+    assert solved.history[-1]["cell_model"].endswith("1d-esim")
+    assert solved.history[0]["cell_solve_count"] == 2
+    assert all(row["cell_solve_count"] == 0 for row in solved.history[1:])
+    operator = system.impedance(
+        1j * 2.0 * np.pi * frequency_hz,
+        surface_impedance=solved.surface_impedance,
+    )
+    np.testing.assert_allclose(operator @ solved.coefficients, rhs)
+
+    partial = vim.SolveLocalESIMSurfaceVIM(
+        system,
+        surface,
+        rhs,
+        model,
+        frequency_hz,
+        outer_tolerance=1.0e-14,
+        outer_max_iterations=1,
+        raise_on_nonconvergence=False,
+    )
+    assert not partial.converged
+    partial_operator = system.impedance(
+        1j * 2.0 * np.pi * frequency_hz,
+        surface_impedance=partial.surface_impedance,
+    )
+    np.testing.assert_allclose(partial_operator @ partial.coefficients, rhs)
+
+    with pytest.raises(ValueError, match="one nonlinear excitation"):
+        vim.SolveLocalESIMSurfaceVIM(
+            system,
+            surface,
+            np.ones((1, 2)),
+            model,
+            frequency_hz,
+        )
+
+
+def test_local_esim_surface_lut_roundtrip_interpolation_and_model_guard(tmp_path):
+    curve = np.array([
+        [0.0, 0.0],
+        [100.0, 0.1],
+        [500.0, 0.45],
+        [2_000.0, 1.2],
+        [10_000.0, 1.6],
+    ])
+    cell_model = vim.LocalESIMSurfaceModel(
+        bh_curve=curve,
+        sigma=2.0e6,
+        bins=3,
+        n_nodes=30,
+        cell_tolerance=1.0e-4,
+        cell_max_iterations=60,
+        h_floor=1.0,
+    )
+    frequencies = np.array([10_000.0, 40_000.0])
+    fields = np.array([1.0, 100.0, 10_000.0])
+    path = tmp_path / "steel-local-esim.npz"
+
+    built = vim.BuildLocalESIMSurfaceLUT(
+        cell_model,
+        frequencies,
+        fields,
+        output_path=path,
+    )
+    loaded = vim.LocalESIMSurfaceLUT.load(path)
+
+    assert path.is_file()
+    assert loaded.model_key == built.model_key
+    assert loaded.diagnostics()["passive"]
+    assert loaded.diagnostics()["interpolation"].endswith("logabs-phase-v1")
+    np.testing.assert_allclose(loaded.impedance_ohm, built.impedance_ohm)
+    np.testing.assert_allclose(
+        loaded.evaluate(fields, frequencies[0]),
+        built.impedance_ohm[0],
+    )
+    quality = vim.ValidateLocalESIMSurfaceLUT(
+        cell_model,
+        loaded,
+        frequencies_hz=[20_000.0],
+        h_values_A_per_m=[10.0],
+    )
+    assert quality["sample_count"] == 1
+    assert quality["direct_cells_passive"]
+    assert quality["max_relative_error"] < 0.2
+
+    lut_model = cell_model.with_lut(loaded)
+    values, diagnostics = lut_model.impedance_samples(
+        np.array([10.0, 1_000.0]),
+        20_000.0,
+    )
+    assert np.all(np.isfinite(values))
+    assert np.min(values.real) >= -1.0e-12
+    assert diagnostics["cell_model"] == "precomputed-2d-local-esim-lut"
+    assert diagnostics["cell_solve_count"] == 0
+    assert not diagnostics["cell_table_rebuilt"]
+
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        modes=np.array([[[1.0, 0.0, 0.0]]]),
+        kind="surface",
+        names=("skin",),
+    )
+    system = vim.HybridVIMSystem(
+        resistance=np.zeros((1, 1)),
+        inductance=np.array([[1.0e-10]]),
+        surface_mass=np.ones((1, 1)),
+        basis_names=("skin",),
+        blocks={"surface": (0, 1)},
+    )
+    solved = vim.SolveLocalESIMSurfaceVIM(
+        system,
+        surface,
+        np.array([1.0]),
+        lut_model,
+        frequencies[0],
+        outer_tolerance=5.0e-3,
+        outer_max_iterations=12,
+        outer_relaxation=0.7,
+    )
+    assert solved.converged
+    assert all(row["cell_solve_count"] == 0 for row in solved.history)
+    assert all(row["cell_model"].endswith("local-esim-lut") for row in solved.history)
+
+    with pytest.raises(ValueError, match="outside the local ESIM LUT range"):
+        lut_model.impedance_samples([20_000.0], 20_000.0)
+    with pytest.raises(ValueError, match="frequency is outside"):
+        lut_model.impedance_samples([100.0], 80_000.0)
+    with pytest.raises(ValueError, match="model signature does not match"):
+        vim.LocalESIMSurfaceModel(
+            bh_curve=curve,
+            sigma=3.0e6,
+            bins=3,
+            n_nodes=30,
+            cell_tolerance=1.0e-4,
+            cell_max_iterations=60,
+            h_floor=1.0,
+            lut=loaded,
+        )
+
+
 def test_hybrid_vim_accepts_custom_bem_interaction_backend():
     basis = vim.VolumeCurrentBasis(
         points=np.array([[0.0, 0.0, 0.0]]),
@@ -577,14 +1007,19 @@ def test_hacapk_cross_operator_preserves_matrix_free_diagonal_backends_and_gmres
         interaction=reference_backend,
     )
 
-    exact_volume = reference_backend(volume, volume) + np.array(
-        [[0.3, 0.05], [0.05, 0.2]]
-    )
+    exact_volume_operator = vim.HACApKSampledLaplaceInteraction(
+        mu=mu,
+        kernel_epsilon=kernel_epsilon,
+        aca_eps=1.0e-12,
+        leaf_size=64,
+        cross_only=False,
+    ).build_operator((volume,))
+    exact_volume = exact_volume_operator.to_dense()
 
     def exact_diagonal(left, right):
         assert left is volume
         assert right is volume
-        return _ToySymmetricOperator(exact_volume)
+        return exact_volume_operator
 
     compressed = vim.AssembleHybridVIM(
         volume,
@@ -1192,6 +1627,11 @@ def test_hybrid_vim_named_block_schur_matches_igte_mixed_galerkin_formula():
         orthogonalized.trial_transform,
         orthogonalized.test_transform,
     )
+    rhs = np.array([[1.5, -0.2], [0.7, 1.1]])
+    np.testing.assert_allclose(
+        orthogonalized.solve(z, rhs),
+        np.linalg.solve(z, rhs),
+    )
     orthogonal_info = orthogonalized.diagnostics()
     assert orthogonal_info["retained_modes"] == 1
     assert orthogonal_info["eliminated_modes"] == 1
@@ -1249,6 +1689,9 @@ def test_mixed_galerkin_uses_distinct_trial_and_test_for_nonsymmetric_operator()
     assert info["trial_orthogonality_relative_defect"] < 1.0e-15
     assert info["test_orthogonality_relative_defect"] < 1.0e-15
     assert info["schur_relative_error"] < 1.0e-15
+
+    with pytest.raises(ValueError, match="operator does not match"):
+        orthogonalized.solve(system.impedance(0.0) + np.eye(2), np.ones(2))
 
 
 def test_hybrid_vim_multi_block_schur_eliminates_evrs_keeps_bridge_and_surface():
@@ -1445,8 +1888,12 @@ def test_hybrid_vim_public_names_are_exported():
         "BlockKrylovBasis",
         "SampledLaplaceInteraction",
         "HACApKSampledLaplaceInteraction",
+        "HACApKSampledPlanarLogInteraction",
         "SampledHACApKOperator",
         "ReducedInteractionMatrix",
+        "NGSolveProjectedOperator",
+        "NGSolveProjectedInteraction",
+        "CoupledReducedOperator",
         "CurrentMagneticFluxDensitySamples",
         "MagnetizationCurrentCoupling",
         "EVRSTMethodAlgebra",
@@ -1465,6 +1912,9 @@ def test_hybrid_vim_public_names_are_exported():
         "CoupleHybridVIMWithHDivMMM",
         "CoupleEddyBubbleHCurlBasisWithHDivMMM",
         "AssembleHybridVIM",
+        "LocalESIMSurfaceLUT",
+        "BuildLocalESIMSurfaceLUT",
+        "ValidateLocalESIMSurfaceLUT",
         "TopologyAwareHybridVIM",
         "NgsolveTopologyAwareHybridVIM",
         "NgsolveEddyBubbleHybridVIM",
@@ -1928,6 +2378,8 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     assert built.system.n_modes == 2 + built.conductor_graph.cycle_rank + 2
     assert built.rhs.shape == (built.system.n_modes, 2)
     info = built.diagnostics()
+    assert built.system.interaction_backend == "hacapk-sampled-laplace"
+    assert info["system"]["inductance_matrix_free"] is True
     assert info["system"]["passive_blocks"] is True
     assert info["reduction_plan"]["loop_bridge_reduction_strategy"] == "cycle-basis"
     assert info["reduction_plan"]["estimated_reduced_modes"] == built.system.n_modes
@@ -1947,6 +2399,41 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     assert isinstance(coupled, vim.CoupledHDivHybridVIMSystem)
     assert coupled.n_hcurl_vim_modes == built.system.n_modes
     assert coupled.diagnostics()["eddy_basis_count"] == 3
+
+
+def test_ngsolve_topology_aware_planar_builder_uses_log_hacapk_by_default():
+    ng = pytest.importorskip("ngsolve")
+    geom2d = pytest.importorskip("netgen.geom2d")
+
+    geometry = geom2d.SplineGeometry()
+    geometry.AddRectangle(
+        (0.0, 0.0),
+        (1.0, 1.0),
+        bcs=("skin", "skin", "skin", "skin"),
+        leftdomain=1,
+    )
+    geometry.SetMaterial(1, "cond")
+    mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.7))
+    fes = ng.HCurl(mesh, order=2, nograds=True)
+    vectors = np.zeros((fes.ndof, 2))
+    vectors[0, 0] = 1.0
+    vectors[1, 1] = 1.0
+
+    built = vim.NgsolveTopologyAwareHybridVIM(
+        mesh,
+        fes,
+        vectors,
+        (ng.CF((1.0, 0.0)),),
+        sigma=1.0e6,
+        conductive_materials="cond",
+        surface_boundaries="skin",
+        intorder=2,
+        kernel_epsilon=0.05,
+    )
+
+    assert built.system.interaction_backend == "hacapk-sampled-planar-log"
+    assert built.system.diagnostics()["inductance_matrix_free"] is True
+    assert built.bridge_cycle_basis.n_modes == built.conductor_graph.cycle_rank
 
 
 def test_ngsolve_eddy_bubble_hcurl_basis_builder_feeds_vim_and_hdiv_mmm():
