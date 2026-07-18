@@ -3350,6 +3350,163 @@ def _degenerate_eigenmode_subspace_inputs_are_current(
     )
 
 
+def _waveguide_port_modal_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_port_mode_power_orthogonality_impedance_deembed_cutoff_frequency_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("waveguide_port_generation", "")).strip()
+    try:
+        powers = [float(item) for item in identity.get("modal_power_w", [])]
+        gram_real = [[float(item) for item in row] for row in identity.get("mode_gram_real", [])]
+        gram_imag = [[float(item) for item in row] for row in identity.get("mode_gram_imag", [])]
+        impedance = [float(item) for item in identity.get("modal_impedance_ohm", [])]
+        frequencies = [float(item) for item in identity.get("frequency_grid_hz", [])]
+        cutoff = float(identity.get("cutoff_frequency_hz"))
+        beta = [float(item) for item in identity.get("propagation_constant_rad_m", [])]
+        reference_plane = float(identity.get("reference_plane_m"))
+        deembedded_plane = float(identity.get("deembedded_reference_plane_m"))
+        phase = [float(item) for item in identity.get("deembed_phase_rad", [])]
+    except (TypeError, ValueError):
+        return False
+    count = len(frequencies)
+    c0 = 299_792_458.0
+    expected_impedance = [
+        377.0 / math.sqrt(1.0 - (cutoff / frequency) ** 2)
+        for frequency in frequencies
+    ] if cutoff > 0.0 and all(frequency > cutoff for frequency in frequencies) else []
+    expected_beta = [
+        2.0 * math.pi / c0 * math.sqrt(frequency**2 - cutoff**2)
+        for frequency in frequencies
+    ] if expected_impedance else []
+    distance = deembedded_plane - reference_plane
+    mirrored_fields = (
+        "mode_name", "normalization", "modal_power_w", "mode_gram_real",
+        "mode_gram_imag", "impedance_definition", "modal_impedance_ohm",
+        "frequency_grid_hz", "cutoff_frequency_hz", "propagation_constant_rad_m",
+        "reference_plane_m", "deembedded_reference_plane_m", "deembed_phase_rad",
+        "port_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mode_generation", "power_generation", "orthogonality_generation",
+                "impedance_generation", "deembed_generation", "cutoff_generation",
+                "frequency_generation", "mesh_generation", "owner_generation",
+                "result_generation",
+            )
+        )
+        and identity.get("mode_name") == "TE10"
+        and identity.get("normalization") == "accepted_power_1w"
+        and count >= 3
+        and len(powers) == len(impedance) == len(beta) == len(phase) == count
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and math.isfinite(cutoff)
+        and cutoff > 0.0
+        and all(frequency > cutoff for frequency in frequencies)
+        and all(math.isclose(item, 1.0, rel_tol=0.0, abs_tol=1.0e-12) for item in powers)
+        and len(gram_real) == len(gram_imag) == 2
+        and all(len(row) == 2 for row in (*gram_real, *gram_imag))
+        and all(
+            math.isclose(gram_real[i][j], 1.0 if i == j else 0.0, abs_tol=1.0e-12)
+            and math.isclose(gram_imag[i][j], 0.0, abs_tol=1.0e-12)
+            for i in range(2) for j in range(2)
+        )
+        and identity.get("impedance_definition") == "te_wave_impedance"
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-12, abs_tol=1.0e-9)
+            for observed, expected in zip(impedance, expected_impedance)
+        )
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-12, abs_tol=1.0e-9)
+            for observed, expected in zip(beta, expected_beta)
+        )
+        and math.isfinite(reference_plane)
+        and math.isfinite(deembedded_plane)
+        and distance > 0.0
+        and all(
+            math.isclose(observed, -expected * distance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for observed, expected in zip(phase, beta)
+        )
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored_fields)
+        and _valid_sha256(identity.get("port_mesh_sha256"))
+        and bool(str(identity.get("port_owner", "")).strip())
+        and identity.get("accepted_port_owner") == identity.get("port_owner")
+        and _valid_sha256(identity.get("port_result_sha256"))
+        and identity.get("accepted_port_result_sha256") == identity.get("port_result_sha256")
+    )
+
+
+def _nearfar_power_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "nearfar_sphere_power_directivity_gain_efficiency_polarization_quadrature_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("nearfar_generation", "")).strip()
+    try:
+        frequency = float(identity.get("frequency_hz"))
+        accepted = float(identity.get("accepted_power_w"))
+        sphere = float(identity.get("enclosing_sphere_power_w"))
+        radiated = float(identity.get("radiated_power_w"))
+        efficiency = float(identity.get("radiation_efficiency"))
+        directivity = float(identity.get("maximum_directivity_linear"))
+        gain = float(identity.get("realized_gain_linear"))
+        weights = [float(item) for item in identity.get("angular_quadrature_weights_sr", [])]
+        intensity = [float(item) for item in identity.get("radiation_intensity_w_sr", [])]
+    except (TypeError, ValueError):
+        return False
+    integrated_power = sum(weight * value for weight, value in zip(weights, intensity))
+    expected_directivity = 4.0 * math.pi * max(intensity, default=math.nan) / radiated if radiated > 0.0 else math.nan
+    mirrored_fields = (
+        "frequency_hz", "accepted_power_w", "enclosing_sphere_power_w",
+        "radiated_power_w", "radiation_efficiency", "maximum_directivity_linear",
+        "realized_gain_linear", "polarization_basis", "copolar_definition",
+        "angular_quadrature_weights_sr", "radiation_intensity_w_sr",
+        "farfield_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "sphere_generation", "power_generation", "directivity_generation",
+                "gain_generation", "efficiency_generation", "polarization_generation",
+                "quadrature_generation", "mesh_generation", "owner_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(item) and item > 0.0 for item in (frequency, accepted, sphere, radiated, directivity, gain))
+        and math.isfinite(efficiency)
+        and 0.0 < efficiency <= 1.0
+        and math.isclose(sphere, radiated, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(efficiency, radiated / accepted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(gain, directivity * efficiency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and len(weights) == len(intensity) >= 4
+        and all(math.isfinite(item) and item > 0.0 for item in weights)
+        and all(math.isfinite(item) and item >= 0.0 for item in intensity)
+        and math.isclose(sum(weights), 4.0 * math.pi, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(integrated_power, radiated, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(directivity, expected_directivity, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and identity.get("polarization_basis") == "theta_phi_right_handed"
+        and identity.get("copolar_definition") == "ludwig3"
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored_fields)
+        and _valid_sha256(identity.get("farfield_mesh_sha256"))
+        and bool(str(identity.get("nearfar_owner", "")).strip())
+        and identity.get("accepted_nearfar_owner") == identity.get("nearfar_owner")
+        and _valid_sha256(identity.get("nearfar_result_sha256"))
+        and identity.get("accepted_nearfar_result_sha256") == identity.get("nearfar_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -3669,6 +3826,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "degenerate_eigenmodes_use_current_subspace_angles_mass_orthogonality_phase_tracking_residual_mesh_owner_and_result": (
                 _degenerate_eigenmode_subspace_inputs_are_current(raw)
+            ),
+            "waveguide_port_modes_use_current_power_orthogonality_impedance_deembed_cutoff_frequency_mesh_owner_and_result": (
+                _waveguide_port_modal_closure_inputs_are_current(raw)
+            ),
+            "nearfar_results_use_current_sphere_power_directivity_gain_efficiency_polarization_quadrature_mesh_owner_and_result": (
+                _nearfar_power_inputs_are_current(raw)
             ),
         }
         row = {
