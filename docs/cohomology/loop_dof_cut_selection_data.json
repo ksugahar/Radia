@@ -1,0 +1,39 @@
+{
+  "generated_at_utc": "2026-07-17T23:47:38Z",
+  "radia_version": "4.95.17",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "mesh": {
+    "kind": "unstructured Netgen torus (revolve)",
+    "R_m": 0.03,
+    "b_m": 0.01,
+    "maxh_m": 0.006,
+    "nv_surface": 604,
+    "ne": 1812,
+    "nt": 1208,
+    "chi": 0,
+    "genus": 1,
+    "mesh_nv_incl_interior": 667
+  },
+  "b1": 2,
+  "qr_generator_basis_windings": [
+    [
+      -1,
+      -1
+    ],
+    [
+      0,
+      1
+    ]
+  ],
+  "qr_basis_is_class_mixed": true,
+  "n_fundamental_cycles": 1209,
+  "n_pure_toroidal_candidates": 16,
+  "selected_cut_winding": [
+    1,
+    0
+  ],
+  "selected_cut_length_mm": 176.81253192630746,
+  "selected_cut_n_vertices": 35,
+  "note": "Unstructured torus reproduces the class-mixed QR basis recorded on the Takahashi stepped-tube workpiece; the pure-toroidal winding classification recovers the cut."
+}
