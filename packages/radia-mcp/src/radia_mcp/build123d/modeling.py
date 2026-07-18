@@ -5257,6 +5257,132 @@ def _involute_gear_identity(row):
     )
 
 
+def _multiwire_loft_identity(row):
+    value = row.get(
+        "loft_multiwire_hole_correspondence_section_orientation_selfintersection_volume_centroid_euler_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("loft_generation", "")).strip()
+    try:
+        outer = [int(item) for item in value.get("outer_wire_ids", [])]
+        result_outer = [int(item) for item in value.get("result_outer_wire_ids", [])]
+        inner = [int(item) for item in value.get("inner_wire_ids", [])]
+        result_inner = [int(item) for item in value.get("result_inner_wire_ids", [])]
+        order = [int(item) for item in value.get("section_order", [])]
+        result_order = [int(item) for item in value.get("result_section_order", [])]
+        continuity = [[int(item) for item in pair] for pair in value.get("hole_continuity", [])]
+        result_continuity = [
+            [int(item) for item in pair] for pair in value.get("result_hole_continuity", [])
+        ]
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+        result_centroid = [float(item) for item in value.get("result_centroid_m", [])]
+        solid_count = int(value.get("solid_count"))
+        result_solid_count = int(value.get("result_solid_count"))
+        euler = int(value.get("boundary_euler_characteristic"))
+        result_euler = int(value.get("result_boundary_euler_characteristic"))
+    except (TypeError, ValueError):
+        return None
+    outer_orientation = list(value.get("outer_orientation") or [])
+    inner_orientation = list(value.get("inner_orientation") or [])
+    expected_continuity = [[inner[index], inner[index + 1]] for index in range(len(inner) - 1)]
+    digest = str(value.get("loft_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "wire_generation", "correspondence_generation", "orientation_generation",
+                "hole_generation", "intersection_generation", "mass_generation",
+                "topology_generation", "owner_generation", "brep_generation",
+                "result_generation",
+            )
+        )
+        or len(outer) != len(inner) or len(outer) < 2
+        or any(item <= 0 for item in outer + inner)
+        or len(set(outer)) != len(outer) or len(set(inner)) != len(inner)
+        or set(outer).intersection(inner)
+        or result_outer != outer or result_inner != inner
+        or order != list(range(len(outer))) or result_order != order
+        or outer_orientation != ["ccw"] * len(outer)
+        or inner_orientation != ["cw"] * len(inner)
+        or value.get("result_outer_orientation") != outer_orientation
+        or value.get("result_inner_orientation") != inner_orientation
+        or continuity != expected_continuity or result_continuity != continuity
+        or value.get("self_intersection_free") is not True
+        or value.get("result_self_intersection_free") is not True
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or len(centroid) != 3 or any(not math.isfinite(item) for item in centroid)
+        or result_centroid != centroid
+        or solid_count != 1 or result_solid_count != solid_count
+        or euler != 0 or result_euler != euler
+        or not str(value.get("shape_owner", "")).strip()
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_loft_brep_sha256") != digest
+    ):
+        return None
+    return (generation, tuple(outer), tuple(inner), tuple(order), volume, tuple(centroid), euler, value.get("shape_owner"), digest)
+
+
+def _offset_shell_mass_identity(row):
+    value = row.get(
+        "offset_shell_signed_thickness_join_repair_area_volume_mass_centroid_inertia_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("offset_generation", "")).strip()
+    try:
+        thickness = float(value.get("signed_thickness_m"))
+        outer_area = float(value.get("outer_area_m2"))
+        inner_area = float(value.get("inner_area_m2"))
+        volume = float(value.get("enclosed_volume_m3"))
+        density = float(value.get("density_kg_per_m3"))
+        mass = float(value.get("mass_kg"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+        inertia = [float(item) for item in value.get("principal_inertia_kg_m2", [])]
+    except (TypeError, ValueError):
+        return None
+    mirrored = (
+        "signed_thickness_m", "offset_direction", "join_mode",
+        "self_intersection_detected", "self_intersection_repaired",
+        "outer_area_m2", "inner_area_m2", "enclosed_volume_m3",
+        "density_kg_per_m3", "mass_kg", "centroid_m",
+        "principal_inertia_kg_m2", "shape_owner",
+    )
+    digest = str(value.get("offset_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "thickness_generation", "join_generation", "repair_generation",
+                "area_generation", "volume_generation", "mass_generation",
+                "owner_generation", "brep_generation", "result_generation",
+            )
+        )
+        or not math.isfinite(thickness) or thickness == 0.0
+        or value.get("offset_direction") != ("inward" if thickness < 0.0 else "outward")
+        or value.get("join_mode") not in {"arc", "intersection", "tangent"}
+        or value.get("self_intersection_detected") is not True
+        or value.get("self_intersection_repaired") is not True
+        or not all(math.isfinite(item) and item > 0.0 for item in (outer_area, inner_area, volume, density, mass))
+        or not outer_area > inner_area
+        or not math.isclose(mass, density * volume, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or len(centroid) != 3 or any(not math.isfinite(item) for item in centroid)
+        or len(inertia) != 3 or any(not math.isfinite(item) or item <= 0.0 for item in inertia)
+        or inertia != sorted(inertia)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).strip()
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_offset_brep_sha256") != digest
+    ):
+        return None
+    return (generation, thickness, value.get("join_mode"), outer_area, inner_area, volume, mass, tuple(centroid), tuple(inertia), value.get("shape_owner"), digest)
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -5938,6 +6064,46 @@ def shape_mass_property_crosscheck_summary(
         for _, rows in normalized_sets:
             gear_identity_ok = gear_identity_ok and all(
                 _involute_gear_identity(row) == reference_gears.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    multiwire_loft_evidence_present = any(
+        row.get("loft_multiwire_hole_correspondence_section_orientation_selfintersection_volume_centroid_euler_owner_brep_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_multiwire_lofts = {
+        str(row.get("name", "")): _multiwire_loft_identity(row) for row in reference
+    }
+    multiwire_loft_identity_ok = not multiwire_loft_evidence_present
+    if multiwire_loft_evidence_present:
+        multiwire_loft_identity_ok = bool(reference_multiwire_lofts) and all(
+            value is not None for value in reference_multiwire_lofts.values()
+        )
+        for _, rows in normalized_sets:
+            multiwire_loft_identity_ok = multiwire_loft_identity_ok and all(
+                _multiwire_loft_identity(row)
+                == reference_multiwire_lofts.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    offset_shell_mass_evidence_present = any(
+        row.get("offset_shell_signed_thickness_join_repair_area_volume_mass_centroid_inertia_owner_brep_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_offset_shell_mass = {
+        str(row.get("name", "")): _offset_shell_mass_identity(row) for row in reference
+    }
+    offset_shell_mass_identity_ok = not offset_shell_mass_evidence_present
+    if offset_shell_mass_evidence_present:
+        offset_shell_mass_identity_ok = bool(reference_offset_shell_mass) and all(
+            value is not None for value in reference_offset_shell_mass.values()
+        )
+        for _, rows in normalized_sets:
+            offset_shell_mass_identity_ok = offset_shell_mass_identity_ok and all(
+                _offset_shell_mass_identity(row)
+                == reference_offset_shell_mass.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -7876,6 +8042,8 @@ def shape_mass_property_crosscheck_summary(
         "shell_offsets_use_current_thickness_side_normals_removed_faces_topology_volume_owner_and_brep": shell_offset_contract_identity_ok,
         "revolved_solids_use_current_axis_angle_profile_orientation_pappus_volume_centroid_topology_owner_and_brep": revolve_identity_ok,
         "involute_gears_use_current_module_teeth_pressure_backlash_diameters_periodicity_volume_owner_and_brep": gear_identity_ok,
+        "multiwire_lofts_use_current_wire_correspondence_orientation_holes_intersection_mass_topology_owner_and_brep": multiwire_loft_identity_ok,
+        "offset_shells_use_current_signed_thickness_join_repair_areas_mass_inertia_owner_and_brep": offset_shell_mass_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
