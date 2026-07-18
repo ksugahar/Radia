@@ -5030,6 +5030,330 @@ def _parallel_sculpt_determinism_identity_ok(identity: object) -> bool:
     )
 
 
+def _hex_sweep_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        source_nodes = int(identity.get("source_node_count"))
+        result_source_nodes = int(identity.get("result_source_node_count"))
+        target_nodes = int(identity.get("target_node_count"))
+        result_target_nodes = int(identity.get("result_target_node_count"))
+        layers = int(identity.get("layer_count"))
+        result_layers = int(identity.get("result_layer_count"))
+        bias = float(identity.get("interval_bias"))
+        result_bias = float(identity.get("result_interval_bias"))
+        hex_count = int(identity.get("hex_count"))
+        result_hex_count = int(identity.get("result_hex_count"))
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        minimum_jacobian = float(identity.get("minimum_allowed_scaled_jacobian"))
+        result_minimum_jacobian = float(identity.get("result_minimum_allowed_scaled_jacobian"))
+        cad_volume = float(identity.get("cad_volume_m3"))
+        mesh_volume = float(identity.get("mesh_volume_m3"))
+        result_mesh_volume = float(identity.get("result_mesh_volume_m3"))
+        tolerance = float(identity.get("volume_tolerance_m3"))
+        result_tolerance = float(identity.get("result_volume_tolerance_m3"))
+    except (TypeError, ValueError):
+        return False
+    owners = identity.get("boundary_owners")
+    result_owners = identity.get("result_boundary_owners")
+    generation = str(identity.get("sweep_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "source_generation",
+                "target_generation",
+                "layer_generation",
+                "orientation_generation",
+                "quality_generation",
+                "boundary_generation",
+                "volume_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and bool(str(identity.get("source_surface_topology") or ""))
+        and identity.get("result_source_surface_topology")
+        == identity.get("source_surface_topology")
+        and identity.get("target_surface_topology")
+        == identity.get("source_surface_topology")
+        and identity.get("result_target_surface_topology")
+        == identity.get("target_surface_topology")
+        and source_nodes == target_nodes > 0
+        and result_source_nodes == source_nodes
+        and result_target_nodes == target_nodes
+        and layers > 0
+        and result_layers == layers
+        and math.isfinite(bias)
+        and bias > 0.0
+        and result_bias == bias
+        and hex_count > 0
+        and result_hex_count == hex_count
+        and math.isfinite(jacobian)
+        and jacobian >= minimum_jacobian > 0.0
+        and result_jacobian == jacobian
+        and result_minimum_jacobian == minimum_jacobian
+        and identity.get("orientation") == "source_to_target_positive"
+        and identity.get("result_orientation") == identity.get("orientation")
+        and isinstance(owners, list)
+        and len(owners) >= 3
+        and all(isinstance(value, str) and value for value in owners)
+        and len(set(owners)) == len(owners)
+        and result_owners == owners
+        and all(math.isfinite(value) and value > 0.0 for value in (cad_volume, mesh_volume))
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and abs(mesh_volume - cad_volume) <= tolerance
+        and result_mesh_volume == mesh_volume
+        and _valid_sha256(identity.get("sweep_mesh_sha256"))
+        and identity.get("accepted_sweep_mesh_sha256")
+        == identity.get("sweep_mesh_sha256")
+    )
+
+
+def _mixed_transition_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        hex_count = int(identity.get("hex_count"))
+        result_hex_count = int(identity.get("result_hex_count"))
+        tet_count = int(identity.get("tet_count"))
+        result_tet_count = int(identity.get("result_tet_count"))
+        pyramid_count = int(identity.get("pyramid_count"))
+        result_pyramid_count = int(identity.get("result_pyramid_count"))
+        faces = [int(value) for value in identity.get("interface_face_ids", [])]
+        result_faces = [int(value) for value in identity.get("result_interface_face_ids", [])]
+        nodes = [int(value) for value in identity.get("shared_interface_node_ids", [])]
+        result_nodes = [int(value) for value in identity.get("result_shared_interface_node_ids", [])]
+        volumes = [float(value) for value in identity.get("signed_region_volumes_m3", [])]
+        result_volumes = [float(value) for value in identity.get("result_signed_region_volumes_m3", [])]
+        cad_volume = float(identity.get("cad_volume_m3"))
+        mesh_volume = float(identity.get("mesh_volume_m3"))
+        result_mesh_volume = float(identity.get("result_mesh_volume_m3"))
+        tolerance = float(identity.get("volume_tolerance_m3"))
+        result_tolerance = float(identity.get("result_volume_tolerance_m3"))
+    except (TypeError, ValueError):
+        return False
+    labels = identity.get("region_labels")
+    result_labels = identity.get("result_region_labels")
+    generation = str(identity.get("transition_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "hex_generation",
+                "tet_generation",
+                "pyramid_generation",
+                "interface_generation",
+                "orientation_generation",
+                "region_generation",
+                "volume_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and hex_count > 0
+        and tet_count > 0
+        and pyramid_count > 0
+        and result_hex_count == hex_count
+        and result_tet_count == tet_count
+        and result_pyramid_count == pyramid_count
+        and len(faces) == pyramid_count
+        and all(value > 0 for value in faces)
+        and len(set(faces)) == len(faces)
+        and result_faces == faces
+        and bool(nodes)
+        and all(value > 0 for value in nodes)
+        and len(set(nodes)) == len(nodes)
+        and result_nodes == nodes
+        and identity.get("interface_face_orientation")
+        == "hex_outward_pyramid_inward"
+        and identity.get("result_interface_face_orientation")
+        == identity.get("interface_face_orientation")
+        and isinstance(labels, list)
+        and len(labels) == len(volumes) >= 3
+        and all(isinstance(value, str) and value for value in labels)
+        and len(set(labels)) == len(labels)
+        and result_labels == labels
+        and all(math.isfinite(value) and value > 0.0 for value in volumes)
+        and result_volumes == volumes
+        and all(math.isfinite(value) and value > 0.0 for value in (cad_volume, mesh_volume))
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and abs(sum(volumes) - cad_volume) <= tolerance
+        and abs(mesh_volume - cad_volume) <= tolerance
+        and result_mesh_volume == mesh_volume
+        and bool(str(identity.get("mixed_mesh_owner") or ""))
+        and identity.get("result_mixed_mesh_owner") == identity.get("mixed_mesh_owner")
+        and _valid_sha256(identity.get("mixed_mesh_sha256"))
+        and identity.get("accepted_mixed_mesh_sha256")
+        == identity.get("mixed_mesh_sha256")
+    )
+
+
+def _journal_replay_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        command_count = int(identity.get("command_count"))
+        replay_command_count = int(identity.get("replay_command_count"))
+        undo_groups = [[int(value) for value in row] for row in identity.get("undo_groups", [])]
+        replay_undo_groups = [[int(value) for value in row] for row in identity.get("replay_undo_groups", [])]
+        entities = [int(value) for value in identity.get("entity_ids_after_first_run", [])]
+        replay_entities = [int(value) for value in identity.get("entity_ids_after_replay", [])]
+        checkpoint = int(identity.get("checkpoint_generation_id"))
+        replay_checkpoint = int(identity.get("replay_checkpoint_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    reset_sequence = identity.get("reset_sequence")
+    replay_reset_sequence = identity.get("replay_reset_sequence")
+    covered = [
+        index
+        for group in undo_groups
+        if len(group) == 2 and group[0] <= group[1]
+        for index in range(group[0], group[1] + 1)
+    ]
+    generation = str(identity.get("journal_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "undo_generation",
+                "idempotence_generation",
+                "entity_generation",
+                "reset_generation",
+                "checkpoint_generation",
+                "replay_generation",
+                "database_generation",
+                "result_generation",
+            )
+        )
+        and command_count > 0
+        and replay_command_count == command_count
+        and bool(undo_groups)
+        and all(len(group) == 2 for group in undo_groups)
+        and covered == list(range(command_count))
+        and replay_undo_groups == undo_groups
+        and bool(entities)
+        and all(value > 0 for value in entities)
+        and len(set(entities)) == len(entities)
+        and replay_entities == entities
+        and isinstance(reset_sequence, list)
+        and len(reset_sequence) >= 2
+        and reset_sequence[0] == "reset"
+        and reset_sequence[-1] == "export"
+        and replay_reset_sequence == reset_sequence
+        and checkpoint >= 0
+        and replay_checkpoint == checkpoint
+        and all(
+            _valid_sha256(identity.get(source))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("command_order_sha256", "replay_command_order_sha256"),
+                ("first_database_sha256", "replay_database_sha256"),
+                ("journal_result_sha256", "accepted_journal_result_sha256"),
+            )
+        )
+        and str(identity.get("journal_owner") or "").startswith("headless:")
+        and identity.get("replay_journal_owner") == identity.get("journal_owner")
+    )
+
+
+def _exodus_semantic_export_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        exported_blocks = [int(value) for value in identity.get("exported_block_ids", [])]
+        sidesets = [int(value) for value in identity.get("sideset_ids", [])]
+        exported_sidesets = [int(value) for value in identity.get("exported_sideset_ids", [])]
+        orientations = [int(value) for value in identity.get("sideset_orientation", [])]
+        exported_orientations = [int(value) for value in identity.get("exported_sideset_orientation", [])]
+        nodesets = [int(value) for value in identity.get("nodeset_ids", [])]
+        exported_nodesets = [int(value) for value in identity.get("exported_nodeset_ids", [])]
+        maximum_id = int(identity.get("maximum_entity_id"))
+        exported_maximum_id = int(identity.get("exported_maximum_entity_id"))
+        element_map = [int(value) for value in identity.get("element_map", [])]
+        exported_element_map = [int(value) for value in identity.get("exported_element_map", [])]
+        mesh_generation = int(identity.get("mesh_generation_id"))
+        exported_mesh_generation = int(identity.get("exported_mesh_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    topologies = identity.get("block_topologies")
+    exported_topologies = identity.get("exported_block_topologies")
+    generation = str(identity.get("exodus_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "block_generation",
+                "sideset_generation",
+                "nodeset_generation",
+                "integer_generation",
+                "topology_generation",
+                "map_generation",
+                "owner_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and bool(blocks)
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and exported_blocks == blocks
+        and isinstance(topologies, list)
+        and len(topologies) == len(blocks)
+        and all(value in {"HEX8", "PYRAMID5", "TET4"} for value in topologies)
+        and exported_topologies == topologies
+        and bool(sidesets)
+        and all(value > 0 for value in sidesets)
+        and len(set(sidesets)) == len(sidesets)
+        and exported_sidesets == sidesets
+        and len(orientations) == len(sidesets)
+        and all(value in {-1, 1} for value in orientations)
+        and exported_orientations == orientations
+        and bool(nodesets)
+        and all(value > 0 for value in nodesets)
+        and len(set(nodesets)) == len(nodesets)
+        and exported_nodesets == nodesets
+        and identity.get("int64_ids") is True
+        and identity.get("exported_int64_ids") is True
+        and maximum_id > 2_147_483_647
+        and exported_maximum_id == maximum_id
+        and bool(element_map)
+        and all(value > 0 for value in element_map)
+        and len(set(element_map)) == len(element_map)
+        and exported_element_map == element_map
+        and bool(str(identity.get("assembly_owner") or ""))
+        and identity.get("exported_assembly_owner") == identity.get("assembly_owner")
+        and mesh_generation >= 0
+        and exported_mesh_generation == mesh_generation
+        and all(
+            _valid_sha256(identity.get(source))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("exodus_mesh_sha256", "exported_exodus_mesh_sha256"),
+                ("exodus_file_sha256", "accepted_exodus_file_sha256"),
+            )
+        )
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -5897,6 +6221,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "curved_high_order_boundaries_use_current_normals_hausdorff_measures_jacobian_order_geometry_and_result": (
             _curved_highorder_boundary_identity_ok(
                 summary.get("curved_highorder_boundary_normal_hausdorff_area_volume_jacobian_order_geometry_result_generation_identity")
+            )
+        ),
+        "hex_sweeps_use_current_source_target_layers_bias_orientation_jacobian_boundaries_volume_and_mesh": (
+            _hex_sweep_contract_identity_ok(
+                summary.get("hex_sweep_source_target_topology_layer_interval_orientation_jacobian_boundary_volume_mesh_result_generation_identity")
+            )
+        ),
+        "mixed_transitions_use_current_counts_interface_nodes_orientation_regions_volume_owner_and_mesh": (
+            _mixed_transition_contract_identity_ok(
+                summary.get("mixed_hex_tet_pyramid_count_interface_conformity_face_orientation_node_region_volume_mesh_result_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -6788,6 +7122,16 @@ def cubit_mixed_transition_source_gate(
         "parallel_sculpt_uses_current_seed_ranks_owned_ghost_stitch_qa_connectivity_invocation_and_export": (
             _parallel_sculpt_determinism_identity_ok(
                 summary.get("parallel_sculpt_seed_rank_owned_ghost_stitch_qa_connectivity_invocation_export_generation_identity")
+            )
+        ),
+        "journal_replays_use_current_undo_groups_entities_reset_checkpoint_order_database_owner_and_result": (
+            _journal_replay_contract_identity_ok(
+                summary.get("journal_undo_idempotence_entity_reset_checkpoint_replay_order_database_result_generation_identity")
+            )
+        ),
+        "exodus_exports_use_current_blocks_sets_int64_topology_map_owner_mesh_and_file": (
+            _exodus_semantic_export_identity_ok(
+                summary.get("exodus_block_sideset_nodeset_int64_topology_element_map_owner_mesh_export_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
