@@ -3361,6 +3361,376 @@ def _cad_import_identity_ok(identity: object) -> bool:
     )
 
 
+def _mixed_high_order_transition_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        topologies = [str(value) for value in identity.get("element_topologies", [])]
+        result_topologies = [
+            str(value) for value in identity.get("result_element_topologies", [])
+        ]
+        orders = [int(value) for value in identity.get("polynomial_orders", [])]
+        result_orders = [
+            int(value) for value in identity.get("result_polynomial_orders", [])
+        ]
+        corners = [
+            [int(value) for value in row]
+            for row in identity.get("interface_corner_node_ids", [])
+        ]
+        result_corners = [
+            [int(value) for value in row]
+            for row in identity.get("result_interface_corner_node_ids", [])
+        ]
+        midnodes = [
+            [int(value) for value in row]
+            for row in identity.get("interface_midnode_ids", [])
+        ]
+        result_midnodes = [
+            [int(value) for value in row]
+            for row in identity.get("result_interface_midnode_ids", [])
+        ]
+        permutations = [
+            [int(value) for value in row]
+            for row in identity.get("face_node_permutations", [])
+        ]
+        result_permutations = [
+            [int(value) for value in row]
+            for row in identity.get("result_face_node_permutations", [])
+        ]
+        jacobians = [
+            [float(value) for value in row]
+            for row in identity.get("quadrature_scaled_jacobians", [])
+        ]
+        result_jacobians = [
+            [float(value) for value in row]
+            for row in identity.get("result_quadrature_scaled_jacobians", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("transition_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "order_transition_generation",
+                "midnode_transition_generation",
+                "permutation_transition_generation",
+                "parametric_transition_generation",
+                "jacobian_transition_generation",
+                "export_transition_generation",
+                "result_transition_generation",
+            )
+        )
+        and topologies == ["hex27", "pyramid14", "tet10"]
+        and result_topologies == topologies
+        and orders == [2, 2, 2]
+        and result_orders == orders
+        and len(corners) == len(midnodes) == len(permutations) == len(jacobians) >= 1
+        and all(
+            len(row) in {3, 4}
+            and len(set(row)) == len(row)
+            and all(value > 0 for value in row)
+            for row in corners
+        )
+        and result_corners == corners
+        and all(
+            len(nodes) == len(corner)
+            and len(set(nodes)) == len(nodes)
+            and all(value > 0 for value in nodes)
+            for corner, nodes in zip(corners, midnodes, strict=True)
+        )
+        and result_midnodes == midnodes
+        and all(
+            sorted(permutation) == list(range(len(corner) + len(nodes)))
+            for corner, nodes, permutation in zip(
+                corners, midnodes, permutations, strict=True
+            )
+        )
+        and result_permutations == permutations
+        and all(
+            bool(row)
+            and all(math.isfinite(value) and value > 0.0 for value in row)
+            for row in jacobians
+        )
+        and result_jacobians == jacobians
+        and _valid_sha256(identity.get("parametric_face_coordinate_sha256"))
+        and identity.get("result_parametric_face_coordinate_sha256")
+        == identity.get("parametric_face_coordinate_sha256")
+        and _valid_sha256(identity.get("export_connectivity_sha256"))
+        and identity.get("accepted_export_connectivity_sha256")
+        == identity.get("export_connectivity_sha256")
+    )
+
+
+def _periodic_high_order_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        order = int(identity.get("polynomial_order"))
+        result_order = int(identity.get("result_polynomial_order"))
+        transform = [
+            [float(value) for value in row]
+            for row in identity.get("affine_transform_4x4", [])
+        ]
+        result_transform = [
+            [float(value) for value in row]
+            for row in identity.get("result_affine_transform_4x4", [])
+        ]
+        pair_fields = []
+        for source, target in (
+            ("corner_node_pairs", "result_corner_node_pairs"),
+            ("edge_node_pairs", "result_edge_node_pairs"),
+            ("face_node_pairs", "result_face_node_pairs"),
+        ):
+            pairs = [[int(value) for value in row] for row in identity.get(source, [])]
+            result_pairs = [
+                [int(value) for value in row] for row in identity.get(target, [])
+            ]
+            pair_fields.append((pairs, result_pairs))
+        orientations = [int(value) for value in identity.get("orientation_signs", [])]
+        result_orientations = [
+            int(value) for value in identity.get("result_orientation_signs", [])
+        ]
+        source_sideset = int(identity.get("source_sideset_id"))
+        result_source_sideset = int(identity.get("result_source_sideset_id"))
+        target_sideset = int(identity.get("target_sideset_id"))
+        result_target_sideset = int(identity.get("result_target_sideset_id"))
+        residual = float(identity.get("maximum_periodic_residual_m"))
+        result_residual = float(identity.get("result_maximum_periodic_residual_m"))
+        tolerance = float(identity.get("periodic_residual_tolerance_m"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("periodic_generation") or "")
+    all_pairs = [pair for pairs, _ in pair_fields for pair in pairs]
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "affine_periodic_generation",
+                "corner_periodic_generation",
+                "edge_periodic_generation",
+                "face_periodic_generation",
+                "orientation_periodic_generation",
+                "sideset_periodic_generation",
+                "residual_periodic_generation",
+                "result_periodic_generation",
+            )
+        )
+        and order >= 2
+        and result_order == order
+        and len(transform) == 4
+        and all(len(row) == 4 and all(math.isfinite(value) for value in row) for row in transform)
+        and transform[3] == [0.0, 0.0, 0.0, 1.0]
+        and result_transform == transform
+        and all(bool(pairs) and result_pairs == pairs for pairs, result_pairs in pair_fields)
+        and all(len(pair) == 2 and pair[0] > 0 and pair[1] > 0 for pair in all_pairs)
+        and len({pair[0] for pair in all_pairs}) == len(all_pairs)
+        and len({pair[1] for pair in all_pairs}) == len(all_pairs)
+        and bool(orientations)
+        and all(value in {-1, 1} for value in orientations)
+        and result_orientations == orientations
+        and source_sideset > 0
+        and target_sideset > 0
+        and source_sideset != target_sideset
+        and result_source_sideset == source_sideset
+        and result_target_sideset == target_sideset
+        and math.isfinite(residual)
+        and residual >= 0.0
+        and result_residual == residual
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and residual <= tolerance
+        and _valid_sha256(identity.get("periodic_mesh_sha256"))
+        and identity.get("result_periodic_mesh_sha256")
+        == identity.get("periodic_mesh_sha256")
+    )
+
+
+def _boolean_entity_lineage_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        pre_ids = [int(value) for value in identity.get("pre_entity_ids", [])]
+        resolved_pre_ids = [
+            int(value) for value in identity.get("resolved_pre_entity_ids", [])
+        ]
+        post_ids = [int(value) for value in identity.get("post_entity_ids", [])]
+        resolved_post_ids = [
+            int(value) for value in identity.get("resolved_post_entity_ids", [])
+        ]
+        lineage = [
+            [int(value) for value in row]
+            for row in identity.get("entity_lineage_pairs", [])
+        ]
+        resolved_lineage = [
+            [int(value) for value in row]
+            for row in identity.get("resolved_entity_lineage_pairs", [])
+        ]
+        orientations = [
+            int(value) for value in identity.get("surface_orientation_signs", [])
+        ]
+        resolved_orientations = [
+            int(value)
+            for value in identity.get("resolved_surface_orientation_signs", [])
+        ]
+        measures = [float(value) for value in identity.get("surface_measures_m2", [])]
+        resolved_measures = [
+            float(value) for value in identity.get("resolved_surface_measures_m2", [])
+        ]
+        adjacency = [
+            [int(value) for value in row]
+            for row in identity.get("block_adjacency", [])
+        ]
+        resolved_adjacency = [
+            [int(value) for value in row]
+            for row in identity.get("resolved_block_adjacency", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("lineage_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "imprint_lineage_generation",
+                "merge_lineage_generation",
+                "orientation_lineage_generation",
+                "measure_lineage_generation",
+                "adjacency_lineage_generation",
+                "journal_lineage_generation",
+                "result_lineage_generation",
+            )
+        )
+        and bool(pre_ids and post_ids)
+        and pre_ids == sorted(set(pre_ids))
+        and post_ids == sorted(set(post_ids))
+        and all(value > 0 for value in pre_ids + post_ids)
+        and resolved_pre_ids == pre_ids
+        and resolved_post_ids == post_ids
+        and bool(lineage)
+        and all(
+            len(pair) == 2 and pair[0] in pre_ids and pair[1] in post_ids
+            for pair in lineage
+        )
+        and {pair[1] for pair in lineage} == set(post_ids)
+        and resolved_lineage == lineage
+        and len(orientations) == len(measures) == len(adjacency) == len(post_ids)
+        and all(value in {-1, 1} for value in orientations)
+        and resolved_orientations == orientations
+        and all(math.isfinite(value) and value > 0.0 for value in measures)
+        and resolved_measures == measures
+        and all(
+            len(pair) == 2 and pair[0] in post_ids and pair[1] > 0
+            for pair in adjacency
+        )
+        and {pair[0] for pair in adjacency} == set(post_ids)
+        and resolved_adjacency == adjacency
+        and bool(str(identity.get("journal_generation_id") or ""))
+        and identity.get("resolved_journal_generation_id")
+        == identity.get("journal_generation_id")
+        and _valid_sha256(identity.get("lineage_table_sha256"))
+        and identity.get("resolved_lineage_table_sha256")
+        == identity.get("lineage_table_sha256")
+        and _valid_sha256(identity.get("model_digest_sha256"))
+        and identity.get("accepted_model_digest_sha256")
+        == identity.get("model_digest_sha256")
+    )
+
+
+def _exodus_high_order_restart_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        block_ids = [int(value) for value in identity.get("block_ids", [])]
+        decoded_block_ids = [
+            int(value) for value in identity.get("decoded_block_ids", [])
+        ]
+        topologies = [str(value) for value in identity.get("element_topologies", [])]
+        decoded_topologies = [
+            str(value) for value in identity.get("decoded_element_topologies", [])
+        ]
+        midnodes = [
+            [int(value) for value in row]
+            for row in identity.get("midnode_orderings", [])
+        ]
+        decoded_midnodes = [
+            [int(value) for value in row]
+            for row in identity.get("decoded_midnode_orderings", [])
+        ]
+        word_size = int(identity.get("integer_word_size_bits"))
+        decoded_word_size = int(identity.get("decoded_integer_word_size_bits"))
+        qa_records = [[str(value) for value in row] for row in identity.get("qa_records", [])]
+        decoded_qa_records = [
+            [str(value) for value in row] for row in identity.get("decoded_qa_records", [])
+        ]
+        restart = int(identity.get("restart_step_index"))
+        decoded_restart = int(identity.get("decoded_restart_step_index"))
+        owners = [
+            [int(value) for value in row]
+            for row in identity.get("sideset_owner_block_ids", [])
+        ]
+        decoded_owners = [
+            [int(value) for value in row]
+            for row in identity.get("decoded_sideset_owner_block_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("exodus_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "block_exodus_generation",
+                "midnode_exodus_generation",
+                "id_exodus_generation",
+                "qa_exodus_generation",
+                "restart_exodus_generation",
+                "sideset_exodus_generation",
+                "digest_exodus_generation",
+                "result_exodus_generation",
+            )
+        )
+        and bool(block_ids)
+        and all(value > 2**31 - 1 for value in block_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and decoded_block_ids == block_ids
+        and len(topologies) == len(block_ids)
+        and all(value in {"HEX27", "PYRAMID14", "TET10"} for value in topologies)
+        and decoded_topologies == topologies
+        and len(midnodes) == len(block_ids)
+        and all(bool(row) and len(set(row)) == len(row) and min(row) > 0 for row in midnodes)
+        and decoded_midnodes == midnodes
+        and word_size == 64
+        and decoded_word_size == word_size
+        and bool(qa_records)
+        and all(len(row) == 4 and all(row) for row in qa_records)
+        and decoded_qa_records == qa_records
+        and restart >= 0
+        and decoded_restart == restart
+        and bool(owners)
+        and all(len(pair) == 2 and pair[0] > 0 and pair[1] in block_ids for pair in owners)
+        and decoded_owners == owners
+        and _valid_sha256(identity.get("exodus_file_sha256"))
+        and identity.get("decoded_exodus_file_sha256")
+        == identity.get("exodus_file_sha256")
+        and _valid_sha256(identity.get("connectivity_table_sha256"))
+        and identity.get("decoded_connectivity_table_sha256")
+        == identity.get("connectivity_table_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -4178,6 +4548,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "mixed_transitions_use_current_elements_faces_nodes_orientation_conformity_quality_blocks_sidesets_and_export": (
             _mixed_transition_face_identity_ok(
                 summary.get("hex_tet_pyramid_transition_face_nodes_orientation_conformity_quality_block_sideset_export_generation_identity")
+            )
+        ),
+        "curved_mixed_transitions_use_current_orders_midnodes_permutations_parametric_faces_quadrature_jacobians_and_export": (
+            _mixed_high_order_transition_identity_ok(
+                summary.get("mixed_high_order_transition_midnode_permutation_parametric_face_quadrature_jacobian_export_generation_identity")
+            )
+        ),
+        "periodic_high_order_meshes_use_current_affine_corner_edge_face_pairs_orientation_sidesets_and_residual": (
+            _periodic_high_order_identity_ok(
+                summary.get("periodic_high_order_affine_corner_edge_face_node_pair_orientation_sideset_residual_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -5019,6 +5399,16 @@ def cubit_mixed_transition_source_gate(
         "exodus_sidesets_use_current_ids_topology_orientation_distribution_blocks_time_and_digests": (
             _exodus_sideset_distribution_identity_ok(
                 summary.get("exodus_sideset_distribution_factor_topology_orientation_block_time_file_generation_identity")
+            )
+        ),
+        "boolean_imprint_merges_use_current_entity_lineage_orientation_measure_adjacency_journal_and_digest": (
+            _boolean_entity_lineage_identity_ok(
+                summary.get("boolean_imprint_merge_entity_lineage_surface_orientation_measure_adjacency_journal_digest_generation_identity")
+            )
+        ),
+        "high_order_exodus_uses_current_blocks_midnodes_int64_qa_restart_sideset_owners_and_digests": (
+            _exodus_high_order_restart_identity_ok(
+                summary.get("exodus_high_order_block_midnode_order_int64_qa_restart_sideset_digest_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
