@@ -3840,6 +3840,174 @@ def _boolean_history_generation_identity(row):
     )
 
 
+def _assembly_occurrence_mass_generation_identity(row):
+    value = row.get(
+        "assembly_occurrence_location_density_unit_suppression_mass_center_inertia_parallel_axis_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("assembly_generation", "")).strip()
+    occurrence_ids = [str(item).strip() for item in value.get("occurrence_ids", [])]
+    result_occurrence_ids = [
+        str(item).strip() for item in value.get("result_occurrence_ids", [])
+    ]
+    suppressed = [
+        str(item).strip() for item in value.get("suppressed_occurrence_ids", [])
+    ]
+    result_suppressed = [
+        str(item).strip()
+        for item in value.get("result_suppressed_occurrence_ids", [])
+    ]
+    try:
+        locations = [
+            [[float(item) for item in matrix_row] for matrix_row in matrix]
+            for matrix in value.get("location_matrices", [])
+        ]
+        result_locations = [
+            [[float(item) for item in matrix_row] for matrix_row in matrix]
+            for matrix in value.get("result_location_matrices", [])
+        ]
+        densities = [float(item) for item in value.get("densities_kg_m3", [])]
+        result_densities = [
+            float(item) for item in value.get("result_densities_kg_m3", [])
+        ]
+        volumes = [float(item) for item in value.get("part_volumes_m3", [])]
+        result_volumes = [
+            float(item) for item in value.get("result_part_volumes_m3", [])
+        ]
+        mass = float(value.get("assembly_mass_kg"))
+        result_mass = float(value.get("result_assembly_mass_kg"))
+        center = [float(item) for item in value.get("center_of_mass_m", [])]
+        result_center = [
+            float(item) for item in value.get("result_center_of_mass_m", [])
+        ]
+        inertia = [
+            [float(item) for item in matrix_row]
+            for matrix_row in value.get("assembly_inertia_kg_m2", [])
+        ]
+        result_inertia = [
+            [float(item) for item in matrix_row]
+            for matrix_row in value.get("result_assembly_inertia_kg_m2", [])
+        ]
+    except (TypeError, ValueError):
+        return None
+    parallel_axis = value.get("parallel_axis_applied")
+    result_parallel_axis = value.get("result_parallel_axis_applied")
+    shape_digest = str(value.get("assembly_shape_sha256", "")).lower()
+    part_masses = [density * volume for density, volume in zip(densities, volumes)]
+    calculated_mass = sum(part_masses)
+    calculated_center = [
+        sum(
+            part_mass * locations[index][axis][3]
+            for index, part_mass in enumerate(part_masses)
+        )
+        / calculated_mass
+        for axis in range(3)
+    ] if calculated_mass > 0.0 else []
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "occurrence_assembly_generation", "location_assembly_generation",
+            "density_assembly_generation", "suppression_assembly_generation",
+            "mass_assembly_generation", "inertia_assembly_generation",
+            "shape_assembly_generation", "result_assembly_generation"))
+        or not occurrence_ids or len(set(occurrence_ids)) != len(occurrence_ids)
+        or result_occurrence_ids != occurrence_ids
+        or not (len(locations) == len(densities) == len(volumes) == len(occurrence_ids))
+        or any(len(matrix) != 4 or any(len(matrix_row) != 4 for matrix_row in matrix) for matrix in locations)
+        or any(not math.isfinite(item) for matrix in locations for matrix_row in matrix for item in matrix_row)
+        or any(matrix[3] != [0.0, 0.0, 0.0, 1.0] for matrix in locations)
+        or result_locations != locations
+        or any(not math.isfinite(item) or item <= 0.0 for item in densities + volumes)
+        or result_densities != densities or result_volumes != volumes
+        or value.get("density_unit") != "kg/m^3"
+        or value.get("result_density_unit") != value.get("density_unit")
+        or any(item not in occurrence_ids for item in suppressed)
+        or result_suppressed != suppressed
+        or suppressed
+        or not math.isfinite(mass) or mass <= 0.0 or result_mass != mass
+        or not math.isclose(mass, calculated_mass, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or len(center) != 3 or any(not math.isfinite(item) for item in center)
+        or result_center != center
+        or any(not math.isclose(a, b, rel_tol=1.0e-12, abs_tol=1.0e-15) for a, b in zip(center, calculated_center))
+        or value.get("inertia_reference_frame") != "assembly_global_center_of_mass"
+        or value.get("result_inertia_reference_frame") != value.get("inertia_reference_frame")
+        or parallel_axis is not True or result_parallel_axis != parallel_axis
+        or len(inertia) != 3
+        or any(len(matrix_row) != 3 or any(not math.isfinite(item) for item in matrix_row) for matrix_row in inertia)
+        or any(inertia[index][index] <= 0.0 for index in range(3))
+        or any(not math.isclose(inertia[i][j], inertia[j][i], rel_tol=0.0, abs_tol=1.0e-18) for i in range(3) for j in range(3))
+        or result_inertia != inertia
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_assembly_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation, tuple(occurrence_ids), tuple(tuple(tuple(items) for items in matrix) for matrix in locations),
+        tuple(densities), tuple(volumes), mass, tuple(center),
+        tuple(tuple(items) for items in inertia), shape_digest,
+    )
+
+
+def _loft_face_lineage_generation_identity(row):
+    value = row.get(
+        "loft_sweep_profile_order_seam_guide_orientation_face_lineage_shell_volume_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("loft_generation", "")).strip()
+    profiles = [str(item).strip() for item in value.get("profile_ids", [])]
+    result_profiles = [str(item).strip() for item in value.get("result_profile_ids", [])]
+    lineage = [tuple(str(item).strip() for item in pair) for pair in value.get("face_lineage_pairs", [])]
+    result_lineage = [tuple(str(item).strip() for item in pair) for pair in value.get("result_face_lineage_pairs", [])]
+    try:
+        parameters = [float(item) for item in value.get("profile_parameters", [])]
+        result_parameters = [float(item) for item in value.get("result_profile_parameters", [])]
+        seams = [float(item) for item in value.get("seam_parameters", [])]
+        result_seams = [float(item) for item in value.get("result_seam_parameters", [])]
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    shell_closed = value.get("shell_closed")
+    result_shell_closed = value.get("result_shell_closed")
+    lineage_digest = str(value.get("face_lineage_sha256", "")).lower()
+    shape_digest = str(value.get("loft_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "profile_loft_generation", "seam_loft_generation",
+            "guide_loft_generation", "lineage_loft_generation",
+            "shell_loft_generation", "mass_loft_generation",
+            "shape_loft_generation", "result_loft_generation"))
+        or len(profiles) < 2 or len(set(profiles)) != len(profiles)
+        or result_profiles != profiles
+        or len(parameters) != len(profiles)
+        or any(not math.isfinite(item) for item in parameters)
+        or any(right <= left for left, right in zip(parameters, parameters[1:]))
+        or result_parameters != parameters
+        or len(seams) != len(profiles)
+        or any(not math.isfinite(item) or not 0.0 <= item < 1.0 for item in seams)
+        or result_seams != seams
+        or value.get("guide_orientation") != "start_to_end_right_handed"
+        or value.get("result_guide_orientation") != value.get("guide_orientation")
+        or len(lineage) < len(profiles)
+        or any(len(pair) != 2 or not all(pair) for pair in lineage)
+        or result_lineage != lineage
+        or not _valid_identity_digest(lineage_digest)
+        or value.get("result_face_lineage_sha256") != lineage_digest
+        or shell_closed is not True or result_shell_closed != shell_closed
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_loft_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation, tuple(profiles), tuple(parameters), tuple(seams),
+        tuple(lineage), lineage_digest, volume, shape_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -4216,6 +4384,50 @@ def shape_mass_property_crosscheck_summary(
             boolean_history_identity_ok = boolean_history_identity_ok and all(
                 _boolean_history_generation_identity(row)
                 == reference_boolean_histories.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    assembly_occurrence_evidence_present = any(
+        row.get(
+            "assembly_occurrence_location_density_unit_suppression_mass_center_inertia_parallel_axis_shape_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_assembly_occurrences = {
+        str(row.get("name", "")): _assembly_occurrence_mass_generation_identity(row)
+        for row in reference
+    }
+    assembly_occurrence_identity_ok = not assembly_occurrence_evidence_present
+    if assembly_occurrence_evidence_present:
+        assembly_occurrence_identity_ok = bool(reference_assembly_occurrences) and all(
+            value is not None for value in reference_assembly_occurrences.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_occurrence_identity_ok = assembly_occurrence_identity_ok and all(
+                _assembly_occurrence_mass_generation_identity(row)
+                == reference_assembly_occurrences.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    loft_lineage_evidence_present = any(
+        row.get(
+            "loft_sweep_profile_order_seam_guide_orientation_face_lineage_shell_volume_shape_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_loft_lineages = {
+        str(row.get("name", "")): _loft_face_lineage_generation_identity(row)
+        for row in reference
+    }
+    loft_lineage_identity_ok = not loft_lineage_evidence_present
+    if loft_lineage_evidence_present:
+        loft_lineage_identity_ok = bool(reference_loft_lineages) and all(
+            value is not None for value in reference_loft_lineages.values()
+        )
+        for _, rows in normalized_sets:
+            loft_lineage_identity_ok = loft_lineage_identity_ok and all(
+                _loft_face_lineage_generation_identity(row)
+                == reference_loft_lineages.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -6140,6 +6352,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "boolean_results_use_current_operation_tolerance_operands_history_mass_inertia_and_shape": (
             boolean_history_identity_ok
+        ),
+        "assembly_occurrences_use_current_locations_densities_units_suppression_mass_center_parallel_axis_inertia_and_shape": (
+            assembly_occurrence_identity_ok
+        ),
+        "lofts_use_current_profile_order_seams_guide_face_lineage_shell_volume_and_shape": (
+            loft_lineage_identity_ok
         ),
     }
     issues = []
