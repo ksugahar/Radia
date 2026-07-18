@@ -4491,6 +4491,109 @@ on the model teacher, IDENTIFY on the raw data.
 """
 
 
+IDENTIFICATION_CONDITIONING = r"""
+# Conditioning of a linear-in-theta convex hysteresis-shape identification
+# (basis sizing, the over-regularization confound, effective DoF, and what
+#  "linear" does and does NOT buy).  Sugahara Lab, 2026-07 -- the operational
+#  lessons behind the B-input energy STOP identification (tensor-separated
+#  spline shape function fit by NNLS; see `lab_core`, `bergqvist_binput_stop`).
+
+## What "linear in theta" buys -- and what it does NOT
+
+The identification is LINEAR in the coefficients theta because the rate-
+independent stop clip rule has NO unknowns (the states s_k(t) are pre-computed
+from the B trajectory) and alpha is fixed.  So H = alpha*B + A(B).theta with a
+design matrix A(B) that does NOT depend on theta.  This buys:
+  - CONVEXITY: the fit is a convex QP (NNLS / ridge) with a GLOBAL optimum, no
+    local minima, no initialization sensitivity.  THIS is the real reason the
+    fit is "easy" and the coefficient count barely matters -- even a ~10^4-coeff
+    fit solves in ~minutes with a guaranteed optimum.
+  - CLOSED-FORM PARAMETER JACOBIAN: dH/dtheta = A itself, so the model is a
+    torch nonnegative-linear layer and auto-diff can propagate through vector,
+    eddy-term, or online-update extensions.  Auto-diff is a convenience, not a
+    consequence unique to linear models.  With fixed noise and an UNCONSTRAINED
+    Gaussian prior, predictive covariance is closed-form.  With theta>=0 the
+    posterior is a TRUNCATED Gaussian; its constrained predictive variance
+    requires integration or sampling.  An unconstrained inverse or active-set
+    Laplace covariance is an APPROXIMATION and must be labelled as such.
+
+It does NOT buy correctness.  Linearity/convexity is the TRACTABILITY leg;
+CORRECTNESS/expressiveness comes from the basis (tensor separation) plus the
+structural constraints (theta>=0 passivity, monotone I-splines, even/odd
+envelope, tangent-margin invertibility), and ACCURACY is set by the model CLASS
+(e.g. the odd-symmetry "even-floor") plus the DATA.  Never argue "linear model =
+good", and never CALL it a "linear model": the operator is a NONLINEAR,
+Preisach-equivalent hysteresis map -- only the IDENTIFICATION is linear IN THETA.
+
+## Basis SIZE was not sensitive in the reported in-class teacher experiment
+
+In the reported controlled run (play teacher, even basis, held-out set, at
+MATCHED regularization):
+2080 and ~5000 coefficients give the SAME held-out RMS to within ~0.02 A/m;
+~10000 fits fine (convex) but gains nothing on held-out and starts to OVERFIT
+the dc-bias minor loops.  The EFFECTIVE DoF is far below nominal (ridge hat-trace
+~180 at 2080, ~400 at 10000 = ~4% of nominal; ARD ~130) -- data + prior collapse
+the nominal count.  And theta>=0 PASSIVITY is the DOMINANT regularizer: the
+passive fit is nearly insensitive to the explicit ridge value as well.  For
+THAT experiment, a count in the ~2000-5000 range is adequate.  Treat this as a
+starting range, not a universal setting: repeat the held-out ridge/count sweep
+when the waveform family, noise, basis design, or material data changes.
+
+## The OVER-REGULARIZATION confound when comparing sizes (the key gotcha)
+
+The common auto-ridge  lambda = rel * mean(diag(A^T A))  has an ABSOLUTE strength
+that SHRINKS as the basis refines (mean-diag drops).  So comparing two basis
+sizes at the SAME rel is CONFOUNDED -- the SMALLER basis is more heavily ridged
+and looks worse for a reason that is NOT under-resolution.  ALWAYS compare each
+size at its OWN best (matched) ridge.  Concretely: at fixed rel=1e-3 the 2080
+basis (lambda=50) looked worse than ~5000 (lambda=13) on held-out (0.888 vs
+0.679); at each basis's OWN best ridge they matched (0.695 vs 0.674, gap 0.02).
+The "2080 is under-resolved" reading was a regularization artifact, not physics.
+
+## Basis DESIGN (shape), not count, is what matters for smoothness
+
+Distinct axis from the count: the SHAPE/design of the basis drives curve
+smoothness.  A coarse threshold (eta) grid makes the tangent KINK right after a
+reversal; a long-tailed envelope basis makes the tangent RING.  Fixes: a UNIFORM
+threshold grid matched to the teacher's resolution + a COMPACT-support (clamped
+B-spline) envelope.  "count insensitive" and "design matters" are about DIFFERENT
+axes and both hold -- state them so a reader does not read a contradiction.
+
+## Verification recipe (how these numbers were obtained)
+
+Fit at 2-3 basis sizes (accumulate A^T A once per size, per-waveform -- never the
+full A); sweep the ridge; compare the BEST held-out per size on an UNSEEN set.
+Use UNCONSTRAINED ridge (cho_solve) as an OPTIMISTIC TRAINING-capacity
+diagnostic: its feasible set contains the passive NNLS set, so its minimum
+training objective lower-bounds the constrained one.  It does NOT bound or
+order HELD-OUT error; the passive model must still be compared on the same
+unseen set.  Get the effective DoF from the ridge hat-trace via Hutchinson using
+the Cholesky you already formed
+(gamma = D - lambda * E[z^T (A^T A + lambda I)^-1 z]).  A noise-free in-class
+play teacher isolates representation and conditioning error; it does not
+establish the useful count for real noisy data, where even-asymmetry,
+rate-dependence, and measurement noise can change the selected basis size.
+
+## Manuscript-honesty checklist (when writing this up)
+
+- Say "linear in the coefficients / linear in theta", NOT "linear model".
+- Separate the three legs explicitly: CORRECTNESS (energy/passivity/monotone
+  splines/envelope), TRACTABILITY (linear->convex + auto-diff), ACCURACY (the
+  reproduction numbers).  Do not let "linear" carry the accuracy claim.
+- State the PRECONDITION for convexity (states pre-computable because the clip
+  rule has no unknowns; alpha fixed) -- it is conditional, not free.
+- A capability the paper does not demonstrate ("gradient steps CAN absorb new
+  measurements online") takes "can", not the bare present tense.
+
+## Cross-reference
+
+- `lab_core`, `bergqvist_binput_stop` - the convex + passive STOP identification
+- `peeling_identification` - the alternative (analytic, non-LSQ) calibration
+- `bayesian_field_separation` - the real-measurement direction, where the CLASS +
+  DATA floors (not the coefficient count) dominate
+"""
+
+
 def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
     """Dispatch by topic.
 
@@ -4599,6 +4702,18 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
                                 truncated-Gaussian posterior, NNLS = MAP;
                                 needs >= 2 frequencies for eddy identifiability;
                                 posterior variance = attribution).
+        identification_conditioning - Basis sizing + regularization know-how for
+                                the linear-in-theta convex shape identification:
+                                what "linear" buys (convexity + auto-diff =
+                                tractability) vs does NOT (correctness/accuracy);
+                                coefficient count is NOT a sensitive knob
+                                (2080 ~= 5000 at matched ridge, effective DoF <<
+                                nominal, passivity is the dominant regularizer);
+                                the OVER-REGULARIZATION confound (auto-ridge
+                                rel*mean-diag shrinks with D -> compare at each
+                                size's own best ridge); design (grid/tail) vs
+                                count; verification recipe + manuscript-honesty
+                                checklist.
         all                  - Everything
     """
     topic = topic.lower().strip()
@@ -4638,6 +4753,12 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
                   "consistency_diagnostics", "loss_field_separation",
                   "rate_independent_extraction", "bertotti_dynamic"):
         return BAYESIAN_FIELD_SEPARATION
+    if topic in ("identification_conditioning", "conditioning", "basis_sizing",
+                  "basis_size", "dof_sizing", "dof_scaling", "effective_dof",
+                  "regularization_confound", "over_regularization",
+                  "linear_convex", "convex_tractability", "linear_in_theta",
+                  "passivity_regularizer"):
+        return IDENTIFICATION_CONDITIONING
     if topic in ("vector_play_model", "vector_play", "canonical_play",
                   "playmodel", "play_hysteron", "playhysteron",
                   "ahagon_play", "binput_play", "b_input_play"):
@@ -4725,6 +4846,7 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
             JACQUES_MONOGRAPH, CONGRUENCY_BINPUT_SELECTION,
             BERGQVIST_BINPUT_STOP, PEELING_IDENTIFICATION,
             VECTOR_PLAY_MODEL, BAYESIAN_FIELD_SEPARATION,
+            IDENTIFICATION_CONDITIONING,
         ])
     return (f"Unknown topic '{topic}'. Available: lab_core, "
             "lab_core_production, catalog, decision_tree, "
@@ -4738,4 +4860,4 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
             "chua_model, other_models, jacques_monograph, "
             "congruency_selection, bergqvist_binput_stop, "
             "peeling_identification, vector_play_model, "
-            "bayesian_field_separation, all.")
+            "bayesian_field_separation, identification_conditioning, all.")
