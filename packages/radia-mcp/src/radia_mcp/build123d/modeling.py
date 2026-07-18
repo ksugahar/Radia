@@ -4008,6 +4008,157 @@ def _loft_face_lineage_generation_identity(row):
     )
 
 
+def _boolean_topology_ancestry_generation_identity(row):
+    value = row.get(
+        "boolean_fuzzy_tolerance_topology_name_face_ancestry_count_volume_centroid_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("boolean_generation", "")).strip()
+    names = [str(item).strip() for item in value.get("surviving_topology_names", [])]
+    result_names = [
+        str(item).strip() for item in value.get("result_surviving_topology_names", [])
+    ]
+    ancestry = [
+        tuple(str(item).strip() for item in pair)
+        for pair in value.get("face_ancestry", [])
+    ]
+    result_ancestry = [
+        tuple(str(item).strip() for item in pair)
+        for pair in value.get("result_face_ancestry", [])
+    ]
+    try:
+        tolerance = float(value.get("fuzzy_tolerance_m"))
+        result_tolerance = float(value.get("result_fuzzy_tolerance_m"))
+        solid_count = int(value.get("solid_count"))
+        result_solid_count = int(value.get("result_solid_count"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        centroid = tuple(float(item) for item in value.get("centroid_m", []))
+        result_centroid = tuple(
+            float(item) for item in value.get("result_centroid_m", [])
+        )
+    except (TypeError, ValueError):
+        return None
+    shape_digest = str(value.get("boolean_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "tolerance_generation",
+                "topology_generation",
+                "ancestry_generation",
+                "mass_generation",
+                "shape_generation",
+                "result_generation",
+            )
+        )
+        or not math.isfinite(tolerance)
+        or tolerance <= 0.0
+        or result_tolerance != tolerance
+        or not names
+        or len(set(names)) != len(names)
+        or result_names != names
+        or not ancestry
+        or any(len(pair) != 2 or not all(pair) for pair in ancestry)
+        or result_ancestry != ancestry
+        or solid_count != 1
+        or result_solid_count != solid_count
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or result_volume != volume
+        or len(centroid) != 3
+        or any(not math.isfinite(item) for item in centroid)
+        or result_centroid != centroid
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_boolean_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation,
+        tolerance,
+        tuple(names),
+        tuple(ancestry),
+        solid_count,
+        volume,
+        centroid,
+        shape_digest,
+    )
+
+
+def _sweep_frame_transition_generation_identity(row):
+    value = row.get(
+        "sweep_frenet_frame_twist_transition_profile_orientation_self_intersection_volume_owner_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("sweep_generation", "")).strip()
+    try:
+        twist = tuple(float(item) for item in value.get("twist_parameters_rad", []))
+        result_twist = tuple(
+            float(item) for item in value.get("result_twist_parameters_rad", [])
+        )
+        orientation = tuple(
+            int(item) for item in value.get("profile_orientation_signs", [])
+        )
+        result_orientation = tuple(
+            int(item) for item in value.get("result_profile_orientation_signs", [])
+        )
+        volume = float(value.get("sweep_volume_m3"))
+        result_volume = float(value.get("result_sweep_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    shape_digest = str(value.get("sweep_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "frame_generation",
+                "twist_generation",
+                "transition_generation",
+                "orientation_generation",
+                "intersection_generation",
+                "mass_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        or value.get("frame_convention") != "corrected_frenet"
+        or value.get("result_frame_convention") != value.get("frame_convention")
+        or len(twist) < 2
+        or any(not math.isfinite(item) for item in twist)
+        or any(right < left for left, right in zip(twist, twist[1:]))
+        or result_twist != twist
+        or value.get("transition_mode") not in {"right_corner", "round_corner"}
+        or value.get("result_transition_mode") != value.get("transition_mode")
+        or len(orientation) != len(twist)
+        or any(item != 1 for item in orientation)
+        or result_orientation != orientation
+        or value.get("self_intersection") is not False
+        or value.get("result_self_intersection") is not False
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or result_volume != volume
+        or not str(value.get("shape_owner", "")).strip()
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_sweep_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation,
+        value.get("frame_convention"),
+        twist,
+        value.get("transition_mode"),
+        orientation,
+        volume,
+        value.get("shape_owner"),
+        shape_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -4429,6 +4580,53 @@ def shape_mass_property_crosscheck_summary(
                 _loft_face_lineage_generation_identity(row)
                 == reference_loft_lineages.get(str(row.get("name", "")))
                 for row in rows
+            )
+
+    boolean_topology_evidence_present = any(
+        row.get(
+            "boolean_fuzzy_tolerance_topology_name_face_ancestry_count_volume_centroid_shape_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_boolean_topologies = {
+        str(row.get("name", "")): _boolean_topology_ancestry_generation_identity(row)
+        for row in reference
+    }
+    boolean_topology_identity_ok = not boolean_topology_evidence_present
+    if boolean_topology_evidence_present:
+        boolean_topology_identity_ok = bool(reference_boolean_topologies) and all(
+            value is not None for value in reference_boolean_topologies.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_topology_identity_ok = boolean_topology_identity_ok and all(
+                _boolean_topology_ancestry_generation_identity(row)
+                == reference_boolean_topologies.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    sweep_frame_transition_evidence_present = any(
+        row.get(
+            "sweep_frenet_frame_twist_transition_profile_orientation_self_intersection_volume_owner_shape_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_sweep_frame_transitions = {
+        str(row.get("name", "")): _sweep_frame_transition_generation_identity(row)
+        for row in reference
+    }
+    sweep_frame_transition_identity_ok = not sweep_frame_transition_evidence_present
+    if sweep_frame_transition_evidence_present:
+        sweep_frame_transition_identity_ok = bool(reference_sweep_frame_transitions) and all(
+            value is not None for value in reference_sweep_frame_transitions.values()
+        )
+        for _, rows in normalized_sets:
+            sweep_frame_transition_identity_ok = (
+                sweep_frame_transition_identity_ok
+                and all(
+                    _sweep_frame_transition_generation_identity(row)
+                    == reference_sweep_frame_transitions.get(str(row.get("name", "")))
+                    for row in rows
+                )
             )
 
     revision_evidence_present = any(
@@ -6358,6 +6556,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "lofts_use_current_profile_order_seams_guide_face_lineage_shell_volume_and_shape": (
             loft_lineage_identity_ok
+        ),
+        "boolean_results_use_current_fuzzy_tolerance_topology_names_face_ancestry_count_volume_centroid_and_shape": (
+            boolean_topology_identity_ok
+        ),
+        "swept_solids_use_current_frenet_frame_twist_transition_orientation_intersection_volume_owner_and_shape": (
+            sweep_frame_transition_identity_ok
         ),
     }
     issues = []

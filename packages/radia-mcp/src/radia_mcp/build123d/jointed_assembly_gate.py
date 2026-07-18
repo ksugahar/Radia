@@ -1042,6 +1042,108 @@ def _stl_brep_tessellation_error_identity_ok(value: object) -> bool:
     )
 
 
+def _step_assembly_instance_metadata_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation") or "")
+    try:
+        instances = [str(item) for item in value.get("instance_ids", [])]
+        decoded_instances = [str(item) for item in value.get("decoded_instance_ids", [])]
+        transforms = [[str(item) for item in row] for row in value.get("instance_transform_sha256", [])]
+        decoded_transforms = [[str(item) for item in row] for row in value.get("decoded_instance_transform_sha256", [])]
+        colors = [list(row) for row in value.get("instance_colors_rgb", [])]
+        decoded_colors = [list(row) for row in value.get("decoded_instance_colors_rgb", [])]
+        materials = [[str(item) for item in row] for row in value.get("material_labels", [])]
+        decoded_materials = [[str(item) for item in row] for row in value.get("decoded_material_labels", [])]
+        uuids = [[str(item) for item in row] for row in value.get("product_uuids", [])]
+        decoded_uuids = [[str(item) for item in row] for row in value.get("decoded_product_uuids", [])]
+        components = [[str(item) for item in row] for row in value.get("component_shape_sha256", [])]
+        decoded_components = [[str(item) for item in row] for row in value.get("decoded_component_shape_sha256", [])]
+        volume = float(value.get("total_volume_m3"))
+        decoded_volume = float(value.get("decoded_total_volume_m3"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "instance_generation", "transform_generation", "unit_generation",
+            "color_generation", "material_generation", "uuid_generation",
+            "component_generation", "volume_generation", "file_generation",
+            "result_generation"))
+        and bool(instances)
+        and len(set(instances)) == len(instances)
+        and decoded_instances == instances
+        and len(transforms) == len(colors) == len(materials) == len(uuids) == len(components) == len(instances)
+        and all(len(row) == 2 and row[0] in instances and _valid_sha256(row[1]) for row in transforms + components)
+        and {row[0] for row in transforms} == {row[0] for row in components} == set(instances)
+        and decoded_transforms == transforms
+        and all(
+            len(row) == 4
+            and str(row[0]) in instances
+            and all(math.isfinite(float(item)) and 0.0 <= float(item) <= 1.0 for item in row[1:])
+            for row in colors
+        )
+        and decoded_colors == colors
+        and all(len(row) == 2 and row[0] in instances and row[1] for row in materials + uuids)
+        and {row[0] for row in materials} == {row[0] for row in uuids} == set(instances)
+        and decoded_materials == materials
+        and decoded_uuids == uuids
+        and decoded_components == components
+        and value.get("length_unit") == "m"
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and math.isfinite(volume) and volume > 0.0 and decoded_volume == volume
+        and _valid_sha256(value.get("step_file_sha256"))
+        and value.get("decoded_step_file_sha256") == value.get("step_file_sha256")
+    )
+
+
+def _stl_repair_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("repair_generation") or "")
+    try:
+        tolerance = float(value.get("merge_tolerance_m"))
+        decoded_tolerance = float(value.get("decoded_merge_tolerance_m"))
+        duplicates = int(value.get("duplicate_vertex_count"))
+        decoded_duplicates = int(value.get("decoded_duplicate_vertex_count"))
+        boundaries = int(value.get("boundary_edge_count"))
+        decoded_boundaries = int(value.get("decoded_boundary_edge_count"))
+        components = int(value.get("watertight_component_count"))
+        decoded_components = int(value.get("decoded_watertight_component_count"))
+        volume = float(value.get("repaired_volume_m3"))
+        decoded_volume = float(value.get("decoded_repaired_volume_m3"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "tolerance_generation", "normal_generation", "duplicate_generation",
+            "boundary_generation", "watertight_generation", "volume_generation",
+            "unit_generation", "file_generation", "result_generation"))
+        and math.isfinite(tolerance) and tolerance > 0.0 and decoded_tolerance == tolerance
+        and _valid_sha256(value.get("facet_normal_sha256"))
+        and value.get("decoded_facet_normal_sha256") == value.get("facet_normal_sha256")
+        and duplicates == 0 and decoded_duplicates == duplicates
+        and boundaries == 0 and decoded_boundaries == boundaries
+        and components == 1 and decoded_components == components
+        and math.isfinite(volume) and volume > 0.0 and decoded_volume == volume
+        and value.get("length_unit") == "m"
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and all(
+            _valid_sha256(value.get(source))
+            and value.get(target) == value.get(source)
+            for source, target in (
+                ("source_stl_sha256", "decoded_source_stl_sha256"),
+                ("repaired_stl_sha256", "decoded_repaired_stl_sha256"),
+            )
+        )
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1384,6 +1486,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     stl_solid_reconstruction_identity_ok = True
     step_ap242_context_owner_mass_identity_ok = True
     stl_brep_tessellation_error_identity_ok = True
+    step_assembly_instance_metadata_identity_ok = True
+    stl_repair_closure_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -1431,6 +1535,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         three_mf_reconstruction_identity_ok = False
         step_ap242_context_owner_mass_identity_ok = False
         stl_brep_tessellation_error_identity_ok = False
+        step_assembly_instance_metadata_identity_ok = False
+        stl_repair_closure_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -3062,6 +3168,18 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 )
             )
         )
+        step_assembly_instance_metadata_identity_ok = (
+            _step_assembly_instance_metadata_identity_ok(
+                replay_identity_value.get(
+                    "step_assembly_instance_transform_unit_color_material_uuid_component_volume_file_generation_identity"
+                )
+            )
+        )
+        stl_repair_closure_identity_ok = _stl_repair_closure_identity_ok(
+            replay_identity_value.get(
+                "stl_repair_merge_tolerance_normal_duplicate_boundary_watertight_volume_unit_file_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -3221,6 +3339,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "stl_tessellations_use_current_brep_chord_angle_facets_components_deviation_area_volume_and_digests": (
             stl_brep_tessellation_error_identity_ok
+        ),
+        "step_assemblies_use_current_instances_transforms_units_colors_materials_uuids_components_volume_and_file": (
+            step_assembly_instance_metadata_identity_ok
+        ),
+        "stl_repairs_use_current_tolerance_normals_duplicates_boundaries_watertight_volume_unit_and_files": (
+            stl_repair_closure_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
