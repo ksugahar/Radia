@@ -2302,6 +2302,206 @@ def _loop_gain_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _mosfet_switching_loss_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "mosfet_switching_loss_gate_charge_overlap_deadtime_event_grid_temperature_cycle_result_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        deadtime = float(contract.get("deadtime_s"))
+        result_deadtime = float(contract.get("result_deadtime_s"))
+        events = [float(value) for value in contract.get("event_times_s", [])]
+        result_events = [
+            float(value) for value in contract.get("result_event_times_s", [])
+        ]
+        temperature = float(contract.get("junction_temperature_c"))
+        result_temperature = float(contract.get("result_junction_temperature_c"))
+        window = [float(value) for value in contract.get("cycle_window_s", [])]
+        result_window = [
+            float(value) for value in contract.get("result_cycle_window_s", [])
+        ]
+        turn_on = float(contract.get("turn_on_energy_j"))
+        result_turn_on = float(contract.get("result_turn_on_energy_j"))
+        turn_off = float(contract.get("turn_off_energy_j"))
+        result_turn_off = float(contract.get("result_turn_off_energy_j"))
+        frequency = float(contract.get("switching_frequency_hz"))
+        result_frequency = float(contract.get("result_switching_frequency_hz"))
+        loss = float(contract.get("switching_loss_w"))
+        result_loss = float(contract.get("result_switching_loss_w"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("switching_generation_id") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "gate_charge_switching_generation_id",
+                "overlap_switching_generation_id",
+                "deadtime_switching_generation_id",
+                "event_grid_switching_generation_id",
+                "temperature_switching_generation_id",
+                "cycle_switching_generation_id",
+                "result_switching_generation_id",
+            )
+        )
+        and contract.get("gate_charge_trace_id") == "Qgate(M1)"
+        and contract.get("result_gate_charge_trace_id")
+        == contract.get("gate_charge_trace_id")
+        and contract.get("overlap_power_trace_id") == "Vds(M1)*Id(M1)"
+        and contract.get("result_overlap_power_trace_id")
+        == contract.get("overlap_power_trace_id")
+        and math.isfinite(deadtime)
+        and deadtime > 0.0
+        and result_deadtime == deadtime
+        and len(events) >= 4
+        and all(math.isfinite(value) for value in events)
+        and all(right > left for left, right in zip(events, events[1:]))
+        and result_events == events
+        and contract.get("event_grid_rule") == "edge-aligned-local-refinement"
+        and contract.get("result_event_grid_rule") == contract.get("event_grid_rule")
+        and math.isfinite(temperature)
+        and temperature > -273.15
+        and result_temperature == temperature
+        and len(window) == 2
+        and all(math.isfinite(value) for value in window)
+        and 0.0 <= window[0] < window[1]
+        and all(window[0] <= event <= window[1] for event in events)
+        and result_window == window
+        and all(
+            math.isfinite(value) and value >= 0.0
+            for value in (turn_on, turn_off)
+        )
+        and result_turn_on == turn_on
+        and result_turn_off == turn_off
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and result_frequency == frequency
+        and math.isfinite(loss)
+        and loss >= 0.0
+        and math.isclose(
+            loss, (turn_on + turn_off) * frequency, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and result_loss == loss
+        and _is_sha256(str(contract.get("event_grid_sha256") or ""))
+        and contract.get("result_event_grid_sha256")
+        == contract.get("event_grid_sha256")
+        and _is_sha256(str(contract.get("switching_waveform_sha256") or ""))
+        and contract.get("result_switching_waveform_sha256")
+        == contract.get("switching_waveform_sha256")
+        and _is_sha256(str(contract.get("switching_loss_result_sha256") or ""))
+        and contract.get("accepted_switching_loss_result_sha256")
+        == contract.get("switching_loss_result_sha256")
+    )
+
+
+def _step_response_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "step_response_initial_final_rise_threshold_settling_band_overshoot_window_waveform_result_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        initial = float(contract.get("initial_value"))
+        result_initial = float(contract.get("result_initial_value"))
+        final = float(contract.get("final_value"))
+        result_final = float(contract.get("result_final_value"))
+        thresholds = [
+            float(value) for value in contract.get("rise_threshold_fractions", [])
+        ]
+        result_thresholds = [
+            float(value)
+            for value in contract.get("result_rise_threshold_fractions", [])
+        ]
+        crossings = [
+            float(value) for value in contract.get("rise_crossing_times_s", [])
+        ]
+        result_crossings = [
+            float(value) for value in contract.get("result_rise_crossing_times_s", [])
+        ]
+        rise_time = float(contract.get("rise_time_s"))
+        result_rise_time = float(contract.get("result_rise_time_s"))
+        settling_band = float(contract.get("settling_band_fraction"))
+        result_settling_band = float(contract.get("result_settling_band_fraction"))
+        settling_time = float(contract.get("settling_time_s"))
+        result_settling_time = float(contract.get("result_settling_time_s"))
+        peak = float(contract.get("overshoot_peak"))
+        result_peak = float(contract.get("result_overshoot_peak"))
+        overshoot = float(contract.get("overshoot_fraction"))
+        result_overshoot = float(contract.get("result_overshoot_fraction"))
+        window = [float(value) for value in contract.get("measurement_window_s", [])]
+        result_window = [
+            float(value) for value in contract.get("result_measurement_window_s", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("step_generation_id") or "")
+    expected_overshoot = (peak - final) / abs(final - initial)
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "initial_step_generation_id",
+                "final_step_generation_id",
+                "rise_step_generation_id",
+                "settling_step_generation_id",
+                "overshoot_step_generation_id",
+                "window_step_generation_id",
+                "waveform_step_generation_id",
+                "result_step_generation_id",
+            )
+        )
+        and all(math.isfinite(value) for value in (initial, final))
+        and final != initial
+        and result_initial == initial
+        and result_final == final
+        and len(thresholds) == 2
+        and 0.0 < thresholds[0] < thresholds[1] < 1.0
+        and result_thresholds == thresholds
+        and len(crossings) == 2
+        and all(math.isfinite(value) for value in crossings)
+        and 0.0 <= crossings[0] < crossings[1]
+        and result_crossings == crossings
+        and math.isfinite(rise_time)
+        and math.isclose(
+            rise_time, crossings[1] - crossings[0], rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and result_rise_time == rise_time
+        and math.isfinite(settling_band)
+        and 0.0 < settling_band < 1.0
+        and result_settling_band == settling_band
+        and math.isfinite(settling_time)
+        and settling_time >= crossings[1]
+        and result_settling_time == settling_time
+        and math.isfinite(peak)
+        and result_peak == peak
+        and math.isfinite(overshoot)
+        and overshoot >= 0.0
+        and math.isclose(
+            overshoot, expected_overshoot, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and result_overshoot == overshoot
+        and len(window) == 2
+        and all(math.isfinite(value) for value in window)
+        and 0.0 <= window[0] < window[1]
+        and window[0] <= crossings[0] < crossings[1] <= settling_time <= window[1]
+        and result_window == window
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("result_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("step_result_sha256") or ""))
+        and contract.get("accepted_step_result_sha256")
+        == contract.get("step_result_sha256")
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -2688,6 +2888,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "loop_gain_uses_current_break_injection_phase_grid_crossover_margins_and_result": (
             _loop_gain_owner_identity_ok(positive)
+        ),
+        "mosfet_switching_loss_uses_current_gate_charge_overlap_deadtime_events_temperature_cycle_and_result": (
+            _mosfet_switching_loss_owner_identity_ok(positive)
+        ),
+        "step_response_uses_current_initial_final_rise_settling_overshoot_window_and_waveform": (
+            _step_response_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
