@@ -1016,6 +1016,150 @@ def _lamination_anisotropy_loss_identity_ok(value):
     )
 
 
+def _axisymmetric_weighted_stress_coenergy_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    try:
+        contour_radius = float(value.get("contour_radius_m"))
+        result_contour_radius = float(value.get("result_contour_radius_m"))
+        displacement = float(value.get("virtual_displacement_m"))
+        result_displacement = float(value.get("result_virtual_displacement_m"))
+        weighted_force = float(value.get("weighted_stress_force_n"))
+        coenergy_force = float(value.get("coenergy_force_n"))
+        tolerance = float(value.get("force_relative_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    force_scale = max(abs(weighted_force), abs(coenergy_force), 1.0e-30)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "stress_generation",
+                "coenergy_generation",
+                "contour_generation",
+                "displacement_generation",
+                "weight_generation",
+                "material_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and value.get("stress_method") == "weighted_stress_tensor"
+        and value.get("result_stress_method") == value.get("stress_method")
+        and value.get("coenergy_method") == "symmetric_virtual_displacement"
+        and value.get("result_coenergy_method") == value.get("coenergy_method")
+        and math.isfinite(contour_radius)
+        and contour_radius > 0.0
+        and math.isclose(
+            result_contour_radius, contour_radius, rel_tol=0.0, abs_tol=1.0e-18
+        )
+        and math.isfinite(displacement)
+        and displacement > 0.0
+        and math.isclose(
+            result_displacement, displacement, rel_tol=0.0, abs_tol=1.0e-18
+        )
+        and value.get("axisymmetric_weight") == "2*pi*r"
+        and value.get("result_axisymmetric_weight") == value.get("axisymmetric_weight")
+        and value.get("material_side") == "air_gap"
+        and value.get("result_material_side") == value.get("material_side")
+        and math.isfinite(weighted_force)
+        and math.isfinite(coenergy_force)
+        and math.isfinite(tolerance)
+        and tolerance >= 0.0
+        and abs(weighted_force - coenergy_force) / force_scale <= tolerance
+        and _valid_sha256(value.get("force_mesh_sha256"))
+        and value.get("result_force_mesh_sha256") == value.get("force_mesh_sha256")
+        and bool(str(value.get("force_owner", "")).strip())
+        and value.get("result_force_owner") == value.get("force_owner")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256")
+        == value.get("force_result_sha256")
+    )
+
+
+def _laminated_diffusion_power_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("diffusion_generation", "")).strip()
+    try:
+        conductivity = [
+            [float(item) for item in row]
+            for row in value.get("conductivity_tensor_s_per_m", [])
+        ]
+        result_conductivity = [
+            [float(item) for item in row]
+            for row in value.get("result_conductivity_tensor_s_per_m", [])
+        ]
+        skin_depth = float(value.get("skin_depth_m"))
+        result_skin_depth = float(value.get("result_skin_depth_m"))
+        frequency = float(value.get("frequency_hz"))
+        result_frequency = float(value.get("result_frequency_hz"))
+        power = [float(item) for item in value.get("complex_power_va_ri", [])]
+        result_power = [
+            float(item) for item in value.get("result_complex_power_va_ri", [])
+        ]
+        volume = float(value.get("active_volume_m3"))
+        result_volume = float(value.get("result_active_volume_m3"))
+        loss = float(value.get("laminated_loss_w"))
+        result_loss = float(value.get("result_laminated_loss_w"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "conductivity_generation",
+                "skin_depth_generation",
+                "frequency_generation",
+                "phasor_generation",
+                "power_generation",
+                "volume_generation",
+                "mesh_generation",
+                "loss_generation",
+                "result_generation",
+            )
+        )
+        and len(conductivity) == 2
+        and all(len(row) == 2 for row in conductivity)
+        and all(math.isfinite(item) for row in conductivity for item in row)
+        and conductivity[0][0] > 0.0
+        and conductivity[1][1] > 0.0
+        and result_conductivity == conductivity
+        and math.isfinite(skin_depth)
+        and skin_depth > 0.0
+        and math.isclose(result_skin_depth, skin_depth, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and math.isclose(result_frequency, frequency, rel_tol=0.0, abs_tol=1.0e-15)
+        and value.get("phasor_convention") == "exp(+jwt)_rms"
+        and value.get("result_phasor_convention") == value.get("phasor_convention")
+        and len(power) == 2
+        and all(math.isfinite(item) for item in power)
+        and result_power == power
+        and math.isfinite(volume)
+        and volume > 0.0
+        and math.isclose(result_volume, volume, rel_tol=0.0, abs_tol=1.0e-18)
+        and _valid_sha256(value.get("laminated_mesh_sha256"))
+        and value.get("result_laminated_mesh_sha256")
+        == value.get("laminated_mesh_sha256")
+        and math.isfinite(loss)
+        and loss >= 0.0
+        and math.isclose(loss, power[0], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(result_loss, loss, rel_tol=0.0, abs_tol=1.0e-15)
+        and _valid_sha256(value.get("laminated_result_sha256"))
+        and value.get("accepted_laminated_result_sha256")
+        == value.get("laminated_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -1091,6 +1235,8 @@ def force_coenergy_displacement_gate(
     axisymmetric_stress_contour_identity_ok = True
     nonlinear_incremental_inductance_identity_ok = True
     lamination_anisotropy_loss_identity_ok = True
+    axisymmetric_weighted_stress_coenergy_identity_ok = True
+    laminated_diffusion_power_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -1140,6 +1286,8 @@ def force_coenergy_displacement_gate(
         axisymmetric_stress_contour_identity_ok = False
         nonlinear_incremental_inductance_identity_ok = False
         lamination_anisotropy_loss_identity_ok = False
+        axisymmetric_weighted_stress_coenergy_identity_ok = False
+        laminated_diffusion_power_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2750,6 +2898,20 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        axisymmetric_weighted_stress_coenergy_identity_ok = (
+            _axisymmetric_weighted_stress_coenergy_identity_ok(
+                artifact_identity.get(
+                    "axisymmetric_weighted_stress_coenergy_contour_displacement_radius_weight_material_mesh_owner_result_identity"
+                )
+            )
+        )
+        laminated_diffusion_power_identity_ok = (
+            _laminated_diffusion_power_identity_ok(
+                artifact_identity.get(
+                    "laminated_diffusion_conductivity_skin_depth_frequency_phasor_power_volume_mesh_loss_result_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2921,6 +3083,12 @@ def force_coenergy_displacement_gate(
         ),
         "laminated_loss_uses_current_anisotropy_fill_orientation_frequency_volume_balance_and_result": (
             lamination_anisotropy_loss_identity_ok
+        ),
+        "axisymmetric_force_closes_weighted_stress_coenergy_contour_displacement_weight_material_mesh_owner_and_result": (
+            axisymmetric_weighted_stress_coenergy_identity_ok
+        ),
+        "laminated_diffusion_uses_current_conductivity_skin_depth_frequency_phasor_power_volume_mesh_loss_and_result": (
+            laminated_diffusion_power_identity_ok
         ),
     }
     return {
