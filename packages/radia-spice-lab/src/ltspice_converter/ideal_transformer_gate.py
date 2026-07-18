@@ -4214,6 +4214,142 @@ def _conducted_emi_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _sallen_key_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "sallenkey_poles_q_gain_opamp_gbw_phase_noise_step_circuit_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("filter_generation_id") or "")
+    fields = (
+        "r1_ohm", "r2_ohm", "c1_f", "c2_f", "noninverting_gain",
+        "pole_frequency_hz", "quality_factor", "dc_gain", "opamp_gbw_hz",
+        "phase_margin_deg", "integrated_output_noise_v_rms",
+        "step_overshoot_fraction", "step_settling_time_s",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    r1, r2 = values["r1_ohm"], values["r2_ohm"]
+    c1, c2 = values["c1_f"], values["c2_f"]
+    gain = values["noninverting_gain"]
+    scale = math.sqrt(r1 * r2 * c1 * c2) if min(r1, r2, c1, c2) > 0.0 else math.nan
+    expected_frequency = 1.0 / (2.0 * math.pi * scale) if scale > 0.0 else math.nan
+    q_denominator = c2 * (r1 + r2) + (1.0 - gain) * r1 * c1
+    expected_q = scale / q_denominator if q_denominator > 0.0 else math.nan
+    expected_overshoot = 0.0
+    if math.isfinite(expected_q) and expected_q > 0.5:
+        damping = 1.0 / (2.0 * expected_q)
+        expected_overshoot = math.exp(
+            -math.pi * damping / math.sqrt(1.0 - damping * damping)
+        )
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "pole_filter_generation_id", "q_filter_generation_id",
+            "gain_filter_generation_id", "opamp_filter_generation_id",
+            "noise_filter_generation_id", "step_filter_generation_id",
+            "circuit_filter_generation_id", "result_filter_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(r1, r2, c1, c2) > 0.0
+        and 0.0 < gain < 3.0
+        and math.isclose(values["pole_frequency_hz"], expected_frequency, rel_tol=1.0e-9, abs_tol=0.0)
+        and math.isclose(values["quality_factor"], expected_q, rel_tol=1.0e-9, abs_tol=0.0)
+        and math.isclose(values["dc_gain"], gain, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["opamp_gbw_hz"] >= 100.0 * expected_frequency
+        and 45.0 <= values["phase_margin_deg"] <= 180.0
+        and values["integrated_output_noise_v_rms"] >= 0.0
+        and 0.0 <= values["step_overshoot_fraction"] < 1.0
+        and math.isclose(values["step_overshoot_fraction"], expected_overshoot, rel_tol=1.0e-6, abs_tol=1.0e-9)
+        and 0.0 < values["step_settling_time_s"] <= 20.0 / expected_frequency
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-15) for field in fields)
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _bridge_rectifier_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "bridge_rectifier_inrush_ripple_charge_conduction_loss_load_cycle_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("rectifier_generation_id") or "")
+    fields = (
+        "line_frequency_hz", "ripple_frequency_hz", "capacitor_f",
+        "average_output_voltage_v", "load_resistance_ohm",
+        "average_load_current_a", "ripple_voltage_pp_v",
+        "inrush_peak_current_a", "capacitor_charge_per_cycle_c",
+        "rectifier_delivered_charge_per_cycle_c", "diode_conduction_fraction",
+        "diode_forward_drop_v", "average_diode_loss_w",
+        "average_load_power_w", "ripple_cycle_period_s",
+        "source_energy_per_cycle_j", "load_energy_per_cycle_j",
+        "diode_energy_per_cycle_j",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    line_frequency = values["line_frequency_hz"]
+    ripple_frequency = values["ripple_frequency_hz"]
+    capacitance = values["capacitor_f"]
+    voltage = values["average_output_voltage_v"]
+    resistance = values["load_resistance_ohm"]
+    expected_current = voltage / resistance if resistance > 0.0 else math.nan
+    expected_power = voltage * expected_current
+    expected_ripple = expected_current / (ripple_frequency * capacitance) if min(ripple_frequency, capacitance) > 0.0 else math.nan
+    expected_charge = expected_current / ripple_frequency if ripple_frequency > 0.0 else math.nan
+    expected_diode_loss = 2.0 * values["diode_forward_drop_v"] * expected_current
+    expected_period = 1.0 / ripple_frequency if ripple_frequency > 0.0 else math.nan
+    expected_load_energy = expected_power * expected_period
+    expected_diode_energy = expected_diode_loss * expected_period
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "inrush_rectifier_generation_id", "ripple_rectifier_generation_id",
+            "charge_rectifier_generation_id", "conduction_rectifier_generation_id",
+            "loss_rectifier_generation_id", "load_rectifier_generation_id",
+            "energy_rectifier_generation_id", "waveform_rectifier_generation_id",
+            "result_rectifier_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(line_frequency, capacitance, voltage, resistance) > 0.0
+        and math.isclose(ripple_frequency, 2.0 * line_frequency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["average_load_current_a"], expected_current, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["average_load_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["ripple_voltage_pp_v"], expected_ripple, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["inrush_peak_current_a"] >= expected_current
+        and math.isclose(values["capacitor_charge_per_cycle_c"], expected_charge, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["rectifier_delivered_charge_per_cycle_c"], expected_charge, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and 0.0 < values["diode_conduction_fraction"] < 1.0
+        and values["diode_forward_drop_v"] >= 0.0
+        and math.isclose(values["average_diode_loss_w"], expected_diode_loss, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["ripple_cycle_period_s"], expected_period, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["load_energy_per_cycle_j"], expected_load_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["diode_energy_per_cycle_j"], expected_diode_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["source_energy_per_cycle_j"], expected_load_energy + expected_diode_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-15) for field in fields)
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -4648,6 +4784,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "conducted_emi_uses_current_lisn_window_fft_detector_band_limit_power_circuit_and_result": (
             _conducted_emi_owner_identity_ok(positive)
+        ),
+        "sallen_key_uses_current_poles_q_gain_opamp_gbw_phase_noise_step_circuit_owner_and_result": (
+            _sallen_key_owner_identity_ok(positive)
+        ),
+        "bridge_rectifier_uses_current_inrush_ripple_charge_conduction_loss_load_cycle_energy_waveform_and_result": (
+            _bridge_rectifier_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
