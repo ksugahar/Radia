@@ -4391,6 +4391,366 @@ def _cub_roundtrip_identity_ok(identity: object) -> bool:
     )
 
 
+def _high_order_hex_family_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        element_ids = [int(value) for value in identity.get("element_ids", [])]
+        families = [str(value) for value in identity.get("element_families", [])]
+        node_counts = [int(value) for value in identity.get("node_counts", [])]
+        corners = [int(value) for value in identity.get("corner_node_order", [])]
+        edges = [int(value) for value in identity.get("edge_node_order", [])]
+        face_nodes = [int(value) for value in identity.get("hex27_face_node_order", [])]
+        center = int(identity.get("hex27_center_node"))
+        jacobians = [float(value) for value in identity.get("minimum_jacobians", [])]
+        quadrature_volumes = [
+            float(value) for value in identity.get("quadrature_volumes_m3", [])
+        ]
+        geometric_volumes = [
+            float(value) for value in identity.get("geometric_volumes_m3", [])
+        ]
+        curved_face_owners = [
+            [int(value) for value in row]
+            for row in identity.get("curved_face_owners", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("high_order_hex_generation") or "")
+    all_hex27_roles = corners + edges + face_nodes + [center]
+    result_pairs = (
+        ("result_element_ids", element_ids),
+        ("result_element_families", families),
+        ("result_node_counts", node_counts),
+        ("result_corner_node_order", corners),
+        ("result_edge_node_order", edges),
+        ("result_hex27_face_node_order", face_nodes),
+        ("result_hex27_center_node", center),
+        ("result_minimum_jacobians", jacobians),
+        ("result_quadrature_volumes_m3", quadrature_volumes),
+        ("result_geometric_volumes_m3", geometric_volumes),
+        ("result_curved_face_owners", curved_face_owners),
+    )
+    try:
+        results_match = all(
+            (
+                [float(value) for value in identity.get(key, [])] == expected
+                if key in {
+                    "result_minimum_jacobians",
+                    "result_quadrature_volumes_m3",
+                    "result_geometric_volumes_m3",
+                }
+                else identity.get(key) == expected
+            )
+            for key, expected in result_pairs
+        )
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "family_generation",
+                "node_generation",
+                "reference_generation",
+                "jacobian_generation",
+                "volume_generation",
+                "face_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and element_ids == [20, 27]
+        and families == ["hex20_serendipity", "hex27_lagrange"]
+        and node_counts == [20, 27]
+        and corners == list(range(8))
+        and edges == list(range(8, 20))
+        and face_nodes == list(range(20, 26))
+        and center == 26
+        and len(set(all_hex27_roles)) == 27
+        and set(all_hex27_roles) == set(range(27))
+        and len(jacobians) == 2
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and len(quadrature_volumes) == len(geometric_volumes) == 2
+        and all(value > 0.0 and math.isfinite(value) for value in quadrature_volumes)
+        and all(value > 0.0 and math.isfinite(value) for value in geometric_volumes)
+        and all(
+            math.isclose(qv, gv, rel_tol=1.0e-9, abs_tol=1.0e-12)
+            for qv, gv in zip(quadrature_volumes, geometric_volumes)
+        )
+        and len(curved_face_owners) == 2
+        and all(len(row) == 2 and row[1] > 0 for row in curved_face_owners)
+        and [row[0] for row in curved_face_owners] == element_ids
+        and len({row[1] for row in curved_face_owners}) == 2
+        and results_match
+        and _valid_sha256(identity.get("high_order_mesh_sha256"))
+        and identity.get("accepted_high_order_mesh_sha256")
+        == identity.get("high_order_mesh_sha256")
+    )
+
+
+def _sheet_midplane_mass_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        source_volume_id = int(identity.get("source_volume_id"))
+        offset = float(identity.get("midplane_offset_m"))
+        thickness = float(identity.get("thickness_m"))
+        block_id = int(identity.get("shell_block_id"))
+        top_sideset_id = int(identity.get("top_sideset_id"))
+        bottom_sideset_id = int(identity.get("bottom_sideset_id"))
+        area = float(identity.get("midplane_area_m2"))
+        source_volume = float(identity.get("source_volume_m3"))
+        density = float(identity.get("density_kg_m3"))
+        mass = float(identity.get("shell_mass_kg"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sheet_generation") or "")
+    mirrored_fields = (
+        "source_volume_id",
+        "midplane_offset_m",
+        "thickness_m",
+        "normal_orientation",
+        "shell_block_id",
+        "top_sideset_id",
+        "bottom_sideset_id",
+        "midplane_area_m2",
+        "source_volume_m3",
+        "density_kg_m3",
+        "shell_mass_kg",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "source_generation",
+                "midplane_generation",
+                "thickness_generation",
+                "normal_generation",
+                "block_generation",
+                "sideset_generation",
+                "mass_generation",
+                "geometry_generation",
+                "result_generation",
+            )
+        )
+        and source_volume_id > 0
+        and math.isfinite(offset)
+        and math.isfinite(thickness)
+        and thickness > 0.0
+        and identity.get("normal_orientation") == "outward_source_volume"
+        and block_id > 0
+        and top_sideset_id > 0
+        and bottom_sideset_id > 0
+        and top_sideset_id != bottom_sideset_id
+        and all(math.isfinite(value) and value > 0.0 for value in (area, source_volume, density, mass))
+        and math.isclose(source_volume, area * thickness, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        and math.isclose(mass, area * thickness * density, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        and all(identity.get(f"result_{key}") == identity.get(key) for key in mirrored_fields)
+        and _valid_sha256(identity.get("sheet_geometry_sha256"))
+        and identity.get("accepted_sheet_geometry_sha256")
+        == identity.get("sheet_geometry_sha256")
+    )
+
+
+def _sweep_replay_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        volume_id = int(identity.get("volume_id"))
+        source_id = int(identity.get("source_surface_id"))
+        target_id = int(identity.get("target_surface_id"))
+        intervals = int(identity.get("interval_count"))
+        bias_ratio = float(identity.get("bias_ratio"))
+        node_layers = int(identity.get("node_layer_count"))
+        match_pairs = [
+            [int(value) for value in row] for row in identity.get("match_pairs", [])
+        ]
+        periodic_layers = [
+            [int(value) for value in row]
+            for row in identity.get("periodic_layer_map", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sweep_generation") or "")
+    mirrored_fields = (
+        "volume_id",
+        "source_surface_id",
+        "target_surface_id",
+        "interval_count",
+        "bias_ratio",
+        "bias_direction",
+        "match_pairs",
+        "periodic_layer_map",
+        "node_layer_count",
+        "volume_scheme",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "source_generation",
+                "target_generation",
+                "interval_generation",
+                "bias_generation",
+                "match_generation",
+                "periodic_generation",
+                "layer_generation",
+                "journal_generation",
+                "result_generation",
+            )
+        )
+        and volume_id > 0
+        and source_id > 0
+        and target_id > 0
+        and source_id != target_id
+        and intervals > 0
+        and math.isfinite(bias_ratio)
+        and bias_ratio > 0.0
+        and identity.get("bias_direction") in {"source_to_target", "target_to_source"}
+        and node_layers == intervals + 1
+        and bool(match_pairs)
+        and all(len(row) == 2 and row[0] > 0 and row[1] > 0 for row in match_pairs)
+        and len({tuple(row) for row in match_pairs}) == len(match_pairs)
+        and bool(periodic_layers)
+        and all(
+            len(row) == 2
+            and 0 <= row[0] <= intervals
+            and 0 <= row[1] <= intervals
+            and row[0] + row[1] == intervals
+            for row in periodic_layers
+        )
+        and identity.get("volume_scheme") == "sweep"
+        and all(
+            identity.get(f"replayed_{key}") == identity.get(key)
+            for key in mirrored_fields
+        )
+        and _valid_sha256(identity.get("journal_sha256"))
+        and identity.get("replayed_journal_sha256") == identity.get("journal_sha256")
+        and _valid_sha256(identity.get("sweep_result_sha256"))
+        and identity.get("accepted_sweep_result_sha256")
+        == identity.get("sweep_result_sha256")
+    )
+
+
+def _checkpoint_partition_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+
+    def partition_map(value: object) -> dict[int, list[int]]:
+        if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+            raise ValueError("partition rows must be a sequence")
+        result: dict[int, list[int]] = {}
+        for row in value:
+            if isinstance(row, (str, bytes)) or not isinstance(row, Sequence) or len(row) != 2:
+                raise ValueError("partition row must contain an id and entity ids")
+            partition = int(row[0])
+            entity_ids = row[1]
+            if isinstance(entity_ids, (str, bytes)) or not isinstance(entity_ids, Sequence):
+                raise ValueError("partition entity ids must be a sequence")
+            if partition in result:
+                raise ValueError("duplicate partition id")
+            result[partition] = [int(entity_id) for entity_id in entity_ids]
+        return result
+
+    def membership_rows(value: object) -> list[list[object]]:
+        if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+            raise ValueError("membership rows must be a sequence")
+        result: list[list[object]] = []
+        for row in value:
+            if isinstance(row, (str, bytes)) or not isinstance(row, Sequence) or len(row) != 2:
+                raise ValueError("membership row must contain a set id and entity ids")
+            set_id = int(row[0])
+            members = row[1]
+            if isinstance(members, (str, bytes)) or not isinstance(members, Sequence):
+                raise ValueError("membership entity ids must be a sequence")
+            result.append([set_id, [int(entity_id) for entity_id in members]])
+        return result
+
+    try:
+        partition_count = int(identity.get("partition_count"))
+        owned = partition_map(identity.get("owned_entity_ids"))
+        ghost = partition_map(identity.get("ghost_entity_ids"))
+        persistent = [int(value) for value in identity.get("persistent_entity_ids", [])]
+        blocks = membership_rows(identity.get("block_membership"))
+        sidesets = membership_rows(identity.get("sideset_membership"))
+        quality = [
+            float(value)
+            for value in identity.get("partition_minimum_scaled_jacobian", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("checkpoint_generation") or "")
+    partitions = set(range(partition_count))
+    flattened_owned = [entity_id for ids in owned.values() for entity_id in ids]
+    persistent_set = set(persistent)
+    mirrored_fields = (
+        "partition_count",
+        "owned_entity_ids",
+        "ghost_entity_ids",
+        "persistent_entity_ids",
+        "block_membership",
+        "sideset_membership",
+        "partition_minimum_scaled_jacobian",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "partition_generation",
+                "owned_generation",
+                "ghost_generation",
+                "persistent_generation",
+                "block_generation",
+                "sideset_generation",
+                "quality_generation",
+                "model_generation",
+                "result_generation",
+            )
+        )
+        and partition_count > 1
+        and set(owned) == partitions
+        and set(ghost) == partitions
+        and all(owned[partition] for partition in partitions)
+        and all(entity_id > 0 for entity_id in flattened_owned)
+        and len(flattened_owned) == len(set(flattened_owned))
+        and persistent == sorted(flattened_owned)
+        and all(
+            all(entity_id in persistent_set and entity_id not in owned[partition] for entity_id in ghost[partition])
+            for partition in partitions
+        )
+        and all(
+            set_id > 0
+            and bool(members)
+            and all(entity_id in persistent_set for entity_id in members)
+            for set_id, members in blocks + sidesets
+        )
+        and len(quality) == partition_count
+        and all(math.isfinite(value) and value > 0.0 for value in quality)
+        and all(
+            identity.get(f"restored_{key}") == identity.get(key)
+            for key in mirrored_fields
+        )
+        and _valid_sha256(identity.get("checkpoint_model_sha256"))
+        and identity.get("restored_checkpoint_model_sha256")
+        == identity.get("checkpoint_model_sha256")
+        and _valid_sha256(identity.get("checkpoint_result_sha256"))
+        and identity.get("accepted_checkpoint_result_sha256")
+        == identity.get("checkpoint_result_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -5238,6 +5598,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "multiblock_interfaces_use_current_merge_nodes_faces_owners_sets_duplicates_jacobian_and_export": (
             _multiblock_interface_identity_ok(
                 summary.get("multiblock_interface_merge_face_owner_block_sideset_duplicate_jacobian_export_generation_identity")
+            )
+        ),
+        "high_order_hexes_use_current_family_node_roles_reference_order_jacobian_volume_faces_and_mesh": (
+            _high_order_hex_family_identity_ok(
+                summary.get("hex20_hex27_family_node_role_reference_order_jacobian_volume_face_mesh_result_generation_identity")
+            )
+        ),
+        "sheet_midplanes_use_current_source_offset_thickness_normal_sets_area_mass_and_geometry": (
+            _sheet_midplane_mass_identity_ok(
+                summary.get("sheet_midplane_source_offset_thickness_normal_block_sideset_area_mass_geometry_result_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -6109,6 +6479,16 @@ def cubit_mixed_transition_source_gate(
         "cub_roundtrips_preserve_kernel_entities_attributes_groups_mesh_model_file_and_result": (
             _cub_roundtrip_identity_ok(
                 summary.get("cub_roundtrip_kernel_entity_name_attribute_group_mesh_model_file_result_generation_identity")
+            )
+        ),
+        "sweep_replays_use_current_source_target_intervals_bias_matches_periodic_layers_journal_and_result": (
+            _sweep_replay_identity_ok(
+                summary.get("sweep_source_target_interval_bias_match_periodic_layer_scheme_journal_result_generation_identity")
+            )
+        ),
+        "checkpoint_restores_use_current_partitions_owned_ghost_persistent_sets_quality_model_and_result": (
+            _checkpoint_partition_identity_ok(
+                summary.get("checkpoint_partition_owned_ghost_persistent_block_sideset_quality_model_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
