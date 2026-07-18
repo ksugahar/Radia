@@ -303,14 +303,14 @@ insufficient reference case.
 The companion lane `validation_test/cln/evrs_sibc_mixed_schur.py` adds
 surface-Omega/SIBC modes to the same bulk EVRS basis and checks the mixed
 Galerkin Schur complement.  It accepts `--orders 4,5,6` so the same validation
-can compare candidate parent orders against the highest-p reference case.  In
-the current p=6 smoke, the 1226 active parent
-DoFs split into 258 SIBC-surface DoFs, 386 loop-bridge DoFs, and 600 ordinary
-EVRS candidates.  The conductor graph has cycle rank 7, so the class-wise
-tri-block system at the reference depth is 24 bulk EVRS coordinates, 7
-bridge-cycle coordinates, and 3 surface coordinates: 34 modes in total.  The
-n=11 bulk basis is already within about 0.11% in the mixed port admittance,
-while the Schur-reconstructed mixed-system residual is about 1e-13.
+can compare candidate parent orders against the highest-p reference case.  The
+current notched-box p=6 record starts from 3557 active parent DoFs.  At Krylov
+depth 8, the current-Gram quotient reduces 10 parent-T response directions to 8
+independent current directions; 14 conductor-cycle modes and 3 exterior-SIBC
+modes then give 25 eddy coordinates in total.  Against the depth-22 result, the
+maximum local-ESIM port-admittance difference over 1 kHz--1 MHz is `4.95e-8`.
+The mixed-Galerkin port error relative to the direct reduced solve is at most
+`6.44e-16`, and the reconstructed residual is at most `5.12e-16`.
 
 The question is not whether `p=6` is inherently needed.  The production choice
 should be the smallest parent order that satisfies the symbolic order ledger
@@ -375,6 +375,19 @@ Z_r(s) = R_r + s L_r + Z_s(s) M_Gamma
 is still passive if `Re(Z_s(s)) >= 0` and `M_Gamma` is Hermitian positive
 semidefinite.
 
+For nonlinear ESIM the impedance is generally local, not one scalar.  Radia
+therefore assembles
+
+```text
+[G_Gamma(Z_s)]_mn = int_Gamma Z_s(x,s) K_m(x) . K_n(x) dGamma,
+Z_r(s) = R_r + s L_r + G_Gamma(Z_s).
+```
+
+`SurfaceImpedanceGram` stores this reduced complex matrix explicitly, and
+`AssembleSurfaceImpedanceGram` projects the per-surface-sample ESIM values.
+No spatial averaging is applied.  Passivity follows pointwise from
+`Re(Z_s(x,s)) >= 0` and the non-negative surface quadrature weights.
+
 This is the reason the reduced model should be assembled as a Galerkin/VIM
 projection, not as an ad hoc fitted circuit.  Positivity and reciprocity are
 structural.
@@ -383,10 +396,10 @@ The production assembly order is important.  A dense p=6 parent-space Green
 Gram is not formed.  NGSolve first assembles the sparse high-order HCurl
 stiffness, mass, and port actions.  Static condensation and EVRS then produce
 the retained `J = curl(T)` modes, bridge-cycle modes, and SIBC modes.  Only this
-small retained current basis enters the VIM Gram.  Near interactions require
-singularity-aware or adaptive integration; far interactions may use the same
-Laplace-kernel ACA/H-matrix backend as the other Radia VIM operators.  Thus p=6
-controls parent-space resolution without making the dense Gram dimension p=6.
+small retained current basis enters the VIM Gram.  Exact affine/high-order or
+P2-curved diagonal actions and sampled 3-D Laplace / 2-D planar-log cross
+actions are retained as HACApK operators.  Thus p=6 controls parent-space
+resolution without making the dense Gram dimension p=6.
 
 ---
 
@@ -437,13 +450,28 @@ Only conductor-air/exterior faces are candidates for that SIBC replacement.
 Conductor-conductor faces remain topology-bearing interfaces.
 
 Nonlinearity does not make a surface model mathematically impossible, but it
-changes the contract.  A saturating or hysteretic conductor has a field- and
-history-dependent DtN map, so one precomputed linear boundary operator is no
-longer sufficient.  A nonlinear ESIM/SIBC cell model remains useful as an
-explicit reduced approximation.  The robust reference and the production path
-when penetration, corner fields, or material state matters is the volume VIM
-branch, with response reduction performed after the material operator has been
-assembled or updated.
+changes the contract.  The ESIM path solves a nonlinear one-dimensional normal
+cell problem for the local tangential field, tabulates `Z_s^ESIM(|H_t|,s)`, and
+updates the local surface Gram in an outer Karl iteration.  This is especially
+effective at high frequency when the skin layer is thin and locally
+one-dimensional.  A scalar average of `Z_s^ESIM` is not an equivalent method:
+the local projection is needed to retain saturation and loss variation along
+the conductor-air face.
+
+The routing gate is physical.  Use linear SIBC for a linear thin skin layer;
+use local ESIM-SIBC for a nonlinear but locally normal one-dimensional layer;
+retain the volume EVRS/VIM branch when penetration is not small, when edge or
+corner currents are genuinely three-dimensional, or when rotational/hysteretic
+state cannot be represented by the ESIM cell.  Conductor-conductor faces always
+remain topology-bearing bridge/cycle modes.
+
+The local HCurl-VIM loop is production code, but its current coupled scope must
+be stated precisely. A converged `SurfaceImpedanceGram` can be consumed by the
+linear/response-reduced `CoupledHDivHybridVIMSystem`. The BDM-MMM builder still
+constructs its magnetic reduction from a scalar `mu_r`; a simultaneous
+constitutive iteration that updates both nonlinear HDiv magnetization and local
+ESIM is a remaining integration task, not an implicit feature of the shared
+material registry.
 
 ---
 
@@ -477,10 +505,18 @@ Current primitives:
 | `NgsolveTopologyAwareHybridVIM` | one-call NGSolve builder for topology classification, class-wise reduction planning, tri-block VIM assembly, and optional port RHS projection |
 | `NgsolveEddyBubbleHybridVIM` | production station/stator builder: HCurl parent matrices/ports -> EVRS -> bulk/bridge/surface hybrid VIM |
 | `AssembleHybridVIM` | assembles `R + sL + Z_s M_Gamma` on volume and surface bases |
+| `SurfaceImpedanceGram` | explicit reduced surface operator for spatially varying linear or ESIM impedance |
+| `AssembleSurfaceImpedanceGram` | projects per-surface-sample `Z_s(x,s)` without replacing it by a scalar average |
+| `LocalESIMSurfaceModel` | validates the BH/cell controls and evaluates the SciPy one-dimensional ESIM cell problem on logarithmic local-field bins |
+| `SolveLocalESIMSurfaceVIM` | runs the fail-loud local-ESIM outer iteration for one physical HCurl-VIM excitation and returns a coefficient/field/Gram-consistent state |
+| `TopologyAwareHybridVIM.solve_local_esim` | applies the same production loop directly to the classified air-facing SIBC block |
 | `HybridVIMSystem.block_rhs` | assembles full mixed right-hand sides from named volume/surface block projections |
 | `HybridVIMSystem.diagnostics` | records the interaction backend name plus Hermitian/passive matrix checks for backend replacement |
 | `HybridVIMSystem.schur_complement` | evaluates the IGTE mixed Galerkin block reduction `K_ss-K_sb K_bb^{-1}K_bs` |
 | `ReducedInteractionMatrix` | accepts a pre-projected BEM/H-matrix interaction matrix |
+| `HACApKSampledLaplaceInteraction` / `HACApKSampledPlanarLogInteraction` | production 3-D/2-D sampled cross-block interactions retained as C++ HACApK operators |
+| `NGSolveProjectedInteraction` | projects an actual NGSolve BEM/DtN `BaseMatrix`; `from_laplace_sl` assembles `ngsolve.bem.LaplaceSL` |
+| `CoupledReducedOperator` | keeps independent HDiv and HCurl H-matrices as separate terms in one native reduced block matvec |
 | `ReducedPortAdmittance` / `ReducedPortImpedance` | evaluates the reduced external-port transfer function for p/n convergence and CLN fitting |
 | `SIBCAdmittanceTail` | returns the leading `S sqrt(sigma/(mu s))` SIBC admittance tail |
 | `SIBCSchurTerminationImpedance` | returns the Schur/Warburg scalar block `(s+d)/(K_SIBC sqrt(s))` |
@@ -505,11 +541,20 @@ The important architectural choice is that the algebra is VIM.  The interaction
 matrix is a replaceable VIM backend.  The same reduced basis can use:
 
 ```text
-sampled dense Laplace VIM kernel
-ngsolve.bem LaplaceSL projection as a VIM backend
-Radia in-tree HACApK-compressed VIM projection
+sampled dense Laplace VIM kernel for small-ROM reference
+actual ngsolve.bem LaplaceSL or another DtN BaseMatrix projection
+Radia in-tree HACApK-compressed 3-D Laplace / 2-D planar-log VIM projection
 future HDiv-VIM material kernel coupling
 ```
+
+The production solve follows NGSolve's operator style.  HCurl impedance uses
+native `BaseMatrix` COCR by default because the reduced impedance is complex
+symmetric; the general HDiv-HCurl block system uses native `BaseMatrix` GMRES.
+Both use the C++ reduced block-Jacobi preconditioner.  Independent HDiv and
+HCurl H-matrices are not merged: a native reduced block matrix holds them as
+separate terms and combines their actions during matvec.  SciPy iterative
+solvers are not used in this path.  Dense conversion is explicit and reserved
+for small-ROM diagnostics, mixed-Galerkin orthogonalization, or Schur checks.
 
 Every production backend should pass the same `HybridVIMSystem.diagnostics`
 gate: the reduced `R`, `L`, and `M_Gamma` blocks must be Hermitian and
@@ -652,10 +697,12 @@ lower-level `NgsolveHCurlVIMHDivMMM` remains available for explicit RT studies
 or externally constructed magnetic bases.
 
 The BDM-MMM parent demagnetizing operator remains the C++
-`_ChargeGramHMatrix` HACApK path.  Mixed Galerkin acts after that parent
-operator and the HCurl response basis have been projected.  The final coupled
-Schur matrix is deliberately dense because its dimension is the retained HDiv
-plus protected HCurl mode count, not the high-order parent DoF count.
+`_ChargeGramHMatrix` HACApK path.  The direct coupled production solve retains
+that operator and the HCurl interaction as independent NGSolve `BaseMatrix`
+terms.  Mixed Galerkin acts after the parent operators and the HCurl response
+basis have been projected.  Only its explicitly requested condensed Schur
+matrix is dense because its dimension is the retained HDiv plus protected
+HCurl mode count, not the high-order parent DoF count.
 
 For production naming the same concrete object is also exported as
 `HCurlVIMHDivMMMSystem`, with constructor `CoupleHCurlVIMWithHDivMMM`.  This is
@@ -698,11 +745,12 @@ The lower-level `NgsolveHDivMMMReduction` applies the parent HDiv mass matrix an
 `A_m = Q^* M Q / (mu_r - 1) + Q^* N Q` without constructing a dense parent
 matrix.  Its `external_field_rhs` method projects new stator or rotor-angle
 fields without rebuilding the demagnetizing operator.  `solve_frequency` uses
-that stored magnetic operator and projected excitation RHS.  It derives the half-space skin
-impedance from the stored conductivity unless an explicit SIBC impedance is
-supplied.  The reduced complex solve uses the native row-major
-`_HybridVIMSolve` kernel when `_radia_pybind` is available, with NumPy retained
-as a source-level fallback.
+that stored magnetic operator and projected excitation RHS.  It derives the
+half-space skin impedance from the stored conductivity unless an explicit SIBC
+impedance is supplied.  The direct coupled production solve keeps the
+independent HDiv and HCurl H-matrices inside one NGSolve `BaseMatrix` and uses
+native GMRES.  `_HybridVIMSolve` is retained only for the explicitly requested
+dense mixed-Galerkin/Schur verification path.
 
 ### 6.1 End-to-End p=6 Production-Path Smoke
 
@@ -716,26 +764,29 @@ excitation ports.  The saved native-kernel smoke gives:
 | 3557 | 10 | 8 | 14 | 3 | 25 |
 
 The production-default run uses NGSolve's bare `HDiv(order=1)`, hence BDM1,
-with harmonic ports through degree two.  At 100 Hz and 10 kHz, the full mixed
-RHS-scaled residuals are `4.69e-16` and `4.60e-16`, while the corresponding
-backward errors are `2.58e-20` and `2.50e-18`.  It reconstructs all 3557 parent-HCurl
+with harmonic ports through degree two.  At 100 Hz and 10 kHz, the explicit
+mixed-Galerkin verification residuals are `4.65e-15` and `1.48e-14`, while the
+corresponding backward errors are `2.33e-15` and `7.39e-15`.  It reconstructs all 3557 parent-HCurl
 coordinates and all 267 parent-BDM1 coordinates; the magnetic branch reduces
 267 DoFs to 8 modes.  The maximum snapshot residual is `9.91e-11` and the
 full-rank training-response energy error is `3.54e-11`.  The same run evaluates
 the summed bulk/bridge/SIBC eddy-current field at an exterior probe and records
-`1.12e-4 T`, exercising the physical-field reconstruction rather than only the
-reduced matrix solve.
+`5.70e-3 T` and `2.00e-4 T`, exercising the physical-field reconstruction
+rather than only the reduced matrix solve.
 
 The current-Gram quotient first removes 2 `curl(T)`-null directions and leaves
-8 bulk modes whose Gram identity defect is `1.49e-14`.  The adjacency-role map
+8 bulk modes whose Gram identity defect is `5.41e-15`.  The adjacency-role map
 classifies `volume` as ordinary bulk, `volume1` as a
 conductor-conductor cycle bridge, and `surface` as conductor-air SIBC.  The
 mixed Galerkin step consequently eliminates 8 bulk coordinates but retains
 all 8 BDM1, 14 bridge, and 3 SIBC coordinates, reducing the complete 33-mode
 system to 25 modes.  Across 100 Hz and 10 kHz, the maximum full-coupled Schur
-error is `1.11e-16`; direct-solve port response and Joule loss are reproduced
-to `6.98e-16` and `8.14e-16`.  The parent HDiv demagnetizing action is supplied
-by HACApK `_ChargeGramHMatrix`; only the small retained Schur solve is dense.
+error is `1.11e-16`.  The native NGSolve GMRES true residuals are `3.45e-11`
+and `9.56e-10`; compared with the dense Schur check, the maximum coefficient,
+port-response, and Joule-loss differences are `3.10e-8`, `3.30e-8`, and
+`1.60e-8`.  The parent HDiv demagnetizing action is supplied by HACApK
+`_ChargeGramHMatrix`; only the deliberately condensed small retained Schur
+check is dense.
 
 The companion `hcurl_vim_hdiv_mmm_bdm2_smoke.json` uses degree-three harmonic
 ports and reduces 738 BDM2 DoFs to 15 modes.  Actual Raviart--Thomas is kept as
@@ -743,6 +794,10 @@ an explicit comparison, generated with `--hdiv-family rt`; RT1 and RT2 have
 369 and 942 parent DoFs on this mesh.  Do not infer RT from the `HDiv` class
 name.  Motor-specific training should replace or augment the generic harmonics
 with actual slot and rotor-angle fields.
+
+For comparison, the explicit dense mixed-Galerkin family sweep retains its
+machine-precision Schur self-consistency table; these are not the iterative
+GMRES-versus-Schur differences reported above:
 
 | HDiv parent | parent DoF -> modes | coupled modes -> retained | max Schur error | max port error | max loss error |
 |---|---:|---:|---:|---:|---:|
@@ -752,11 +807,58 @@ with actual slot and rotor-angle fields.
 | RT2 | 942 -> 15 | 40 -> 32 | 1.147e-16 | 6.657e-16 | 1.647e-15 |
 
 The bulk block condition number was near `1e18` before the current-Gram
-quotient.  The v8 complete coupled matrix is conditioned at `2.52e6` for 100 Hz
-and `2.53e4` for 10 kHz.  Backward error, exact-Schur diagnostics,
+quotient.  The v10 complete coupled matrix is conditioned at `3.94e7` for 100 Hz
+and `1.58e6` for 10 kHz.  Backward error, exact-Schur diagnostics,
 reconstructed fields, port response, and Joule loss now agree simultaneously.
 
-### 6.2 Planar BDM/RT Corner Smoke
+### 6.2 Local ESIM-SIBC Broadband Gate
+
+`validation_test/cln/evrs_esim_sibc_mixed_notched_p6.json` is the mdx record
+for the p=6 notched conductor at 1 kHz, 10 kHz, 100 kHz, and 1 MHz.  It couples
+the topology-aware 25-mode EVRS/bridge/surface model to the nonlinear ESIM cell
+and iterates the local surface Gram to a relative impedance tolerance of
+`1e-3`.  The 96-field-node LUT stores four frequency rows, is checked against
+665 direct midpoint cell solves, and has maximum complex relative interpolation
+error `8.17e-4`.  All outer iterations converge in 10--17 updates, every local
+surface Gram passes the passive-Hermitian gate, and online cell-solve count is
+zero in all 16 production runs.
+
+| comparison over 1 kHz--1 MHz | observed relative port difference |
+|---|---:|
+| depth 8 local ESIM vs depth 22 local ESIM | `1.73e-8`--`4.95e-8` |
+| uniform ESIM vs local ESIM | `0.229%`--`0.655%` |
+| linear SIBC vs local ESIM | `6.98%`--`38.31%` |
+| mixed Galerkin vs direct reduced solve | at most `6.44e-16` |
+
+The linear-to-ESIM difference is a constitutive-model difference, not a
+numerical error estimate.  It demonstrates why the existing ESIM material cell
+is valuable in the high-frequency SIBC branch.  The uniform-to-local difference
+isolates the smaller but systematic error caused by averaging a nonlinear
+surface impedance.  At depth 8, response construction took `0.368 s`, VIM and
+HACApK assembly took `2.026 s`, and the retained dense blocks occupy 20,000
+bytes on the recorded mdx run.
+
+### 6.3 p=6 Cell-Family and Curved-Geometry Gate
+
+`validation_test/cln/hcurl_p6_cell_family_matrixfree.py` applies the same
+native COCR solve to every NGSolve HCurl cell family and a P2-curved tetrahedral
+mesh.  The mdx record is:
+
+| cell | parent DoF | polynomial degree | projection residual | compressed / original scalar charges |
+|---|---:|---:|---:|---:|
+| TET | 136 | 5 | 1.69e-15 | 3 / 56 |
+| HEX | 840 | 18 | 2.59e-11 | 18 / 7980 |
+| WEDGE | 418 | 12 | 1.76e-13 | 9 / 1365 |
+| PYRAMID | 312 | 18 | 4.72e-5 | 6 / 2660 |
+| TRIG | 23 | 6 | 1.84e-15 | 28 / 28 |
+| QUAD | 52 | 6 | 6.95e-15 | 49 / 49 |
+| P2-curved TET sphere | 10,471 | 6 | 1.80e-15 | 8568 / 8568 |
+
+The pyramid value passes its explicit `1e-4` apex gate.  The curved sphere's
+NGSolve-versus-P2 geometry residual is `3.56e-16`.  Every interaction remains
+matrix-free, and every native COCR true residual is below `1.8e-15`.
+
+### 6.4 Planar BDM/RT Corner Smoke
 
 `validation_test/cln/planar_hdiv_mmm_response_smoke.py` applies the same
 construction to a 2-D L-shaped body.  The production-default BDM1 path reduces
@@ -765,7 +867,7 @@ re-entrant corner to `4.19e-12`.  BDM2 reduces 93 DoFs to 6 modes.  Explicit
 RT1/RT2 comparisons have 62/123 parent DoFs.  These are response-span
 reconstruction checks, not claims that a fixed rank covers every excitation.
 
-### 6.3 Shared Mesh and Material Coefficients
+### 6.5 Shared Mesh and Material Coefficients
 
 The HCurl-VIM and HDiv-MMM branches may share the same NGSolve mesh and the same
 material registry, but they should not share finite-element unknowns.  The
@@ -845,3 +947,6 @@ response space has been exposed.
   of Various Formalisms," IEEE Transactions on Magnetics, 2010.
 - A. Bendali et al., high-order impedance-boundary/asymptotic treatments of
   magnetic skin effect and SIBC formulations.
+- K. Hollaus, V. Hanser, and M. Schoebinger, "A Nonlinear Effective Surface
+  Impedance in a Magnetic Scalar Potential Formulation," IEEE Transactions on
+  Magnetics, Early Access, 2025.  https://doi.org/10.1109/TMAG.2025.3613932

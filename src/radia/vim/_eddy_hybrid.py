@@ -12,7 +12,11 @@ and the reduced circuit-facing matrices.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+import hashlib
+import json
+import os
+from pathlib import Path
 from typing import Iterable
 
 import numpy as np
@@ -513,11 +517,11 @@ def _label_filter(labels):
 
 
 def _vector_cf_value(value, name: str) -> np.ndarray:
-    arr = np.asarray(value)
+    arr = np.asarray(value).reshape(-1)
+    if arr.shape == (2,):
+        arr = np.array((arr[0], arr[1], 0.0), dtype=arr.dtype)
     if arr.shape != (3,):
-        arr = arr.reshape(-1)
-    if arr.shape != (3,):
-        raise ValueError(f"{name} must evaluate to a 3-vector")
+        raise ValueError(f"{name} must evaluate to a 2- or 3-vector")
     if not np.all(np.isfinite(arr)):
         raise ValueError(f"{name} evaluated to a non-finite value")
     return arr
@@ -1620,7 +1624,12 @@ def NgsolveEddyBubbleReduction(
 
 def _mesh_node_point(mesh, node) -> np.ndarray:
     point = mesh.vertices[_node_nr(node)].point
-    return np.array([float(point[0]), float(point[1]), float(point[2])], dtype=float)
+    values = [float(value) for value in point]
+    if len(values) == 2:
+        values.append(0.0)
+    if len(values) != 3:
+        raise ValueError("mesh vertex must have two or three coordinates")
+    return np.asarray(values, dtype=float)
 
 
 def _mesh_face_points(mesh, face_nr: int) -> np.ndarray:
@@ -2098,7 +2107,7 @@ def NgsolveSurfaceOmegaBasis(
         boundaries=boundaries,
     )
     if normal_cf is None:
-        normal_cf = ng.specialcf.normal(3)
+        normal_cf = ng.specialcf.normal(int(mesh.dim))
     normal_points, normal_weights, normals = SampleNgsolveVectorCFs(
         mesh,
         (normal_cf,),
@@ -4872,13 +4881,31 @@ def _interaction_block(
     )
 
 
+def _planar_interaction_block(
+    left: SampledCurrentBasis,
+    right: SampledCurrentBasis,
+    *,
+    mu: float,
+    kernel_epsilon: float,
+    reference_length: float,
+) -> np.ndarray:
+    diff = left.points[:, np.newaxis, :2] - right.points[np.newaxis, :, :2]
+    distance = np.sqrt(np.einsum("ijk,ijk->ij", diff, diff) + kernel_epsilon**2)
+    kernel = -(mu / (2.0 * np.pi)) * (
+        left.weights[:, np.newaxis] * right.weights[np.newaxis, :]
+    ) * np.log(distance / reference_length)
+    return np.einsum(
+        "aik,bjk,ij->ab", left.modes.conj(), right.modes, kernel
+    )
+
+
 @dataclass(frozen=True)
 class SampledLaplaceInteraction:
     """Callable sampled Laplace single-layer interaction backend.
 
-    This is the default dense quadrature backend made explicit.  It is useful
-    as a reference backend when replacing the interaction with ``ngsolve.bem``,
-    Radia's in-tree BEM, or a HACApK-compressed operator.
+    This is the dense quadrature reference backend made explicit.  Production
+    high-level builders select a HACApK-compressed interaction unless the
+    caller deliberately supplies this backend for a small-ROM comparison.
     """
 
     mu: float = MU0
@@ -4995,6 +5022,93 @@ class HACApKSampledLaplaceInteraction:
         return np.asarray(desired) - sampled
 
 
+@dataclass(frozen=True)
+class HACApKSampledPlanarLogInteraction:
+    """Projected HACApK cross interaction for a 2-D ``-log(r/L)`` kernel."""
+
+    mu: float = MU0
+    kernel_epsilon: float = 1.0
+    reference_length: float = 1.0
+    aca_eps: float = 1.0e-11
+    leaf_size: int = 64
+    eta: float = 2.0
+    cross_only: bool = True
+    diagonal_interaction: object | None = None
+    diagonal_bases: tuple[SampledCurrentBasis, ...] = ()
+    name: str = "hacapk-sampled-planar-log"
+
+    def __post_init__(self) -> None:
+        for key in (
+            "mu", "kernel_epsilon", "reference_length", "aca_eps", "eta"
+        ):
+            number = float(getattr(self, key))
+            if not np.isfinite(number) or number <= 0.0:
+                raise ValueError(f"{key} must be positive")
+            object.__setattr__(self, key, number)
+        leaf_size = int(self.leaf_size)
+        if leaf_size < 1:
+            raise ValueError("leaf_size must be >= 1")
+        object.__setattr__(self, "leaf_size", leaf_size)
+        if self.diagonal_interaction is not None and not callable(
+            self.diagonal_interaction
+        ):
+            raise TypeError("diagonal_interaction must be callable")
+        diagonal_bases = tuple(self.diagonal_bases)
+        if any(
+            not isinstance(basis, SampledCurrentBasis)
+            for basis in diagonal_bases
+        ):
+            raise TypeError(
+                "diagonal_bases must contain SampledCurrentBasis objects"
+            )
+        if diagonal_bases and self.diagonal_interaction is None:
+            raise ValueError("diagonal_bases requires diagonal_interaction")
+        object.__setattr__(self, "diagonal_bases", diagonal_bases)
+        if not self.name:
+            raise ValueError("name must not be empty")
+
+    @property
+    def operator_scope(self) -> str:
+        return "cross" if self.cross_only else "full"
+
+    def build_operator(self, bases: tuple[SampledCurrentBasis, ...]):
+        return _build_sampled_hacapk_operator(
+            bases,
+            mu=self.mu,
+            kernel_epsilon=self.kernel_epsilon,
+            aca_eps=self.aca_eps,
+            leaf_size=self.leaf_size,
+            eta=self.eta,
+            cross_only=self.cross_only,
+            kernel="planar-log",
+            reference_length=self.reference_length,
+        )
+
+    def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
+        sampled = _planar_interaction_block(
+            left,
+            right,
+            mu=self.mu,
+            kernel_epsilon=self.kernel_epsilon,
+            reference_length=self.reference_length,
+        )
+        if not self.cross_only or left is not right:
+            return sampled
+        use_override = self.diagonal_interaction is not None and (
+            not self.diagonal_bases
+            or any(left is basis for basis in self.diagonal_bases)
+        )
+        if not use_override:
+            return np.zeros_like(sampled)
+        desired = self.diagonal_interaction(left, right)
+        if _is_matrix_free_operator(desired):
+            return ReducedBlockHMatrixOperator(
+                -sampled,
+                [(0, left.n_modes, desired)],
+            )
+        return np.asarray(desired) - sampled
+
+
 def _basis_offsets(bases: tuple[SampledCurrentBasis, ...]) -> list[tuple[int, int]]:
     offsets: list[tuple[int, int]] = []
     start = 0
@@ -5051,6 +5165,170 @@ class ReducedInteractionMatrix:
         return self.matrix[a0:a1, b0:b1]
 
 
+class NGSolveProjectedOperator:
+    """Matrix-free reduced operator backed by an NGSolve ``BaseMatrix``."""
+
+    def __init__(self, matrix, *, scale=1.0, name="ngsolve-projected"):
+        self._native_matrix = matrix
+        self._scale = complex(scale)
+        self._name = str(name)
+        self.shape = (int(matrix.height), int(matrix.width))
+        if self.shape[0] != self.shape[1]:
+            raise ValueError("projected NGSolve operator must be square")
+        self.dtype = np.dtype(complex)
+
+    @property
+    def T(self):
+        return self
+
+    @property
+    def H(self):
+        return self
+
+    @property
+    def matrix_free(self) -> bool:
+        return True
+
+    @property
+    def is_hermitian(self) -> bool:
+        return np.isreal(self._scale)
+
+    def matvec(self, vector):
+        values = np.asarray(vector, dtype=np.complex128)
+        if values.shape != (self.shape[1],):
+            raise ValueError(f"vector must have shape ({self.shape[1]},)")
+        source = self._native_matrix.CreateColVector()
+        target = self._native_matrix.CreateRowVector()
+        source.FV().NumPy()[:] = values
+        target.data = self._native_matrix * source
+        return self._scale * target.FV().NumPy().copy()
+
+    def matmat(self, matrix):
+        values = np.asarray(matrix)
+        if values.ndim == 1:
+            return self.matvec(values)
+        if values.ndim != 2 or values.shape[0] != self.shape[1]:
+            raise ValueError(f"matrix must have shape ({self.shape[1]}, n_rhs)")
+        return np.column_stack(
+            [self.matvec(values[:, column]) for column in range(values.shape[1])]
+        )
+
+    def __matmul__(self, other):
+        values = np.asarray(other)
+        return self.matvec(values) if values.ndim == 1 else self.matmat(values)
+
+    def to_dense(self):
+        return self.matmat(np.eye(self.shape[1], dtype=complex))
+
+    def stats(self):
+        return {
+            "operator": self._name,
+            "matrix_free": True,
+            "mode_count": int(self.shape[0]),
+            "backend": "ngsolve-base-matrix",
+        }
+
+
+@dataclass(frozen=True)
+class NGSolveProjectedInteraction:
+    """Galerkin-project an actual NGSolve BEM/DtN ``BaseMatrix``.
+
+    ``projections[i]`` maps reduced coefficients of ``bases[i]`` to the parent
+    NGSolve space.  The C++ adapter applies ``P.H @ A @ P`` without exporting
+    the parent BEM matrix or materializing the reduced interaction.
+    """
+
+    bases: tuple[SampledCurrentBasis, ...]
+    parent_matrix: object
+    projections: tuple[np.ndarray, ...]
+    scale: complex = 1.0
+    name: str = "ngsolve-bem-dtn-projected"
+
+    def __post_init__(self) -> None:
+        bases = tuple(self.bases)
+        projections = tuple(np.asarray(item) for item in self.projections)
+        if not bases or len(bases) != len(projections):
+            raise ValueError("bases and projections must have equal non-zero length")
+        parent_rows = int(self.parent_matrix.height)
+        if parent_rows != int(self.parent_matrix.width):
+            raise ValueError("parent_matrix must be square")
+        for basis, projection in zip(bases, projections):
+            if not isinstance(basis, SampledCurrentBasis):
+                raise TypeError("bases must contain SampledCurrentBasis objects")
+            if projection.shape != (parent_rows, basis.n_modes):
+                raise ValueError(
+                    "each projection must have shape "
+                    f"({parent_rows}, basis.n_modes)"
+                )
+            if not np.all(np.isfinite(projection)):
+                raise ValueError("projections must contain only finite values")
+        object.__setattr__(self, "bases", bases)
+        object.__setattr__(self, "projections", projections)
+        if not self.name:
+            raise ValueError("name must not be empty")
+
+    @classmethod
+    def from_laplace_sl(
+        cls,
+        fes,
+        bases,
+        projections,
+        *,
+        use_fmm: bool = False,
+        scale=1.0,
+    ):
+        """Assemble ``ngsolve.bem.LaplaceSL`` and retain its BaseMatrix."""
+
+        from ngsolve import ds
+        from ngsolve.bem import LaplaceSL
+
+        test, trial = fes.TnT()
+        parent = (
+            LaplaceSL(test.Trace() * ds, use_fmm=bool(use_fmm))
+            * trial.Trace()
+            * ds
+        ).mat
+        return cls(
+            tuple(bases),
+            parent,
+            tuple(projections),
+            scale=scale,
+            name="ngsolve-bem-laplace-sl-projected",
+        )
+
+    @property
+    def operator_scope(self) -> str:
+        return "full"
+
+    def build_operator(self, bases):
+        bases = tuple(bases)
+        if len(bases) != len(self.bases) or any(
+            left is not right for left, right in zip(bases, self.bases)
+        ):
+            raise ValueError("assembled bases do not match projected BEM bases")
+        projection = np.column_stack(self.projections)
+        matrix_type = _radia_cpp_kernel("_ProjectedBaseMatrix")
+        if matrix_type is None:
+            raise RuntimeError(
+                "Radia C++ extension lacks the NGSolve projected BaseMatrix adapter"
+            )
+        native = matrix_type(
+            self.parent_matrix,
+            np.ascontiguousarray(projection, dtype=np.complex128),
+        )
+        return NGSolveProjectedOperator(
+            native,
+            scale=self.scale,
+            name=self.name,
+        )
+
+    def __call__(self, left, right):
+        raise RuntimeError(
+            "NGSolveProjectedInteraction is a full matrix-free operator; "
+            "use build_operator(bases)"
+        )
+
+
 def _is_matrix_free_operator(value) -> bool:
     return (
         hasattr(value, "shape")
@@ -5062,28 +5340,32 @@ def _is_matrix_free_operator(value) -> bool:
 class SampledHACApKOperator:
     """Projected ``mu * sum_c B_c.T G B_c`` sampled-current operator."""
 
-    def __init__(self, gram, charge_map, *, mu: float, metadata=None):
-        matrix = charge_map.tocsr()
-        if matrix.shape[0] != 3 * int(gram.ndof()):
+    def __init__(self, gram, charge_map, *, shape, mu: float, metadata=None):
+        indptr, indices, data = charge_map
+        rows, columns = (int(shape[0]), int(shape[1]))
+        indptr = np.asarray(indptr, dtype=np.int32)
+        indices = np.asarray(indices, dtype=np.int32)
+        data = np.asarray(data, dtype=float)
+        if rows != 3 * int(gram.ndof()):
             raise ValueError("charge-map rows must equal three times the HACApK point count")
-        if matrix.shape[1] < 1:
+        if columns < 1:
             raise ValueError("charge-map must contain at least one reduced mode")
+        if indptr.shape != (rows + 1,) or indices.shape != data.shape:
+            raise ValueError("invalid charge-map CSR arrays")
         gram.configure_vector_charge_map(
-            np.asarray(matrix.indptr, dtype=np.int32),
-            np.asarray(matrix.indices, dtype=np.int32),
-            np.asarray(matrix.data, dtype=float),
-            int(matrix.shape[1]),
+            indptr,
+            indices,
+            data,
+            columns,
             3,
         )
         self._gram = gram
         self._mu = float(mu)
         self._metadata = {} if metadata is None else dict(metadata)
         self._point_count = int(gram.ndof())
-        self._map_entries = int(matrix.nnz)
-        self._map_bytes = int(
-            matrix.indptr.nbytes + matrix.indices.nbytes + matrix.data.nbytes
-        )
-        self.shape = (int(matrix.shape[1]), int(matrix.shape[1]))
+        self._map_entries = int(data.size)
+        self._map_bytes = int(indptr.nbytes + indices.nbytes + data.nbytes)
+        self.shape = (columns, columns)
         self.dtype = np.dtype(float)
 
     @property
@@ -5172,9 +5454,9 @@ def _build_sampled_hacapk_operator(
     leaf_size: int,
     eta: float,
     cross_only: bool,
+    kernel: str = "laplace",
+    reference_length: float = 1.0,
 ):
-    from scipy import sparse
-
     bases = tuple(bases)
     active = [
         (index, basis)
@@ -5197,33 +5479,41 @@ def _build_sampled_hacapk_operator(
         cursor += basis.n_samples
     mode_offsets = _basis_offsets(bases)
 
-    rows = []
-    cols = []
+    indptr = [0]
+    indices = []
     data = []
     point_count = points.shape[0]
     for component in range(3):
-        component_offset = component * point_count
         for index, basis in active:
             values = np.asarray(basis.modes[:, :, component].T.real, dtype=float)
-            local_rows, local_cols = np.nonzero(values)
-            rows.extend(component_offset + point_offsets[index] + local_rows)
-            cols.extend(mode_offsets[index][0] + local_cols)
-            data.extend(values[local_rows, local_cols])
-    charge_map = sparse.coo_matrix(
-        (data, (rows, cols)),
-        shape=(3 * point_count, total_modes),
-        dtype=float,
-    ).tocsr()
+            for row in values:
+                nonzero = np.flatnonzero(row)
+                indices.extend(mode_offsets[index][0] + nonzero)
+                data.extend(row[nonzero])
+                indptr.append(len(indices))
 
     gram_type = _radia_cpp_kernel("_ChargeGramHMatrix")
-    if gram_type is None or not hasattr(gram_type, "from_sampled_laplace"):
+    factory_name = (
+        "from_sampled_laplace"
+        if kernel == "laplace"
+        else "from_sampled_planar_log"
+    )
+    if kernel not in {"laplace", "planar-log"}:
+        raise ValueError("kernel must be 'laplace' or 'planar-log'")
+    if gram_type is None or not hasattr(gram_type, factory_name):
         raise RuntimeError(
-            "Radia C++ extension lacks sampled Laplace HACApK support; rebuild _radia_pybind"
+            f"Radia C++ extension lacks sampled {kernel} HACApK support; rebuild _radia_pybind"
         )
-    gram = gram_type.from_sampled_laplace(
+    factory = getattr(gram_type, factory_name)
+    arguments = [
         np.ascontiguousarray(points.reshape(-1), dtype=float),
         np.ascontiguousarray(weights, dtype=float),
         float(kernel_epsilon),
+    ]
+    if kernel == "planar-log":
+        arguments.append(float(reference_length))
+    gram = factory(
+        *arguments,
         float(aca_eps),
         int(leaf_size),
         float(eta),
@@ -5231,10 +5521,15 @@ def _build_sampled_hacapk_operator(
     )
     return SampledHACApKOperator(
         gram,
-        charge_map,
+        (
+            np.asarray(indptr, dtype=np.int32),
+            np.asarray(indices, dtype=np.int32),
+            np.asarray(data, dtype=float),
+        ),
+        shape=(3 * point_count, total_modes),
         mu=mu,
         metadata={
-            "backend": "hacapk-sampled-laplace",
+            "backend": f"hacapk-sampled-{kernel}",
             "cross_only": bool(cross_only),
             "kernel_scope": "full-stable-gram",
             "diagonal_policy": (
@@ -5243,6 +5538,9 @@ def _build_sampled_hacapk_operator(
             "basis_count": len(bases),
             "active_basis_count": len(active),
             "kernel_epsilon": float(kernel_epsilon),
+            "reference_length": (
+                float(reference_length) if kernel == "planar-log" else None
+            ),
         },
     )
 
@@ -5368,6 +5666,265 @@ class ShiftedReducedOperator:
 
     def __getitem__(self, key):
         return self.to_dense()[key]
+
+
+class CoupledReducedOperator:
+    """Native-ready HDiv/HCurl block operator with an HCurl sub-operator."""
+
+    def __init__(self, magnetic, upper, lower, eddy):
+        upper = np.asarray(upper)
+        lower = np.asarray(lower)
+        magnetic_shape = tuple(magnetic.shape)
+        if len(magnetic_shape) != 2 or magnetic_shape[0] != magnetic_shape[1]:
+            raise ValueError("magnetic block must be square")
+        if upper.shape != (magnetic_shape[0], eddy.shape[1]):
+            raise ValueError("upper coupling block shape mismatch")
+        if lower.shape != (eddy.shape[0], magnetic_shape[1]):
+            raise ValueError("lower coupling block shape mismatch")
+        self._magnetic = (
+            magnetic if _is_matrix_free_operator(magnetic)
+            else np.array(magnetic, copy=True)
+        )
+        self._upper = np.array(upper, copy=True)
+        self._lower = np.array(lower, copy=True)
+        self._eddy = eddy
+        self._magnetic_size = int(magnetic_shape[0])
+        total = self._magnetic_size + int(eddy.shape[0])
+        self.shape = (total, total)
+        magnetic_dtype = (
+            magnetic.dtype
+            if hasattr(magnetic, "dtype")
+            else np.asarray(magnetic).dtype
+        )
+        self.dtype = np.result_type(magnetic_dtype, upper, lower, eddy.dtype)
+
+    @property
+    def matrix_free(self) -> bool:
+        return True
+
+    def matvec(self, vector):
+        values = np.asarray(vector)
+        if values.shape != (self.shape[1],):
+            raise ValueError(f"vector must have shape ({self.shape[1]},)")
+        mh = self._magnetic_size
+        magnetic_action = (
+            self._magnetic.matvec(values[:mh])
+            if _is_matrix_free_operator(self._magnetic)
+            else self._magnetic @ values[:mh]
+        )
+        magnetic = magnetic_action + self._upper @ values[mh:]
+        eddy = self._lower @ values[:mh] + self._eddy.matvec(values[mh:])
+        return np.concatenate((magnetic, eddy))
+
+    def matmat(self, matrix):
+        values = np.asarray(matrix)
+        if values.ndim == 1:
+            return self.matvec(values)
+        if values.ndim != 2 or values.shape[0] != self.shape[1]:
+            raise ValueError(f"matrix must have shape ({self.shape[1]}, n_rhs)")
+        return np.column_stack(
+            [self.matvec(values[:, column]) for column in range(values.shape[1])]
+        )
+
+    def __matmul__(self, other):
+        values = np.asarray(other)
+        return self.matvec(values) if values.ndim == 1 else self.matmat(values)
+
+    def to_dense(self):
+        mh = self._magnetic_size
+        out = np.empty(self.shape, dtype=self.dtype)
+        out[:mh, :mh] = (
+            self._magnetic.to_dense()
+            if _is_matrix_free_operator(self._magnetic)
+            else self._magnetic
+        )
+        out[:mh, mh:] = self._upper
+        out[mh:, :mh] = self._lower
+        out[mh:, mh:] = self._eddy.to_dense()
+        return out
+
+
+def _flatten_native_operator(operator, *, offset=0, scale=1.0):
+    """Return ``(dense, BaseMatrix terms)`` without materializing H-matrices."""
+
+    n = int(operator.shape[0])
+    if tuple(operator.shape) != (n, n):
+        raise ValueError("native reduced operator must be square")
+    if isinstance(operator, NGSolveProjectedOperator):
+        return (
+            np.zeros((n, n), dtype=complex),
+            [(operator._native_matrix, offset, offset + n, scale * operator._scale)],
+        )
+    if isinstance(operator, ShiftedReducedOperator):
+        dense, terms = _flatten_native_operator(
+            operator._inductance,
+            offset=offset,
+            scale=scale * operator._scale,
+        )
+        dense += scale * np.asarray(operator._dense)
+        return dense, terms
+    if isinstance(operator, ReducedBlockHMatrixOperator):
+        dense = scale * np.asarray(operator._dense, dtype=complex)
+        terms = []
+        for start, stop, block in operator._operator_blocks:
+            block_dense, block_terms = _flatten_native_operator(
+                block,
+                offset=offset + start,
+                scale=scale,
+            )
+            dense[start:stop, start:stop] += block_dense
+            terms.extend(block_terms)
+        return dense, terms
+    if isinstance(operator, CoupledReducedOperator):
+        mh = operator._magnetic_size
+        dense = np.zeros(operator.shape, dtype=complex)
+        dense[:mh, mh:] = scale * operator._upper
+        dense[mh:, :mh] = scale * operator._lower
+        if _is_matrix_free_operator(operator._magnetic):
+            magnetic_dense, magnetic_terms = _flatten_native_operator(
+                operator._magnetic,
+                offset=offset,
+                scale=scale,
+            )
+            dense[:mh, :mh] = magnetic_dense
+        else:
+            dense[:mh, :mh] = scale * operator._magnetic
+            magnetic_terms = []
+        eddy_dense, eddy_terms = _flatten_native_operator(
+            operator._eddy,
+            offset=offset + mh,
+            scale=scale,
+        )
+        dense[mh:, mh:] = eddy_dense
+        return dense, magnetic_terms + eddy_terms
+    gram = getattr(operator, "_gram", None)
+    local_scale = getattr(operator, "_mu", None)
+    if gram is not None and local_scale is not None:
+        return (
+            np.zeros((n, n), dtype=complex),
+            [(gram.demag_matrix(), offset, offset + n, scale * local_scale)],
+        )
+    raise TypeError(
+        f"matrix-free operator {type(operator).__name__} has no native BaseMatrix path"
+    )
+
+
+def _native_reduced_base_matrix(operator):
+    """Build one C++/NGSolve BaseMatrix from independent reduced terms."""
+
+    dense, terms = _flatten_native_operator(operator)
+    matrix_type = _radia_cpp_kernel("_ReducedBlockMatrix")
+    if matrix_type is None:
+        raise RuntimeError(
+            "Radia C++ extension lacks the reduced NGSolve BaseMatrix adapter"
+        )
+    return matrix_type(
+        np.ascontiguousarray(dense, dtype=np.complex128),
+        [term[0] for term in terms],
+        np.asarray([term[1] for term in terms], dtype=np.int32),
+        np.asarray([term[2] for term in terms], dtype=np.int32),
+        np.asarray([term[3] for term in terms], dtype=np.complex128),
+    )
+
+
+def _solve_native_reduced_operator(
+    operator,
+    rhs,
+    *,
+    solver: str = "gmres",
+    tolerance: float = 1.0e-10,
+    max_iterations: int | None = None,
+    restart: int | None = None,
+):
+    """Solve a matrix-free reduced system in NGSolve's BaseMatrix style."""
+
+    import ngsolve as ng
+    from radia import sparsesolv_ngsolve
+
+    solver = str(solver).lower()
+    if solver not in {"gmres", "cocr"}:
+        raise ValueError("solver must be 'gmres' or 'cocr'")
+    if not np.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    native = _native_reduced_base_matrix(operator)
+    preconditioner = native.diagonal_preconditioner()
+    n = int(native.height)
+    values = np.asarray(rhs)
+    vector_result = values.ndim == 1
+    if vector_result:
+        values = values[:, np.newaxis]
+    if values.ndim != 2 or values.shape[0] != n:
+        raise ValueError(f"rhs must have shape ({n}, n_rhs)")
+    max_iterations = max(100, 10 * n) if max_iterations is None else int(max_iterations)
+    restart = min(max_iterations, 50) if restart is None else int(restart)
+    if max_iterations <= 0 or restart <= 0:
+        raise ValueError("max_iterations and restart must be positive")
+    if solver == "gmres":
+        inverse = sparsesolv_ngsolve.GMRESSolver(
+            native,
+            preconditioner,
+            maxiter=max_iterations,
+            tol=float(tolerance),
+            restart=restart,
+        )
+    else:
+        inverse = sparsesolv_ngsolve.COCRSolver(
+            native,
+            preconditioner,
+            maxiter=max_iterations,
+            tol=float(tolerance),
+        )
+    solutions = []
+    residuals = []
+    iteration_counts = []
+    refinement_counts = []
+    with ng.TaskManager():
+        for column in range(values.shape[1]):
+            source = native.CreateColVector()
+            source.FV().NumPy()[:] = np.asarray(
+                values[:, column], dtype=np.complex128
+            )
+            solution = native.CreateColVector()
+            solution.FV().NumPy()[:] = 0.0
+            residual = native.CreateRowVector()
+            denominator = max(float(np.linalg.norm(source.FV().NumPy())), 1.0)
+            total_iterations = 0
+            relative_residual = np.inf
+            refinement_count = 0
+            correction_rhs = source
+            for refinement_count in range(8):
+                correction = native.CreateColVector()
+                correction.data = inverse * correction_rhs
+                solution.data += correction
+                solver_iterations = int(getattr(inverse, "iterations", -1))
+                if solver_iterations >= 0:
+                    total_iterations += solver_iterations
+                residual.data = source - native * solution
+                relative_residual = float(
+                    np.linalg.norm(residual.FV().NumPy()) / denominator
+                )
+                if relative_residual <= max(10.0 * tolerance, 1.0e-12):
+                    break
+                correction_rhs = residual
+            if relative_residual > max(10.0 * tolerance, 1.0e-12):
+                raise RuntimeError(
+                    f"native reduced {solver.upper()} residual {relative_residual:.3e} "
+                    f"exceeds tolerance {tolerance:.3e}"
+                )
+            solutions.append(solution.FV().NumPy().copy())
+            residuals.append(relative_residual)
+            iteration_counts.append(total_iterations)
+            refinement_counts.append(refinement_count)
+    result = np.column_stack(solutions)
+    diagnostics = {
+        "backend": f"ngsolve-base-matrix-{solver}",
+        "iterations": max(iteration_counts, default=0),
+        "defect_corrections": max(refinement_counts, default=0),
+        "relative_residual_max": max(residuals, default=0.0),
+        "native_term_count": int(native.term_count),
+        "preconditioner": "native-reduced-block-jacobi",
+    }
+    return (result[:, 0] if vector_result else result), diagnostics
 
 
 def _validate_interaction_block(block, left: SampledCurrentBasis, right: SampledCurrentBasis):
@@ -5689,23 +6246,12 @@ def _min_hermitian_eigenvalue(matrix) -> float:
         n = int(matrix.shape[0])
         if n == 0:
             return 0.0
-        if n <= 2:
-            dense = matrix.matmat(np.eye(n))
-            return float(np.min(np.linalg.eigvalsh(0.5 * (dense + dense.conj().T)).real))
-        from scipy.sparse.linalg import LinearOperator, eigsh
-
-        operator = LinearOperator(
-            matrix.shape, matvec=matrix.matvec, dtype=np.dtype(matrix.dtype)
-        )
-        value = eigsh(
-            operator,
-            k=1,
-            which="SA",
-            return_eigenvectors=False,
-            tol=1.0e-8,
-            maxiter=max(100, 10 * n),
-        )[0]
-        return float(np.real(value))
+        # This is an explicit reduced-order diagnostic, not the production
+        # solve path.  Keep SciPy out of the HCurl solver and inspect the small
+        # retained operator with NumPy only when diagnostics are requested.
+        dense = matrix.matmat(np.eye(n))
+        hermitian = 0.5 * (dense + dense.conj().T)
+        return float(np.min(np.linalg.eigvalsh(hermitian).real))
     if matrix.size == 0:
         return 0.0
     hermitian = 0.5 * (matrix + matrix.conj().T)
@@ -5741,6 +6287,156 @@ class MixedGalerkinOrthogonalization:
 
     def diagnostics(self) -> dict[str, float | int]:
         return dict(self.diagnostics_data)
+
+    def solve(self, operator, rhs) -> np.ndarray:
+        """Solve with the Schur basis and restore the eliminated-block lift.
+
+        ``T c`` is the homogeneous harmonic extension of the retained
+        coefficients.  When the eliminated block is directly excited, the
+        complete solution also contains the particular lift
+        ``Z_ee^-1 b_e``.  Keeping this term explicit prevents a correct Schur
+        operator from being paired with an incomplete reconstructed field.
+        """
+
+        matrix = np.asarray(operator)
+        if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+            raise ValueError("operator must be square")
+        if matrix.shape[0] != self.trial_transform.shape[0]:
+            raise ValueError("operator size does not match the mixed basis")
+        values = np.asarray(rhs)
+        vector_rhs = values.ndim == 1
+        if vector_rhs:
+            values = values[:, np.newaxis]
+        if values.ndim != 2 or values.shape[0] != matrix.shape[0]:
+            raise ValueError("rhs must have shape (n_modes,) or (n_modes, n_rhs)")
+
+        scale = max(float(np.linalg.norm(matrix)), np.finfo(float).tiny)
+        trial_defect = float(
+            np.linalg.norm(matrix[self.eliminate_indices, :] @ self.trial_transform)
+            / scale
+        )
+        test_defect = float(
+            np.linalg.norm(
+                self.test_transform.T @ matrix[:, self.eliminate_indices]
+            )
+            / scale
+        )
+        projected = self.test_transform.T @ matrix @ self.trial_transform
+        projected_scale = max(
+            float(np.linalg.norm(self.reduced_operator)),
+            np.finfo(float).tiny,
+        )
+        projected_error = float(
+            np.linalg.norm(projected - self.reduced_operator) / projected_scale
+        )
+        if max(trial_defect, test_defect, projected_error) > 1.0e-10:
+            raise ValueError(
+                "operator does not match the matrix used to construct this "
+                "mixed-Galerkin orthogonalization"
+            )
+
+        reduced_rhs = self.test_transform.T @ values
+        reduced_coefficients = np.linalg.solve(self.reduced_operator, reduced_rhs)
+        solution = self.trial_transform @ reduced_coefficients
+        eliminated = self.eliminate_indices
+        z_ee = matrix[np.ix_(eliminated, eliminated)]
+        solution[eliminated, :] += np.linalg.solve(z_ee, values[eliminated, :])
+        return solution[:, 0] if vector_rhs else solution
+
+
+@dataclass(frozen=True)
+class SurfaceImpedanceGram:
+    """Preassembled local SIBC term ``int_Gamma Zs(x) jt.jv dS``.
+
+    A scalar surface impedance can be multiplied by ``surface_mass``.  ESIM,
+    curvature corrections, and material patches instead produce a value per
+    surface quadrature sample.  This object keeps that weighted Gram explicit
+    so local impedances are not silently replaced by an arithmetic mean.
+    """
+
+    matrix: np.ndarray
+    sample_values: np.ndarray
+    surface_mass_reference: np.ndarray
+    label: str = "local-sibc"
+
+    def __post_init__(self) -> None:
+        matrix = np.asarray(self.matrix, dtype=complex)
+        values = np.asarray(self.sample_values, dtype=complex).reshape(-1)
+        surface_mass = np.asarray(self.surface_mass_reference, dtype=complex)
+        if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+            raise ValueError("surface impedance Gram matrix must be square")
+        if surface_mass.shape != matrix.shape:
+            raise ValueError("surface mass reference must match the Gram matrix")
+        if values.size == 0:
+            raise ValueError("surface impedance samples must not be empty")
+        if not (
+            np.all(np.isfinite(matrix))
+            and np.all(np.isfinite(values))
+            and np.all(np.isfinite(surface_mass))
+        ):
+            raise ValueError("surface impedance Gram contains non-finite values")
+        object.__setattr__(self, "matrix", np.array(matrix, copy=True))
+        object.__setattr__(self, "sample_values", np.array(values, copy=True))
+        object.__setattr__(
+            self,
+            "surface_mass_reference",
+            np.array(surface_mass, copy=True),
+        )
+
+    @property
+    def dissipative_matrix(self) -> np.ndarray:
+        """Return the Hermitian dissipative part used for average loss."""
+
+        return 0.5 * (self.matrix + self.matrix.conj().T)
+
+    def diagnostics(self, *, passive_tol: float = 1.0e-10) -> dict[str, object]:
+        """Return JSON-ready local-impedance and passivity diagnostics."""
+
+        min_dissipative = _min_hermitian_eigenvalue(self.dissipative_matrix)
+        return {
+            "label": self.label,
+            "modes": int(self.matrix.shape[0]),
+            "samples": int(self.sample_values.size),
+            "real_min": float(np.min(self.sample_values.real)),
+            "real_max": float(np.max(self.sample_values.real)),
+            "imag_min": float(np.min(self.sample_values.imag)),
+            "imag_max": float(np.max(self.sample_values.imag)),
+            "minimum_dissipative_eigenvalue": min_dissipative,
+            "passive": bool(min_dissipative >= -passive_tol),
+        }
+
+
+def _surface_impedance_term(surface_mass, surface_impedance) -> np.ndarray:
+    """Resolve a scalar or preassembled local SIBC contribution."""
+
+    if isinstance(surface_impedance, SurfaceImpedanceGram):
+        if surface_impedance.matrix.shape != surface_mass.shape:
+            raise ValueError(
+                "surface impedance Gram shape does not match the hybrid system"
+            )
+        scale = max(float(np.linalg.norm(surface_mass)), np.finfo(float).tiny)
+        if (
+            np.linalg.norm(surface_impedance.surface_mass_reference - surface_mass)
+            / scale
+            > 1.0e-10
+        ):
+            raise ValueError(
+                "surface impedance Gram was assembled for a different hybrid system"
+            )
+        return surface_impedance.matrix
+    if np.isscalar(surface_impedance):
+        return complex(surface_impedance) * surface_mass
+    raise TypeError(
+        "surface_impedance must be a scalar or SurfaceImpedanceGram; "
+        "assemble spatial values with AssembleSurfaceImpedanceGram"
+    )
+
+
+def _surface_impedance_dissipative_term(surface_mass, surface_impedance) -> np.ndarray:
+    """Return the Hermitian loss contribution of a SIBC term."""
+
+    term = _surface_impedance_term(surface_mass, surface_impedance)
+    return 0.5 * (term + term.conj().T)
 
 
 def _mixed_galerkin_orthogonalize_operator(
@@ -5842,13 +6538,16 @@ class HybridVIMSystem:
         return (
             self.resistance
             + s * inductance
-            + surface_impedance * self.surface_mass
+            + _surface_impedance_term(self.surface_mass, surface_impedance)
         )
 
     def impedance_operator(self, s, *, surface_impedance=0.0):
         """Return the impedance without materializing HACApK-backed inductance."""
 
-        dense = self.resistance + surface_impedance * self.surface_mass
+        dense = self.resistance + _surface_impedance_term(
+            self.surface_mass,
+            surface_impedance,
+        )
         if _is_matrix_free_operator(self.inductance):
             return ShiftedReducedOperator(dense, self.inductance, s)
         return dense + s * self.inductance
@@ -6054,62 +6753,33 @@ class HybridVIMSystem:
         rhs,
         *,
         surface_impedance=0.0,
+        solver: str = "cocr",
         tolerance: float = 1.0e-10,
         max_iterations: int | None = None,
         restart: int | None = None,
+        return_diagnostics: bool = False,
     ) -> np.ndarray:
-        """Solve directly or by GMRES when the inductance stays in HACApK form."""
+        """Solve through dense C++ or native NGSolve COCR/GMRES."""
 
         z = self.impedance_operator(s, surface_impedance=surface_impedance)
         values = np.asarray(rhs)
         if not _is_matrix_free_operator(z):
-            return _solve_reduced_linear(z, values)
-        if tolerance <= 0.0:
-            raise ValueError("tolerance must be positive")
-        from scipy.sparse.linalg import LinearOperator, gmres
-
-        n = self.n_modes
-        if values.ndim == 1:
-            rhs_matrix = values[:, np.newaxis]
-            vector_result = True
-        elif values.ndim == 2:
-            rhs_matrix = values
-            vector_result = False
+            result = _solve_reduced_linear(z, values)
+            diagnostics = {
+                "backend": "native-dense-reduced-lu",
+                "iterations": 0,
+                "relative_residual_max": 0.0,
+            }
         else:
-            raise ValueError("rhs must be one- or two-dimensional")
-        if rhs_matrix.shape[0] != n:
-            raise ValueError(f"rhs must have {n} rows")
-        max_iterations = max(100, 10 * n) if max_iterations is None else int(max_iterations)
-        restart = min(max(n, 1), 50) if restart is None else int(restart)
-        if max_iterations <= 0 or restart <= 0:
-            raise ValueError("max_iterations and restart must be positive")
-        linear = LinearOperator(z.shape, matvec=z.matvec, dtype=np.dtype(z.dtype))
-        diagonal = np.diag(z._dense)
-        threshold = np.finfo(float).eps * max(float(np.max(np.abs(diagonal))), 1.0)
-        preconditioner = None
-        if np.all(np.abs(diagonal) > threshold):
-            inverse = 1.0 / diagonal
-            preconditioner = LinearOperator(
-                z.shape,
-                matvec=lambda x: inverse * x,
-                dtype=np.dtype(z.dtype),
-            )
-        solutions = []
-        for column in range(rhs_matrix.shape[1]):
-            solution, info = gmres(
-                linear,
-                rhs_matrix[:, column],
-                M=preconditioner,
-                rtol=float(tolerance),
-                atol=0.0,
+            result, diagnostics = _solve_native_reduced_operator(
+                z,
+                values,
+                solver=solver,
+                tolerance=tolerance,
+                max_iterations=max_iterations,
                 restart=restart,
-                maxiter=max_iterations,
             )
-            if info != 0:
-                raise RuntimeError(f"matrix-free HCurl GMRES did not converge (info={info})")
-            solutions.append(solution)
-        result = np.column_stack(solutions)
-        return result[:, 0] if vector_result else result
+        return (result, diagnostics) if return_diagnostics else result
 
     def port_admittance(self, s, rhs, *, surface_impedance=0.0) -> np.ndarray:
         """Return the reduced port admittance ``B^* Z(s)^-1 B``."""
@@ -6235,7 +6905,7 @@ class HCurlEddyCLNModel:
         return (
             self.resistance
             + s * self.inductance
-            + surface_impedance * self.surface_mass
+            + _surface_impedance_term(self.surface_mass, surface_impedance)
         )
 
     def solve(self, s, drive, *, surface_impedance=0.0) -> np.ndarray:
@@ -6456,7 +7126,7 @@ class HCurlVIMHDivMMMSolution:
 
     frequency_hz: float
     s: complex
-    surface_impedance: complex
+    surface_impedance: object
     magnetization_coefficients: np.ndarray
     eddy_coefficients: np.ndarray
     parent_t_coefficients: np.ndarray | None
@@ -6472,6 +7142,7 @@ class HCurlVIMHDivMMMSolution:
     average_joule_loss: np.ndarray
     residual_relative_norm: float
     solver_backend: str
+    solver_diagnostics: dict[str, object] | None = None
     orthogonalized_rhs: np.ndarray | None = None
     orthogonalized_solution: np.ndarray | None = None
     mixed_galerkin_diagnostics: dict[str, object] | None = None
@@ -6565,13 +7236,20 @@ class HCurlVIMHDivMMMSolution:
     def diagnostics(self) -> dict[str, object]:
         """Return compact JSON-ready solve and reconstruction diagnostics."""
 
+        if isinstance(self.surface_impedance, SurfaceImpedanceGram):
+            surface_impedance_diagnostics = self.surface_impedance.diagnostics()
+        else:
+            value = complex(self.surface_impedance)
+            surface_impedance_diagnostics = {
+                "kind": "uniform",
+                "real": float(value.real),
+                "imag": float(value.imag),
+            }
+
         return {
             "frequency_Hz": float(self.frequency_hz),
             "s": {"real": float(self.s.real), "imag": float(self.s.imag)},
-            "surface_impedance": {
-                "real": float(self.surface_impedance.real),
-                "imag": float(self.surface_impedance.imag),
-            },
+            "surface_impedance": surface_impedance_diagnostics,
             "n_excitations": self.n_excitations,
             "magnetization_modes": int(self.magnetization_coefficients.shape[0]),
             "eddy_modes": int(self.eddy_coefficients.shape[0]),
@@ -6604,6 +7282,11 @@ class HCurlVIMHDivMMMSolution:
                 else float(self.residual_backward_error)
             ),
             "solver_backend": self.solver_backend,
+            "solver_diagnostics": (
+                None
+                if self.solver_diagnostics is None
+                else dict(self.solver_diagnostics)
+            ),
             "orthogonalized_modes": (
                 None
                 if self.orthogonalized_solution is None
@@ -6933,11 +7616,21 @@ class CoupledHDivHybridVIMSystem:
             raise ValueError("coupling contains non-finite values")
         magnetic_operator = self.magnetic_operator
         if magnetic_operator is not None:
-            magnetic_operator = _square_matrix(
-                magnetic_operator,
-                self.magnetization_basis.n_modes,
-                "magnetic_operator",
-            )
+            if _is_matrix_free_operator(magnetic_operator):
+                expected_magnetic = (
+                    self.magnetization_basis.n_modes,
+                    self.magnetization_basis.n_modes,
+                )
+                if tuple(magnetic_operator.shape) != expected_magnetic:
+                    raise ValueError(
+                        f"magnetic_operator must have shape {expected_magnetic}"
+                    )
+            else:
+                magnetic_operator = _square_matrix(
+                    magnetic_operator,
+                    self.magnetization_basis.n_modes,
+                    "magnetic_operator",
+                )
         magnetic_rhs = self.magnetic_rhs
         if magnetic_rhs is not None:
             magnetic_rhs = _port_rhs_matrix(
@@ -7004,17 +7697,20 @@ class CoupledHDivHybridVIMSystem:
     def n_evrs_modes(self) -> int:
         return self.n_hcurl_vim_modes
 
-    def _resolved_magnetic_operator(self, magnetic_operator) -> np.ndarray:
+    def _resolved_magnetic_operator(self, magnetic_operator):
         if magnetic_operator is None:
             magnetic_operator = self.magnetic_operator
         if magnetic_operator is None:
             raise ValueError(
                 "magnetic_operator is required; pass it to the builder or solve"
             )
+        if _is_matrix_free_operator(magnetic_operator):
+            expected = (self.n_hdiv_modes, self.n_hdiv_modes)
+            if tuple(magnetic_operator.shape) != expected:
+                raise ValueError(f"magnetic_operator must have shape {expected}")
+            return magnetic_operator
         return _square_matrix(
-            magnetic_operator,
-            self.n_hdiv_modes,
-            "magnetic_operator",
+            magnetic_operator, self.n_hdiv_modes, "magnetic_operator"
         )
 
     def _resolved_rhs(self, magnetic_rhs, eddy_rhs, dtype, *, require_excitation=False):
@@ -7055,6 +7751,26 @@ class CoupledHDivHybridVIMSystem:
             return _square_matrix(eddy_operator, self.n_hcurl_vim_modes, "eddy_operator")
         return self.eddy_system.impedance(s, surface_impedance=surface_impedance)
 
+    def eddy_impedance_operator(
+        self,
+        s,
+        *,
+        surface_impedance=0.0,
+        eddy_operator=None,
+    ):
+        """Return the HCurl block while retaining any HACApK BaseMatrix terms."""
+
+        if eddy_operator is not None:
+            return _square_matrix(
+                eddy_operator,
+                self.n_hcurl_vim_modes,
+                "eddy_operator",
+            )
+        return self.eddy_system.impedance_operator(
+            s,
+            surface_impedance=surface_impedance,
+        )
+
     def mixed_operator(
         self,
         magnetic_operator=None,
@@ -7064,11 +7780,11 @@ class CoupledHDivHybridVIMSystem:
         surface_impedance=0.0,
         coupling_scale=1.0,
         adjoint_coupling_scale=None,
-    ) -> np.ndarray:
-        """Assemble ``[[A_m, alpha K], [beta K^*, Z_e]]``."""
+    ):
+        """Assemble ``[[A_m, alpha K], [beta K^*, Z_e]]`` matrix-free."""
 
         magnetic = self._resolved_magnetic_operator(magnetic_operator)
-        eddy = self.eddy_impedance(
+        eddy = self.eddy_impedance_operator(
             s,
             surface_impedance=surface_impedance,
             eddy_operator=eddy_operator,
@@ -7077,6 +7793,10 @@ class CoupledHDivHybridVIMSystem:
             adjoint_coupling_scale = np.conjugate(coupling_scale)
         upper = coupling_scale * self.coupling
         lower = adjoint_coupling_scale * self.coupling.conj().T
+        if _is_matrix_free_operator(magnetic) or _is_matrix_free_operator(eddy):
+            if not _is_matrix_free_operator(eddy):
+                eddy = ReducedBlockHMatrixOperator(eddy, ())
+            return CoupledReducedOperator(magnetic, upper, lower, eddy)
         dtype = np.result_type(magnetic, eddy, upper, lower)
         out = np.zeros(
             (self.n_hdiv_modes + self.n_hcurl_vim_modes,
@@ -7118,6 +7838,8 @@ class CoupledHDivHybridVIMSystem:
             coupling_scale=coupling_scale,
             adjoint_coupling_scale=adjoint_coupling_scale,
         )
+        if _is_matrix_free_operator(full_operator):
+            full_operator = full_operator.to_dense()
         eddy_keep = self.eddy_system.block_indices(keep_eddy_blocks)
         eddy_eliminate = self.eddy_system.block_indices(eliminate_eddy_blocks)
         mh = self.n_hdiv_modes
@@ -7203,6 +7925,10 @@ class CoupledHDivHybridVIMSystem:
         surface_impedance=0.0,
         coupling_scale=1.0,
         adjoint_coupling_scale=None,
+        solver: str = "gmres",
+        tolerance: float = 1.0e-10,
+        max_iterations: int | None = None,
+        restart: int | None = None,
         return_operator: bool = False,
     ) -> dict[str, np.ndarray]:
         """Solve the coupled HDiv-MMM / hybrid HCurl-VIM system."""
@@ -7216,14 +7942,31 @@ class CoupledHDivHybridVIMSystem:
             adjoint_coupling_scale=adjoint_coupling_scale,
         )
         mh = self.n_hdiv_modes
-        m_rhs, e_rhs = self._resolved_rhs(magnetic_rhs, eddy_rhs, op.dtype)
-        rhs = np.vstack([m_rhs, e_rhs]).astype(op.dtype, copy=False)
-        sol = _solve_reduced_linear(op, rhs)
+        dtype = np.dtype(op.dtype) if _is_matrix_free_operator(op) else op.dtype
+        m_rhs, e_rhs = self._resolved_rhs(magnetic_rhs, eddy_rhs, dtype)
+        rhs = np.vstack([m_rhs, e_rhs]).astype(dtype, copy=False)
+        if _is_matrix_free_operator(op):
+            sol, solver_diagnostics = _solve_native_reduced_operator(
+                op,
+                rhs,
+                solver=solver,
+                tolerance=tolerance,
+                max_iterations=max_iterations,
+                restart=restart,
+            )
+        else:
+            sol = _solve_reduced_linear(op, rhs)
+            solver_diagnostics = {
+                "backend": "native-dense-reduced-lu",
+                "iterations": 0,
+                "relative_residual_max": 0.0,
+            }
         result = {
             "magnetization": sol[:mh],
             "eddy": sol[mh:],
             "solution": sol,
             "rhs": rhs,
+            "solver_diagnostics": solver_diagnostics,
         }
         if return_operator:
             result["operator"] = op
@@ -7271,7 +8014,8 @@ class CoupledHDivHybridVIMSystem:
                     "sigma or surface_impedance is required for the SIBC block"
                 )
             surface_impedance = SkinImpedance(s, float(conductivity), mu)
-        surface_impedance = complex(surface_impedance)
+        if not isinstance(surface_impedance, SurfaceImpedanceGram):
+            surface_impedance = complex(surface_impedance)
 
         if magnetic_rhs is None:
             magnetic_rhs = self.magnetic_rhs
@@ -7387,19 +8131,23 @@ class CoupledHDivHybridVIMSystem:
                 magnetic_coefficients
             )
 
-        residual = op @ coefficients - rhs
+        applied = op @ coefficients
+        residual = applied - rhs
         rhs_norm = float(np.linalg.norm(rhs))
         residual_relative = float(np.linalg.norm(residual) / max(rhs_norm, 1.0e-300))
         residual_backward = float(
             np.linalg.norm(residual)
             / max(
-                float(np.linalg.norm(op) * np.linalg.norm(coefficients) + rhs_norm),
+                float(np.linalg.norm(applied) + rhs_norm),
                 1.0e-300,
             )
         )
         dissipative = (
             self.eddy_system.resistance
-            + surface_impedance.real * self.eddy_system.surface_mass
+            + _surface_impedance_dissipative_term(
+                self.eddy_system.surface_mass,
+                surface_impedance,
+            )
         )
         average_loss = 0.5 * np.real(
             np.einsum(
@@ -7410,10 +8158,13 @@ class CoupledHDivHybridVIMSystem:
             )
         )
         port_response = rhs.conj().T @ coefficients
-        backend = (
-            "radia-cpp-dense"
-            if _radia_cpp_kernel("_HybridVIMSolve") is not None
-            else "numpy-linalg"
+        backend = solved.get("solver_diagnostics", {}).get(
+            "backend",
+            (
+                "radia-cpp-dense"
+                if _radia_cpp_kernel("_HybridVIMSolve") is not None
+                else "numpy-linalg"
+            ),
         )
         if use_mixed_galerkin:
             backend += "-mixed-galerkin"
@@ -7436,6 +8187,7 @@ class CoupledHDivHybridVIMSystem:
             average_joule_loss=np.asarray(average_loss),
             residual_relative_norm=residual_relative,
             solver_backend=backend,
+            solver_diagnostics=solved.get("solver_diagnostics"),
             orthogonalized_rhs=orthogonalized_rhs,
             orthogonalized_solution=orthogonalized_solution,
             mixed_galerkin_diagnostics=mixed_galerkin_diagnostics,
@@ -8038,6 +8790,1051 @@ def AssembleHybridVIM(
     )
 
 
+def AssembleSurfaceImpedanceGram(
+    system: HybridVIMSystem,
+    surface_basis: SampledCurrentBasis,
+    surface_impedance,
+    *,
+    block: str = "surface",
+    label: str = "local-sibc",
+) -> SurfaceImpedanceGram:
+    """Assemble ``int_Gamma Zs(x) jt.jv dS`` on one surface block.
+
+    ``surface_impedance`` may be a scalar, one complex value per surface
+    quadrature sample, or a callable evaluated at ``surface_basis.points``.
+    The returned full-system Gram can be passed anywhere a scalar
+    ``surface_impedance`` is accepted, including Schur complements and mixed
+    Galerkin orthogonalization.
+    """
+
+    if not isinstance(system, HybridVIMSystem):
+        raise TypeError("system must be a HybridVIMSystem")
+    if not isinstance(surface_basis, SampledCurrentBasis):
+        raise TypeError("surface_basis must be a SampledCurrentBasis")
+    if surface_basis.kind != "surface":
+        raise ValueError("surface_basis must have kind='surface'")
+    values = (
+        surface_impedance(surface_basis.points)
+        if callable(surface_impedance)
+        else surface_impedance
+    )
+    if np.isscalar(values):
+        values = np.full(surface_basis.n_samples, complex(values), dtype=complex)
+    else:
+        values = np.asarray(values, dtype=complex).reshape(-1)
+    if values.shape != (surface_basis.n_samples,):
+        raise ValueError(
+            "surface_impedance must provide one value per surface sample; "
+            f"expected {surface_basis.n_samples}, got {values.size}"
+        )
+    if not np.all(np.isfinite(values)):
+        raise ValueError("surface_impedance contains non-finite sample values")
+
+    weighted = np.einsum(
+        "aik,bik,i,i->ab",
+        surface_basis.modes.conj(),
+        surface_basis.modes,
+        surface_basis.weights,
+        values,
+    )
+    target = system.block_slice(block)
+    expected = target.stop - target.start
+    if weighted.shape != (expected, expected):
+        raise ValueError(
+            f"surface basis has {surface_basis.n_modes} modes but block {block!r} "
+            f"has size {expected}"
+        )
+    reference_mass = np.zeros_like(system.surface_mass, dtype=complex)
+    reference_mass[target, target] = surface_basis.mass_matrix()
+    mass_scale = max(
+        float(np.linalg.norm(system.surface_mass)),
+        np.finfo(float).tiny,
+    )
+    if np.linalg.norm(reference_mass - system.surface_mass) / mass_scale > 1.0e-10:
+        raise ValueError(
+            "surface_basis quadrature/modes do not match the requested hybrid "
+            "system surface block"
+        )
+    matrix = np.zeros_like(system.resistance, dtype=complex)
+    matrix[target, target] = weighted
+    return SurfaceImpedanceGram(
+        matrix=matrix,
+        sample_values=values,
+        surface_mass_reference=system.surface_mass,
+        label=label,
+    )
+
+
+_LOCAL_ESIM_LUT_SCHEMA_VERSION = 1
+_LOCAL_ESIM_LUT_INTERPOLATION = "bilinear-logf-logh-logabs-phase-v1"
+
+
+def _canonical_json_sha256(value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+@dataclass(frozen=True)
+class LocalESIMSurfaceLUT:
+    """Persistent local-ESIM surface-impedance lookup table.
+
+    The table stores one material/cell-model signature on a tensor grid in
+    positive frequency and positive tangential-field magnitude.  Evaluation
+    is bilinear in ``log(f)`` and ``log(|H_t|)``.  Extrapolation is forbidden:
+    a production solve must either provide a table covering its operating
+    range or explicitly run the cell problem to build a wider table.  The
+    interpolated variables are log impedance magnitude and continuous phase,
+    which exactly represents the square-root frequency scaling of the linear
+    skin impedance.
+    """
+
+    frequency_nodes_hz: np.ndarray
+    h_nodes_A_per_m: np.ndarray
+    impedance_ohm: np.ndarray
+    cell_iterations: np.ndarray
+    model_signature: dict[str, object]
+    schema_version: int = _LOCAL_ESIM_LUT_SCHEMA_VERSION
+    _log_frequency_nodes: np.ndarray = field(init=False, repr=False, compare=False)
+    _log_h_nodes: np.ndarray = field(init=False, repr=False, compare=False)
+    _log_impedance_magnitude: np.ndarray = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _unwrapped_impedance_phase: np.ndarray = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        frequencies = np.asarray(self.frequency_nodes_hz, dtype=float).reshape(-1)
+        fields = np.asarray(self.h_nodes_A_per_m, dtype=float).reshape(-1)
+        impedance = np.asarray(self.impedance_ohm, dtype=complex)
+        iterations = np.asarray(self.cell_iterations, dtype=int)
+        if frequencies.size < 1 or fields.size < 2:
+            raise ValueError(
+                "local ESIM LUT requires at least one frequency and two field nodes"
+            )
+        if not np.all(np.isfinite(frequencies)) or np.any(frequencies <= 0.0):
+            raise ValueError("local ESIM LUT frequencies must be finite and positive")
+        if not np.all(np.isfinite(fields)) or np.any(fields <= 0.0):
+            raise ValueError("local ESIM LUT field nodes must be finite and positive")
+        if np.any(np.diff(frequencies) <= 0.0):
+            raise ValueError("local ESIM LUT frequencies must be strictly increasing")
+        if np.any(np.diff(fields) <= 0.0):
+            raise ValueError("local ESIM LUT field nodes must be strictly increasing")
+        expected_shape = (frequencies.size, fields.size)
+        if impedance.shape != expected_shape:
+            raise ValueError(
+                "local ESIM LUT impedance must have shape "
+                f"{expected_shape}, got {impedance.shape}"
+            )
+        if iterations.shape != expected_shape:
+            raise ValueError(
+                "local ESIM LUT cell_iterations must have shape "
+                f"{expected_shape}, got {iterations.shape}"
+            )
+        if not np.all(np.isfinite(impedance)):
+            raise ValueError("local ESIM LUT contains non-finite impedance")
+        if np.any(np.abs(impedance) <= np.finfo(float).tiny):
+            raise ValueError("local ESIM LUT impedance magnitude must be positive")
+        if np.min(impedance.real) < -1.0e-12:
+            raise ValueError("local ESIM LUT contains non-passive impedance")
+        if np.any(iterations < 1):
+            raise ValueError("local ESIM LUT cell iterations must be positive")
+        signature = json.loads(json.dumps(self.model_signature, sort_keys=True))
+        if not isinstance(signature, dict) or not signature:
+            raise ValueError("local ESIM LUT model_signature must be a non-empty dict")
+        schema_version = int(self.schema_version)
+        if schema_version != _LOCAL_ESIM_LUT_SCHEMA_VERSION:
+            raise ValueError(
+                "unsupported local ESIM LUT schema version: "
+                f"{schema_version}"
+            )
+        object.__setattr__(self, "frequency_nodes_hz", np.array(frequencies, copy=True))
+        object.__setattr__(self, "h_nodes_A_per_m", np.array(fields, copy=True))
+        object.__setattr__(self, "impedance_ohm", np.array(impedance, copy=True))
+        object.__setattr__(self, "cell_iterations", np.array(iterations, copy=True))
+        object.__setattr__(self, "model_signature", signature)
+        object.__setattr__(self, "schema_version", schema_version)
+        object.__setattr__(self, "_log_frequency_nodes", np.log(frequencies))
+        object.__setattr__(self, "_log_h_nodes", np.log(fields))
+        object.__setattr__(
+            self,
+            "_log_impedance_magnitude",
+            np.log(np.abs(impedance)),
+        )
+        object.__setattr__(
+            self,
+            "_unwrapped_impedance_phase",
+            np.unwrap(np.unwrap(np.angle(impedance), axis=1), axis=0),
+        )
+
+    @property
+    def model_key(self) -> str:
+        """Return the stable SHA-256 key for the material/cell configuration."""
+
+        return _canonical_json_sha256(self.model_signature)
+
+    def validate_model(self, model: "LocalESIMSurfaceModel") -> None:
+        """Reject use with a different BH curve, conductivity, or cell setup."""
+
+        expected = model.lut_signature()
+        if expected != self.model_signature:
+            raise ValueError(
+                "local ESIM LUT model signature does not match the requested "
+                "BH curve, conductivity, or cell settings"
+            )
+
+    def evaluate(self, tangential_field_magnitude, frequency_hz: float) -> np.ndarray:
+        """Interpolate impedance without extrapolating beyond the LUT domain."""
+
+        fields = np.asarray(tangential_field_magnitude, dtype=float).reshape(-1)
+        if fields.size == 0:
+            raise ValueError("tangential field samples must not be empty")
+        if not np.all(np.isfinite(fields)) or np.any(fields <= 0.0):
+            raise ValueError("LUT tangential field samples must be finite and positive")
+        frequency = float(frequency_hz)
+        if not np.isfinite(frequency) or frequency <= 0.0:
+            raise ValueError("frequency_hz must be positive")
+        h_min = float(self.h_nodes_A_per_m[0])
+        h_max = float(self.h_nodes_A_per_m[-1])
+        f_min = float(self.frequency_nodes_hz[0])
+        f_max = float(self.frequency_nodes_hz[-1])
+        range_rtol = 32.0 * np.finfo(float).eps
+        if np.min(fields) < h_min * (1.0 - range_rtol) or np.max(fields) > h_max * (
+            1.0 + range_rtol
+        ):
+            raise ValueError(
+                "tangential field is outside the local ESIM LUT range "
+                f"[{h_min:.6g}, {h_max:.6g}] A/m"
+            )
+        if frequency < f_min * (1.0 - range_rtol) or frequency > f_max * (
+            1.0 + range_rtol
+        ):
+            raise ValueError(
+                "frequency is outside the local ESIM LUT range "
+                f"[{f_min:.6g}, {f_max:.6g}] Hz"
+            )
+        clipped_fields = np.clip(fields, h_min, h_max)
+        clipped_frequency = float(np.clip(frequency, f_min, f_max))
+        log_fields = np.log(clipped_fields)
+        log_magnitude_by_frequency = np.empty(
+            (self.frequency_nodes_hz.size, fields.size),
+            dtype=float,
+        )
+        phase_by_frequency = np.empty_like(log_magnitude_by_frequency)
+        for index in range(self.frequency_nodes_hz.size):
+            log_magnitude_by_frequency[index] = np.interp(
+                log_fields,
+                self._log_h_nodes,
+                self._log_impedance_magnitude[index],
+            )
+            phase_by_frequency[index] = np.interp(
+                log_fields,
+                self._log_h_nodes,
+                self._unwrapped_impedance_phase[index],
+            )
+        if self.frequency_nodes_hz.size == 1:
+            interpolated_log_magnitude = log_magnitude_by_frequency[0]
+            interpolated_phase = phase_by_frequency[0]
+        else:
+            log_frequency = np.log(clipped_frequency)
+            upper = int(np.searchsorted(self._log_frequency_nodes, log_frequency))
+            upper = min(max(upper, 1), self.frequency_nodes_hz.size - 1)
+            lower = upper - 1
+            denominator = (
+                self._log_frequency_nodes[upper]
+                - self._log_frequency_nodes[lower]
+            )
+            fraction = (log_frequency - self._log_frequency_nodes[lower]) / denominator
+            interpolated_log_magnitude = (
+                (1.0 - fraction) * log_magnitude_by_frequency[lower]
+                + fraction * log_magnitude_by_frequency[upper]
+            )
+            interpolated_phase = (
+                (1.0 - fraction) * phase_by_frequency[lower]
+                + fraction * phase_by_frequency[upper]
+            )
+        values = np.exp(interpolated_log_magnitude + 1j * interpolated_phase)
+        if not np.all(np.isfinite(values)):
+            raise RuntimeError("local ESIM LUT interpolation produced non-finite impedance")
+        if np.min(values.real) < -1.0e-12:
+            raise RuntimeError("local ESIM LUT interpolation produced non-passive impedance")
+        return values
+
+    def diagnostics(self) -> dict[str, object]:
+        """Return JSON-ready provenance and coverage information."""
+
+        return {
+            "schema_version": int(self.schema_version),
+            "interpolation": _LOCAL_ESIM_LUT_INTERPOLATION,
+            "model_key_sha256": self.model_key,
+            "frequency_count": int(self.frequency_nodes_hz.size),
+            "field_count": int(self.h_nodes_A_per_m.size),
+            "frequency_min_Hz": float(self.frequency_nodes_hz[0]),
+            "frequency_max_Hz": float(self.frequency_nodes_hz[-1]),
+            "h_min_A_per_m": float(self.h_nodes_A_per_m[0]),
+            "h_max_A_per_m": float(self.h_nodes_A_per_m[-1]),
+            "cell_iterations_max": int(np.max(self.cell_iterations)),
+            "passive": bool(np.min(self.impedance_ohm.real) >= -1.0e-12),
+        }
+
+    def save(self, path) -> Path:
+        """Atomically save this LUT as a pickle-free compressed NPZ file."""
+
+        destination = Path(path)
+        if destination.suffix.lower() != ".npz":
+            raise ValueError("local ESIM LUT path must end in .npz")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        metadata = json.dumps(
+            {
+                "schema_version": int(self.schema_version),
+                "interpolation": _LOCAL_ESIM_LUT_INTERPOLATION,
+                "model_signature": self.model_signature,
+                "model_key_sha256": self.model_key,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        temporary = destination.with_name(destination.name + ".tmp.npz")
+        try:
+            np.savez_compressed(
+                temporary,
+                frequency_nodes_hz=self.frequency_nodes_hz,
+                h_nodes_A_per_m=self.h_nodes_A_per_m,
+                impedance_real_ohm=self.impedance_ohm.real,
+                impedance_imag_ohm=self.impedance_ohm.imag,
+                cell_iterations=self.cell_iterations,
+                metadata=np.asarray(metadata),
+            )
+            os.replace(temporary, destination)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        return destination
+
+    @classmethod
+    def load(cls, path) -> "LocalESIMSurfaceLUT":
+        """Load and validate a LUT written by :meth:`save`."""
+
+        source = Path(path)
+        with np.load(source, allow_pickle=False) as archive:
+            required = {
+                "frequency_nodes_hz",
+                "h_nodes_A_per_m",
+                "impedance_real_ohm",
+                "impedance_imag_ohm",
+                "cell_iterations",
+                "metadata",
+            }
+            missing = required.difference(archive.files)
+            if missing:
+                raise ValueError(
+                    "local ESIM LUT archive is missing: " + ", ".join(sorted(missing))
+                )
+            metadata = json.loads(str(archive["metadata"].item()))
+            if not isinstance(metadata, dict):
+                raise ValueError("local ESIM LUT metadata must be an object")
+            if metadata.get("interpolation") != _LOCAL_ESIM_LUT_INTERPOLATION:
+                raise ValueError("unsupported local ESIM LUT interpolation scheme")
+            lut = cls(
+                frequency_nodes_hz=archive["frequency_nodes_hz"],
+                h_nodes_A_per_m=archive["h_nodes_A_per_m"],
+                impedance_ohm=(
+                    archive["impedance_real_ohm"]
+                    + 1j * archive["impedance_imag_ohm"]
+                ),
+                cell_iterations=archive["cell_iterations"],
+                model_signature=metadata.get("model_signature", {}),
+                schema_version=metadata.get("schema_version", -1),
+            )
+        if metadata.get("model_key_sha256") != lut.model_key:
+            raise ValueError("local ESIM LUT model signature hash is inconsistent")
+        return lut
+
+
+@dataclass(frozen=True)
+class _LocalESIMImpedanceTable:
+    frequency_hz: float
+    h_nodes: np.ndarray
+    z_nodes: np.ndarray
+    cell_iterations_max: int
+    skin_depth_initial_m: float
+
+    def __post_init__(self) -> None:
+        h_nodes = np.asarray(self.h_nodes, dtype=float).reshape(-1)
+        z_nodes = np.asarray(self.z_nodes, dtype=complex).reshape(-1)
+        if h_nodes.size < 2 or z_nodes.shape != h_nodes.shape:
+            raise ValueError("local ESIM table requires matching node arrays")
+        if not np.all(np.isfinite(h_nodes)) or not np.all(np.isfinite(z_nodes)):
+            raise ValueError("local ESIM table contains non-finite values")
+        if np.any(h_nodes <= 0.0) or np.any(np.diff(h_nodes) <= 0.0):
+            raise ValueError("local ESIM table field nodes must be positive and increasing")
+        object.__setattr__(self, "h_nodes", np.array(h_nodes, copy=True))
+        object.__setattr__(self, "z_nodes", np.array(z_nodes, copy=True))
+
+
+@dataclass(frozen=True)
+class LocalESIMSurfaceModel:
+    """Nonlinear one-dimensional ESIM cell model for one SIBC surface block."""
+
+    bh_curve: np.ndarray
+    sigma: float
+    bins: int = 12
+    n_nodes: int = 100
+    num_skin_depths: float = 10.0
+    cell_tolerance: float = 1.0e-5
+    cell_max_iterations: int = 80
+    cell_relaxation: float = 0.5
+    h_floor: float = 1.0e-6
+    table_range_margin: float = 2.0
+    lut: LocalESIMSurfaceLUT | None = None
+    _table_cache: dict[float, _LocalESIMImpedanceTable] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        curve = np.asarray(self.bh_curve, dtype=float)
+        if curve.ndim != 2 or curve.shape[1] != 2 or curve.shape[0] < 2:
+            raise ValueError("bh_curve must have shape (n, 2) with n >= 2")
+        if not np.all(np.isfinite(curve)):
+            raise ValueError("bh_curve contains non-finite values")
+        if np.any(curve[:, 0] < 0.0) or np.any(np.diff(curve[:, 0]) <= 0.0):
+            raise ValueError("bh_curve H values must be non-negative and increasing")
+        if np.any(curve[:, 1] < 0.0):
+            raise ValueError("bh_curve B values must be non-negative")
+        sigma = float(self.sigma)
+        if not np.isfinite(sigma) or sigma <= 0.0:
+            raise ValueError("sigma must be positive")
+        bins = int(self.bins)
+        n_nodes = int(self.n_nodes)
+        max_iterations = int(self.cell_max_iterations)
+        if bins < 2:
+            raise ValueError("bins must be >= 2")
+        if n_nodes < 3:
+            raise ValueError("n_nodes must be >= 3")
+        if max_iterations < 1:
+            raise ValueError("cell_max_iterations must be >= 1")
+        for name in (
+            "num_skin_depths",
+            "cell_tolerance",
+            "h_floor",
+            "table_range_margin",
+        ):
+            value = float(getattr(self, name))
+            if not np.isfinite(value) or value <= 0.0:
+                raise ValueError(f"{name} must be positive")
+            object.__setattr__(self, name, value)
+        if self.table_range_margin <= 1.0:
+            raise ValueError("table_range_margin must be greater than 1")
+        relaxation = float(self.cell_relaxation)
+        if not np.isfinite(relaxation) or not 0.0 < relaxation <= 1.0:
+            raise ValueError("cell_relaxation must be in (0, 1]")
+        object.__setattr__(self, "bh_curve", np.array(curve, copy=True))
+        object.__setattr__(self, "sigma", sigma)
+        object.__setattr__(self, "bins", bins)
+        object.__setattr__(self, "n_nodes", n_nodes)
+        object.__setattr__(self, "cell_max_iterations", max_iterations)
+        object.__setattr__(self, "cell_relaxation", relaxation)
+        if self.lut is not None:
+            if not isinstance(self.lut, LocalESIMSurfaceLUT):
+                raise TypeError("lut must be a LocalESIMSurfaceLUT")
+            self.lut.validate_model(self)
+
+    def lut_signature(self) -> dict[str, object]:
+        """Return the stable material and cell-discretization signature."""
+
+        curve = np.ascontiguousarray(self.bh_curve, dtype="<f8")
+        return {
+            "schema_version": _LOCAL_ESIM_LUT_SCHEMA_VERSION,
+            "cell_model": "radia.esim_cell_problem.ESIMCellProblemSolver",
+            "bh_curve_sha256": hashlib.sha256(curve.tobytes()).hexdigest(),
+            "bh_curve_points": int(curve.shape[0]),
+            "sigma_S_per_m": float(self.sigma),
+            "n_nodes": int(self.n_nodes),
+            "num_skin_depths": float(self.num_skin_depths),
+            "cell_tolerance": float(self.cell_tolerance),
+            "cell_max_iterations": int(self.cell_max_iterations),
+            "cell_relaxation": float(self.cell_relaxation),
+        }
+
+    def with_lut(self, lut: LocalESIMSurfaceLUT) -> "LocalESIMSurfaceModel":
+        """Return an equivalent model that evaluates a precomputed LUT."""
+
+        if not isinstance(lut, LocalESIMSurfaceLUT):
+            raise TypeError("lut must be a LocalESIMSurfaceLUT")
+        lut.validate_model(self)
+        return replace(self, lut=lut)
+
+    def _cell_solver(self, frequency_hz: float):
+        frequency = float(frequency_hz)
+        if not np.isfinite(frequency) or frequency <= 0.0:
+            raise ValueError("frequency_hz must be positive")
+        from radia.esim_cell_problem import ESIMCellProblemSolver
+
+        return ESIMCellProblemSolver(
+            bh_curve=self.bh_curve,
+            sigma=self.sigma,
+            frequency=frequency,
+            num_skin_depths=self.num_skin_depths,
+            n_nodes=self.n_nodes,
+        )
+
+    def linear_impedance(self, frequency_hz: float) -> complex:
+        """Return the low-field linear SIBC used to start the Karl iteration."""
+
+        if self.lut is not None:
+            self.lut.validate_model(self)
+            return complex(
+                self.lut.evaluate([float(self.lut.h_nodes_A_per_m[0])], frequency_hz)[0]
+            )
+        return complex(self._cell_solver(frequency_hz).get_linear_sibc())
+
+    def _impedance_samples_cached(
+        self,
+        tangential_field_magnitude,
+        frequency_hz: float,
+        table: _LocalESIMImpedanceTable | None,
+    ) -> tuple[
+        np.ndarray,
+        dict[str, object],
+        _LocalESIMImpedanceTable | None,
+    ]:
+        """Interpolate a persistent table, extending it only when necessary."""
+
+        fields = np.asarray(tangential_field_magnitude, dtype=float).reshape(-1)
+        if fields.size == 0:
+            raise ValueError("tangential field samples must not be empty")
+        if not np.all(np.isfinite(fields)) or np.any(fields < 0.0):
+            raise ValueError("tangential field magnitudes must be finite and non-negative")
+        frequency = float(frequency_hz)
+        if not np.isfinite(frequency) or frequency <= 0.0:
+            raise ValueError("frequency_hz must be positive")
+        effective = np.maximum(fields, self.h_floor)
+        if self.lut is not None:
+            self.lut.validate_model(self)
+            values = self.lut.evaluate(effective, frequency)
+            lut_info = self.lut.diagnostics()
+            return values, {
+                "cell_model": "precomputed-2d-local-esim-lut",
+                "frequency_Hz": frequency,
+                "bins": int(self.lut.h_nodes_A_per_m.size),
+                "cell_iterations_max": int(lut_info["cell_iterations_max"]),
+                "cell_converged": True,
+                "cell_table_rebuilt": False,
+                "cell_solve_count": 0,
+                "lut_model_key_sha256": self.lut.model_key,
+                "lut_frequency_count": int(self.lut.frequency_nodes_hz.size),
+                "h_min_A_per_m": float(np.min(fields)),
+                "h_max_A_per_m": float(np.max(fields)),
+                "table_h_min_A_per_m": float(self.lut.h_nodes_A_per_m[0]),
+                "table_h_max_A_per_m": float(self.lut.h_nodes_A_per_m[-1]),
+                "z_real_min_ohm": float(np.min(values.real)),
+                "z_real_max_ohm": float(np.max(values.real)),
+                "z_imag_min_ohm": float(np.min(values.imag)),
+                "z_imag_max_ohm": float(np.max(values.imag)),
+            }, table
+        required_nodes = max(2, min(self.bins, fields.size))
+        if table is None:
+            table = self._table_cache.get(frequency)
+        table_valid = (
+            table is not None
+            and np.isclose(table.frequency_hz, frequency, rtol=0.0, atol=0.0)
+            and table.h_nodes.size >= required_nodes
+            and float(np.min(effective)) >= float(table.h_nodes[0])
+            and float(np.max(effective)) <= float(table.h_nodes[-1])
+        )
+        rebuilt = not table_valid
+        cell_solve_count = 0
+        if rebuilt:
+            h_min = max(
+                float(np.min(effective)) / self.table_range_margin,
+                self.h_floor,
+            )
+            h_max = max(
+                float(np.max(effective)) * self.table_range_margin,
+                h_min * (1.0 + 1.0e-6),
+            )
+            if table is not None and np.isclose(
+                table.frequency_hz,
+                frequency,
+                rtol=0.0,
+                atol=0.0,
+            ):
+                h_min = min(h_min, float(table.h_nodes[0]))
+                h_max = max(h_max, float(table.h_nodes[-1]))
+            h_nodes = np.geomspace(
+                h_min,
+                h_max,
+                required_nodes,
+            )
+            solver = self._cell_solver(frequency)
+            z_nodes = []
+            iterations = []
+            for h_value in h_nodes:
+                result = solver.solve(
+                    float(h_value),
+                    tol=self.cell_tolerance,
+                    max_iter=self.cell_max_iterations,
+                    relaxation=self.cell_relaxation,
+                )
+                if not bool(result["converged"]):
+                    raise RuntimeError(
+                        "ESIM cell problem did not converge at "
+                        f"H_t={float(h_value):.6g} A/m"
+                    )
+                z_nodes.append(complex(result["Z"]))
+                iterations.append(int(result["iterations"]))
+            table = _LocalESIMImpedanceTable(
+                frequency_hz=frequency,
+                h_nodes=h_nodes,
+                z_nodes=np.asarray(z_nodes, dtype=complex),
+                cell_iterations_max=max(iterations),
+                skin_depth_initial_m=float(solver.delta_initial),
+            )
+            self._table_cache[frequency] = table
+            cell_solve_count = int(h_nodes.size)
+        assert table is not None
+        h_nodes = table.h_nodes
+        z_nodes = table.z_nodes
+        values = np.interp(effective, h_nodes, z_nodes.real) + 1j * np.interp(
+            effective,
+            h_nodes,
+            z_nodes.imag,
+        )
+        if not np.all(np.isfinite(values)):
+            raise RuntimeError("ESIM cell interpolation produced non-finite impedance")
+        if np.min(values.real) < -1.0e-12:
+            raise RuntimeError("ESIM cell interpolation produced a non-passive impedance")
+        return values, {
+            "cell_model": "semi-infinite-geometrically-graded-1d-esim",
+            "frequency_Hz": frequency,
+            "bins": int(h_nodes.size),
+            "cell_iterations_max": int(table.cell_iterations_max),
+            "cell_converged": True,
+            "cell_table_rebuilt": rebuilt,
+            "cell_solve_count": cell_solve_count,
+            "skin_depth_initial_m": float(table.skin_depth_initial_m),
+            "h_nodes_A_per_m": [float(value) for value in h_nodes],
+            "z_nodes_ohm": [
+                {"real": float(value.real), "imag": float(value.imag)}
+                for value in z_nodes
+            ],
+            "h_min_A_per_m": float(np.min(fields)),
+            "h_max_A_per_m": float(np.max(fields)),
+            "table_h_min_A_per_m": float(h_nodes[0]),
+            "table_h_max_A_per_m": float(h_nodes[-1]),
+            "z_real_min_ohm": float(np.min(values.real)),
+            "z_real_max_ohm": float(np.max(values.real)),
+            "z_imag_min_ohm": float(np.min(values.imag)),
+            "z_imag_max_ohm": float(np.max(values.imag)),
+        }, table
+
+    def impedance_samples(
+        self,
+        tangential_field_magnitude,
+        frequency_hz: float,
+    ) -> tuple[np.ndarray, dict[str, object]]:
+        """Evaluate an attached LUT or build and cache a runtime cell table."""
+
+        values, diagnostics, _ = self._impedance_samples_cached(
+            tangential_field_magnitude,
+            frequency_hz,
+            None,
+        )
+        return values, diagnostics
+
+
+def BuildLocalESIMSurfaceLUT(
+    model: LocalESIMSurfaceModel,
+    frequencies_hz,
+    h_nodes_A_per_m,
+    *,
+    output_path=None,
+) -> LocalESIMSurfaceLUT:
+    """Precompute a reusable ``Z_s(f, |H_t|)`` database from cell problems.
+
+    All nodes are solved directly; interpolation is used only later by
+    :class:`LocalESIMSurfaceLUT`.  The returned table can be saved explicitly
+    or atomically written by passing ``output_path``.
+    """
+
+    if not isinstance(model, LocalESIMSurfaceModel):
+        raise TypeError("model must be a LocalESIMSurfaceModel")
+    frequencies = np.asarray(frequencies_hz, dtype=float).reshape(-1)
+    fields = np.asarray(h_nodes_A_per_m, dtype=float).reshape(-1)
+    if frequencies.size < 1 or not np.all(np.isfinite(frequencies)):
+        raise ValueError("frequencies_hz must contain finite positive nodes")
+    if fields.size < 2 or not np.all(np.isfinite(fields)):
+        raise ValueError("h_nodes_A_per_m must contain at least two finite nodes")
+    if np.any(frequencies <= 0.0) or np.any(np.diff(frequencies) <= 0.0):
+        raise ValueError("frequencies_hz must be positive and strictly increasing")
+    if np.any(fields <= 0.0) or np.any(np.diff(fields) <= 0.0):
+        raise ValueError("h_nodes_A_per_m must be positive and strictly increasing")
+    impedance = np.empty((frequencies.size, fields.size), dtype=complex)
+    iterations = np.empty((frequencies.size, fields.size), dtype=int)
+    for frequency_index, frequency in enumerate(frequencies):
+        solver = model._cell_solver(float(frequency))
+        for field_index, h_value in enumerate(fields):
+            result = solver.solve(
+                float(h_value),
+                tol=model.cell_tolerance,
+                max_iter=model.cell_max_iterations,
+                relaxation=model.cell_relaxation,
+            )
+            if not bool(result["converged"]):
+                raise RuntimeError(
+                    "ESIM cell problem did not converge while building LUT at "
+                    f"f={float(frequency):.6g} Hz, H_t={float(h_value):.6g} A/m"
+                )
+            value = complex(result["Z"])
+            if not np.isfinite(value) or value.real < -1.0e-12:
+                raise RuntimeError(
+                    "ESIM cell problem produced invalid impedance while building LUT at "
+                    f"f={float(frequency):.6g} Hz, H_t={float(h_value):.6g} A/m"
+                )
+            impedance[frequency_index, field_index] = value
+            iterations[frequency_index, field_index] = int(result["iterations"])
+    lut = LocalESIMSurfaceLUT(
+        frequency_nodes_hz=frequencies,
+        h_nodes_A_per_m=fields,
+        impedance_ohm=impedance,
+        cell_iterations=iterations,
+        model_signature=model.lut_signature(),
+    )
+    if output_path is not None:
+        lut.save(output_path)
+    return lut
+
+
+def ValidateLocalESIMSurfaceLUT(
+    model: LocalESIMSurfaceModel,
+    lut: LocalESIMSurfaceLUT,
+    *,
+    frequencies_hz=None,
+    h_values_A_per_m=None,
+) -> dict[str, object]:
+    """Compare LUT interpolation with direct cell solves at validation points.
+
+    By default, validation uses every LUT frequency node plus each geometric
+    frequency midpoint, crossed with every geometric field midpoint.  The
+    result is JSON-ready and does not modify the LUT or the model cache.
+    """
+
+    if not isinstance(model, LocalESIMSurfaceModel):
+        raise TypeError("model must be a LocalESIMSurfaceModel")
+    if not isinstance(lut, LocalESIMSurfaceLUT):
+        raise TypeError("lut must be a LocalESIMSurfaceLUT")
+    lut.validate_model(model)
+    if frequencies_hz is None:
+        frequencies = np.asarray(lut.frequency_nodes_hz, dtype=float)
+        if frequencies.size > 1:
+            frequency_midpoints = np.sqrt(frequencies[:-1] * frequencies[1:])
+            frequencies = np.sort(np.concatenate((frequencies, frequency_midpoints)))
+    else:
+        frequencies = np.asarray(frequencies_hz, dtype=float).reshape(-1)
+    if h_values_A_per_m is None:
+        fields = np.sqrt(lut.h_nodes_A_per_m[:-1] * lut.h_nodes_A_per_m[1:])
+    else:
+        fields = np.asarray(h_values_A_per_m, dtype=float).reshape(-1)
+    if frequencies.size < 1 or fields.size < 1:
+        raise ValueError("LUT validation requires frequency and field samples")
+    if not np.all(np.isfinite(frequencies)) or np.any(frequencies <= 0.0):
+        raise ValueError("validation frequencies must be finite and positive")
+    if not np.all(np.isfinite(fields)) or np.any(fields <= 0.0):
+        raise ValueError("validation fields must be finite and positive")
+
+    relative_errors = []
+    direct_impedances = []
+    cell_iterations = []
+    for frequency in frequencies:
+        predicted = lut.evaluate(fields, float(frequency))
+        solver = model._cell_solver(float(frequency))
+        direct = np.empty(fields.size, dtype=complex)
+        for index, h_value in enumerate(fields):
+            result = solver.solve(
+                float(h_value),
+                tol=model.cell_tolerance,
+                max_iter=model.cell_max_iterations,
+                relaxation=model.cell_relaxation,
+            )
+            if not bool(result["converged"]):
+                raise RuntimeError(
+                    "ESIM cell problem did not converge while validating LUT at "
+                    f"f={float(frequency):.6g} Hz, H_t={float(h_value):.6g} A/m"
+                )
+            direct[index] = complex(result["Z"])
+            cell_iterations.append(int(result["iterations"]))
+        denominator = np.maximum(np.abs(direct), np.finfo(float).tiny)
+        relative_errors.extend(np.abs(predicted - direct) / denominator)
+        direct_impedances.extend(direct)
+    errors = np.asarray(relative_errors, dtype=float)
+    direct_values = np.asarray(direct_impedances, dtype=complex)
+    return {
+        "model_key_sha256": lut.model_key,
+        "interpolation": _LOCAL_ESIM_LUT_INTERPOLATION,
+        "sample_count": int(errors.size),
+        "frequency_sample_count": int(frequencies.size),
+        "field_sample_count": int(fields.size),
+        "max_relative_error": float(np.max(errors)),
+        "rms_relative_error": float(np.sqrt(np.mean(errors**2))),
+        "p95_relative_error": float(np.percentile(errors, 95.0)),
+        "cell_iterations_max": int(max(cell_iterations)),
+        "direct_cells_passive": bool(np.min(direct_values.real) >= -1.0e-12),
+    }
+
+
+@dataclass(frozen=True)
+class LocalESIMSurfaceSolution:
+    """Converged nonlinear local-ESIM solution of a reduced HCurl-VIM system."""
+
+    coefficients: np.ndarray
+    surface_impedance: SurfaceImpedanceGram
+    tangential_field_magnitude: np.ndarray
+    frequency_hz: float
+    converged: bool
+    iterations: int
+    relative_impedance_change: float
+    history: tuple[dict[str, object], ...]
+    linear_solve_diagnostics: dict[str, object]
+
+    def __post_init__(self) -> None:
+        coefficients = np.asarray(self.coefficients, dtype=complex).reshape(-1)
+        fields = np.asarray(self.tangential_field_magnitude, dtype=float).reshape(-1)
+        if not np.all(np.isfinite(coefficients)) or not np.all(np.isfinite(fields)):
+            raise ValueError("local ESIM solution contains non-finite values")
+        object.__setattr__(self, "coefficients", np.array(coefficients, copy=True))
+        object.__setattr__(
+            self,
+            "tangential_field_magnitude",
+            np.array(fields, copy=True),
+        )
+        object.__setattr__(self, "history", tuple(dict(row) for row in self.history))
+        object.__setattr__(
+            self,
+            "linear_solve_diagnostics",
+            dict(self.linear_solve_diagnostics),
+        )
+
+    def diagnostics(self) -> dict[str, object]:
+        """Return JSON-ready nonlinear convergence and passivity diagnostics."""
+
+        return {
+            "frequency_Hz": float(self.frequency_hz),
+            "converged": bool(self.converged),
+            "iterations": int(self.iterations),
+            "relative_impedance_change": float(self.relative_impedance_change),
+            "h_min_A_per_m": float(np.min(self.tangential_field_magnitude)),
+            "h_max_A_per_m": float(np.max(self.tangential_field_magnitude)),
+            "surface_impedance": self.surface_impedance.diagnostics(),
+            "linear_solve": dict(self.linear_solve_diagnostics),
+            "history": [dict(row) for row in self.history],
+        }
+
+
+def SolveLocalESIMSurfaceVIM(
+    system: HybridVIMSystem,
+    surface_basis: SampledCurrentBasis,
+    rhs,
+    model: LocalESIMSurfaceModel,
+    frequency_hz: float,
+    *,
+    block: str = "surface",
+    outer_tolerance: float = 1.0e-3,
+    outer_max_iterations: int = 20,
+    outer_relaxation: float = 0.5,
+    field_amplitude_scale: float = 1.0,
+    initial_surface_impedance=None,
+    solver: str = "cocr",
+    solve_tolerance: float = 1.0e-10,
+    solve_max_iterations: int | None = None,
+    mixed_galerkin_keep_blocks=None,
+    mixed_galerkin_eliminate_blocks=None,
+    raise_on_nonconvergence: bool = True,
+) -> LocalESIMSurfaceSolution:
+    """Solve one physical excitation with a local nonlinear ESIM SIBC block.
+
+    Nonlinear superposition is not valid, so ``rhs`` must contain exactly one
+    excitation.  The surface-Omega current is the tangential magnetic-field
+    trace (up to ``field_amplitude_scale`` for the caller's phasor convention).
+    """
+
+    if not isinstance(system, HybridVIMSystem):
+        raise TypeError("system must be a HybridVIMSystem")
+    if not isinstance(surface_basis, SampledCurrentBasis):
+        raise TypeError("surface_basis must be a SampledCurrentBasis")
+    if not isinstance(model, LocalESIMSurfaceModel):
+        raise TypeError("model must be a LocalESIMSurfaceModel")
+    frequency = float(frequency_hz)
+    if not np.isfinite(frequency) or frequency <= 0.0:
+        raise ValueError("frequency_hz must be positive")
+    values = np.asarray(rhs)
+    if values.ndim == 2 and values.shape[1] == 1:
+        values = values[:, 0]
+    if values.ndim != 1 or values.shape != (system.n_modes,):
+        raise ValueError(
+            "rhs must contain one nonlinear excitation with shape "
+            f"({system.n_modes},)"
+        )
+    if not np.all(np.isfinite(values)):
+        raise ValueError("rhs contains non-finite values")
+    outer_tolerance = float(outer_tolerance)
+    outer_relaxation = float(outer_relaxation)
+    field_amplitude_scale = float(field_amplitude_scale)
+    outer_max_iterations = int(outer_max_iterations)
+    if not np.isfinite(outer_tolerance) or outer_tolerance <= 0.0:
+        raise ValueError("outer_tolerance must be positive")
+    if outer_max_iterations < 1:
+        raise ValueError("outer_max_iterations must be >= 1")
+    if not np.isfinite(outer_relaxation) or not 0.0 < outer_relaxation <= 1.0:
+        raise ValueError("outer_relaxation must be in (0, 1]")
+    if not np.isfinite(field_amplitude_scale) or field_amplitude_scale <= 0.0:
+        raise ValueError("field_amplitude_scale must be positive")
+    use_mixed = (
+        mixed_galerkin_keep_blocks is not None
+        or mixed_galerkin_eliminate_blocks is not None
+    )
+    if (mixed_galerkin_keep_blocks is None) != (
+        mixed_galerkin_eliminate_blocks is None
+    ):
+        raise ValueError(
+            "mixed_galerkin_keep_blocks and mixed_galerkin_eliminate_blocks "
+            "must be supplied together"
+        )
+    surface_slice = system.block_slice(block)
+    if surface_slice.stop - surface_slice.start != surface_basis.n_modes:
+        raise ValueError("surface basis mode count does not match the selected block")
+    s = 1j * 2.0 * np.pi * frequency
+    if initial_surface_impedance is None:
+        initial_surface_impedance = model.linear_impedance(frequency)
+    if isinstance(initial_surface_impedance, SurfaceImpedanceGram):
+        _surface_impedance_term(system.surface_mass, initial_surface_impedance)
+        current_gram = initial_surface_impedance
+    elif np.isscalar(initial_surface_impedance):
+        current_gram = AssembleSurfaceImpedanceGram(
+            system,
+            surface_basis,
+            complex(initial_surface_impedance),
+            block=block,
+            label="local-esim-initial-linear",
+        )
+    else:
+        raise TypeError(
+            "initial_surface_impedance must be scalar or SurfaceImpedanceGram"
+        )
+
+    history = []
+    coefficients = None
+    fields = None
+    solved_gram = current_gram
+    solve_info = {}
+    impedance_table = None
+    relative_change = float("inf")
+    converged = False
+    for iteration in range(1, outer_max_iterations + 1):
+        solved_gram = current_gram
+        if use_mixed:
+            matrix = system.impedance(s, surface_impedance=solved_gram)
+            orthogonalization = system.mixed_galerkin_orthogonalization(
+                mixed_galerkin_keep_blocks,
+                mixed_galerkin_eliminate_blocks,
+                s,
+                surface_impedance=solved_gram,
+            )
+            coefficients = orthogonalization.solve(matrix, values)
+            solve_info = {
+                "backend": "dense-mixed-galerkin-schur",
+                **orthogonalization.diagnostics(),
+            }
+        else:
+            coefficients, solve_info = system.solve(
+                s,
+                values,
+                surface_impedance=solved_gram,
+                solver=solver,
+                tolerance=solve_tolerance,
+                max_iterations=solve_max_iterations,
+                return_diagnostics=True,
+            )
+        surface_coefficients = coefficients[surface_slice]
+        surface_current = np.einsum(
+            "m,mik->ik",
+            surface_coefficients,
+            surface_basis.modes,
+        )
+        fields = field_amplitude_scale * np.sqrt(
+            np.sum(np.abs(surface_current) ** 2, axis=1)
+        )
+        target_values, cell_info, impedance_table = model._impedance_samples_cached(
+            fields,
+            frequency,
+            impedance_table,
+        )
+        target_gram = AssembleSurfaceImpedanceGram(
+            system,
+            surface_basis,
+            target_values,
+            block=block,
+            label="local-esim",
+        )
+        denominator = max(
+            float(np.linalg.norm(target_values)),
+            np.finfo(float).tiny,
+        )
+        relative_change = float(
+            np.linalg.norm(target_values - solved_gram.sample_values) / denominator
+        )
+        history.append(
+            {
+                "iteration": iteration,
+                "relative_impedance_change": relative_change,
+                **cell_info,
+            }
+        )
+        if relative_change <= outer_tolerance:
+            converged = True
+            break
+        relaxed_values = (
+            (1.0 - outer_relaxation) * solved_gram.sample_values
+            + outer_relaxation * target_values
+        )
+        current_gram = AssembleSurfaceImpedanceGram(
+            system,
+            surface_basis,
+            relaxed_values,
+            block=block,
+            label="local-esim-relaxed",
+        )
+
+    if not converged and raise_on_nonconvergence:
+        raise RuntimeError(
+            "local ESIM outer iteration did not converge: "
+            f"relative change={relative_change:.3e} after {outer_max_iterations} iterations"
+        )
+    assert coefficients is not None and fields is not None
+    return LocalESIMSurfaceSolution(
+        coefficients=coefficients,
+        surface_impedance=solved_gram,
+        tangential_field_magnitude=fields,
+        frequency_hz=frequency,
+        converged=converged,
+        iterations=iteration,
+        relative_impedance_change=relative_change,
+        history=tuple(history),
+        linear_solve_diagnostics=solve_info,
+    )
+
+
 def _rhs_matrix_for_basis(basis: SampledCurrentBasis, vector_potentials) -> np.ndarray:
     ports = tuple(vector_potentials)
     if not ports:
@@ -8133,6 +9930,45 @@ class TopologyAwareHybridVIM:
             s,
             self.rhs,
             surface_impedance=surface_impedance,
+        )
+
+    def surface_impedance_gram(
+        self,
+        surface_impedance,
+        *,
+        label: str = "local-sibc",
+    ) -> SurfaceImpedanceGram:
+        """Assemble local linear/ESIM values on the air-facing SIBC block."""
+
+        return AssembleSurfaceImpedanceGram(
+            self.system,
+            self.surface_basis,
+            surface_impedance,
+            block="surface",
+            label=label,
+        )
+
+    def solve_local_esim(
+        self,
+        model: LocalESIMSurfaceModel,
+        frequency_hz: float,
+        rhs=None,
+        **kwargs,
+    ) -> LocalESIMSurfaceSolution:
+        """Run the production local-ESIM Karl loop on the air-facing block."""
+
+        if rhs is None:
+            if self.rhs is None:
+                raise ValueError("rhs was not assembled; supply one excitation")
+            rhs = self.rhs
+        return SolveLocalESIMSurfaceVIM(
+            self.system,
+            self.surface_basis,
+            rhs,
+            model,
+            frequency_hz,
+            block="surface",
+            **kwargs,
         )
 
     def cln_model(self) -> HCurlEddyCLNModel:
@@ -8254,6 +10090,7 @@ def NgsolveTopologyAwareHybridVIM(
             volume,
             rtol=current_gram_rtol,
         )
+        vectors = response_basis.vectors
     graph = topology.conductor_graph()
     if bridge_names is None:
         bridge_names = [f"bridge_cycle_{i}" for i in range(graph.cycle_rank)]
@@ -8270,6 +10107,53 @@ def NgsolveTopologyAwareHybridVIM(
         boundaries=surface_boundaries,
         names=surface_names,
     )
+    if interaction is None:
+        sampled_epsilon = (
+            _default_kernel_epsilon((volume, bridge, surface))
+            if kernel_epsilon is None
+            else float(kernel_epsilon)
+        )
+        if int(mesh.dim) == 3:
+            from ._hcurl_tet_interaction import (
+                NgsolveHCurlCellVolumeInteraction,
+            )
+
+            volume_interaction = NgsolveHCurlCellVolumeInteraction(
+                mesh,
+                fes,
+                vectors,
+                volume,
+                materials=volume_materials,
+                matrix_free=True,
+            )
+            interaction = HACApKSampledLaplaceInteraction(
+                kernel_epsilon=sampled_epsilon,
+                cross_only=True,
+                diagonal_interaction=volume_interaction,
+                diagonal_bases=(volume,),
+            )
+        elif int(mesh.dim) == 2:
+            from ._hcurl_planar_interaction import (
+                NgsolveHCurlPlanarVolumeInteraction,
+            )
+
+            volume_interaction = NgsolveHCurlPlanarVolumeInteraction(
+                mesh,
+                fes,
+                vectors,
+                volume,
+                materials=volume_materials,
+                matrix_free=True,
+            )
+            interaction = HACApKSampledPlanarLogInteraction(
+                kernel_epsilon=sampled_epsilon,
+                reference_length=1.0,
+                cross_only=True,
+                diagonal_interaction=volume_interaction,
+                diagonal_bases=(volume,),
+            )
+        else:
+            raise ValueError("HCurl hybrid VIM supports only 2-D or 3-D meshes")
     system = AssembleHybridVIM(
         volume,
         bridge,
@@ -8866,8 +10750,11 @@ __all__ = [
     "NgsolveStaticCondensedBlockKrylovBasis",
     "SampledLaplaceInteraction",
     "HACApKSampledLaplaceInteraction",
+    "HACApKSampledPlanarLogInteraction",
     "SampledHACApKOperator",
     "ReducedInteractionMatrix",
+    "NGSolveProjectedOperator",
+    "NGSolveProjectedInteraction",
     "CurrentMagneticFluxDensitySamples",
     "MagnetizationCurrentCoupling",
     "EVRSTMethodAlgebra",
@@ -8884,10 +10771,18 @@ __all__ = [
     "CoupleHybridVIMWithHDivMMM",
     "CoupleEddyBubbleHCurlBasisWithHDivMMM",
     "MixedGalerkinOrthogonalization",
+    "SurfaceImpedanceGram",
+    "LocalESIMSurfaceLUT",
+    "LocalESIMSurfaceModel",
+    "LocalESIMSurfaceSolution",
+    "BuildLocalESIMSurfaceLUT",
+    "ValidateLocalESIMSurfaceLUT",
     "HybridVIMSystem",
     "HCurlEddyCLNModel",
     "HCurlEddyCLNFromVIM",
     "AssembleHybridVIM",
+    "AssembleSurfaceImpedanceGram",
+    "SolveLocalESIMSurfaceVIM",
     "TopologyAwareHybridVIM",
     "NgsolveTopologyAwareHybridVIM",
     "NgsolveEddyBubbleHybridVIM",

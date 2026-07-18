@@ -666,6 +666,125 @@ after Theorem 1; Paper 1 §VIII routes volume-source problems to XFEM.
 """
 
 
+CLN_SIBC_EVRS_ESIM = """
+# Production HCurl EVRS + local ESIM-SIBC mixed Galerkin
+
+This is the current Radia production interpretation of the SIBC bridge.  It is
+separate from the deprecated scalar Warburg closure described historically in
+other sections of this document.
+
+## Topology-aware space
+
+Start from a high-order NGSolve `HCurl(p)` parent space and classify every
+conductor face by its neighboring materials:
+
+- conductor-air/exterior: eligible for surface-Omega/SIBC modes;
+- conductor-conductor: retain conductive graph-cycle bridge modes;
+- conductor-insulator: retain a non-SIBC blocking trace;
+- ordinary conductor interior: compress by the Eddy-Visible Response Space
+  (EVRS), then quotient directions carrying no independent `curl(T)` current.
+
+Thus `p` controls parent-space admissibility near corners and edges, while the
+retained EVRS/CLN rank controls reduced-model size.  An SIBC face is never
+inferred merely from being a boundary face.
+
+## Local ESIM surface operator
+
+For a nonlinear magnetic conductor, solve the one-dimensional normal ESIM cell
+at the local tangential-field magnitude and tabulate
+`Z_s^ESIM(|H_t|,s)`.  Do not replace those values by their surface average.
+For surface-current modes `K_m`, assemble
+
+    [G_Gamma(Z_s)]_mn = int_Gamma Z_s(x,s) K_m(x) . K_n(x) dGamma.
+
+Radia exposes this contract as `SurfaceImpedanceGram` and
+`AssembleSurfaceImpedanceGram`.  The latter projects per-quadrature-sample
+impedances and checks the surface basis and weights.  If
+`Re Z_s(x,s) >= 0` pointwise, the Hermitian dissipative part of the Gram is
+positive semidefinite.  Passing an unnamed array as if it were a modal diagonal
+is rejected because it would hide the required surface projection.
+
+`LocalESIMSurfaceModel` owns the validated BH curve and SciPy one-dimensional
+cell controls. `SolveLocalESIMSurfaceVIM`, or
+`TopologyAwareHybridVIM.solve_local_esim`, runs the fail-loud outer loop for
+exactly one physical excitation. The returned coefficients, sampled `|H_t|`,
+and `SurfaceImpedanceGram` always belong to the same linearization point.
+
+For design sweeps, `BuildLocalESIMSurfaceLUT` solves the cell grid offline and
+`LocalESIMSurfaceLUT` persists `Z_s(f,|H_t|)` in a pickle-free NPZ archive.
+Attach a loaded table with `LocalESIMSurfaceModel.with_lut`. The online Karl
+iteration then reports `cell_solve_count = 0`. Interpolation is bilinear in
+log-frequency and log-field for `log(|Z_s|)` and continuous impedance phase;
+extrapolation is forbidden. A SHA-256 material/cell signature rejects reuse with
+a different BH curve, conductivity, or numerical cell setup. Establish LUT
+adequacy by field/frequency node refinement. Add state
+dimensions, rather than forcing a two-dimensional LUT, for hysteresis,
+temperature-dependent data not already represented by BH/sigma, rotational
+magnetization, or multidimensional corner cells.
+`ValidateLocalESIMSurfaceLUT` automates this check with direct cell solves at
+field midpoints and at both stored and midpoint frequencies; choose the table
+density from its reported maximum relative interpolation error.
+
+The nonlinear solve uses an outer Karl iteration:
+
+1. solve the reduced HCurl system for the current local surface Gram;
+2. recover the solution-shaped `|H_t|` profile on conductor-air faces;
+3. interpolate the converged ESIM cell table;
+4. rebuild `G_Gamma(Z_s)` and repeat to the impedance-change tolerance.
+
+The converged Gram is accepted by the fixed-operator HDiv-MMM/HCurl coupled
+solve. Do not overclaim the scope: `NgsolveBDMEddyBubbleVIM` currently builds
+the BDM-MMM response reduction from scalar `mu_r`. A simultaneous constitutive
+iteration that updates an ordinary nonlinear HDiv magnetic operator together
+with the local ESIM Gram is still an integration task.
+
+## Exact mixed-Galerkin elimination
+
+Partition the reduced operator into eliminated ordinary bulk coordinates `b`
+and retained HDiv/bridge/SIBC coordinates `k`:
+
+    A = [[A_bb, A_bk], [A_kb, A_kk]].
+
+The frequency-specific trial and test maps are
+
+    P_trial = [-A_bb^-1 A_bk; I],
+    P_test  = [-A_bb^-T A_kb^T; I],
+    P_test^T A P_trial = A_kk - A_kb A_bb^-1 A_bk.
+
+For a nonzero eliminated-block right-hand side, reconstruction is affine:
+
+    x = P_trial c + [A_bb^-1 f_b; 0],
+    rhs_reduced = P_test^T f.
+
+Omitting the particular lift loses the directly excited bulk field even though
+the Schur matrix itself is correct.  `MixedGalerkinOrthogonalization.solve`
+implements the complete affine reconstruction.
+
+## Recorded p=6 broadband gate
+
+`validation_test/cln/evrs_esim_sibc_mixed_notched_p6.json` records an mdx run
+on a re-entrant notched conductor from 1 kHz to 1 MHz:
+
+- 3557 active parent-HCurl DoFs;
+- Krylov depth 8: 10 parent-T responses -> 8 current-Gram bulk modes;
+- 14 conductor-cycle modes + 3 exterior-SIBC modes;
+- 25 retained eddy coordinates, 0.703% of the parent DoFs;
+- local-ESIM port difference from depth 22: at most 4.95e-8;
+- mixed-Galerkin port difference from the direct reduced solve: at most 6.44e-16;
+- uniform ESIM vs local ESIM: 0.229%--0.655%;
+- linear SIBC vs local ESIM: 6.98%--38.31%;
+- the 4-by-96 LUT has maximum direct-midpoint relative error 8.17e-4;
+- all 16 outer solves converged in 10--17 updates with passive local Grams;
+- every online outer update used the LUT and performed zero cell solves.
+
+The linear-to-ESIM difference is a constitutive-model comparison, not an error
+estimate.  Use local ESIM-SIBC when the high-frequency layer is thin and locally
+one-dimensional.  Retain volume EVRS/VIM for low-frequency penetration,
+genuinely three-dimensional edge/corner current, or rotational/hysteretic state
+outside the ESIM cell model.
+"""
+
+
 def get_cln_sibc_orthogonal_documentation() -> str:
     """Return full markdown documentation for the CLN+SIBC orthogonal theory."""
     return "\n\n".join([
@@ -677,6 +796,7 @@ def get_cln_sibc_orthogonal_documentation() -> str:
         CLN_SIBC_ORTHOGONAL_NAGAMINE_LINK,
         CLN_SIBC_ORTHOGONAL_OUTLOOK,
         CLN_SIBC_ORTHOGONAL_XFEM_COMPARISON,
+        CLN_SIBC_EVRS_ESIM,
     ])
 
 
@@ -694,6 +814,8 @@ def get_cln_sibc_orthogonal_section(name: str = "list") -> str:
         "outlook"        - 2D Nagamine square + 3D cuboid completion path
         "xfem_vs_sibc"   - XFEM / classical SIBC / augmented CLN decision
                            framework, port-driven scope, stacking strategy
+        "evrs_esim"      - production HCurl EVRS, local ESIM surface Gram,
+                           and exact affine mixed-Galerkin reconstruction
         "all"            - full documentation
     """
     table = {
@@ -705,12 +827,13 @@ def get_cln_sibc_orthogonal_section(name: str = "list") -> str:
         "nagamine":     CLN_SIBC_ORTHOGONAL_NAGAMINE_LINK,
         "outlook":      CLN_SIBC_ORTHOGONAL_OUTLOOK,
         "xfem_vs_sibc": CLN_SIBC_ORTHOGONAL_XFEM_COMPARISON,
+        "evrs_esim":    CLN_SIBC_EVRS_ESIM,
         "all":          get_cln_sibc_orthogonal_documentation(),
     }
     if name == "list":
         return "Available sections: " + ", ".join(
             ["overview", "matsuo", "kuriyama", "math", "verification",
-             "nagamine", "outlook", "xfem_vs_sibc", "all"])
+             "nagamine", "outlook", "xfem_vs_sibc", "evrs_esim", "all"])
     if name not in table:
         return (f"Unknown section '{name}'. "
                 f"Use 'list' to see available sections.")

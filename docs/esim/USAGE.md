@@ -27,13 +27,13 @@ canonical Hollaus-type Picard relaxation.
 | Cu / Al / brass workpiece (`μ_r ≈ 1`) | `--impedance-model sibc` (linear Dowell) |
 | Steel / ferrite workpiece, **mid-frequency**, `|H_t|` stays on one side of the BH knee | `--impedance-model sibc` with reasonable `--mu-r` |
 | Steel workpiece traversing the BH knee (saturation pattern matters) | **`--impedance-model esim`** + `--bh-file <table.txt>` |
-| Strong spatial saturation contrast across the workpiece surface | `--impedance-model esim --esim-per-panel` (BEM path only) |
+| Strong spatial saturation contrast across the workpiece surface | `--impedance-model esim --esim-per-panel` (BEM), or the local HCurl-VIM API in Section 3.4 |
 
-Linear SIBC is closed-form and fast (one matrix solve per outer
-iteration).  ESIM adds an outer Karl iteration (Picard fixed-point on
-`Z_s`) plus a 1-D nonlinear cell solve per iteration; typical overhead
-is 5-10× the linear solve.  Per-panel ESIM multiplies the cell-solve
-cost by `N_DOF`.
+Linear SIBC is closed-form and fast.  The scalar/per-panel CLI paths add an
+outer Karl iteration and runtime one-dimensional cell solves.  The local
+HCurl-VIM API can instead use the persistent LUT in Section 3.4; its online
+outer iterations perform no cell solves.  Per-panel runtime ESIM without that
+LUT multiplies cell-solve work by the number of sampled panels/DOFs.
 
 ---
 
@@ -158,6 +158,93 @@ The flag set matches `calc_inductance.py` (note: this one uses
 `--impedance-model` and `--esim-max-iter`, unlike `calc_fem_kelvin.py`).
 Per-panel ESIM is not wired here either — the Robin term uses a scalar
 `s/Z_s`.
+
+### 3.4 Local ESIM on the HCurl Eddy-Bubble VIM
+
+The topology-aware HCurl-VIM path has a separate local surface API. It keeps
+one ESIM value per air-facing surface quadrature sample, assembles the complex
+surface Gram without spatial averaging, and repeats the reduced VIM solve in a
+Hollaus-type outer Picard iteration:
+
+```python
+import numpy as np
+import radia.vim as vim
+
+model = vim.LocalESIMSurfaceModel(
+    bh_curve=np.loadtxt("steel_bh.txt")[:, :2],
+    sigma=2.0e6,
+    bins=12,
+    n_nodes=100,
+)
+result = hybrid.solve_local_esim(
+    model,
+    frequency_hz=100_000.0,
+    outer_tolerance=1.0e-3,
+    outer_max_iterations=20,
+    outer_relaxation=0.5,
+)
+assert result.converged
+```
+
+`hybrid` is the `TopologyAwareHybridVIM` returned by
+`NgsolveTopologyAwareHybridVIM` or `NgsolveEddyBubbleHybridVIM`. The lower-level
+entry is `SolveLocalESIMSurfaceVIM(system, surface_basis, rhs, model, frequency)`.
+Because ESIM is nonlinear, both entries accept exactly one physical excitation;
+multi-column port superposition is rejected.
+
+The one-dimensional cell problem deliberately uses SciPy's sparse/tridiagonal
+solvers. HCurl basis construction, VIM assembly, HACApK action, mixed-Galerkin
+Schur reduction, and the reduced linear solve remain on the NGSolve/Radia native
+path. `SurfaceImpedanceGram` records the surface mass used at assembly and is
+rejected if passed to a different hybrid system.
+
+For repeated design sweeps, precompute the cell problems once as a persistent
+two-dimensional `Z_s(f, |H_t|)` LUT:
+
+```python
+frequencies = np.geomspace(1.0e3, 1.0e6, 13)
+fields = np.geomspace(model.h_floor, 3.0e4, 96)
+lut = vim.BuildLocalESIMSurfaceLUT(
+    model,
+    frequencies,
+    fields,
+    output_path="steel_local_esim.npz",
+)
+quality = vim.ValidateLocalESIMSurfaceLUT(model, lut)
+print(quality["max_relative_error"])
+
+# A later process performs no SciPy cell solve in the Karl iteration.
+lut = vim.LocalESIMSurfaceLUT.load("steel_local_esim.npz")
+production_model = model.with_lut(lut)
+result = hybrid.solve_local_esim(
+    production_model,
+    frequency_hz=100_000.0,
+)
+assert all(row["cell_solve_count"] == 0 for row in result.history)
+```
+
+The NPZ archive is pickle-free and carries a SHA-256 signature of the BH curve,
+conductivity, and cell discretization/tolerances. A mismatched model is rejected.
+Interpolation of `log(|Z_s|)` and continuous impedance phase is bilinear in
+`log(f)` and `log(|H_t|)`; extrapolation is also rejected, so the offline grid
+must cover the full expected operating envelope.
+Generated LUT files are runtime/cache artifacts and are not committed as Radia
+source binaries.
+
+A LUT is sufficient when the local ESIM cell response is single-valued in the
+chosen state variables and a node-refinement check bounds interpolation error.
+`ValidateLocalESIMSurfaceLUT` evaluates every field-interval midpoint at all
+frequency nodes and frequency midpoints with direct cell solves. Select the
+field-node count from that reported error, rather than treating 96 as universal.
+Use separate tables when BH data or conductivity changes, including a material
+temperature update. A two-dimensional LUT is not a substitute for additional
+state variables required by hysteresis, rotational magnetization, or a genuinely
+two/three-dimensional corner cell problem.
+
+The converged Gram can be passed to `CoupledHDivHybridVIMSystem.solve_frequency`
+for a fixed HDiv-MMM magnetic operator. A simultaneous outer iteration that
+also updates the ordinary nonlinear HDiv constitutive operator is not yet a
+one-call API; it must not be described as completed production functionality.
 
 ---
 
