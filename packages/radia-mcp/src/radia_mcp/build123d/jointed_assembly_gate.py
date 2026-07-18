@@ -1144,6 +1144,197 @@ def _stl_repair_closure_identity_ok(value: object) -> bool:
     )
 
 
+def _brep_semantic_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("brep_generation") or "")
+    try:
+        pcurves = [[int(row[0]), str(row[1])] for row in value.get("face_pcurve_sha256", [])]
+        decoded_pcurves = [
+            [int(row[0]), str(row[1])]
+            for row in value.get("decoded_face_pcurve_sha256", [])
+        ]
+        orientations = [
+            [int(row[0]), int(row[1])]
+            for row in value.get("wire_orientation_signs", [])
+        ]
+        decoded_orientations = [
+            [int(row[0]), int(row[1])]
+            for row in value.get("decoded_wire_orientation_signs", [])
+        ]
+        locations = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("nested_location_sha256", [])
+        ]
+        decoded_locations = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("decoded_nested_location_sha256", [])
+        ]
+        tolerances = [
+            [int(row[0]), float(row[1])]
+            for row in value.get("edge_tolerances_m", [])
+        ]
+        decoded_tolerances = [
+            [int(row[0]), float(row[1])]
+            for row in value.get("decoded_edge_tolerances_m", [])
+        ]
+        surfaces = [
+            [int(row[0]), str(row[1])] for row in value.get("surface_types", [])
+        ]
+        decoded_surfaces = [
+            [int(row[0]), str(row[1])]
+            for row in value.get("decoded_surface_types", [])
+        ]
+    except (IndexError, TypeError, ValueError):
+        return False
+    face_ids = {row[0] for row in pcurves}
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "pcurve_generation",
+                "wire_generation",
+                "location_generation",
+                "tolerance_generation",
+                "surface_generation",
+                "serializer_generation",
+                "shape_generation",
+                "result_generation",
+            )
+        )
+        and bool(pcurves)
+        and len(face_ids) == len(pcurves)
+        and all(row[0] > 0 and _valid_sha256(row[1]) for row in pcurves)
+        and decoded_pcurves == pcurves
+        and bool(orientations)
+        and len({row[0] for row in orientations}) == len(orientations)
+        and all(row[0] > 0 and row[1] in {-1, 1} for row in orientations)
+        and decoded_orientations == orientations
+        and bool(locations)
+        and len({row[0] for row in locations}) == len(locations)
+        and all(row[0] and _valid_sha256(row[1]) for row in locations)
+        and decoded_locations == locations
+        and bool(tolerances)
+        and len({row[0] for row in tolerances}) == len(tolerances)
+        and all(row[0] > 0 and math.isfinite(row[1]) and row[1] > 0.0 for row in tolerances)
+        and decoded_tolerances == tolerances
+        and bool(surfaces)
+        and {row[0] for row in surfaces} == face_ids
+        and all(row[0] > 0 and row[1] for row in surfaces)
+        and decoded_surfaces == surfaces
+        and str(value.get("serializer_version") or "").startswith("occt-brep-v")
+        and value.get("decoded_serializer_version") == value.get("serializer_version")
+        and _valid_sha256(value.get("brep_shape_sha256"))
+        and value.get("decoded_brep_shape_sha256") == value.get("brep_shape_sha256")
+    )
+
+
+def _gltf_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("gltf_generation") or "")
+    try:
+        hierarchy = [
+            [str(row[0]), str(row[1])] for row in value.get("node_hierarchy", [])
+        ]
+        decoded_hierarchy = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("decoded_node_hierarchy", [])
+        ]
+        transforms = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("instance_transform_sha256", [])
+        ]
+        decoded_transforms = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("decoded_instance_transform_sha256", [])
+        ]
+        materials = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("material_assignments", [])
+        ]
+        decoded_materials = [
+            [str(row[0]), str(row[1])]
+            for row in value.get("decoded_material_assignments", [])
+        ]
+        linear = float(value.get("linear_deflection_m"))
+        decoded_linear = float(value.get("decoded_linear_deflection_m"))
+        angular = float(value.get("angular_deflection_rad"))
+        decoded_angular = float(value.get("decoded_angular_deflection_rad"))
+        triangles = int(value.get("triangle_count"))
+        decoded_triangles = int(value.get("decoded_triangle_count"))
+        volume = float(value.get("enclosed_volume_m3"))
+        decoded_volume = float(value.get("decoded_enclosed_volume_m3"))
+    except (IndexError, TypeError, ValueError):
+        return False
+    nodes = {item for pair in hierarchy for item in pair}
+    parents = {child: parent for parent, child in hierarchy}
+    hierarchy_is_tree = bool(hierarchy) and len(parents) == len(hierarchy)
+    if hierarchy_is_tree:
+        for node in nodes:
+            visited = set()
+            current = node
+            while current in parents:
+                if current in visited:
+                    hierarchy_is_tree = False
+                    break
+                visited.add(current)
+                current = parents[current]
+            if not hierarchy_is_tree:
+                break
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "node_generation",
+                "transform_generation",
+                "winding_generation",
+                "material_generation",
+                "unit_generation",
+                "tessellation_generation",
+                "volume_generation",
+                "file_generation",
+                "result_generation",
+            )
+        )
+        and hierarchy_is_tree
+        and all(parent and child and parent != child for parent, child in hierarchy)
+        and decoded_hierarchy == hierarchy
+        and bool(transforms)
+        and len({row[0] for row in transforms}) == len(transforms)
+        and all(row[0] in nodes and _valid_sha256(row[1]) for row in transforms)
+        and decoded_transforms == transforms
+        and _valid_sha256(value.get("triangle_winding_sha256"))
+        and value.get("decoded_triangle_winding_sha256")
+        == value.get("triangle_winding_sha256")
+        and bool(materials)
+        and len({row[0] for row in materials}) == len(materials)
+        and all(row[0] in nodes and row[1] for row in materials)
+        and decoded_materials == materials
+        and value.get("length_unit") == "m"
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and math.isfinite(linear)
+        and linear > 0.0
+        and decoded_linear == linear
+        and math.isfinite(angular)
+        and 0.0 < angular < math.pi
+        and decoded_angular == angular
+        and triangles > 0
+        and decoded_triangles == triangles
+        and math.isfinite(volume)
+        and volume > 0.0
+        and decoded_volume == volume
+        and _valid_sha256(value.get("gltf_file_sha256"))
+        and value.get("decoded_gltf_file_sha256") == value.get("gltf_file_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1488,6 +1679,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     stl_brep_tessellation_error_identity_ok = True
     step_assembly_instance_metadata_identity_ok = True
     stl_repair_closure_identity_ok = True
+    brep_semantic_roundtrip_identity_ok = True
+    gltf_roundtrip_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -1537,6 +1730,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         stl_brep_tessellation_error_identity_ok = False
         step_assembly_instance_metadata_identity_ok = False
         stl_repair_closure_identity_ok = False
+        brep_semantic_roundtrip_identity_ok = False
+        gltf_roundtrip_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -3180,6 +3375,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "stl_repair_merge_tolerance_normal_duplicate_boundary_watertight_volume_unit_file_generation_identity"
             )
         )
+        brep_semantic_roundtrip_identity_ok = _brep_semantic_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "brep_face_pcurve_wire_orientation_location_tolerance_surface_serializer_shape_generation_identity"
+            )
+        )
+        gltf_roundtrip_identity_ok = _gltf_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "gltf_node_hierarchy_transform_winding_material_unit_tessellation_volume_file_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -3345,6 +3550,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "stl_repairs_use_current_tolerance_normals_duplicates_boundaries_watertight_volume_unit_and_files": (
             stl_repair_closure_identity_ok
+        ),
+        "brep_roundtrips_use_current_pcurves_wire_orientations_locations_tolerances_surfaces_serializer_and_shape": (
+            brep_semantic_roundtrip_identity_ok
+        ),
+        "gltf_roundtrips_use_current_hierarchy_transforms_winding_materials_units_tessellation_volume_and_file": (
+            gltf_roundtrip_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
