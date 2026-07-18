@@ -3127,6 +3127,229 @@ def _tdr_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _sparameter_gated_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "sparameter_reference_plane_time_gate_causality_passivity_energy_port_frequency_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("sparameter_generation", "")).strip()
+    try:
+        reference_plane = float(identity.get("reference_plane_shift_m"))
+        gate = [float(item) for item in identity.get("time_gate_window_s", [])]
+        times = [float(item) for item in identity.get("impulse_time_s", [])]
+        response = [float(item) for item in identity.get("impulse_response", [])]
+        pre_zero_max = float(identity.get("pre_zero_max_abs"))
+        singular_values = [
+            float(item) for item in identity.get("maximum_singular_values", [])
+        ]
+        incident = float(identity.get("incident_energy_j"))
+        reflected = float(identity.get("reflected_energy_j"))
+        transmitted = float(identity.get("transmitted_energy_j"))
+        absorbed = float(identity.get("absorbed_energy_j"))
+        impedances = [float(item) for item in identity.get("port_impedance_ohm", [])]
+        frequencies = [float(item) for item in identity.get("frequency_grid_hz", [])]
+    except (TypeError, ValueError):
+        return False
+    expected_pre_zero_max = max(
+        (abs(value) for time, value in zip(times, response) if time < 0.0),
+        default=0.0,
+    )
+    energy_sum = reflected + transmitted + absorbed
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "reference_generation",
+                "gate_generation",
+                "causality_generation",
+                "passivity_generation",
+                "energy_generation",
+                "port_generation",
+                "frequency_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(reference_plane)
+        and identity.get("result_reference_plane_shift_m") == reference_plane
+        and len(gate) == 2
+        and all(math.isfinite(item) for item in gate)
+        and 0.0 <= gate[0] < gate[1]
+        and identity.get("result_time_gate_window_s") == gate
+        and len(times) >= 3
+        and len(response) == len(times)
+        and all(math.isfinite(item) for item in (*times, *response))
+        and all(left < right for left, right in zip(times, times[1:]))
+        and identity.get("result_impulse_time_s") == times
+        and identity.get("result_impulse_response") == response
+        and math.isfinite(pre_zero_max)
+        and math.isclose(
+            pre_zero_max, expected_pre_zero_max, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and pre_zero_max <= 1.0e-12
+        and identity.get("result_pre_zero_max_abs") == pre_zero_max
+        and len(singular_values) == len(frequencies) >= 2
+        and all(
+            math.isfinite(item) and 0.0 <= item <= 1.0 + 1.0e-12
+            for item in singular_values
+        )
+        and identity.get("result_maximum_singular_values") == singular_values
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (incident, reflected, transmitted, absorbed)
+        )
+        and incident > 0.0
+        and math.isclose(
+            energy_sum, incident, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and identity.get("result_incident_energy_j") == incident
+        and identity.get("result_reflected_energy_j") == reflected
+        and identity.get("result_transmitted_energy_j") == transmitted
+        and identity.get("result_absorbed_energy_j") == absorbed
+        and len(impedances) >= 1
+        and all(math.isfinite(item) and item > 0.0 for item in impedances)
+        and identity.get("result_port_impedance_ohm") == impedances
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and identity.get("result_frequency_grid_hz") == frequencies
+        and bool(str(identity.get("sparameter_owner", "")).strip())
+        and identity.get("accepted_sparameter_owner")
+        == identity.get("sparameter_owner")
+        and _valid_sha256(identity.get("sparameter_sha256"))
+        and identity.get("accepted_sparameter_sha256")
+        == identity.get("sparameter_sha256")
+    )
+
+
+def _degenerate_eigenmode_subspace_inputs_are_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get(
+        "eigenmode_degenerate_subspace_principal_angle_mass_orthogonality_phase_tracking_residual_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("degenerate_mode_generation", "")).strip()
+    try:
+        frequencies = [float(item) for item in identity.get("mode_frequencies_hz", [])]
+        angles = [float(item) for item in identity.get("principal_angles_rad", [])]
+        gram_real = [
+            [float(item) for item in row]
+            for row in identity.get("mass_gram_real", [])
+        ]
+        gram_imag = [
+            [float(item) for item in row]
+            for row in identity.get("mass_gram_imag", [])
+        ]
+        phase_anchors = [
+            [float(item) for item in row]
+            for row in identity.get("phase_anchor_complex", [])
+        ]
+        residuals = [float(item) for item in identity.get("residual_norms", [])]
+        mesh_counts = [int(item) for item in identity.get("mesh_cell_counts", [])]
+        mesh_frequencies = [
+            float(item)
+            for item in identity.get("mesh_converged_frequency_hz", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    tracking_ids = identity.get("tracking_subspace_ids")
+    near_degenerate = (
+        len(frequencies) == 2
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and abs(frequencies[1] - frequencies[0]) / max(frequencies) <= 1.0e-5
+    )
+    gram_ok = (
+        len(gram_real) == len(gram_imag) == 2
+        and all(len(row) == 2 for row in (*gram_real, *gram_imag))
+        and all(
+            math.isclose(
+                gram_real[i][j], 1.0 if i == j else 0.0, abs_tol=1.0e-9
+            )
+            and math.isclose(gram_imag[i][j], 0.0, abs_tol=1.0e-9)
+            for i in range(2)
+            for j in range(2)
+        )
+    )
+    phase_ok = (
+        len(phase_anchors) == 2
+        and all(len(anchor) == 2 for anchor in phase_anchors)
+        and all(
+            math.isfinite(real)
+            and math.isfinite(imag)
+            and real > 0.0
+            and math.isclose(imag, 0.0, abs_tol=1.0e-9)
+            for real, imag in phase_anchors
+        )
+    )
+    mesh_errors = [
+        abs(mesh_frequencies[index] - mesh_frequencies[-1])
+        / mesh_frequencies[-1]
+        for index in range(len(mesh_frequencies) - 1)
+    ] if mesh_frequencies and mesh_frequencies[-1] > 0.0 else []
+    mesh_ok = (
+        len(mesh_counts) == len(mesh_frequencies) >= 3
+        and all(count > 0 for count in mesh_counts)
+        and all(left < right for left, right in zip(mesh_counts, mesh_counts[1:]))
+        and all(math.isfinite(item) and item > 0.0 for item in mesh_frequencies)
+        and len(mesh_errors) >= 2
+        and mesh_errors[-1] <= mesh_errors[-2]
+        and mesh_errors[-1] <= 5.0e-3
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "subspace_generation",
+                "principal_angle_generation",
+                "mass_generation",
+                "phase_generation",
+                "tracking_generation",
+                "residual_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and near_degenerate
+        and identity.get("result_mode_frequencies_hz") == frequencies
+        and len(angles) == 2
+        and all(math.isfinite(item) and 0.0 <= item <= 0.01 for item in angles)
+        and identity.get("result_principal_angles_rad") == angles
+        and gram_ok
+        and identity.get("result_mass_gram_real") == gram_real
+        and identity.get("result_mass_gram_imag") == gram_imag
+        and phase_ok
+        and identity.get("result_phase_anchor_complex") == phase_anchors
+        and isinstance(tracking_ids, Sequence)
+        and not isinstance(tracking_ids, (str, bytes))
+        and len(tracking_ids) == 2
+        and bool(str(tracking_ids[0]).strip())
+        and tracking_ids[0] == tracking_ids[1]
+        and identity.get("result_tracking_subspace_ids") == list(tracking_ids)
+        and len(residuals) == 2
+        and all(math.isfinite(item) and 0.0 <= item <= 1.0e-6 for item in residuals)
+        and identity.get("result_residual_norms") == residuals
+        and mesh_ok
+        and identity.get("result_mesh_cell_counts") == mesh_counts
+        and identity.get("result_mesh_converged_frequency_hz") == mesh_frequencies
+        and _valid_sha256(identity.get("eigenmode_mesh_sha256"))
+        and identity.get("result_eigenmode_mesh_sha256")
+        == identity.get("eigenmode_mesh_sha256")
+        and bool(str(identity.get("field_owner", "")).strip())
+        and identity.get("accepted_field_owner") == identity.get("field_owner")
+        and _valid_sha256(identity.get("field_sha256"))
+        and identity.get("accepted_field_sha256") == identity.get("field_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -3440,6 +3663,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "tdr_uses_current_reference_velocity_time_zero_impedance_arrival_causality_energy_owner_and_result": (
                 _tdr_closure_inputs_are_current(raw)
+            ),
+            "sparameters_use_current_reference_gate_causality_passivity_energy_ports_frequency_owner_and_result": (
+                _sparameter_gated_inputs_are_current(raw)
+            ),
+            "degenerate_eigenmodes_use_current_subspace_angles_mass_orthogonality_phase_tracking_residual_mesh_owner_and_result": (
+                _degenerate_eigenmode_subspace_inputs_are_current(raw)
             ),
         }
         row = {
