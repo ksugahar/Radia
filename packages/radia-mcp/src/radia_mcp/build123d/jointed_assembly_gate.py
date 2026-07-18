@@ -788,6 +788,133 @@ def _three_mf_reconstruction_identity_ok(value: object) -> bool:
     )
 
 
+def _step_assembly_reconstruction_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation", "")).strip()
+    names = [str(item).strip() for item in value.get("product_names", [])]
+    decoded_names = [
+        str(item).strip() for item in value.get("decoded_product_names", [])
+    ]
+    instances = [str(item).strip() for item in value.get("instance_order", [])]
+    decoded_instances = [
+        str(item).strip() for item in value.get("decoded_instance_order", [])
+    ]
+    transforms = [
+        tuple(str(item).strip() for item in row)
+        for row in value.get("instance_transform_sha256", [])
+    ]
+    decoded_transforms = [
+        tuple(str(item).strip() for item in row)
+        for row in value.get("decoded_instance_transform_sha256", [])
+    ]
+    hierarchy = [
+        tuple(str(item).strip() for item in row)
+        for row in value.get("assembly_hierarchy", [])
+    ]
+    decoded_hierarchy = [
+        tuple(str(item).strip() for item in row)
+        for row in value.get("decoded_assembly_hierarchy", [])
+    ]
+    try:
+        colors = [
+            (str(row[0]).strip(), *(float(item) for item in row[1:]))
+            for row in value.get("product_colors_rgb", [])
+        ]
+        decoded_colors = [
+            (str(row[0]).strip(), *(float(item) for item in row[1:]))
+            for row in value.get("decoded_product_colors_rgb", [])
+        ]
+    except (TypeError, ValueError, IndexError):
+        return False
+    file_digest = str(value.get("step_sha256", "")).lower()
+    shape_digest = str(value.get("assembly_shape_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "product_step_generation", "color_step_generation",
+            "instance_step_generation", "transform_step_generation",
+            "unit_step_generation", "hierarchy_step_generation",
+            "file_step_generation", "result_step_generation"))
+        and len(names) >= 2 and all(names) and len(set(names)) == len(names)
+        and decoded_names == names
+        and bool(colors)
+        and all(len(row) == 4 and row[0] in names and all(math.isfinite(item) and 0.0 <= item <= 1.0 for item in row[1:]) for row in colors)
+        and len({row[0] for row in colors}) == len(colors)
+        and decoded_colors == colors
+        and bool(instances) and all(instances) and len(set(instances)) == len(instances)
+        and decoded_instances == instances
+        and len(transforms) == len(instances)
+        and [row[0] for row in transforms if len(row) == 2] == instances
+        and all(len(row) == 2 and _valid_sha256(row[1].lower()) for row in transforms)
+        and decoded_transforms == transforms
+        and value.get("length_unit") in {"m", "cm", "mm", "in"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and len(hierarchy) == len(instances)
+        and all(len(row) == 2 and row[0] in names and row[1] in instances for row in hierarchy)
+        and [row[1] for row in hierarchy] == instances
+        and decoded_hierarchy == hierarchy
+        and _valid_sha256(file_digest) and value.get("decoded_step_sha256") == file_digest
+        and _valid_sha256(shape_digest)
+        and value.get("decoded_assembly_shape_sha256") == shape_digest
+    )
+
+
+def _stl_solid_reconstruction_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("stl_generation", "")).strip()
+    try:
+        normals = [
+            [float(item) for item in row] for row in value.get("facet_normals", [])
+        ]
+        decoded_normals = [
+            [float(item) for item in row]
+            for row in value.get("decoded_facet_normals", [])
+        ]
+        unmatched = int(value.get("unmatched_edge_count"))
+        decoded_unmatched = int(value.get("decoded_unmatched_edge_count"))
+        tolerance = float(value.get("merge_tolerance_m"))
+        decoded_tolerance = float(value.get("decoded_merge_tolerance_m"))
+        volume = float(value.get("signed_volume_m3"))
+        decoded_volume = float(value.get("decoded_signed_volume_m3"))
+    except (TypeError, ValueError):
+        return False
+    file_digest = str(value.get("stl_sha256", "")).lower()
+    solid_digest = str(value.get("stl_solid_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "normal_stl_generation", "winding_stl_generation",
+            "watertight_stl_generation", "tolerance_stl_generation",
+            "volume_stl_generation", "unit_stl_generation",
+            "file_stl_generation", "result_stl_generation"))
+        and bool(normals)
+        and all(
+            len(row) == 3
+            and all(math.isfinite(item) for item in row)
+            and math.isclose(sum(item * item for item in row), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for row in normals
+        )
+        and decoded_normals == normals
+        and value.get("triangle_winding") == "outward_counterclockwise"
+        and value.get("decoded_triangle_winding") == value.get("triangle_winding")
+        and unmatched == 0 and decoded_unmatched == unmatched
+        and math.isfinite(tolerance) and tolerance > 0.0
+        and decoded_tolerance == tolerance
+        and math.isfinite(volume) and volume > 0.0 and decoded_volume == volume
+        and value.get("length_unit") in {"m", "cm", "mm", "in"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and _valid_sha256(file_digest) and value.get("decoded_stl_sha256") == file_digest
+        and _valid_sha256(solid_digest)
+        and value.get("decoded_stl_solid_sha256") == solid_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1126,6 +1253,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     occt_shape_cache_identity_ok = True
     dxf_face_reconstruction_identity_ok = True
     three_mf_reconstruction_identity_ok = True
+    step_assembly_reconstruction_identity_ok = True
+    stl_solid_reconstruction_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2776,6 +2905,18 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "three_mf_component_transform_triangle_winding_material_watertight_volume_unit_digest_generation_identity"
             )
         )
+        step_assembly_reconstruction_identity_ok = (
+            _step_assembly_reconstruction_identity_ok(
+                replay_identity_value.get(
+                    "step_assembly_product_color_instance_transform_unit_hierarchy_file_generation_identity"
+                )
+            )
+        )
+        stl_solid_reconstruction_identity_ok = _stl_solid_reconstruction_identity_ok(
+            replay_identity_value.get(
+                "stl_facet_normal_winding_watertight_tolerance_volume_unit_file_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2923,6 +3064,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "three_mf_imports_use_current_components_transforms_winding_materials_watertight_volumes_units_and_digests": (
             three_mf_reconstruction_identity_ok
+        ),
+        "step_assemblies_use_current_products_colors_instances_transforms_units_hierarchy_and_digests": (
+            step_assembly_reconstruction_identity_ok
+        ),
+        "stl_solids_use_current_normals_winding_watertight_edges_tolerance_volume_units_and_digests": (
+            stl_solid_reconstruction_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"

@@ -3708,6 +3708,138 @@ def _joint_kinematic_loop_generation_identity(row):
     )
 
 
+def _helical_sweep_generation_identity(row):
+    value = row.get(
+        "helical_sweep_pitch_handedness_profile_frame_turn_self_intersection_volume_centroid_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("helical_generation", "")).strip()
+    try:
+        pitch = float(value.get("pitch_m"))
+        result_pitch = float(value.get("result_pitch_m"))
+        frame = [
+            [float(item) for item in row]
+            for row in value.get("profile_frame_matrix", [])
+        ]
+        result_frame = [
+            [float(item) for item in row]
+            for row in value.get("result_profile_frame_matrix", [])
+        ]
+        turns = float(value.get("turn_count"))
+        result_turns = float(value.get("result_turn_count"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+        result_centroid = [
+            float(item) for item in value.get("result_centroid_m", [])
+        ]
+    except (TypeError, ValueError):
+        return None
+    handedness = str(value.get("handedness", "")).strip()
+    profile_digest = str(value.get("profile_frame_sha256", "")).lower()
+    shape_digest = str(value.get("helical_shape_sha256", "")).lower()
+    intersection = value.get("self_intersection")
+    result_intersection = value.get("result_self_intersection")
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "pitch_helical_generation", "handedness_helical_generation",
+            "profile_helical_generation", "turn_helical_generation",
+            "intersection_helical_generation", "mass_helical_generation",
+            "shape_helical_generation", "result_helical_generation"))
+        or not math.isfinite(pitch) or pitch <= 0.0 or result_pitch != pitch
+        or handedness not in {"right", "left"}
+        or value.get("result_handedness") != handedness
+        or len(frame) != 4
+        or any(len(items) != 4 or any(not math.isfinite(item) for item in items) for items in frame)
+        or frame[3] != [0.0, 0.0, 0.0, 1.0]
+        or result_frame != frame
+        or not _valid_identity_digest(profile_digest)
+        or value.get("result_profile_frame_sha256") != profile_digest
+        or not math.isfinite(turns) or turns <= 0.0 or result_turns != turns
+        or not isinstance(intersection, bool)
+        or not isinstance(result_intersection, bool)
+        or intersection is not False or result_intersection != intersection
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or len(centroid) != 3 or any(not math.isfinite(item) for item in centroid)
+        or result_centroid != centroid
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_helical_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation, pitch, handedness, tuple(tuple(items) for items in frame),
+        profile_digest, turns, intersection, volume, tuple(centroid), shape_digest,
+    )
+
+
+def _boolean_history_generation_identity(row):
+    value = row.get(
+        "boolean_tolerance_operand_order_history_volume_centroid_inertia_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("boolean_generation", "")).strip()
+    operands = [str(item).strip() for item in value.get("operand_order", [])]
+    result_operands = [
+        str(item).strip() for item in value.get("result_operand_order", [])
+    ]
+    try:
+        tolerance = float(value.get("model_tolerance_m"))
+        result_tolerance = float(value.get("result_model_tolerance_m"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+        result_centroid = [
+            float(item) for item in value.get("result_centroid_m", [])
+        ]
+        inertia = [
+            [float(item) for item in row]
+            for row in value.get("inertia_tensor_kg_m2", [])
+        ]
+        result_inertia = [
+            [float(item) for item in row]
+            for row in value.get("result_inertia_tensor_kg_m2", [])
+        ]
+    except (TypeError, ValueError):
+        return None
+    operation = str(value.get("operation", "")).strip()
+    history_digest = str(value.get("subshape_history_sha256", "")).lower()
+    shape_digest = str(value.get("boolean_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "tolerance_boolean_generation", "operand_boolean_generation",
+            "history_boolean_generation", "mass_boolean_generation",
+            "inertia_boolean_generation", "shape_boolean_generation",
+            "result_boolean_generation"))
+        or operation not in {"cut", "fuse", "intersect"}
+        or value.get("result_operation") != operation
+        or not math.isfinite(tolerance) or tolerance <= 0.0
+        or result_tolerance != tolerance
+        or len(operands) != 2 or not all(operands) or operands[0] == operands[1]
+        or result_operands != operands
+        or not _valid_identity_digest(history_digest)
+        or value.get("result_subshape_history_sha256") != history_digest
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or len(centroid) != 3 or any(not math.isfinite(item) for item in centroid)
+        or result_centroid != centroid
+        or len(inertia) != 3
+        or any(len(items) != 3 or any(not math.isfinite(item) for item in items) for items in inertia)
+        or any(inertia[index][index] <= 0.0 for index in range(3))
+        or any(not math.isclose(inertia[i][j], inertia[j][i], rel_tol=0.0, abs_tol=1.0e-18) for i in range(3) for j in range(3))
+        or result_inertia != inertia
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_boolean_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation, operation, tolerance, tuple(operands), history_digest,
+        volume, tuple(centroid), tuple(tuple(items) for items in inertia), shape_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -4040,6 +4172,50 @@ def shape_mass_property_crosscheck_summary(
             joint_loop_identity_ok = joint_loop_identity_ok and all(
                 _joint_kinematic_loop_generation_identity(row)
                 == reference_joint_loops.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    helical_sweep_evidence_present = any(
+        row.get(
+            "helical_sweep_pitch_handedness_profile_frame_turn_self_intersection_volume_centroid_shape_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_helical_sweeps = {
+        str(row.get("name", "")): _helical_sweep_generation_identity(row)
+        for row in reference
+    }
+    helical_sweep_identity_ok = not helical_sweep_evidence_present
+    if helical_sweep_evidence_present:
+        helical_sweep_identity_ok = bool(reference_helical_sweeps) and all(
+            value is not None for value in reference_helical_sweeps.values()
+        )
+        for _, rows in normalized_sets:
+            helical_sweep_identity_ok = helical_sweep_identity_ok and all(
+                _helical_sweep_generation_identity(row)
+                == reference_helical_sweeps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    boolean_history_evidence_present = any(
+        row.get(
+            "boolean_tolerance_operand_order_history_volume_centroid_inertia_shape_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_boolean_histories = {
+        str(row.get("name", "")): _boolean_history_generation_identity(row)
+        for row in reference
+    }
+    boolean_history_identity_ok = not boolean_history_evidence_present
+    if boolean_history_evidence_present:
+        boolean_history_identity_ok = bool(reference_boolean_histories) and all(
+            value is not None for value in reference_boolean_histories.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_history_identity_ok = boolean_history_identity_ok and all(
+                _boolean_history_generation_identity(row)
+                == reference_boolean_histories.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5958,6 +6134,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "joint_loops_use_current_graph_dofs_limits_frames_closure_configuration_and_swept_volume": (
             joint_loop_identity_ok
+        ),
+        "helical_sweeps_use_current_pitch_handedness_profile_frame_turns_intersection_mass_and_shape": (
+            helical_sweep_identity_ok
+        ),
+        "boolean_results_use_current_operation_tolerance_operands_history_mass_inertia_and_shape": (
+            boolean_history_identity_ok
         ),
     }
     issues = []
