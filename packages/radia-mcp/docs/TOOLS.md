@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **782 tools** across 41 MCP servers.
+Total: **781 tools** across 41 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -37,7 +37,7 @@ Total: **782 tools** across 41 MCP servers.
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
-| [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 12 |
+| [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
@@ -829,7 +829,6 @@ Module: `radia_mcp.mathematica.server`
 | `mathematica_to_tex` | Wolfram の TeXForm を文字列で取得 (paper / 数式 DB 登録用)。 |
 | `mathematica_unit_convert` | 物理単位変換 (Wolfram Quantity / UnitConvert)。 |
 | `mathematica_vector_calc` | ベクトル解析: Curl / Div / Grad / Laplacian / Cross / Dot。 |
-| `mathematica_verify_script` | Run a Wolfram Language regression script and parse its JSON verdict. |
 
 ## `mcp-server-md2html`
 
