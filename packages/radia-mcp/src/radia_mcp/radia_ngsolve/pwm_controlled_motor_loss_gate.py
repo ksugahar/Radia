@@ -2347,6 +2347,147 @@ def _flux_switching_pm_identity_ok(value: object) -> bool:
     )
 
 
+def _skewed_rotor_slice_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("skew_generation", "")).strip()
+    try:
+        pole_pairs = int(value.get("pole_pairs"))
+        angles = [float(item) for item in value.get("slice_angles_mechanical_deg", [])]
+        phases = [float(item) for item in value.get("slice_phase_offsets_electrical_deg", [])]
+        weights = [float(item) for item in value.get("axial_weights", [])]
+        torque = [float(item) for item in value.get("slice_mean_torque_nm", [])]
+        phasors = [[float(item) for item in row] for row in value.get("slice_ripple_phasor", [])]
+        mean_torque = float(value.get("weighted_mean_torque_nm"))
+        ripple = float(value.get("weighted_ripple_residual"))
+        speed = float(value.get("mechanical_speed_rad_s"))
+        power = float(value.get("mechanical_power_w"))
+    except (TypeError, ValueError):
+        return False
+    count = len(angles)
+    expected_mean = sum(weight * item for weight, item in zip(weights, torque))
+    expected_ripple = (
+        math.hypot(
+            sum(weight * pair[0] for weight, pair in zip(weights, phasors)),
+            sum(weight * pair[1] for weight, pair in zip(weights, phasors)),
+        )
+        if count and len(phasors) == count and all(len(pair) == 2 for pair in phasors)
+        else math.nan
+    )
+    mirrored = (
+        "pole_pairs", "slice_angles_mechanical_deg",
+        "slice_phase_offsets_electrical_deg", "axial_weights",
+        "slice_mean_torque_nm", "slice_ripple_phasor",
+        "weighted_mean_torque_nm", "weighted_ripple_residual",
+        "mechanical_speed_rad_s", "mechanical_power_w",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "slice_generation", "phase_generation", "weight_generation",
+                "torque_generation", "ripple_generation", "power_generation",
+                "owner_generation", "result_generation",
+            )
+        )
+        and pole_pairs > 0
+        and count >= 3
+        and len(phases) == len(weights) == len(torque) == len(phasors) == count
+        and all(math.isfinite(item) for item in angles + phases + weights + torque)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and math.isclose(angles[0], -angles[-1], rel_tol=0.0, abs_tol=1.0e-12)
+        and all(
+            math.isclose(phase, pole_pairs * angle, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for phase, angle in zip(phases, angles)
+        )
+        and all(weight > 0.0 for weight in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(
+            len(pair) == 2
+            and all(math.isfinite(item) for item in pair)
+            and math.isclose(math.hypot(*pair), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for pair in phasors
+        )
+        and math.isfinite(mean_torque) and mean_torque > 0.0
+        and math.isclose(mean_torque, expected_mean, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isfinite(ripple) and 0.0 <= ripple < 1.0
+        and math.isclose(ripple, expected_ripple, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isfinite(speed) and speed > 0.0
+        and math.isfinite(power) and power > 0.0
+        and math.isclose(power, mean_torque * speed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("model_owner", "")).startswith("motor:")
+        and value.get("accepted_model_owner") == value.get("model_owner")
+        and _valid_sha256(value.get("skew_result_sha256"))
+        and value.get("accepted_skew_result_sha256") == value.get("skew_result_sha256")
+    )
+
+
+def _pm_irreversible_demag_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    fields = (
+        "reference_temperature_c", "magnet_temperature_c",
+        "remanence_reference_t", "remanence_temperature_coefficient_per_k",
+        "temperature_adjusted_remanence_t", "recoil_relative_permeability",
+        "operating_h_a_per_m", "operating_b_t", "knee_h_a_per_m",
+        "remanence_loss_fraction", "airgap_flux_before_wb",
+        "airgap_flux_after_wb", "torque_before_nm", "torque_after_nm",
+    )
+    try:
+        numbers = {field: float(value.get(field)) for field in fields}
+    except (TypeError, ValueError):
+        return False
+    expected_br = numbers["remanence_reference_t"] * (
+        1.0
+        + numbers["remanence_temperature_coefficient_per_k"]
+        * (numbers["magnet_temperature_c"] - numbers["reference_temperature_c"])
+    )
+    expected_b = expected_br + 4.0e-7 * math.pi * numbers["recoil_relative_permeability"] * numbers["operating_h_a_per_m"]
+    expected_irreversible = numbers["operating_h_a_per_m"] < numbers["knee_h_a_per_m"]
+    retained = 1.0 - numbers["remanence_loss_fraction"]
+    mirrored = fields + ("irreversible_region",)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "temperature_generation", "recoil_generation", "knee_generation",
+                "operating_generation", "remanence_generation", "flux_generation",
+                "torque_generation", "mesh_generation", "owner_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(number) for number in numbers.values())
+        and numbers["magnet_temperature_c"] >= numbers["reference_temperature_c"]
+        and numbers["remanence_reference_t"] > 0.0
+        and numbers["remanence_temperature_coefficient_per_k"] < 0.0
+        and math.isclose(numbers["temperature_adjusted_remanence_t"], expected_br, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["recoil_relative_permeability"] > 0.0
+        and numbers["operating_h_a_per_m"] < 0.0
+        and numbers["operating_b_t"] > 0.0
+        and math.isclose(numbers["operating_b_t"], expected_b, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and bool(value.get("irreversible_region")) is expected_irreversible
+        and expected_irreversible
+        and 0.0 < numbers["remanence_loss_fraction"] < 1.0
+        and numbers["airgap_flux_before_wb"] > 0.0
+        and numbers["torque_before_nm"] > 0.0
+        and math.isclose(numbers["airgap_flux_after_wb"], retained * numbers["airgap_flux_before_wb"], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(numbers["torque_after_nm"], retained * numbers["torque_before_nm"], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("demag_result_sha256"))
+        and value.get("accepted_demag_result_sha256") == value.get("demag_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -2448,6 +2589,8 @@ def pwm_controlled_motor_loss_gate(
     axial_flux_periodicity_identity_ok = True
     wound_field_synchronous_identity_ok = True
     flux_switching_pm_identity_ok = True
+    skewed_rotor_slice_closure_identity_ok = True
+    pm_irreversible_demag_closure_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -2511,6 +2654,8 @@ def pwm_controlled_motor_loss_gate(
         axial_flux_periodicity_identity_ok = False
         wound_field_synchronous_identity_ok = False
         flux_switching_pm_identity_ok = False
+        skewed_rotor_slice_closure_identity_ok = False
+        pm_irreversible_demag_closure_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -4237,6 +4382,16 @@ def pwm_controlled_motor_loss_gate(
                 "flux_switching_pm_slot_pole_polarity_phase_harmonic_backemf_torque_ripple_periodicity_mesh_owner_result_identity"
             )
         )
+        skewed_rotor_slice_closure_identity_ok = _skewed_rotor_slice_closure_identity_ok(
+            identity_value.get(
+                "skewed_rotor_slice_angle_phase_weight_torque_ripple_power_model_owner_result_identity"
+            )
+        )
+        pm_irreversible_demag_closure_identity_ok = _pm_irreversible_demag_closure_identity_ok(
+            identity_value.get(
+                "pm_irreversible_demag_temperature_recoil_knee_operating_flux_torque_mesh_owner_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -4611,6 +4766,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "flux_switching_pm_closes_slot_pole_polarity_harmonic_backemf_torque_periodicity_mesh_owner_and_result": (
             flux_switching_pm_identity_ok
+        ),
+        "skewed_rotor_closes_slice_angles_phase_offsets_weights_torque_ripple_power_owner_and_result": (
+            skewed_rotor_slice_closure_identity_ok
+        ),
+        "pm_demagnetization_closes_temperature_recoil_knee_irreversible_loss_flux_torque_mesh_and_result": (
+            pm_irreversible_demag_closure_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
