@@ -3080,6 +3080,163 @@ def _electrochemical_conservation_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _multirate_electromechanical_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "multirate_electromechanical_event_interpolation_work_power_timegrid_frame_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        electrical_time = [float(value) for value in identity.get("electrical_time_s", [])]
+        result_electrical_time = [
+            float(value) for value in identity.get("result_electrical_time_s", [])
+        ]
+        mechanical_time = [float(value) for value in identity.get("mechanical_time_s", [])]
+        result_mechanical_time = [
+            float(value) for value in identity.get("result_mechanical_time_s", [])
+        ]
+        event_time = float(identity.get("event_time_s"))
+        result_event_time = float(identity.get("result_event_time_s"))
+        electrical_energy = float(identity.get("electrical_input_energy_j"))
+        result_electrical_energy = float(identity.get("result_electrical_input_energy_j"))
+        mechanical_work = float(identity.get("mechanical_output_work_j"))
+        result_mechanical_work = float(identity.get("result_mechanical_output_work_j"))
+        dissipation = float(identity.get("dissipated_energy_j"))
+        result_dissipation = float(identity.get("result_dissipated_energy_j"))
+        tolerance = float(identity.get("energy_balance_tolerance_j"))
+        result_tolerance = float(identity.get("result_energy_balance_tolerance_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("coupling_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "electrical_generation",
+                "mechanical_generation",
+                "event_generation",
+                "timegrid_generation",
+                "power_generation",
+                "work_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and _increasing(electrical_time)
+        and _increasing(mechanical_time)
+        and all(value >= 0.0 for value in electrical_time + mechanical_time)
+        and electrical_time[0] == mechanical_time[0]
+        and electrical_time[-1] == mechanical_time[-1]
+        and len(mechanical_time) == 2 * (len(electrical_time) - 1) + 1
+        and result_electrical_time == electrical_time
+        and result_mechanical_time == mechanical_time
+        and event_time in electrical_time
+        and event_time in mechanical_time
+        and result_event_time == event_time
+        and identity.get("event_interpolation_side") == "right_continuous_after_event"
+        and identity.get("result_event_interpolation_side")
+        == identity.get("event_interpolation_side")
+        and bool(str(identity.get("substep_owner") or ""))
+        and identity.get("result_substep_owner") == identity.get("substep_owner")
+        and bool(str(identity.get("coordinate_frame") or ""))
+        and identity.get("result_coordinate_frame") == identity.get("coordinate_frame")
+        and all(
+            math.isfinite(value) and value >= 0.0
+            for value in (electrical_energy, mechanical_work, dissipation)
+        )
+        and result_electrical_energy == electrical_energy
+        and result_mechanical_work == mechanical_work
+        and result_dissipation == dissipation
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and abs(electrical_energy - mechanical_work - dissipation) <= tolerance
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("coupling_mesh_sha256", "result_coupling_mesh_sha256"),
+                ("coupling_result_sha256", "accepted_coupling_result_sha256"),
+            )
+        )
+    )
+
+
+def _adjoint_sensitivity_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "adjoint_objective_design_chainrule_constraint_fd_mesh_solution_gradient_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        design_scale = float(identity.get("design_scale"))
+        result_design_scale = float(identity.get("result_design_scale"))
+        adjoint_gradient = float(identity.get("adjoint_gradient"))
+        chainrule_gradient = float(identity.get("chainrule_gradient"))
+        finite_difference_gradient = float(identity.get("finite_difference_gradient"))
+        tolerance = float(identity.get("gradient_tolerance"))
+        result_tolerance = float(identity.get("result_gradient_tolerance"))
+        perturbation = float(identity.get("fd_perturbation"))
+        result_perturbation = float(identity.get("result_fd_perturbation"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sensitivity_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "objective_generation",
+                "design_generation",
+                "chainrule_generation",
+                "constraint_generation",
+                "fd_generation",
+                "mesh_generation",
+                "solution_generation",
+                "result_generation",
+            )
+        )
+        and all(
+            bool(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("objective_tag", "result_objective_tag"),
+                ("design_variable", "result_design_variable"),
+                ("active_constraint", "result_active_constraint"),
+            )
+        )
+        and math.isfinite(design_scale)
+        and design_scale > 0.0
+        and result_design_scale == design_scale
+        and all(
+            math.isfinite(value)
+            for value in (adjoint_gradient, chainrule_gradient, finite_difference_gradient)
+        )
+        and math.isclose(adjoint_gradient, chainrule_gradient, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and abs(adjoint_gradient - finite_difference_gradient) <= tolerance
+        and math.isfinite(perturbation)
+        and 0.0 < perturbation <= 1.0e-2
+        and result_perturbation == perturbation
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("sensitivity_mesh_sha256", "result_sensitivity_mesh_sha256"),
+                ("primal_solution_sha256", "result_primal_solution_sha256"),
+                ("gradient_result_sha256", "accepted_gradient_result_sha256"),
+            )
+        )
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -3553,6 +3710,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "electrochemical_results_use_current_species_flux_charge_mass_reaction_energy_time_mesh_and_result": (
             _electrochemical_conservation_identity_ok(summary)
+        ),
+        "multirate_electromechanical_results_use_current_event_timegrids_work_power_frame_mesh_and_result": (
+            _multirate_electromechanical_identity_ok(summary)
+        ),
+        "adjoint_sensitivities_use_current_objective_design_chainrule_constraint_fd_mesh_solution_and_result": (
+            _adjoint_sensitivity_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
