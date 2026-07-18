@@ -1160,6 +1160,110 @@ def _srm_coenergy_torque_identity_ok(value: object) -> bool:
     )
 
 
+def _pwm_sampling_loss_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("loss_generation", "")).strip()
+    try:
+        dt = float(value.get("sample_period_s"))
+        result_dt = float(value.get("result_sample_period_s"))
+        samples = int(value.get("samples_per_fundamental_cycle"))
+        result_samples = int(value.get("result_samples_per_fundamental_cycle"))
+        carrier = float(value.get("carrier_frequency_hz"))
+        result_carrier = float(value.get("result_carrier_frequency_hz"))
+        fundamental = float(value.get("fundamental_frequency_hz"))
+        result_fundamental = float(value.get("result_fundamental_frequency_hz"))
+        sidebands = [float(item) for item in value.get("carrier_sidebands_hz", [])]
+        result_sidebands = [float(item) for item in value.get("result_carrier_sidebands_hz", [])]
+        pole_pairs = int(value.get("pole_pairs"))
+        result_pole_pairs = int(value.get("result_pole_pairs"))
+        mechanical = [float(item) for item in value.get("mechanical_angle_deg", [])]
+        result_mechanical = [float(item) for item in value.get("result_mechanical_angle_deg", [])]
+        electrical = [float(item) for item in value.get("electrical_angle_deg", [])]
+        result_electrical = [float(item) for item in value.get("result_electrical_angle_deg", [])]
+        gross = float(value.get("gross_volume_m3")); result_gross = float(value.get("result_gross_volume_m3"))
+        active = float(value.get("active_volume_m3")); result_active = float(value.get("result_active_volume_m3"))
+        stacking = float(value.get("stacking_factor")); result_stacking = float(value.get("result_stacking_factor"))
+        loss = float(value.get("mean_iron_loss_w")); result_loss = float(value.get("result_mean_iron_loss_w"))
+        energy = float(value.get("cycle_energy_j")); result_energy = float(value.get("result_cycle_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "sampling_loss_generation", "sideband_loss_generation", "angle_loss_generation",
+            "alias_loss_generation", "volume_loss_generation", "energy_loss_generation",
+            "mesh_loss_generation", "result_loss_generation"))
+        and dt > 0.0 and result_dt == dt and carrier > fundamental > 0.0
+        and result_carrier == carrier and result_fundamental == fundamental
+        and samples >= 4 and result_samples == samples
+        and math.isclose(samples * dt, 1.0 / fundamental, rel_tol=1.0e-12)
+        and sidebands == [carrier - fundamental, carrier + fundamental]
+        and result_sidebands == sidebands and 0.5 / dt > max(sidebands)
+        and pole_pairs > 0 and result_pole_pairs == pole_pairs
+        and len(mechanical) == len(electrical) >= 3 and result_mechanical == mechanical
+        and result_electrical == electrical
+        and all(math.isclose(e, pole_pairs * m, rel_tol=0.0, abs_tol=1.0e-12) for m, e in zip(mechanical, electrical))
+        and value.get("alias_filter") == "nyquist_guard_and_sideband_keep"
+        and value.get("result_alias_filter") == value.get("alias_filter")
+        and gross > 0.0 and result_gross == gross and 0.0 < stacking <= 1.0
+        and result_stacking == stacking and math.isclose(active, gross * stacking, rel_tol=1.0e-12)
+        and result_active == active and loss >= 0.0 and result_loss == loss
+        and math.isclose(energy, loss / fundamental, rel_tol=1.0e-12)
+        and result_energy == energy and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _skew_slice_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("skew_generation", "")).strip()
+    try:
+        axial = [float(item) for item in value.get("axial_locations_m", [])]
+        result_axial = [float(item) for item in value.get("result_axial_locations_m", [])]
+        weights = [float(item) for item in value.get("slice_weights", [])]
+        result_weights = [float(item) for item in value.get("result_slice_weights", [])]
+        offsets = [float(item) for item in value.get("electrical_phase_offsets_deg", [])]
+        result_offsets = [float(item) for item in value.get("result_electrical_phase_offsets_deg", [])]
+        wrap = float(value.get("periodic_wrap_electrical_deg")); result_wrap = float(value.get("result_periodic_wrap_electrical_deg"))
+        torques = [float(item) for item in value.get("slice_mean_torque_nm", [])]
+        result_torques = [float(item) for item in value.get("result_slice_mean_torque_nm", [])]
+        mean = float(value.get("skew_mean_torque_nm")); result_mean = float(value.get("result_skew_mean_torque_nm"))
+    except (TypeError, ValueError):
+        return False
+    ripple = value.get("slice_ripple_harmonics_nm")
+    result_ripple = value.get("result_slice_ripple_harmonics_nm")
+    aggregate = value.get("skew_ripple_harmonics_nm")
+    result_aggregate = value.get("result_skew_ripple_harmonics_nm")
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "weight_skew_generation", "axial_skew_generation", "phase_skew_generation",
+            "periodicity_skew_generation", "torque_skew_generation", "ripple_skew_generation",
+            "mesh_skew_generation", "result_skew_generation"))
+        and len(axial) == len(weights) == len(offsets) == len(torques) >= 3
+        and all(right > left for left, right in zip(axial, axial[1:])) and result_axial == axial
+        and all(item >= 0.0 for item in weights) and math.isclose(sum(weights), 1.0, abs_tol=1.0e-12)
+        and result_weights == weights and result_offsets == offsets
+        and math.isclose(offsets[0], -offsets[-1], abs_tol=1.0e-12)
+        and wrap == 360.0 and result_wrap == wrap and result_torques == torques
+        and math.isclose(mean, sum(w * t for w, t in zip(weights, torques)), rel_tol=1.0e-12)
+        and result_mean == mean and isinstance(ripple, list) and len(ripple) == len(weights)
+        and result_ripple == ripple and isinstance(aggregate, dict) and result_aggregate == aggregate
+        and set(aggregate) == {"6"}
+        and math.isclose(float(aggregate["6"]), sum(w * float(row["6"]) for w, row in zip(weights, ripple)), rel_tol=1.0e-12)
+        and _valid_sha256(value.get("mesh_sha256")) and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1245,6 +1349,8 @@ def pwm_controlled_motor_loss_gate(
     induction_power_frame_identity_ok = True
     ipm_dq_inductance_identity_ok = True
     srm_coenergy_torque_identity_ok = True
+    pwm_sampling_loss_identity_ok = True
+    skew_slice_torque_v31_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -1292,6 +1398,8 @@ def pwm_controlled_motor_loss_gate(
         induction_power_frame_identity_ok = False
         ipm_dq_inductance_identity_ok = False
         srm_coenergy_torque_identity_ok = False
+        pwm_sampling_loss_identity_ok = False
+        skew_slice_torque_v31_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -2936,6 +3044,16 @@ def pwm_controlled_motor_loss_gate(
                 "srm_torque_current_position_coenergy_periodicity_phase_sequence_mesh_result_identity"
             )
         )
+        pwm_sampling_loss_identity_ok = _pwm_sampling_loss_identity_ok(
+            identity_value.get(
+                "pwm_iron_loss_sampling_sideband_angle_alias_volume_energy_result_identity"
+            )
+        )
+        skew_slice_torque_v31_identity_ok = _skew_slice_torque_identity_ok(
+            identity_value.get(
+                "skew_slice_torque_weight_axial_phase_periodicity_ripple_mesh_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -3262,6 +3380,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "srm_torque_uses_current_positions_coenergy_periodicity_phase_sequence_mesh_and_result": (
             srm_coenergy_torque_identity_ok
+        ),
+        "pwm_iron_loss_uses_current_sampling_sidebands_angles_alias_volume_energy_mesh_and_result": (
+            pwm_sampling_loss_identity_ok
+        ),
+        "skew_torque_uses_current_slice_weights_axial_phase_periodicity_ripple_mesh_and_result": (
+            skew_slice_torque_v31_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
