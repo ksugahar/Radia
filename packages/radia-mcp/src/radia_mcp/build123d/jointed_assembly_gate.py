@@ -1726,6 +1726,60 @@ def _boolean_history_roundtrip_identity_ok(value: object) -> bool:
     )
 
 
+def _sketch_solve_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("sketch_generation") or "")
+    constraints = value.get("constraint_ids")
+    references = value.get("reference_geometry_ids")
+    try:
+        dof = int(value.get("remaining_dof"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("constraint_generation", "dof_generation", "solver_generation", "reference_generation", "unit_generation", "owner_generation", "source_generation", "result_generation"))
+        and isinstance(constraints, list) and bool(constraints) and all(isinstance(item, str) and item for item in constraints) and len(set(constraints)) == len(constraints)
+        and value.get("solved_constraint_ids") == constraints
+        and dof == 0 and int(value.get("solved_remaining_dof", -1)) == dof
+        and value.get("solver_status") == "fully_constrained" and value.get("solved_solver_status") == value.get("solver_status")
+        and isinstance(references, list) and bool(references) and all(isinstance(item, str) and item for item in references) and len(set(references)) == len(references)
+        and value.get("solved_reference_geometry_ids") == references
+        and value.get("length_unit") == "m" and value.get("solved_length_unit") == value.get("length_unit")
+        and bool(str(value.get("sketch_owner") or "")) and value.get("solved_sketch_owner") == value.get("sketch_owner")
+        and _valid_sha256(value.get("sketch_source_sha256")) and value.get("solved_sketch_source_sha256") == value.get("sketch_source_sha256")
+        and _valid_sha256(value.get("sketch_result_sha256")) and value.get("accepted_sketch_result_sha256") == value.get("sketch_result_sha256")
+    )
+
+
+def _topological_naming_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("toponame_generation") or "")
+    edges = value.get("edge_names"); faces = value.get("face_names"); history = value.get("operation_history"); selected = value.get("selector_result")
+    try:
+        shape_generation = int(value.get("shape_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("edge_generation", "face_generation", "history_generation", "ocp_generation", "selector_generation", "shape_generation", "owner_generation", "source_generation", "brep_generation", "result_generation"))
+        and isinstance(edges, list) and bool(edges) and all(isinstance(item, str) and item.startswith("edge:") for item in edges) and len(set(edges)) == len(edges) and value.get("replayed_edge_names") == edges
+        and isinstance(faces, list) and bool(faces) and all(isinstance(item, str) and item.startswith("face:") for item in faces) and len(set(faces)) == len(faces) and value.get("replayed_face_names") == faces
+        and isinstance(history, list) and len(history) >= 2 and all(isinstance(item, str) and item for item in history) and value.get("replayed_operation_history") == history
+        and bool(str(value.get("ocp_version") or "")) and value.get("replayed_ocp_version") == value.get("ocp_version")
+        and isinstance(selected, list) and bool(selected) and set(selected).issubset(set(faces)) and value.get("replayed_selector_result") == selected
+        and shape_generation >= 0 and int(value.get("replayed_shape_generation_id", -1)) == shape_generation
+        and bool(str(value.get("feature_owner") or "")) and value.get("replayed_feature_owner") == value.get("feature_owner")
+        and _valid_sha256(value.get("feature_source_sha256")) and value.get("replayed_feature_source_sha256") == value.get("feature_source_sha256")
+        and _valid_sha256(value.get("feature_brep_sha256")) and value.get("accepted_feature_brep_sha256") == value.get("feature_brep_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -2078,6 +2132,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     step_assembly_hierarchy_identity_ok = True
     boolean_history_roundtrip_identity_ok = True
     dxf_profile_roundtrip_identity_ok = True
+    sketch_solve_identity_ok = True
+    topological_naming_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2131,6 +2187,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         gltf_roundtrip_identity_ok = False
         step_semantic_roundtrip_identity_ok = False
         brep_periodic_seam_identity_ok = False
+        sketch_solve_identity_ok = False
+        topological_naming_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -3814,6 +3872,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "boolean_tolerance_healing_sliver_nonmanifold_operation_history_input_output_owner_brep_result_generation_identity"
             )
         )
+        sketch_solve_identity_ok = _sketch_solve_identity_ok(
+            replay_identity_value.get(
+                "sketch_constraint_dof_solver_reference_unit_owner_source_result_generation_identity"
+            )
+        )
+        topological_naming_identity_ok = _topological_naming_identity_ok(
+            replay_identity_value.get(
+                "topological_naming_edge_face_history_ocp_selector_shape_feature_source_brep_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -4003,6 +4071,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "boolean_roundtrips_use_current_operation_tolerance_healing_slivers_manifold_history_owners_and_brep": (
             boolean_history_roundtrip_identity_ok
+        ),
+        "sketch_solves_use_current_constraints_dof_status_references_units_owner_source_and_result": (
+            sketch_solve_identity_ok
+        ),
+        "topological_names_use_current_edges_faces_history_ocp_selector_shape_owner_source_and_brep": (
+            topological_naming_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"

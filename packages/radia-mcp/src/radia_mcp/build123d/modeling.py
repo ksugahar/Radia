@@ -4989,6 +4989,70 @@ def _loft_section_owner_brep_identity(row):
     return (generation, sections, parameters, orientations, guides, value.get("continuity"), volume, centroid, value.get("loft_owner"), digest)
 
 
+def _placed_mass_properties_identity(row):
+    value = row.get("mass_properties_centroid_inertia_principal_axes_placement_density_shape_brep_generation_identity")
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("mass_generation", "")).strip()
+    try:
+        density = float(value.get("density_kg_m3")); volume = float(value.get("volume_m3")); mass = float(value.get("mass_kg"))
+        centroid = tuple(float(item) for item in value.get("centroid_world_m", []))
+        inertia = tuple(tuple(float(item) for item in axis) for axis in value.get("inertia_world_kg_m2", []))
+        moments = tuple(float(item) for item in value.get("principal_moments_kg_m2", []))
+        axes = tuple(tuple(float(item) for item in axis) for axis in value.get("principal_axes_world", []))
+        placement = tuple(tuple(float(item) for item in axis) for axis in value.get("placement_transform", []))
+    except (TypeError, ValueError):
+        return None
+    mirrored = ("density_kg_m3", "volume_m3", "mass_kg", "centroid_world_m", "inertia_world_kg_m2", "principal_moments_kg_m2", "principal_axes_world", "placement_transform", "shape_owner")
+    digest = str(value.get("shape_brep_sha256", "")).lower()
+    symmetric = len(inertia) == 3 and all(len(axis) == 3 for axis in inertia) and all(math.isclose(inertia[i][j], inertia[j][i], rel_tol=0.0, abs_tol=1.0e-12) for i in range(3) for j in range(3))
+    orthonormal = len(axes) == 3 and all(len(axis) == 3 for axis in axes) and all(math.isclose(sum(axes[i][k] * axes[j][k] for k in range(3)), 1.0 if i == j else 0.0, rel_tol=0.0, abs_tol=1.0e-12) for i in range(3) for j in range(3))
+    if (
+        not generation
+        or any(value.get(key) != generation for key in ("density_generation", "centroid_generation", "inertia_generation", "principal_generation", "placement_generation", "owner_generation", "brep_generation", "result_generation"))
+        or not all(math.isfinite(item) and item > 0.0 for item in (density, volume, mass))
+        or not math.isclose(mass, density * volume, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or len(centroid) != 3 or any(not math.isfinite(item) for item in centroid)
+        or not symmetric or any(inertia[i][i] <= 0.0 for i in range(3))
+        or len(moments) != 3 or any(not math.isfinite(item) or item <= 0.0 for item in moments) or tuple(sorted(moments)) != moments
+        or not orthonormal
+        or len(placement) != 4 or any(len(axis) != 4 for axis in placement) or placement[3] != (0.0, 0.0, 0.0, 1.0)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).strip()
+        or not _valid_identity_digest(digest) or value.get("accepted_shape_brep_sha256") != digest
+    ):
+        return None
+    return (generation, density, volume, mass, centroid, inertia, moments, axes, placement, value.get("shape_owner"), digest)
+
+
+def _shell_offset_contract_identity(row):
+    value = row.get("shell_offset_thickness_normal_side_removed_face_topology_volume_input_owner_brep_generation_identity")
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("shell_generation", "")).strip()
+    try:
+        thickness = float(value.get("thickness_m")); normals = tuple(tuple(float(item) for item in axis) for axis in value.get("face_normals", []))
+        removed = tuple(int(item) for item in value.get("removed_face_ids", [])); topology = tuple(int(item) for item in value.get("wall_topology_v_e_f", [])); volume = float(value.get("analytical_shell_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    mirrored = ("thickness_m", "offset_side", "face_normals", "removed_face_ids", "wall_topology_v_e_f", "analytical_shell_volume_m3", "input_owner")
+    digest = str(value.get("shell_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in ("thickness_generation", "normal_generation", "side_generation", "removed_generation", "topology_generation", "volume_generation", "owner_generation", "brep_generation", "result_generation"))
+        or not math.isfinite(thickness) or thickness <= 0.0 or value.get("offset_side") not in {"inside", "outside"}
+        or not normals or any(len(axis) != 3 or not math.isclose(sum(item * item for item in axis), 1.0, rel_tol=0.0, abs_tol=1.0e-12) for axis in normals)
+        or not removed or any(item <= 0 for item in removed) or len(set(removed)) != len(removed)
+        or len(topology) != 3 or any(item <= 0 for item in topology) or topology[0] - topology[1] + topology[2] != 2
+        or not math.isfinite(volume) or volume <= 0.0
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("input_owner", "")).strip()
+        or not _valid_identity_digest(digest) or value.get("accepted_shell_brep_sha256") != digest
+    ):
+        return None
+    return (generation, thickness, value.get("offset_side"), normals, removed, topology, volume, value.get("input_owner"), digest)
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -5621,6 +5685,22 @@ def shape_mass_property_crosscheck_summary(
                 _loft_section_owner_brep_identity(row) == reference_loft_section_owner_brep.get(str(row.get("name", "")))
                 for row in rows
             )
+
+    placed_mass_evidence_present = any(row.get("mass_properties_centroid_inertia_principal_axes_placement_density_shape_brep_generation_identity") is not None for row in identity_rows)
+    reference_placed_mass = {str(row.get("name", "")): _placed_mass_properties_identity(row) for row in reference}
+    placed_mass_identity_ok = not placed_mass_evidence_present
+    if placed_mass_evidence_present:
+        placed_mass_identity_ok = bool(reference_placed_mass) and all(value is not None for value in reference_placed_mass.values())
+        for _, rows in normalized_sets:
+            placed_mass_identity_ok = placed_mass_identity_ok and all(_placed_mass_properties_identity(row) == reference_placed_mass.get(str(row.get("name", ""))) for row in rows)
+
+    shell_offset_contract_evidence_present = any(row.get("shell_offset_thickness_normal_side_removed_face_topology_volume_input_owner_brep_generation_identity") is not None for row in identity_rows)
+    reference_shell_offsets = {str(row.get("name", "")): _shell_offset_contract_identity(row) for row in reference}
+    shell_offset_contract_identity_ok = not shell_offset_contract_evidence_present
+    if shell_offset_contract_evidence_present:
+        shell_offset_contract_identity_ok = bool(reference_shell_offsets) and all(value is not None for value in reference_shell_offsets.values())
+        for _, rows in normalized_sets:
+            shell_offset_contract_identity_ok = shell_offset_contract_identity_ok and all(_shell_offset_contract_identity(row) == reference_shell_offsets.get(str(row.get("name", ""))) for row in rows)
 
     revision_evidence_present = any(
         row.get("brep_identity") is not None
@@ -7580,6 +7660,8 @@ def shape_mass_property_crosscheck_summary(
         "lofts_use_current_sections_order_orientation_guides_continuity_volume_centroid_owner_and_brep": (
             loft_section_owner_brep_identity_ok
         ),
+        "placed_mass_properties_use_current_density_mass_centroid_inertia_principal_axes_placement_owner_and_brep": placed_mass_identity_ok,
+        "shell_offsets_use_current_thickness_side_normals_removed_faces_topology_volume_owner_and_brep": shell_offset_contract_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
