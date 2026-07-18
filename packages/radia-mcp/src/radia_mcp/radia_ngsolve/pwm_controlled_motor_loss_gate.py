@@ -2158,6 +2158,195 @@ def _axial_flux_periodicity_identity_ok(value: object) -> bool:
     )
 
 
+def _wound_field_synchronous_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("wound_field_generation", "")).strip()
+    owner = str(value.get("mesh_owner", "")).strip()
+    try:
+        field_current = float(value.get("field_current_a"))
+        excitation_inductance = float(value.get("excitation_inductance_h"))
+        excitation_flux = float(value.get("excitation_flux_linkage_wb_turn"))
+        torque_angle = float(value.get("torque_angle_rad"))
+        pole_pairs = int(value.get("pole_pairs"))
+        stator_current = float(value.get("stator_current_rms_a"))
+        torque = float(value.get("electromagnetic_torque_nm"))
+        speed = float(value.get("mechanical_speed_rad_s"))
+        mechanical_power = float(value.get("mechanical_power_w"))
+        field_resistance = float(value.get("field_resistance_ohm"))
+        field_loss = float(value.get("field_copper_loss_w"))
+        stator_resistance = float(value.get("stator_phase_resistance_ohm"))
+        stator_loss = float(value.get("stator_copper_loss_w"))
+        line_voltage = float(value.get("line_voltage_rms_v"))
+        apparent_power = float(value.get("apparent_power_va"))
+        active_power = float(value.get("active_input_power_w"))
+        power_factor = float(value.get("power_factor"))
+        residual = float(value.get("energy_balance_residual_w"))
+        tolerance = float(value.get("energy_tolerance_w"))
+    except (TypeError, ValueError):
+        return False
+    numbers = (
+        field_current, excitation_inductance, excitation_flux, torque_angle,
+        stator_current, torque, speed, mechanical_power, field_resistance,
+        field_loss, stator_resistance, stator_loss, line_voltage,
+        apparent_power, active_power, power_factor, residual, tolerance,
+    )
+    if not all(math.isfinite(item) for item in numbers):
+        return False
+    expected_flux = field_current * excitation_inductance
+    expected_torque = (
+        1.5
+        * pole_pairs
+        * excitation_flux
+        * math.sqrt(2.0)
+        * stator_current
+        * math.sin(torque_angle)
+    )
+    expected_mechanical_power = torque * speed
+    expected_field_loss = field_current**2 * field_resistance
+    expected_stator_loss = 3.0 * stator_current**2 * stator_resistance
+    expected_apparent_power = math.sqrt(3.0) * line_voltage * stator_current
+    expected_active_power = mechanical_power + field_loss + stator_loss
+    expected_residual = active_power - expected_active_power
+    mirrored = (
+        "field_current_a", "excitation_inductance_h",
+        "excitation_flux_linkage_wb_turn", "torque_angle_rad",
+        "pole_pairs", "stator_current_rms_a", "electromagnetic_torque_nm",
+        "mechanical_speed_rad_s", "mechanical_power_w",
+        "field_resistance_ohm", "field_copper_loss_w",
+        "stator_phase_resistance_ohm", "stator_copper_loss_w",
+        "line_voltage_rms_v", "apparent_power_va",
+        "active_input_power_w", "power_factor",
+        "energy_balance_residual_w", "energy_tolerance_w",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "excitation_generation", "flux_generation",
+                "torque_generation", "powerfactor_generation",
+                "field_loss_generation", "stator_loss_generation",
+                "mechanical_generation", "energy_generation",
+                "mesh_generation", "owner_generation", "result_generation",
+            )
+        )
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and field_current > 0.0
+        and excitation_inductance > 0.0
+        and excitation_flux > 0.0
+        and 0.0 < torque_angle < math.pi / 2.0
+        and pole_pairs > 0
+        and stator_current > 0.0
+        and speed > 0.0
+        and field_resistance > 0.0
+        and stator_resistance > 0.0
+        and line_voltage > 0.0
+        and math.isclose(excitation_flux, expected_flux, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(torque, expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and torque > 0.0
+        and math.isclose(mechanical_power, expected_mechanical_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(field_loss, expected_field_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(stator_loss, expected_stator_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(apparent_power, expected_apparent_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(active_power, expected_active_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < power_factor <= 1.0
+        and math.isclose(power_factor, active_power / apparent_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(residual, expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and tolerance >= 0.0
+        and abs(residual) <= tolerance
+        and bool(owner)
+        and value.get("accepted_mesh_owner") == owner
+        and _valid_sha256(value.get("motor_result_sha256"))
+        and value.get("accepted_motor_result_sha256")
+        == value.get("motor_result_sha256")
+    )
+
+
+def _flux_switching_pm_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("flux_switching_generation", "")).strip()
+    owner = str(value.get("mesh_owner", "")).strip()
+    try:
+        slots = int(value.get("slot_count"))
+        poles = int(value.get("pole_count"))
+        polarity = [int(item) for item in value.get("magnet_polarity_sequence", [])]
+        harmonic = int(value.get("working_harmonic_order"))
+        phase_angles = [float(item) for item in value.get("backemf_phase_angles_rad", [])]
+        torque_samples = [float(item) for item in value.get("torque_samples_nm", [])]
+        average_torque = float(value.get("average_torque_nm"))
+        torque_ripple = float(value.get("torque_ripple_ratio"))
+        multiplier = int(value.get("periodic_multiplier"))
+        sector_slots = int(value.get("sector_slot_count"))
+        sector_poles = int(value.get("sector_pole_count"))
+    except (TypeError, ValueError):
+        return False
+    numbers = phase_angles + torque_samples + [average_torque, torque_ripple]
+    if (
+        not all(math.isfinite(item) for item in numbers)
+        or len(phase_angles) != 3
+        or len(torque_samples) < 3
+    ):
+        return False
+    expected_average = sum(torque_samples) / len(torque_samples)
+    expected_ripple = (
+        (max(torque_samples) - min(torque_samples)) / expected_average
+        if expected_average > 0.0
+        else math.nan
+    )
+    phase_vector = [
+        sum(math.cos(angle) for angle in phase_angles),
+        sum(math.sin(angle) for angle in phase_angles),
+    ]
+    mirrored = (
+        "slot_count", "pole_count", "magnet_polarity_sequence",
+        "phase_sequence", "working_harmonic_order",
+        "backemf_phase_angles_rad", "torque_samples_nm",
+        "average_torque_nm", "torque_ripple_ratio", "periodic_multiplier",
+        "sector_slot_count", "sector_pole_count",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "slot_pole_generation", "polarity_generation",
+                "phase_generation", "harmonic_generation",
+                "backemf_generation", "torque_generation",
+                "periodicity_generation", "mesh_generation",
+                "owner_generation", "result_generation",
+            )
+        )
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and slots > 0
+        and poles >= 2
+        and poles % 2 == 0
+        and len(polarity) == poles
+        and all(item in {-1, 1} for item in polarity)
+        and all(left * right == -1 for left, right in zip(polarity, polarity[1:]))
+        and value.get("phase_sequence") == "ABC"
+        and harmonic == poles // 2
+        and all(abs(item) <= 1.0e-12 for item in phase_vector)
+        and expected_average > 0.0
+        and math.isclose(average_torque, expected_average, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(torque_ripple, expected_ripple, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and multiplier == math.gcd(slots, poles)
+        and multiplier >= 2
+        and sector_slots * multiplier == slots
+        and sector_poles * multiplier == poles
+        and bool(owner)
+        and value.get("accepted_mesh_owner") == owner
+        and _valid_sha256(value.get("flux_switching_result_sha256"))
+        and value.get("accepted_flux_switching_result_sha256")
+        == value.get("flux_switching_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -2257,6 +2446,8 @@ def pwm_controlled_motor_loss_gate(
     iron_loss_energy_balance_identity_ok = True
     induction_motor_power_identity_ok = True
     axial_flux_periodicity_identity_ok = True
+    wound_field_synchronous_identity_ok = True
+    flux_switching_pm_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -2318,6 +2509,8 @@ def pwm_controlled_motor_loss_gate(
         iron_loss_energy_balance_identity_ok = False
         induction_motor_power_identity_ok = False
         axial_flux_periodicity_identity_ok = False
+        wound_field_synchronous_identity_ok = False
+        flux_switching_pm_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -4034,6 +4227,16 @@ def pwm_controlled_motor_loss_gate(
                 "axial_flux_motor_sector_periodicity_dual_airgap_axial_flux_torque_ripple_backemf_frame_mesh_owner_result_identity"
             )
         )
+        wound_field_synchronous_identity_ok = _wound_field_synchronous_identity_ok(
+            identity_value.get(
+                "wound_field_synchronous_excitation_flux_torque_angle_powerfactor_field_stator_loss_mechanical_energy_mesh_owner_result_identity"
+            )
+        )
+        flux_switching_pm_identity_ok = _flux_switching_pm_identity_ok(
+            identity_value.get(
+                "flux_switching_pm_slot_pole_polarity_phase_harmonic_backemf_torque_ripple_periodicity_mesh_owner_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -4402,6 +4605,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "axial_flux_motor_closes_sector_dual_airgap_flux_torque_ripple_backemf_frame_mesh_owner_and_result": (
             axial_flux_periodicity_identity_ok
+        ),
+        "wound_field_motor_closes_excitation_torque_powerfactor_copper_losses_mechanical_energy_mesh_owner_and_result": (
+            wound_field_synchronous_identity_ok
+        ),
+        "flux_switching_pm_closes_slot_pole_polarity_harmonic_backemf_torque_periodicity_mesh_owner_and_result": (
+            flux_switching_pm_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
