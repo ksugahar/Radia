@@ -1754,6 +1754,121 @@ def _eccentricity_ump_identity_ok(value: object) -> bool:
     )
 
 
+def _skew_harmonic_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("skew_generation", "")).strip()
+    try:
+        angles = [float(item) for item in value.get("slice_angles_rad", [])]
+        weights = [float(item) for item in value.get("axial_weights", [])]
+        phases = [
+            [int(row[0]), [float(item) for item in row[1]]]
+            for row in value.get("harmonic_phase_shifts_rad", [])
+        ]
+        pole_pairs = int(value.get("pole_pairs"))
+        periodicity = float(value.get("pole_periodicity_angle_rad"))
+        torques = [float(item) for item in value.get("slice_mean_torque_nm", [])]
+        mean_torque = float(value.get("weighted_mean_torque_nm"))
+        ripple = [[int(row[0]), float(row[1])] for row in value.get("torque_ripple_spectrum_nm", [])]
+    except (IndexError, TypeError, ValueError):
+        return False
+    mirrored = (
+        "slice_angles_rad", "axial_weights", "harmonic_phase_shifts_rad", "pole_pairs",
+        "pole_periodicity_angle_rad", "slice_mean_torque_nm", "weighted_mean_torque_nm",
+        "torque_ripple_spectrum_nm", "skew_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "slice_generation", "weight_generation", "phase_generation",
+            "periodicity_generation", "torque_generation", "ripple_generation",
+            "mesh_generation", "owner_generation", "result_generation"))
+        and len(angles) == len(weights) == len(torques) >= 3
+        and all(math.isfinite(item) for item in angles + weights + torques + [periodicity, mean_torque])
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and all(item >= 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and pole_pairs > 0
+        and math.isclose(periodicity, 2.0 * math.pi / pole_pairs, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and bool(phases)
+        and len({row[0] for row in phases}) == len(phases)
+        and all(
+            harmonic > 0
+            and len(row_phases) == len(angles)
+            and all(
+                math.isclose(phase, harmonic * pole_pairs * angle, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for phase, angle in zip(row_phases, angles)
+            )
+            for harmonic, row_phases in phases
+        )
+        and math.isclose(mean_torque, sum(weight * torque for weight, torque in zip(weights, torques)), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and bool(ripple) and ripple[0][0] == 0
+        and len({row[0] for row in ripple}) == len(ripple)
+        and math.isclose(ripple[0][1], mean_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(row[0] >= 0 and math.isfinite(row[1]) and row[1] >= 0.0 for row in ripple)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("skew_mesh_sha256"))
+        and bool(str(value.get("skew_result_owner", "")).strip())
+        and value.get("accepted_skew_result_owner") == value.get("skew_result_owner")
+        and _valid_sha256(value.get("skew_result_sha256"))
+        and value.get("accepted_skew_result_sha256") == value.get("skew_result_sha256")
+    )
+
+
+def _ironloss_separation_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("ironloss_generation", "")).strip()
+    try:
+        b_peak = float(value.get("b_waveform_peak_t"))
+        waveform_factor = float(value.get("waveform_factor"))
+        frequency = float(value.get("frequency_hz"))
+        coefficients = [float(item) for item in value.get("material_coefficients", [])]
+        volume = float(value.get("active_volume_m3"))
+        temperature = float(value.get("temperature_c"))
+        temperature_factor = float(value.get("temperature_factor"))
+        components = [float(item) for item in value.get("loss_components_w_m3", [])]
+        total = float(value.get("total_iron_loss_w"))
+    except (TypeError, ValueError):
+        return False
+    if len(coefficients) != 3 or len(components) != 3:
+        return False
+    expected = [
+        coefficients[0] * frequency * b_peak**2 * waveform_factor * temperature_factor,
+        coefficients[1] * frequency**2 * b_peak**2 * waveform_factor,
+        coefficients[2] * frequency**1.5 * b_peak**1.5 * waveform_factor,
+    ]
+    mirrored = (
+        "b_waveform_peak_t", "waveform_factor", "frequency_hz", "material_coefficients",
+        "active_volume_m3", "temperature_c", "temperature_factor", "loss_components_w_m3",
+        "total_iron_loss_w", "waveform_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "component_generation", "waveform_generation", "frequency_generation",
+            "coefficient_generation", "volume_generation", "temperature_generation",
+            "total_generation", "owner_generation", "result_generation"))
+        and all(math.isfinite(item) for item in [b_peak, waveform_factor, frequency, volume, temperature, temperature_factor, total] + coefficients + components)
+        and b_peak > 0.0 and waveform_factor > 0.0 and frequency > 0.0 and volume > 0.0
+        and temperature_factor > 0.0 and coefficients[0] > 0.0
+        and coefficients[1] >= 0.0 and coefficients[2] >= 0.0
+        and all(item >= 0.0 for item in components)
+        and all(math.isclose(item, target, rel_tol=1.0e-12, abs_tol=1.0e-12) for item, target in zip(components, expected))
+        and math.isclose(total, sum(components) * volume, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("waveform_sha256"))
+        and bool(str(value.get("ironloss_owner", "")).strip())
+        and value.get("accepted_ironloss_owner") == value.get("ironloss_owner")
+        and _valid_sha256(value.get("ironloss_result_sha256"))
+        and value.get("accepted_ironloss_result_sha256") == value.get("ironloss_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1847,6 +1962,8 @@ def pwm_controlled_motor_loss_gate(
     axial_flux_pm_closure_identity_ok = True
     pm_demagnetization_identity_ok = True
     eccentricity_ump_identity_ok = True
+    skew_harmonic_torque_identity_ok = True
+    ironloss_separation_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -1902,6 +2019,8 @@ def pwm_controlled_motor_loss_gate(
         axial_flux_pm_closure_identity_ok = False
         pm_demagnetization_identity_ok = False
         eccentricity_ump_identity_ok = False
+        skew_harmonic_torque_identity_ok = False
+        ironloss_separation_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -3588,6 +3707,16 @@ def pwm_controlled_motor_loss_gate(
                 "eccentricity_static_dynamic_frame_radial_force_harmonic_ump_torque_pole_periodicity_angle_owner_result_identity"
             )
         )
+        skew_harmonic_torque_identity_ok = _skew_harmonic_torque_identity_ok(
+            identity_value.get(
+                "skew_slice_torque_angle_axial_weight_harmonic_phase_pole_periodicity_mean_ripple_mesh_owner_result_identity"
+            )
+        )
+        ironloss_separation_identity_ok = _ironloss_separation_identity_ok(
+            identity_value.get(
+                "ironloss_hysteresis_eddy_excess_waveform_frequency_coeff_volume_temperature_total_owner_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -3938,6 +4067,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "eccentricity_ump_uses_current_static_dynamic_frame_harmonics_force_torque_periodicity_angles_owner_and_result": (
             eccentricity_ump_identity_ok
+        ),
+        "skew_slice_torque_closes_angles_axial_weights_harmonic_phases_pole_periodicity_mean_ripple_mesh_owner_and_result": (
+            skew_harmonic_torque_identity_ok
+        ),
+        "iron_loss_closes_hysteresis_eddy_excess_waveform_frequency_coefficients_volume_temperature_total_owner_and_result": (
+            ironloss_separation_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
