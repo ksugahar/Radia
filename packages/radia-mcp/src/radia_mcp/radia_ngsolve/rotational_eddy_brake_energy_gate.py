@@ -3878,6 +3878,143 @@ def _piezoelectric_reciprocity_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _poroelastic_biot_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "poroelastic_biot_pressure_displacement_flux_storage_dissipation_interface_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("poroelastic_generation") or "")
+    names = (
+        "biot_coefficient", "pore_pressure_pa", "volumetric_strain",
+        "biot_modulus_pa", "fluid_content_increment", "permeability_m2",
+        "dynamic_viscosity_pa_s", "pressure_gradient_pa_per_m",
+        "darcy_flux_m_per_s", "domain_volume_m3", "time_step_s",
+        "interface_traction_pa", "storage_energy_j",
+        "skeleton_coupling_work_j", "fluid_dissipation_j",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    alpha = values["biot_coefficient"]
+    pressure = values["pore_pressure_pa"]
+    strain = values["volumetric_strain"]
+    modulus = values["biot_modulus_pa"]
+    permeability = values["permeability_m2"]
+    viscosity = values["dynamic_viscosity_pa_s"]
+    gradient = values["pressure_gradient_pa_per_m"]
+    flux = values["darcy_flux_m_per_s"]
+    volume = values["domain_volume_m3"]
+    timestep = values["time_step_s"]
+    expected_content = alpha * strain + pressure / modulus
+    expected_flux = -permeability * gradient / viscosity
+    expected_traction = -alpha * pressure
+    expected_storage = 0.5 * pressure * pressure / modulus * volume
+    expected_coupling = alpha * pressure * strain * volume
+    expected_dissipation = viscosity / permeability * flux * flux * volume * timestep
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "biot_generation", "pressure_generation", "displacement_generation",
+            "flux_generation", "storage_generation", "dissipation_generation",
+            "interface_generation", "mesh_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and 0.0 < alpha <= 1.0
+        and pressure > 0.0 and strain >= 0.0 and modulus > 0.0
+        and permeability > 0.0 and viscosity > 0.0
+        and volume > 0.0 and timestep > 0.0
+        and math.isclose(values["fluid_content_increment"], expected_content, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(flux, expected_flux, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["interface_traction_pa"], expected_traction, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["storage_energy_j"], expected_storage, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["skeleton_coupling_work_j"], expected_coupling, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["fluid_dissipation_j"], expected_dissipation, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["storage_energy_j"] >= 0.0
+        and values["skeleton_coupling_work_j"] >= 0.0
+        and values["fluid_dissipation_j"] >= 0.0
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and identity.get("interface_normal") == "porous_skeleton_to_free_fluid"
+        and identity.get("result_interface_normal") == identity.get("interface_normal")
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _rotating_induction_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "rotating_induction_slip_frequency_current_loss_torque_power_frame_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("induction_generation") or "")
+    names = (
+        "supply_frequency_hz", "pole_pairs", "synchronous_speed_rad_per_s",
+        "rotor_speed_rad_per_s", "slip", "rotor_electrical_frequency_hz",
+        "rotor_phase_current_a_rms", "rotor_phase_resistance_ohm",
+        "rotor_copper_loss_w", "airgap_torque_nm", "airgap_power_w",
+        "mechanical_power_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    frequency = values["supply_frequency_hz"]
+    pole_pairs = values["pole_pairs"]
+    synchronous = values["synchronous_speed_rad_per_s"]
+    rotor_speed = values["rotor_speed_rad_per_s"]
+    slip = values["slip"]
+    current = values["rotor_phase_current_a_rms"]
+    resistance = values["rotor_phase_resistance_ohm"]
+    torque = values["airgap_torque_nm"]
+    expected_synchronous = 2.0 * math.pi * frequency / pole_pairs
+    expected_slip = (synchronous - rotor_speed) / synchronous
+    expected_copper_loss = 3.0 * current * current * resistance
+    expected_airgap_power = torque * synchronous
+    expected_mechanical_power = torque * rotor_speed
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "slip_generation", "frequency_generation", "current_generation",
+            "loss_generation", "torque_generation", "power_generation",
+            "frame_generation", "mesh_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and frequency > 0.0
+        and pole_pairs > 0.0 and pole_pairs == math.floor(pole_pairs)
+        and math.isclose(synchronous, expected_synchronous, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 <= rotor_speed < synchronous
+        and math.isclose(slip, expected_slip, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and 0.0 < slip < 1.0
+        and math.isclose(values["rotor_electrical_frequency_hz"], slip * frequency, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and current > 0.0 and resistance > 0.0 and torque > 0.0
+        and math.isclose(values["rotor_copper_loss_w"], expected_copper_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["airgap_power_w"], expected_airgap_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["mechanical_power_w"], expected_mechanical_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["airgap_power_w"], values["mechanical_power_w"] + values["rotor_copper_loss_w"], rel_tol=1.0e-12, abs_tol=1.0e-10)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-12) for name in names)
+        and identity.get("rotating_frame") == "rotor_mechanical_frame"
+        and identity.get("result_rotating_frame") == identity.get("rotating_frame")
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -4325,6 +4462,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "piezoelectric_results_use_current_charge_strain_reciprocity_energy_polarization_mesh_and_result": (
             _piezoelectric_reciprocity_identity_ok(summary)
+        ),
+        "poroelastic_results_use_current_biot_pressure_displacement_flux_storage_dissipation_interface_mesh_and_result": (
+            _poroelastic_biot_identity_ok(summary)
+        ),
+        "rotating_induction_results_use_current_slip_frequency_current_loss_torque_power_frame_mesh_and_result": (
+            _rotating_induction_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
