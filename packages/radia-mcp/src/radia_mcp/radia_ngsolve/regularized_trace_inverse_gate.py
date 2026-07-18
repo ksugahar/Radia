@@ -280,6 +280,12 @@ def regularized_trace_inverse_path_gate(
     fembem_shape_derivative_identity_ok = (
         _optional_fembem_shape_derivative_identity_is_aligned(summary)
     )
+    hmatrix_benchmark_identity_ok = (
+        _optional_hmatrix_benchmark_identity_is_aligned(summary)
+    )
+    multifrequency_adjoint_identity_ok = (
+        _optional_multifrequency_adjoint_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -483,6 +489,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_shape_derivative_uses_current_morph_normal_velocity_trace_jacobian_fd_mesh_and_result": (
             fembem_shape_derivative_identity_ok
+        ),
+        "hmatrix_benchmarks_use_current_dense_error_tolerance_rank_memory_complexity_mesh_owners_and_result": (
+            hmatrix_benchmark_identity_ok
+        ),
+        "multifrequency_fembem_adjoints_use_current_weights_objective_quadrature_trace_gradient_fd_mesh_owner_and_result": (
+            multifrequency_adjoint_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -4160,6 +4172,140 @@ def _optional_cq_adaptive_timestep_identity_is_aligned(
         and value.get("accepted_operator_sha256") == value.get("operator_sha256")
         and _is_sha256(str(value.get("result_sha256", "")).lower())
         and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_hmatrix_benchmark_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_dense_reference_error_tolerance_rank_memory_complexity_mesh_operator_benchmark_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["hmatrix_generation"]).strip()
+        sizes = tuple(_integer({"item": item}, "item") for item in value["boundary_unknown_count"])
+        errors = tuple(float(item) for item in value["dense_reference_relative_error"])
+        tolerance = float(value["relative_tolerance"])
+        ranks = tuple(_integer({"item": item}, "item") for item in value["maximum_block_rank"])
+        dense_memory = tuple(_integer({"item": item}, "item") for item in value["dense_memory_bytes"])
+        hmatrix_memory = tuple(_integer({"item": item}, "item") for item in value["hmatrix_memory_bytes"])
+        memory_exponent = float(value["memory_complexity_exponent"])
+        rank_exponent = float(value["rank_complexity_exponent"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    empirical_memory_exponent = (
+        math.log(hmatrix_memory[-1] / hmatrix_memory[0])
+        / math.log(sizes[-1] / sizes[0])
+        if len(sizes) >= 2 and min(sizes[0], hmatrix_memory[0]) > 0 else math.nan
+    )
+    empirical_rank_exponent = (
+        math.log(ranks[-1] / ranks[0]) / math.log(sizes[-1] / sizes[0])
+        if len(sizes) >= 2 and min(sizes[0], ranks[0]) > 0 else math.nan
+    )
+    mirrored = (
+        "boundary_unknown_count", "dense_reference_relative_error",
+        "relative_tolerance", "maximum_block_rank", "dense_memory_bytes",
+        "hmatrix_memory_bytes", "memory_complexity_exponent",
+        "rank_complexity_exponent", "boundary_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "dense_generation", "tolerance_generation", "rank_generation",
+            "memory_generation", "complexity_generation", "mesh_generation",
+            "operator_generation", "benchmark_generation", "result_generation",
+        ))
+        and len(sizes) == len(errors) == len(ranks) == len(dense_memory) == len(hmatrix_memory) >= 3
+        and all(item > 0 for item in sizes)
+        and all(left < right for left, right in zip(sizes, sizes[1:]))
+        and math.isfinite(tolerance) and 0.0 < tolerance < 1.0
+        and all(math.isfinite(item) and 0.0 <= item <= tolerance for item in errors)
+        and all(right <= left for left, right in zip(errors, errors[1:]))
+        and all(0 < rank < size for rank, size in zip(ranks, sizes))
+        and all(left <= right for left, right in zip(ranks, ranks[1:]))
+        and dense_memory == tuple(16 * size * size for size in sizes)
+        and all(0 < compressed < dense for compressed, dense in zip(hmatrix_memory, dense_memory))
+        and all(left < right for left, right in zip(hmatrix_memory, hmatrix_memory[1:]))
+        and math.isfinite(empirical_memory_exponent) and 1.0 <= empirical_memory_exponent < 2.0
+        and math.isclose(memory_exponent, empirical_memory_exponent, rel_tol=0.02, abs_tol=0.02)
+        and math.isfinite(empirical_rank_exponent) and 0.0 <= empirical_rank_exponent <= 1.0
+        and math.isclose(rank_exponent, empirical_rank_exponent, rel_tol=0.02, abs_tol=0.02)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("boundary_mesh_sha256", "")).lower())
+        and bool(str(value.get("operator_owner", "")).strip())
+        and value.get("accepted_operator_owner") == value.get("operator_owner")
+        and bool(str(value.get("benchmark_owner", "")).strip())
+        and value.get("accepted_benchmark_owner") == value.get("benchmark_owner")
+        and _is_sha256(str(value.get("hmatrix_result_sha256", "")).lower())
+        and value.get("accepted_hmatrix_result_sha256") == value.get("hmatrix_result_sha256")
+    )
+
+
+def _optional_multifrequency_adjoint_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "multifrequency_fembem_adjoint_weight_objective_quadrature_trace_gradient_fd_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["adjoint_generation"]).strip()
+        frequencies = tuple(float(item) for item in value["frequency_hz"])
+        weights = tuple(float(item) for item in value["frequency_weights"])
+        objectives = tuple(complex(float(row[0]), float(row[1])) for row in value["objective_complex"])
+        weighted_objective = complex(*[float(item) for item in value["weighted_objective_complex"]])
+        quadrature = tuple(_integer({"item": item}, "item") for item in value["quadrature_order"])
+        trace_map = tuple(_integer({"item": item}, "item") for item in value["trace_node_map"])
+        gradients = tuple(float(item) for item in value["frequency_gradient"])
+        accumulated = float(value["accumulated_gradient"])
+        finite_difference = float(value["finite_difference_gradient"])
+        tolerance = float(value["gradient_relative_tolerance"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    count = len(frequencies)
+    expected_objective = sum(weight * objective for weight, objective in zip(weights, objectives))
+    expected_gradient = sum(weight * gradient for weight, gradient in zip(weights, gradients))
+    mirrored = (
+        "frequency_hz", "frequency_weights", "objective_complex",
+        "weighted_objective_complex", "quadrature_order", "trace_node_map",
+        "frequency_gradient", "accumulated_gradient", "finite_difference_gradient",
+        "gradient_relative_tolerance", "fembem_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "frequency_generation", "weight_generation", "objective_generation",
+            "quadrature_generation", "trace_generation", "gradient_generation",
+            "fd_generation", "mesh_generation", "owner_generation", "result_generation",
+        ))
+        and count == len(weights) == len(objectives) == len(quadrature) == len(gradients) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and all(math.isfinite(item) and item >= 0.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(math.isfinite(item.real) and math.isfinite(item.imag) for item in objectives)
+        and abs(weighted_objective - expected_objective) <= 1.0e-12
+        and all(item >= 2 and item % 2 == 0 for item in quadrature)
+        and bool(trace_map) and all(item > 0 for item in trace_map)
+        and len(set(trace_map)) == len(trace_map)
+        and all(math.isfinite(item) for item in gradients)
+        and math.isclose(accumulated, expected_gradient, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isfinite(tolerance) and 0.0 < tolerance <= 1.0e-2
+        and math.isfinite(finite_difference)
+        and abs(accumulated - finite_difference) / max(abs(accumulated), abs(finite_difference), 1.0e-300) <= tolerance
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("fembem_mesh_sha256", "")).lower())
+        and bool(str(value.get("adjoint_owner", "")).strip())
+        and value.get("accepted_adjoint_owner") == value.get("adjoint_owner")
+        and _is_sha256(str(value.get("adjoint_result_sha256", "")).lower())
+        and value.get("accepted_adjoint_result_sha256") == value.get("adjoint_result_sha256")
     )
 
 
