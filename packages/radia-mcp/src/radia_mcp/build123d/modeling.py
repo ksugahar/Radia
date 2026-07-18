@@ -4159,6 +4159,276 @@ def _sweep_frame_transition_generation_identity(row):
     )
 
 
+def _guided_loft_generation_identity(row):
+    value = row.get(
+        "loft_section_guide_parameterization_seam_orientation_mode_intersection_volume_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("loft_generation", "")).strip()
+    sections = tuple(str(item).strip() for item in value.get("section_order", []))
+    result_sections = tuple(
+        str(item).strip() for item in value.get("result_section_order", [])
+    )
+    intersections = tuple(
+        tuple(str(item).strip() for item in pair)
+        for pair in value.get("guide_intersections", [])
+    )
+    result_intersections = tuple(
+        tuple(str(item).strip() for item in pair)
+        for pair in value.get("result_guide_intersections", [])
+    )
+    try:
+        seams = tuple(int(item) for item in value.get("seam_orientation_signs", []))
+        result_seams = tuple(
+            int(item) for item in value.get("result_seam_orientation_signs", [])
+        )
+        volume = float(value.get("loft_volume_m3"))
+        result_volume = float(value.get("result_loft_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    parameter_digest = str(value.get("wire_parameterization_sha256", "")).lower()
+    shape_digest = str(value.get("loft_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "section_generation",
+                "parameter_generation",
+                "guide_generation",
+                "seam_generation",
+                "mode_generation",
+                "intersection_generation",
+                "mass_generation",
+                "shape_generation",
+                "result_generation",
+            )
+        )
+        or len(sections) < 2
+        or len(set(sections)) != len(sections)
+        or result_sections != sections
+        or not _valid_identity_digest(parameter_digest)
+        or value.get("result_wire_parameterization_sha256") != parameter_digest
+        or not intersections
+        or len(set(intersections)) != len(intersections)
+        or any(len(pair) != 2 or not all(pair) or pair[1] not in sections for pair in intersections)
+        or {pair[1] for pair in intersections} != set(sections)
+        or result_intersections != intersections
+        or len(seams) != len(sections)
+        or any(item != 1 for item in seams)
+        or result_seams != seams
+        or value.get("loft_mode") != "smooth"
+        or value.get("result_loft_mode") != value.get("loft_mode")
+        or value.get("self_intersection") is not False
+        or value.get("result_self_intersection") is not False
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or result_volume != volume
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_loft_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation,
+        sections,
+        parameter_digest,
+        intersections,
+        seams,
+        value.get("loft_mode"),
+        volume,
+        shape_digest,
+    )
+
+
+def _mass_inertia_parallel_axis_generation_identity(row):
+    value = row.get(
+        "mass_property_density_unit_origin_center_principal_axis_degeneracy_parallel_axis_owner_shape_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("mass_property_generation", "")).strip()
+    try:
+        density = float(value.get("density_kg_m3"))
+        result_density = float(value.get("result_density_kg_m3"))
+        mass = float(value.get("mass_kg"))
+        result_mass = float(value.get("result_mass_kg"))
+        origin = tuple(float(item) for item in value.get("inertia_origin_m", []))
+        result_origin = tuple(
+            float(item) for item in value.get("result_inertia_origin_m", [])
+        )
+        center = tuple(float(item) for item in value.get("center_of_mass_m", []))
+        result_center = tuple(
+            float(item) for item in value.get("result_center_of_mass_m", [])
+        )
+        inertia_com = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("inertia_at_com_kg_m2", [])
+        )
+        result_inertia_com = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("result_inertia_at_com_kg_m2", [])
+        )
+        inertia_origin = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("inertia_at_origin_kg_m2", [])
+        )
+        result_inertia_origin = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("result_inertia_at_origin_kg_m2", [])
+        )
+        moments = tuple(
+            float(item) for item in value.get("principal_moments_kg_m2", [])
+        )
+        result_moments = tuple(
+            float(item) for item in value.get("result_principal_moments_kg_m2", [])
+        )
+        axes = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("principal_axes", [])
+        )
+        result_axes = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("result_principal_axes", [])
+        )
+    except (TypeError, ValueError):
+        return None
+
+    def matrix3(matrix):
+        return len(matrix) == 3 and all(
+            len(matrix_row) == 3
+            and all(math.isfinite(item) for item in matrix_row)
+            for matrix_row in matrix
+        )
+
+    def close(left, right):
+        return math.isclose(left, right, rel_tol=1.0e-10, abs_tol=1.0e-12)
+
+    axes_orthonormal = matrix3(axes) and all(
+        close(
+            sum(axes[row][index] * axes[column][index] for index in range(3)),
+            1.0 if row == column else 0.0,
+        )
+        for row in range(3)
+        for column in range(3)
+    )
+    axes_determinant = (
+        axes[0][0] * (axes[1][1] * axes[2][2] - axes[1][2] * axes[2][1])
+        - axes[0][1] * (axes[1][0] * axes[2][2] - axes[1][2] * axes[2][0])
+        + axes[0][2] * (axes[1][0] * axes[2][1] - axes[1][1] * axes[2][0])
+        if matrix3(axes)
+        else 0.0
+    )
+    reconstructed_com = (
+        tuple(
+            tuple(
+                sum(axes[index][row] * moments[index] * axes[index][column] for index in range(3))
+                for column in range(3)
+            )
+            for row in range(3)
+        )
+        if matrix3(axes) and len(moments) == 3
+        else ()
+    )
+    displacement = (
+        tuple(center[index] - origin[index] for index in range(3))
+        if len(center) == len(origin) == 3
+        else ()
+    )
+    displacement_sq = sum(item * item for item in displacement)
+    parallel_axis = (
+        tuple(
+            tuple(
+                inertia_com[row_index][column_index]
+                + mass
+                * (
+                    displacement_sq * (1.0 if row_index == column_index else 0.0)
+                    - displacement[row_index] * displacement[column_index]
+                )
+                for column_index in range(3)
+            )
+            for row_index in range(3)
+        )
+        if matrix3(inertia_com) and len(displacement) == 3
+        else ()
+    )
+    shape_digest = str(value.get("mass_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "density_generation",
+                "origin_generation",
+                "center_generation",
+                "principal_generation",
+                "axis_generation",
+                "parallel_axis_generation",
+                "owner_generation",
+                "shape_generation",
+                "result_generation",
+            )
+        )
+        or not math.isfinite(density)
+        or density <= 0.0
+        or result_density != density
+        or value.get("density_unit") != "kg/m^3"
+        or value.get("result_density_unit") != value.get("density_unit")
+        or not math.isfinite(mass)
+        or mass <= 0.0
+        or result_mass != mass
+        or len(origin) != 3
+        or any(not math.isfinite(item) for item in origin)
+        or result_origin != origin
+        or len(center) != 3
+        or any(not math.isfinite(item) for item in center)
+        or result_center != center
+        or not matrix3(inertia_com)
+        or not matrix3(inertia_origin)
+        or result_inertia_com != inertia_com
+        or result_inertia_origin != inertia_origin
+        or len(moments) != 3
+        or any(not math.isfinite(item) or item <= 0.0 for item in moments)
+        or tuple(sorted(moments)) != moments
+        or result_moments != moments
+        or not axes_orthonormal
+        or not close(axes_determinant, 1.0)
+        or result_axes != axes
+        or not matrix3(reconstructed_com)
+        or any(
+            not close(reconstructed_com[row_index][column_index], inertia_com[row_index][column_index])
+            for row_index in range(3)
+            for column_index in range(3)
+        )
+        or not matrix3(parallel_axis)
+        or any(
+            not close(parallel_axis[row_index][column_index], inertia_origin[row_index][column_index])
+            for row_index in range(3)
+            for column_index in range(3)
+        )
+        or value.get("degeneracy_convention") != "right_handed_sorted_moments"
+        or value.get("result_degeneracy_convention") != value.get("degeneracy_convention")
+        or not str(value.get("shape_owner", "")).strip()
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(shape_digest)
+        or value.get("result_mass_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation,
+        density,
+        mass,
+        origin,
+        center,
+        inertia_com,
+        inertia_origin,
+        moments,
+        axes,
+        value.get("shape_owner"),
+        shape_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -4627,6 +4897,52 @@ def shape_mass_property_crosscheck_summary(
                     == reference_sweep_frame_transitions.get(str(row.get("name", "")))
                     for row in rows
                 )
+            )
+
+    guided_loft_evidence_present = any(
+        row.get(
+            "loft_section_guide_parameterization_seam_orientation_mode_intersection_volume_shape_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_guided_lofts = {
+        str(row.get("name", "")): _guided_loft_generation_identity(row)
+        for row in reference
+    }
+    guided_loft_identity_ok = not guided_loft_evidence_present
+    if guided_loft_evidence_present:
+        guided_loft_identity_ok = bool(reference_guided_lofts) and all(
+            value is not None for value in reference_guided_lofts.values()
+        )
+        for _, rows in normalized_sets:
+            guided_loft_identity_ok = guided_loft_identity_ok and all(
+                _guided_loft_generation_identity(row)
+                == reference_guided_lofts.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    mass_inertia_evidence_present = any(
+        row.get(
+            "mass_property_density_unit_origin_center_principal_axis_degeneracy_parallel_axis_owner_shape_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_mass_inertias = {
+        str(row.get("name", "")): _mass_inertia_parallel_axis_generation_identity(row)
+        for row in reference
+    }
+    mass_inertia_identity_ok = not mass_inertia_evidence_present
+    if mass_inertia_evidence_present:
+        mass_inertia_identity_ok = bool(reference_mass_inertias) and all(
+            value is not None for value in reference_mass_inertias.values()
+        )
+        for _, rows in normalized_sets:
+            mass_inertia_identity_ok = mass_inertia_identity_ok and all(
+                _mass_inertia_parallel_axis_generation_identity(row)
+                == reference_mass_inertias.get(str(row.get("name", "")))
+                for row in rows
             )
 
     revision_evidence_present = any(
@@ -6562,6 +6878,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "swept_solids_use_current_frenet_frame_twist_transition_orientation_intersection_volume_owner_and_shape": (
             sweep_frame_transition_identity_ok
+        ),
+        "guided_lofts_use_current_sections_parameterization_guides_seams_mode_intersection_volume_and_shape": (
+            guided_loft_identity_ok
+        ),
+        "mass_properties_use_current_density_units_origin_center_principal_axes_parallel_axis_owner_and_shape": (
+            mass_inertia_identity_ok
         ),
     }
     issues = []
