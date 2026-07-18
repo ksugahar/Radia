@@ -1927,6 +1927,161 @@ def _svg_extrusion_identity_ok(value: object) -> bool:
     )
 
 
+def _occt_heal_replay_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("heal_generation") or "")
+    try:
+        tolerance = float(value.get("healing_tolerance_m"))
+        replayed_tolerance = float(value.get("replayed_healing_tolerance_m"))
+        shell_count = int(value.get("sewn_shell_count"))
+        replayed_shell_count = int(value.get("replayed_sewn_shell_count"))
+        solid_count = int(value.get("solid_count"))
+        replayed_solid_count = int(value.get("replayed_solid_count"))
+        orientations = [int(item) for item in value.get("face_orientations", [])]
+        replayed_orientations = [int(item) for item in value.get("replayed_face_orientations", [])]
+        removed = [int(item) for item in value.get("removed_degenerate_edge_ids", [])]
+        replayed_removed = [
+            int(item) for item in value.get("replayed_removed_degenerate_edge_ids", [])
+        ]
+        names = {str(key): int(item) for key, item in value.get("stable_subshape_names", {}).items()}
+        replayed_names = {
+            str(key): int(item)
+            for key, item in value.get("replayed_stable_subshape_names", {}).items()
+        }
+        counts = {str(key): int(item) for key, item in value.get("roundtrip_subshape_counts", {}).items()}
+        replayed_counts = {
+            str(key): int(item)
+            for key, item in value.get("replayed_roundtrip_subshape_counts", {}).items()
+        }
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "tolerance_generation", "sew_generation", "orientation_generation",
+                "degenerate_generation", "name_generation", "roundtrip_generation",
+                "owner_generation", "result_generation",
+            )
+        )
+        and math.isfinite(tolerance) and 0.0 < tolerance <= 1.0e-3
+        and replayed_tolerance == tolerance
+        and shell_count == 1 and replayed_shell_count == shell_count
+        and solid_count == 1 and replayed_solid_count == solid_count
+        and len(orientations) >= 4 and all(item == 1 for item in orientations)
+        and replayed_orientations == orientations
+        and bool(removed) and all(item > 0 for item in removed)
+        and len(set(removed)) == len(removed) and replayed_removed == removed
+        and bool(names)
+        and all(key.startswith("face:") and item > 0 for key, item in names.items())
+        and len(set(names.values())) == len(names)
+        and replayed_names == names
+        and set(counts) == {"solid", "shell", "face", "edge"}
+        and counts["solid"] == 1 and counts["shell"] == 1
+        and counts["face"] >= 4 and counts["edge"] >= counts["face"]
+        and replayed_counts == counts
+        and str(value.get("shape_owner") or "").startswith("headless:")
+        and value.get("replayed_shape_owner") == value.get("shape_owner")
+        and _valid_sha256(value.get("healed_brep_sha256"))
+        and value.get("replayed_healed_brep_sha256") == value.get("healed_brep_sha256")
+        and _valid_sha256(value.get("heal_result_sha256"))
+        and value.get("accepted_heal_result_sha256") == value.get("heal_result_sha256")
+    )
+
+
+def _assembly_hierarchy_replay_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("assembly_generation") or "")
+    hierarchy = value.get("hierarchy")
+    replayed_hierarchy = value.get("replayed_hierarchy")
+    local = value.get("local_locations_m")
+    replayed_local = value.get("replayed_local_locations_m")
+    global_locations = value.get("global_locations_m")
+    replayed_global = value.get("replayed_global_locations_m")
+    quantities = value.get("component_quantities")
+    replayed_quantities = value.get("replayed_component_quantities")
+    bom = value.get("bom_identity")
+    replayed_bom = value.get("replayed_bom_identity")
+    try:
+        joint_axis = [float(item) for item in value.get("joint_axis", [])]
+        replayed_joint_axis = [float(item) for item in value.get("replayed_joint_axis", [])]
+        collisions = [[str(item) for item in pair] for pair in value.get("collision_pairs", [])]
+        replayed_collisions = [
+            [str(item) for item in pair] for pair in value.get("replayed_collision_pairs", [])
+        ]
+        local_vectors = {
+            str(key): [float(item) for item in vector] for key, vector in local.items()
+        }
+        global_vectors = {
+            str(key): [float(item) for item in vector] for key, vector in global_locations.items()
+        }
+    except (AttributeError, TypeError, ValueError):
+        return False
+    if not isinstance(hierarchy, Mapping) or not isinstance(quantities, Mapping) or not isinstance(bom, Mapping):
+        return False
+    parent_of = {
+        str(child): str(parent)
+        for parent, children in hierarchy.items()
+        for child in children
+    }
+    components = set(local_vectors)
+    locations_close = all(
+        len(local_vectors[name]) == len(global_vectors.get(name, [])) == 3
+        and all(math.isfinite(item) for item in local_vectors[name] + global_vectors[name])
+        and all(
+            math.isclose(
+                global_vectors[name][axis],
+                local_vectors[name][axis]
+                + (global_vectors[parent_of[name]][axis] if parent_of.get(name) in components else 0.0),
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            for axis in range(3)
+        )
+        for name in components
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "hierarchy_generation", "location_generation", "joint_generation",
+                "collision_generation", "quantity_generation", "bom_generation",
+                "owner_generation", "result_generation",
+            )
+        )
+        and bool(hierarchy) and replayed_hierarchy == hierarchy
+        and components == set(global_vectors) == set(quantities) == set(bom)
+        and components == set(parent_of)
+        and len(parent_of) == sum(len(children) for children in hierarchy.values())
+        and replayed_local == local and replayed_global == global_locations
+        and locations_close
+        and len(joint_axis) == 3
+        and all(math.isfinite(item) for item in joint_axis)
+        and math.isclose(sum(item * item for item in joint_axis), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and replayed_joint_axis == joint_axis
+        and bool(collisions)
+        and all(len(pair) == 2 and pair[0] != pair[1] and set(pair).issubset(components) for pair in collisions)
+        and replayed_collisions == collisions
+        and all(int(item) > 0 for item in quantities.values())
+        and replayed_quantities == quantities
+        and all(str(item).strip() for item in bom.values())
+        and len(set(str(item) for item in bom.values())) == len(bom)
+        and replayed_bom == bom
+        and str(value.get("assembly_owner") or "").startswith("headless:")
+        and value.get("replayed_assembly_owner") == value.get("assembly_owner")
+        and _valid_sha256(value.get("assembly_result_sha256"))
+        and value.get("accepted_assembly_result_sha256") == value.get("assembly_result_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -2283,6 +2438,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     topological_naming_identity_ok = True
     brep_roundtrip_topology_bounds_identity_ok = True
     svg_extrusion_identity_ok = True
+    occt_heal_replay_identity_ok = True
+    assembly_hierarchy_replay_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2340,6 +2497,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         topological_naming_identity_ok = False
         brep_roundtrip_topology_bounds_identity_ok = False
         svg_extrusion_identity_ok = False
+        occt_heal_replay_identity_ok = False
+        assembly_hierarchy_replay_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(replay_identity_value.get("replayed_source_commit", "")).lower()
@@ -4039,6 +4198,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "svg_path_fillrule_curve_transform_unit_wire_face_extrusion_source_digest_generation_identity"
             )
         )
+        occt_heal_replay_identity_ok = _occt_heal_replay_identity_ok(
+            replay_identity_value.get(
+                "occt_heal_tolerance_sew_orientation_degenerate_stablename_roundtrip_owner_digest_generation_identity"
+            )
+        )
+        assembly_hierarchy_replay_identity_ok = _assembly_hierarchy_replay_identity_ok(
+            replay_identity_value.get(
+                "assembly_hierarchy_location_joint_axis_collision_quantity_bom_owner_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name) for row in components for name in (row.get("joint_names") or []) if str(name)
     }
@@ -4235,6 +4404,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "svg_extrusions_use_current_paths_fill_transform_units_wire_face_volume_owner_and_digests": (
             svg_extrusion_identity_ok
+        ),
+        "occt_heals_use_current_tolerance_sewing_orientation_degenerate_edges_names_roundtrip_owner_and_digests": (
+            occt_heal_replay_identity_ok
+        ),
+        "assemblies_use_current_hierarchy_locations_joint_axis_collisions_quantities_bom_owner_and_result": (
+            assembly_hierarchy_replay_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
