@@ -1070,6 +1070,96 @@ def _induction_power_frame_identity_ok(value: object) -> bool:
     )
 
 
+def _ipm_dq_inductance_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("dq_generation", "")).strip()
+    try:
+        current = float(value.get("current_magnitude_a"))
+        angle = float(value.get("current_angle_electrical_deg"))
+        operating = [float(item) for item in value.get("saturation_operating_point_a", [])]
+        result_operating = [float(item) for item in value.get("result_saturation_operating_point_a", [])]
+        matrix = [[float(item) for item in row] for row in value.get("flux_linkage_derivative_h", [])]
+        result_matrix = [[float(item) for item in row] for row in value.get("result_flux_linkage_derivative_h", [])]
+        tolerance = float(value.get("reciprocity_tolerance_h"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "current_dq_generation", "frame_dq_generation", "saturation_dq_generation",
+            "flux_dq_generation", "derivative_dq_generation", "reciprocity_dq_generation",
+            "mesh_dq_generation", "result_dq_generation"))
+        and math.isfinite(current) and current > 0.0
+        and value.get("result_current_magnitude_a") == current
+        and math.isfinite(angle) and value.get("result_current_angle_electrical_deg") == angle
+        and value.get("park_frame") == "rotor_d_aligned_ccw_power_invariant"
+        and value.get("result_park_frame") == value.get("park_frame")
+        and len(operating) == 2 and all(math.isfinite(item) for item in operating)
+        and result_operating == operating
+        and len(matrix) == 2 and all(len(row) == 2 for row in matrix)
+        and all(math.isfinite(item) for row in matrix for item in row)
+        and matrix[0][0] > 0.0 and matrix[1][1] > 0.0
+        and result_matrix == matrix
+        and math.isfinite(tolerance) and tolerance >= 0.0
+        and value.get("result_reciprocity_tolerance_h") == tolerance
+        and abs(matrix[0][1] - matrix[1][0]) <= tolerance
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _srm_coenergy_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("srm_generation", "")).strip()
+    try:
+        currents = [float(item) for item in value.get("current_a", [])]
+        positions = [float(item) for item in value.get("rotor_position_mechanical_deg", [])]
+        coenergy = [float(item) for item in value.get("coenergy_j_at_50a", [])]
+        torque = float(value.get("torque_nm_at_50a"))
+        period = float(value.get("sector_period_mechanical_deg"))
+    except (TypeError, ValueError):
+        return False
+    derivative = (
+        (coenergy[2] - coenergy[0]) / math.radians(positions[2] - positions[0])
+        if len(coenergy) == 3 and len(positions) == 3 and positions[2] != positions[0]
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "current_srm_generation", "position_srm_generation", "coenergy_srm_generation",
+            "periodicity_srm_generation", "phase_srm_generation", "mesh_srm_generation",
+            "result_srm_generation"))
+        and len(currents) == 3 and all(math.isfinite(item) and item >= 0.0 for item in currents)
+        and currents[0] < currents[1] < currents[2]
+        and value.get("result_current_a") == currents
+        and len(positions) == 3 and positions[0] < positions[1] < positions[2]
+        and math.isclose(positions[1], 0.0, abs_tol=1.0e-15)
+        and math.isclose(positions[2], -positions[0], rel_tol=1.0e-12)
+        and value.get("result_rotor_position_mechanical_deg") == positions
+        and len(coenergy) == 3 and all(math.isfinite(item) for item in coenergy)
+        and value.get("result_coenergy_j_at_50a") == coenergy
+        and math.isfinite(torque) and math.isclose(torque, derivative, rel_tol=1.0e-10)
+        and value.get("result_torque_nm_at_50a") == torque
+        and math.isfinite(period) and period > 0.0
+        and value.get("result_sector_period_mechanical_deg") == period
+        and value.get("phase_sequence") == ["A", "B", "C"]
+        and value.get("result_phase_sequence") == value.get("phase_sequence")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1153,6 +1243,8 @@ def pwm_controlled_motor_loss_gate(
     skew_slice_average_identity_ok = True
     iron_loss_component_volume_identity_ok = True
     induction_power_frame_identity_ok = True
+    ipm_dq_inductance_identity_ok = True
+    srm_coenergy_torque_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -1198,6 +1290,8 @@ def pwm_controlled_motor_loss_gate(
         skew_slice_average_identity_ok = False
         iron_loss_component_volume_identity_ok = False
         induction_power_frame_identity_ok = False
+        ipm_dq_inductance_identity_ok = False
+        srm_coenergy_torque_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -2832,6 +2926,16 @@ def pwm_controlled_motor_loss_gate(
                 "induction_slip_rotor_current_torque_power_frame_generation_identity"
             )
         )
+        ipm_dq_inductance_identity_ok = _ipm_dq_inductance_identity_ok(
+            identity_value.get(
+                "ipm_dq_inductance_current_angle_park_saturation_flux_derivative_reciprocity_mesh_result_identity"
+            )
+        )
+        srm_coenergy_torque_identity_ok = _srm_coenergy_torque_identity_ok(
+            identity_value.get(
+                "srm_torque_current_position_coenergy_periodicity_phase_sequence_mesh_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -3152,6 +3256,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "induction_motor_uses_current_slip_rotor_frequency_current_frame_torque_and_power_balance": (
             induction_power_frame_identity_ok
+        ),
+        "ipm_dq_inductance_uses_current_angle_park_frame_saturation_derivatives_reciprocity_mesh_and_result": (
+            ipm_dq_inductance_identity_ok
+        ),
+        "srm_torque_uses_current_positions_coenergy_periodicity_phase_sequence_mesh_and_result": (
+            srm_coenergy_torque_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
