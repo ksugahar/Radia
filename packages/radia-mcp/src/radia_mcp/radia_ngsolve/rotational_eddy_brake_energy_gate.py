@@ -3237,6 +3237,224 @@ def _adjoint_sensitivity_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _magnetostatic_virtual_work_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "magnetostatic_virtual_work_coenergy_force_displacement_current_mesh_frame_solution_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        displacement = [float(value) for value in identity.get("displacement_m", [])]
+        result_displacement = [
+            float(value) for value in identity.get("result_displacement_m", [])
+        ]
+        coenergy = [float(value) for value in identity.get("coenergy_j", [])]
+        result_coenergy = [
+            float(value) for value in identity.get("result_coenergy_j", [])
+        ]
+        reported_central_force = float(identity.get("central_coenergy_force_n"))
+        result_force = float(identity.get("result_force_n"))
+        tolerance = float(identity.get("force_tolerance_n"))
+        result_tolerance = float(identity.get("result_force_tolerance_n"))
+    except (TypeError, ValueError):
+        return False
+    if len(displacement) != 3 or len(coenergy) != 3:
+        return False
+    central_force = (coenergy[2] - coenergy[0]) / (
+        displacement[2] - displacement[0]
+    )
+    mesh_digests = identity.get("displaced_mesh_sha256")
+    result_mesh_digests = identity.get("result_displaced_mesh_sha256")
+    generation = str(identity.get("force_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "displacement_generation",
+                "coenergy_generation",
+                "current_generation",
+                "mesh_generation",
+                "frame_generation",
+                "solution_generation",
+                "result_generation",
+            )
+        )
+        and _increasing(displacement)
+        and displacement[1] == 0.0
+        and math.isclose(
+            displacement[2], -displacement[0], rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and all(math.isfinite(value) for value in displacement + coenergy)
+        and result_displacement == displacement
+        and result_coenergy == coenergy
+        and identity.get("held_source_convention") == "constant_current"
+        and identity.get("result_held_source_convention")
+        == identity.get("held_source_convention")
+        and identity.get("force_sign_convention") == "positive_dcoenergy_dx"
+        and identity.get("result_force_sign_convention")
+        == identity.get("force_sign_convention")
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and math.isclose(
+            reported_central_force, central_force, rel_tol=1.0e-12, abs_tol=tolerance
+        )
+        and math.isclose(result_force, central_force, rel_tol=1.0e-12, abs_tol=tolerance)
+        and bool(str(identity.get("coordinate_frame") or ""))
+        and identity.get("result_coordinate_frame") == identity.get("coordinate_frame")
+        and isinstance(mesh_digests, list)
+        and len(mesh_digests) == len(displacement)
+        and all(_is_sha256(str(value or "")) for value in mesh_digests)
+        and result_mesh_digests == mesh_digests
+        and bool(str(identity.get("force_solution_owner") or ""))
+        and identity.get("result_force_solution_owner")
+        == identity.get("force_solution_owner")
+        and _is_sha256(str(identity.get("force_result_sha256") or ""))
+        and identity.get("accepted_force_result_sha256")
+        == identity.get("force_result_sha256")
+    )
+
+
+def _acoustic_modal_participation_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "acoustic_modal_normalization_effective_mass_participation_damping_frequency_reconstruction_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        frequencies = [float(value) for value in identity.get("mode_frequency_hz", [])]
+        result_frequencies = [
+            float(value) for value in identity.get("result_mode_frequency_hz", [])
+        ]
+        masses = [float(value) for value in identity.get("modal_mass_kg", [])]
+        result_masses = [
+            float(value) for value in identity.get("result_modal_mass_kg", [])
+        ]
+        participation = [
+            float(value) for value in identity.get("participation_factor", [])
+        ]
+        result_participation = [
+            float(value) for value in identity.get("result_participation_factor", [])
+        ]
+        effective_mass = [
+            float(value) for value in identity.get("effective_modal_mass_kg", [])
+        ]
+        result_effective_mass = [
+            float(value) for value in identity.get("result_effective_modal_mass_kg", [])
+        ]
+        damping = [float(value) for value in identity.get("damping_ratio", [])]
+        result_damping = [
+            float(value) for value in identity.get("result_damping_ratio", [])
+        ]
+        probe_factors = [
+            float(value) for value in identity.get("probe_mode_factor", [])
+        ]
+        result_probe_factors = [
+            float(value) for value in identity.get("result_probe_mode_factor", [])
+        ]
+        response_frequencies = [
+            float(value) for value in identity.get("response_frequency_hz", [])
+        ]
+        result_response_frequencies = [
+            float(value) for value in identity.get("result_response_frequency_hz", [])
+        ]
+        response = [
+            [float(component) for component in value]
+            for value in identity.get("probe_response_complex", [])
+        ]
+        result_response = [
+            [float(component) for component in value]
+            for value in identity.get("result_probe_response_complex", [])
+        ]
+        tolerance = float(identity.get("response_tolerance"))
+        result_tolerance = float(identity.get("result_response_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    count = len(frequencies)
+    if count < 1 or not all(
+        len(values) == count
+        for values in (masses, participation, effective_mass, damping, probe_factors)
+    ):
+        return False
+    if len(response) != len(response_frequencies) or not all(
+        len(value) == 2 for value in response
+    ):
+        return False
+    reconstructed: list[complex] = []
+    for frequency in response_frequencies:
+        omega = 2.0 * math.pi * frequency
+        value = 0.0j
+        for mode_hz, zeta, factor, probe in zip(
+            frequencies, damping, participation, probe_factors, strict=True
+        ):
+            omega_mode = 2.0 * math.pi * mode_hz
+            denominator = complex(
+                omega_mode**2 - omega**2,
+                2.0 * zeta * omega_mode * omega,
+            )
+            value += probe * factor / denominator
+        reconstructed.append(value)
+    generation = str(identity.get("modal_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "normalization_generation",
+                "mass_generation",
+                "participation_generation",
+                "damping_generation",
+                "frequency_generation",
+                "reconstruction_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and bool(str(identity.get("normalization") or ""))
+        and identity.get("result_normalization") == identity.get("normalization")
+        and _increasing(frequencies)
+        and all(value > 0.0 and math.isfinite(value) for value in frequencies + masses)
+        and all(math.isfinite(value) for value in participation + probe_factors)
+        and all(0.0 <= value < 1.0 for value in damping)
+        and all(
+            math.isclose(actual, factor**2 * mass, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, factor, mass in zip(
+                effective_mass, participation, masses, strict=True
+            )
+        )
+        and result_frequencies == frequencies
+        and result_masses == masses
+        and result_participation == participation
+        and result_effective_mass == effective_mass
+        and result_damping == damping
+        and result_probe_factors == probe_factors
+        and _increasing(response_frequencies)
+        and all(value > 0.0 for value in response_frequencies)
+        and result_response_frequencies == response_frequencies
+        and all(math.isfinite(component) for value in response for component in value)
+        and result_response == response
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and all(
+            math.isclose(actual[0], expected.real, rel_tol=1.0e-12, abs_tol=tolerance)
+            and math.isclose(actual[1], expected.imag, rel_tol=1.0e-12, abs_tol=tolerance)
+            for actual, expected in zip(response, reconstructed, strict=True)
+        )
+        and _is_sha256(str(identity.get("modal_mesh_sha256") or ""))
+        and identity.get("result_modal_mesh_sha256")
+        == identity.get("modal_mesh_sha256")
+        and _is_sha256(str(identity.get("modal_result_sha256") or ""))
+        and identity.get("accepted_modal_result_sha256")
+        == identity.get("modal_result_sha256")
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -3716,6 +3934,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "adjoint_sensitivities_use_current_objective_design_chainrule_constraint_fd_mesh_solution_and_result": (
             _adjoint_sensitivity_identity_ok(summary)
+        ),
+        "magnetostatic_force_uses_current_displacement_coenergy_source_sign_mesh_frame_owner_and_result": (
+            _magnetostatic_virtual_work_identity_ok(summary)
+        ),
+        "acoustic_modes_use_current_normalization_mass_participation_damping_reconstruction_mesh_and_result": (
+            _acoustic_modal_participation_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
