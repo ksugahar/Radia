@@ -258,6 +258,12 @@ def regularized_trace_inverse_path_gate(
     modal_fembem_transient_identity_ok = (
         _optional_modal_fembem_transient_identity_is_aligned(summary)
     )
+    calderon_projector_identity_ok = (
+        _optional_calderon_projector_identity_is_aligned(summary)
+    )
+    cq_physical_closure_identity_ok = (
+        _optional_cq_physical_closure_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -437,6 +443,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "modal_fembem_transient_uses_current_mass_damping_initial_projection_truncation_energy_mesh_history_and_result": (
             modal_fembem_transient_identity_ok
+        ),
+        "calderon_projector_uses_current_p1_spaces_v_k_kt_w_mass_duality_normals_quadrature_mesh_owner_and_result": (
+            calderon_projector_identity_ok
+        ),
+        "cq_uses_current_symbol_contour_conjugate_transfer_causal_ifft_parseval_passivity_timestep_operator_and_result": (
+            cq_physical_closure_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -3392,6 +3404,231 @@ def _optional_modal_fembem_transient_identity_is_aligned(
         and value.get("result_mesh_sha256") == value.get("mesh_sha256")
         and bool(str(value.get("time_history_owner", "")).strip())
         and value.get("accepted_time_history_owner") == value.get("time_history_owner")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_calderon_projector_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "calderon_projector_p1_v_k_kt_w_mass_duality_normal_quadrature_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        signs = tuple(_integer(value, key) for key in ("v_sign", "k_sign", "kt_sign", "w_sign"))
+        result_signs = tuple(
+            _integer(value, key)
+            for key in ("result_v_sign", "result_k_sign", "result_kt_sign", "result_w_sign")
+        )
+        mass_residual = float(value["mass_duality_residual"])
+        result_mass_residual = float(value["result_mass_duality_residual"])
+        mass_tolerance = float(value["mass_duality_tolerance"])
+        result_mass_tolerance = float(value["result_mass_duality_tolerance"])
+        projector_residual = float(value["projector_residual"])
+        result_projector_residual = float(value["result_projector_residual"])
+        projector_tolerance = float(value["projector_tolerance"])
+        result_projector_tolerance = float(value["result_projector_tolerance"])
+        block_order = tuple(str(item) for item in value["block_order"])
+        result_block_order = tuple(str(item) for item in value["result_block_order"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("calderon_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "space_calderon_generation",
+                "operator_calderon_generation",
+                "mass_calderon_generation",
+                "normal_calderon_generation",
+                "quadrature_calderon_generation",
+                "mesh_calderon_generation",
+                "projector_calderon_generation",
+                "owner_calderon_generation",
+                "result_calderon_generation",
+            )
+        )
+        and value.get("trial_space") == "P1"
+        and value.get("result_trial_space") == "P1"
+        and value.get("test_space") == "P1"
+        and value.get("result_test_space") == "P1"
+        and value.get("projector_convention") == "interior_calderon_outward"
+        and value.get("result_projector_convention")
+        == value.get("projector_convention")
+        and block_order == ("dirichlet", "neumann")
+        and result_block_order == block_order
+        and signs == (-1, 1, -1, -1)
+        and result_signs == signs
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (
+                mass_residual,
+                result_mass_residual,
+                projector_residual,
+                result_projector_residual,
+            )
+        )
+        and all(
+            math.isfinite(item) and item > 0.0
+            for item in (
+                mass_tolerance,
+                result_mass_tolerance,
+                projector_tolerance,
+                result_projector_tolerance,
+            )
+        )
+        and mass_residual <= mass_tolerance
+        and result_mass_residual == mass_residual
+        and result_mass_tolerance == mass_tolerance
+        and value.get("normal_orientation") == "outward"
+        and value.get("result_normal_orientation") == "outward"
+        and value.get("singular_quadrature") == "duffy_principal_value_p1"
+        and value.get("result_singular_quadrature")
+        == value.get("singular_quadrature")
+        and projector_residual <= projector_tolerance
+        and result_projector_residual == projector_residual
+        and result_projector_tolerance == projector_tolerance
+        and _is_sha256(str(value.get("operator_sha256", "")).lower())
+        and value.get("result_operator_sha256") == value.get("operator_sha256")
+        and _is_sha256(str(value.get("mass_sha256", "")).lower())
+        and value.get("result_mass_sha256") == value.get("mass_sha256")
+        and _is_sha256(str(value.get("boundary_mesh_sha256", "")).lower())
+        and value.get("result_boundary_mesh_sha256")
+        == value.get("boundary_mesh_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_cq_physical_closure_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_symbol_contour_transfer_conjugate_causal_ifft_parseval_passivity_timestep_operator_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        coefficients = tuple(float(item) for item in value["symbol_coefficients"])
+        result_coefficients = tuple(
+            float(item) for item in value["result_symbol_coefficients"]
+        )
+        radius = float(value["contour_radius"])
+        result_radius = float(value["result_contour_radius"])
+        samples = tuple(
+            (float(row[0]), float(row[1])) for row in value["transfer_samples_ri"]
+        )
+        result_samples = tuple(
+            (float(row[0]), float(row[1]))
+            for row in value["result_transfer_samples_ri"]
+        )
+        response = tuple(float(item) for item in value["time_response"])
+        result_response = tuple(float(item) for item in value["result_time_response"])
+        negative_energy = float(value["negative_time_energy"])
+        result_negative_energy = float(value["result_negative_time_energy"])
+        time_work = float(value["time_domain_work"])
+        result_time_work = float(value["result_time_domain_work"])
+        frequency_work = float(value["frequency_domain_work"])
+        result_frequency_work = float(value["result_frequency_domain_work"])
+        parseval_tolerance = float(value["parseval_tolerance"])
+        result_parseval_tolerance = float(value["result_parseval_tolerance"])
+        minimum_real = float(value["minimum_real_transfer"])
+        result_minimum_real = float(value["result_minimum_real_transfer"])
+        timestep = float(value["timestep_s"])
+        result_timestep = float(value["result_timestep_s"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    conjugate_pairs_close = bool(samples) and math.isclose(
+        samples[0][1], 0.0, rel_tol=0.0, abs_tol=1.0e-12
+    )
+    for index in range(1, (len(samples) + 1) // 2):
+        conjugate_pairs_close = conjugate_pairs_close and math.isclose(
+            samples[index][0], samples[-index][0], rel_tol=1.0e-12, abs_tol=1.0e-12
+        ) and math.isclose(
+            samples[index][1], -samples[-index][1], rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+    expected_minimum_real = min((item[0] for item in samples), default=math.nan)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "symbol_cq_generation",
+                "contour_cq_generation",
+                "transfer_cq_generation",
+                "symmetry_cq_generation",
+                "causality_cq_generation",
+                "parseval_cq_generation",
+                "passivity_cq_generation",
+                "timestep_cq_generation",
+                "operator_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and value.get("multistep_symbol") == "BDF2"
+        and value.get("result_multistep_symbol") == "BDF2"
+        and coefficients == (1.5, -2.0, 0.5)
+        and result_coefficients == coefficients
+        and math.isfinite(radius)
+        and 0.0 < radius < 1.0
+        and result_radius == radius
+        and len(samples) >= 5
+        and all(math.isfinite(part) for sample in samples for part in sample)
+        and result_samples == samples
+        and conjugate_pairs_close
+        and bool(response)
+        and all(math.isfinite(item) for item in response)
+        and result_response == response
+        and math.isfinite(negative_energy)
+        and negative_energy >= 0.0
+        and negative_energy <= 1.0e-12
+        and result_negative_energy == negative_energy
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (time_work, result_time_work, frequency_work, result_frequency_work)
+        )
+        and math.isfinite(parseval_tolerance)
+        and parseval_tolerance > 0.0
+        and result_parseval_tolerance == parseval_tolerance
+        and math.isclose(
+            time_work,
+            frequency_work,
+            rel_tol=parseval_tolerance,
+            abs_tol=parseval_tolerance,
+        )
+        and result_time_work == time_work
+        and result_frequency_work == frequency_work
+        and math.isfinite(minimum_real)
+        and minimum_real >= 0.0
+        and math.isclose(
+            minimum_real,
+            expected_minimum_real,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and result_minimum_real == minimum_real
+        and value.get("passivity_sign") == "nonnegative_real_transfer"
+        and value.get("result_passivity_sign") == value.get("passivity_sign")
+        and math.isfinite(timestep)
+        and timestep > 0.0
+        and result_timestep == timestep
+        and value.get("operator_family") == "p1_calderon_bem"
+        and value.get("result_operator_family") == value.get("operator_family")
+        and _is_sha256(str(value.get("operator_sha256", "")).lower())
+        and value.get("result_operator_sha256") == value.get("operator_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
         and _is_sha256(str(value.get("result_sha256", "")).lower())
         and value.get("accepted_result_sha256") == value.get("result_sha256")
     )
