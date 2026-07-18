@@ -3549,6 +3549,165 @@ def _path_sweep_generation_identity(row):
     return generation, tuple(paths), frame, transition, tuple(profiles), tuple(orientations), volume, digest
 
 
+def _sheet_metal_flat_pattern_generation_identity(row):
+    value = row.get(
+        "sheet_metal_bend_allowance_kfactor_neutral_axis_relief_thickness_flat_pattern_area_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("sheet_generation", "")).strip()
+    try:
+        radius = float(value.get("bend_radius_m"))
+        result_radius = float(value.get("result_bend_radius_m"))
+        angle = float(value.get("bend_angle_deg"))
+        result_angle = float(value.get("result_bend_angle_deg"))
+        k_factor = float(value.get("k_factor"))
+        result_k_factor = float(value.get("result_k_factor"))
+        neutral_radius = float(value.get("neutral_axis_radius_m"))
+        result_neutral_radius = float(value.get("result_neutral_axis_radius_m"))
+        allowance = float(value.get("bend_allowance_m"))
+        result_allowance = float(value.get("result_bend_allowance_m"))
+        relief_width = float(value.get("relief_width_m"))
+        result_relief_width = float(value.get("result_relief_width_m"))
+        thickness = float(value.get("thickness_m"))
+        result_thickness = float(value.get("result_thickness_m"))
+        width = float(value.get("strip_width_m"))
+        result_width = float(value.get("result_strip_width_m"))
+        straight = [float(item) for item in value.get("straight_lengths_m", [])]
+        result_straight = [
+            float(item) for item in value.get("result_straight_lengths_m", [])
+        ]
+        area = float(value.get("flat_pattern_area_m2"))
+        result_area = float(value.get("result_flat_pattern_area_m2"))
+    except (TypeError, ValueError):
+        return None
+    relief = str(value.get("relief_type", "")).strip()
+    digest = str(value.get("flat_pattern_sha256", "")).lower()
+    expected_neutral_radius = radius + k_factor * thickness
+    expected_allowance = math.radians(abs(angle)) * expected_neutral_radius
+    expected_area = width * (sum(straight) + expected_allowance)
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "bend_sheet_generation", "neutral_axis_sheet_generation",
+            "relief_sheet_generation", "thickness_sheet_generation",
+            "pattern_sheet_generation", "area_sheet_generation",
+            "result_sheet_generation"))
+        or not all(math.isfinite(item) for item in (
+            radius, angle, k_factor, neutral_radius, allowance, relief_width,
+            thickness, width, area))
+        or radius <= 0.0 or thickness <= 0.0 or width <= 0.0
+        or not 0.0 < abs(angle) <= 180.0 or not 0.0 <= k_factor <= 1.0
+        or relief not in {"rectangular", "round", "tear"}
+        or relief_width <= 0.0
+        or not straight or any(item <= 0.0 or not math.isfinite(item) for item in straight)
+        or not math.isclose(neutral_radius, expected_neutral_radius, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or not math.isclose(allowance, expected_allowance, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or not math.isclose(area, expected_area, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or result_radius != radius or result_angle != angle
+        or result_k_factor != k_factor or result_neutral_radius != neutral_radius
+        or result_allowance != allowance or value.get("result_relief_type") != relief
+        or result_relief_width != relief_width or result_thickness != thickness
+        or result_width != width or result_straight != straight or result_area != area
+        or value.get("flat_pattern_wire_closed") is not True
+        or value.get("result_flat_pattern_wire_closed") is not True
+        or not _valid_identity_digest(digest)
+        or value.get("result_flat_pattern_sha256") != digest
+    ):
+        return None
+    return (
+        generation, radius, angle, k_factor, neutral_radius, allowance, relief,
+        relief_width, thickness, width, tuple(straight), area, digest,
+    )
+
+
+def _joint_kinematic_loop_generation_identity(row):
+    value = row.get(
+        "joint_kinematic_loop_graph_dof_limit_connector_frame_closure_configuration_swept_volume_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("joint_generation", "")).strip()
+    edges = [tuple(str(item).strip() for item in edge) for edge in value.get("joint_graph_edges", [])]
+    result_edges = [
+        tuple(str(item).strip() for item in edge)
+        for edge in value.get("result_joint_graph_edges", [])
+    ]
+    names = [str(item).strip() for item in value.get("dof_names", [])]
+    result_names = [str(item).strip() for item in value.get("result_dof_names", [])]
+    types = [str(item).strip() for item in value.get("dof_types", [])]
+    result_types = [str(item).strip() for item in value.get("result_dof_types", [])]
+    try:
+        lower = [float(item) for item in value.get("lower_limits", [])]
+        result_lower = [float(item) for item in value.get("result_lower_limits", [])]
+        upper = [float(item) for item in value.get("upper_limits", [])]
+        result_upper = [float(item) for item in value.get("result_upper_limits", [])]
+        configuration = [float(item) for item in value.get("configuration_values", [])]
+        result_configuration = [
+            float(item) for item in value.get("result_configuration_values", [])
+        ]
+        closure = float(value.get("loop_closure_error_m"))
+        result_closure = float(value.get("result_loop_closure_error_m"))
+        tolerance = float(value.get("loop_closure_tolerance_m"))
+        result_tolerance = float(value.get("result_loop_closure_tolerance_m"))
+        swept_volume = float(value.get("swept_volume_m3"))
+        result_swept_volume = float(value.get("result_swept_volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    nodes = {item for edge in edges if len(edge) == 3 for item in (edge[0], edge[2])}
+    joint_names = [edge[1] for edge in edges if len(edge) == 3]
+    graph = {node: set() for node in nodes}
+    for edge in edges:
+        if len(edge) == 3 and edge[0] in graph and edge[2] in graph:
+            graph[edge[0]].add(edge[2])
+            graph[edge[2]].add(edge[0])
+    visited = set()
+    pending = [next(iter(nodes))] if nodes else []
+    while pending:
+        node = pending.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        pending.extend(graph[node] - visited)
+    frame_digest = str(value.get("connector_frame_sha256", "")).lower()
+    swept_digest = str(value.get("swept_shape_sha256", "")).lower()
+    configuration_id = str(value.get("configuration_id", "")).strip()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "graph_joint_generation", "dof_joint_generation", "limit_joint_generation",
+            "frame_joint_generation", "closure_joint_generation",
+            "configuration_joint_generation", "swept_joint_generation",
+            "result_joint_generation"))
+        or len(edges) < 3 or any(len(edge) != 3 or not all(edge) for edge in edges)
+        or len(set(edges)) != len(edges) or len(set(joint_names)) != len(joint_names)
+        or visited != nodes or len(edges) < len(nodes)
+        or result_edges != edges
+        or not names or len(set(names)) != len(names) or result_names != names
+        or len(types) != len(names) or any(item not in {"revolute", "prismatic"} for item in types)
+        or result_types != types
+        or not (len(lower) == len(upper) == len(configuration) == len(names))
+        or any(not all(math.isfinite(item) for item in values) for values in (lower, upper, configuration))
+        or any(lo >= hi or not lo <= current <= hi for lo, current, hi in zip(lower, configuration, upper))
+        or result_lower != lower or result_upper != upper or result_configuration != configuration
+        or not _valid_identity_digest(frame_digest)
+        or value.get("result_connector_frame_sha256") != frame_digest
+        or not all(math.isfinite(item) for item in (closure, tolerance, swept_volume))
+        or tolerance <= 0.0 or closure < 0.0 or closure > tolerance
+        or result_closure != closure or result_tolerance != tolerance
+        or not configuration_id or value.get("result_configuration_id") != configuration_id
+        or swept_volume <= 0.0 or result_swept_volume != swept_volume
+        or not _valid_identity_digest(swept_digest)
+        or value.get("result_swept_shape_sha256") != swept_digest
+    ):
+        return None
+    return (
+        generation, tuple(edges), tuple(names), tuple(types), tuple(lower),
+        tuple(upper), tuple(configuration), frame_digest, closure, tolerance,
+        configuration_id, swept_volume, swept_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -3837,6 +3996,50 @@ def shape_mass_property_crosscheck_summary(
             path_sweep_identity_ok = path_sweep_identity_ok and all(
                 _path_sweep_generation_identity(row)
                 == reference_path_sweeps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    sheet_metal_evidence_present = any(
+        row.get(
+            "sheet_metal_bend_allowance_kfactor_neutral_axis_relief_thickness_flat_pattern_area_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_sheet_metal = {
+        str(row.get("name", "")): _sheet_metal_flat_pattern_generation_identity(row)
+        for row in reference
+    }
+    sheet_metal_identity_ok = not sheet_metal_evidence_present
+    if sheet_metal_evidence_present:
+        sheet_metal_identity_ok = bool(reference_sheet_metal) and all(
+            value is not None for value in reference_sheet_metal.values()
+        )
+        for _, rows in normalized_sets:
+            sheet_metal_identity_ok = sheet_metal_identity_ok and all(
+                _sheet_metal_flat_pattern_generation_identity(row)
+                == reference_sheet_metal.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    joint_loop_evidence_present = any(
+        row.get(
+            "joint_kinematic_loop_graph_dof_limit_connector_frame_closure_configuration_swept_volume_generation_identity"
+        ) is not None
+        for row in identity_rows
+    )
+    reference_joint_loops = {
+        str(row.get("name", "")): _joint_kinematic_loop_generation_identity(row)
+        for row in reference
+    }
+    joint_loop_identity_ok = not joint_loop_evidence_present
+    if joint_loop_evidence_present:
+        joint_loop_identity_ok = bool(reference_joint_loops) and all(
+            value is not None for value in reference_joint_loops.values()
+        )
+        for _, rows in normalized_sets:
+            joint_loop_identity_ok = joint_loop_identity_ok and all(
+                _joint_kinematic_loop_generation_identity(row)
+                == reference_joint_loops.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -5749,6 +5952,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "path_sweeps_use_current_path_frame_transition_profile_orientation_solid_and_volume": (
             path_sweep_identity_ok
+        ),
+        "sheet_metal_flat_patterns_use_current_bends_neutral_axis_relief_thickness_and_area": (
+            sheet_metal_identity_ok
+        ),
+        "joint_loops_use_current_graph_dofs_limits_frames_closure_configuration_and_swept_volume": (
+            joint_loop_identity_ok
         ),
     }
     issues = []

@@ -653,6 +653,141 @@ def _occt_shape_cache_identity_ok(value: object) -> bool:
     )
 
 
+def _dxf_face_reconstruction_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("dxf_generation", "")).strip()
+    arcs = [tuple(row) for row in value.get("arc_parameters", [])]
+    decoded_arcs = [tuple(row) for row in value.get("decoded_arc_parameters", [])]
+    splines = [tuple(row) for row in value.get("spline_parameters", [])]
+    decoded_splines = [tuple(row) for row in value.get("decoded_spline_parameters", [])]
+    layers = [tuple(str(item).strip() for item in row) for row in value.get("entity_layer_map", [])]
+    decoded_layers = [
+        tuple(str(item).strip() for item in row)
+        for row in value.get("decoded_entity_layer_map", [])
+    ]
+    try:
+        plane = [[float(item) for item in row] for row in value.get("workplane_matrix", [])]
+        decoded_plane = [
+            [float(item) for item in row]
+            for row in value.get("decoded_workplane_matrix", [])
+        ]
+        area = float(value.get("face_area_mm2"))
+        decoded_area = float(value.get("decoded_face_area_mm2"))
+        arcs_numeric = [tuple(float(item) for item in row[1:]) for row in arcs]
+        spline_degree_counts = [
+            (int(row[1]), int(row[2])) for row in splines if len(row) == 4
+        ]
+    except (TypeError, ValueError):
+        return False
+    arc_names = [str(row[0]).strip() for row in arcs if len(row) == 6]
+    spline_names = [str(row[0]).strip() for row in splines if len(row) == 4]
+    entity_names = arc_names + spline_names
+    dxf_digest = str(value.get("dxf_sha256", "")).lower()
+    face_digest = str(value.get("face_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "arc_dxf_generation", "spline_dxf_generation", "layer_dxf_generation",
+            "plane_dxf_generation", "unit_dxf_generation", "wire_dxf_generation",
+            "face_dxf_generation", "result_dxf_generation"))
+        and bool(arcs) and all(len(row) == 6 for row in arcs)
+        and len(arc_names) == len(arcs) and all(arc_names)
+        and len(set(arc_names)) == len(arc_names)
+        and all(
+            all(math.isfinite(item) for item in numeric)
+            and numeric[2] > 0.0 and numeric[3] != numeric[4]
+            for numeric in arcs_numeric
+        )
+        and decoded_arcs == arcs
+        and bool(splines) and all(len(row) == 4 for row in splines)
+        and len(spline_names) == len(splines) and all(spline_names)
+        and len(set(spline_names)) == len(spline_names)
+        and all(degree >= 1 and count > degree for degree, count in spline_degree_counts)
+        and all(_valid_sha256(str(row[3]).lower()) for row in splines)
+        and decoded_splines == splines
+        and len(set(entity_names)) == len(entity_names)
+        and len(layers) == len(entity_names)
+        and {row[0] for row in layers if len(row) == 2} == set(entity_names)
+        and all(len(row) == 2 and all(row) for row in layers)
+        and decoded_layers == layers
+        and len(plane) == 4
+        and all(len(row) == 4 and all(math.isfinite(item) for item in row) for row in plane)
+        and plane[3] == [0.0, 0.0, 0.0, 1.0]
+        and decoded_plane == plane
+        and value.get("length_unit") in {"m", "cm", "mm", "in"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and value.get("wire_closed") is True
+        and value.get("decoded_wire_closed") is True
+        and value.get("wire_orientation") == "counterclockwise"
+        and value.get("decoded_wire_orientation") == value.get("wire_orientation")
+        and math.isfinite(area) and area > 0.0 and decoded_area == area
+        and _valid_sha256(dxf_digest) and value.get("decoded_dxf_sha256") == dxf_digest
+        and _valid_sha256(face_digest) and value.get("decoded_face_sha256") == face_digest
+    )
+
+
+def _three_mf_reconstruction_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("three_mf_generation", "")).strip()
+    names = [str(item).strip() for item in value.get("component_names", [])]
+    decoded_names = [str(item).strip() for item in value.get("decoded_component_names", [])]
+    transforms = [tuple(str(item).strip() for item in row) for row in value.get("component_transform_sha256", [])]
+    decoded_transforms = [
+        tuple(str(item).strip() for item in row)
+        for row in value.get("decoded_component_transform_sha256", [])
+    ]
+    try:
+        materials = [(str(row[0]).strip(), int(row[1])) for row in value.get("material_id_map", [])]
+        decoded_materials = [(str(row[0]).strip(), int(row[1])) for row in value.get("decoded_material_id_map", [])]
+        volumes = [(str(row[0]).strip(), float(row[1])) for row in value.get("component_volumes_mm3", [])]
+        decoded_volumes = [(str(row[0]).strip(), float(row[1])) for row in value.get("decoded_component_volumes_mm3", [])]
+        total_volume = float(value.get("total_volume_mm3"))
+        decoded_total_volume = float(value.get("decoded_total_volume_mm3"))
+    except (TypeError, ValueError, IndexError):
+        return False
+    watertight = [str(item).strip() for item in value.get("watertight_component_names", [])]
+    decoded_watertight = [
+        str(item).strip() for item in value.get("decoded_watertight_component_names", [])
+    ]
+    file_digest = str(value.get("three_mf_sha256", "")).lower()
+    mesh_digest = str(value.get("triangle_mesh_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "component_three_mf_generation", "transform_three_mf_generation",
+            "winding_three_mf_generation", "material_three_mf_generation",
+            "watertight_three_mf_generation", "volume_three_mf_generation",
+            "file_three_mf_generation", "result_three_mf_generation"))
+        and bool(names) and all(names) and len(set(names)) == len(names)
+        and decoded_names == names
+        and len(transforms) == len(names)
+        and [row[0] for row in transforms if len(row) == 2] == names
+        and all(len(row) == 2 and _valid_sha256(row[1].lower()) for row in transforms)
+        and decoded_transforms == transforms
+        and value.get("triangle_winding") == "outward_counterclockwise"
+        and value.get("decoded_triangle_winding") == value.get("triangle_winding")
+        and len(materials) == len(names) and [row[0] for row in materials] == names
+        and all(row[1] > 0 for row in materials) and decoded_materials == materials
+        and watertight == names and decoded_watertight == watertight
+        and len(volumes) == len(names) and [row[0] for row in volumes] == names
+        and all(math.isfinite(row[1]) and row[1] > 0.0 for row in volumes)
+        and decoded_volumes == volumes
+        and math.isfinite(total_volume) and total_volume > 0.0
+        and math.isclose(total_volume, sum(row[1] for row in volumes), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and decoded_total_volume == total_volume
+        and value.get("length_unit") in {"m", "cm", "mm", "in"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and _valid_sha256(file_digest) and value.get("decoded_three_mf_sha256") == file_digest
+        and _valid_sha256(mesh_digest) and value.get("decoded_triangle_mesh_sha256") == mesh_digest
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -989,6 +1124,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     brep_cache_generation_identity_ok = True
     step_ap242_import_identity_ok = True
     occt_shape_cache_identity_ok = True
+    dxf_face_reconstruction_identity_ok = True
+    three_mf_reconstruction_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -1032,6 +1169,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         brep_cache_generation_identity_ok = False
         step_ap242_import_identity_ok = False
         occt_shape_cache_identity_ok = False
+        dxf_face_reconstruction_identity_ok = False
+        three_mf_reconstruction_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2627,6 +2766,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "occt_kernel_shape_location_tolerance_triangulation_serialization_cache_generation_identity"
             )
         )
+        dxf_face_reconstruction_identity_ok = _dxf_face_reconstruction_identity_ok(
+            replay_identity_value.get(
+                "dxf_arc_spline_layer_plane_unit_closed_wire_orientation_face_digest_generation_identity"
+            )
+        )
+        three_mf_reconstruction_identity_ok = _three_mf_reconstruction_identity_ok(
+            replay_identity_value.get(
+                "three_mf_component_transform_triangle_winding_material_watertight_volume_unit_digest_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -2768,6 +2917,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "occt_shape_cache_uses_current_kernel_shape_location_tolerance_triangulation_and_serialization": (
             occt_shape_cache_identity_ok
+        ),
+        "dxf_faces_use_current_arcs_splines_layers_plane_units_closure_orientation_and_digests": (
+            dxf_face_reconstruction_identity_ok
+        ),
+        "three_mf_imports_use_current_components_transforms_winding_materials_watertight_volumes_units_and_digests": (
+            three_mf_reconstruction_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
