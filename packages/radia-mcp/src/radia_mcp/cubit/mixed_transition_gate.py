@@ -2805,6 +2805,347 @@ def _headless_python_invocation_identity_ok(identity: object) -> bool:
     )
 
 
+def _sweep_hex_twist_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        twist = float(identity.get("twist_angle_deg"))
+        result_twist = float(identity.get("result_twist_angle_deg"))
+        source_face = int(identity.get("source_face_id"))
+        result_source_face = int(identity.get("result_source_face_id"))
+        target_face = int(identity.get("target_face_id"))
+        result_target_face = int(identity.get("result_target_face_id"))
+        intervals = int(identity.get("axial_interval_count"))
+        result_intervals = int(identity.get("result_axial_interval_count"))
+        source_edges = [int(value) for value in identity.get("source_edge_ids", [])]
+        result_source_edges = [
+            int(value) for value in identity.get("result_source_edge_ids", [])
+        ]
+        target_edges = [int(value) for value in identity.get("target_edge_ids", [])]
+        result_target_edges = [
+            int(value) for value in identity.get("result_target_edge_ids", [])
+        ]
+        edge_map = [
+            [int(value) for value in pair] for pair in identity.get("edge_map", [])
+        ]
+        result_edge_map = [
+            [int(value) for value in pair]
+            for pair in identity.get("result_edge_map", [])
+        ]
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [
+            float(value) for value in identity.get("result_scaled_jacobians", [])
+        ]
+        block_id = int(identity.get("block_id"))
+        result_block_id = int(identity.get("result_block_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sweep_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "twist_sweep_generation",
+                "pairing_sweep_generation",
+                "interval_sweep_generation",
+                "edge_map_sweep_generation",
+                "orientation_sweep_generation",
+                "quality_sweep_generation",
+                "block_sweep_generation",
+                "result_sweep_generation",
+            )
+        )
+        and math.isfinite(twist)
+        and result_twist == twist
+        and source_face > 0
+        and target_face > 0
+        and source_face != target_face
+        and result_source_face == source_face
+        and result_target_face == target_face
+        and intervals > 0
+        and result_intervals == intervals
+        and bool(source_edges)
+        and len(source_edges) == len(target_edges)
+        and len(set(source_edges)) == len(source_edges)
+        and len(set(target_edges)) == len(target_edges)
+        and all(value > 0 for value in source_edges + target_edges)
+        and result_source_edges == source_edges
+        and result_target_edges == target_edges
+        and edge_map == [list(pair) for pair in zip(source_edges, target_edges)]
+        and result_edge_map == edge_map
+        and identity.get("sweep_orientation")
+        in {"right_handed_source_to_target", "left_handed_source_to_target"}
+        and identity.get("result_sweep_orientation")
+        == identity.get("sweep_orientation")
+        and bool(jacobians)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and block_id > 0
+        and result_block_id == block_id
+        and _valid_sha256(identity.get("sweep_mesh_sha256"))
+        and identity.get("result_sweep_mesh_sha256")
+        == identity.get("sweep_mesh_sha256")
+    )
+
+
+def _mixed_transition_face_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        hex_ids = [int(value) for value in identity.get("hex_element_ids", [])]
+        result_hex_ids = [
+            int(value) for value in identity.get("result_hex_element_ids", [])
+        ]
+        pyramid_ids = [
+            int(value) for value in identity.get("pyramid_element_ids", [])
+        ]
+        result_pyramid_ids = [
+            int(value) for value in identity.get("result_pyramid_element_ids", [])
+        ]
+        tet_ids = [int(value) for value in identity.get("tet_element_ids", [])]
+        result_tet_ids = [
+            int(value) for value in identity.get("result_tet_element_ids", [])
+        ]
+        faces = [
+            [int(value) for value in face]
+            for face in identity.get("transition_face_node_ids", [])
+        ]
+        result_faces = [
+            [int(value) for value in face]
+            for face in identity.get("result_transition_face_node_ids", [])
+        ]
+        owners = [
+            [str(value) for value in pair]
+            for pair in identity.get("face_owner_pairs", [])
+        ]
+        result_owners = [
+            [str(value) for value in pair]
+            for pair in identity.get("result_face_owner_pairs", [])
+        ]
+        orientations = [
+            [int(value) for value in pair]
+            for pair in identity.get("opposed_face_orientation_signs", [])
+        ]
+        result_orientations = [
+            [int(value) for value in pair]
+            for pair in identity.get("result_opposed_face_orientation_signs", [])
+        ]
+        unmatched = int(identity.get("unmatched_transition_face_count"))
+        result_unmatched = int(identity.get("result_unmatched_transition_face_count"))
+        quality = float(identity.get("minimum_scaled_jacobian"))
+        result_quality = float(identity.get("result_minimum_scaled_jacobian"))
+        block_ids = [int(value) for value in identity.get("block_ids", [])]
+        result_block_ids = [int(value) for value in identity.get("result_block_ids", [])]
+        sideset_ids = [int(value) for value in identity.get("sideset_ids", [])]
+        result_sideset_ids = [
+            int(value) for value in identity.get("result_sideset_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("transition_generation") or "")
+    all_elements = hex_ids + pyramid_ids + tet_ids
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "face_transition_generation",
+                "node_transition_generation",
+                "orientation_transition_generation",
+                "conformity_transition_generation",
+                "quality_transition_generation",
+                "block_transition_generation",
+                "sideset_transition_generation",
+                "export_transition_generation",
+                "result_transition_generation",
+            )
+        )
+        and bool(hex_ids and pyramid_ids and tet_ids)
+        and all(value > 0 for value in all_elements)
+        and len(set(all_elements)) == len(all_elements)
+        and result_hex_ids == hex_ids
+        and result_pyramid_ids == pyramid_ids
+        and result_tet_ids == tet_ids
+        and bool(faces)
+        and all(len(face) in {3, 4} and len(set(face)) == len(face) for face in faces)
+        and result_faces == faces
+        and len(owners) == len(faces)
+        and all(len(pair) == 2 and all(pair) for pair in owners)
+        and result_owners == owners
+        and len(orientations) == len(faces)
+        and all(len(pair) == 2 and pair[0] == -pair[1] for pair in orientations)
+        and result_orientations == orientations
+        and unmatched == 0
+        and result_unmatched == unmatched
+        and math.isfinite(quality)
+        and quality > 0.0
+        and result_quality == quality
+        and bool(block_ids)
+        and all(value > 0 for value in block_ids)
+        and len(set(block_ids)) == len(block_ids)
+        and result_block_ids == block_ids
+        and bool(sideset_ids)
+        and all(value > 0 for value in sideset_ids)
+        and len(set(sideset_ids)) == len(sideset_ids)
+        and result_sideset_ids == sideset_ids
+        and _valid_sha256(identity.get("transition_mesh_sha256"))
+        and identity.get("result_transition_mesh_sha256")
+        == identity.get("transition_mesh_sha256")
+        and _valid_sha256(identity.get("transition_export_sha256"))
+        and identity.get("accepted_transition_export_sha256")
+        == identity.get("transition_export_sha256")
+    )
+
+
+def _journal_transaction_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        commands = [str(value) for value in identity.get("command_sequence", [])]
+        replayed_commands = [
+            str(value) for value in identity.get("replayed_command_sequence", [])
+        ]
+        ordinals = [int(value) for value in identity.get("command_ordinals", [])]
+        replayed_ordinals = [
+            int(value) for value in identity.get("replayed_command_ordinals", [])
+        ]
+        entities = [int(value) for value in identity.get("entity_ids", [])]
+        replayed_entities = [
+            int(value) for value in identity.get("replayed_entity_ids", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("journal_generation") or "")
+    session = str(identity.get("active_session_id") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "undo_journal_generation",
+                "command_journal_generation",
+                "entity_journal_generation",
+                "session_journal_generation",
+                "model_journal_generation",
+                "digest_journal_generation",
+                "result_journal_generation",
+            )
+        )
+        and bool(str(identity.get("undo_transaction_id") or ""))
+        and identity.get("replayed_undo_transaction_id")
+        == identity.get("undo_transaction_id")
+        and bool(commands)
+        and all(commands)
+        and replayed_commands == commands
+        and ordinals == list(range(1, len(commands) + 1))
+        and replayed_ordinals == ordinals
+        and bool(entities)
+        and all(value > 0 for value in entities)
+        and len(set(entities)) == len(entities)
+        and replayed_entities == entities
+        and session.startswith("headless-session-")
+        and identity.get("replayed_active_session_id") == session
+        and bool(str(identity.get("model_generation_id") or ""))
+        and identity.get("replayed_model_generation_id")
+        == identity.get("model_generation_id")
+        and _valid_sha256(identity.get("journal_sha256"))
+        and identity.get("loaded_journal_sha256") == identity.get("journal_sha256")
+        and _valid_sha256(identity.get("journal_result_sha256"))
+        and identity.get("accepted_journal_result_sha256")
+        == identity.get("journal_result_sha256")
+    )
+
+
+def _exodus_sideset_distribution_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        sidesets = [int(value) for value in identity.get("sideset_ids", [])]
+        decoded_sidesets = [
+            int(value) for value in identity.get("decoded_sideset_ids", [])
+        ]
+        topologies = [str(value) for value in identity.get("face_topologies", [])]
+        decoded_topologies = [
+            str(value) for value in identity.get("decoded_face_topologies", [])
+        ]
+        orientations = [
+            int(value) for value in identity.get("face_orientation_signs", [])
+        ]
+        decoded_orientations = [
+            int(value) for value in identity.get("decoded_face_orientation_signs", [])
+        ]
+        factors = [
+            [float(value) for value in row]
+            for row in identity.get("distribution_factors", [])
+        ]
+        decoded_factors = [
+            [float(value) for value in row]
+            for row in identity.get("decoded_distribution_factors", [])
+        ]
+        blocks = [int(value) for value in identity.get("block_owner_ids", [])]
+        decoded_blocks = [
+            int(value) for value in identity.get("decoded_block_owner_ids", [])
+        ]
+        time_index = int(identity.get("time_step_index"))
+        decoded_time_index = int(identity.get("decoded_time_step_index"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sideset_generation") or "")
+    nodes_per_face = {"tri3": 3, "quad4": 4, "tri6": 6, "quad8": 8}
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "topology_sideset_generation",
+                "orientation_sideset_generation",
+                "factor_sideset_generation",
+                "block_sideset_generation",
+                "time_sideset_generation",
+                "file_sideset_generation",
+                "result_sideset_generation",
+            )
+        )
+        and bool(sidesets)
+        and all(value > 0 for value in sidesets)
+        and len(set(sidesets)) == len(sidesets)
+        and decoded_sidesets == sidesets
+        and len(topologies) == len(sidesets)
+        and all(value in nodes_per_face for value in topologies)
+        and decoded_topologies == topologies
+        and len(orientations) == len(sidesets)
+        and all(value in {-1, 1} for value in orientations)
+        and decoded_orientations == orientations
+        and len(factors) == len(sidesets)
+        and all(
+            len(row) == nodes_per_face[topology]
+            and all(math.isfinite(value) and value >= 0.0 for value in row)
+            for row, topology in zip(factors, topologies)
+        )
+        and decoded_factors == factors
+        and len(blocks) == len(sidesets)
+        and all(value > 0 for value in blocks)
+        and decoded_blocks == blocks
+        and time_index >= 1
+        and decoded_time_index == time_index
+        and _valid_sha256(identity.get("exodus_file_sha256"))
+        and identity.get("decoded_exodus_file_sha256")
+        == identity.get("exodus_file_sha256")
+        and _valid_sha256(identity.get("sideset_table_sha256"))
+        and identity.get("decoded_sideset_table_sha256")
+        == identity.get("sideset_table_sha256")
+    )
+
+
 def _hex_map_identity_ok(identity: object) -> bool:
     if identity is None:
         return True
@@ -3829,6 +4170,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
                 summary.get("mesh_morph_boundary_displacement_constraint_frame_smoothing_jacobian_sideset_export_generation_identity")
             )
         ),
+        "swept_hexes_use_current_twist_pairing_intervals_edge_map_orientation_jacobians_block_and_mesh": (
+            _sweep_hex_twist_identity_ok(
+                summary.get("sweep_hex_twist_source_target_interval_edge_map_orientation_jacobian_block_mesh_generation_identity")
+            )
+        ),
+        "mixed_transitions_use_current_elements_faces_nodes_orientation_conformity_quality_blocks_sidesets_and_export": (
+            _mixed_transition_face_identity_ok(
+                summary.get("hex_tet_pyramid_transition_face_nodes_orientation_conformity_quality_block_sideset_export_generation_identity")
+            )
+        ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
             quality_minima[family] >= threshold for family in ("hex", "pyramid", "tet")
@@ -4658,6 +5009,16 @@ def cubit_mixed_transition_source_gate(
         "cad_imports_use_current_classification_transform_units_heal_topology_session_and_result": (
             _cad_import_identity_ok(
                 summary.get("cad_import_body_sheet_lump_transform_unit_heal_topology_session_result_generation_identity")
+            )
+        ),
+        "journals_use_current_undo_transaction_command_order_entities_headless_session_model_and_digests": (
+            _journal_transaction_identity_ok(
+                summary.get("journal_undo_transaction_command_order_entity_session_model_digest_generation_identity")
+            )
+        ),
+        "exodus_sidesets_use_current_ids_topology_orientation_distribution_blocks_time_and_digests": (
+            _exodus_sideset_distribution_identity_ok(
+                summary.get("exodus_sideset_distribution_factor_topology_orientation_block_time_file_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
