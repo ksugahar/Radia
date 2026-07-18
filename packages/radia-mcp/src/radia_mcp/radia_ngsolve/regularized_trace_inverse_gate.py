@@ -242,6 +242,12 @@ def regularized_trace_inverse_path_gate(
     fembem_energy_reciprocity_identity_ok = (
         _optional_fembem_energy_reciprocity_identity_is_aligned(summary)
     )
+    hmatrix_recompression_identity_ok = (
+        _optional_hmatrix_recompression_identity_is_aligned(summary)
+    )
+    cq_block_restart_identity_ok = (
+        _optional_cq_block_restart_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -403,6 +409,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_energy_flux_and_reciprocity_use_current_trace_normal_frequency_incident_field_and_result": (
             fembem_energy_reciprocity_identity_ok
+        ),
+        "hmatrix_recompression_uses_current_svd_tolerance_norm_ranks_permutations_operator_mesh_and_result": (
+            hmatrix_recompression_identity_ok
+        ),
+        "cq_block_restart_uses_current_blocks_history_startup_weights_time_samples_owners_and_result": (
+            cq_block_restart_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -2744,14 +2756,28 @@ def _optional_fembem_energy_reciprocity_identity_is_aligned(
     if not isinstance(value, Mapping):
         return False
     try:
-        trace_shape = tuple(_integer({"value": item}, "value") for item in value["interface_trace_shape"])
-        result_trace_shape = tuple(_integer({"value": item}, "value") for item in value["result_interface_trace_shape"])
+        trace_shape = tuple(
+            _integer({"value": item}, "value")
+            for item in value["interface_trace_shape"]
+        )
+        result_trace_shape = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_interface_trace_shape"]
+        )
         frequency = float(value["frequency_hz"])
         result_frequency = float(value["result_frequency_hz"])
         pair_ids = tuple(str(item) for item in value["reciprocity_pair_ids"])
-        result_pair_ids = tuple(str(item) for item in value["result_reciprocity_pair_ids"])
-        reciprocity = tuple(tuple(float(component) for component in row) for row in value["reciprocity_values_ri"])
-        result_reciprocity = tuple(tuple(float(component) for component in row) for row in value["result_reciprocity_values_ri"])
+        result_pair_ids = tuple(
+            str(item) for item in value["result_reciprocity_pair_ids"]
+        )
+        reciprocity = tuple(
+            tuple(float(component) for component in row)
+            for row in value["reciprocity_values_ri"]
+        )
+        result_reciprocity = tuple(
+            tuple(float(component) for component in row)
+            for row in value["result_reciprocity_values_ri"]
+        )
         reciprocity_error = float(value["reciprocity_relative_error"])
         reciprocity_tolerance = float(value["reciprocity_relative_tolerance"])
         fem_power = float(value["fem_outward_power_w"])
@@ -2761,7 +2787,9 @@ def _optional_fembem_energy_reciprocity_identity_is_aligned(
     except (KeyError, TypeError, ValueError):
         return False
     generation = str(value.get("coupling_generation", "")).strip()
-    actual_energy_error = abs(fem_power - bem_power) / max(abs(fem_power), 1.0e-300)
+    actual_energy_error = abs(fem_power - bem_power) / max(
+        abs(fem_power), 1.0e-300
+    )
     return (
         bool(generation)
         and all(
@@ -2777,22 +2805,32 @@ def _optional_fembem_energy_reciprocity_identity_is_aligned(
             )
         )
         and value.get("interface_trace_basis") == "p1-nodal-boundary-trace"
-        and value.get("result_interface_trace_basis") == value.get("interface_trace_basis")
+        and value.get("result_interface_trace_basis")
+        == value.get("interface_trace_basis")
         and len(trace_shape) == 2
         and all(item > 0 for item in trace_shape)
         and trace_shape[0] <= trace_shape[1]
         and result_trace_shape == trace_shape
         and value.get("normal_orientation") == "volume-outward"
-        and value.get("result_normal_orientation") == value.get("normal_orientation")
+        and value.get("result_normal_orientation")
+        == value.get("normal_orientation")
         and math.isfinite(frequency)
         and frequency > 0.0
         and result_frequency == frequency
         and _is_sha256(str(value.get("incident_field_sha256", "")).lower())
-        and value.get("result_incident_field_sha256") == value.get("incident_field_sha256")
-        and len(pair_ids) == len(result_pair_ids) == len(reciprocity) == len(result_reciprocity) == 2
+        and value.get("result_incident_field_sha256")
+        == value.get("incident_field_sha256")
+        and len(pair_ids)
+        == len(result_pair_ids)
+        == len(reciprocity)
+        == len(result_reciprocity)
+        == 2
         and len(set(pair_ids)) == 2
         and result_pair_ids == pair_ids
-        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in reciprocity)
+        and all(
+            len(row) == 2 and all(math.isfinite(item) for item in row)
+            for row in reciprocity
+        )
         and result_reciprocity == reciprocity
         and math.isfinite(reciprocity_error)
         and 0.0 <= reciprocity_error <= reciprocity_tolerance
@@ -2803,12 +2841,196 @@ def _optional_fembem_energy_reciprocity_identity_is_aligned(
         and math.isfinite(bem_power)
         and bem_power >= 0.0
         and math.isfinite(energy_error)
-        and math.isclose(energy_error, actual_energy_error, rel_tol=1.0e-6, abs_tol=1.0e-15)
+        and math.isclose(
+            energy_error, actual_energy_error, rel_tol=1.0e-6, abs_tol=1.0e-15
+        )
         and math.isfinite(energy_tolerance)
         and energy_tolerance > 0.0
         and energy_error <= energy_tolerance
         and _is_sha256(str(value.get("coupled_result_sha256", "")).lower())
-        and value.get("accepted_coupled_result_sha256") == value.get("coupled_result_sha256")
+        and value.get("accepted_coupled_result_sha256")
+        == value.get("coupled_result_sha256")
+    )
+
+
+def _optional_hmatrix_recompression_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_recompression_svd_tolerance_norm_rank_permutation_operator_mesh_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        tolerance = float(value["tolerance"])
+        result_tolerance = float(value["result_tolerance"])
+        ranks_before = tuple(
+            _integer({"value": item}, "value")
+            for item in value["block_ranks_before"]
+        )
+        result_ranks_before = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_block_ranks_before"]
+        )
+        ranks_after = tuple(
+            _integer({"value": item}, "value")
+            for item in value["block_ranks_after"]
+        )
+        result_ranks_after = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_block_ranks_after"]
+        )
+        row_permutation = tuple(
+            _integer({"value": item}, "value")
+            for item in value["row_permutation"]
+        )
+        result_row_permutation = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_row_permutation"]
+        )
+        column_permutation = tuple(
+            _integer({"value": item}, "value")
+            for item in value["column_permutation"]
+        )
+        result_column_permutation = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_column_permutation"]
+        )
+        operator_error = float(value["operator_relative_error"])
+        result_operator_error = float(value["result_operator_relative_error"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("hmatrix_generation", "")).strip()
+    valid_row_permutation = sorted(row_permutation) == list(
+        range(len(row_permutation))
+    )
+    valid_column_permutation = sorted(column_permutation) == list(
+        range(len(column_permutation))
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "svd_hmatrix_generation",
+                "tolerance_hmatrix_generation",
+                "rank_hmatrix_generation",
+                "permutation_hmatrix_generation",
+                "operator_hmatrix_generation",
+                "mesh_hmatrix_generation",
+                "result_hmatrix_generation",
+            )
+        )
+        and value.get("svd_basis") == "euclidean-orthonormal"
+        and value.get("result_svd_basis") == value.get("svd_basis")
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and value.get("tolerance_norm") == "spectral-relative"
+        and value.get("result_tolerance_norm") == value.get("tolerance_norm")
+        and bool(ranks_before)
+        and len(ranks_before) == len(ranks_after)
+        and all(before > 0 and 0 < after <= before for before, after in zip(ranks_before, ranks_after))
+        and result_ranks_before == ranks_before
+        and result_ranks_after == ranks_after
+        and bool(row_permutation)
+        and valid_row_permutation
+        and result_row_permutation == row_permutation
+        and bool(column_permutation)
+        and valid_column_permutation
+        and result_column_permutation == column_permutation
+        and math.isfinite(operator_error)
+        and 0.0 <= operator_error <= tolerance
+        and result_operator_error == operator_error
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_cq_block_restart_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_restart_block_history_startup_weight_time_index_sample_contour_operator_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        block_size = _positive_integer(value, "block_size")
+        result_block_size = _positive_integer(value, "result_block_size")
+        block_ids = tuple(
+            _integer({"value": item}, "value")
+            for item in value["completed_block_ids"]
+        )
+        result_block_ids = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_completed_block_ids"]
+        )
+        history_count = _positive_integer(value, "history_sample_count")
+        result_history_count = _positive_integer(
+            value, "result_history_sample_count"
+        )
+        startup_weights = tuple(
+            tuple(float(component) for component in row)
+            for row in value["startup_weights_ri"]
+        )
+        result_startup_weights = tuple(
+            tuple(float(component) for component in row)
+            for row in value["result_startup_weights_ri"]
+        )
+        restart_index = _integer(value, "restart_time_index")
+        result_restart_index = _integer(value, "result_restart_time_index")
+        total_count = _positive_integer(value, "total_sample_count")
+        result_total_count = _positive_integer(value, "result_total_sample_count")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "block_cq_generation",
+                "history_cq_generation",
+                "startup_cq_generation",
+                "time_cq_generation",
+                "sample_cq_generation",
+                "owner_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and result_block_size == block_size
+        and bool(block_ids)
+        and block_ids == tuple(range(len(block_ids)))
+        and result_block_ids == block_ids
+        and history_count == block_size * len(block_ids)
+        and result_history_count == history_count
+        and bool(startup_weights)
+        and all(
+            len(row) == 2 and all(math.isfinite(component) for component in row)
+            for row in startup_weights
+        )
+        and result_startup_weights == startup_weights
+        and restart_index == history_count
+        and result_restart_index == restart_index
+        and total_count > restart_index
+        and result_total_count == total_count
+        and _is_sha256(str(value.get("contour_owner_sha256", "")).lower())
+        and value.get("result_contour_owner_sha256")
+        == value.get("contour_owner_sha256")
+        and _is_sha256(str(value.get("operator_owner_sha256", "")).lower())
+        and value.get("result_operator_owner_sha256")
+        == value.get("operator_owner_sha256")
+        and _is_sha256(str(value.get("history_sha256", "")).lower())
+        and value.get("loaded_history_sha256") == value.get("history_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
     )
 
 
