@@ -3,6 +3,11 @@ from __future__ import annotations
 
 import math
 
+from .magnetic_force_method_profile_gate import (
+    _airgap_stress_harmonic_torque_identity_ok,
+    _laminated_core_loss_identity_ok,
+)
+
 
 def _valid_sha256(value):
     digest = str(value or "").lower()
@@ -754,6 +759,8 @@ def force_coenergy_displacement_gate(
     harmonic_eddy_loss_identity_ok = True
     axisymmetric_aphi_force_identity_ok = True
     permanent_magnet_operating_point_identity_ok = True
+    airgap_stress_harmonic_torque_identity_ok = True
+    laminated_core_loss_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -797,6 +804,8 @@ def force_coenergy_displacement_gate(
         harmonic_eddy_loss_identity_ok = False
         axisymmetric_aphi_force_identity_ok = False
         permanent_magnet_operating_point_identity_ok = False
+        airgap_stress_harmonic_torque_identity_ok = False
+        laminated_core_loss_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2367,6 +2376,18 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        airgap_stress_harmonic_torque_identity_ok = (
+            _airgap_stress_harmonic_torque_identity_ok(
+                artifact_identity.get(
+                    "airgap_stress_harmonic_sector_periodicity_origin_sampling_alias_radius_torque_generation_identity"
+                )
+            )
+        )
+        laminated_core_loss_identity_ok = _laminated_core_loss_identity_ok(
+            artifact_identity.get(
+                "laminated_core_hysteresis_eddy_excess_frequency_flux_lamination_volume_result_generation_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2520,6 +2541,12 @@ def force_coenergy_displacement_gate(
         ),
         "permanent_magnet_force_uses_current_recoil_temperature_operating_point_frame_demag_and_mesh": (
             permanent_magnet_operating_point_identity_ok
+        ),
+        "airgap_torque_uses_current_sector_sampling_alias_harmonics_geometry_mesh_and_result": (
+            airgap_stress_harmonic_torque_identity_ok
+        ),
+        "laminated_core_loss_uses_current_frequency_flux_lamination_volume_components_and_result": (
+            laminated_core_loss_identity_ok
         ),
     }
     return {

@@ -1044,6 +1044,114 @@ def _motor_coenergy_torque_identity_ok(value: object) -> bool:
     )
 
 
+def _airgap_stress_harmonic_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("stress_generation", "")).strip()
+    try:
+        pitch = float(value.get("sector_pitch_deg"))
+        result_pitch = float(value.get("result_sector_pitch_deg"))
+        sectors = int(value.get("sector_count"))
+        result_sectors = int(value.get("result_sector_count"))
+        origin = float(value.get("angular_origin_deg"))
+        result_origin = float(value.get("result_angular_origin_deg"))
+        samples = int(value.get("angular_sample_count"))
+        result_samples = int(value.get("result_angular_sample_count"))
+        sector_samples = int(value.get("sector_sample_count"))
+        result_sector_samples = int(value.get("result_sector_sample_count"))
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        result_orders = [int(item) for item in value.get("result_harmonic_orders", [])]
+        harmonics = [float(item) for item in value.get("torque_harmonics_nm", [])]
+        result_harmonics = [float(item) for item in value.get("result_torque_harmonics_nm", [])]
+        cutoff = int(value.get("alias_cutoff_order"))
+        result_cutoff = int(value.get("result_alias_cutoff_order"))
+        radius = float(value.get("airgap_radius_m"))
+        result_radius = float(value.get("result_airgap_radius_m"))
+        length = float(value.get("axial_length_m"))
+        result_length = float(value.get("result_axial_length_m"))
+        torque = float(value.get("torque_nm"))
+        result_torque = float(value.get("result_torque_nm"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "harmonic_stress_generation", "sector_stress_generation",
+            "sampling_stress_generation", "alias_stress_generation",
+            "geometry_stress_generation", "mesh_stress_generation",
+            "result_stress_generation"))
+        and all(math.isfinite(item) for item in (pitch, origin, radius, length, torque))
+        and pitch > 0.0 and sectors > 1
+        and math.isclose(pitch * sectors, 360.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_pitch == pitch and result_sectors == sectors and result_origin == origin
+        and samples > 0 and samples % sectors == 0
+        and sector_samples == samples // sectors
+        and result_samples == samples and result_sector_samples == sector_samples
+        and bool(orders) and orders == sorted(set(orders)) and orders[0] == 0
+        and all(order >= 0 and order % sectors in {0, sectors // 2} for order in orders)
+        and result_orders == orders
+        and len(harmonics) == len(orders) and all(math.isfinite(item) for item in harmonics)
+        and result_harmonics == harmonics
+        and value.get("alias_filter") == "truncate_below_nyquist"
+        and value.get("result_alias_filter") == value.get("alias_filter")
+        and 0 <= cutoff < samples // 2 and cutoff >= max(orders)
+        and result_cutoff == cutoff
+        and radius > 0.0 and length > 0.0
+        and result_radius == radius and result_length == length
+        and math.isclose(torque, sum(harmonics), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_torque == torque
+        and _valid_sha256(value.get("airgap_mesh_sha256"))
+        and value.get("result_airgap_mesh_sha256") == value.get("airgap_mesh_sha256")
+        and _valid_sha256(value.get("torque_result_sha256"))
+        and value.get("accepted_torque_result_sha256") == value.get("torque_result_sha256")
+    )
+
+
+def _laminated_core_loss_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("loss_generation", "")).strip()
+    names = (
+        "frequency_hz", "peak_flux_density_t", "lamination_thickness_m",
+        "magnetic_volume_m3", "hysteresis_coefficient", "hysteresis_exponent",
+        "eddy_coefficient", "excess_coefficient", "hysteresis_loss_w",
+        "eddy_loss_w", "excess_loss_w", "total_core_loss_w",
+    )
+    try:
+        data = {name: float(value.get(name)) for name in names}
+        result = {name: float(value.get(f"result_{name}")) for name in names}
+    except (TypeError, ValueError):
+        return False
+    frequency = data["frequency_hz"]
+    flux = data["peak_flux_density_t"]
+    thickness = data["lamination_thickness_m"]
+    volume = data["magnetic_volume_m3"]
+    expected_hysteresis = data["hysteresis_coefficient"] * frequency * flux ** data["hysteresis_exponent"] * volume
+    expected_eddy = data["eddy_coefficient"] * frequency**2 * flux**2 * thickness**2 * volume
+    expected_excess = data["excess_coefficient"] * frequency**1.5 * flux**1.5 * volume
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "hysteresis_loss_generation", "eddy_loss_generation", "excess_loss_generation",
+            "frequency_loss_generation", "flux_loss_generation", "lamination_loss_generation",
+            "volume_loss_generation", "result_loss_generation"))
+        and all(math.isfinite(item) and item > 0.0 for item in data.values())
+        and result == data
+        and math.isclose(data["hysteresis_loss_w"], expected_hysteresis, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(data["eddy_loss_w"], expected_eddy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(data["excess_loss_w"], expected_excess, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(data["total_core_loss_w"], expected_hysteresis + expected_eddy + expected_excess, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("material_sha256"))
+        and value.get("result_material_sha256") == value.get("material_sha256")
+        and _valid_sha256(value.get("loss_result_sha256"))
+        and value.get("accepted_loss_result_sha256") == value.get("loss_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1150,6 +1258,8 @@ def magnetic_force_method_profile_gate(
     motor_reduced_basis_torque_identity_ok = True
     maglev_force_stiffness_identity_ok = True
     motor_coenergy_torque_identity_ok = True
+    airgap_stress_harmonic_torque_identity_ok = True
+    laminated_core_loss_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1193,6 +1303,8 @@ def magnetic_force_method_profile_gate(
         motor_reduced_basis_torque_identity_ok = False
         maglev_force_stiffness_identity_ok = False
         motor_coenergy_torque_identity_ok = False
+        airgap_stress_harmonic_torque_identity_ok = False
+        laminated_core_loss_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -2895,6 +3007,18 @@ def magnetic_force_method_profile_gate(
                 "motor_winding_harmonic_current_phase_rotor_angle_coenergy_torque_result_generation_identity"
             )
         )
+        airgap_stress_harmonic_torque_identity_ok = (
+            _airgap_stress_harmonic_torque_identity_ok(
+                identity_value.get(
+                    "airgap_stress_harmonic_sector_periodicity_origin_sampling_alias_radius_torque_generation_identity"
+                )
+            )
+        )
+        laminated_core_loss_identity_ok = _laminated_core_loss_identity_ok(
+            identity_value.get(
+                "laminated_core_hysteresis_eddy_excess_frequency_flux_lamination_volume_result_generation_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3079,6 +3203,12 @@ def magnetic_force_method_profile_gate(
         ),
         "motor_torque_uses_current_winding_harmonics_currents_phases_angles_coenergy_mesh_and_result": (
             motor_coenergy_torque_identity_ok
+        ),
+        "airgap_torque_uses_current_sector_sampling_alias_harmonics_geometry_mesh_and_result": (
+            airgap_stress_harmonic_torque_identity_ok
+        ),
+        "laminated_core_loss_uses_current_frequency_flux_lamination_volume_components_and_result": (
+            laminated_core_loss_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
