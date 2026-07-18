@@ -3528,6 +3528,232 @@ def _small_signal_consistency_owner_identity_ok(
     )
 
 
+def _switched_limit_cycle_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "switched_converter_poincare_limitcycle_floquet_event_flux_charge_cycle_energy_step_waveform_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("limit_cycle_generation_id") or "")
+    try:
+        start_state = [float(item) for item in contract["poincare_state_start"]]
+        end_state = [float(item) for item in contract["poincare_state_end"]]
+        result_start_state = [float(item) for item in contract["result_poincare_state_start"]]
+        result_end_state = [float(item) for item in contract["result_poincare_state_end"]]
+        tolerance = float(contract["poincare_tolerance"])
+        result_tolerance = float(contract["result_poincare_tolerance"])
+        events = [str(item) for item in contract["event_sequence"]]
+        result_events = [str(item) for item in contract["result_event_sequence"]]
+        event_times = [float(item) for item in contract["event_times_s"]]
+        result_event_times = [float(item) for item in contract["result_event_times_s"]]
+        floquet = [
+            complex(float(row[0]), float(row[1])) for row in contract["floquet_multipliers_ri"]
+        ]
+        result_floquet = [
+            complex(float(row[0]), float(row[1]))
+            for row in contract["result_floquet_multipliers_ri"]
+        ]
+        start_flux = [float(item) for item in contract["inductor_flux_start_wb"]]
+        end_flux = [float(item) for item in contract["inductor_flux_end_wb"]]
+        result_start_flux = [float(item) for item in contract["result_inductor_flux_start_wb"]]
+        result_end_flux = [float(item) for item in contract["result_inductor_flux_end_wb"]]
+        start_charge = [float(item) for item in contract["capacitor_charge_start_c"]]
+        end_charge = [float(item) for item in contract["capacitor_charge_end_c"]]
+        result_start_charge = [float(item) for item in contract["result_capacitor_charge_start_c"]]
+        result_end_charge = [float(item) for item in contract["result_capacitor_charge_end_c"]]
+        input_energy = float(contract["input_cycle_energy_j"])
+        output_energy = float(contract["output_cycle_energy_j"])
+        loss_energy = float(contract["loss_cycle_energy_j"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    finite_rows = all(
+        math.isfinite(item)
+        for row in (start_state, end_state, start_flux, end_flux, start_charge, end_charge)
+        for item in row
+    )
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "poincare_limit_cycle_generation_id",
+                "floquet_limit_cycle_generation_id",
+                "event_limit_cycle_generation_id",
+                "flux_limit_cycle_generation_id",
+                "charge_limit_cycle_generation_id",
+                "energy_limit_cycle_generation_id",
+                "step_limit_cycle_generation_id",
+                "waveform_limit_cycle_generation_id",
+                "owner_limit_cycle_generation_id",
+                "result_limit_cycle_generation_id",
+            )
+        )
+        and bool(start_state)
+        and len(end_state) == len(start_state)
+        and finite_rows
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance <= 1.0e-6
+        and result_tolerance == tolerance
+        and max(abs(left - right) for left, right in zip(start_state, end_state)) <= tolerance
+        and result_start_state == start_state
+        and result_end_state == end_state
+        and len(events) == len(event_times) >= 3
+        and events[0] == events[-1] == "switch_on"
+        and all(left != right for left, right in zip(events, events[1:]))
+        and result_events == events
+        and all(math.isfinite(item) for item in event_times)
+        and math.isclose(event_times[0], 0.0, abs_tol=1.0e-15)
+        and all(left < right for left, right in zip(event_times, event_times[1:]))
+        and result_event_times == event_times
+        and bool(floquet)
+        and all(
+            math.isfinite(item.real) and math.isfinite(item.imag) and abs(item) < 1.0
+            for item in floquet
+        )
+        and result_floquet == floquet
+        and bool(start_flux)
+        and len(end_flux) == len(start_flux)
+        and max(abs(left - right) for left, right in zip(start_flux, end_flux)) <= tolerance
+        and result_start_flux == start_flux
+        and result_end_flux == end_flux
+        and bool(start_charge)
+        and len(end_charge) == len(start_charge)
+        and max(abs(left - right) for left, right in zip(start_charge, end_charge)) <= tolerance
+        and result_start_charge == start_charge
+        and result_end_charge == end_charge
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (input_energy, output_energy, loss_energy)
+        )
+        and input_energy > 0.0
+        and math.isclose(
+            input_energy, output_energy + loss_energy, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and contract.get("result_input_cycle_energy_j") == input_energy
+        and contract.get("result_output_cycle_energy_j") == output_energy
+        and contract.get("result_loss_cycle_energy_j") == loss_energy
+        and bool(str(contract.get("step_owner") or ""))
+        and contract.get("accepted_step_owner") == contract.get("step_owner")
+        and _is_sha256(str(contract.get("step_sha256") or ""))
+        and contract.get("accepted_step_sha256") == contract.get("step_sha256")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _noise_referral_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "noise_input_output_referred_density_correlation_integration_gain_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("noise_generation_id") or "")
+    try:
+        frequency = [float(item) for item in contract["frequency_hz"]]
+        result_frequency = [float(item) for item in contract["result_frequency_hz"]]
+        input_density = [float(item) for item in contract["input_referred_density_v_per_sqrt_hz"]]
+        result_input_density = [
+            float(item) for item in contract["result_input_referred_density_v_per_sqrt_hz"]
+        ]
+        output_density = [float(item) for item in contract["output_referred_density_v_per_sqrt_hz"]]
+        result_output_density = [
+            float(item) for item in contract["result_output_referred_density_v_per_sqrt_hz"]
+        ]
+        gain = [float(item) for item in contract["transfer_gain_magnitude"]]
+        result_gain = [float(item) for item in contract["result_transfer_gain_magnitude"]]
+        correlation = [
+            [float(item) for item in row] for row in contract["source_correlation_matrix"]
+        ]
+        result_correlation = [
+            [float(item) for item in row] for row in contract["result_source_correlation_matrix"]
+        ]
+        bandwidth = [float(item) for item in contract["integration_bandwidth_hz"]]
+        result_bandwidth = [float(item) for item in contract["result_integration_bandwidth_hz"]]
+        bin_width = [float(item) for item in contract["integration_bin_width_hz"]]
+        result_bin_width = [float(item) for item in contract["result_integration_bin_width_hz"]]
+        rms_noise = float(contract["total_output_rms_noise_v"])
+        result_rms_noise = float(contract["result_total_output_rms_noise_v"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    correlation_ok = (
+        bool(correlation)
+        and all(len(row) == len(correlation) for row in correlation)
+        and all(math.isfinite(item) for row in correlation for item in row)
+        and all(
+            math.isclose(correlation[i][i], 1.0, abs_tol=1.0e-12) for i in range(len(correlation))
+        )
+        and all(
+            math.isclose(correlation[i][j], correlation[j][i], abs_tol=1.0e-12)
+            and abs(correlation[i][j]) <= 1.0
+            for i in range(len(correlation))
+            for j in range(len(correlation))
+        )
+    )
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "input_noise_generation_id",
+                "output_noise_generation_id",
+                "correlation_noise_generation_id",
+                "integration_noise_generation_id",
+                "gain_noise_generation_id",
+                "circuit_noise_generation_id",
+                "result_noise_generation_id",
+            )
+        )
+        and len(frequency)
+        == len(input_density)
+        == len(output_density)
+        == len(gain)
+        == len(bin_width)
+        >= 2
+        and all(math.isfinite(item) and item > 0.0 for item in frequency)
+        and all(left < right for left, right in zip(frequency, frequency[1:]))
+        and result_frequency == frequency
+        and all(
+            math.isfinite(item) and item >= 0.0 for item in (*input_density, *output_density, *gain)
+        )
+        and result_input_density == input_density
+        and result_output_density == output_density
+        and result_gain == gain
+        and all(
+            math.isclose(output, source * scale, rel_tol=1.0e-12, abs_tol=1.0e-18)
+            for source, output, scale in zip(input_density, output_density, gain)
+        )
+        and correlation_ok
+        and result_correlation == correlation
+        and contract.get("spectral_density_unit") == "V/sqrt(Hz)"
+        and contract.get("result_spectral_density_unit") == contract.get("spectral_density_unit")
+        and bandwidth == [frequency[0], frequency[-1]]
+        and result_bandwidth == bandwidth
+        and all(math.isfinite(item) and item > 0.0 for item in bin_width)
+        and result_bin_width == bin_width
+        and math.isfinite(rms_noise)
+        and rms_noise >= 0.0
+        and math.isclose(
+            rms_noise * rms_noise,
+            sum(value * value * width for value, width in zip(output_density, bin_width)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-24,
+        )
+        and result_rms_noise == rms_noise
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -3944,6 +4170,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "small_signal_uses_current_bias_jacobian_ac_transient_poles_zeros_normalization_circuit_and_result": (
             _small_signal_consistency_owner_identity_ok(positive)
+        ),
+        "switched_limit_cycles_use_current_poincare_floquet_events_flux_charge_energy_step_waveform_and_result": (
+            _switched_limit_cycle_owner_identity_ok(positive)
+        ),
+        "noise_referral_uses_current_input_output_density_correlation_band_gain_circuit_and_result": (
+            _noise_referral_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
