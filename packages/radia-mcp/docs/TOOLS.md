@@ -569,7 +569,7 @@ Module: `radia_mcp.motor.server`
 | `motor_thermal_handoff_gate` | Validate one motor-loss table for both LPTN and 3D all-hex thermal paths. |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
 | `motor_transient_no_load_load_cycle_gate` | Gate paired no-load and loaded three-phase transient cycles. |
-| `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact. |
+| `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-MMM/HCurl eddy-bubble motor artifact. |
 | `motor_triple_check_plan` | Plan the standard radia-motor comparison. |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
 | `motor_validation_artifact_gate` | Check whether a motor cross-validation artifact can train radia-motor. |
