@@ -3118,6 +3118,226 @@ def _noise_correlation_band_owner_identity_ok(
     )
 
 
+def _transmission_line_transient_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "transmission_line_z0_delay_reflection_arrival_polarity_causality_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        z0 = float(contract.get("characteristic_impedance_ohm"))
+        source_z = float(contract.get("source_impedance_ohm"))
+        load_z = float(contract.get("load_impedance_ohm"))
+        source_gamma = float(contract.get("source_reflection_coefficient"))
+        load_gamma = float(contract.get("load_reflection_coefficient"))
+        delay = float(contract.get("one_way_delay_s"))
+        incident_arrival = float(contract.get("incident_arrival_s"))
+        reflected_arrival = float(contract.get("reflected_source_arrival_s"))
+        time = [float(value) for value in contract.get("time_s", [])]
+        result_time = [float(value) for value in contract.get("result_time_s", [])]
+        waveform = [
+            float(value) for value in contract.get("source_observation_v", [])
+        ]
+        result_waveform = [
+            float(value)
+            for value in contract.get("result_source_observation_v", [])
+        ]
+        pre_arrival = float(contract.get("pre_arrival_max_abs_v"))
+        incident_energy = float(contract.get("incident_energy_j"))
+        reflected_energy = float(contract.get("reflected_energy_j"))
+        accepted_energy = float(contract.get("accepted_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("transmission_line_generation_id") or "")
+    values = (z0, source_z, load_z, source_gamma, load_gamma, delay)
+    expected_source_gamma = (source_z - z0) / (source_z + z0)
+    expected_load_gamma = (load_z - z0) / (load_z + z0)
+    expected_reflected_polarity = "positive" if load_gamma > 0.0 else "negative"
+    causal_samples = [
+        abs(value) for sample_time, value in zip(time, waveform) if sample_time < delay
+    ]
+    causal_max = max(causal_samples, default=0.0)
+    energy_scale = max(abs(incident_energy), 1.0e-30)
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "impedance_transmission_line_generation_id",
+                "delay_transmission_line_generation_id",
+                "reflection_transmission_line_generation_id",
+                "arrival_transmission_line_generation_id",
+                "polarity_transmission_line_generation_id",
+                "causality_transmission_line_generation_id",
+                "energy_transmission_line_generation_id",
+                "waveform_transmission_line_generation_id",
+                "result_transmission_line_generation_id",
+            )
+        )
+        and all(math.isfinite(value) for value in values)
+        and z0 > 0.0
+        and source_z > 0.0
+        and load_z > 0.0
+        and delay > 0.0
+        and float(contract.get("result_characteristic_impedance_ohm")) == z0
+        and float(contract.get("result_source_impedance_ohm")) == source_z
+        and float(contract.get("result_load_impedance_ohm")) == load_z
+        and math.isclose(source_gamma, expected_source_gamma, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(load_gamma, expected_load_gamma, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and float(contract.get("result_source_reflection_coefficient")) == source_gamma
+        and float(contract.get("result_load_reflection_coefficient")) == load_gamma
+        and math.isclose(incident_arrival, delay, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isclose(reflected_arrival, 2.0 * delay, rel_tol=0.0, abs_tol=1.0e-18)
+        and float(contract.get("result_one_way_delay_s")) == delay
+        and float(contract.get("result_incident_arrival_s")) == incident_arrival
+        and float(contract.get("result_reflected_source_arrival_s")) == reflected_arrival
+        and contract.get("incident_pulse_polarity") == "positive"
+        and contract.get("result_incident_pulse_polarity")
+        == contract.get("incident_pulse_polarity")
+        and contract.get("reflected_pulse_polarity") == expected_reflected_polarity
+        and contract.get("result_reflected_pulse_polarity")
+        == contract.get("reflected_pulse_polarity")
+        and len(time) >= 4
+        and len(waveform) == len(time)
+        and all(math.isfinite(value) for value in (*time, *waveform))
+        and all(left < right for left, right in zip(time, time[1:]))
+        and result_time == time
+        and result_waveform == waveform
+        and math.isfinite(pre_arrival)
+        and math.isclose(pre_arrival, causal_max, rel_tol=0.0, abs_tol=1.0e-15)
+        and pre_arrival <= 1.0e-12
+        and float(contract.get("result_pre_arrival_max_abs_v")) == pre_arrival
+        and all(
+            math.isfinite(value) and value >= 0.0
+            for value in (incident_energy, reflected_energy, accepted_energy)
+        )
+        and abs(incident_energy - reflected_energy - accepted_energy)
+        <= 1.0e-12 * energy_scale
+        and math.isclose(
+            reflected_energy / incident_energy,
+            load_gamma * load_gamma,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and float(contract.get("result_incident_energy_j")) == incident_energy
+        and float(contract.get("result_reflected_energy_j")) == reflected_energy
+        and float(contract.get("result_accepted_energy_j")) == accepted_energy
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("result_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _sampled_loop_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "sampled_loop_sideband_injection_period_fft_bin_phase_nyquist_crossover_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        sideband = int(contract.get("sideband_order"))
+        period = float(contract.get("switching_period_s"))
+        switching_frequency = float(contract.get("switching_frequency_hz"))
+        duration = float(contract.get("record_duration_s"))
+        injection_frequency = float(contract.get("injection_frequency_hz"))
+        coherent_bin = int(contract.get("coherent_fft_bin"))
+        frequency = [float(value) for value in contract.get("loop_frequency_hz", [])]
+        result_frequency = [
+            float(value) for value in contract.get("result_loop_frequency_hz", [])
+        ]
+        magnitude = [float(value) for value in contract.get("loop_magnitude", [])]
+        result_magnitude = [
+            float(value) for value in contract.get("result_loop_magnitude", [])
+        ]
+        phase = [float(value) for value in contract.get("loop_phase_deg", [])]
+        result_phase = [
+            float(value) for value in contract.get("result_loop_phase_deg", [])
+        ]
+        crossover = float(contract.get("crossover_frequency_hz"))
+        encirclements = int(
+            contract.get("nyquist_clockwise_encirclements_minus_one")
+        )
+        open_rhp = int(contract.get("open_loop_right_half_plane_poles"))
+        closed_rhp = int(contract.get("closed_loop_right_half_plane_poles"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("sampled_loop_generation_id") or "")
+    unity_indices = [
+        index
+        for index, value in enumerate(magnitude)
+        if math.isclose(value, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+    ]
+    coherent_bin_exact = injection_frequency * duration
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "sideband_sampled_loop_generation_id",
+                "injection_sampled_loop_generation_id",
+                "period_sampled_loop_generation_id",
+                "fft_sampled_loop_generation_id",
+                "phase_sampled_loop_generation_id",
+                "nyquist_sampled_loop_generation_id",
+                "crossover_sampled_loop_generation_id",
+                "waveform_sampled_loop_generation_id",
+                "result_sampled_loop_generation_id",
+            )
+        )
+        and sideband == 0
+        and contract.get("result_sideband_order") == sideband
+        and contract.get("sideband_selection") == "fundamental"
+        and contract.get("result_sideband_selection") == contract.get("sideband_selection")
+        and contract.get("injection_point") == "control_to_duty_break"
+        and contract.get("result_injection_point") == contract.get("injection_point")
+        and math.isfinite(period)
+        and period > 0.0
+        and math.isclose(switching_frequency, 1.0 / period, rel_tol=1.0e-12)
+        and float(contract.get("result_switching_period_s")) == period
+        and float(contract.get("result_switching_frequency_hz")) == switching_frequency
+        and math.isfinite(duration)
+        and duration > period
+        and float(contract.get("result_record_duration_s")) == duration
+        and math.isfinite(injection_frequency)
+        and 0.0 < injection_frequency < 0.5 * switching_frequency
+        and float(contract.get("result_injection_frequency_hz")) == injection_frequency
+        and coherent_bin > 0
+        and math.isclose(coherent_bin_exact, coherent_bin, rel_tol=0.0, abs_tol=1.0e-12)
+        and contract.get("result_coherent_fft_bin") == coherent_bin
+        and len(frequency) >= 3
+        and len(magnitude) == len(frequency) == len(phase)
+        and all(math.isfinite(value) and value > 0.0 for value in frequency)
+        and all(left < right for left, right in zip(frequency, frequency[1:]))
+        and all(math.isfinite(value) and value > 0.0 for value in magnitude)
+        and all(math.isfinite(value) and -360.0 <= value <= 360.0 for value in phase)
+        and result_frequency == frequency
+        and result_magnitude == magnitude
+        and result_phase == phase
+        and len(unity_indices) == 1
+        and math.isclose(crossover, frequency[unity_indices[0]], rel_tol=1.0e-12)
+        and float(contract.get("result_crossover_frequency_hz")) == crossover
+        and open_rhp >= 0
+        and closed_rhp >= 0
+        and closed_rhp == open_rhp + encirclements
+        and contract.get("result_nyquist_clockwise_encirclements_minus_one")
+        == encirclements
+        and contract.get("result_open_loop_right_half_plane_poles") == open_rhp
+        and contract.get("result_closed_loop_right_half_plane_poles") == closed_rhp
+        and closed_rhp == 0
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("result_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -3522,6 +3742,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "noise_bands_use_current_sources_correlation_psd_grid_bandwidth_transfer_integration_model_and_result": (
             _noise_correlation_band_owner_identity_ok(positive)
+        ),
+        "transmission_lines_use_current_z0_delay_reflections_arrivals_polarity_causality_energy_waveform_and_result": (
+            _transmission_line_transient_owner_identity_ok(positive)
+        ),
+        "sampled_loops_use_current_sideband_injection_period_fft_phase_nyquist_crossover_waveform_and_result": (
+            _sampled_loop_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
