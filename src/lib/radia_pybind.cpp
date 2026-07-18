@@ -339,6 +339,249 @@ private:
     int ndof_;
 };
 
+// Native complex diagonal inverse used as the reduced HCurl/HDiv-HCurl block
+// preconditioner.  The reduced resistance/material blocks provide the local
+// diagonal; long-range HACApK terms stay exclusively in the system matvec.
+class RadComplexDiagonalInverseMatrix final : public ngla::BaseMatrix {
+public:
+    explicit RadComplexDiagonalInverseMatrix(
+            std::vector<std::complex<double>> inverse_diagonal)
+        : inverse_diagonal_(std::move(inverse_diagonal)) {
+        if (inverse_diagonal_.empty())
+            throw std::invalid_argument("diagonal inverse must not be empty");
+    }
+
+    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
+        auto xv = x.FVComplex();
+        auto yv = y.FVComplex();
+        if (xv.Size() != static_cast<int>(inverse_diagonal_.size()) ||
+            yv.Size() != static_cast<int>(inverse_diagonal_.size()))
+            throw std::runtime_error("ComplexDiagonalInverse.Mult: vector size mismatch");
+        for (int i = 0; i < xv.Size(); ++i)
+            yv[i] = inverse_diagonal_[i] * xv[i];
+    }
+
+    int VHeight() const override { return static_cast<int>(inverse_diagonal_.size()); }
+    int VWidth() const override { return static_cast<int>(inverse_diagonal_.size()); }
+    bool IsComplex() const override { return true; }
+    ngla::AutoVector CreateRowVector() const override {
+        return std::make_unique<ngla::VVector<ngcore::Complex>>(VHeight());
+    }
+    ngla::AutoVector CreateColVector() const override {
+        return std::make_unique<ngla::VVector<ngcore::Complex>>(VWidth());
+    }
+
+private:
+    std::vector<std::complex<double>> inverse_diagonal_;
+};
+
+// Galerkin projection P^H A P of an arbitrary NGSolve matrix.  This is the
+// adapter used for ngsolve.bem LaplaceSL/DtN matrices: the parent BEM matrix
+// remains an NGSolve BaseMatrix and only reduced vectors cross the interface.
+class RadProjectedBaseMatrix final : public ngla::BaseMatrix {
+public:
+    RadProjectedBaseMatrix(std::shared_ptr<ngla::BaseMatrix> parent,
+                           std::vector<std::complex<double>> projection,
+                           int parent_size, int reduced_size)
+        : parent_(std::move(parent)), projection_(std::move(projection)),
+          parent_size_(parent_size), reduced_size_(reduced_size) {
+        if (!parent_ || parent_size_ < 1 || reduced_size_ < 1 ||
+            parent_->VHeight() != parent_size_ || parent_->VWidth() != parent_size_ ||
+            projection_.size() != static_cast<size_t>(parent_size_) * reduced_size_)
+            throw std::invalid_argument("ProjectedBaseMatrix shape mismatch");
+    }
+
+    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
+        auto xv = x.FVComplex();
+        auto yv = y.FVComplex();
+        if (xv.Size() != reduced_size_ || yv.Size() != reduced_size_)
+            throw std::runtime_error("ProjectedBaseMatrix.Mult: vector size mismatch");
+        std::vector<std::complex<double>> parent_x(parent_size_, 0.0);
+        for (int row = 0; row < parent_size_; ++row) {
+            const auto* p = &projection_[static_cast<size_t>(row) * reduced_size_];
+            for (int col = 0; col < reduced_size_; ++col)
+                parent_x[row] += p[col] * xv[col];
+        }
+        const auto parent_y = ApplyParent(parent_x);
+        for (int col = 0; col < reduced_size_; ++col) {
+            std::complex<double> value = 0.0;
+            for (int row = 0; row < parent_size_; ++row)
+                value += std::conj(
+                    projection_[static_cast<size_t>(row) * reduced_size_ + col])
+                    * parent_y[row];
+            yv[col] = value;
+        }
+    }
+
+    int VHeight() const override { return reduced_size_; }
+    int VWidth() const override { return reduced_size_; }
+    bool IsComplex() const override { return true; }
+    ngla::AutoVector CreateRowVector() const override {
+        return std::make_unique<ngla::VVector<ngcore::Complex>>(reduced_size_);
+    }
+    ngla::AutoVector CreateColVector() const override {
+        return std::make_unique<ngla::VVector<ngcore::Complex>>(reduced_size_);
+    }
+
+private:
+    std::vector<std::complex<double>> ApplyParent(
+            const std::vector<std::complex<double>>& input) const {
+        std::vector<std::complex<double>> output(parent_size_);
+        if (parent_->IsComplex()) {
+            auto px = parent_->CreateColVector();
+            auto py = parent_->CreateRowVector();
+            auto pxv = px.FVComplex();
+            auto pyv = py.FVComplex();
+            for (int i = 0; i < parent_size_; ++i) pxv[i] = input[i];
+            parent_->Mult(*px, *py);
+            for (int i = 0; i < parent_size_; ++i) output[i] = pyv[i];
+            return output;
+        }
+        auto px = parent_->CreateColVector();
+        auto py = parent_->CreateRowVector();
+        auto pxv = px.FV<double>();
+        auto pyv = py.FV<double>();
+        for (int i = 0; i < parent_size_; ++i) pxv[i] = input[i].real();
+        parent_->Mult(*px, *py);
+        for (int i = 0; i < parent_size_; ++i) output[i] = pyv[i];
+        for (int i = 0; i < parent_size_; ++i) pxv[i] = input[i].imag();
+        parent_->Mult(*px, *py);
+        for (int i = 0; i < parent_size_; ++i)
+            output[i] += std::complex<double>(0.0, pyv[i]);
+        return output;
+    }
+
+    std::shared_ptr<ngla::BaseMatrix> parent_;
+    std::vector<std::complex<double>> projection_;
+    int parent_size_ = 0;
+    int reduced_size_ = 0;
+};
+
+// Dense reduced correction plus independently compressed NGSolve BaseMatrix
+// terms embedded into sub-blocks.  This is the common production operator for
+// HCurl Eddy Bubble, projected BEM/DtN, and coupled HDiv-MMM/HCurl-VIM solves.
+// Each HACApK hierarchy remains independent; GMRES/COCR only sees one native
+// BaseMatrix matvec.
+class RadReducedBlockMatrix final : public ngla::BaseMatrix {
+public:
+    struct Term {
+        std::shared_ptr<ngla::BaseMatrix> matrix;
+        int start = 0;
+        int stop = 0;
+        std::complex<double> scale = 1.0;
+    };
+
+    RadReducedBlockMatrix(std::vector<std::complex<double>> dense, int size,
+                          std::vector<Term> terms)
+        : dense_(std::move(dense)), size_(size), terms_(std::move(terms)) {
+        if (size_ < 1 || dense_.size() != static_cast<size_t>(size_) * size_)
+            throw std::invalid_argument(
+                "ReducedBlockMatrix dense correction must be a non-empty square matrix");
+        for (const auto& term : terms_) {
+            if (!term.matrix || term.start < 0 || term.stop <= term.start ||
+                term.stop > size_ || term.matrix->VHeight() != term.stop - term.start ||
+                term.matrix->VWidth() != term.stop - term.start)
+                throw std::invalid_argument("ReducedBlockMatrix embedded term shape mismatch");
+            if (!std::isfinite(term.scale.real()) || !std::isfinite(term.scale.imag()))
+                throw std::invalid_argument("ReducedBlockMatrix term scale must be finite");
+        }
+    }
+
+    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
+        auto xv = x.FVComplex();
+        auto yv = y.FVComplex();
+        if (xv.Size() != size_ || yv.Size() != size_)
+            throw std::runtime_error("ReducedBlockMatrix.Mult: vector size mismatch");
+        for (int row = 0; row < size_; ++row) {
+            std::complex<double> value = 0.0;
+            const auto* dense_row = &dense_[static_cast<size_t>(row) * size_];
+            for (int col = 0; col < size_; ++col)
+                value += dense_row[col] * xv[col];
+            yv[row] = value;
+        }
+        for (const auto& term : terms_)
+            ApplyTerm(term, xv, yv);
+    }
+
+    void MultAdd(double scale, const ngla::BaseVector& x,
+                 ngla::BaseVector& y) const override {
+        auto tmp = CreateRowVector();
+        Mult(x, *tmp);
+        y += scale * *tmp;
+    }
+
+    int VHeight() const override { return size_; }
+    int VWidth() const override { return size_; }
+    bool IsComplex() const override { return true; }
+    ngla::AutoVector CreateRowVector() const override {
+        return std::make_unique<ngla::VVector<ngcore::Complex>>(size_);
+    }
+    ngla::AutoVector CreateColVector() const override {
+        return std::make_unique<ngla::VVector<ngcore::Complex>>(size_);
+    }
+
+    std::shared_ptr<RadComplexDiagonalInverseMatrix> DiagonalPreconditioner(
+            double relative_floor = 1.0e-14) const {
+        if (!std::isfinite(relative_floor) || relative_floor <= 0.0)
+            throw std::invalid_argument("relative_floor must be positive");
+        double scale = 0.0;
+        for (int i = 0; i < size_; ++i)
+            scale = std::max(scale, std::abs(dense_[static_cast<size_t>(i) * size_ + i]));
+        if (scale == 0.0)
+            throw std::runtime_error(
+                "reduced block diagonal is zero; provide a physical resistance/material block");
+        const double floor = relative_floor * scale;
+        std::vector<std::complex<double>> inverse(size_);
+        for (int i = 0; i < size_; ++i) {
+            const auto value = dense_[static_cast<size_t>(i) * size_ + i];
+            if (std::abs(value) <= floor)
+                throw std::runtime_error(
+                    "reduced block diagonal is singular; provide a physical resistance/material block");
+            inverse[i] = 1.0 / value;
+        }
+        return std::make_shared<RadComplexDiagonalInverseMatrix>(std::move(inverse));
+    }
+
+    int TermCount() const { return static_cast<int>(terms_.size()); }
+
+private:
+    static void ApplyTerm(const Term& term,
+                          ngbla::FlatVector<ngcore::Complex> x,
+                          ngbla::FlatVector<ngcore::Complex> y) {
+        const int n = term.stop - term.start;
+        if (term.matrix->IsComplex()) {
+            auto tx = term.matrix->CreateColVector();
+            auto ty = term.matrix->CreateRowVector();
+            auto txv = tx.FVComplex();
+            auto tyv = ty.FVComplex();
+            for (int i = 0; i < n; ++i) txv[i] = x[term.start + i];
+            term.matrix->Mult(*tx, *ty);
+            for (int i = 0; i < n; ++i)
+                y[term.start + i] += term.scale * tyv[i];
+            return;
+        }
+
+        auto tx = term.matrix->CreateColVector();
+        auto ty = term.matrix->CreateRowVector();
+        auto txv = tx.FV<double>();
+        auto tyv = ty.FV<double>();
+        std::vector<double> real_part(n), imag_part(n);
+        for (int i = 0; i < n; ++i) txv[i] = x[term.start + i].real();
+        term.matrix->Mult(*tx, *ty);
+        for (int i = 0; i < n; ++i) real_part[i] = tyv[i];
+        for (int i = 0; i < n; ++i) txv[i] = x[term.start + i].imag();
+        term.matrix->Mult(*tx, *ty);
+        for (int i = 0; i < n; ++i) imag_part[i] = tyv[i];
+        for (int i = 0; i < n; ++i)
+            y[term.start + i] += term.scale
+                * std::complex<double>(real_part[i], imag_part[i]);
+    }
+
+    std::vector<std::complex<double>> dense_;
+    int size_ = 0;
+    std::vector<Term> terms_;
+};
+
 /**
  * @brief Convert 2D Python list to flat array with vertex data
  * Returns vertex data and count
@@ -3411,6 +3654,57 @@ PYBIND11_MODULE(_radia_pybind, m) {
     py::class_<RadHDivDemagMatrix, std::shared_ptr<RadHDivDemagMatrix>, ngla::BaseMatrix>(
         m, "_HDivDemagMatrix");
 
+    py::class_<RadComplexDiagonalInverseMatrix,
+               std::shared_ptr<RadComplexDiagonalInverseMatrix>, ngla::BaseMatrix>(
+        m, "_ComplexDiagonalInverseMatrix");
+    py::class_<RadProjectedBaseMatrix,
+               std::shared_ptr<RadProjectedBaseMatrix>, ngla::BaseMatrix>(
+        m, "_ProjectedBaseMatrix")
+        .def(py::init([](
+                std::shared_ptr<ngla::BaseMatrix> parent,
+                py::array_t<std::complex<double>,
+                            py::array::c_style | py::array::forcecast> projection_a) {
+            auto projection = to_complex_matrix_2d(projection_a, "projection");
+            return std::make_shared<RadProjectedBaseMatrix>(
+                std::move(parent), std::move(projection.values),
+                projection.rows, projection.cols);
+        }), py::arg("parent"), py::arg("projection"));
+    py::class_<RadReducedBlockMatrix,
+               std::shared_ptr<RadReducedBlockMatrix>, ngla::BaseMatrix>(
+        m, "_ReducedBlockMatrix")
+        .def(py::init([](
+                py::array_t<std::complex<double>,
+                            py::array::c_style | py::array::forcecast> dense_a,
+                py::list matrices_a, I32Array starts_a, I32Array stops_a,
+                py::array_t<std::complex<double>,
+                            py::array::c_style | py::array::forcecast> scales_a) {
+            auto dense = to_complex_matrix_2d(dense_a, "dense");
+            if (dense.rows != dense.cols)
+                throw std::invalid_argument("dense must be square");
+            auto starts = to_1d_vector<int>(starts_a, "starts");
+            auto stops = to_1d_vector<int>(stops_a, "stops");
+            auto scales = to_1d_vector<std::complex<double>>(scales_a, "scales");
+            if (matrices_a.size() != starts.size() || starts.size() != stops.size() ||
+                stops.size() != scales.size())
+                throw std::invalid_argument(
+                    "matrices, starts, stops, and scales must have equal length");
+            std::vector<RadReducedBlockMatrix::Term> terms;
+            terms.reserve(starts.size());
+            for (size_t i = 0; i < starts.size(); ++i) {
+                terms.push_back({
+                    matrices_a[i].cast<std::shared_ptr<ngla::BaseMatrix>>(),
+                    starts[i], stops[i], scales[i]});
+            }
+            return std::make_shared<RadReducedBlockMatrix>(
+                std::move(dense.values), dense.rows, std::move(terms));
+        }), py::arg("dense"), py::arg("matrices"), py::arg("starts"),
+            py::arg("stops"), py::arg("scales"))
+        .def("diagonal_preconditioner",
+             &RadReducedBlockMatrix::DiagonalPreconditioner,
+             py::arg("relative_floor") = 1.0e-14,
+             "Return a native complex Jacobi/block-diagonal preconditioner.")
+        .def_property_readonly("term_count", &RadReducedBlockMatrix::TermCount);
+
     py::class_<RadHACApKChargeGram, std::shared_ptr<RadHACApKChargeGram>>(m, "_ChargeGramHMatrix")
         .def(py::init([](F64Array centroids_a, F64Array measures_a,
                          F64Array self_energy_a, double eps, int leaf, double eta) {
@@ -3443,6 +3737,24 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "Build a stable regularized sampled Laplace HACApK Gram.  Hybrid cross-only "
              "composition is implemented by reduced diagonal correction, not by placing "
              "partition zeros inside ACA.  Component CSR maps are configured separately.")
+        .def_static("from_sampled_planar_log",
+             [](F64Array points_a, F64Array weights_a, double kernel_epsilon,
+                double reference_length, double eps, int leaf, double eta, bool build) {
+                 auto points = to_1d_vector<double>(points_a, "points");
+                 auto weights = to_1d_vector<double>(weights_a, "weights");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(points), std::move(weights), kernel_epsilon,
+                         reference_length); },
+                     eps, leaf, eta, build,
+                     "sampled planar-log Gram H-matrix build failed");
+             },
+             py::arg("points"), py::arg("weights"), py::arg("kernel_epsilon"),
+             py::arg("reference_length") = 1.0,
+             py::arg("eps") = 1e-11, py::arg("leaf") = 64,
+             py::arg("eta") = 2.0, py::arg("build") = true,
+             "Build a regularized sampled planar -log(r/L)/(2*pi) HACApK Gram.  "
+             "The exact planar volume diagonal is supplied by reduced correction.")
         .def(py::init([](F64Array cell_verts_a, F64Array face_verts_a,
                          int n_el, double eps, int leaf, double eta, double near_factor,
                          I32Array image_masks_a, F64Array image_signs_a, bool build,

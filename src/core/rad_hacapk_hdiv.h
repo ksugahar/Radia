@@ -58,6 +58,16 @@ public:
                         std::vector<double> weights,
                         double kernel_epsilon);
 
+    // SAMPLED PLANAR LOG mode for 2-D hybrid HCurl-VIM/SIBC coupling:
+    //   G_ij = -w_i w_j log(sqrt(|x_i-x_j|^2 + eps^2)/reference_length)/(2*pi).
+    // The exact planar HCurl volume block is supplied separately and replaces
+    // the sampled diagonal through the same reduced-correction composition as
+    // the 3-D sampled Laplace path.
+    RadHACApKChargeGram(std::vector<double> points,
+                        std::vector<double> weights,
+                        double kernel_epsilon,
+                        double reference_length);
+
     // ANALYTIC mode (M2b): the EXACT charge Gram from per-charge GEOMETRY -- matches the independent
     // analytic reference entry-by-entry.  cell_verts [n_el*12] (tets, 4 verts) then
     // face_verts [n_bf*9] (triangles, 3 verts); the n_charge charges are the n_el volume cells
@@ -467,7 +477,9 @@ private:
     std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
     int  m_n = 0;
     bool m_sampledLaplace = false;
+    bool m_sampledPlanarLog = false;
     double m_sampledKernelEpsilon = 0.0;
+    double m_sampledReferenceLength = 1.0;
     // analytic mode (M2b)
     bool m_analytic = false;
     int  m_n_el = 0;

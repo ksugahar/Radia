@@ -264,6 +264,31 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> points,
             throw std::invalid_argument("sampled Laplace weights must be positive and finite");
 }
 
+RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> points,
+                                         std::vector<double> weights,
+                                         double kernel_epsilon,
+                                         double reference_length)
+    : m_cent(std::move(points)), m_meas(std::move(weights)),
+      m_sampledPlanarLog(true), m_sampledKernelEpsilon(kernel_epsilon),
+      m_sampledReferenceLength(reference_length)
+{
+    m_n = static_cast<int>(m_meas.size());
+    if (m_n < 1 || m_cent.size() != static_cast<size_t>(3 * m_n))
+        throw std::invalid_argument(
+            "sampled planar-log HACApK requires points[n,3] and weights[n]");
+    if (!std::isfinite(m_sampledKernelEpsilon) || m_sampledKernelEpsilon <= 0.0)
+        throw std::invalid_argument("sampled planar-log kernel_epsilon must be positive");
+    if (!std::isfinite(m_sampledReferenceLength) || m_sampledReferenceLength <= 0.0)
+        throw std::invalid_argument("sampled planar-log reference_length must be positive");
+    for (double value : m_cent)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("sampled planar-log points must be finite");
+    for (double weight : m_meas)
+        if (!std::isfinite(weight) || weight <= 0.0)
+            throw std::invalid_argument(
+                "sampled planar-log weights must be positive and finite");
+}
+
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
                                          std::vector<double> face_verts,
                                          int n_el, double near_factor,
@@ -5116,6 +5141,14 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const double eps2 = m_sampledKernelEpsilon * m_sampledKernelEpsilon;
         return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI /
                std::sqrt(dx * dx + dy * dy + dz * dz + eps2);
+    }
+    if (m_sampledPlanarLog) {
+        const double dx = m_cent[3 * a] - m_cent[3 * b];
+        const double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
+        const double eps2 = m_sampledKernelEpsilon * m_sampledKernelEpsilon;
+        const double distance = std::sqrt(dx * dx + dy * dy + eps2);
+        return -2.0 * RAD_INV_FOUR_PI * m_meas[a] * m_meas[b]
+             * std::log(distance / m_sampledReferenceLength);
     }
     if (m_d2) {
         // 2D planar mode: served block-wise like the hex mode, symmetrized 0.5*(AB + BA).  Each scalar
