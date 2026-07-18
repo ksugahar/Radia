@@ -4038,6 +4038,359 @@ def _exodus_assembly_identity_ok(identity: object) -> bool:
     )
 
 
+def _hex_sheet_pillow_topology_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        cells = [int(value) for value in identity.get("cell_ids", [])]
+        result_cells = [int(value) for value in identity.get("result_cell_ids", [])]
+        incidence = [
+            [int(value) for value in row]
+            for row in identity.get("cell_face_incidence", [])
+        ]
+        result_incidence = [
+            [int(value) for value in row]
+            for row in identity.get("result_cell_face_incidence", [])
+        ]
+        counts = {
+            name: int(identity.get(name))
+            for name in ("vertex_count", "edge_count", "face_count", "cell_count")
+        }
+        result_counts = {
+            name: int(identity.get(f"result_{name}"))
+            for name in ("vertex_count", "edge_count", "face_count", "cell_count")
+        }
+        euler = int(identity.get("euler_characteristic"))
+        result_euler = int(identity.get("result_euler_characteristic"))
+        shell_count = int(identity.get("boundary_shell_count"))
+        result_shell_count = int(identity.get("result_boundary_shell_count"))
+        orientations = [
+            int(value) for value in identity.get("cell_orientation_signs", [])
+        ]
+        result_orientations = [
+            int(value)
+            for value in identity.get("result_cell_orientation_signs", [])
+        ]
+        block_id = int(identity.get("block_id"))
+        result_block_id = int(identity.get("result_block_id"))
+        jacobians = [float(value) for value in identity.get("scaled_jacobians", [])]
+        result_jacobians = [
+            float(value) for value in identity.get("result_scaled_jacobians", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sheet_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "incidence_generation",
+                "euler_generation",
+                "shell_generation",
+                "orientation_generation",
+                "block_generation",
+                "jacobian_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and identity.get("operation") == "pillow"
+        and identity.get("result_operation") == identity.get("operation")
+        and bool(cells)
+        and cells == sorted(set(cells))
+        and all(value > 0 for value in cells)
+        and result_cells == cells
+        and bool(incidence)
+        and len({tuple(row) for row in incidence}) == len(incidence)
+        and all(
+            len(row) == 2 and row[0] in cells and row[1] > 0 for row in incidence
+        )
+        and result_incidence == incidence
+        and all(value > 0 for value in counts.values())
+        and result_counts == counts
+        and counts["cell_count"] == len(cells)
+        and counts["vertex_count"]
+        - counts["edge_count"]
+        + counts["face_count"]
+        - counts["cell_count"]
+        == euler
+        and euler == 1
+        and result_euler == euler
+        and shell_count == 1
+        and result_shell_count == shell_count
+        and len(orientations) == len(cells)
+        and all(value == 1 for value in orientations)
+        and result_orientations == orientations
+        and block_id > 0
+        and result_block_id == block_id
+        and len(jacobians) == len(cells)
+        and all(math.isfinite(value) and value > 0.0 for value in jacobians)
+        and result_jacobians == jacobians
+        and _valid_sha256(identity.get("sheet_mesh_sha256"))
+        and identity.get("accepted_sheet_mesh_sha256")
+        == identity.get("sheet_mesh_sha256")
+    )
+
+
+def _multiblock_interface_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        tolerance = float(identity.get("merge_tolerance_m"))
+        result_tolerance = float(identity.get("result_merge_tolerance_m"))
+        node_pairs = [
+            [int(value) for value in row]
+            for row in identity.get("interface_node_pairs", [])
+        ]
+        result_node_pairs = [
+            [int(value) for value in row]
+            for row in identity.get("result_interface_node_pairs", [])
+        ]
+        face_pairs = [
+            [int(value) for value in row]
+            for row in identity.get("coincident_face_pairs", [])
+        ]
+        result_face_pairs = [
+            [int(value) for value in row]
+            for row in identity.get("result_coincident_face_pairs", [])
+        ]
+        face_owners = [
+            [int(value) for value in row] for row in identity.get("face_owners", [])
+        ]
+        result_face_owners = [
+            [int(value) for value in row]
+            for row in identity.get("result_face_owners", [])
+        ]
+        block_ids = [int(value) for value in identity.get("block_ids", [])]
+        result_block_ids = [
+            int(value) for value in identity.get("result_block_ids", [])
+        ]
+        sideset_ids = [int(value) for value in identity.get("sideset_ids", [])]
+        result_sideset_ids = [
+            int(value) for value in identity.get("result_sideset_ids", [])
+        ]
+        duplicate_count = int(identity.get("duplicate_cell_count"))
+        result_duplicate_count = int(identity.get("result_duplicate_cell_count"))
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("interface_generation") or "")
+    face_ids = {value for pair in face_pairs for value in pair}
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "merge_generation",
+                "node_generation",
+                "face_generation",
+                "owner_generation",
+                "block_generation",
+                "sideset_generation",
+                "duplicate_generation",
+                "jacobian_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and result_tolerance == tolerance
+        and bool(node_pairs)
+        and all(len(pair) == 2 and pair[0] > 0 and pair[1] > 0 for pair in node_pairs)
+        and len({pair[0] for pair in node_pairs}) == len(node_pairs)
+        and len({pair[1] for pair in node_pairs}) == len(node_pairs)
+        and result_node_pairs == node_pairs
+        and bool(face_pairs)
+        and all(
+            len(pair) == 2
+            and pair[0] > 0
+            and pair[1] > 0
+            and pair[0] != pair[1]
+            for pair in face_pairs
+        )
+        and len(face_ids) == 2 * len(face_pairs)
+        and result_face_pairs == face_pairs
+        and len(face_owners) == len(face_ids)
+        and all(
+            len(row) == 2 and row[0] in face_ids and row[1] in block_ids
+            for row in face_owners
+        )
+        and {row[0] for row in face_owners} == face_ids
+        and result_face_owners == face_owners
+        and bool(block_ids)
+        and block_ids == sorted(set(block_ids))
+        and all(value > 0 for value in block_ids)
+        and result_block_ids == block_ids
+        and bool(sideset_ids)
+        and sideset_ids == sorted(set(sideset_ids))
+        and all(value > 0 for value in sideset_ids)
+        and result_sideset_ids == sideset_ids
+        and duplicate_count == 0
+        and result_duplicate_count == duplicate_count
+        and math.isfinite(jacobian)
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and _valid_sha256(identity.get("multiblock_export_sha256"))
+        and identity.get("accepted_multiblock_export_sha256")
+        == identity.get("multiblock_export_sha256")
+    )
+
+
+def _command_failure_atomic_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        failed_index = int(identity.get("failed_command_index"))
+        reported_index = int(identity.get("reported_failed_command_index"))
+        error_code = int(identity.get("error_code"))
+        reported_error_code = int(identity.get("reported_error_code"))
+        next_entity_id = int(identity.get("next_entity_id"))
+        rolled_back_next_entity_id = int(identity.get("rolled_back_next_entity_id"))
+        undo_depth = int(identity.get("undo_depth"))
+        rolled_back_undo_depth = int(identity.get("rolled_back_undo_depth"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("failure_generation") or "")
+    category = str(identity.get("failure_category") or "")
+    session_owner = str(identity.get("session_owner") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "command_generation",
+                "error_generation",
+                "rollback_generation",
+                "allocator_generation",
+                "undo_generation",
+                "session_generation",
+                "result_generation",
+            )
+        )
+        and failed_index >= 0
+        and reported_index == failed_index
+        and error_code != 0
+        and reported_error_code == error_code
+        and bool(category)
+        and category != "success"
+        and identity.get("reported_failure_category") == category
+        and _valid_sha256(identity.get("pre_transaction_model_sha256"))
+        and identity.get("rolled_back_model_sha256")
+        == identity.get("pre_transaction_model_sha256")
+        and next_entity_id > 0
+        and rolled_back_next_entity_id == next_entity_id
+        and undo_depth >= 0
+        and rolled_back_undo_depth == undo_depth
+        and session_owner.startswith("headless-")
+        and identity.get("rolled_back_session_owner") == session_owner
+        and _valid_sha256(identity.get("failure_result_sha256"))
+        and identity.get("accepted_failure_result_sha256")
+        == identity.get("failure_result_sha256")
+    )
+
+
+def _cub_roundtrip_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        names = [
+            [str(row[0]), int(row[1]), str(row[2])]
+            for row in identity.get("entity_names", [])
+        ]
+        reopened_names = [
+            [str(row[0]), int(row[1]), str(row[2])]
+            for row in identity.get("reopened_entity_names", [])
+        ]
+        attributes = [
+            [str(row[0]), int(row[1]), str(row[2]), str(row[3])]
+            for row in identity.get("entity_attributes", [])
+        ]
+        reopened_attributes = [
+            [str(row[0]), int(row[1]), str(row[2]), str(row[3])]
+            for row in identity.get("reopened_entity_attributes", [])
+        ]
+        groups = [
+            [str(row[0]), str(row[1]), int(row[2])]
+            for row in identity.get("group_memberships", [])
+        ]
+        reopened_groups = [
+            [str(row[0]), str(row[1]), int(row[2])]
+            for row in identity.get("reopened_group_memberships", [])
+        ]
+        mesh = dict(identity.get("mesh_state") or {})
+        reopened_mesh = dict(identity.get("reopened_mesh_state") or {})
+        hex_count = int(mesh.get("hex"))
+        quad_count = int(mesh.get("quad"))
+        block_ids = [int(value) for value in mesh.get("block_ids", [])]
+        sideset_ids = [int(value) for value in mesh.get("sideset_ids", [])]
+    except (IndexError, TypeError, ValueError):
+        return False
+    generation = str(identity.get("roundtrip_generation") or "")
+    kernel_version = str(identity.get("kernel_version") or "")
+    entity_keys = {(row[0], row[1]) for row in names}
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "kernel_generation",
+                "entity_generation",
+                "attribute_generation",
+                "group_generation",
+                "mesh_generation",
+                "file_generation",
+                "result_generation",
+            )
+        )
+        and bool(kernel_version)
+        and identity.get("reopened_kernel_version") == kernel_version
+        and bool(names)
+        and len(entity_keys) == len(names)
+        and all(row[0] and row[1] > 0 and row[2] for row in names)
+        and reopened_names == names
+        and all(
+            row[0] and row[1] > 0 and row[2] and row[3]
+            and (row[0], row[1]) in entity_keys
+            for row in attributes
+        )
+        and reopened_attributes == attributes
+        and all(
+            row[0] and row[1] and row[2] > 0 and (row[1], row[2]) in entity_keys
+            for row in groups
+        )
+        and reopened_groups == groups
+        and hex_count >= 0
+        and quad_count >= 0
+        and bool(block_ids)
+        and block_ids == sorted(set(block_ids))
+        and all(value > 0 for value in block_ids)
+        and bool(sideset_ids)
+        and sideset_ids == sorted(set(sideset_ids))
+        and all(value > 0 for value in sideset_ids)
+        and reopened_mesh == mesh
+        and bool(str(identity.get("model_generation") or ""))
+        and identity.get("reopened_model_generation")
+        == identity.get("model_generation")
+        and _valid_sha256(identity.get("cub_file_sha256"))
+        and identity.get("reopened_cub_file_sha256")
+        == identity.get("cub_file_sha256")
+        and _valid_sha256(identity.get("roundtrip_result_sha256"))
+        and identity.get("accepted_roundtrip_result_sha256")
+        == identity.get("roundtrip_result_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -4875,6 +5228,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "pyramid_transitions_use_current_diagonal_orientation_faces_regions_jacobians_and_export": (
             _pyramid_transition_closure_identity_ok(
                 summary.get("pyramid_transition_diagonal_orientation_shared_face_region_jacobian_export_generation_identity")
+            )
+        ),
+        "hex_sheet_pillows_use_current_incidence_euler_shell_orientation_block_jacobian_and_mesh": (
+            _hex_sheet_pillow_topology_identity_ok(
+                summary.get("hex_sheet_pillow_incidence_euler_shell_orientation_block_jacobian_mesh_result_generation_identity")
+            )
+        ),
+        "multiblock_interfaces_use_current_merge_nodes_faces_owners_sets_duplicates_jacobian_and_export": (
+            _multiblock_interface_identity_ok(
+                summary.get("multiblock_interface_merge_face_owner_block_sideset_duplicate_jacobian_export_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -5736,6 +6099,16 @@ def cubit_mixed_transition_source_gate(
         "exodus_assemblies_use_current_membership_frame_qa_time_block_sideset_file_and_result": (
             _exodus_assembly_identity_ok(
                 summary.get("exodus_assembly_membership_frame_qa_time_block_sideset_file_result_generation_identity")
+            )
+        ),
+        "failed_commands_rollback_model_allocator_undo_session_and_result_atomically": (
+            _command_failure_atomic_identity_ok(
+                summary.get("command_failure_atomic_rollback_error_entity_allocator_undo_session_result_generation_identity")
+            )
+        ),
+        "cub_roundtrips_preserve_kernel_entities_attributes_groups_mesh_model_file_and_result": (
+            _cub_roundtrip_identity_ok(
+                summary.get("cub_roundtrip_kernel_entity_name_attribute_group_mesh_model_file_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
