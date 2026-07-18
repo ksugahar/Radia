@@ -1413,6 +1413,134 @@ def _hysteresis_minor_loop_identity_ok(value: object) -> bool:
     )
 
 
+def _maglev_equilibrium_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("equilibrium_generation", "")).strip()
+    try:
+        displacements = [float(item) for item in value.get("displacement_samples_m", [])]
+        forces = [float(item) for item in value.get("magnetic_force_samples_n", [])]
+        derivative = float(value.get("force_derivative_n_per_m"))
+        stiffness = float(value.get("vertical_stiffness_n_per_m"))
+        gravity = float(value.get("gravity_force_n"))
+    except (TypeError, ValueError):
+        return False
+    if len(displacements) != 3 or len(forces) != 3:
+        return False
+    spacing_left = displacements[1] - displacements[0]
+    spacing_right = displacements[2] - displacements[1]
+    if not (
+        all(math.isfinite(item) for item in (*displacements, *forces, derivative, stiffness, gravity))
+        and spacing_left > 0.0
+        and math.isclose(spacing_left, spacing_right, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(displacements[1], 0.0, rel_tol=0.0, abs_tol=1.0e-15)
+    ):
+        return False
+    central_derivative = (forces[2] - forces[0]) / (
+        displacements[2] - displacements[0]
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "force_equilibrium_generation",
+                "frame_equilibrium_generation",
+                "displacement_equilibrium_generation",
+                "derivative_equilibrium_generation",
+                "stiffness_equilibrium_generation",
+                "gravity_equilibrium_generation",
+                "mesh_equilibrium_generation",
+                "result_equilibrium_generation",
+            )
+        )
+        and value.get("force_sign_convention") == "positive_up"
+        and value.get("result_force_sign_convention") == "positive_up"
+        and value.get("displacement_frame") == "global_z_up"
+        and value.get("result_displacement_frame") == "global_z_up"
+        and value.get("result_displacement_samples_m") == displacements
+        and value.get("result_magnetic_force_samples_n") == forces
+        and value.get("derivative_stencil") == "symmetric_central_difference"
+        and value.get("result_derivative_stencil") == "symmetric_central_difference"
+        and math.isclose(derivative, central_derivative, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("result_force_derivative_n_per_m") == derivative
+        and stiffness > 0.0
+        and math.isclose(stiffness, -derivative, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("result_vertical_stiffness_n_per_m") == stiffness
+        and math.isclose(forces[1] + gravity, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and value.get("result_gravity_force_n") == gravity
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _bem_surface_charge_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("bem_generation", "")).strip()
+    try:
+        net_charge = float(value.get("net_surface_charge"))
+        charge_tolerance = float(value.get("charge_balance_tolerance"))
+        source_normal = [float(item) for item in value.get("source_normal", [])]
+        target_normal = [float(item) for item in value.get("target_normal", [])]
+        energy = float(value.get("field_energy_j"))
+        reciprocity_residual = float(value.get("reciprocity_residual"))
+        reciprocity_tolerance = float(value.get("reciprocity_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "charge_bem_generation",
+                "gauge_bem_generation",
+                "normal_bem_generation",
+                "energy_bem_generation",
+                "reciprocity_bem_generation",
+                "geometry_bem_generation",
+                "owner_bem_generation",
+                "result_bem_generation",
+            )
+        )
+        and math.isfinite(net_charge)
+        and math.isfinite(charge_tolerance)
+        and charge_tolerance >= 0.0
+        and abs(net_charge) <= charge_tolerance
+        and value.get("result_net_surface_charge") == net_charge
+        and value.get("gauge_reference") == "mean_zero_scalar_potential"
+        and value.get("result_gauge_reference") == value.get("gauge_reference")
+        and len(source_normal) == len(target_normal) == 3
+        and math.isclose(sum(item * item for item in source_normal), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(sum(item * item for item in target_normal), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and all(math.isclose(a, -b, rel_tol=0.0, abs_tol=1.0e-12) for a, b in zip(source_normal, target_normal))
+        and value.get("result_source_normal") == source_normal
+        and value.get("result_target_normal") == target_normal
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and value.get("result_field_energy_j") == energy
+        and math.isfinite(reciprocity_residual)
+        and math.isfinite(reciprocity_tolerance)
+        and reciprocity_tolerance >= 0.0
+        and abs(reciprocity_residual) <= reciprocity_tolerance
+        and value.get("result_reciprocity_residual") == reciprocity_residual
+        and _valid_sha256(value.get("geometry_sha256"))
+        and value.get("result_geometry_sha256") == value.get("geometry_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1527,6 +1655,8 @@ def magnetic_force_method_profile_gate(
     cogging_torque_sampling_identity_ok = True
     bem_near_singular_force_identity_ok = True
     hysteresis_minor_loop_identity_ok = True
+    maglev_equilibrium_closure_identity_ok = True
+    bem_surface_charge_closure_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1578,6 +1708,8 @@ def magnetic_force_method_profile_gate(
         cogging_torque_sampling_identity_ok = False
         bem_near_singular_force_identity_ok = False
         hysteresis_minor_loop_identity_ok = False
+        maglev_equilibrium_closure_identity_ok = False
+        bem_surface_charge_closure_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3322,6 +3454,16 @@ def magnetic_force_method_profile_gate(
                 "hysteresis_minor_loop_state_reversal_return_memory_remanence_energy_time_material_identity"
             )
         )
+        maglev_equilibrium_closure_identity_ok = _maglev_equilibrium_closure_identity_ok(
+            identity_value.get(
+                "maglev_equilibrium_force_displacement_derivative_stiffness_gravity_mesh_result_identity"
+            )
+        )
+        bem_surface_charge_closure_identity_ok = _bem_surface_charge_closure_identity_ok(
+            identity_value.get(
+                "bem_surface_charge_gauge_normal_energy_reciprocity_geometry_owner_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3530,6 +3672,12 @@ def magnetic_force_method_profile_gate(
         ),
         "hysteresis_minor_loop_uses_initial_state_reversals_return_memory_remanence_energy_time_and_material": (
             hysteresis_minor_loop_identity_ok
+        ),
+        "maglev_equilibrium_uses_upward_force_global_displacement_central_stiffness_gravity_mesh_and_result": (
+            maglev_equilibrium_closure_identity_ok
+        ),
+        "bem_surface_charge_uses_neutral_charge_mean_zero_gauge_opposed_normals_energy_reciprocity_geometry_and_result": (
+            bem_surface_charge_closure_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
