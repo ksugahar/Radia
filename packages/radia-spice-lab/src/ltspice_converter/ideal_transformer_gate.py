@@ -2839,6 +2839,285 @@ def _touchstone_network_owner_identity_ok(
     )
 
 
+def _smps_startup_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "smps_startup_softstart_uvlo_switch_cycle_timestep_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        softstart_time = [float(value) for value in contract.get("softstart_time_s", [])]
+        result_softstart_time = [
+            float(value) for value in contract.get("result_softstart_time_s", [])
+        ]
+        softstart_command = [
+            float(value) for value in contract.get("softstart_command", [])
+        ]
+        result_softstart_command = [
+            float(value) for value in contract.get("result_softstart_command", [])
+        ]
+        uvlo_on = float(contract.get("uvlo_on_v"))
+        result_uvlo_on = float(contract.get("result_uvlo_on_v"))
+        uvlo_off = float(contract.get("uvlo_off_v"))
+        result_uvlo_off = float(contract.get("result_uvlo_off_v"))
+        first_cycle = [
+            float(value) for value in contract.get("first_switching_cycle_s", [])
+        ]
+        result_first_cycle = [
+            float(value)
+            for value in contract.get("result_first_switching_cycle_s", [])
+        ]
+        timestep_grid = [
+            float(value) for value in contract.get("aligned_timestep_grid_s", [])
+        ]
+        result_timestep_grid = [
+            float(value)
+            for value in contract.get("result_aligned_timestep_grid_s", [])
+        ]
+        energies = [
+            float(contract.get(key))
+            for key in (
+                "input_energy_j",
+                "output_energy_j",
+                "stored_energy_j",
+                "loss_energy_j",
+            )
+        ]
+        result_energies = [
+            float(contract.get(key))
+            for key in (
+                "result_input_energy_j",
+                "result_output_energy_j",
+                "result_stored_energy_j",
+                "result_loss_energy_j",
+            )
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("startup_generation_id") or "")
+    energy_scale = max(abs(energies[0]), 1.0e-30)
+    energy_residual = energies[0] - sum(energies[1:])
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "softstart_startup_generation_id",
+                "uvlo_startup_generation_id",
+                "switch_startup_generation_id",
+                "timestep_startup_generation_id",
+                "energy_startup_generation_id",
+                "waveform_startup_generation_id",
+                "result_startup_generation_id",
+            )
+        )
+        and len(softstart_time) >= 2
+        and len(softstart_command) == len(softstart_time)
+        and all(math.isfinite(value) and value >= 0.0 for value in softstart_time)
+        and all(left < right for left, right in zip(softstart_time, softstart_time[1:]))
+        and all(math.isfinite(value) and 0.0 <= value <= 1.0 for value in softstart_command)
+        and all(left <= right for left, right in zip(softstart_command, softstart_command[1:]))
+        and result_softstart_time == softstart_time
+        and result_softstart_command == softstart_command
+        and math.isfinite(uvlo_on)
+        and math.isfinite(uvlo_off)
+        and uvlo_on > uvlo_off >= 0.0
+        and result_uvlo_on == uvlo_on
+        and result_uvlo_off == uvlo_off
+        and len(first_cycle) == 2
+        and all(math.isfinite(value) for value in first_cycle)
+        and softstart_time[-1] <= first_cycle[0] < first_cycle[1]
+        and result_first_cycle == first_cycle
+        and len(timestep_grid) >= 3
+        and all(math.isfinite(value) for value in timestep_grid)
+        and all(left < right for left, right in zip(timestep_grid, timestep_grid[1:]))
+        and math.isclose(timestep_grid[0], first_cycle[0], rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(timestep_grid[-1], first_cycle[1], rel_tol=0.0, abs_tol=1.0e-15)
+        and result_timestep_grid == timestep_grid
+        and all(math.isfinite(value) and value >= 0.0 for value in energies)
+        and result_energies == energies
+        and abs(energy_residual) <= 1.0e-12 * energy_scale
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("result_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _correlation_matrix_is_positive_semidefinite(
+    matrix: list[list[float]],
+) -> bool:
+    """Check a symmetric matrix with a pivoted LDL-style factorization."""
+    size = len(matrix)
+    if size == 0 or any(len(row) != size for row in matrix):
+        return False
+    tolerance = 1.0e-12 * max(
+        1.0, max(abs(value) for row in matrix for value in row)
+    ) * size
+    lower = [[0.0] * size for _ in range(size)]
+    diagonal = [0.0] * size
+    for row in range(size):
+        lower[row][row] = 1.0
+        for column in range(row):
+            residual = matrix[row][column] - sum(
+                lower[row][index]
+                * diagonal[index]
+                * lower[column][index]
+                for index in range(column)
+            )
+            if abs(diagonal[column]) <= tolerance:
+                if abs(residual) > tolerance:
+                    return False
+                lower[row][column] = 0.0
+            else:
+                lower[row][column] = residual / diagonal[column]
+        pivot = matrix[row][row] - sum(
+            lower[row][index] * lower[row][index] * diagonal[index]
+            for index in range(row)
+        )
+        if pivot < -tolerance:
+            return False
+        diagonal[row] = 0.0 if abs(pivot) <= tolerance else pivot
+    return True
+
+
+def _noise_correlation_band_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "noise_source_correlation_psd_grid_bandwidth_transfer_integration_rms_model_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        source_order = [str(value) for value in contract.get("source_order", [])]
+        result_source_order = [
+            str(value) for value in contract.get("result_source_order", [])
+        ]
+        correlation = [
+            [float(value) for value in row]
+            for row in contract.get("source_correlation", [])
+        ]
+        result_correlation = [
+            [float(value) for value in row]
+            for row in contract.get("result_source_correlation", [])
+        ]
+        frequency = [float(value) for value in contract.get("frequency_hz", [])]
+        result_frequency = [
+            float(value) for value in contract.get("result_frequency_hz", [])
+        ]
+        bandwidth = [
+            float(value) for value in contract.get("integration_bandwidth_hz", [])
+        ]
+        result_bandwidth = [
+            float(value)
+            for value in contract.get("result_integration_bandwidth_hz", [])
+        ]
+        transfer = [
+            float(value) for value in contract.get("transfer_magnitude", [])
+        ]
+        result_transfer = [
+            float(value) for value in contract.get("result_transfer_magnitude", [])
+        ]
+        output_psd = [
+            float(value) for value in contract.get("output_psd_v2_per_hz", [])
+        ]
+        result_output_psd = [
+            float(value)
+            for value in contract.get("result_output_psd_v2_per_hz", [])
+        ]
+        integrated = float(contract.get("integrated_noise_v2"))
+        result_integrated = float(contract.get("result_integrated_noise_v2"))
+        rms_noise = float(contract.get("rms_noise_v"))
+        result_rms_noise = float(contract.get("result_rms_noise_v"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("noise_generation_id") or "")
+    source_count = len(source_order)
+    correlation_shape_ok = (
+        source_count > 0
+        and len(correlation) == source_count
+        and all(len(row) == source_count for row in correlation)
+    )
+    correlation_ok = correlation_shape_ok and all(
+        math.isfinite(correlation[row][column])
+        and abs(correlation[row][column]) <= 1.0
+        and math.isclose(
+            correlation[row][column],
+            correlation[column][row],
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        )
+        and (
+            row != column
+            or math.isclose(correlation[row][column], 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        )
+        for row in range(source_count)
+        for column in range(source_count)
+    ) and _correlation_matrix_is_positive_semidefinite(correlation)
+    trapezoid = sum(
+        0.5 * (left_psd + right_psd) * (right_frequency - left_frequency)
+        for left_frequency, right_frequency, left_psd, right_psd in zip(
+            frequency, frequency[1:], output_psd, output_psd[1:]
+        )
+    )
+    integration_scale = max(abs(integrated), abs(trapezoid), 1.0e-30)
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "correlation_noise_generation_id",
+                "psd_noise_generation_id",
+                "grid_noise_generation_id",
+                "bandwidth_noise_generation_id",
+                "transfer_noise_generation_id",
+                "integration_noise_generation_id",
+                "model_noise_generation_id",
+                "result_noise_generation_id",
+            )
+        )
+        and all(source_order)
+        and len(set(source_order)) == source_count
+        and result_source_order == source_order
+        and correlation_ok
+        and result_correlation == correlation
+        and contract.get("psd_convention") == "one_sided_v2_per_hz"
+        and contract.get("result_psd_convention") == contract.get("psd_convention")
+        and len(frequency) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in frequency)
+        and all(left < right for left, right in zip(frequency, frequency[1:]))
+        and result_frequency == frequency
+        and len(bandwidth) == 2
+        and frequency[0] <= bandwidth[0] < bandwidth[1] <= frequency[-1]
+        and math.isclose(bandwidth[0], frequency[0], rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(bandwidth[1], frequency[-1], rel_tol=0.0, abs_tol=1.0e-15)
+        and result_bandwidth == bandwidth
+        and len(transfer) == len(frequency)
+        and all(math.isfinite(value) and value >= 0.0 for value in transfer)
+        and result_transfer == transfer
+        and len(output_psd) == len(frequency)
+        and all(math.isfinite(value) and value >= 0.0 for value in output_psd)
+        and result_output_psd == output_psd
+        and math.isfinite(integrated)
+        and integrated >= 0.0
+        and abs(integrated - trapezoid) <= 1.0e-12 * integration_scale
+        and result_integrated == integrated
+        and math.isfinite(rms_noise)
+        and rms_noise >= 0.0
+        and math.isclose(rms_noise * rms_noise, integrated, rel_tol=1.0e-12, abs_tol=1.0e-30)
+        and result_rms_noise == rms_noise
+        and _is_sha256(str(contract.get("noise_model_sha256") or ""))
+        and contract.get("result_noise_model_sha256") == contract.get("noise_model_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -3237,6 +3516,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "touchstone_networks_use_current_impedance_units_parameters_ports_complex_passivity_file_and_result": (
             _touchstone_network_owner_identity_ok(positive)
+        ),
+        "smps_startup_uses_current_softstart_uvlo_switch_cycle_timestep_energy_waveform_and_result": (
+            _smps_startup_owner_identity_ok(positive)
+        ),
+        "noise_bands_use_current_sources_correlation_psd_grid_bandwidth_transfer_integration_model_and_result": (
+            _noise_correlation_band_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
