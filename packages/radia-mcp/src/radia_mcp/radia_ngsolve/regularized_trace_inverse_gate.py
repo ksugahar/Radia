@@ -286,6 +286,10 @@ def regularized_trace_inverse_path_gate(
     multifrequency_adjoint_identity_ok = (
         _optional_multifrequency_adjoint_identity_is_aligned(summary)
     )
+    simp_topology_identity_ok = _optional_simp_topology_identity_is_aligned(summary)
+    fembem_model_reduction_identity_ok = (
+        _optional_fembem_model_reduction_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -495,6 +499,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "multifrequency_fembem_adjoints_use_current_weights_objective_quadrature_trace_gradient_fd_mesh_owner_and_result": (
             multifrequency_adjoint_identity_ok
+        ),
+        "simp_topology_uses_current_density_filter_projection_volume_compliance_adjoint_fd_kkt_mesh_owner_and_result": (
+            simp_topology_identity_ok
+        ),
+        "fembem_model_reduction_uses_current_projection_order_stability_passivity_moments_frequency_error_full_model_mesh_owners_and_result": (
+            fembem_model_reduction_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -4405,6 +4415,202 @@ def _optional_fembem_shape_derivative_identity_is_aligned(
         and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
         and _is_sha256(str(value.get("shape_result_sha256", "")).lower())
         and value.get("accepted_shape_result_sha256") == value.get("shape_result_sha256")
+    )
+
+
+def _optional_simp_topology_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "simp_topology_density_filter_projection_volume_compliance_adjoint_fd_kkt_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["topology_generation"]).strip()
+        density = tuple(float(item) for item in value["design_density"])
+        filter_matrix = tuple(
+            tuple(float(item) for item in row)
+            for row in value["density_filter_matrix"]
+        )
+        filtered = tuple(float(item) for item in value["filtered_density"])
+        beta = tuple(float(item) for item in value["projection_beta_continuation"])
+        eta = float(value["projection_eta"])
+        projected = tuple(float(item) for item in value["projected_density"])
+        volume_fraction = float(value["volume_fraction"])
+        volume_limit = float(value["volume_fraction_limit"])
+        compliance = float(value["compliance"])
+        adjoint = tuple(float(item) for item in value["adjoint_compliance_gradient"])
+        finite_difference = tuple(
+            float(item) for item in value["finite_difference_compliance_gradient"]
+        )
+        volume_gradient = tuple(float(item) for item in value["volume_gradient"])
+        multiplier = float(value["volume_lagrange_multiplier"])
+        kkt_residual = float(value["kkt_stationarity_residual"])
+        gradient_tolerance = float(value["gradient_relative_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    count = len(density)
+    if count == 0 or len(filter_matrix) != count:
+        return False
+    if any(len(row) != count for row in filter_matrix):
+        return False
+    expected_filtered = tuple(
+        sum(weight * item for weight, item in zip(row, density))
+        for row in filter_matrix
+    )
+    if not beta:
+        return False
+    denominator = math.tanh(beta[-1] * eta) + math.tanh(beta[-1] * (1.0 - eta))
+    if not math.isfinite(denominator) or denominator <= 0.0:
+        return False
+    expected_projected = tuple(
+        (
+            math.tanh(beta[-1] * eta)
+            + math.tanh(beta[-1] * (item - eta))
+        )
+        / denominator
+        for item in filtered
+    )
+    expected_volume = sum(projected) / count
+    expected_kkt = max(
+        abs(gradient + multiplier * constraint_gradient)
+        for gradient, constraint_gradient in zip(adjoint, volume_gradient)
+    )
+    mirrored = (
+        "design_density", "density_filter_matrix", "filtered_density",
+        "projection_beta_continuation", "projection_eta", "projected_density",
+        "volume_fraction", "volume_fraction_limit", "compliance",
+        "adjoint_compliance_gradient", "finite_difference_compliance_gradient",
+        "volume_gradient", "volume_lagrange_multiplier",
+        "kkt_stationarity_residual", "gradient_relative_tolerance",
+        "topology_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "density_generation", "filter_generation", "projection_generation",
+            "volume_generation", "compliance_generation", "adjoint_generation",
+            "fd_generation", "kkt_generation", "mesh_generation",
+            "owner_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) and 0.0 <= item <= 1.0 for item in density)
+        and all(
+            math.isfinite(weight) and weight >= 0.0
+            for row in filter_matrix for weight in row
+        )
+        and all(math.isclose(sum(row), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12) for row in filter_matrix)
+        and len(filtered) == len(projected) == count
+        and all(math.isclose(left, right, rel_tol=1.0e-12, abs_tol=1.0e-12) for left, right in zip(filtered, expected_filtered))
+        and all(math.isfinite(item) and item > 0.0 for item in beta)
+        and all(left < right for left, right in zip(beta, beta[1:]))
+        and math.isfinite(eta) and 0.0 < eta < 1.0
+        and all(math.isclose(left, right, rel_tol=1.0e-12, abs_tol=1.0e-12) for left, right in zip(projected, expected_projected))
+        and all(0.0 <= item <= 1.0 for item in projected)
+        and math.isclose(volume_fraction, expected_volume, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isfinite(volume_limit) and 0.0 < volume_limit <= 1.0
+        and volume_fraction <= volume_limit + max(1.0e-2, gradient_tolerance)
+        and math.isfinite(compliance) and compliance > 0.0
+        and len(adjoint) == len(finite_difference) == len(volume_gradient) == count
+        and all(math.isfinite(item) for item in (*adjoint, *finite_difference, *volume_gradient))
+        and math.isfinite(gradient_tolerance) and 0.0 < gradient_tolerance <= 1.0e-2
+        and all(
+            abs(left - right) / max(abs(left), abs(right), 1.0e-300) <= gradient_tolerance
+            for left, right in zip(adjoint, finite_difference)
+        )
+        and math.isfinite(multiplier) and multiplier >= 0.0
+        and math.isclose(kkt_residual, expected_kkt, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and kkt_residual <= gradient_tolerance
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("topology_mesh_sha256", "")).lower())
+        and bool(str(value.get("topology_owner", "")).strip())
+        and value.get("accepted_topology_owner") == value.get("topology_owner")
+        and _is_sha256(str(value.get("topology_result_sha256", "")).lower())
+        and value.get("accepted_topology_result_sha256") == value.get("topology_result_sha256")
+    )
+
+
+def _optional_fembem_model_reduction_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_model_reduction_projection_order_stability_passivity_moment_frequency_error_full_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["reduction_generation"]).strip()
+        full_order = _integer(value, "full_order")
+        reduced_order = _integer(value, "reduced_order")
+        trial = tuple(tuple(float(item) for item in row) for row in value["trial_projection_basis"])
+        test = tuple(tuple(float(item) for item in row) for row in value["test_projection_basis"])
+        gram = tuple(tuple(float(item) for item in row) for row in value["biorthogonality_gram"])
+        full_poles = tuple(complex(float(row[0]), float(row[1])) for row in value["full_model_poles"])
+        reduced_poles = tuple(complex(float(row[0]), float(row[1])) for row in value["reduced_model_poles"])
+        passivity = float(value["minimum_passivity_eigenvalue"])
+        full_moments = tuple(complex(float(row[0]), float(row[1])) for row in value["matched_moments_full"])
+        reduced_moments = tuple(complex(float(row[0]), float(row[1])) for row in value["matched_moments_reduced"])
+        frequencies = tuple(float(item) for item in value["frequency_hz"])
+        errors = tuple(float(item) for item in value["frequency_response_relative_error"])
+        maximum_error = float(value["maximum_frequency_response_relative_error"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    if not (
+        0 < reduced_order < full_order
+        and len(trial) == len(test) == full_order
+        and all(len(row) == reduced_order for row in (*trial, *test))
+        and len(gram) == reduced_order
+        and all(len(row) == reduced_order for row in gram)
+    ):
+        return False
+    expected_gram = tuple(
+        tuple(sum(test[row][left] * trial[row][right] for row in range(full_order)) for right in range(reduced_order))
+        for left in range(reduced_order)
+    )
+    mirrored = (
+        "full_order", "reduced_order", "trial_projection_basis",
+        "test_projection_basis", "biorthogonality_gram", "full_model_poles",
+        "reduced_model_poles", "minimum_passivity_eigenvalue",
+        "matched_moments_full", "matched_moments_reduced", "frequency_hz",
+        "frequency_response_relative_error",
+        "maximum_frequency_response_relative_error", "reduction_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "projection_generation", "order_generation", "stability_generation",
+            "passivity_generation", "moment_generation", "frequency_generation",
+            "error_generation", "full_model_generation", "mesh_generation",
+            "owner_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) for row in (*trial, *test, *gram) for item in row)
+        and all(math.isclose(gram[i][j], expected_gram[i][j], rel_tol=1.0e-12, abs_tol=1.0e-12) for i in range(reduced_order) for j in range(reduced_order))
+        and all(math.isclose(gram[i][j], 1.0 if i == j else 0.0, rel_tol=1.0e-12, abs_tol=1.0e-12) for i in range(reduced_order) for j in range(reduced_order))
+        and len(full_poles) == full_order and len(reduced_poles) == reduced_order
+        and all(math.isfinite(item.real) and math.isfinite(item.imag) and item.real < 0.0 for item in (*full_poles, *reduced_poles))
+        and math.isfinite(passivity) and passivity >= 0.0
+        and len(full_moments) == len(reduced_moments) >= reduced_order
+        and all(math.isfinite(item.real) and math.isfinite(item.imag) for item in (*full_moments, *reduced_moments))
+        and all(abs(left - right) <= 1.0e-12 for left, right in zip(full_moments, reduced_moments))
+        and len(frequencies) == len(errors) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and all(math.isfinite(item) and item >= 0.0 for item in errors)
+        and all(right <= left for left, right in zip(errors, errors[1:]))
+        and math.isfinite(maximum_error) and 0.0 < maximum_error < 1.0
+        and max(errors) <= maximum_error
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("reduction_mesh_sha256", "")).lower())
+        and bool(str(value.get("full_model_owner", "")).strip())
+        and value.get("accepted_full_model_owner") == value.get("full_model_owner")
+        and bool(str(value.get("reduction_owner", "")).strip())
+        and value.get("accepted_reduction_owner") == value.get("reduction_owner")
+        and _is_sha256(str(value.get("reduction_result_sha256", "")).lower())
+        and value.get("accepted_reduction_result_sha256") == value.get("reduction_result_sha256")
     )
 
 
