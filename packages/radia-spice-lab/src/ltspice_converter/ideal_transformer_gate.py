@@ -3971,6 +3971,249 @@ def _electrothermal_fixedpoint_owner_identity_ok(
     )
 
 
+def _oscillator_closure_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "oscillator_startup_barkhausen_frequency_amplitude_limitcycle_energy_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("oscillator_generation_id") or "")
+    try:
+        startup_time = [float(item) for item in contract["startup_time_s"]]
+        result_startup_time = [
+            float(item) for item in contract["result_startup_time_s"]
+        ]
+        startup_amplitude = [
+            float(item) for item in contract["startup_amplitude_v"]
+        ]
+        result_startup_amplitude = [
+            float(item) for item in contract["result_startup_amplitude_v"]
+        ]
+        barkhausen_frequency = float(contract["barkhausen_frequency_hz"])
+        result_barkhausen_frequency = float(
+            contract["result_barkhausen_frequency_hz"]
+        )
+        loop_gain = float(contract["loop_gain_magnitude"])
+        result_loop_gain = float(contract["result_loop_gain_magnitude"])
+        loop_phase = float(contract["loop_phase_deg"])
+        result_loop_phase = float(contract["result_loop_phase_deg"])
+        steady_frequency = float(contract["steady_frequency_hz"])
+        result_steady_frequency = float(contract["result_steady_frequency_hz"])
+        steady_amplitude = float(contract["steady_amplitude_v"])
+        result_steady_amplitude = float(contract["result_steady_amplitude_v"])
+        start_state = [float(item) for item in contract["limitcycle_start_state"]]
+        end_state = [float(item) for item in contract["limitcycle_end_state"]]
+        result_start_state = [
+            float(item) for item in contract["result_limitcycle_start_state"]
+        ]
+        result_end_state = [
+            float(item) for item in contract["result_limitcycle_end_state"]
+        ]
+        state_tolerance = float(contract["limitcycle_state_tolerance"])
+        result_state_tolerance = float(
+            contract["result_limitcycle_state_tolerance"]
+        )
+        source_energy = float(contract["cycle_source_energy_j"])
+        result_source_energy = float(contract["result_cycle_source_energy_j"])
+        dissipated_energy = float(contract["cycle_dissipated_energy_j"])
+        result_dissipated_energy = float(
+            contract["result_cycle_dissipated_energy_j"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    try:
+        growth_rates = [
+            math.log(right_amp / left_amp) / (right_time - left_time)
+            for left_time, right_time, left_amp, right_amp in zip(
+                startup_time,
+                startup_time[1:],
+                startup_amplitude,
+                startup_amplitude[1:],
+            )
+        ]
+    except (ValueError, ZeroDivisionError):
+        return False
+    phase_residual = (loop_phase + 180.0) % 360.0 - 180.0
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "startup_oscillator_generation_id",
+                "barkhausen_oscillator_generation_id",
+                "frequency_oscillator_generation_id",
+                "amplitude_oscillator_generation_id",
+                "limitcycle_oscillator_generation_id",
+                "energy_oscillator_generation_id",
+                "waveform_oscillator_generation_id",
+                "circuit_oscillator_generation_id",
+                "result_oscillator_generation_id",
+            )
+        )
+        and len(startup_time) == len(startup_amplitude) >= 4
+        and all(math.isfinite(item) for item in startup_time + startup_amplitude)
+        and startup_time[0] >= 0.0
+        and all(left < right for left, right in zip(startup_time, startup_time[1:]))
+        and all(item > 0.0 for item in startup_amplitude)
+        and all(
+            left < right for left, right in zip(startup_amplitude, startup_amplitude[1:])
+        )
+        and result_startup_time == startup_time
+        and result_startup_amplitude == startup_amplitude
+        and all(math.isfinite(item) and item > 0.0 for item in growth_rates)
+        and max(growth_rates) - min(growth_rates)
+        <= 1.0e-10 * max(growth_rates)
+        and all(
+            math.isfinite(item)
+            for item in (
+                barkhausen_frequency,
+                loop_gain,
+                loop_phase,
+                steady_frequency,
+                steady_amplitude,
+            )
+        )
+        and barkhausen_frequency > 0.0
+        and steady_frequency > 0.0
+        and math.isclose(loop_gain, 1.0, rel_tol=5.0e-2, abs_tol=5.0e-2)
+        and abs(phase_residual) <= 5.0
+        and math.isclose(
+            steady_frequency, barkhausen_frequency, rel_tol=2.0e-2, abs_tol=0.0
+        )
+        and steady_amplitude > 0.0
+        and result_barkhausen_frequency == barkhausen_frequency
+        and result_loop_gain == loop_gain
+        and result_loop_phase == loop_phase
+        and result_steady_frequency == steady_frequency
+        and result_steady_amplitude == steady_amplitude
+        and len(start_state) == len(end_state) >= 2
+        and result_start_state == start_state
+        and result_end_state == end_state
+        and math.isfinite(state_tolerance)
+        and state_tolerance > 0.0
+        and result_state_tolerance == state_tolerance
+        and max(abs(left - right) for left, right in zip(start_state, end_state))
+        <= state_tolerance
+        and source_energy > 0.0
+        and dissipated_energy > 0.0
+        and math.isclose(
+            source_energy, dissipated_energy, rel_tol=1.0e-9, abs_tol=1.0e-18
+        )
+        and result_source_energy == source_energy
+        and result_dissipated_energy == dissipated_energy
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256")
+        == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _conducted_emi_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "conducted_emi_lisn_spectrum_window_band_limit_power_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("emi_generation_id") or "")
+    try:
+        lisn_impedance = float(contract["lisn_impedance_ohm"])
+        result_lisn_impedance = float(contract["result_lisn_impedance_ohm"])
+        bandwidth = float(contract["resolution_bandwidth_hz"])
+        result_bandwidth = float(contract["result_resolution_bandwidth_hz"])
+        frequency = [float(item) for item in contract["frequency_hz"]]
+        result_frequency = [float(item) for item in contract["result_frequency_hz"]]
+        spectrum = [float(item) for item in contract["spectrum_dbuv"]]
+        result_spectrum = [float(item) for item in contract["result_spectrum_dbuv"]]
+        limits = [float(item) for item in contract["limit_dbuv"]]
+        result_limits = [float(item) for item in contract["result_limit_dbuv"]]
+        margins = [float(item) for item in contract["margin_db"]]
+        result_margins = [float(item) for item in contract["result_margin_db"]]
+        source_power = float(contract["source_input_power_w"])
+        result_source_power = float(contract["result_source_input_power_w"])
+        load_power = float(contract["load_power_w"])
+        result_load_power = float(contract["result_load_power_w"])
+        lisn_loss = float(contract["lisn_loss_w"])
+        result_lisn_loss = float(contract["result_lisn_loss_w"])
+        switching_loss = float(contract["switching_loss_w"])
+        result_switching_loss = float(contract["result_switching_loss_w"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "lisn_emi_generation_id",
+                "waveform_emi_generation_id",
+                "fft_emi_generation_id",
+                "detector_emi_generation_id",
+                "limit_emi_generation_id",
+                "power_emi_generation_id",
+                "circuit_emi_generation_id",
+                "result_emi_generation_id",
+            )
+        )
+        and math.isfinite(lisn_impedance)
+        and math.isclose(lisn_impedance, 50.0, rel_tol=1.0e-2, abs_tol=0.0)
+        and result_lisn_impedance == lisn_impedance
+        and contract.get("waveform_window") in {"hann", "blackman_harris"}
+        and contract.get("result_waveform_window") == contract.get("waveform_window")
+        and contract.get("fft_normalization") == "rms_single_sided"
+        and contract.get("result_fft_normalization")
+        == contract.get("fft_normalization")
+        and contract.get("detector") == "quasi_peak"
+        and contract.get("result_detector") == contract.get("detector")
+        and math.isfinite(bandwidth)
+        and bandwidth > 0.0
+        and result_bandwidth == bandwidth
+        and len(frequency) == len(spectrum) == len(limits) == len(margins) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in frequency)
+        and all(left < right for left, right in zip(frequency, frequency[1:]))
+        and frequency[0] >= 1.5e5
+        and frequency[-1] <= 3.0e7
+        and result_frequency == frequency
+        and all(math.isfinite(item) for item in spectrum + limits + margins)
+        and result_spectrum == spectrum
+        and result_limits == limits
+        and result_margins == margins
+        and all(
+            margin >= 0.0
+            and math.isclose(margin, limit - value, abs_tol=1.0e-9)
+            for value, limit, margin in zip(spectrum, limits, margins)
+        )
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (source_power, load_power, lisn_loss, switching_loss)
+        )
+        and source_power > 0.0
+        and math.isclose(
+            source_power,
+            load_power + lisn_loss + switching_loss,
+            rel_tol=1.0e-9,
+            abs_tol=1.0e-12,
+        )
+        and result_source_power == source_power
+        and result_load_power == load_power
+        and result_lisn_loss == lisn_loss
+        and result_switching_loss == switching_loss
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -4399,6 +4642,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "electrothermal_uses_current_thermal_impedance_power_temperature_device_fixedpoint_stability_circuit_and_result": (
             _electrothermal_fixedpoint_owner_identity_ok(positive)
+        ),
+        "oscillators_use_current_startup_barkhausen_frequency_amplitude_limitcycle_energy_waveform_and_result": (
+            _oscillator_closure_owner_identity_ok(positive)
+        ),
+        "conducted_emi_uses_current_lisn_window_fft_detector_band_limit_power_circuit_and_result": (
+            _conducted_emi_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
