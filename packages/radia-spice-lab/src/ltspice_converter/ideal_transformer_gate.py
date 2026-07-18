@@ -3338,6 +3338,196 @@ def _sampled_loop_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _periodic_steady_state_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "periodic_steady_state_charge_flux_cycle_energy_efficiency_phase_waveform_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("periodic_generation_id") or "")
+    try:
+        start_charge = [float(item) for item in contract["cycle_start_charge_c"]]
+        end_charge = [float(item) for item in contract["cycle_end_charge_c"]]
+        result_start_charge = [float(item) for item in contract["result_cycle_start_charge_c"]]
+        result_end_charge = [float(item) for item in contract["result_cycle_end_charge_c"]]
+        start_flux = [float(item) for item in contract["cycle_start_flux_wb"]]
+        end_flux = [float(item) for item in contract["cycle_end_flux_wb"]]
+        result_start_flux = [float(item) for item in contract["result_cycle_start_flux_wb"]]
+        result_end_flux = [float(item) for item in contract["result_cycle_end_flux_wb"]]
+        tolerance = float(contract["closure_tolerance"])
+        result_tolerance = float(contract["result_closure_tolerance"])
+        input_energy = float(contract["input_energy_j"])
+        output_energy = float(contract["output_energy_j"])
+        loss_energy = float(contract["loss_energy_j"])
+        efficiency = float(contract["efficiency"])
+        phase_window = [float(item) for item in contract["phase_window_rad"]]
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "charge_periodic_generation_id",
+                "flux_periodic_generation_id",
+                "energy_periodic_generation_id",
+                "efficiency_periodic_generation_id",
+                "phase_periodic_generation_id",
+                "waveform_periodic_generation_id",
+                "owner_periodic_generation_id",
+                "result_periodic_generation_id",
+            )
+        )
+        and bool(start_charge)
+        and len(end_charge) == len(start_charge)
+        and all(math.isfinite(item) for item in (*start_charge, *end_charge))
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance <= 1.0e-6
+        and result_tolerance == tolerance
+        and max(abs(left - right) for left, right in zip(start_charge, end_charge))
+        <= tolerance
+        and result_start_charge == start_charge
+        and result_end_charge == end_charge
+        and bool(start_flux)
+        and len(end_flux) == len(start_flux)
+        and all(math.isfinite(item) for item in (*start_flux, *end_flux))
+        and max(abs(left - right) for left, right in zip(start_flux, end_flux))
+        <= tolerance
+        and result_start_flux == start_flux
+        and result_end_flux == end_flux
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (input_energy, output_energy, loss_energy)
+        )
+        and input_energy > 0.0
+        and math.isclose(
+            input_energy,
+            output_energy + loss_energy,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isfinite(efficiency)
+        and 0.0 <= efficiency <= 1.0
+        and math.isclose(efficiency, output_energy / input_energy, rel_tol=1.0e-12)
+        and contract.get("result_input_energy_j") == input_energy
+        and contract.get("result_output_energy_j") == output_energy
+        and contract.get("result_loss_energy_j") == loss_energy
+        and contract.get("result_efficiency") == efficiency
+        and len(phase_window) == 2
+        and math.isclose(phase_window[0], 0.0, abs_tol=1.0e-12)
+        and math.isclose(phase_window[1], 2.0 * math.pi, rel_tol=1.0e-12)
+        and contract.get("result_phase_window_rad") == phase_window
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _small_signal_consistency_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "bias_small_signal_jacobian_ac_transient_pole_zero_normalization_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("small_signal_generation_id") or "")
+    try:
+        bias = [float(item) for item in contract["bias_state"]]
+        result_bias = [float(item) for item in contract["result_bias_state"]]
+        jacobian = [[float(item) for item in row] for row in contract["jacobian"]]
+        result_jacobian = [[float(item) for item in row] for row in contract["result_jacobian"]]
+        frequencies = [float(item) for item in contract["frequency_rad_s"]]
+        result_frequencies = [float(item) for item in contract["result_frequency_rad_s"]]
+        transfer = [complex(float(row[0]), float(row[1])) for row in contract["ac_transfer_ri"]]
+        result_transfer = [complex(float(row[0]), float(row[1])) for row in contract["result_ac_transfer_ri"]]
+        times = [float(item) for item in contract["time_s"]]
+        result_times = [float(item) for item in contract["result_time_s"]]
+        impulse = [float(item) for item in contract["impulse_response"]]
+        result_impulse = [float(item) for item in contract["result_impulse_response"]]
+        step = [float(item) for item in contract["step_response"]]
+        result_step = [float(item) for item in contract["result_step_response"]]
+        poles = [complex(float(row[0]), float(row[1])) for row in contract["poles_ri"]]
+        result_poles = [complex(float(row[0]), float(row[1])) for row in contract["result_poles_ri"]]
+        zeros = [complex(float(row[0]), float(row[1])) for row in contract["zeros_ri"]]
+        result_zeros = [complex(float(row[0]), float(row[1])) for row in contract["result_zeros_ri"]]
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    first_order_pole = poles[0].real if len(poles) == 1 else math.nan
+    physical_response = (
+        len(times) == len(impulse) == len(step) >= 2
+        and math.isfinite(first_order_pole)
+        and first_order_pole < 0.0
+        and abs(poles[0].imag) <= 1.0e-12
+        and all(
+            math.isclose(
+                impulse[index],
+                math.exp(first_order_pole * time),
+                rel_tol=1.0e-10,
+                abs_tol=1.0e-12,
+            )
+            and math.isclose(
+                step[index],
+                1.0 - math.exp(first_order_pole * time),
+                rel_tol=1.0e-10,
+                abs_tol=1.0e-12,
+            )
+            for index, time in enumerate(times)
+        )
+    )
+    expected_transfer = [1.0 / complex(-first_order_pole, omega) for omega in frequencies]
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "bias_small_signal_generation_id",
+                "jacobian_small_signal_generation_id",
+                "ac_small_signal_generation_id",
+                "transient_small_signal_generation_id",
+                "pole_zero_small_signal_generation_id",
+                "normalization_small_signal_generation_id",
+                "circuit_small_signal_generation_id",
+                "result_small_signal_generation_id",
+            )
+        )
+        and len(bias) == 1
+        and all(math.isfinite(item) for item in bias)
+        and result_bias == bias
+        and jacobian == [[-1.0]]
+        and result_jacobian == jacobian
+        and len(frequencies) == len(transfer) >= 2
+        and all(math.isfinite(item) and item >= 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and all(abs(actual - expected) <= 1.0e-10 for actual, expected in zip(transfer, expected_transfer))
+        and result_transfer == transfer
+        and all(left < right for left, right in zip(times, times[1:]))
+        and result_times == times
+        and physical_response
+        and result_impulse == impulse
+        and result_step == step
+        and result_poles == poles
+        and not zeros
+        and result_zeros == zeros
+        and contract.get("normalization") == "monic_denominator_unit_dc_gain"
+        and contract.get("result_normalization") == contract.get("normalization")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("linearized_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -3748,6 +3938,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "sampled_loops_use_current_sideband_injection_period_fft_phase_nyquist_crossover_waveform_and_result": (
             _sampled_loop_owner_identity_ok(positive)
+        ),
+        "periodic_steady_state_uses_current_charge_flux_energy_efficiency_phase_waveform_owner_and_result": (
+            _periodic_steady_state_owner_identity_ok(positive)
+        ),
+        "small_signal_uses_current_bias_jacobian_ac_transient_poles_zeros_normalization_circuit_and_result": (
+            _small_signal_consistency_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
