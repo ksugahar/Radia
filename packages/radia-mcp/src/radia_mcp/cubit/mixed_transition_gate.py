@@ -4751,6 +4751,285 @@ def _checkpoint_partition_identity_ok(identity: object) -> bool:
     )
 
 
+def _anisotropic_hex_metric_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        vectors = [[float(value) for value in row] for row in identity.get("metric_eigenvectors", [])]
+        result_vectors = [[float(value) for value in row] for row in identity.get("result_metric_eigenvectors", [])]
+        sizes = [float(value) for value in identity.get("principal_sizes_m", [])]
+        result_sizes = [float(value) for value in identity.get("result_principal_sizes_m", [])]
+        gradation = float(identity.get("gradation_ratio"))
+        result_gradation = float(identity.get("result_gradation_ratio"))
+        maximum_gradation = float(identity.get("maximum_gradation_ratio"))
+        result_maximum_gradation = float(identity.get("result_maximum_gradation_ratio"))
+        alignment = float(identity.get("alignment_error_deg"))
+        result_alignment = float(identity.get("result_alignment_error_deg"))
+        maximum_alignment = float(identity.get("maximum_alignment_error_deg"))
+        result_maximum_alignment = float(identity.get("result_maximum_alignment_error_deg"))
+        jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        minimum_jacobian = float(identity.get("minimum_allowed_scaled_jacobian"))
+        result_minimum_jacobian = float(identity.get("result_minimum_allowed_scaled_jacobian"))
+        blocks = [int(value) for value in identity.get("block_ids", [])]
+        result_blocks = [int(value) for value in identity.get("result_block_ids", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("anisotropic_generation") or "")
+    orthonormal = (
+        len(vectors) == 3
+        and all(len(vector) == 3 for vector in vectors)
+        and all(
+            math.isclose(sum(value * value for value in vector), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for vector in vectors
+        )
+        and all(
+            math.isclose(
+                sum(left * right for left, right in zip(vectors[i], vectors[j], strict=True)),
+                0.0,
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            for i in range(3)
+            for j in range(i + 1, 3)
+        )
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "metric_generation",
+                "direction_generation",
+                "size_generation",
+                "gradation_generation",
+                "quality_generation",
+                "block_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and orthonormal
+        and result_vectors == vectors
+        and len(sizes) == 3
+        and all(math.isfinite(value) and value > 0.0 for value in sizes)
+        and result_sizes == sizes
+        and 1.0 <= gradation <= maximum_gradation
+        and result_gradation == gradation
+        and result_maximum_gradation == maximum_gradation
+        and 0.0 <= alignment <= maximum_alignment
+        and result_alignment == alignment
+        and result_maximum_alignment == maximum_alignment
+        and jacobian >= minimum_jacobian > 0.0
+        and result_jacobian == jacobian
+        and result_minimum_jacobian == minimum_jacobian
+        and bool(blocks)
+        and all(value > 0 for value in blocks)
+        and len(set(blocks)) == len(blocks)
+        and result_blocks == blocks
+        and _valid_sha256(identity.get("anisotropic_mesh_sha256"))
+        and identity.get("accepted_anisotropic_mesh_sha256")
+        == identity.get("anisotropic_mesh_sha256")
+    )
+
+
+def _curved_highorder_boundary_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        normal_dot = float(identity.get("minimum_normal_dot"))
+        result_normal_dot = float(identity.get("result_minimum_normal_dot"))
+        hausdorff = float(identity.get("hausdorff_error_m"))
+        result_hausdorff = float(identity.get("result_hausdorff_error_m"))
+        maximum_hausdorff = float(identity.get("maximum_hausdorff_error_m"))
+        result_maximum_hausdorff = float(identity.get("result_maximum_hausdorff_error_m"))
+        cad_area = float(identity.get("cad_surface_area_m2"))
+        mesh_area = float(identity.get("mesh_surface_area_m2"))
+        area_tolerance = float(identity.get("surface_measure_tolerance"))
+        cad_volume = float(identity.get("cad_volume_m3"))
+        mesh_volume = float(identity.get("mesh_volume_m3"))
+        volume_tolerance = float(identity.get("volume_measure_tolerance"))
+        jacobian = float(identity.get("minimum_curved_jacobian"))
+        result_jacobian = float(identity.get("result_minimum_curved_jacobian"))
+        order = int(identity.get("polynomial_order"))
+        result_order = int(identity.get("result_polynomial_order"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("curved_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "normal_generation",
+                "hausdorff_generation",
+                "area_generation",
+                "volume_generation",
+                "jacobian_generation",
+                "order_generation",
+                "geometry_generation",
+                "result_generation",
+            )
+        )
+        and 0.95 <= normal_dot <= 1.0
+        and result_normal_dot == normal_dot
+        and 0.0 <= hausdorff <= maximum_hausdorff
+        and result_hausdorff == hausdorff
+        and result_maximum_hausdorff == maximum_hausdorff
+        and cad_area > 0.0
+        and mesh_area > 0.0
+        and 0.0 <= area_tolerance < 1.0
+        and abs(mesh_area - cad_area) / cad_area <= area_tolerance
+        and cad_volume > 0.0
+        and mesh_volume > 0.0
+        and 0.0 <= volume_tolerance < 1.0
+        and abs(mesh_volume - cad_volume) / cad_volume <= volume_tolerance
+        and jacobian > 0.0
+        and result_jacobian == jacobian
+        and order >= 2
+        and result_order == order
+        and bool(str(identity.get("geometry_owner") or ""))
+        and identity.get("result_geometry_owner") == identity.get("geometry_owner")
+        and _valid_sha256(identity.get("curved_geometry_sha256"))
+        and identity.get("accepted_curved_geometry_sha256")
+        == identity.get("curved_geometry_sha256")
+    )
+
+
+def _sideset_skin_remesh_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        sideset = int(identity.get("sideset_id"))
+        restored_sideset = int(identity.get("restored_sideset_id"))
+        blocks = [int(value) for value in identity.get("adjacent_block_ids", [])]
+        restored_blocks = [int(value) for value in identity.get("restored_adjacent_block_ids", [])]
+        normals = [[float(value) for value in row] for row in identity.get("outward_normals", [])]
+        restored_normals = [[float(value) for value in row] for row in identity.get("restored_outward_normals", [])]
+        faces = [int(value) for value in identity.get("face_ids", [])]
+        restored_faces = [int(value) for value in identity.get("restored_face_ids", [])]
+        multiplicities = [int(value) for value in identity.get("face_multiplicities", [])]
+        restored_multiplicities = [int(value) for value in identity.get("restored_face_multiplicities", [])]
+        keys = [str(value) for value in identity.get("source_entity_keys", [])]
+        restored_keys = [str(value) for value in identity.get("restored_source_entity_keys", [])]
+        revision = int(identity.get("remesh_revision"))
+        restored_revision = int(identity.get("restored_remesh_revision"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sideset_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "skin_generation",
+                "remesh_generation",
+                "adjacency_generation",
+                "normal_generation",
+                "face_generation",
+                "entity_generation",
+                "journal_generation",
+                "result_generation",
+            )
+        )
+        and sideset > 0
+        and restored_sideset == sideset
+        and len(blocks) == 1
+        and blocks[0] > 0
+        and restored_blocks == blocks
+        and bool(faces)
+        and len(set(faces)) == len(faces)
+        and all(value > 0 for value in faces)
+        and restored_faces == faces
+        and len(normals) == len(multiplicities) == len(keys) == len(faces)
+        and all(len(normal) == 3 for normal in normals)
+        and all(
+            math.isclose(sum(value * value for value in normal), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for normal in normals
+        )
+        and restored_normals == normals
+        and multiplicities == [1] * len(faces)
+        and restored_multiplicities == multiplicities
+        and all(keys)
+        and len(set(keys)) == len(keys)
+        and restored_keys == keys
+        and revision >= 0
+        and restored_revision == revision
+        and _valid_sha256(identity.get("sideset_journal_sha256"))
+        and identity.get("replayed_sideset_journal_sha256")
+        == identity.get("sideset_journal_sha256")
+        and _valid_sha256(identity.get("sideset_result_sha256"))
+        and identity.get("accepted_sideset_result_sha256")
+        == identity.get("sideset_result_sha256")
+    )
+
+
+def _parallel_sculpt_determinism_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        seed = int(identity.get("partition_seed"))
+        replay_seed = int(identity.get("replay_partition_seed"))
+        ranks = int(identity.get("rank_count"))
+        replay_ranks = int(identity.get("replay_rank_count"))
+        owned = [int(value) for value in identity.get("owned_cell_counts", [])]
+        replay_owned = [int(value) for value in identity.get("replay_owned_cell_counts", [])]
+        ghost = [int(value) for value in identity.get("ghost_cell_counts", [])]
+        replay_ghost = [int(value) for value in identity.get("replay_ghost_cell_counts", [])]
+        stitched = int(identity.get("stitched_interface_pair_count"))
+        replay_stitched = int(identity.get("replay_stitched_interface_pair_count"))
+        qa = [str(value) for value in identity.get("qa_record", [])]
+        replay_qa = [str(value) for value in identity.get("replay_qa_record", [])]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("sculpt_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "seed_generation",
+                "rank_generation",
+                "partition_generation",
+                "stitch_generation",
+                "qa_generation",
+                "connectivity_generation",
+                "invocation_generation",
+                "result_generation",
+            )
+        )
+        and seed >= 0
+        and replay_seed == seed
+        and ranks > 1
+        and replay_ranks == ranks
+        and len(owned) == len(ghost) == ranks
+        and all(value > 0 for value in owned)
+        and all(value >= 0 for value in ghost)
+        and replay_owned == owned
+        and replay_ghost == ghost
+        and stitched > 0
+        and replay_stitched == stitched
+        and len(qa) >= 3
+        and all(qa)
+        and replay_qa == qa
+        and str(identity.get("invocation_owner") or "").startswith("headless:")
+        and identity.get("replay_invocation_owner") == identity.get("invocation_owner")
+        and _valid_sha256(identity.get("connectivity_sha256"))
+        and identity.get("replay_connectivity_sha256") == identity.get("connectivity_sha256")
+        and _valid_sha256(identity.get("sculpt_export_sha256"))
+        and identity.get("accepted_sculpt_export_sha256")
+        == identity.get("sculpt_export_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -5608,6 +5887,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "sheet_midplanes_use_current_source_offset_thickness_normal_sets_area_mass_and_geometry": (
             _sheet_midplane_mass_identity_ok(
                 summary.get("sheet_midplane_source_offset_thickness_normal_block_sideset_area_mass_geometry_result_generation_identity")
+            )
+        ),
+        "anisotropic_hexes_use_current_metric_directions_sizes_gradation_alignment_jacobian_blocks_and_mesh": (
+            _anisotropic_hex_metric_identity_ok(
+                summary.get("anisotropic_hex_metric_direction_size_gradation_alignment_jacobian_block_mesh_result_generation_identity")
+            )
+        ),
+        "curved_high_order_boundaries_use_current_normals_hausdorff_measures_jacobian_order_geometry_and_result": (
+            _curved_highorder_boundary_identity_ok(
+                summary.get("curved_highorder_boundary_normal_hausdorff_area_volume_jacobian_order_geometry_result_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -6489,6 +6778,16 @@ def cubit_mixed_transition_source_gate(
         "checkpoint_restores_use_current_partitions_owned_ghost_persistent_sets_quality_model_and_result": (
             _checkpoint_partition_identity_ok(
                 summary.get("checkpoint_partition_owned_ghost_persistent_block_sideset_quality_model_result_generation_identity")
+            )
+        ),
+        "skinned_sidesets_use_current_remesh_adjacency_normals_faces_entities_journal_and_result": (
+            _sideset_skin_remesh_identity_ok(
+                summary.get("sideset_skin_remesh_adjacent_block_normal_face_multiplicity_entity_journal_result_generation_identity")
+            )
+        ),
+        "parallel_sculpt_uses_current_seed_ranks_owned_ghost_stitch_qa_connectivity_invocation_and_export": (
+            _parallel_sculpt_determinism_identity_ok(
+                summary.get("parallel_sculpt_seed_rank_owned_ghost_stitch_qa_connectivity_invocation_export_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
