@@ -1869,6 +1869,223 @@ def _weighted_stress_force_convergence_identity_ok(value):
     )
 
 
+def _harmonic_conductor_closure_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("harmonic_generation", "")).strip()
+    owner = str(value.get("field_owner", "")).strip()
+    try:
+        frequency = float(value.get("frequency_hz"))
+        conductivity = float(value.get("conductivity_s_m"))
+        relative_permeability = float(value.get("relative_permeability"))
+        skin_depth = float(value.get("skin_depth_m"))
+        voltage = [
+            float(item)
+            for item in value.get("terminal_voltage_peak_phasor_v", [])
+        ]
+        current = [
+            float(item)
+            for item in value.get("terminal_current_peak_phasor_a", [])
+        ]
+        impedance = [
+            float(item) for item in value.get("complex_impedance_ohm", [])
+        ]
+        proximity = [
+            float(item)
+            for item in value.get("proximity_current_density_peak_a_m2", [])
+        ]
+        copper_loss = float(value.get("copper_loss_w"))
+        poynting_power = float(value.get("inward_poynting_power_w"))
+        mesh_levels = [int(item) for item in value.get("mesh_levels", [])]
+        impedance_changes = [
+            float(item)
+            for item in value.get("impedance_relative_changes", [])
+        ]
+        maximum_final_change = float(value.get("maximum_final_relative_change"))
+    except (TypeError, ValueError):
+        return False
+    vectors = voltage + current + impedance + proximity + impedance_changes
+    if (
+        len(voltage) != 2
+        or len(current) != 2
+        or len(impedance) != 2
+        or len(proximity) < 2
+        or len(mesh_levels) < 3
+        or len(impedance_changes) != len(mesh_levels)
+        or not all(math.isfinite(item) for item in vectors)
+    ):
+        return False
+    current_norm_sq = current[0] ** 2 + current[1] ** 2
+    if current_norm_sq <= 0.0:
+        return False
+    expected_impedance = [
+        (voltage[0] * current[0] + voltage[1] * current[1])
+        / current_norm_sq,
+        (voltage[1] * current[0] - voltage[0] * current[1])
+        / current_norm_sq,
+    ]
+    expected_loss = 0.5 * (
+        voltage[0] * current[0] + voltage[1] * current[1]
+    )
+    expected_skin_depth = math.sqrt(
+        2.0
+        / (
+            2.0
+            * math.pi
+            * frequency
+            * (4.0e-7 * math.pi)
+            * relative_permeability
+            * conductivity
+        )
+    ) if frequency > 0.0 and conductivity > 0.0 and relative_permeability > 0.0 else math.nan
+    mirrored = (
+        "frequency_hz",
+        "conductivity_s_m",
+        "relative_permeability",
+        "skin_depth_m",
+        "proximity_current_density_peak_a_m2",
+        "terminal_voltage_peak_phasor_v",
+        "terminal_current_peak_phasor_a",
+        "complex_impedance_ohm",
+        "copper_loss_w",
+        "inward_poynting_power_w",
+        "phasor_convention",
+        "mesh_levels",
+        "impedance_relative_changes",
+        "maximum_final_relative_change",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "skin_generation", "proximity_generation",
+                "impedance_generation", "current_generation",
+                "voltage_generation", "loss_generation",
+                "poynting_generation", "frequency_generation",
+                "mesh_generation", "owner_generation", "result_generation",
+            )
+        )
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and frequency > 0.0
+        and conductivity > 0.0
+        and relative_permeability > 0.0
+        and math.isclose(skin_depth, expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, expected in zip(impedance, expected_impedance)
+        )
+        and all(item > 0.0 for item in proximity)
+        and max(proximity) > min(proximity)
+        and expected_loss > 0.0
+        and math.isclose(copper_loss, expected_loss, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(poynting_power, copper_loss, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and value.get("phasor_convention") == "peak_cosine"
+        and all(right > left > 0 for left, right in zip(mesh_levels, mesh_levels[1:]))
+        and all(item > 0.0 for item in impedance_changes)
+        and all(
+            right < left
+            for left, right in zip(impedance_changes, impedance_changes[1:])
+        )
+        and maximum_final_change > 0.0
+        and impedance_changes[-1] <= maximum_final_change
+        and bool(owner)
+        and value.get("accepted_field_owner") == owner
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("harmonic_result_sha256"))
+        and value.get("accepted_harmonic_result_sha256")
+        == value.get("harmonic_result_sha256")
+    )
+
+
+def _heat_convection_radiation_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("heat_generation", "")).strip()
+    owner = str(value.get("mesh_owner", "")).strip()
+    try:
+        coefficient = float(value.get("convection_coefficient_w_m2_k"))
+        emissivity = float(value.get("emissivity"))
+        sigma = float(value.get("stefan_boltzmann_w_m2_k4"))
+        ambient = float(value.get("ambient_temperature_k"))
+        boundary = float(value.get("boundary_temperature_k"))
+        convection_flux = float(value.get("convection_flux_w_m2"))
+        radiation_flux = float(value.get("radiation_flux_w_m2"))
+        conductive_flux = float(value.get("conductive_outward_flux_w_m2"))
+        boundary_length = float(value.get("boundary_length_m"))
+        depth = float(value.get("planar_depth_m"))
+        area = float(value.get("effective_boundary_area_m2"))
+        heat_loss = float(value.get("boundary_heat_loss_w"))
+        heat_generation = float(value.get("domain_heat_generation_w"))
+        residual = float(value.get("energy_balance_residual_w"))
+        tolerance = float(value.get("energy_tolerance_w"))
+    except (TypeError, ValueError):
+        return False
+    scalars = (
+        coefficient, emissivity, sigma, ambient, boundary, convection_flux,
+        radiation_flux, conductive_flux, boundary_length, depth, area,
+        heat_loss, heat_generation, residual, tolerance,
+    )
+    if not all(math.isfinite(item) for item in scalars):
+        return False
+    expected_convection = coefficient * (boundary - ambient)
+    expected_radiation = emissivity * sigma * (boundary**4 - ambient**4)
+    expected_flux = expected_convection + expected_radiation
+    expected_area = boundary_length * depth
+    expected_loss = expected_flux * expected_area
+    mirrored = (
+        "convection_coefficient_w_m2_k", "emissivity",
+        "stefan_boltzmann_w_m2_k4", "ambient_temperature_k",
+        "boundary_temperature_k", "convection_flux_w_m2",
+        "radiation_flux_w_m2", "conductive_outward_flux_w_m2",
+        "geometry_weighting", "boundary_length_m", "planar_depth_m",
+        "effective_boundary_area_m2", "boundary_heat_loss_w",
+        "domain_heat_generation_w", "energy_balance_residual_w",
+        "energy_tolerance_w",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "convection_generation", "radiation_generation",
+                "emissivity_generation", "ambient_generation",
+                "flux_generation", "temperature_generation",
+                "geometry_generation", "mesh_generation",
+                "energy_generation", "result_generation",
+            )
+        )
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and coefficient > 0.0
+        and 0.0 <= emissivity <= 1.0
+        and math.isclose(sigma, 5.670374419e-8, rel_tol=1.0e-12, abs_tol=0.0)
+        and boundary > ambient > 0.0
+        and math.isclose(convection_flux, expected_convection, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(radiation_flux, expected_radiation, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(conductive_flux, expected_flux, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("geometry_weighting") == "planar_depth"
+        and boundary_length > 0.0
+        and depth > 0.0
+        and math.isclose(area, expected_area, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(heat_loss, expected_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and heat_loss > 0.0
+        and heat_generation >= 0.0
+        and math.isclose(residual, heat_loss - heat_generation, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and tolerance >= 0.0
+        and abs(residual) <= tolerance
+        and bool(owner)
+        and value.get("accepted_mesh_owner") == owner
+        and _valid_sha256(value.get("heat_result_sha256"))
+        and value.get("accepted_heat_result_sha256")
+        == value.get("heat_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -1956,6 +2173,8 @@ def force_coenergy_displacement_gate(
     weighted_stress_force_convergence_identity_ok = True
     axisymmetric_3d_force_revolution_identity_ok = True
     harmonic_circuit_power_identity_ok = True
+    harmonic_conductor_closure_identity_ok = True
+    heat_convection_radiation_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -2017,6 +2236,8 @@ def force_coenergy_displacement_gate(
         weighted_stress_force_convergence_identity_ok = False
         axisymmetric_3d_force_revolution_identity_ok = False
         harmonic_circuit_power_identity_ok = False
+        harmonic_conductor_closure_identity_ok = False
+        heat_convection_radiation_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -3697,6 +3918,20 @@ def force_coenergy_displacement_gate(
                 "harmonic_circuit_voltage_current_impedance_complex_power_copper_field_loss_rms_owner_result_identity"
             )
         )
+        harmonic_conductor_closure_identity_ok = (
+            _harmonic_conductor_closure_identity_ok(
+                artifact_identity.get(
+                    "harmonic_conductor_skin_proximity_impedance_current_voltage_loss_poynting_frequency_mesh_owner_result_identity"
+                )
+            )
+        )
+        heat_convection_radiation_identity_ok = (
+            _heat_convection_radiation_identity_ok(
+                artifact_identity.get(
+                    "heat_convection_radiation_emissivity_ambient_flux_temperature_geometry_mesh_energy_result_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -3904,6 +4139,12 @@ def force_coenergy_displacement_gate(
         ),
         "harmonic_circuits_use_current_voltage_current_impedance_power_losses_rms_owner_and_result": (
             harmonic_circuit_power_identity_ok
+        ),
+        "harmonic_conductors_close_skin_proximity_impedance_loss_poynting_mesh_owner_and_result": (
+            harmonic_conductor_closure_identity_ok
+        ),
+        "heat_boundaries_close_convection_radiation_temperature_geometry_energy_owner_and_result": (
+            heat_convection_radiation_identity_ok
         ),
     }
     return {
