@@ -1335,6 +1335,202 @@ def _gltf_roundtrip_identity_ok(value: object) -> bool:
     )
 
 
+def _step_semantic_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation") or "")
+    try:
+        products = [
+            [int(row[0]), str(row[1]).strip()]
+            for row in value.get("product_entities", [])
+        ]
+        decoded_products = [
+            [int(row[0]), str(row[1]).strip()]
+            for row in value.get("decoded_product_entities", [])
+        ]
+        colors = [
+            [int(row[0]), [float(item) for item in row[1]]]
+            for row in value.get("entity_colors_rgb", [])
+        ]
+        decoded_colors = [
+            [int(row[0]), [float(item) for item in row[1]]]
+            for row in value.get("decoded_entity_colors_rgb", [])
+        ]
+        transforms = [
+            [int(row[0]), str(row[1])]
+            for row in value.get("assembly_transform_sha256", [])
+        ]
+        decoded_transforms = [
+            [int(row[0]), str(row[1])]
+            for row in value.get("decoded_assembly_transform_sha256", [])
+        ]
+        shape_count = int(value.get("shape_count"))
+        decoded_shape_count = int(value.get("decoded_shape_count"))
+        validity = [
+            [int(row[0]), bool(row[1])]
+            for row in value.get("solid_validity", [])
+        ]
+        decoded_validity = [
+            [int(row[0]), bool(row[1])]
+            for row in value.get("decoded_solid_validity", [])
+        ]
+    except (IndexError, TypeError, ValueError):
+        return False
+    product_ids = [row[0] for row in products]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "unit_generation",
+                "entity_generation",
+                "color_generation",
+                "transform_generation",
+                "shape_generation",
+                "validity_generation",
+                "owner_generation",
+                "file_generation",
+                "result_generation",
+            )
+        )
+        and value.get("length_unit") == "m"
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and bool(products)
+        and len(set(product_ids)) == len(products)
+        and all(row[0] > 0 and row[1] for row in products)
+        and decoded_products == products
+        and len(colors) == len(products)
+        and {row[0] for row in colors} == set(product_ids)
+        and all(
+            len(row[1]) == 3
+            and all(math.isfinite(channel) and 0.0 <= channel <= 1.0 for channel in row[1])
+            for row in colors
+        )
+        and decoded_colors == colors
+        and len(transforms) == len(products)
+        and {row[0] for row in transforms} == set(product_ids)
+        and all(_valid_sha256(row[1]) for row in transforms)
+        and decoded_transforms == transforms
+        and shape_count == len(products)
+        and decoded_shape_count == shape_count
+        and len(validity) == shape_count
+        and {row[0] for row in validity} == set(product_ids)
+        and all(row[1] is True for row in validity)
+        and decoded_validity == validity
+        and bool(str(value.get("source_owner") or "").strip())
+        and value.get("decoded_source_owner") == value.get("source_owner")
+        and _valid_sha256(value.get("step_file_sha256"))
+        and value.get("decoded_step_file_sha256") == value.get("step_file_sha256")
+    )
+
+
+def _brep_periodic_seam_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("periodic_brep_generation") or "")
+    try:
+        face_ids = [int(item) for item in value.get("periodic_face_ids", [])]
+        decoded_face_ids = [int(item) for item in value.get("decoded_periodic_face_ids", [])]
+        seams = [
+            [int(row[0]), int(row[1]), int(row[2])]
+            for row in value.get("seam_edge_multiplicity", [])
+        ]
+        decoded_seams = [
+            [int(row[0]), int(row[1]), int(row[2])]
+            for row in value.get("decoded_seam_edge_multiplicity", [])
+        ]
+        orientations = [
+            [int(row[0]), int(row[1])]
+            for row in value.get("face_orientation_signs", [])
+        ]
+        decoded_orientations = [
+            [int(row[0]), int(row[1])]
+            for row in value.get("decoded_face_orientation_signs", [])
+        ]
+        pcurve_deviations = [
+            [int(row[0]), float(row[1])]
+            for row in value.get("edge_pcurve_max_deviation_m", [])
+        ]
+        decoded_pcurve_deviations = [
+            [int(row[0]), float(row[1])]
+            for row in value.get("decoded_edge_pcurve_max_deviation_m", [])
+        ]
+        vertex_tolerances = [
+            [int(row[0]), float(row[1])]
+            for row in value.get("vertex_tolerances_m", [])
+        ]
+        decoded_vertex_tolerances = [
+            [int(row[0]), float(row[1])]
+            for row in value.get("decoded_vertex_tolerances_m", [])
+        ]
+        incidence = [
+            [int(row[0]), int(row[1])]
+            for row in value.get("edge_face_incidence_counts", [])
+        ]
+        decoded_incidence = [
+            [int(row[0]), int(row[1])]
+            for row in value.get("decoded_edge_face_incidence_counts", [])
+        ]
+    except (IndexError, TypeError, ValueError):
+        return False
+    seam_edge_ids = {row[1] for row in seams}
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "face_generation",
+                "seam_generation",
+                "orientation_generation",
+                "pcurve_generation",
+                "tolerance_generation",
+                "manifold_generation",
+                "serializer_generation",
+                "shape_generation",
+                "result_generation",
+            )
+        )
+        and bool(face_ids)
+        and len(set(face_ids)) == len(face_ids)
+        and all(face_id > 0 for face_id in face_ids)
+        and decoded_face_ids == face_ids
+        and len(seams) == len(face_ids)
+        and {row[0] for row in seams} == set(face_ids)
+        and len(seam_edge_ids) == len(seams)
+        and all(row[1] > 0 and row[2] == 2 for row in seams)
+        and decoded_seams == seams
+        and len(orientations) == len(face_ids)
+        and {row[0] for row in orientations} == set(face_ids)
+        and all(row[1] in {-1, 1} for row in orientations)
+        and decoded_orientations == orientations
+        and {row[0] for row in pcurve_deviations} == seam_edge_ids
+        and all(
+            math.isfinite(row[1]) and 0.0 <= row[1] <= 1.0e-6
+            for row in pcurve_deviations
+        )
+        and decoded_pcurve_deviations == pcurve_deviations
+        and bool(vertex_tolerances)
+        and len({row[0] for row in vertex_tolerances}) == len(vertex_tolerances)
+        and all(
+            row[0] > 0 and math.isfinite(row[1]) and 0.0 < row[1] <= 1.0e-5
+            for row in vertex_tolerances
+        )
+        and decoded_vertex_tolerances == vertex_tolerances
+        and {row[0] for row in incidence} == seam_edge_ids
+        and all(row[1] == 2 for row in incidence)
+        and decoded_incidence == incidence
+        and str(value.get("serializer_version") or "").startswith("occt-brep-v")
+        and value.get("decoded_serializer_version") == value.get("serializer_version")
+        and _valid_sha256(value.get("periodic_brep_shape_sha256"))
+        and value.get("decoded_periodic_brep_shape_sha256")
+        == value.get("periodic_brep_shape_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1681,6 +1877,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     stl_repair_closure_identity_ok = True
     brep_semantic_roundtrip_identity_ok = True
     gltf_roundtrip_identity_ok = True
+    step_semantic_roundtrip_identity_ok = True
+    brep_periodic_seam_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -1732,6 +1930,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         stl_repair_closure_identity_ok = False
         brep_semantic_roundtrip_identity_ok = False
         gltf_roundtrip_identity_ok = False
+        step_semantic_roundtrip_identity_ok = False
+        brep_periodic_seam_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -3385,6 +3585,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "gltf_node_hierarchy_transform_winding_material_unit_tessellation_volume_file_generation_identity"
             )
         )
+        step_semantic_roundtrip_identity_ok = _step_semantic_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "step_unit_product_entity_color_assembly_transform_shape_validity_owner_file_result_generation_identity"
+            )
+        )
+        brep_periodic_seam_identity_ok = _brep_periodic_seam_identity_ok(
+            replay_identity_value.get(
+                "brep_periodic_face_seam_edge_orientation_pcurve_tolerance_manifold_serializer_shape_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -3556,6 +3766,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "gltf_roundtrips_use_current_hierarchy_transforms_winding_materials_units_tessellation_volume_and_file": (
             gltf_roundtrip_identity_ok
+        ),
+        "step_roundtrips_use_current_units_products_colors_transforms_shapes_validity_owner_and_file": (
+            step_semantic_roundtrip_identity_ok
+        ),
+        "periodic_brep_roundtrips_use_current_seams_orientations_pcurves_tolerances_manifold_serializer_and_shape": (
+            brep_periodic_seam_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
