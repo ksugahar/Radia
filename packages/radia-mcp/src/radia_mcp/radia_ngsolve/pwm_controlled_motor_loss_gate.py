@@ -1264,6 +1264,167 @@ def _skew_slice_torque_identity_ok(value: object) -> bool:
     )
 
 
+def _ipm_demagnetization_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    try:
+        temperature = float(value.get("magnet_temperature_c"))
+        result_temperature = float(value.get("result_magnet_temperature_c"))
+        current = float(value.get("phase_current_rms_a"))
+        result_current = float(value.get("result_phase_current_rms_a"))
+        angle = float(value.get("current_angle_electrical_deg"))
+        result_angle = float(value.get("result_current_angle_electrical_deg"))
+        fraction = float(value.get("demagnetized_fraction"))
+        result_fraction = float(value.get("result_demagnetized_fraction"))
+    except (TypeError, ValueError):
+        return False
+    regions = [
+        str(item).strip() for item in value.get("irreversible_region_labels", [])
+    ]
+    result_regions = [
+        str(item).strip()
+        for item in value.get("result_irreversible_region_labels", [])
+    ]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "knee_demag_generation",
+                "temperature_demag_generation",
+                "current_demag_generation",
+                "angle_demag_generation",
+                "region_demag_generation",
+                "fraction_demag_generation",
+                "mesh_demag_generation",
+                "result_demag_generation",
+            )
+        )
+        and value.get("knee_criterion") == "b_parallel_below_temperature_knee"
+        and value.get("result_knee_criterion") == value.get("knee_criterion")
+        and math.isfinite(temperature)
+        and math.isclose(result_temperature, temperature, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isfinite(current)
+        and current >= 0.0
+        and math.isclose(result_current, current, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isfinite(angle)
+        and math.isclose(result_angle, angle, rel_tol=0.0, abs_tol=1.0e-12)
+        and bool(regions)
+        and all(regions)
+        and len(set(regions)) == len(regions)
+        and result_regions == regions
+        and math.isfinite(fraction)
+        and 0.0 <= fraction <= 1.0
+        and math.isclose(result_fraction, fraction, rel_tol=0.0, abs_tol=1.0e-15)
+        and bool(str(value.get("operating_point_owner", "")).strip())
+        and value.get("result_operating_point_owner")
+        == value.get("operating_point_owner")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _synrm_dq_map_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("map_generation", "")).strip()
+    rows = value.get("flux_map_rows")
+    result_rows = value.get("result_flux_map_rows")
+    if not isinstance(rows, list) or not isinstance(result_rows, list):
+        return False
+    try:
+        angles = [float(item) for item in value.get("electrical_angle_deg", [])]
+        result_angles = [
+            float(item) for item in value.get("result_electrical_angle_deg", [])
+        ]
+        normalized_rows = [
+            {
+                key: float(row[key])
+                for key in ("id_a", "iq_a", "psi_d_wb", "psi_q_wb")
+            }
+            for row in rows
+        ]
+        normalized_result_rows = [
+            {
+                key: float(row[key])
+                for key in ("id_a", "iq_a", "psi_d_wb", "psi_q_wb")
+            }
+            for row in result_rows
+        ]
+        dpsi_d_diq = [float(item) for item in value.get("dpsi_d_diq_h", [])]
+        result_dpsi_d_diq = [
+            float(item) for item in value.get("result_dpsi_d_diq_h", [])
+        ]
+        dpsi_q_did = [float(item) for item in value.get("dpsi_q_did_h", [])]
+        result_dpsi_q_did = [
+            float(item) for item in value.get("result_dpsi_q_did_h", [])
+        ]
+        mtpa = [int(item) for item in value.get("mtpa_row_indices", [])]
+        result_mtpa = [int(item) for item in value.get("result_mtpa_row_indices", [])]
+        pole_pairs = int(value.get("pole_pairs"))
+        result_pole_pairs = int(value.get("result_pole_pairs"))
+        torque = [float(item) for item in value.get("torque_nm", [])]
+        result_torque = [float(item) for item in value.get("result_torque_nm", [])]
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "angle_map_generation",
+                "saturation_map_generation",
+                "cross_coupling_map_generation",
+                "mtpa_map_generation",
+                "torque_map_generation",
+                "mesh_map_generation",
+                "result_map_generation",
+            )
+        )
+        and len(angles) >= 3
+        and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and result_angles == angles
+        and value.get("saturation_branch") == "nonlinear_forward"
+        and value.get("result_saturation_branch") == value.get("saturation_branch")
+        and len(normalized_rows) >= 3
+        and all(math.isfinite(item) for row in normalized_rows for item in row.values())
+        and normalized_result_rows == normalized_rows
+        and len(dpsi_d_diq) == len(dpsi_q_did) == len(normalized_rows)
+        and all(math.isfinite(item) for item in dpsi_d_diq + dpsi_q_did)
+        and all(
+            math.isclose(left, right, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for left, right in zip(dpsi_d_diq, dpsi_q_did)
+        )
+        and result_dpsi_d_diq == dpsi_d_diq
+        and result_dpsi_q_did == dpsi_q_did
+        and bool(mtpa)
+        and len(set(mtpa)) == len(mtpa)
+        and all(0 <= item < len(normalized_rows) for item in mtpa)
+        and result_mtpa == mtpa
+        and pole_pairs > 0
+        and result_pole_pairs == pole_pairs
+        and value.get("torque_reconstruction")
+        == "1.5*p*(psi_d*iq-psi_q*id)"
+        and value.get("result_torque_reconstruction")
+        == value.get("torque_reconstruction")
+        and len(torque) == len(normalized_rows)
+        and all(math.isfinite(item) for item in torque)
+        and result_torque == torque
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("map_sha256"))
+        and value.get("accepted_map_sha256") == value.get("map_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1351,6 +1512,8 @@ def pwm_controlled_motor_loss_gate(
     srm_coenergy_torque_identity_ok = True
     pwm_sampling_loss_identity_ok = True
     skew_slice_torque_v31_identity_ok = True
+    ipm_demagnetization_closure_identity_ok = True
+    synrm_dq_map_closure_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -1400,6 +1563,8 @@ def pwm_controlled_motor_loss_gate(
         srm_coenergy_torque_identity_ok = False
         pwm_sampling_loss_identity_ok = False
         skew_slice_torque_v31_identity_ok = False
+        ipm_demagnetization_closure_identity_ok = False
+        synrm_dq_map_closure_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -3054,6 +3219,18 @@ def pwm_controlled_motor_loss_gate(
                 "skew_slice_torque_weight_axial_phase_periodicity_ripple_mesh_result_identity"
             )
         )
+        ipm_demagnetization_closure_identity_ok = (
+            _ipm_demagnetization_closure_identity_ok(
+                identity_value.get(
+                    "ipm_demagnetization_knee_temperature_current_angle_region_fraction_mesh_result_identity"
+                )
+            )
+        )
+        synrm_dq_map_closure_identity_ok = _synrm_dq_map_closure_identity_ok(
+            identity_value.get(
+                "synrm_dq_map_angle_saturation_cross_coupling_mtpa_torque_mesh_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -3386,6 +3563,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "skew_torque_uses_current_slice_weights_axial_phase_periodicity_ripple_mesh_and_result": (
             skew_slice_torque_v31_identity_ok
+        ),
+        "ipm_demagnetization_uses_current_knee_temperature_current_angle_regions_fraction_mesh_owner_and_result": (
+            ipm_demagnetization_closure_identity_ok
+        ),
+        "synrm_dq_map_uses_current_angles_saturation_cross_coupling_mtpa_torque_mesh_and_result": (
+            synrm_dq_map_closure_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
