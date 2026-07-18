@@ -264,6 +264,12 @@ def regularized_trace_inverse_path_gate(
     cq_physical_closure_identity_ok = (
         _optional_cq_physical_closure_identity_is_aligned(summary)
     )
+    fembem_reciprocity_identity_ok = (
+        _optional_fembem_reciprocity_identity_is_aligned(summary)
+    )
+    nonlinear_eigen_contour_identity_ok = (
+        _optional_nonlinear_eigen_contour_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -449,6 +455,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_uses_current_symbol_contour_conjugate_transfer_causal_ifft_parseval_passivity_timestep_operator_and_result": (
             cq_physical_closure_identity_ok
+        ),
+        "fembem_uses_current_reciprocal_transfer_radiation_power_interior_energy_trace_map_frequency_mesh_and_solution": (
+            fembem_reciprocity_identity_ok
+        ),
+        "nonlinear_eigenpairs_use_current_contour_orientation_quadrature_moments_rank_count_residual_biorthogonality_poles_and_result": (
+            nonlinear_eigen_contour_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -3627,6 +3639,215 @@ def _optional_cq_physical_closure_identity_is_aligned(
         and value.get("result_operator_family") == value.get("operator_family")
         and _is_sha256(str(value.get("operator_sha256", "")).lower())
         and value.get("result_operator_sha256") == value.get("operator_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_fembem_reciprocity_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_reciprocity_radiation_power_interior_energy_trace_orientation_boundary_volume_map_frequency_mesh_solution_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        frequency = float(value["frequency_hz"])
+        result_frequency = float(value["result_frequency_hz"])
+        transfer_ab = complex(*[float(item) for item in value["transfer_ab_ri"]])
+        result_transfer_ab = complex(
+            *[float(item) for item in value["result_transfer_ab_ri"]]
+        )
+        transfer_ba = complex(*[float(item) for item in value["transfer_ba_ri"]])
+        result_transfer_ba = complex(
+            *[float(item) for item in value["result_transfer_ba_ri"]]
+        )
+        reciprocity_tolerance = float(value["reciprocity_tolerance"])
+        result_reciprocity_tolerance = float(value["result_reciprocity_tolerance"])
+        radiated_power = float(value["radiated_power_w"])
+        result_radiated_power = float(value["result_radiated_power_w"])
+        flux_power = float(value["boundary_flux_power_w"])
+        result_flux_power = float(value["result_boundary_flux_power_w"])
+        interior_energy = float(value["interior_energy_j"])
+        result_interior_energy = float(value["result_interior_energy_j"])
+        node_map = tuple(_integer({"item": item}, "item") for item in value["boundary_volume_node_map"])
+        result_node_map = tuple(
+            _integer({"item": item}, "item")
+            for item in value["result_boundary_volume_node_map"]
+        )
+        trace_nodes = tuple(_integer({"item": item}, "item") for item in value["trace_node_ids"])
+        result_trace_nodes = tuple(
+            _integer({"item": item}, "item") for item in value["result_trace_node_ids"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("fembem_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "transfer_fembem_generation",
+                "radiation_fembem_generation",
+                "interior_fembem_generation",
+                "trace_fembem_generation",
+                "map_fembem_generation",
+                "frequency_fembem_generation",
+                "mesh_fembem_generation",
+                "solution_fembem_generation",
+                "result_fembem_generation",
+            )
+        )
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and result_frequency == frequency
+        and math.isfinite(reciprocity_tolerance)
+        and 0.0 < reciprocity_tolerance <= 1.0e-6
+        and result_reciprocity_tolerance == reciprocity_tolerance
+        and abs(transfer_ab - transfer_ba) <= reciprocity_tolerance
+        and result_transfer_ab == transfer_ab
+        and result_transfer_ba == transfer_ba
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (
+                radiated_power,
+                result_radiated_power,
+                flux_power,
+                result_flux_power,
+                interior_energy,
+                result_interior_energy,
+            )
+        )
+        and math.isclose(
+            radiated_power, flux_power, rel_tol=1.0e-10, abs_tol=1.0e-12
+        )
+        and result_radiated_power == radiated_power
+        and result_flux_power == flux_power
+        and result_interior_energy == interior_energy
+        and value.get("trace_orientation") == "outward_volume_to_boundary"
+        and value.get("result_trace_orientation") == value.get("trace_orientation")
+        and bool(node_map)
+        and all(item > 0 for item in node_map)
+        and len(set(node_map)) == len(node_map)
+        and trace_nodes == node_map
+        and result_node_map == node_map
+        and result_trace_nodes == trace_nodes
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
+        and bool(str(value.get("solution_owner", "")).strip())
+        and value.get("accepted_solution_owner") == value.get("solution_owner")
+        and _is_sha256(str(value.get("solution_sha256", "")).lower())
+        and value.get("accepted_solution_sha256") == value.get("solution_sha256")
+    )
+
+
+def _optional_nonlinear_eigen_contour_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "nonlinear_eigen_contour_orientation_quadrature_moment_rank_count_residual_biorthogonality_pole_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        contour = tuple(
+            complex(float(row[0]), float(row[1])) for row in value["contour_points_ri"]
+        )
+        result_contour = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["result_contour_points_ri"]
+        )
+        moment_ranks = tuple(_integer({"item": item}, "item") for item in value["moment_ranks"])
+        result_moment_ranks = tuple(
+            _integer({"item": item}, "item") for item in value["result_moment_ranks"]
+        )
+        rank = _integer(value, "numerical_rank")
+        result_rank = _integer(value, "result_numerical_rank")
+        count = _integer(value, "enclosed_eigenvalue_count")
+        result_count = _integer(value, "result_enclosed_eigenvalue_count")
+        eigenvalues = tuple(
+            complex(float(row[0]), float(row[1])) for row in value["eigenvalues_ri"]
+        )
+        result_eigenvalues = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["result_eigenvalues_ri"]
+        )
+        residuals = tuple(float(item) for item in value["residual_norms"])
+        result_residuals = tuple(float(item) for item in value["result_residual_norms"])
+        gram = tuple(
+            tuple(complex(float(item[0]), float(item[1])) for item in row)
+            for row in value["biorthogonality_gram_ri"]
+        )
+        result_gram = tuple(
+            tuple(complex(float(item[0]), float(item[1])) for item in row)
+            for row in value["result_biorthogonality_gram_ri"]
+        )
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    generation = str(value.get("nonlinear_eigen_generation", "")).strip()
+    signed_area = 0.5 * sum(
+        left.real * right.imag - right.real * left.imag
+        for left, right in zip(contour, contour[1:] + contour[:1])
+    )
+    gram_ok = (
+        len(gram) == rank
+        and all(len(row) == rank for row in gram)
+        and all(
+            abs(gram[i][j] - (1.0 if i == j else 0.0)) <= 1.0e-8
+            for i in range(rank)
+            for j in range(rank)
+        )
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "contour_eigen_generation",
+                "quadrature_eigen_generation",
+                "moment_eigen_generation",
+                "rank_eigen_generation",
+                "count_eigen_generation",
+                "residual_eigen_generation",
+                "biorthogonality_eigen_generation",
+                "pole_eigen_generation",
+                "result_eigen_generation",
+            )
+        )
+        and value.get("contour_orientation") == "counterclockwise"
+        and value.get("result_contour_orientation") == "counterclockwise"
+        and len(contour) >= 4
+        and result_contour == contour
+        and signed_area > 0.0
+        and value.get("quadrature_rule") == "trapezoidal_periodic"
+        and value.get("result_quadrature_rule") == value.get("quadrature_rule")
+        and bool(moment_ranks)
+        and all(item == rank for item in moment_ranks)
+        and result_moment_ranks == moment_ranks
+        and rank > 0
+        and result_rank == rank
+        and count == rank
+        and result_count == count
+        and len(eigenvalues) == count
+        and result_eigenvalues == eigenvalues
+        and len(residuals) == count
+        and all(math.isfinite(item) and 0.0 <= item <= 1.0e-6 for item in residuals)
+        and result_residuals == residuals
+        and gram_ok
+        and result_gram == gram
+        and bool(str(value.get("pole_owner", "")).strip())
+        and value.get("accepted_pole_owner") == value.get("pole_owner")
+        and _is_sha256(str(value.get("pole_sha256", "")).lower())
+        and value.get("accepted_pole_sha256") == value.get("pole_sha256")
         and bool(str(value.get("result_owner", "")).strip())
         and value.get("accepted_result_owner") == value.get("result_owner")
         and _is_sha256(str(value.get("result_sha256", "")).lower())
