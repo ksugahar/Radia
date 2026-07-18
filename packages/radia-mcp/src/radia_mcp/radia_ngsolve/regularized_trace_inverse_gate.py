@@ -252,6 +252,12 @@ def regularized_trace_inverse_path_gate(
     pde_quadratic_vol_identity_ok = (
         _optional_pde_quadratic_vol_identity_is_aligned(summary)
     )
+    adaptive_cq_restart_identity_ok = (
+        _optional_adaptive_cq_restart_identity_is_aligned(summary)
+    )
+    modal_fembem_transient_identity_ok = (
+        _optional_modal_fembem_transient_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -425,6 +431,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "pde_quadratic_vol_uses_current_midnodes_tets_boundary_orientation_regions_order_and_mesh": (
             pde_quadratic_vol_identity_ok
+        ),
+        "adaptive_cq_uses_current_timesteps_contour_rebuild_history_interpolation_error_restart_operator_mesh_and_result": (
+            adaptive_cq_restart_identity_ok
+        ),
+        "modal_fembem_transient_uses_current_mass_damping_initial_projection_truncation_energy_mesh_history_and_result": (
+            modal_fembem_transient_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -3203,6 +3215,185 @@ def _optional_pde_quadratic_vol_identity_is_aligned(
         and result_boundary_regions == boundary_regions
         and _is_sha256(str(value.get("mesh_sha256", "")).lower())
         and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+    )
+
+
+def _optional_adaptive_cq_restart_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "adaptive_cq_timestep_contour_history_interpolation_error_restart_operator_mesh_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        timesteps = tuple(float(item) for item in value["timestep_schedule_s"])
+        result_timesteps = tuple(
+            float(item) for item in value["result_timestep_schedule_s"]
+        )
+        rebuild_indices = tuple(
+            _integer({"value": item}, "value")
+            for item in value["contour_rebuild_indices"]
+        )
+        result_rebuild_indices = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_contour_rebuild_indices"]
+        )
+        errors = tuple(float(item) for item in value["local_error_estimates"])
+        result_errors = tuple(
+            float(item) for item in value["result_local_error_estimates"]
+        )
+        tolerance = float(value["local_error_tolerance"])
+        result_tolerance = float(value["result_local_error_tolerance"])
+        restart_index = _integer(value, "restart_index")
+        result_restart_index = _integer(value, "result_restart_index")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("cq_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "timestep_cq_generation",
+                "contour_cq_generation",
+                "history_cq_generation",
+                "error_cq_generation",
+                "restart_cq_generation",
+                "operator_cq_generation",
+                "mesh_cq_generation",
+                "result_cq_generation",
+            )
+        )
+        and len(timesteps) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in timesteps)
+        and result_timesteps == timesteps
+        and rebuild_indices
+        and rebuild_indices[0] == 0
+        and tuple(sorted(set(rebuild_indices))) == rebuild_indices
+        and rebuild_indices[-1] < len(timesteps)
+        and result_rebuild_indices == rebuild_indices
+        and all(
+            timesteps[index] == timesteps[index - 1]
+            or index in rebuild_indices
+            for index in range(1, len(timesteps))
+        )
+        and value.get("history_interpolation") == "barycentric_causal"
+        and value.get("result_history_interpolation")
+        == value.get("history_interpolation")
+        and len(errors) == len(timesteps)
+        and all(math.isfinite(item) and item >= 0.0 for item in errors)
+        and result_errors == errors
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and max(errors) <= tolerance
+        and result_tolerance == tolerance
+        and restart_index in rebuild_indices
+        and result_restart_index == restart_index
+        and _is_sha256(str(value.get("operator_owner_sha256", "")).lower())
+        and value.get("result_operator_owner_sha256")
+        == value.get("operator_owner_sha256")
+        and _is_sha256(str(value.get("history_sha256", "")).lower())
+        and value.get("loaded_history_sha256") == value.get("history_sha256")
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_modal_fembem_transient_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_modal_transient_mass_damping_initial_projection_truncation_energy_mesh_history_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        rayleigh = tuple(float(item) for item in value["rayleigh_coefficients"])
+        result_rayleigh = tuple(
+            float(item) for item in value["result_rayleigh_coefficients"]
+        )
+        displacement = tuple(
+            float(item) for item in value["initial_displacement_projection"]
+        )
+        result_displacement = tuple(
+            float(item) for item in value["result_initial_displacement_projection"]
+        )
+        velocity = tuple(float(item) for item in value["initial_velocity_projection"])
+        result_velocity = tuple(
+            float(item) for item in value["result_initial_velocity_projection"]
+        )
+        modal_count = _positive_integer(value, "modal_count")
+        result_modal_count = _positive_integer(value, "result_modal_count")
+        truncation_frequency = float(value["truncation_frequency_hz"])
+        result_truncation_frequency = float(value["result_truncation_frequency_hz"])
+        initial_energy = float(value["initial_energy_j"])
+        result_initial_energy = float(value["result_initial_energy_j"])
+        radiated_energy = float(value["radiated_energy_j"])
+        result_radiated_energy = float(value["result_radiated_energy_j"])
+        dissipated_energy = float(value["dissipated_energy_j"])
+        result_dissipated_energy = float(value["result_dissipated_energy_j"])
+        final_energy = float(value["final_energy_j"])
+        result_final_energy = float(value["result_final_energy_j"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("modal_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "mass_modal_generation",
+                "damping_modal_generation",
+                "initial_modal_generation",
+                "truncation_modal_generation",
+                "energy_modal_generation",
+                "mesh_modal_generation",
+                "history_modal_generation",
+                "result_modal_generation",
+            )
+        )
+        and value.get("mass_normalization") == "M_orthonormal"
+        and value.get("result_mass_normalization") == "M_orthonormal"
+        and value.get("damping_model") == "rayleigh"
+        and value.get("result_damping_model") == "rayleigh"
+        and len(rayleigh) == 2
+        and all(math.isfinite(item) and item >= 0.0 for item in rayleigh)
+        and result_rayleigh == rayleigh
+        and len(displacement) == len(velocity) == modal_count
+        and all(math.isfinite(item) for item in displacement + velocity)
+        and result_displacement == displacement
+        and result_velocity == velocity
+        and result_modal_count == modal_count
+        and math.isfinite(truncation_frequency)
+        and truncation_frequency > 0.0
+        and result_truncation_frequency == truncation_frequency
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (initial_energy, radiated_energy, dissipated_energy, final_energy)
+        )
+        and math.isclose(
+            radiated_energy + dissipated_energy + final_energy,
+            initial_energy,
+            rel_tol=1.0e-10,
+            abs_tol=1.0e-12,
+        )
+        and result_initial_energy == initial_energy
+        and result_radiated_energy == radiated_energy
+        and result_dissipated_energy == dissipated_energy
+        and result_final_energy == final_energy
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and bool(str(value.get("time_history_owner", "")).strip())
+        and value.get("accepted_time_history_owner") == value.get("time_history_owner")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
     )
 
 
