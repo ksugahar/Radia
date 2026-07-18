@@ -2361,6 +2361,119 @@ def _demag_bem_charge_identity_ok(value: object) -> bool:
     )
 
 
+def _maglev_dynamic_stiffness_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("maglev_generation", "")).strip()
+    try:
+        bias = float(value.get("bias_current_a"))
+        gap = float(value.get("equilibrium_gap_m"))
+        equilibrium_force = float(value.get("equilibrium_force_n"))
+        load = float(value.get("supported_load_n"))
+        frequency = float(value.get("excitation_frequency_hz"))
+        stiffness = [float(item) for item in value.get("complex_stiffness_n_m", [])]
+        damping = float(value.get("viscous_damping_n_s_m"))
+        displacement = [float(item) for item in value.get("displacement_phasor_m", [])]
+        force = [float(item) for item in value.get("force_phasor_n", [])]
+        phase = float(value.get("force_displacement_phase_rad"))
+    except (TypeError, ValueError):
+        return False
+    fields = (
+        "bias_current_a", "equilibrium_gap_m", "equilibrium_force_n",
+        "supported_load_n", "excitation_frequency_hz", "complex_stiffness_n_m",
+        "viscous_damping_n_s_m", "displacement_phasor_m", "force_phasor_n",
+        "force_displacement_phase_rad", "coordinate_frame",
+    )
+    values = [bias, gap, equilibrium_force, load, frequency, damping, phase]
+    if (
+        len(stiffness) != 2 or len(displacement) != 2 or len(force) != 2
+        or not all(math.isfinite(item) for item in values + stiffness + displacement + force)
+    ):
+        return False
+    omega = 2.0 * math.pi * frequency
+    expected_force = [
+        stiffness[0] * displacement[0] - stiffness[1] * displacement[1],
+        stiffness[0] * displacement[1] + stiffness[1] * displacement[0],
+    ]
+    expected_phase = math.atan2(force[1], force[0]) - math.atan2(
+        displacement[1], displacement[0]
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "bias_generation", "equilibrium_generation", "frequency_generation",
+            "stiffness_generation", "damping_generation", "force_generation",
+            "displacement_generation", "phase_generation", "frame_generation",
+            "owner_generation", "result_generation"))
+        and bias > 0.0 and gap > 0.0 and frequency > 0.0
+        and equilibrium_force > 0.0
+        and math.isclose(equilibrium_force, load, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and stiffness[0] > 0.0 and damping >= 0.0
+        and math.isclose(stiffness[1], omega * damping, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.hypot(*displacement) > 0.0
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for item, expected in zip(force, expected_force))
+        and math.isclose(phase, expected_phase, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("coordinate_frame") == "global_z_up_force_positive"
+        and all(value.get(f"result_{field}") == value.get(field) for field in fields)
+        and bool(str(value.get("maglev_owner", "")).strip())
+        and value.get("accepted_maglev_owner") == value.get("maglev_owner")
+        and _valid_sha256(value.get("maglev_result_sha256"))
+        and value.get("accepted_maglev_result_sha256")
+        == value.get("maglev_result_sha256")
+    )
+
+
+def _bem_demag_reciprocity_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    try:
+        energy_12 = float(value.get("interaction_energy_12_j"))
+        energy_21 = float(value.get("interaction_energy_21_j"))
+        field_12 = [float(item) for item in value.get("field_1_due_2_a_m", [])]
+        field_21 = [float(item) for item in value.get("field_2_due_1_a_m", [])]
+        magnetization_1 = [float(item) for item in value.get("magnetization_1_a_m", [])]
+        magnetization_2 = [float(item) for item in value.get("magnetization_2_a_m", [])]
+        volumes = [float(item) for item in value.get("region_volumes_m3", [])]
+    except (TypeError, ValueError):
+        return False
+    vectors = (field_12, field_21, magnetization_1, magnetization_2)
+    mirrored = (
+        "interaction_energy_12_j", "interaction_energy_21_j",
+        "field_1_due_2_a_m", "field_2_due_1_a_m", "magnetization_1_a_m",
+        "magnetization_2_a_m", "surface_orientation", "region_volumes_m3",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "reciprocity_generation", "energy_generation", "field_generation",
+            "magnetization_generation", "surface_generation", "volume_generation",
+            "mesh_generation", "solution_generation", "result_generation"))
+        and all(len(vector) == 3 for vector in vectors)
+        and len(volumes) == 2
+        and all(math.isfinite(item) for vector in vectors for item in vector)
+        and all(math.isfinite(item) and item > 0.0 for item in volumes)
+        and math.isfinite(energy_12) and math.isfinite(energy_21)
+        and math.isclose(energy_12, energy_21, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and sum(a * b for a, b in zip(magnetization_1, field_12)) < 0.0
+        and sum(a * b for a, b in zip(magnetization_2, field_21)) < 0.0
+        and value.get("surface_orientation") == "outward_right_handed"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and bool(str(value.get("solution_owner", "")).strip())
+        and value.get("accepted_solution_owner") == value.get("solution_owner")
+        and _valid_sha256(value.get("demag_result_sha256"))
+        and value.get("accepted_demag_result_sha256")
+        == value.get("demag_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -2485,6 +2598,8 @@ def magnetic_force_method_profile_gate(
     demag_bem_charge_identity_ok = True
     magnetic_bearing_bias_sweep_identity_ok = True
     pm_demag_recoil_identity_ok = True
+    maglev_dynamic_stiffness_identity_ok = True
+    bem_demag_reciprocity_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -2546,6 +2661,8 @@ def magnetic_force_method_profile_gate(
         demag_bem_charge_identity_ok = False
         magnetic_bearing_bias_sweep_identity_ok = False
         pm_demag_recoil_identity_ok = False
+        maglev_dynamic_stiffness_identity_ok = False
+        bem_demag_reciprocity_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -4344,6 +4461,16 @@ def magnetic_force_method_profile_gate(
                 "pm_demag_recoil_knee_loadline_temperature_irreversible_orientation_mesh_owner_result_identity"
             )
         )
+        maglev_dynamic_stiffness_identity_ok = _maglev_dynamic_stiffness_identity_ok(
+            identity_value.get(
+                "maglev_bias_equilibrium_frequency_complex_stiffness_damping_force_displacement_phase_frame_owner_result_identity"
+            )
+        )
+        bem_demag_reciprocity_identity_ok = _bem_demag_reciprocity_identity_ok(
+            identity_value.get(
+                "bem_demag_reciprocity_interaction_energy_field_magnetization_surface_volume_mesh_solution_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -4582,6 +4709,12 @@ def magnetic_force_method_profile_gate(
         ),
         "pm_demag_uses_temperature_adjusted_recoil_knee_loadline_irreversible_loss_orientation_mesh_owner_and_result": (
             pm_demag_recoil_identity_ok
+        ),
+        "maglev_dynamics_close_bias_equilibrium_frequency_stiffness_damping_phase_frame_owner_and_result": (
+            maglev_dynamic_stiffness_identity_ok
+        ),
+        "bem_demag_closes_reciprocal_energy_field_magnetization_surface_volume_mesh_solution_and_result": (
+            bem_demag_reciprocity_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
