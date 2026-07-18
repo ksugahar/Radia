@@ -2495,10 +2495,210 @@ def _step_response_owner_identity_ok(positive: Mapping[str, object]) -> bool:
         and window[0] <= crossings[0] < crossings[1] <= settling_time <= window[1]
         and result_window == window
         and _is_sha256(str(contract.get("waveform_sha256") or ""))
-        and contract.get("result_waveform_sha256") == contract.get("waveform_sha256")
+        and contract.get("result_waveform_sha256")
+        == contract.get("waveform_sha256")
         and _is_sha256(str(contract.get("step_result_sha256") or ""))
         and contract.get("accepted_step_result_sha256")
         == contract.get("step_result_sha256")
+    )
+
+
+def _mosfet_soa_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "mosfet_soa_vds_id_pulse_width_duty_temperature_model_waveform_result_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        vds = float(contract.get("vds_v"))
+        result_vds = float(contract.get("result_vds_v"))
+        drain_current = float(contract.get("id_a"))
+        result_drain_current = float(contract.get("result_id_a"))
+        pulse_width = float(contract.get("pulse_width_s"))
+        result_pulse_width = float(contract.get("result_pulse_width_s"))
+        period = float(contract.get("repetition_period_s"))
+        result_period = float(contract.get("result_repetition_period_s"))
+        duty = float(contract.get("duty_cycle"))
+        result_duty = float(contract.get("result_duty_cycle"))
+        temperature = float(contract.get("junction_temperature_c"))
+        result_temperature = float(contract.get("result_junction_temperature_c"))
+        current_limit = float(contract.get("soa_limit_id_a"))
+        result_current_limit = float(contract.get("result_soa_limit_id_a"))
+        margin = float(contract.get("soa_margin_fraction"))
+        result_margin = float(contract.get("result_soa_margin_fraction"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("soa_generation_id") or "")
+    expected_duty = pulse_width / period
+    expected_margin = (current_limit - drain_current) / current_limit
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "voltage_soa_generation_id",
+                "current_soa_generation_id",
+                "pulse_soa_generation_id",
+                "duty_soa_generation_id",
+                "temperature_soa_generation_id",
+                "model_soa_generation_id",
+                "waveform_soa_generation_id",
+                "result_soa_generation_id",
+            )
+        )
+        and all(
+            math.isfinite(value) and value > 0.0
+            for value in (vds, drain_current, pulse_width, period, current_limit)
+        )
+        and pulse_width < period
+        and result_vds == vds
+        and result_drain_current == drain_current
+        and result_pulse_width == pulse_width
+        and result_period == period
+        and math.isfinite(duty)
+        and 0.0 < duty < 1.0
+        and math.isclose(duty, expected_duty, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and result_duty == duty
+        and math.isfinite(temperature)
+        and temperature > -273.15
+        and result_temperature == temperature
+        and drain_current <= current_limit
+        and result_current_limit == current_limit
+        and math.isfinite(margin)
+        and margin >= 0.0
+        and math.isclose(
+            margin, expected_margin, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and result_margin == margin
+        and _is_sha256(str(contract.get("model_card_sha256") or ""))
+        and contract.get("result_model_card_sha256")
+        == contract.get("model_card_sha256")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("result_waveform_sha256")
+        == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("soa_result_sha256") or ""))
+        and contract.get("accepted_soa_result_sha256")
+        == contract.get("soa_result_sha256")
+    )
+
+
+def _monte_carlo_yield_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "monte_carlo_yield_distribution_tolerance_seed_failure_sample_owner_result_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        parameters = [str(value) for value in contract.get("parameter_order", [])]
+        result_parameters = [
+            str(value) for value in contract.get("result_parameter_order", [])
+        ]
+        families = [
+            str(value) for value in contract.get("distribution_families", [])
+        ]
+        result_families = [
+            str(value)
+            for value in contract.get("result_distribution_families", [])
+        ]
+        nominal = [float(value) for value in contract.get("nominal_values", [])]
+        result_nominal = [
+            float(value) for value in contract.get("result_nominal_values", [])
+        ]
+        tolerances = [
+            float(value) for value in contract.get("relative_tolerances", [])
+        ]
+        result_tolerances = [
+            float(value)
+            for value in contract.get("result_relative_tolerances", [])
+        ]
+        seeds = [int(value) for value in contract.get("seed_schedule", [])]
+        result_seeds = [
+            int(value) for value in contract.get("result_seed_schedule", [])
+        ]
+        sample_ids = [int(value) for value in contract.get("sample_ids", [])]
+        result_sample_ids = [
+            int(value) for value in contract.get("result_sample_ids", [])
+        ]
+        failed_ids = [
+            int(value) for value in contract.get("failed_sample_ids", [])
+        ]
+        result_failed_ids = [
+            int(value) for value in contract.get("result_failed_sample_ids", [])
+        ]
+        accepted_ids = [
+            int(value) for value in contract.get("accepted_sample_ids", [])
+        ]
+        result_accepted_ids = [
+            int(value) for value in contract.get("result_accepted_sample_ids", [])
+        ]
+        yield_fraction = float(contract.get("yield_fraction"))
+        result_yield_fraction = float(contract.get("result_yield_fraction"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("yield_generation_id") or "")
+    expected_accepted = [
+        sample_id for sample_id in sample_ids if sample_id not in set(failed_ids)
+    ]
+    expected_yield = len(expected_accepted) / len(sample_ids) if sample_ids else -1.0
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "distribution_yield_generation_id",
+                "tolerance_yield_generation_id",
+                "seed_yield_generation_id",
+                "criterion_yield_generation_id",
+                "sample_yield_generation_id",
+                "owner_yield_generation_id",
+                "result_yield_generation_id",
+            )
+        )
+        and bool(parameters)
+        and all(parameters)
+        and len(set(parameters)) == len(parameters)
+        and result_parameters == parameters
+        and len(families) == len(nominal) == len(tolerances) == len(parameters)
+        and all(family in {"gaussian", "uniform"} for family in families)
+        and result_families == families
+        and all(math.isfinite(value) and value > 0.0 for value in nominal)
+        and result_nominal == nominal
+        and all(math.isfinite(value) and 0.0 < value < 1.0 for value in tolerances)
+        and result_tolerances == tolerances
+        and sample_ids == list(range(len(sample_ids)))
+        and len(seeds) == len(sample_ids)
+        and all(seed >= 0 for seed in seeds)
+        and len(set(seeds)) == len(seeds)
+        and result_seeds == seeds
+        and result_sample_ids == sample_ids
+        and len(set(failed_ids)) == len(failed_ids)
+        and set(failed_ids).issubset(sample_ids)
+        and result_failed_ids == failed_ids
+        and accepted_ids == expected_accepted
+        and result_accepted_ids == accepted_ids
+        and bool(str(contract.get("failure_criterion") or ""))
+        and contract.get("result_failure_criterion")
+        == contract.get("failure_criterion")
+        and math.isfinite(yield_fraction)
+        and math.isclose(
+            yield_fraction, expected_yield, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and result_yield_fraction == yield_fraction
+        and _is_sha256(str(contract.get("circuit_owner_sha256") or ""))
+        and contract.get("result_circuit_owner_sha256")
+        == contract.get("circuit_owner_sha256")
+        and _is_sha256(str(contract.get("sample_table_sha256") or ""))
+        and contract.get("result_sample_table_sha256")
+        == contract.get("sample_table_sha256")
+        and _is_sha256(str(contract.get("yield_result_sha256") or ""))
+        and contract.get("accepted_yield_result_sha256")
+        == contract.get("yield_result_sha256")
     )
 
 
@@ -2894,6 +3094,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "step_response_uses_current_initial_final_rise_settling_overshoot_window_and_waveform": (
             _step_response_owner_identity_ok(positive)
+        ),
+        "mosfet_soa_uses_current_voltage_current_pulse_duty_temperature_model_waveform_and_result": (
+            _mosfet_soa_owner_identity_ok(positive)
+        ),
+        "monte_carlo_yield_uses_current_distributions_tolerances_seeds_failure_samples_owner_and_result": (
+            _monte_carlo_yield_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
