@@ -1160,6 +1160,126 @@ def _laminated_diffusion_power_identity_ok(value):
     )
 
 
+def _electrostatic_capacitance_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("electrostatic_generation", "")).strip()
+    conductors = [str(item) for item in value.get("conductor_order", [])]
+    result_conductors = [str(item) for item in value.get("result_conductor_order", [])]
+    try:
+        matrix = [[float(item) for item in row] for row in value.get("capacitance_matrix_f", [])]
+        result_matrix = [[float(item) for item in row] for row in value.get("result_capacitance_matrix_f", [])]
+        voltages = [float(item) for item in value.get("voltages_v", [])]
+        result_voltages = [float(item) for item in value.get("result_voltages_v", [])]
+        charges = [float(item) for item in value.get("charges_c", [])]
+        result_charges = [float(item) for item in value.get("result_charges_c", [])]
+        energy = float(value.get("electrostatic_energy_j"))
+        result_energy = float(value.get("result_electrostatic_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    count = len(conductors)
+    finite_matrix = len(matrix) == count and all(
+        len(row) == count and all(math.isfinite(item) for item in row) for row in matrix
+    )
+    scale = max((abs(item) for row in matrix for item in row), default=1.0)
+    tolerance = max(scale * 1.0e-12, 1.0e-24)
+    symmetric = finite_matrix and all(
+        math.isclose(matrix[row][column], matrix[column][row], rel_tol=1.0e-12, abs_tol=tolerance)
+        for row in range(count)
+        for column in range(count)
+    )
+    neutral = finite_matrix and all(abs(sum(row)) <= tolerance for row in matrix)
+    computed_charges = (
+        [sum(matrix[row][column] * voltages[column] for column in range(count)) for row in range(count)]
+        if finite_matrix and len(voltages) == count
+        else []
+    )
+    computed_energy = 0.5 * sum(voltage * charge for voltage, charge in zip(voltages, charges))
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "conductor_generation", "reciprocity_generation", "neutrality_generation",
+            "voltage_generation", "charge_generation", "energy_generation", "unit_generation",
+            "mesh_generation", "owner_generation", "result_generation"))
+        and count >= 2
+        and len(set(conductors)) == count
+        and all(conductors)
+        and result_conductors == conductors
+        and symmetric
+        and neutral
+        and result_matrix == matrix
+        and len(voltages) == count
+        and all(math.isfinite(item) for item in voltages)
+        and result_voltages == voltages
+        and len(charges) == count
+        and all(math.isfinite(item) for item in charges)
+        and result_charges == charges
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=tolerance) for actual, expected in zip(charges, computed_charges))
+        and abs(sum(charges)) <= tolerance
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and math.isclose(energy, computed_energy, rel_tol=1.0e-12, abs_tol=tolerance)
+        and result_energy == energy
+        and all(value.get(source) == expected and value.get(result) == expected for source, result, expected in (
+            ("capacitance_unit", "result_capacitance_unit", "F"),
+            ("charge_unit", "result_charge_unit", "C"),
+            ("voltage_unit", "result_voltage_unit", "V"),
+            ("energy_unit", "result_energy_unit", "J")))
+        and _valid_sha256(value.get("electrostatic_mesh_sha256"))
+        and value.get("result_electrostatic_mesh_sha256") == value.get("electrostatic_mesh_sha256")
+        and bool(str(value.get("result_owner", "")).strip())
+        and value.get("accepted_result_owner") == value.get("result_owner")
+        and _valid_sha256(value.get("electrostatic_result_sha256"))
+        and value.get("accepted_electrostatic_result_sha256") == value.get("electrostatic_result_sha256")
+    )
+
+
+def _axisymmetric_heat_balance_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("heat_generation", "")).strip()
+    try:
+        conduction = float(value.get("conduction_w"))
+        result_conduction = float(value.get("result_conduction_w"))
+        convection = float(value.get("convection_w"))
+        result_convection = float(value.get("result_convection_w"))
+        source = float(value.get("volume_source_w"))
+        result_source = float(value.get("result_volume_source_w"))
+        flux = float(value.get("boundary_flux_w"))
+        result_flux = float(value.get("result_boundary_flux_w"))
+        temperature = float(value.get("temperature_reference_k"))
+        result_temperature = float(value.get("result_temperature_reference_k"))
+        tolerance = float(value.get("heat_balance_tolerance_w"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "conduction_generation", "convection_generation", "source_generation", "boundary_generation",
+            "weight_generation", "temperature_generation", "mesh_generation", "owner_generation", "result_generation"))
+        and all(math.isfinite(item) and item >= 0.0 for item in (conduction, convection, source, flux))
+        and (result_conduction, result_convection, result_source, result_flux) == (conduction, convection, source, flux)
+        and value.get("axisymmetric_weight") == "2*pi*r"
+        and value.get("result_axisymmetric_weight") == value.get("axisymmetric_weight")
+        and math.isfinite(temperature)
+        and temperature > 0.0
+        and result_temperature == temperature
+        and math.isfinite(tolerance)
+        and tolerance >= 0.0
+        and abs(source - conduction - convection - flux) <= tolerance
+        and _valid_sha256(value.get("heat_mesh_sha256"))
+        and value.get("result_heat_mesh_sha256") == value.get("heat_mesh_sha256")
+        and bool(str(value.get("heat_result_owner", "")).strip())
+        and value.get("result_heat_result_owner") == value.get("heat_result_owner")
+        and _valid_sha256(value.get("heat_result_sha256"))
+        and value.get("accepted_heat_result_sha256") == value.get("heat_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -1237,6 +1357,8 @@ def force_coenergy_displacement_gate(
     lamination_anisotropy_loss_identity_ok = True
     axisymmetric_weighted_stress_coenergy_identity_ok = True
     laminated_diffusion_power_identity_ok = True
+    electrostatic_capacitance_identity_ok = True
+    axisymmetric_heat_balance_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -1288,6 +1410,8 @@ def force_coenergy_displacement_gate(
         lamination_anisotropy_loss_identity_ok = False
         axisymmetric_weighted_stress_coenergy_identity_ok = False
         laminated_diffusion_power_identity_ok = False
+        electrostatic_capacitance_identity_ok = False
+        axisymmetric_heat_balance_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2912,6 +3036,16 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        electrostatic_capacitance_identity_ok = _electrostatic_capacitance_identity_ok(
+            artifact_identity.get(
+                "electrostatic_capacitance_conductor_reciprocity_neutrality_voltage_charge_energy_unit_mesh_owner_result_identity"
+            )
+        )
+        axisymmetric_heat_balance_identity_ok = _axisymmetric_heat_balance_identity_ok(
+            artifact_identity.get(
+                "axisymmetric_heat_conduction_convection_source_boundary_flux_weight_temperature_mesh_owner_result_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -3089,6 +3223,12 @@ def force_coenergy_displacement_gate(
         ),
         "laminated_diffusion_uses_current_conductivity_skin_depth_frequency_phasor_power_volume_mesh_loss_and_result": (
             laminated_diffusion_power_identity_ok
+        ),
+        "electrostatic_capacitance_closes_conductors_reciprocity_neutrality_charge_energy_units_mesh_owner_and_result": (
+            electrostatic_capacitance_identity_ok
+        ),
+        "axisymmetric_heat_closes_conduction_convection_source_flux_weight_temperature_mesh_owner_and_result": (
+            axisymmetric_heat_balance_identity_ok
         ),
     }
     return {
