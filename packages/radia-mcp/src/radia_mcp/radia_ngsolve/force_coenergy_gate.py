@@ -839,6 +839,183 @@ def _axisymmetric_stress_contour_identity_ok(value):
     )
 
 
+def _nonlinear_incremental_inductance_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("analysis_generation", "")).strip()
+    try:
+        current_path = [float(item) for item in value.get("current_path_a", [])]
+        result_current_path = [float(item) for item in value.get("result_current_path_a", [])]
+        state_index = int(value.get("current_state_index"))
+        result_state_index = int(value.get("result_current_state_index"))
+        nominal_current = float(value.get("nominal_current_a"))
+        result_nominal_current = float(value.get("result_nominal_current_a"))
+        perturbation = float(value.get("perturbation_a"))
+        result_perturbation = float(value.get("result_perturbation_a"))
+        current_samples = [float(item) for item in value.get("current_samples_a", [])]
+        result_current_samples = [
+            float(item) for item in value.get("result_current_samples_a", [])
+        ]
+        flux_linkage = [float(item) for item in value.get("flux_linkage_wb_turn", [])]
+        result_flux_linkage = [
+            float(item) for item in value.get("result_flux_linkage_wb_turn", [])
+        ]
+        inductance = float(value.get("incremental_inductance_h"))
+        result_inductance = float(value.get("result_incremental_inductance_h"))
+    except (TypeError, ValueError):
+        return False
+    derivative = (
+        (flux_linkage[2] - flux_linkage[0]) / (2.0 * perturbation)
+        if len(flux_linkage) == 3 and perturbation > 0.0
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "current_path_generation",
+                "magnetic_state_generation",
+                "perturbation_generation",
+                "derivative_generation",
+                "circuit_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and value.get("nonlinear_material") is True
+        and value.get("result_nonlinear_material") is True
+        and len(current_path) >= 3
+        and all(math.isfinite(item) for item in current_path)
+        and all(right > left for left, right in zip(current_path, current_path[1:]))
+        and result_current_path == current_path
+        and 0 <= state_index < len(current_path)
+        and result_state_index == state_index
+        and math.isclose(current_path[state_index], nominal_current, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(result_nominal_current, nominal_current, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isfinite(perturbation)
+        and perturbation > 0.0
+        and math.isclose(result_perturbation, perturbation, rel_tol=0.0, abs_tol=1.0e-15)
+        and len(current_samples) == 3
+        and all(math.isfinite(item) for item in current_samples)
+        and math.isclose(current_samples[0], nominal_current - perturbation, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(current_samples[1], nominal_current, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(current_samples[2], nominal_current + perturbation, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_current_samples == current_samples
+        and len(flux_linkage) == 3
+        and all(math.isfinite(item) for item in flux_linkage)
+        and result_flux_linkage == flux_linkage
+        and value.get("derivative_rule") == "symmetric_central_difference"
+        and value.get("result_derivative_rule") == "symmetric_central_difference"
+        and math.isfinite(inductance)
+        and inductance > 0.0
+        and math.isclose(inductance, derivative, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(result_inductance, inductance, rel_tol=0.0, abs_tol=1.0e-15)
+        and bool(str(value.get("circuit_name", "")).strip())
+        and value.get("result_circuit_name") == value.get("circuit_name")
+        and _valid_sha256(value.get("magnetic_state_sha256"))
+        and value.get("result_magnetic_state_sha256") == value.get("magnetic_state_sha256")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _lamination_anisotropy_loss_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("analysis_generation", "")).strip()
+    coefficients = value.get("loss_coefficients")
+    result_coefficients = value.get("result_loss_coefficients")
+    components = value.get("loss_components_w")
+    result_components = value.get("result_loss_components_w")
+    if not all(
+        isinstance(item, dict)
+        for item in (coefficients, result_coefficients, components, result_components)
+    ):
+        return False
+    try:
+        permeability = [float(item) for item in value.get("relative_permeability_axes", [])]
+        result_permeability = [
+            float(item) for item in value.get("result_relative_permeability_axes", [])
+        ]
+        fill = float(value.get("lamination_fill_factor"))
+        result_fill = float(value.get("result_lamination_fill_factor"))
+        frequency = float(value.get("frequency_hz"))
+        result_frequency = float(value.get("result_frequency_hz"))
+        gross_volume = float(value.get("gross_volume_m3"))
+        result_gross_volume = float(value.get("result_gross_volume_m3"))
+        active_volume = float(value.get("active_iron_volume_m3"))
+        result_active_volume = float(value.get("result_active_iron_volume_m3"))
+        coefficient_values = [float(coefficients[key]) for key in ("kh", "kc", "ke")]
+        component_values = [
+            float(components[key])
+            for key in ("hysteresis_w", "classical_eddy_w", "excess_w")
+        ]
+        total_loss = float(value.get("total_core_loss_w"))
+        result_total_loss = float(value.get("result_total_core_loss_w"))
+    except (KeyError, TypeError, ValueError):
+        return False
+    axis_order = [str(item).strip() for item in value.get("mu_axis_order", [])]
+    result_axis_order = [str(item).strip() for item in value.get("result_mu_axis_order", [])]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "anisotropy_generation",
+                "fill_generation",
+                "orientation_generation",
+                "frequency_generation",
+                "loss_generation",
+                "volume_generation",
+                "result_generation",
+            )
+        )
+        and len(axis_order) == 2
+        and len(set(axis_order)) == 2
+        and all(axis_order)
+        and result_axis_order == axis_order
+        and len(permeability) == 2
+        and all(math.isfinite(item) and item > 0.0 for item in permeability)
+        and result_permeability == permeability
+        and math.isfinite(fill)
+        and 0.0 < fill <= 1.0
+        and result_fill == fill
+        and bool(str(value.get("stacking_direction", "")).strip())
+        and value.get("result_stacking_direction") == value.get("stacking_direction")
+        and bool(str(value.get("material_frame", "")).strip())
+        and value.get("result_material_frame") == value.get("material_frame")
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and result_frequency == frequency
+        and value.get("loss_coefficient_basis") == "bertotti_three_term"
+        and value.get("result_loss_coefficient_basis") == "bertotti_three_term"
+        and set(coefficients) == {"kh", "kc", "ke"}
+        and result_coefficients == coefficients
+        and all(math.isfinite(item) and item >= 0.0 for item in coefficient_values)
+        and math.isfinite(gross_volume)
+        and gross_volume > 0.0
+        and result_gross_volume == gross_volume
+        and math.isclose(active_volume, gross_volume * fill, rel_tol=1.0e-12)
+        and result_active_volume == active_volume
+        and set(components) == {"hysteresis_w", "classical_eddy_w", "excess_w"}
+        and result_components == components
+        and all(math.isfinite(item) and item >= 0.0 for item in component_values)
+        and math.isclose(total_loss, sum(component_values), rel_tol=1.0e-12)
+        and result_total_loss == total_loss
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -912,6 +1089,8 @@ def force_coenergy_displacement_gate(
     laminated_core_loss_identity_ok = True
     nonlinear_coenergy_central_difference_identity_ok = True
     axisymmetric_stress_contour_identity_ok = True
+    nonlinear_incremental_inductance_identity_ok = True
+    lamination_anisotropy_loss_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -959,6 +1138,8 @@ def force_coenergy_displacement_gate(
         laminated_core_loss_identity_ok = False
         nonlinear_coenergy_central_difference_identity_ok = False
         axisymmetric_stress_contour_identity_ok = False
+        nonlinear_incremental_inductance_identity_ok = False
+        lamination_anisotropy_loss_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -2555,6 +2736,20 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        nonlinear_incremental_inductance_identity_ok = (
+            _nonlinear_incremental_inductance_identity_ok(
+                artifact_identity.get(
+                    "nonlinear_coenergy_incremental_inductance_path_derivative_current_state_mesh_result_identity"
+                )
+            )
+        )
+        lamination_anisotropy_loss_identity_ok = (
+            _lamination_anisotropy_loss_identity_ok(
+                artifact_identity.get(
+                    "lamination_anisotropy_fill_orientation_frequency_loss_volume_balance_result_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -2720,6 +2915,12 @@ def force_coenergy_displacement_gate(
         ),
         "axisymmetric_stress_force_uses_two_pi_r_jacobian_air_contour_mesh_and_result": (
             axisymmetric_stress_contour_identity_ok
+        ),
+        "nonlinear_incremental_inductance_uses_current_path_state_symmetric_derivative_circuit_mesh_and_result": (
+            nonlinear_incremental_inductance_identity_ok
+        ),
+        "laminated_loss_uses_current_anisotropy_fill_orientation_frequency_volume_balance_and_result": (
+            lamination_anisotropy_loss_identity_ok
         ),
     }
     return {
