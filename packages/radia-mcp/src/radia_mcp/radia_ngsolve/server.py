@@ -258,6 +258,7 @@ from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
 from .knowledge.force_validation import get_force_validation_documentation
+from .knowledge.technical_reports import get_technical_reports_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
@@ -834,6 +835,17 @@ def ngsolve_usage(topic: str = "all") -> str:
                                  public-safe MCP knowledge hooks that learned from them
     """
     return get_ngsolve_documentation(topic)
+
+
+@mcp.tool()
+def technical_reports(topic: str = "overview") -> str:
+    """Return implementation-oriented knowledge distilled from IEEJ reports.
+
+    Topics include ``overview``, ``open_boundary``, ``materials``, ``mor``,
+    ``optimization``, ``hpc``, ``force``, ``motor``, ``implementation_map``,
+    ``sources``, and ``all``.
+    """
+    return get_technical_reports_documentation(topic)
 
 
 @mcp.tool()

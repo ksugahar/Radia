@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **781 tools** across 41 MCP servers.
+Total: **782 tools** across 41 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 82 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 139 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 140 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -377,6 +377,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
 | `symmetric_complex_field_curve_gate` | Gate an even- or odd-sampled complex field curve by mirror symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
+| `technical_reports` | Return implementation-oriented knowledge distilled from IEEJ reports. |
 | `thermal_robin_boundary_balance_gate` | Gate signed Robin heat balance, mesh plateau, replay, and reflection. |
 | `three_phase_winding_power_balance_gate` | Gate three-phase balance, STAR KCL, and coupled-winding copper power. |
 | `transient_conductor_replay_identity_gate` | Gate full transient conductor histories, identities, and independent replay. |
