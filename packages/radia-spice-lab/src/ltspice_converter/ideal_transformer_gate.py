@@ -3754,6 +3754,223 @@ def _noise_referral_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _pll_closure_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "pll_lock_phase_noise_jitter_loop_gain_waveform_circuit_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("pll_generation_id") or "")
+    try:
+        lock_time = float(contract["lock_time_s"])
+        result_lock_time = float(contract["result_lock_time_s"])
+        duration = float(contract["waveform_duration_s"])
+        result_duration = float(contract["result_waveform_duration_s"])
+        phase_start = float(contract["phase_error_start_rad"])
+        result_phase_start = float(contract["result_phase_error_start_rad"])
+        phase_end = float(contract["phase_error_end_rad"])
+        result_phase_end = float(contract["result_phase_error_end_rad"])
+        tolerance = float(contract["phase_error_tolerance_rad"])
+        result_tolerance = float(contract["result_phase_error_tolerance_rad"])
+        offsets = [float(item) for item in contract["phase_noise_offset_hz"]]
+        result_offsets = [
+            float(item) for item in contract["result_phase_noise_offset_hz"]
+        ]
+        phase_noise = [float(item) for item in contract["phase_noise_dbc_per_hz"]]
+        result_phase_noise = [
+            float(item) for item in contract["result_phase_noise_dbc_per_hz"]
+        ]
+        jitter = float(contract["integrated_jitter_s"])
+        result_jitter = float(contract["result_integrated_jitter_s"])
+        crossover = float(contract["loop_gain_crossover_hz"])
+        result_crossover = float(contract["result_loop_gain_crossover_hz"])
+        crossover_gain = float(contract["loop_gain_magnitude_at_crossover"])
+        result_crossover_gain = float(
+            contract["result_loop_gain_magnitude_at_crossover"]
+        )
+        phase_margin = float(contract["phase_margin_deg"])
+        result_phase_margin = float(contract["result_phase_margin_deg"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "lock_pll_generation_id",
+                "phase_error_pll_generation_id",
+                "noise_pll_generation_id",
+                "jitter_pll_generation_id",
+                "loop_gain_pll_generation_id",
+                "waveform_pll_generation_id",
+                "circuit_pll_generation_id",
+                "result_pll_generation_id",
+            )
+        )
+        and contract.get("lock_state") == "locked"
+        and contract.get("result_lock_state") == contract.get("lock_state")
+        and all(math.isfinite(item) for item in (lock_time, duration))
+        and 0.0 < lock_time <= duration
+        and result_lock_time == lock_time
+        and result_duration == duration
+        and all(
+            math.isfinite(item)
+            for item in (phase_start, phase_end, tolerance)
+        )
+        and 0.0 < tolerance <= 1.0e-2
+        and abs(phase_end) <= tolerance
+        and abs(phase_end) < abs(phase_start)
+        and result_phase_start == phase_start
+        and result_phase_end == phase_end
+        and result_tolerance == tolerance
+        and len(offsets) == len(phase_noise) >= 2
+        and all(math.isfinite(item) and item > 0.0 for item in offsets)
+        and all(left < right for left, right in zip(offsets, offsets[1:]))
+        and all(math.isfinite(item) and item <= 0.0 for item in phase_noise)
+        and all(right <= left for left, right in zip(phase_noise, phase_noise[1:]))
+        and result_offsets == offsets
+        and result_phase_noise == phase_noise
+        and math.isfinite(jitter)
+        and jitter > 0.0
+        and result_jitter == jitter
+        and math.isfinite(crossover)
+        and crossover > 0.0
+        and result_crossover == crossover
+        and math.isfinite(crossover_gain)
+        and math.isclose(crossover_gain, 1.0, rel_tol=5.0e-2, abs_tol=5.0e-2)
+        and result_crossover_gain == crossover_gain
+        and math.isfinite(phase_margin)
+        and 0.0 < phase_margin < 180.0
+        and result_phase_margin == phase_margin
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256")
+        == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _electrothermal_fixedpoint_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "electrothermal_thermal_impedance_power_temperature_device_fixedpoint_stability_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("electrothermal_generation_id") or "")
+    try:
+        thermal_impedance = float(contract["thermal_impedance_k_per_w"])
+        result_thermal_impedance = float(
+            contract["result_thermal_impedance_k_per_w"]
+        )
+        power = float(contract["dissipated_power_w"])
+        result_power = float(contract["result_dissipated_power_w"])
+        ambient = float(contract["ambient_temperature_c"])
+        result_ambient = float(contract["result_ambient_temperature_c"])
+        junction = float(contract["junction_temperature_c"])
+        result_junction = float(contract["result_junction_temperature_c"])
+        reference_power = float(contract["reference_power_w"])
+        result_reference_power = float(contract["result_reference_power_w"])
+        reference_temperature = float(contract["reference_temperature_c"])
+        result_reference_temperature = float(
+            contract["result_reference_temperature_c"]
+        )
+        coefficient = float(contract["power_temperature_coefficient_per_k"])
+        result_coefficient = float(
+            contract["result_power_temperature_coefficient_per_k"]
+        )
+        residual = float(contract["fixedpoint_residual_c"])
+        result_residual = float(contract["result_fixedpoint_residual_c"])
+        residual_tolerance = float(contract["fixedpoint_tolerance_c"])
+        result_residual_tolerance = float(
+            contract["result_fixedpoint_tolerance_c"]
+        )
+        stability_slope = float(contract["stability_slope"])
+        result_stability_slope = float(contract["result_stability_slope"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    device_power = reference_power * (
+        1.0 + coefficient * (junction - reference_temperature)
+    )
+    computed_residual = junction - (ambient + thermal_impedance * device_power)
+    computed_slope = thermal_impedance * reference_power * coefficient
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "thermal_impedance_generation_id",
+                "power_generation_id",
+                "temperature_generation_id",
+                "device_law_generation_id",
+                "fixedpoint_generation_id",
+                "stability_generation_id",
+                "circuit_generation_id",
+                "result_generation_id",
+            )
+        )
+        and all(
+            math.isfinite(item)
+            for item in (
+                thermal_impedance,
+                power,
+                ambient,
+                junction,
+                reference_power,
+                reference_temperature,
+                coefficient,
+                residual,
+                residual_tolerance,
+                stability_slope,
+            )
+        )
+        and thermal_impedance > 0.0
+        and power > 0.0
+        and reference_power > 0.0
+        and result_thermal_impedance == thermal_impedance
+        and result_power == power
+        and result_ambient == ambient
+        and result_junction == junction
+        and math.isclose(
+            junction,
+            ambient + thermal_impedance * power,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-10,
+        )
+        and contract.get("device_law") == "linear_temperature_power"
+        and contract.get("result_device_law") == contract.get("device_law")
+        and result_reference_power == reference_power
+        and result_reference_temperature == reference_temperature
+        and result_coefficient == coefficient
+        and math.isclose(device_power, power, rel_tol=1.0e-12, abs_tol=1.0e-10)
+        and residual_tolerance > 0.0
+        and abs(residual) <= residual_tolerance
+        and math.isclose(residual, computed_residual, rel_tol=1.0e-10, abs_tol=1.0e-10)
+        and result_residual == residual
+        and result_residual_tolerance == residual_tolerance
+        and math.isclose(
+            stability_slope, computed_slope, rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and abs(stability_slope) < 1.0
+        and result_stability_slope == stability_slope
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -4176,6 +4393,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "noise_referral_uses_current_input_output_density_correlation_band_gain_circuit_and_result": (
             _noise_referral_owner_identity_ok(positive)
+        ),
+        "pll_uses_current_lock_phase_error_noise_jitter_loop_gain_waveform_circuit_and_result": (
+            _pll_closure_owner_identity_ok(positive)
+        ),
+        "electrothermal_uses_current_thermal_impedance_power_temperature_device_fixedpoint_stability_circuit_and_result": (
+            _electrothermal_fixedpoint_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
