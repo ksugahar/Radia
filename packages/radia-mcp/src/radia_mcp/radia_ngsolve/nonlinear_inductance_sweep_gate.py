@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import cmath
 import math
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -3553,6 +3554,166 @@ def _energy_history_restart_offsets_close(
     return previous_end == run_count - 1
 
 
+def _cavity_eigenmode_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "cavity_eigenmode_frequency_q_energy_orthogonality_degeneracy_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("cavity_generation", "")).strip()
+    mode_ids = identity.get("mode_ids")
+    try:
+        frequencies = [float(item) for item in identity.get("mode_frequency_hz", [])]
+        q_external = float(identity.get("q_external"))
+        q_dielectric = float(identity.get("q_dielectric"))
+        q_conductor = float(identity.get("q_conductor"))
+        q_total = float(identity.get("q_total"))
+        electric = [float(item) for item in identity.get("electric_energy_j", [])]
+        magnetic = [float(item) for item in identity.get("magnetic_energy_j", [])]
+        gram_real = [[float(item) for item in row] for row in identity.get("mode_gram_real", [])]
+        gram_imag = [[float(item) for item in row] for row in identity.get("mode_gram_imag", [])]
+        mesh_dof = [int(item) for item in identity.get("mesh_dof", [])]
+        mesh_frequency = [float(item) for item in identity.get("mesh_frequency_hz", [])]
+    except (TypeError, ValueError):
+        return False
+    count = len(frequencies)
+    expected_q = 1.0 / (
+        1.0 / q_external + 1.0 / q_dielectric + 1.0 / q_conductor
+    ) if min(q_external, q_dielectric, q_conductor) > 0.0 else math.nan
+    mesh_errors = [abs(item - frequencies[0]) for item in mesh_frequency] if frequencies else []
+    mirrored_fields = (
+        "mode_ids", "mode_frequency_hz", "q_external", "q_dielectric",
+        "q_conductor", "q_total", "electric_energy_j", "magnetic_energy_j",
+        "normalization", "mode_gram_real", "mode_gram_imag", "degeneracy_order",
+        "mesh_dof", "mesh_frequency_hz", "cavity_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "frequency_generation", "q_generation", "energy_generation",
+                "orthogonality_generation", "degeneracy_generation", "mesh_generation",
+                "owner_generation", "result_generation",
+            )
+        )
+        and isinstance(mode_ids, list)
+        and count == len(mode_ids) >= 2
+        and all(isinstance(item, int) and not isinstance(item, bool) and item > 0 for item in mode_ids)
+        and mode_ids == sorted(mode_ids)
+        and len(set(mode_ids)) == len(mode_ids)
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and all(math.isfinite(item) and item > 0.0 for item in (q_external, q_dielectric, q_conductor, q_total))
+        and math.isclose(q_total, expected_q, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and len(electric) == len(magnetic) == count
+        and all(math.isfinite(item) and item >= 0.0 for item in electric + magnetic)
+        and all(math.isclose(e, h, rel_tol=1.0e-12, abs_tol=1.0e-12) for e, h in zip(electric, magnetic))
+        and all(math.isclose(e + h, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12) for e, h in zip(electric, magnetic))
+        and identity.get("normalization") == "unit_total_energy_1j"
+        and len(gram_real) == len(gram_imag) == count
+        and all(len(row) == count for row in gram_real + gram_imag)
+        and all(
+            math.isclose(gram_real[row][column], 1.0 if row == column else 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+            and math.isclose(gram_imag[row][column], 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+            for row in range(count)
+            for column in range(count)
+        )
+        and identity.get("degeneracy_order") == mode_ids
+        and len(mesh_dof) == len(mesh_frequency) >= 3
+        and all(item > 0 for item in mesh_dof)
+        and all(left < right for left, right in zip(mesh_dof, mesh_dof[1:]))
+        and all(math.isfinite(item) and item > 0.0 for item in mesh_frequency)
+        and all(right <= left for left, right in zip(mesh_errors, mesh_errors[1:]))
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored_fields)
+        and _valid_sha256(identity.get("cavity_mesh_sha256"))
+        and bool(str(identity.get("cavity_owner", "")).strip())
+        and identity.get("accepted_cavity_owner") == identity.get("cavity_owner")
+        and _valid_sha256(identity.get("cavity_result_sha256"))
+        and identity.get("accepted_cavity_result_sha256") == identity.get("cavity_result_sha256")
+    )
+
+
+def _active_array_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "active_sparameter_embedded_pattern_scan_impedance_power_frequency_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+
+    def complex_vector(value: object) -> list[complex]:
+        if not isinstance(value, list):
+            raise ValueError
+        return [complex(float(row[0]), float(row[1])) for row in value if isinstance(row, list) and len(row) == 2]
+
+    generation = str(identity.get("array_generation", "")).strip()
+    try:
+        frequency = float(identity.get("frequency_hz"))
+        impedance = [float(item) for item in identity.get("port_impedance_ohm", [])]
+        phases = [float(item) for item in identity.get("scan_phase_rad", [])]
+        excitation = complex_vector(identity.get("excitation_complex"))
+        matrix = [complex_vector(row) for row in identity.get("s_matrix_complex", [])]
+        active = complex_vector(identity.get("active_s_complex"))
+        patterns = [complex_vector(row) for row in identity.get("embedded_pattern_complex", [])]
+        incident = float(identity.get("incident_power_w"))
+        reflected = float(identity.get("reflected_power_w"))
+        accepted = float(identity.get("accepted_power_w"))
+        radiated = float(identity.get("radiated_power_w"))
+        dissipated = float(identity.get("dissipated_power_w"))
+    except (TypeError, ValueError, IndexError):
+        return False
+    count = len(excitation)
+    expected_active = [
+        sum(matrix[row][column] * excitation[column] for column in range(count)) / excitation[row]
+        for row in range(count)
+    ] if count and len(matrix) == count and all(len(row) == count for row in matrix) and all(abs(item) > 1.0e-15 for item in excitation) else []
+    mirrored_fields = (
+        "frequency_hz", "port_impedance_ohm", "scan_phase_rad", "excitation_complex",
+        "s_matrix_complex", "active_s_complex", "embedded_pattern_complex",
+        "incident_power_w", "reflected_power_w", "accepted_power_w",
+        "radiated_power_w", "dissipated_power_w", "array_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "sparameter_generation", "pattern_generation", "scan_generation",
+                "impedance_generation", "power_generation", "frequency_generation",
+                "mesh_generation", "owner_generation", "result_generation",
+            )
+        )
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and count == len(impedance) == len(phases) >= 2
+        and all(math.isfinite(item) and item > 0.0 for item in impedance)
+        and all(math.isfinite(item) for item in phases)
+        and all(math.isfinite(item.real) and math.isfinite(item.imag) for item in excitation + active)
+        and all(abs(observed - cmath.exp(1j * phase)) <= 1.0e-12 for observed, phase in zip(excitation, phases))
+        and len(expected_active) == count
+        and all(abs(observed - expected) <= 1.0e-12 for observed, expected in zip(active, expected_active))
+        and len(patterns) == count
+        and all(len(row) >= 2 and all(math.isfinite(item.real) and math.isfinite(item.imag) for item in row) for row in patterns)
+        and all(math.isfinite(item) for item in (incident, reflected, accepted, radiated, dissipated))
+        and incident > 0.0
+        and 0.0 <= reflected <= incident
+        and radiated >= 0.0
+        and dissipated >= 0.0
+        and math.isclose(accepted, incident - reflected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(accepted, radiated + dissipated, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored_fields)
+        and _valid_sha256(identity.get("array_mesh_sha256"))
+        and bool(str(identity.get("array_owner", "")).strip())
+        and identity.get("accepted_array_owner") == identity.get("array_owner")
+        and _valid_sha256(identity.get("array_result_sha256"))
+        and identity.get("accepted_array_result_sha256") == identity.get("array_result_sha256")
+    )
+
+
 def nonlinear_inductance_sweep_gate(
     summary: Mapping[str, Any],
     *,
@@ -3832,6 +3993,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "nearfar_results_use_current_sphere_power_directivity_gain_efficiency_polarization_quadrature_mesh_owner_and_result": (
                 _nearfar_power_inputs_are_current(raw)
+            ),
+            "cavity_eigenmodes_use_current_frequency_q_energy_orthogonality_degeneracy_mesh_owner_and_result": (
+                _cavity_eigenmode_closure_inputs_are_current(raw)
+            ),
+            "active_arrays_use_current_sparameters_patterns_scan_impedance_power_frequency_mesh_owner_and_result": (
+                _active_array_closure_inputs_are_current(raw)
             ),
         }
         row = {
