@@ -1280,6 +1280,115 @@ def _axisymmetric_heat_balance_identity_ok(value):
     )
 
 
+def _kelvin_open_boundary_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("kelvin_generation", "")).strip()
+    try:
+        radius = float(value.get("kelvin_radius_m"))
+        permeability = [float(item) for item in value.get("mapped_permeability_relative", [])]
+        jacobians = [float(item) for item in value.get("mapping_jacobian_determinants", [])]
+        potential_jump = float(value.get("interface_potential_jump"))
+        flux_jump = float(value.get("interface_normal_flux_jump_wb"))
+        energy = float(value.get("magnetic_energy_j"))
+        inner_flux = float(value.get("inner_flux_wb"))
+        outer_flux = float(value.get("outer_flux_wb"))
+        far_radii = [float(item) for item in value.get("far_field_radius_m", [])]
+        far_potential = [float(item) for item in value.get("far_field_potential", [])]
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "kelvin_radius_m", "mapped_permeability_relative", "mapping_jacobian_determinants",
+        "interface_potential_jump", "interface_normal_flux_jump_wb", "magnetic_energy_j",
+        "inner_flux_wb", "outer_flux_wb", "far_field_radius_m", "far_field_potential",
+        "kelvin_mesh_sha256",
+    )
+    decay_constants = [radius_value * potential for radius_value, potential in zip(far_radii, far_potential)]
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "radius_generation", "mapping_generation", "jacobian_generation",
+            "interface_generation", "energy_generation", "flux_generation",
+            "far_field_generation", "mesh_generation", "owner_generation", "result_generation"))
+        and math.isfinite(radius) and radius > 0.0
+        and len(permeability) == len(jacobians) >= 2
+        and all(math.isfinite(item) and item > 0.0 for item in permeability + jacobians)
+        and all(math.isclose(mu * jacobian, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12) for mu, jacobian in zip(permeability, jacobians))
+        and math.isfinite(potential_jump) and abs(potential_jump) <= 1.0e-12
+        and math.isfinite(flux_jump) and abs(flux_jump) <= 1.0e-12
+        and math.isfinite(energy) and energy > 0.0
+        and math.isfinite(inner_flux) and math.isfinite(outer_flux)
+        and math.isclose(inner_flux + outer_flux, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and len(far_radii) == len(far_potential) >= 3
+        and all(math.isfinite(item) for item in far_radii + far_potential)
+        and all(right > left > radius for left, right in zip(far_radii, far_radii[1:]))
+        and all(abs(right) < abs(left) for left, right in zip(far_potential, far_potential[1:]))
+        and all(math.isclose(item, decay_constants[0], rel_tol=1.0e-12, abs_tol=1.0e-12) for item in decay_constants[1:])
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("kelvin_mesh_sha256"))
+        and bool(str(value.get("kelvin_result_owner", "")).strip())
+        and value.get("accepted_kelvin_result_owner") == value.get("kelvin_result_owner")
+        and _valid_sha256(value.get("kelvin_result_sha256"))
+        and value.get("accepted_kelvin_result_sha256") == value.get("kelvin_result_sha256")
+    )
+
+
+def _airgap_force_closure_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    try:
+        contour_ids = [int(item) for item in value.get("airgap_contour_ids", [])]
+        forces = [[float(item) for item in row] for row in value.get("contour_forces_n", [])]
+        harmonics = [[int(row[0]), float(row[1])] for row in value.get("fourier_stress_harmonics_n", [])]
+        virtual_force = float(value.get("virtual_work_force_n"))
+        displacement = float(value.get("virtual_work_displacement_m"))
+        torque_origin = [float(item) for item in value.get("torque_origin_m", [])]
+        torque = float(value.get("torque_nm"))
+    except (IndexError, TypeError, ValueError):
+        return False
+    mean_force = sum(row[0] for row in forces) / len(forces) if forces else math.nan
+    force_scale = max(abs(mean_force), 1.0)
+    mirrored = (
+        "airgap_contour_ids", "contour_forces_n", "fourier_stress_harmonics_n",
+        "virtual_work_force_n", "virtual_work_displacement_m", "torque_origin_m",
+        "torque_nm", "force_symmetry", "force_field_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "contour_generation", "stress_generation", "fourier_generation",
+            "virtual_work_generation", "symmetry_generation", "torque_generation",
+            "field_generation", "owner_generation", "result_generation"))
+        and len(contour_ids) >= 2 and len(set(contour_ids)) == len(contour_ids)
+        and all(item > 0 for item in contour_ids)
+        and len(forces) == len(contour_ids)
+        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in forces)
+        and all(math.isclose(row[0], mean_force, rel_tol=1.0e-8, abs_tol=1.0e-9) for row in forces)
+        and all(abs(row[1]) <= 1.0e-9 * force_scale for row in forces)
+        and bool(harmonics) and harmonics[0][0] == 0
+        and len({row[0] for row in harmonics}) == len(harmonics)
+        and math.isclose(harmonics[0][1], mean_force, rel_tol=1.0e-8, abs_tol=1.0e-9)
+        and all(abs(row[1]) <= 1.0e-9 * force_scale for row in harmonics[1:])
+        and math.isfinite(virtual_force)
+        and math.isclose(virtual_force, mean_force, rel_tol=1.0e-8, abs_tol=1.0e-9)
+        and math.isfinite(displacement) and displacement > 0.0
+        and len(torque_origin) == 2 and all(math.isfinite(item) for item in torque_origin)
+        and math.isfinite(torque) and abs(torque) <= 1.0e-9 * force_scale
+        and value.get("force_symmetry") == "mirror_y"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("force_field_sha256"))
+        and bool(str(value.get("force_result_owner", "")).strip())
+        and value.get("accepted_force_result_owner") == value.get("force_result_owner")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256") == value.get("force_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -1359,6 +1468,8 @@ def force_coenergy_displacement_gate(
     laminated_diffusion_power_identity_ok = True
     electrostatic_capacitance_identity_ok = True
     axisymmetric_heat_balance_identity_ok = True
+    kelvin_open_boundary_identity_ok = True
+    airgap_force_closure_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -1412,6 +1523,8 @@ def force_coenergy_displacement_gate(
         laminated_diffusion_power_identity_ok = False
         electrostatic_capacitance_identity_ok = False
         axisymmetric_heat_balance_identity_ok = False
+        kelvin_open_boundary_identity_ok = False
+        airgap_force_closure_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -3046,6 +3159,16 @@ def force_coenergy_displacement_gate(
                 "axisymmetric_heat_conduction_convection_source_boundary_flux_weight_temperature_mesh_owner_result_identity"
             )
         )
+        kelvin_open_boundary_identity_ok = _kelvin_open_boundary_identity_ok(
+            artifact_identity.get(
+                "kelvin_transform_radius_permeability_jacobian_interface_energy_flux_far_field_mesh_owner_result_identity"
+            )
+        )
+        airgap_force_closure_identity_ok = _airgap_force_closure_identity_ok(
+            artifact_identity.get(
+                "force_airgap_contour_stress_fourier_virtual_work_symmetry_torque_origin_field_result_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -3229,6 +3352,12 @@ def force_coenergy_displacement_gate(
         ),
         "axisymmetric_heat_closes_conduction_convection_source_flux_weight_temperature_mesh_owner_and_result": (
             axisymmetric_heat_balance_identity_ok
+        ),
+        "kelvin_open_boundary_closes_mapping_interface_energy_flux_far_field_mesh_owner_and_result": (
+            kelvin_open_boundary_identity_ok
+        ),
+        "airgap_force_closes_contours_fourier_virtual_work_symmetry_torque_field_owner_and_result": (
+            airgap_force_closure_identity_ok
         ),
     }
     return {
