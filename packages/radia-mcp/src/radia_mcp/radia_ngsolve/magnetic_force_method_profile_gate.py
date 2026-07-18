@@ -1152,6 +1152,130 @@ def _laminated_core_loss_identity_ok(value: object) -> bool:
     )
 
 
+def _magnet_demag_volume_fraction_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    try:
+        recoil = float(value.get("recoil_relative_permeability"))
+        result_recoil = float(value.get("result_recoil_relative_permeability"))
+        knee = float(value.get("knee_field_a_m"))
+        result_knee = float(value.get("result_knee_field_a_m"))
+        temperature = float(value.get("temperature_c"))
+        result_temperature = float(value.get("result_temperature_c"))
+        element_ids = [int(item) for item in value.get("element_ids", [])]
+        result_element_ids = [int(item) for item in value.get("result_element_ids", [])]
+        local_field = [float(item) for item in value.get("local_recoil_axis_field_a_m", [])]
+        result_local_field = [float(item) for item in value.get("result_local_recoil_axis_field_a_m", [])]
+        volumes = [float(item) for item in value.get("element_volumes_m3", [])]
+        result_volumes = [float(item) for item in value.get("result_element_volumes_m3", [])]
+        magnet_volume = float(value.get("magnet_volume_m3"))
+        result_magnet_volume = float(value.get("result_magnet_volume_m3"))
+        fraction = float(value.get("irreversible_volume_fraction"))
+        result_fraction = float(value.get("result_irreversible_volume_fraction"))
+    except (TypeError, ValueError):
+        return False
+    mask = value.get("irreversible_mask")
+    result_mask = value.get("result_irreversible_mask")
+    derived_mask = [item <= knee for item in local_field]
+    count = len(element_ids)
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "recoil_demag_generation", "knee_demag_generation",
+            "temperature_demag_generation", "field_demag_generation",
+            "mask_demag_generation", "volume_demag_generation",
+            "mesh_demag_generation", "result_demag_generation"))
+        and math.isfinite(recoil) and recoil > 0.0
+        and math.isclose(result_recoil, recoil, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isfinite(knee) and knee < 0.0
+        and math.isclose(result_knee, knee, rel_tol=0.0, abs_tol=1.0e-9)
+        and math.isfinite(temperature)
+        and math.isclose(result_temperature, temperature, rel_tol=0.0, abs_tol=1.0e-12)
+        and count > 0 and len(set(element_ids)) == count
+        and all(item > 0 for item in element_ids)
+        and len(local_field) == len(volumes) == count
+        and all(math.isfinite(item) for item in local_field)
+        and all(math.isfinite(item) and item > 0.0 for item in volumes)
+        and result_element_ids == element_ids
+        and result_local_field == local_field
+        and result_volumes == volumes
+        and isinstance(mask, list) and len(mask) == count
+        and all(isinstance(item, bool) for item in mask)
+        and mask == derived_mask and result_mask == mask
+        and math.isclose(magnet_volume, sum(volumes), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(result_magnet_volume, magnet_volume, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(
+            fraction,
+            sum(volume for volume, failed in zip(volumes, mask) if failed) / magnet_volume,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(result_fraction, fraction, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("material_state_sha256"))
+        and value.get("result_material_state_sha256") == value.get("material_state_sha256")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _linear_motor_wave_end_effect_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("linear_motor_generation", "")).strip()
+    phase_sequence = value.get("phase_sequence")
+    try:
+        pitch = float(value.get("pole_pitch_m"))
+        result_pitch = float(value.get("result_pole_pitch_m"))
+        positions = [float(item) for item in value.get("position_m", [])]
+        result_positions = [float(item) for item in value.get("result_position_m", [])]
+        end_effect = [float(item) for item in value.get("end_effect_factor", [])]
+        result_end_effect = [float(item) for item in value.get("result_end_effect_factor", [])]
+        force = [float(item) for item in value.get("force_n", [])]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+        mean_force = float(value.get("mean_force_n"))
+        result_mean_force = float(value.get("result_mean_force_n"))
+        ripple = float(value.get("force_ripple_peak_to_peak_n"))
+        result_ripple = float(value.get("result_force_ripple_peak_to_peak_n"))
+    except (TypeError, ValueError):
+        return False
+    count = len(positions)
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "end_effect_linear_motor_generation", "phase_linear_motor_generation",
+            "wave_linear_motor_generation", "pitch_linear_motor_generation",
+            "position_linear_motor_generation", "force_linear_motor_generation",
+            "ripple_linear_motor_generation", "result_linear_motor_generation"))
+        and phase_sequence == ["U", "V", "W"]
+        and value.get("result_phase_sequence") == phase_sequence
+        and value.get("traveling_wave_direction") == "global-x-positive"
+        and value.get("result_traveling_wave_direction") == value.get("traveling_wave_direction")
+        and math.isfinite(pitch) and pitch > 0.0
+        and math.isclose(result_pitch, pitch, rel_tol=0.0, abs_tol=1.0e-15)
+        and count >= 5 and len(end_effect) == len(force) == count
+        and all(math.isfinite(item) for item in positions + end_effect + force)
+        and all(right > left for left, right in zip(positions, positions[1:]))
+        and math.isclose(positions[-1] - positions[0], pitch, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(0.0 < item <= 1.0 for item in end_effect)
+        and result_positions == positions and result_end_effect == end_effect
+        and result_force == force
+        and math.isclose(force[0], force[-1], rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(mean_force, sum(force) / count, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(result_mean_force, mean_force, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(ripple, max(force) - min(force), rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_ripple, ripple, rel_tol=0.0, abs_tol=1.0e-12)
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1260,6 +1384,8 @@ def magnetic_force_method_profile_gate(
     motor_coenergy_torque_identity_ok = True
     airgap_stress_harmonic_torque_identity_ok = True
     laminated_core_loss_identity_ok = True
+    magnet_demag_volume_fraction_identity_ok = True
+    linear_motor_wave_end_effect_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1305,6 +1431,8 @@ def magnetic_force_method_profile_gate(
         motor_coenergy_torque_identity_ok = False
         airgap_stress_harmonic_torque_identity_ok = False
         laminated_core_loss_identity_ok = False
+        magnet_demag_volume_fraction_identity_ok = False
+        linear_motor_wave_end_effect_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3019,6 +3147,16 @@ def magnetic_force_method_profile_gate(
                 "laminated_core_hysteresis_eddy_excess_frequency_flux_lamination_volume_result_generation_identity"
             )
         )
+        magnet_demag_volume_fraction_identity_ok = _magnet_demag_volume_fraction_identity_ok(
+            identity_value.get(
+                "magnet_demag_recoil_knee_field_volume_generation_identity"
+            )
+        )
+        linear_motor_wave_end_effect_identity_ok = _linear_motor_wave_end_effect_identity_ok(
+            identity_value.get(
+                "linear_motor_end_phase_wave_pitch_force_generation_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3209,6 +3347,12 @@ def magnetic_force_method_profile_gate(
         ),
         "laminated_core_loss_uses_current_frequency_flux_lamination_volume_components_and_result": (
             laminated_core_loss_identity_ok
+        ),
+        "magnet_demag_uses_current_recoil_knee_temperature_local_field_mask_volume_and_result": (
+            magnet_demag_volume_fraction_identity_ok
+        ),
+        "linear_motor_force_uses_current_end_effect_phase_wave_pitch_positions_ripple_and_result": (
+            linear_motor_wave_end_effect_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
