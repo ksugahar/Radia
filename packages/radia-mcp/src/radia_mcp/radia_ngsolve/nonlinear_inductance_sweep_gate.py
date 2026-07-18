@@ -2648,6 +2648,152 @@ def _sar_mass_average_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _wave_port_reference_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "wave_port_modal_power_impedance_deembed_phase_balance_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("port_generation", "")).strip()
+    modes = identity.get("mode_ids")
+    owners = identity.get("port_mode_owner_ids")
+    try:
+        power = [float(item) for item in identity.get("modal_power_normalization_w", [])]
+        impedance = [float(item) for item in identity.get("reference_impedance_ohm", [])]
+        planes = [float(item) for item in identity.get("deembed_plane_m", [])]
+        phases = [float(item) for item in identity.get("phase_reference_rad", [])]
+        incident = float(identity.get("incident_power_w"))
+        reflected = float(identity.get("reflected_power_w"))
+        transmitted = float(identity.get("transmitted_power_w"))
+        dissipated = float(identity.get("dissipated_power_w"))
+        result_balance = float(identity.get("result_power_balance_w"))
+    except (TypeError, ValueError):
+        return False
+    count = len(modes) if isinstance(modes, list) else 0
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mode_port_generation",
+                "power_port_generation",
+                "impedance_port_generation",
+                "deembed_port_generation",
+                "phase_port_generation",
+                "owner_port_generation",
+                "balance_port_generation",
+                "result_port_generation",
+            )
+        )
+        and count >= 2
+        and all(isinstance(item, str) and item for item in modes)
+        and len(set(modes)) == count
+        and identity.get("result_mode_ids") == modes
+        and len(power) == count
+        and all(math.isfinite(item) and item > 0.0 for item in power)
+        and identity.get("result_modal_power_normalization_w") == power
+        and len(impedance) == count
+        and all(math.isfinite(item) and item > 0.0 for item in impedance)
+        and identity.get("result_reference_impedance_ohm") == impedance
+        and len(planes) == count
+        and all(math.isfinite(item) for item in planes)
+        and identity.get("result_deembed_plane_m") == planes
+        and len(phases) == count
+        and all(math.isfinite(item) for item in phases)
+        and identity.get("result_phase_reference_rad") == phases
+        and isinstance(owners, list)
+        and len(owners) == count
+        and all(isinstance(item, str) and item for item in owners)
+        and len(set(owners)) == count
+        and identity.get("result_port_mode_owner_ids") == owners
+        and math.isfinite(incident)
+        and incident > 0.0
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for item in (reflected, transmitted, dissipated)
+        )
+        and math.isclose(
+            reflected + transmitted + dissipated,
+            incident,
+            rel_tol=1.0e-9,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            result_balance, incident, rel_tol=1.0e-9, abs_tol=1.0e-12
+        )
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _farfield_basis_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "farfield_spherical_basis_handedness_polarization_phase_power_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("farfield_generation", "")).strip()
+    try:
+        theta_weights = [float(item) for item in identity.get("theta_weights", [])]
+        phi_weights = [float(item) for item in identity.get("phi_weights", [])]
+        radiated_power = float(identity.get("radiated_power_w"))
+        integrated_power = float(identity.get("integrated_radiated_power_w"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "basis_farfield_generation",
+                "handedness_farfield_generation",
+                "order_farfield_generation",
+                "polarization_farfield_generation",
+                "phase_farfield_generation",
+                "weights_farfield_generation",
+                "power_farfield_generation",
+                "owner_farfield_generation",
+                "result_farfield_generation",
+            )
+        )
+        and identity.get("spherical_basis") == "e_theta_e_phi"
+        and identity.get("result_spherical_basis") == identity.get("spherical_basis")
+        and identity.get("coordinate_handedness") == "right_handed"
+        and identity.get("result_coordinate_handedness")
+        == identity.get("coordinate_handedness")
+        and identity.get("angular_order") == "theta_major_phi_minor"
+        and identity.get("result_angular_order") == identity.get("angular_order")
+        and identity.get("polarization_phase_convention") == "exp_plus_j_phase"
+        and identity.get("result_polarization_phase_convention")
+        == identity.get("polarization_phase_convention")
+        and bool(theta_weights)
+        and bool(phi_weights)
+        and all(math.isfinite(item) and item >= 0.0 for item in theta_weights)
+        and all(math.isfinite(item) and item >= 0.0 for item in phi_weights)
+        and math.isclose(sum(theta_weights), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(sum(phi_weights), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and identity.get("result_theta_weights") == theta_weights
+        and identity.get("result_phi_weights") == phi_weights
+        and math.isfinite(radiated_power)
+        and radiated_power >= 0.0
+        and math.isclose(
+            integrated_power,
+            radiated_power,
+            rel_tol=1.0e-9,
+            abs_tol=1.0e-12,
+        )
+        and bool(identity.get("farfield_owner_id"))
+        and identity.get("accepted_farfield_owner_id")
+        == identity.get("farfield_owner_id")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2943,6 +3089,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "sar_uses_current_average_mass_density_voxels_frequency_field_mesh_and_result": (
                 _sar_mass_average_inputs_are_current(raw)
+            ),
+            "wave_ports_use_current_modal_power_impedance_deembed_phase_owner_balance_and_result": (
+                _wave_port_reference_inputs_are_current(raw)
+            ),
+            "farfields_use_current_spherical_basis_handedness_order_polarization_weights_power_owner_and_result": (
+                _farfield_basis_inputs_are_current(raw)
             ),
         }
         row = {
