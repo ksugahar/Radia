@@ -547,4 +547,3 @@ def get_technical_reports_documentation(topic: str = "overview") -> str:
         return TOPICS[key]
     available = ", ".join(sorted(TOPICS))
     return f"Unknown topic {topic!r}. Available topics: {available}, all"
-
