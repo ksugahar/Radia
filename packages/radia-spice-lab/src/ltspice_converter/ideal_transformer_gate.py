@@ -2708,6 +2708,137 @@ def _is_sha256(value: str) -> bool:
     )
 
 
+def _behavioral_source_event_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "behavioral_source_event_timestep_derivative_charge_energy_initial_owner_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        event_time = float(contract.get("event_time_s"))
+        result_event_time = float(contract.get("result_event_time_s"))
+        time_grid = [float(value) for value in contract.get("time_grid_s", [])]
+        result_time_grid = [
+            float(value) for value in contract.get("result_time_grid_s", [])
+        ]
+        charge = float(contract.get("integrated_charge_c"))
+        result_charge = float(contract.get("result_integrated_charge_c"))
+        energy = float(contract.get("source_energy_j"))
+        result_energy = float(contract.get("result_source_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("behavioral_generation_id") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "event_behavioral_generation_id",
+                "timestep_behavioral_generation_id",
+                "derivative_behavioral_generation_id",
+                "charge_behavioral_generation_id",
+                "energy_behavioral_generation_id",
+                "initial_behavioral_generation_id",
+                "owner_behavioral_generation_id",
+                "result_behavioral_generation_id",
+            )
+        )
+        and math.isfinite(event_time)
+        and event_time >= 0.0
+        and result_event_time == event_time
+        and len(time_grid) >= 3
+        and all(math.isfinite(value) and value >= 0.0 for value in time_grid)
+        and all(left < right for left, right in zip(time_grid, time_grid[1:]))
+        and any(
+            math.isclose(value, event_time, rel_tol=0.0, abs_tol=1.0e-15)
+            for value in time_grid
+        )
+        and result_time_grid == time_grid
+        and contract.get("derivative_convention") == "right_limit_after_event"
+        and contract.get("result_derivative_convention")
+        == contract.get("derivative_convention")
+        and isinstance(contract.get("initial_state"), Mapping)
+        and contract.get("result_initial_state") == contract.get("initial_state")
+        and math.isfinite(charge)
+        and result_charge == charge
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and result_energy == energy
+        and _is_sha256(str(contract.get("waveform_owner_sha256") or ""))
+        and contract.get("result_waveform_owner_sha256")
+        == contract.get("waveform_owner_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _touchstone_network_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "touchstone_impedance_frequency_parameter_port_complex_passivity_file_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        impedance = float(contract.get("reference_impedance_ohm"))
+        result_impedance = float(contract.get("result_reference_impedance_ohm"))
+        ports = [int(value) for value in contract.get("port_order", [])]
+        result_ports = [int(value) for value in contract.get("result_port_order", [])]
+        singular_value = float(contract.get("maximum_singular_value"))
+        result_singular_value = float(contract.get("result_maximum_singular_value"))
+        tolerance = float(contract.get("passivity_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("touchstone_generation_id") or "")
+    return (
+        bool(generation)
+        and all(
+            contract.get(key) == generation
+            for key in (
+                "impedance_touchstone_generation_id",
+                "frequency_touchstone_generation_id",
+                "parameter_touchstone_generation_id",
+                "port_touchstone_generation_id",
+                "complex_touchstone_generation_id",
+                "passivity_touchstone_generation_id",
+                "file_touchstone_generation_id",
+                "result_touchstone_generation_id",
+            )
+        )
+        and math.isfinite(impedance)
+        and impedance > 0.0
+        and result_impedance == impedance
+        and contract.get("frequency_unit") in {"Hz", "kHz", "MHz", "GHz"}
+        and contract.get("result_frequency_unit") == contract.get("frequency_unit")
+        and contract.get("parameter_type") == "S"
+        and contract.get("result_parameter_type") == contract.get("parameter_type")
+        and len(ports) >= 2
+        and all(port > 0 for port in ports)
+        and len(set(ports)) == len(ports)
+        and result_ports == ports
+        and contract.get("complex_format") in {"RI", "MA", "DB"}
+        and contract.get("result_complex_format") == contract.get("complex_format")
+        and math.isfinite(tolerance)
+        and tolerance >= 0.0
+        and math.isfinite(singular_value)
+        and singular_value >= 0.0
+        and singular_value <= 1.0 + tolerance
+        and result_singular_value == singular_value
+        and _is_sha256(str(contract.get("touchstone_file_sha256") or ""))
+        and contract.get("parsed_touchstone_file_sha256")
+        == contract.get("touchstone_file_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -3100,6 +3231,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "monte_carlo_yield_uses_current_distributions_tolerances_seeds_failure_samples_owner_and_result": (
             _monte_carlo_yield_owner_identity_ok(positive)
+        ),
+        "behavioral_sources_use_current_event_grid_derivative_charge_energy_initial_owner_and_result": (
+            _behavioral_source_event_owner_identity_ok(positive)
+        ),
+        "touchstone_networks_use_current_impedance_units_parameters_ports_complex_passivity_file_and_result": (
+            _touchstone_network_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
