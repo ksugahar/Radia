@@ -5690,6 +5690,420 @@ def _headless_batch_contract_identity_ok(identity: object) -> bool:
     )
 
 
+def _midsurface_shell_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        face_pairs = [
+            [int(value) for value in pair] for pair in identity.get("paired_face_ids", [])
+        ]
+        result_face_pairs = [
+            [int(value) for value in pair] for pair in identity.get("result_paired_face_ids", [])
+        ]
+        distances = [float(value) for value in identity.get("paired_face_distance_m", [])]
+        result_distances = [
+            float(value) for value in identity.get("result_paired_face_distance_m", [])
+        ]
+        thicknesses = [float(value) for value in identity.get("shell_thickness_m", [])]
+        result_thicknesses = [
+            float(value) for value in identity.get("result_shell_thickness_m", [])
+        ]
+        normal_dots = [float(value) for value in identity.get("paired_normal_dot", [])]
+        result_normal_dots = [
+            float(value) for value in identity.get("result_paired_normal_dot", [])
+        ]
+        areas = [float(value) for value in identity.get("midsurface_area_m2", [])]
+        result_areas = [float(value) for value in identity.get("result_midsurface_area_m2", [])]
+        reconstructed_volume = float(identity.get("reconstructed_volume_m3"))
+        result_reconstructed_volume = float(identity.get("result_reconstructed_volume_m3"))
+        source_volume = float(identity.get("source_volume_m3"))
+        volume_tolerance = float(identity.get("volume_tolerance_m3"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("midsurface_generation") or "")
+    flat_faces = [face_id for pair in face_pairs for face_id in pair]
+    reconstructed_from_shells = sum(area * thickness for area, thickness in zip(areas, thicknesses))
+    shell_sidesets = list(identity.get("shell_sidesets") or [])
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "facepair_generation",
+                "thickness_generation",
+                "normal_generation",
+                "area_generation",
+                "volume_generation",
+                "block_generation",
+                "geometry_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and bool(face_pairs)
+        and all(
+            len(pair) == 2 and pair[0] > 0 and pair[1] > 0 and pair[0] != pair[1]
+            for pair in face_pairs
+        )
+        and len(set(flat_faces)) == len(flat_faces)
+        and result_face_pairs == face_pairs
+        and len(distances) == len(thicknesses) == len(normal_dots) == len(areas) == len(face_pairs)
+        and all(math.isfinite(value) and value > 0.0 for value in distances + thicknesses + areas)
+        and all(
+            math.isclose(distance, thickness, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for distance, thickness in zip(distances, thicknesses)
+        )
+        and result_distances == distances
+        and result_thicknesses == thicknesses
+        and all(
+            math.isfinite(value) and math.isclose(value, -1.0, rel_tol=0.0, abs_tol=1.0e-12)
+            for value in normal_dots
+        )
+        and result_normal_dots == normal_dots
+        and result_areas == areas
+        and math.isfinite(volume_tolerance)
+        and volume_tolerance > 0.0
+        and math.isclose(
+            reconstructed_volume,
+            reconstructed_from_shells,
+            rel_tol=1.0e-12,
+            abs_tol=volume_tolerance,
+        )
+        and math.isclose(
+            result_reconstructed_volume,
+            reconstructed_volume,
+            rel_tol=1.0e-12,
+            abs_tol=volume_tolerance,
+        )
+        and math.isclose(
+            source_volume, reconstructed_volume, rel_tol=1.0e-12, abs_tol=volume_tolerance
+        )
+        and bool(str(identity.get("shell_block") or ""))
+        and identity.get("result_shell_block") == identity.get("shell_block")
+        and bool(shell_sidesets)
+        and len(set(shell_sidesets)) == len(shell_sidesets)
+        and list(identity.get("result_shell_sidesets") or []) == shell_sidesets
+        and bool(str(identity.get("geometry_owner") or ""))
+        and identity.get("result_geometry_owner") == identity.get("geometry_owner")
+        and _valid_sha256(identity.get("midsurface_export_sha256"))
+        and identity.get("accepted_midsurface_export_sha256")
+        == identity.get("midsurface_export_sha256")
+        and _valid_sha256(identity.get("midsurface_result_sha256"))
+        and identity.get("accepted_midsurface_result_sha256")
+        == identity.get("midsurface_result_sha256")
+    )
+
+
+def _cohesive_crack_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        face_pairs = [
+            [int(value) for value in pair] for pair in identity.get("duplicated_face_pairs", [])
+        ]
+        result_face_pairs = [
+            [int(value) for value in pair]
+            for pair in identity.get("result_duplicated_face_pairs", [])
+        ]
+        node_pairs = [
+            [int(value) for value in pair] for pair in identity.get("duplicated_node_pairs", [])
+        ]
+        result_node_pairs = [
+            [int(value) for value in pair]
+            for pair in identity.get("result_duplicated_node_pairs", [])
+        ]
+        crack_front = [int(value) for value in identity.get("crack_front_nodes", [])]
+        result_crack_front = [int(value) for value in identity.get("result_crack_front_nodes", [])]
+        minimum_jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_minimum_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        allowed_jacobian = float(identity.get("minimum_allowed_scaled_jacobian"))
+        result_allowed_jacobian = float(identity.get("result_minimum_allowed_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("cohesive_generation") or "")
+    source_faces = [pair[0] for pair in face_pairs if len(pair) == 2]
+    target_faces = [pair[1] for pair in face_pairs if len(pair) == 2]
+    source_nodes = [pair[0] for pair in node_pairs if len(pair) == 2]
+    target_nodes = [pair[1] for pair in node_pairs if len(pair) == 2]
+    cohesive_block = str(identity.get("cohesive_block") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "face_generation",
+                "nodepair_generation",
+                "front_generation",
+                "normal_generation",
+                "orientation_generation",
+                "traction_generation",
+                "block_generation",
+                "jacobian_generation",
+                "mesh_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and bool(face_pairs)
+        and all(
+            len(pair) == 2 and pair[0] > 0 and pair[1] > 0 and pair[0] != pair[1]
+            for pair in face_pairs
+        )
+        and len(set(source_faces)) == len(source_faces)
+        and len(set(target_faces)) == len(target_faces)
+        and set(source_faces).isdisjoint(target_faces)
+        and result_face_pairs == face_pairs
+        and bool(node_pairs)
+        and all(
+            len(pair) == 2 and pair[0] > 0 and pair[1] > 0 and pair[0] != pair[1]
+            for pair in node_pairs
+        )
+        and len(set(source_nodes)) == len(source_nodes)
+        and len(set(target_nodes)) == len(target_nodes)
+        and set(source_nodes).isdisjoint(target_nodes)
+        and result_node_pairs == node_pairs
+        and bool(crack_front)
+        and len(set(crack_front)) == len(crack_front)
+        and set(crack_front).issubset(source_nodes)
+        and result_crack_front == crack_front
+        and identity.get("interface_normal_relation") == "opposed_outward_normals"
+        and identity.get("result_interface_normal_relation")
+        == identity.get("interface_normal_relation")
+        and identity.get("cohesive_orientation") == "positive_reference_orientation"
+        and identity.get("result_cohesive_orientation") == identity.get("cohesive_orientation")
+        and identity.get("traction_direction") == "source_to_target"
+        and identity.get("result_traction_direction") == identity.get("traction_direction")
+        and cohesive_block.startswith("block:")
+        and "cohesive" in cohesive_block.lower()
+        and identity.get("result_cohesive_block") == cohesive_block
+        and math.isfinite(minimum_jacobian)
+        and math.isfinite(allowed_jacobian)
+        and allowed_jacobian > 0.0
+        and minimum_jacobian >= allowed_jacobian
+        and result_minimum_jacobian == minimum_jacobian
+        and result_allowed_jacobian == allowed_jacobian
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("result_mesh_owner") == identity.get("mesh_owner")
+        and _valid_sha256(identity.get("cohesive_export_sha256"))
+        and identity.get("accepted_cohesive_export_sha256")
+        == identity.get("cohesive_export_sha256")
+        and _valid_sha256(identity.get("cohesive_result_sha256"))
+        and identity.get("accepted_cohesive_result_sha256")
+        == identity.get("cohesive_result_sha256")
+    )
+
+
+def _virtual_geometry_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        curves = [int(value) for value in identity.get("suppressed_curve_ids", [])]
+        replay_curves = [int(value) for value in identity.get("replay_suppressed_curve_ids", [])]
+        surfaces = [int(value) for value in identity.get("suppressed_surface_ids", [])]
+        replay_surfaces = [
+            int(value) for value in identity.get("replay_suppressed_surface_ids", [])
+        ]
+        topology_map = {
+            str(key): int(value)
+            for key, value in _mapping(
+                identity.get("virtual_topology_map"), "virtual_topology_map"
+            ).items()
+        }
+        replay_topology_map = {
+            str(key): int(value)
+            for key, value in _mapping(
+                identity.get("replay_virtual_topology_map"), "replay_virtual_topology_map"
+            ).items()
+        }
+        quality_before = float(identity.get("minimum_quality_before"))
+        replay_quality_before = float(identity.get("replay_minimum_quality_before"))
+        quality_after = float(identity.get("minimum_quality_after"))
+        replay_quality_after = float(identity.get("replay_minimum_quality_after"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("virtual_generation") or "")
+    suppressed_keys = {str(value) for value in curves + surfaces}
+    block_inheritance = identity.get("block_inheritance")
+    sideset_inheritance = identity.get("sideset_inheritance")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "suppression_generation",
+                "topology_generation",
+                "inheritance_generation",
+                "quality_generation",
+                "undo_generation",
+                "checkpoint_generation",
+                "database_generation",
+                "result_generation",
+            )
+        )
+        and bool(curves or surfaces)
+        and all(value > 0 for value in curves + surfaces)
+        and len(set(curves)) == len(curves)
+        and len(set(surfaces)) == len(surfaces)
+        and replay_curves == curves
+        and replay_surfaces == surfaces
+        and set(topology_map) == suppressed_keys
+        and all(value > 0 for value in topology_map.values())
+        and len(set(topology_map.values())) == len(topology_map)
+        and replay_topology_map == topology_map
+        and isinstance(block_inheritance, Mapping)
+        and bool(block_inheritance)
+        and all(str(value).startswith("block:") for value in block_inheritance.values())
+        and identity.get("replay_block_inheritance") == block_inheritance
+        and isinstance(sideset_inheritance, Mapping)
+        and bool(sideset_inheritance)
+        and all(str(value).startswith("sideset:") for value in sideset_inheritance.values())
+        and identity.get("replay_sideset_inheritance") == sideset_inheritance
+        and math.isfinite(quality_before)
+        and math.isfinite(quality_after)
+        and quality_before >= 0.0
+        and quality_after > quality_before
+        and replay_quality_before == quality_before
+        and replay_quality_after == quality_after
+        and identity.get("undo_restored_topology") is True
+        and identity.get("replay_undo_restored_topology") is True
+        and str(identity.get("checkpoint_owner") or "").startswith("headless:")
+        and identity.get("replay_checkpoint_owner") == identity.get("checkpoint_owner")
+        and _valid_sha256(identity.get("database_sha256"))
+        and identity.get("replay_database_sha256") == identity.get("database_sha256")
+        and _valid_sha256(identity.get("virtual_result_sha256"))
+        and identity.get("accepted_virtual_result_sha256") == identity.get("virtual_result_sha256")
+    )
+
+
+def _anisotropic_crack_contract_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        eigenvalues = [float(value) for value in identity.get("metric_eigenvalues", [])]
+        result_eigenvalues = [
+            float(value) for value in identity.get("result_metric_eigenvalues", [])
+        ]
+        eigenvectors = [
+            [float(value) for value in row] for row in identity.get("metric_eigenvectors", [])
+        ]
+        result_eigenvectors = [
+            [float(value) for value in row]
+            for row in identity.get("result_metric_eigenvectors", [])
+        ]
+        sizes = [float(value) for value in identity.get("sizing_field_m", [])]
+        result_sizes = [float(value) for value in identity.get("result_sizing_field_m", [])]
+        tangent = [float(value) for value in identity.get("crack_front_tangent", [])]
+        result_tangent = [float(value) for value in identity.get("result_crack_front_tangent", [])]
+        aligned_axis = int(identity.get("aligned_metric_axis"))
+        result_aligned_axis = int(identity.get("result_aligned_metric_axis"))
+        transition_faces = int(identity.get("cohesive_transition_face_count"))
+        result_transition_faces = int(identity.get("result_cohesive_transition_face_count"))
+        minimum_quality = float(identity.get("minimum_quality"))
+        result_minimum_quality = float(identity.get("result_minimum_quality"))
+        allowed_quality = float(identity.get("minimum_allowed_quality"))
+        result_allowed_quality = float(identity.get("result_minimum_allowed_quality"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("anisotropic_generation") or "")
+    frame_ok = (
+        len(eigenvectors) == 3
+        and all(
+            len(row) == 3 and all(math.isfinite(value) for value in row) for row in eigenvectors
+        )
+        and all(
+            math.isclose(sum(value * value for value in row), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+            for row in eigenvectors
+        )
+        and all(
+            math.isclose(
+                sum(eigenvectors[i][k] * eigenvectors[j][k] for k in range(3)),
+                0.0,
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            for i in range(3)
+            for j in range(i + 1, 3)
+        )
+    )
+    metric_size_scales = (
+        [size * math.sqrt(value) for size, value in zip(sizes, eigenvalues)]
+        if len(sizes) == len(eigenvalues)
+        else []
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "metric_generation",
+                "eigenframe_generation",
+                "sizing_generation",
+                "alignment_generation",
+                "cohesive_generation",
+                "conformity_generation",
+                "quality_generation",
+                "region_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and len(eigenvalues) == 3
+        and all(math.isfinite(value) and value > 0.0 for value in eigenvalues)
+        and eigenvalues == sorted(eigenvalues)
+        and len(set(eigenvalues)) == 3
+        and result_eigenvalues == eigenvalues
+        and frame_ok
+        and result_eigenvectors == eigenvectors
+        and len(sizes) == 3
+        and all(math.isfinite(value) and value > 0.0 for value in sizes)
+        and sizes[0] > sizes[1] > sizes[2]
+        and result_sizes == sizes
+        and len(metric_size_scales) == 3
+        and all(
+            math.isclose(value, metric_size_scales[0], rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for value in metric_size_scales[1:]
+        )
+        and len(tangent) == 3
+        and all(math.isfinite(value) for value in tangent)
+        and math.isclose(sum(value * value for value in tangent), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and result_tangent == tangent
+        and 0 <= aligned_axis < 3
+        and result_aligned_axis == aligned_axis
+        and math.isclose(
+            abs(sum(tangent[index] * eigenvectors[aligned_axis][index] for index in range(3))),
+            1.0,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        )
+        and transition_faces > 0
+        and result_transition_faces == transition_faces
+        and identity.get("hex_interface_conformal") is True
+        and identity.get("result_hex_interface_conformal") is True
+        and math.isfinite(minimum_quality)
+        and math.isfinite(allowed_quality)
+        and allowed_quality > 0.0
+        and minimum_quality >= allowed_quality
+        and result_minimum_quality == minimum_quality
+        and result_allowed_quality == allowed_quality
+        and bool(str(identity.get("region_owner") or ""))
+        and identity.get("result_region_owner") == identity.get("region_owner")
+        and _valid_sha256(identity.get("anisotropic_export_sha256"))
+        and identity.get("accepted_anisotropic_export_sha256")
+        == identity.get("anisotropic_export_sha256")
+        and _valid_sha256(identity.get("anisotropic_result_sha256"))
+        and identity.get("accepted_anisotropic_result_sha256")
+        == identity.get("anisotropic_result_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -6577,6 +6991,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "high_order_curved_hexes_use_current_midnodes_projection_volume_jacobian_order_cad_mesh_and_export": (
             _curved_hex_contract_identity_ok(
                 summary.get("high_order_hex_curve_midnode_projection_volume_jacobian_order_cad_mesh_export_generation_identity")
+            )
+        ),
+        "midsurface_shells_use_current_facepairs_thickness_normals_area_volume_sets_geometry_and_result": (
+            _midsurface_shell_contract_identity_ok(
+                summary.get("midsurface_shell_facepair_thickness_normal_area_volume_block_sideset_geometry_export_result_generation_identity")
+            )
+        ),
+        "cohesive_cracks_use_current_faces_nodes_front_normals_orientation_traction_quality_mesh_and_result": (
+            _cohesive_crack_contract_identity_ok(
+                summary.get("cohesive_crack_face_nodepair_front_normal_orientation_traction_block_jacobian_mesh_export_result_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -7488,6 +7912,16 @@ def cubit_mixed_transition_source_gate(
         "headless_batches_use_current_exit_license_fallback_journal_log_database_command_process_and_result": (
             _headless_batch_contract_identity_ok(
                 summary.get("headless_batch_exit_license_fallback_journal_log_database_command_process_result_generation_identity")
+            )
+        ),
+        "virtual_geometry_replays_use_current_suppression_topology_inheritance_quality_undo_checkpoint_database_and_result": (
+            _virtual_geometry_contract_identity_ok(
+                summary.get("virtual_geometry_suppression_topology_map_inheritance_quality_undo_checkpoint_database_result_generation_identity")
+            )
+        ),
+        "anisotropic_crack_regions_use_spd_metric_eigenframe_sizing_alignment_cohesive_hex_quality_and_result": (
+            _anisotropic_crack_contract_identity_ok(
+                summary.get("anisotropic_crack_metric_eigenframe_sizing_alignment_cohesive_hexconformity_quality_region_export_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
