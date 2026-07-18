@@ -2546,6 +2546,108 @@ def _array_scan_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _waveguide_port_smatrix_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_port_mode_power_deembed_impedance_frequency_port_smatrix_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("port_generation", "")).strip()
+    modes = identity.get("mode_ids")
+    ports = identity.get("port_order")
+    try:
+        power = [float(item) for item in identity.get("power_normalization_w", [])]
+        planes = [float(item) for item in identity.get("deembed_plane_m", [])]
+        impedance = [float(item) for item in identity.get("reference_impedance_ohm", [])]
+        frequencies = [float(item) for item in identity.get("frequency_hz", [])]
+        matrix = [
+            [[float(part) for part in value] for value in row]
+            for row in identity.get("smatrix_ri", [])
+        ]
+        result_matrix = [
+            [[float(part) for part in value] for value in row]
+            for row in identity.get("result_smatrix_ri", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    count = len(ports) if isinstance(ports, list) else 0
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "mode_port_generation", "power_port_generation", "deembed_port_generation",
+            "impedance_port_generation", "frequency_port_generation", "order_port_generation",
+            "result_port_generation"))
+        and count >= 2
+        and all(isinstance(item, int) and item > 0 for item in ports)
+        and len(set(ports)) == count and identity.get("result_port_order") == ports
+        and isinstance(modes, list) and len(modes) == count and all(isinstance(item, str) and item for item in modes)
+        and identity.get("result_mode_ids") == modes
+        and len(power) == count and all(math.isclose(item, 1.0, rel_tol=0.0, abs_tol=1.0e-12) for item in power)
+        and identity.get("result_power_normalization_w") == power
+        and len(planes) == count and all(math.isfinite(item) for item in planes)
+        and identity.get("result_deembed_plane_m") == planes
+        and len(impedance) == count and all(math.isfinite(item) and item > 0.0 for item in impedance)
+        and identity.get("result_reference_impedance_ohm") == impedance
+        and len(frequencies) >= 2 and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and identity.get("result_frequency_hz") == frequencies
+        and len(matrix) == count and all(len(row) == count for row in matrix)
+        and all(len(value) == 2 and all(math.isfinite(part) for part in value) for row in matrix for value in row)
+        and result_matrix == matrix
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _sar_mass_average_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("sar_mass_density_voxel_frequency_field_mesh_result_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("sar_generation", "")).strip()
+    voxel_ids = identity.get("voxel_ids")
+    try:
+        mass = float(identity.get("averaging_mass_kg"))
+        density = float(identity.get("tissue_density_kg_m3"))
+        voxel_mass = [float(item) for item in identity.get("voxel_mass_kg", [])]
+        frequency = float(identity.get("frequency_hz"))
+        sar = float(identity.get("sar_w_kg"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "mass_sar_generation", "density_sar_generation", "voxel_sar_generation",
+            "frequency_sar_generation", "field_sar_generation", "mesh_sar_generation",
+            "result_sar_generation"))
+        and math.isfinite(mass) and mass > 0.0
+        and identity.get("result_averaging_mass_kg") == mass
+        and math.isfinite(density) and density > 0.0
+        and identity.get("result_tissue_density_kg_m3") == density
+        and isinstance(voxel_ids, list) and bool(voxel_ids)
+        and all(isinstance(item, int) and item > 0 for item in voxel_ids)
+        and len(set(voxel_ids)) == len(voxel_ids)
+        and identity.get("result_voxel_ids") == voxel_ids
+        and len(voxel_mass) == len(voxel_ids) and all(item > 0.0 for item in voxel_mass)
+        and math.isclose(sum(voxel_mass), mass, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and identity.get("result_voxel_mass_kg") == voxel_mass
+        and math.isfinite(frequency) and frequency > 0.0
+        and identity.get("result_frequency_hz") == frequency
+        and identity.get("field_normalization") == "accepted_power_1w"
+        and identity.get("result_field_normalization") == "accepted_power_1w"
+        and math.isfinite(sar) and sar >= 0.0 and identity.get("result_sar_w_kg") == sar
+        and _valid_sha256(identity.get("mesh_sha256"))
+        and identity.get("result_mesh_sha256") == identity.get("mesh_sha256")
+        and _valid_sha256(identity.get("result_sha256"))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -2835,6 +2937,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "array_scan_uses_current_embedded_patterns_element_order_phases_reflection_power_mesh_and_result": (
                 _array_scan_inputs_are_current(raw)
+            ),
+            "waveguide_ports_use_current_modes_power_deembed_impedance_frequency_order_smatrix_mesh_and_result": (
+                _waveguide_port_smatrix_inputs_are_current(raw)
+            ),
+            "sar_uses_current_average_mass_density_voxels_frequency_field_mesh_and_result": (
+                _sar_mass_average_inputs_are_current(raw)
             ),
         }
         row = {
