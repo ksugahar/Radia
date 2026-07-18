@@ -236,6 +236,12 @@ def regularized_trace_inverse_path_gate(
         _optional_hmatrix_aca_cluster_identity_is_aligned(summary)
     )
     calderon_cq_identity_ok = _optional_calderon_cq_identity_is_aligned(summary)
+    near_singular_quadrature_identity_ok = (
+        _optional_bem_near_singular_quadrature_identity_is_aligned(summary)
+    )
+    fembem_energy_reciprocity_identity_ok = (
+        _optional_fembem_energy_reciprocity_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -391,6 +397,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "calderon_cq_uses_current_v_k_trace_normals_frequency_inverse_mesh_and_result": (
             calderon_cq_identity_ok
+        ),
+        "bem_near_singular_quadrature_uses_current_distance_size_order_map_kernel_reference_mesh_and_result": (
+            near_singular_quadrature_identity_ok
+        ),
+        "fembem_energy_flux_and_reciprocity_use_current_trace_normal_frequency_incident_field_and_result": (
+            fembem_energy_reciprocity_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -2645,6 +2657,158 @@ def _optional_calderon_cq_identity_is_aligned(
         == value.get("boundary_mesh_sha256")
         and _is_sha256(str(value.get("result_sha256", "")).lower())
         and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_bem_near_singular_quadrature_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "bem_near_singular_quadrature_distance_element_size_adaptive_order_reference_result_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        distance = float(value["target_distance_m"])
+        result_distance = float(value["result_target_distance_m"])
+        element_size = float(value["element_size_m"])
+        result_element_size = float(value["result_element_size_m"])
+        ratio = float(value["distance_size_ratio"])
+        result_ratio = float(value["result_distance_size_ratio"])
+        order = _integer(value, "adaptive_order")
+        result_order = _integer(value, "result_adaptive_order")
+        reference = tuple(float(item) for item in value["reference_integral_ri"])
+        computed = tuple(float(item) for item in value["computed_integral_ri"])
+        reported_error = float(value["relative_error"])
+        tolerance = float(value["relative_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("quadrature_generation", "")).strip()
+    actual_error = math.hypot(
+        computed[0] - reference[0], computed[1] - reference[1]
+    ) / max(math.hypot(*reference), 1.0e-300) if len(reference) == len(computed) == 2 else math.inf
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "target_quadrature_generation",
+                "geometry_quadrature_generation",
+                "order_quadrature_generation",
+                "map_quadrature_generation",
+                "kernel_quadrature_generation",
+                "reference_quadrature_generation",
+                "mesh_quadrature_generation",
+                "result_quadrature_generation",
+            )
+        )
+        and all(math.isfinite(item) and item > 0.0 for item in (distance, element_size))
+        and result_distance == distance
+        and result_element_size == element_size
+        and math.isfinite(ratio)
+        and ratio > 0.0
+        and math.isclose(ratio, distance / element_size, rel_tol=1.0e-12)
+        and result_ratio == ratio
+        and order >= 8
+        and result_order == order
+        and value.get("quadrature_rule") == "adaptive-duffy-p1"
+        and value.get("result_quadrature_rule") == value.get("quadrature_rule")
+        and value.get("coordinate_map") == "target-aligned-barycentric"
+        and value.get("result_coordinate_map") == value.get("coordinate_map")
+        and value.get("kernel") == "helmholtz-single-layer-p1"
+        and value.get("result_kernel") == value.get("kernel")
+        and len(reference) == len(computed) == 2
+        and all(math.isfinite(item) for item in reference + computed)
+        and math.isfinite(reported_error)
+        and math.isclose(reported_error, actual_error, rel_tol=0.25, abs_tol=1.0e-15)
+        and math.isfinite(tolerance)
+        and tolerance > 0.0
+        and reported_error <= tolerance
+        and _is_sha256(str(value.get("element_mesh_sha256", "")).lower())
+        and value.get("result_element_mesh_sha256") == value.get("element_mesh_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_fembem_energy_reciprocity_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_energy_flux_reciprocity_interface_trace_orientation_frequency_incident_result_generation_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        trace_shape = tuple(_integer({"value": item}, "value") for item in value["interface_trace_shape"])
+        result_trace_shape = tuple(_integer({"value": item}, "value") for item in value["result_interface_trace_shape"])
+        frequency = float(value["frequency_hz"])
+        result_frequency = float(value["result_frequency_hz"])
+        pair_ids = tuple(str(item) for item in value["reciprocity_pair_ids"])
+        result_pair_ids = tuple(str(item) for item in value["result_reciprocity_pair_ids"])
+        reciprocity = tuple(tuple(float(component) for component in row) for row in value["reciprocity_values_ri"])
+        result_reciprocity = tuple(tuple(float(component) for component in row) for row in value["result_reciprocity_values_ri"])
+        reciprocity_error = float(value["reciprocity_relative_error"])
+        reciprocity_tolerance = float(value["reciprocity_relative_tolerance"])
+        fem_power = float(value["fem_outward_power_w"])
+        bem_power = float(value["bem_radiated_power_w"])
+        energy_error = float(value["energy_flux_relative_error"])
+        energy_tolerance = float(value["energy_flux_relative_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("coupling_generation", "")).strip()
+    actual_energy_error = abs(fem_power - bem_power) / max(abs(fem_power), 1.0e-300)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "trace_coupling_generation",
+                "normal_coupling_generation",
+                "frequency_coupling_generation",
+                "incident_coupling_generation",
+                "reciprocity_coupling_generation",
+                "energy_coupling_generation",
+                "result_coupling_generation",
+            )
+        )
+        and value.get("interface_trace_basis") == "p1-nodal-boundary-trace"
+        and value.get("result_interface_trace_basis") == value.get("interface_trace_basis")
+        and len(trace_shape) == 2
+        and all(item > 0 for item in trace_shape)
+        and trace_shape[0] <= trace_shape[1]
+        and result_trace_shape == trace_shape
+        and value.get("normal_orientation") == "volume-outward"
+        and value.get("result_normal_orientation") == value.get("normal_orientation")
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and result_frequency == frequency
+        and _is_sha256(str(value.get("incident_field_sha256", "")).lower())
+        and value.get("result_incident_field_sha256") == value.get("incident_field_sha256")
+        and len(pair_ids) == len(result_pair_ids) == len(reciprocity) == len(result_reciprocity) == 2
+        and len(set(pair_ids)) == 2
+        and result_pair_ids == pair_ids
+        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in reciprocity)
+        and result_reciprocity == reciprocity
+        and math.isfinite(reciprocity_error)
+        and 0.0 <= reciprocity_error <= reciprocity_tolerance
+        and math.isfinite(reciprocity_tolerance)
+        and reciprocity_tolerance > 0.0
+        and math.isfinite(fem_power)
+        and fem_power > 0.0
+        and math.isfinite(bem_power)
+        and bem_power >= 0.0
+        and math.isfinite(energy_error)
+        and math.isclose(energy_error, actual_energy_error, rel_tol=1.0e-6, abs_tol=1.0e-15)
+        and math.isfinite(energy_tolerance)
+        and energy_tolerance > 0.0
+        and energy_error <= energy_tolerance
+        and _is_sha256(str(value.get("coupled_result_sha256", "")).lower())
+        and value.get("accepted_coupled_result_sha256") == value.get("coupled_result_sha256")
     )
 
 
