@@ -4251,6 +4251,11 @@ playmodel.py: shapeFunction(HdataLUT) -> Hfunc (peeling); then forward
   steel needs congruency (play) not equal-vertical-chords (stop)
 - `bergqvist_binput_stop` - the lab energy STOP (EVC + thermo + Egger
   inverse); play and stop are complementary (p = B - s)
+- `bayesian_field_separation` - the LIMIT of any such calibration on REAL
+  measurement: peeling HIDES data inconsistency (it corrupts the
+  distribution), whereas the convex+passive fit EXPOSES it; attribution
+  discipline + Bayesian eddy/noise field-separation to tell data-
+  inconsistency apart from model-inadequacy
 """
 
 
@@ -4355,6 +4360,137 @@ validated to 0.01-0.60% on the symmetric loops):
 """
 
 
+BAYESIAN_FIELD_SEPARATION = r"""
+# Real-measurement identification: attribution + Bayesian field-separation
+# (Sugahara Lab, 2026-07 -- extracting a RATE-INDEPENDENT hysteresis
+#  operator from a RATE-CONTAMINATED, NOISY real measurement)
+
+## The problem this solves
+
+When you identify a RATE-INDEPENDENT hysteresis operator (a B-input
+play/stop, energy-based or peeling-calibrated) from REAL measured
+B(t), H(t), a large fit residual is AMBIGUOUS:
+
+  - is the MODEL CLASS too small (odd-only, congruent, finite basis)?
+  - or are the DATA mutually inconsistent with ANY rate-independent
+    operator (eddy/excess rate-dependence, noise, drift, non-congruency)?
+
+Convexity does NOT resolve this: a convex fit (NNLS) finds the best fit
+WITHIN the class and says nothing about whether the class is right or
+the data are self-consistent.  Naively blaming the model ("the stop
+model is inadequate") when the true cause is data inconsistency is the
+central trap of real-measurement identification.
+
+## Peeling HIDES inconsistency; convex + passive EXPOSES it
+
+  - Peeling / sequential FORC-difference identification (see
+    `peeling_identification`) lets data inconsistency + noise PROPAGATE
+    and CORRUPT the identified per-hysteron distribution -> a
+    plausible-but-wrong (often non-physical / non-monotone) result.
+    The inconsistency is HIDDEN inside a fitted-looking answer.
+  - The convex + PASSIVE energy fit (theta >= 0; see `lab_core`,
+    `bergqvist_binput_stop`) CANNOT fit away a passivity-violating data
+    artefact -> the inconsistency surfaces as an irreducible, MEASURABLE
+    residual.  A structured model turns hidden data-inconsistency into a
+    visible diagnostic.  This is a REASON TO PREFER the passive fit for
+    real-measurement work -- not that it fits lower, but that its
+    residual is INTERPRETABLE.
+
+## Attribution discipline: diagnostics BEFORE blaming the model
+
+Run MODEL-INDEPENDENT self-consistency checks on the measured loops
+FIRST, then decompose the residual by which assumption each part
+violates:
+
+| Diagnostic (model-free) | Test | A failure means |
+|-------------------------|------|-----------------|
+| Passivity | contour integral of H dB >= 0 per loop | measurement error (DATA) |
+| Rate-independence | same loop at >= 2 frequencies | rate-dependent (DATA; needs eddy term) |
+| Congruency / wiping-out | same-reversal minor loops, different history | non-congruent (DATA or CLASS) |
+| Branch symmetry | even-in-B loop component ("even-floor") | odd-model class limit (CLASS) |
+
+Then residual = X (rate-inconsistency, DATA) + Y (even-asymmetry, CLASS)
++ Z (finite-basis floor, REPRESENTATION) + noise.  ONLY Y+Z are "the
+model's fault".  The "even-floor" -- the branch-asymmetric (even in B)
+loop component that NO exactly-odd operator can represent -- is one such
+decomposition already used in the lab (recovered by the even-symmetrized
+/ vector envelope, see `vector`).
+
+## Bayesian field-separation = the principled mechanism
+
+Instead of a point residual you cannot attribute, put the rate-dependent
+physics into an explicit forward model and infer a POSTERIOR over the
+split (Bertotti dynamic / loss-field separation):
+
+  H_meas(t) = A_stop(B) . theta               (rate-independent operator)
+            + r_cl * dB/dt                     (classical eddy ~ sigma d^2/12)
+            + r_ex * sign(dB/dt) sqrt|dB/dt|   (excess / Bertotti)
+            + eps(t)                           (measurement noise)
+
+Key properties:
+  - LINEAR in every parameter (theta, r_cl, r_ex).  With a Gaussian
+    prior + theta >= 0 (passivity = truncated Gaussian), the posterior
+    is a tractable TRUNCATED multivariate Gaussian, and the CURRENT
+    convex NNLS fit is exactly its MAP -- so the Bayesian version is a
+    DROP-IN generalization of the existing identifier, not a rewrite.
+  - FREQUENCY DIVERSITY is what makes eddy-vs-hysteresis identifiable:
+    theta is COMMON across all frequencies (rate-independent) while the
+    eddy/excess terms scale with dB/dt (frequency-dependent).  Multi-
+    frequency data OVER-determines the split and tightens the posterior.
+    At a SINGLE frequency r_cl is CONFOUNDED with the hysteresis part
+    (unless sigma, d are known a-priori): a good single-low-frequency
+    rate-independent fit does NOT mean the eddy part was separated -- it
+    means the eddy part was small (quasi-static).  => to actually REMOVE
+    eddy you need measurements at >= 2 FREQUENCIES (or a strong sigma, d
+    prior).
+  - POSTERIOR VARIANCE is the attribution answer: after eddy+noise
+    removal, a TIGHT theta posterior => the rate-independent operator was
+    cleanly extracted; a BROAD / unexplained residual => a genuine
+    model-class limit (only THEN is "the model is inadequate" correct).
+  - The acquisition function for active measurement planning generalizes
+    from noise-aware to noise+eddy-aware expected information gain in the
+    same framework (posterior-variance-reduction over the pool).
+
+## Honest limits (the eddy removal is only as good as the eddy model)
+
+  - sigma d^2/12 * dB/dt is a THIN-lamination, LOW-frequency approx.
+    When the intra-sheet skin depth approaches the sheet thickness the
+    through-thickness field is a 1D DIFFUSION (tanh / Bessel frequency
+    response) NONLINEARLY coupled to the B-profile -> the clean LINEAR
+    separation breaks.  Swap in a lamination-diffusion surface-impedance
+    kernel (the lab's SIBC / ESIM assets) at high f.
+  - The excess sqrt|dB/dt| term is phenomenological -> soft prior only.
+  - Bayes creates NO information: it uses priors + data optimally and
+    returns honest residual uncertainty.  Rate-dependence beyond
+    classical+excess (magnetic aftereffect / viscosity) leaks into the
+    eddy term or the residual.
+
+## A practical caution learned on real data
+
+Fitting the rate-independent operator to a MODEL TEACHER (a reference
+play/stop, as in a controlled active-learning study) ISOLATES the
+identification machinery's error, because the teacher is IN-CLASS
+(near-zero model bias) -- a necessary validation, but NOT a substitute
+for real data.  On raw measured loops the DIRECT fit can BEAT the
+fit-to-a-model-teacher, because the teacher model itself carries
+smoothing / symmetrization bias the raw data does not.  Rule: VALIDATE
+on the model teacher, IDENTIFY on the raw data.
+
+## Cross-reference
+
+- `peeling_identification` - the sequential FORC-difference method whose
+  inconsistency-hiding this contrasts with
+- `lab_core`, `bergqvist_binput_stop` - the convex + passive (theta >= 0)
+  energy STOP whose residual is the diagnostic
+- `vector` - even-symmetrized / vector envelope that recovers the
+  even-floor (branch-asymmetric) component
+- `magnetic_materials_iron_loss` - Bertotti classical + excess loss
+  separation, the physics of the r_cl, r_ex terms
+- MCP servers `radia-data-assimilation`, `radia-bayesian-opt` - the
+  Bayesian inference infrastructure to implement the posterior
+"""
+
+
 def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
     """Dispatch by topic.
 
@@ -4452,6 +4588,17 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
                                 silicon steel); vector/rotational BQM
                                 variants; complementary to the energy
                                 STOP (p=B-s).  VectorPlayModel/ code.
+        bayesian_field_separation - Real-measurement identification: the
+                                attribution problem (data-inconsistency vs
+                                model-inadequacy), why peeling HIDES and the
+                                convex+passive fit EXPOSES inconsistency,
+                                model-free consistency diagnostics, and the
+                                Bayesian field-separation forward model
+                                H = A_stop.theta + r_cl.dB/dt +
+                                r_ex.sgn(dB/dt)sqrt|dB/dt| + eps (linear ->
+                                truncated-Gaussian posterior, NNLS = MAP;
+                                needs >= 2 frequencies for eddy identifiability;
+                                posterior variance = attribution).
         all                  - Everything
     """
     topic = topic.lower().strip()
@@ -4484,6 +4631,13 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
                   "forc_difference", "everett_difference",
                   "play_calibration", "hagitori"):
         return PEELING_IDENTIFICATION
+    if topic in ("bayesian_field_separation", "field_separation",
+                  "bayesian_eddy_removal", "eddy_removal", "eddy_separation",
+                  "real_measurement_identification", "real_measurement",
+                  "attribution", "attribution_problem", "data_consistency",
+                  "consistency_diagnostics", "loss_field_separation",
+                  "rate_independent_extraction", "bertotti_dynamic"):
+        return BAYESIAN_FIELD_SEPARATION
     if topic in ("vector_play_model", "vector_play", "canonical_play",
                   "playmodel", "play_hysteron", "playhysteron",
                   "ahagon_play", "binput_play", "b_input_play"):
@@ -4570,7 +4724,7 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
             ASP_MODEL, ZIRKA_HDHM, CHUA_MODEL, OTHER_MODELS,
             JACQUES_MONOGRAPH, CONGRUENCY_BINPUT_SELECTION,
             BERGQVIST_BINPUT_STOP, PEELING_IDENTIFICATION,
-            VECTOR_PLAY_MODEL,
+            VECTOR_PLAY_MODEL, BAYESIAN_FIELD_SEPARATION,
         ])
     return (f"Unknown topic '{topic}'. Available: lab_core, "
             "lab_core_production, catalog, decision_tree, "
@@ -4583,4 +4737,5 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
             "bobbio_1997_unification, asp_model, zirka_hdhm, "
             "chua_model, other_models, jacques_monograph, "
             "congruency_selection, bergqvist_binput_stop, "
-            "peeling_identification, vector_play_model, all.")
+            "peeling_identification, vector_play_model, "
+            "bayesian_field_separation, all.")
