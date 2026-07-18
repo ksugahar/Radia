@@ -3508,6 +3508,171 @@ def _nearfar_power_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _broadband_waveguide_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_cutoff_mode_impedance_group_delay_power_orthogonality_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("waveguide_generation", "")).strip()
+    try:
+        width = float(identity.get("waveguide_width_m"))
+        length = float(identity.get("waveguide_length_m"))
+        cutoff = float(identity.get("cutoff_frequency_hz"))
+        frequencies = [float(item) for item in identity.get("frequency_hz", [])]
+        impedance = [float(item) for item in identity.get("modal_impedance_ohm", [])]
+        beta = [float(item) for item in identity.get("propagation_constant_rad_m", [])]
+        group_delay = [float(item) for item in identity.get("group_delay_s", [])]
+        power = float(identity.get("power_normalization_w"))
+        gram_real = [[float(item) for item in row] for row in identity.get("mode_gram_real", [])]
+        gram_imag = [[float(item) for item in row] for row in identity.get("mode_gram_imag", [])]
+        mesh_dof = [int(item) for item in identity.get("mesh_dof", [])]
+        mesh_cutoff = [float(item) for item in identity.get("mesh_cutoff_hz", [])]
+    except (TypeError, ValueError):
+        return False
+    c0 = 299_792_458.0
+    eta0 = 376.730313668
+    expected_cutoff = c0 / (2.0 * width) if width > 0.0 else math.nan
+    factors = [
+        math.sqrt(1.0 - (cutoff / frequency) ** 2)
+        if frequency > cutoff > 0.0 else math.nan
+        for frequency in frequencies
+    ]
+    expected_impedance = [eta0 / factor for factor in factors]
+    expected_beta = [
+        2.0 * math.pi * frequency * factor / c0
+        for frequency, factor in zip(frequencies, factors)
+    ]
+    expected_delay = [length / (c0 * factor) for factor in factors]
+    mesh_errors = [abs(item - cutoff) for item in mesh_cutoff]
+    mirrored_fields = (
+        "waveguide_width_m", "waveguide_length_m", "mode",
+        "cutoff_frequency_hz", "frequency_hz", "modal_impedance_ohm",
+        "propagation_constant_rad_m", "group_delay_s", "power_normalization_w",
+        "mode_gram_real", "mode_gram_imag", "mesh_dof", "mesh_cutoff_hz",
+        "waveguide_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "cutoff_generation", "impedance_generation", "propagation_generation",
+                "group_delay_generation", "power_generation", "orthogonality_generation",
+                "mesh_generation", "owner_generation", "result_generation",
+            )
+        )
+        and identity.get("mode") == "TE10"
+        and all(math.isfinite(item) and item > 0.0 for item in (width, length, cutoff, power))
+        and math.isclose(cutoff, expected_cutoff, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and len(frequencies) == len(impedance) == len(beta) == len(group_delay) >= 3
+        and all(math.isfinite(item) and item > cutoff for item in frequencies)
+        and all(left < right for left, right in zip(frequencies, frequencies[1:]))
+        and all(math.isfinite(item) and item > 0.0 for item in factors)
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-9) for value, expected in zip(impedance, expected_impedance))
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-9) for value, expected in zip(beta, expected_beta))
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-18) for value, expected in zip(group_delay, expected_delay))
+        and math.isclose(power, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and gram_real == [[1.0, 0.0], [0.0, 1.0]]
+        and gram_imag == [[0.0, 0.0], [0.0, 0.0]]
+        and len(mesh_dof) == len(mesh_cutoff) >= 3
+        and all(item > 0 for item in mesh_dof)
+        and all(left < right for left, right in zip(mesh_dof, mesh_dof[1:]))
+        and all(math.isfinite(item) and item > 0.0 for item in mesh_cutoff)
+        and all(right <= left for left, right in zip(mesh_errors, mesh_errors[1:]))
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored_fields)
+        and _valid_sha256(identity.get("waveguide_mesh_sha256"))
+        and bool(str(identity.get("waveguide_owner", "")).strip())
+        and identity.get("accepted_waveguide_owner") == identity.get("waveguide_owner")
+        and _valid_sha256(identity.get("waveguide_result_sha256"))
+        and identity.get("accepted_waveguide_result_sha256") == identity.get("waveguide_result_sha256")
+    )
+
+
+def _emc_probe_fft_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "emc_probe_coordinate_interpolation_time_fft_window_parseval_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("probe_generation", "")).strip()
+    try:
+        point = [float(item) for item in identity.get("probe_xyz_m", [])]
+        node_ids = [int(item) for item in identity.get("interpolation_node_ids", [])]
+        weights = [float(item) for item in identity.get("interpolation_weights", [])]
+        times = [float(item) for item in identity.get("time_s", [])]
+        trace = [float(item) for item in identity.get("field_trace_v_m", [])]
+        frequencies = [float(item) for item in identity.get("frequency_hz", [])]
+        spectrum = [complex(float(row[0]), float(row[1])) for row in identity.get("fft_complex_v_m", [])]
+        selected_frequency = float(identity.get("selected_frequency_hz"))
+        selected = complex(*[float(item) for item in identity.get("selected_fft_complex_v_m", [])])
+        time_energy = float(identity.get("time_energy"))
+        frequency_energy = float(identity.get("frequency_energy_over_n"))
+    except (TypeError, ValueError, IndexError):
+        return False
+    count = len(times)
+    dt = times[1] - times[0] if count >= 2 else math.nan
+    expected_frequencies = [index / (count * dt) for index in range(count)] if count and dt > 0.0 else []
+    expected_spectrum = [
+        sum(trace[n] * cmath.exp(-2j * math.pi * k * n / count) for n in range(count))
+        for k in range(count)
+    ] if count == len(trace) and count else []
+    expected_time_energy = sum(item * item for item in trace)
+    expected_frequency_energy = sum(abs(item) ** 2 for item in spectrum) / count if count else math.nan
+    selected_index = min(range(count), key=lambda index: abs(frequencies[index] - selected_frequency)) if count == len(frequencies) and count else -1
+    mirrored_fields = (
+        "coordinate_frame", "probe_xyz_m", "interpolation_scheme",
+        "interpolation_node_ids", "interpolation_weights", "time_s",
+        "field_trace_v_m", "fft_window", "fft_scaling", "frequency_hz",
+        "fft_complex_v_m", "selected_frequency_hz", "selected_fft_complex_v_m",
+        "time_energy", "frequency_energy_over_n", "probe_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "coordinate_generation", "interpolation_generation", "time_generation",
+                "window_generation", "fft_generation", "frequency_generation",
+                "parseval_generation", "mesh_generation", "owner_generation",
+                "result_generation",
+            )
+        )
+        and identity.get("coordinate_frame") == "global_cartesian_xyz_m"
+        and len(point) == 3
+        and all(math.isfinite(item) for item in point)
+        and identity.get("interpolation_scheme") == "trilinear_terminal_mesh"
+        and len(node_ids) == len(weights) >= 4
+        and len(set(node_ids)) == len(node_ids)
+        and all(item >= 0 for item in node_ids)
+        and all(math.isfinite(item) and 0.0 <= item <= 1.0 for item in weights)
+        and math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and count == len(trace) == len(frequencies) == len(spectrum) >= 4
+        and all(math.isfinite(item) for item in (*times, *trace, *frequencies))
+        and all(math.isclose(right - left, dt, rel_tol=1.0e-12, abs_tol=1.0e-18) for left, right in zip(times, times[1:]))
+        and identity.get("fft_window") == "rectangular"
+        and identity.get("fft_scaling") == "unscaled_forward_inverse_over_n"
+        and all(math.isclose(value, expected, rel_tol=1.0e-12, abs_tol=1.0e-9) for value, expected in zip(frequencies, expected_frequencies))
+        and all(abs(value - expected) <= 1.0e-12 for value, expected in zip(spectrum, expected_spectrum))
+        and selected_index >= 0
+        and math.isclose(frequencies[selected_index], selected_frequency, rel_tol=0.0, abs_tol=1.0e-9)
+        and abs(spectrum[selected_index] - selected) <= 1.0e-12
+        and math.isclose(time_energy, expected_time_energy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(frequency_energy, expected_frequency_energy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(time_energy, frequency_energy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored_fields)
+        and _valid_sha256(identity.get("probe_mesh_sha256"))
+        and bool(str(identity.get("probe_owner", "")).strip())
+        and identity.get("accepted_probe_owner") == identity.get("probe_owner")
+        and _valid_sha256(identity.get("probe_result_sha256"))
+        and identity.get("accepted_probe_result_sha256") == identity.get("probe_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -3999,6 +4164,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "active_arrays_use_current_sparameters_patterns_scan_impedance_power_frequency_mesh_owner_and_result": (
                 _active_array_closure_inputs_are_current(raw)
+            ),
+            "broadband_waveguides_use_current_cutoff_impedance_group_delay_power_orthogonality_mesh_owner_and_result": (
+                _broadband_waveguide_closure_inputs_are_current(raw)
+            ),
+            "emc_probes_use_current_coordinates_interpolation_time_fft_window_parseval_mesh_owner_and_result": (
+                _emc_probe_fft_closure_inputs_are_current(raw)
             ),
         }
         row = {
