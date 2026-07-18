@@ -248,6 +248,10 @@ def regularized_trace_inverse_path_gate(
     cq_block_restart_identity_ok = (
         _optional_cq_block_restart_identity_is_aligned(summary)
     )
+    complex_ad_identity_ok = _optional_complex_ad_identity_is_aligned(summary)
+    pde_quadratic_vol_identity_ok = (
+        _optional_pde_quadratic_vol_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -415,6 +419,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_block_restart_uses_current_blocks_history_startup_weights_time_samples_owners_and_result": (
             cq_block_restart_identity_ok
+        ),
+        "complex_ad_uses_current_wirtinger_conjugation_branch_scaling_fd_mesh_and_result": (
+            complex_ad_identity_ok
+        ),
+        "pde_quadratic_vol_uses_current_midnodes_tets_boundary_orientation_regions_order_and_mesh": (
+            pde_quadratic_vol_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -3031,6 +3041,168 @@ def _optional_cq_block_restart_identity_is_aligned(
         and value.get("loaded_history_sha256") == value.get("history_sha256")
         and _is_sha256(str(value.get("result_sha256", "")).lower())
         and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_complex_ad_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "complex_ad_wirtinger_conjugation_branch_scaling_fd_mesh_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        scaling = tuple(float(item) for item in value["design_variable_scaling"])
+        result_scaling = tuple(
+            float(item) for item in value["result_design_variable_scaling"]
+        )
+        gradient = tuple(
+            tuple(float(component) for component in row)
+            for row in value["gradient_ri"]
+        )
+        fd_gradient = tuple(
+            tuple(float(component) for component in row)
+            for row in value["finite_difference_gradient_ri"]
+        )
+        fd_error = float(value["finite_difference_relative_error"])
+        fd_tolerance = float(value["finite_difference_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("ad_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "wirtinger_ad_generation",
+                "conjugation_ad_generation",
+                "branch_ad_generation",
+                "scaling_ad_generation",
+                "finite_difference_ad_generation",
+                "mesh_ad_generation",
+                "result_ad_generation",
+            )
+        )
+        and value.get("wirtinger_convention") == "dJ_dconj_z"
+        and value.get("result_wirtinger_convention")
+        == value.get("wirtinger_convention")
+        and value.get("adjoint_conjugation") == "conjugate_transpose"
+        and value.get("result_adjoint_conjugation")
+        == value.get("adjoint_conjugation")
+        and value.get("objective_branch") == "real_objective"
+        and value.get("result_objective_branch") == value.get("objective_branch")
+        and bool(scaling)
+        and all(math.isfinite(item) and item > 0.0 for item in scaling)
+        and result_scaling == scaling
+        and len(gradient) == len(fd_gradient) == len(scaling)
+        and all(
+            len(row) == 2 and all(math.isfinite(component) for component in row)
+            for row in gradient + fd_gradient
+        )
+        and math.isfinite(fd_error)
+        and fd_error >= 0.0
+        and math.isfinite(fd_tolerance)
+        and fd_tolerance > 0.0
+        and fd_error <= fd_tolerance
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_pde_quadratic_vol_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "pde_quadratic_curved_vol_midnode_tet_boundary_region_order_mesh_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        order = _integer(value, "geometry_order")
+        result_order = _integer(value, "result_geometry_order")
+        tets = tuple(
+            tuple(_positive_integer({"value": node}, "value") for node in row)
+            for row in value["tet_connectivity"]
+        )
+        result_tets = tuple(
+            tuple(_positive_integer({"value": node}, "value") for node in row)
+            for row in value["result_tet_connectivity"]
+        )
+        triangles = tuple(
+            tuple(_positive_integer({"value": node}, "value") for node in row)
+            for row in value["boundary_tri_connectivity"]
+        )
+        result_triangles = tuple(
+            tuple(_positive_integer({"value": node}, "value") for node in row)
+            for row in value["result_boundary_tri_connectivity"]
+        )
+        orientations = tuple(
+            _integer({"value": item}, "value")
+            for item in value["boundary_orientation"]
+        )
+        result_orientations = tuple(
+            _integer({"value": item}, "value")
+            for item in value["result_boundary_orientation"]
+        )
+        tet_regions = tuple(
+            _positive_integer({"value": item}, "value")
+            for item in value["tet_region_labels"]
+        )
+        result_tet_regions = tuple(
+            _positive_integer({"value": item}, "value")
+            for item in value["result_tet_region_labels"]
+        )
+        boundary_regions = tuple(
+            _positive_integer({"value": item}, "value")
+            for item in value["boundary_region_labels"]
+        )
+        result_boundary_regions = tuple(
+            _positive_integer({"value": item}, "value")
+            for item in value["result_boundary_region_labels"]
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("mesh_generation", "")).strip()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "midnode_mesh_generation",
+                "tet_mesh_generation",
+                "boundary_mesh_generation",
+                "region_mesh_generation",
+                "order_mesh_generation",
+                "result_mesh_generation",
+            )
+        )
+        and order == 2
+        and result_order == order
+        and bool(tets)
+        and all(len(row) == 10 and len(set(row)) == 10 for row in tets)
+        and result_tets == tets
+        and _is_sha256(str(value.get("curved_midnode_sha256", "")).lower())
+        and value.get("result_curved_midnode_sha256")
+        == value.get("curved_midnode_sha256")
+        and bool(triangles)
+        and all(len(row) == 6 and len(set(row)) == 6 for row in triangles)
+        and result_triangles == triangles
+        and len(orientations) == len(triangles)
+        and all(item in {-1, 1} for item in orientations)
+        and result_orientations == orientations
+        and len(tet_regions) == len(tets)
+        and result_tet_regions == tet_regions
+        and len(boundary_regions) == len(triangles)
+        and result_boundary_regions == boundary_regions
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
     )
 
 
