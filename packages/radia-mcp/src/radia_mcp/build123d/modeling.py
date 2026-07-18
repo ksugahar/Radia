@@ -4737,6 +4737,136 @@ def _shell_fillet_topology_generation_identity(row):
     )
 
 
+def _mirrored_pattern_generation_identity(row):
+    value = row.get(
+        "mirrored_pattern_occurrence_handedness_transform_suppression_volume_mass_center_inertia_owner_shape_result_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("pattern_generation", "")).strip()
+    try:
+        occurrences = tuple(str(item) for item in value.get("occurrence_ids", []))
+        determinants = tuple(float(item) for item in value.get("transform_determinants", []))
+        handedness = tuple(str(item) for item in value.get("handedness", []))
+        suppressed = tuple(bool(item) for item in value.get("suppressed", []))
+        volumes = tuple(float(item) for item in value.get("occurrence_volumes_m3", []))
+        masses = tuple(float(item) for item in value.get("occurrence_masses_kg", []))
+        centers = tuple(tuple(float(item) for item in center) for center in value.get("occurrence_centers_m", []))
+        inertia = tuple(tuple(float(item) for item in moments) for moments in value.get("occurrence_inertia_principal_kg_m2", []))
+        assembly_volume = float(value.get("assembly_volume_m3"))
+        assembly_mass = float(value.get("assembly_mass_kg"))
+        assembly_center = tuple(float(item) for item in value.get("assembly_center_m", []))
+    except (TypeError, ValueError):
+        return None
+    count = len(occurrences)
+    active = [index for index, is_suppressed in enumerate(suppressed) if not is_suppressed]
+    expected_center = (
+        tuple(
+            sum(masses[index] * centers[index][axis] for index in active) / assembly_mass
+            for axis in range(3)
+        )
+        if assembly_mass > 0.0 and all(len(center) == 3 for center in centers)
+        else ()
+    )
+    mirrored_fields = (
+        "occurrence_ids",
+        "transform_determinants",
+        "handedness",
+        "suppressed",
+        "occurrence_volumes_m3",
+        "occurrence_masses_kg",
+        "occurrence_centers_m",
+        "occurrence_inertia_principal_kg_m2",
+        "assembly_volume_m3",
+        "assembly_mass_kg",
+        "assembly_center_m",
+    )
+    digest = str(value.get("mirrored_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in ("occurrence_generation", "handedness_generation", "transform_generation", "suppression_generation", "volume_generation", "mass_generation", "inertia_generation", "owner_generation", "shape_generation", "result_generation"))
+        or count < 2
+        or len(set(occurrences)) != count
+        or not all(occurrences)
+        or len(determinants) != count
+        or any(not math.isclose(abs(item), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15) for item in determinants)
+        or len(handedness) != count
+        or any((determinant > 0.0) != (side == "right") or side not in {"right", "left"} for determinant, side in zip(determinants, handedness))
+        or len(suppressed) != count
+        or len(volumes) != count
+        or len(masses) != count
+        or len(centers) != count
+        or len(inertia) != count
+        or any(item <= 0.0 or not math.isfinite(item) for item in volumes + masses)
+        or any(len(center) != 3 or any(not math.isfinite(item) for item in center) for center in centers)
+        or any(len(moments) != 3 or any(not math.isfinite(item) or item <= 0.0 for item in moments) for moments in inertia)
+        or not math.isclose(assembly_volume, sum(volumes[index] for index in active), rel_tol=1.0e-9, abs_tol=1.0e-12)
+        or not math.isclose(assembly_mass, sum(masses[index] for index in active), rel_tol=1.0e-9, abs_tol=1.0e-12)
+        or len(assembly_center) != 3
+        or len(expected_center) != 3
+        or any(not math.isclose(item, expected, rel_tol=1.0e-9, abs_tol=1.0e-12) for item, expected in zip(assembly_center, expected_center))
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored_fields)
+        or not str(value.get("assembly_owner", "")).strip()
+        or value.get("result_assembly_owner") != value.get("assembly_owner")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_mirrored_shape_sha256") != digest
+    ):
+        return None
+    return (generation, occurrences, determinants, handedness, suppressed, volumes, masses, centers, inertia, assembly_volume, assembly_mass, assembly_center, value.get("assembly_owner"), digest)
+
+
+def _offset_thicken_generation_identity(row):
+    value = row.get(
+        "offset_thicken_curvature_sign_selfintersection_repair_thickness_volume_topology_convergence_brep_result_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("thicken_generation", "")).strip()
+    try:
+        radius = float(value.get("minimum_curvature_radius_m"))
+        offset = float(value.get("offset_m"))
+        intersections = int(value.get("self_intersection_count"))
+        samples = tuple(float(item) for item in value.get("wall_thickness_samples_m", []))
+        original = float(value.get("original_volume_m3"))
+        removed = float(value.get("removed_volume_m3"))
+        thickened = float(value.get("thickened_volume_m3"))
+        solids = int(value.get("solid_count"))
+        shells = int(value.get("shell_count"))
+        tolerances = tuple(float(item) for item in value.get("convergence_tolerances_m", []))
+        convergence = tuple(float(item) for item in value.get("convergence_volumes_m3", []))
+    except (TypeError, ValueError):
+        return None
+    mirrored_fields = ("minimum_curvature_radius_m", "offset_m", "self_intersection_count", "repair_mode", "wall_thickness_samples_m", "original_volume_m3", "removed_volume_m3", "thickened_volume_m3", "solid_count", "shell_count", "convergence_tolerances_m", "convergence_volumes_m3")
+    digest = str(value.get("thicken_brep_sha256", "")).lower()
+    thickness = abs(offset)
+    if (
+        not generation
+        or any(value.get(key) != generation for key in ("curvature_generation", "offset_generation", "intersection_generation", "repair_generation", "thickness_generation", "volume_generation", "topology_generation", "convergence_generation", "brep_generation", "result_generation"))
+        or not math.isfinite(radius)
+        or radius <= thickness > 0.0
+        or offset >= 0.0
+        or intersections != 0
+        or value.get("repair_mode") != "none_required"
+        or not samples
+        or any(not math.isclose(item, thickness, rel_tol=1.0e-3, abs_tol=1.0e-12) for item in samples)
+        or any(not math.isfinite(item) or item <= 0.0 for item in (original, removed, thickened))
+        or removed >= original
+        or not math.isclose(thickened, original - removed, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        or solids != 1
+        or shells != 1
+        or len(tolerances) < 3
+        or len(convergence) != len(tolerances)
+        or any(right >= left for left, right in zip(tolerances, tolerances[1:]))
+        or not math.isclose(convergence[-1], thickened, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        or not math.isclose(convergence[-2], convergence[-1], rel_tol=1.0e-5, abs_tol=1.0e-12)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored_fields)
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_thicken_brep_sha256") != digest
+    ):
+        return None
+    return (generation, radius, offset, samples, original, removed, thickened, solids, shells, tolerances, convergence, digest)
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -5299,6 +5429,40 @@ def shape_mass_property_crosscheck_summary(
             shell_fillet_identity_ok = shell_fillet_identity_ok and all(
                 _shell_fillet_topology_generation_identity(row)
                 == reference_shell_fillets.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    mirrored_pattern_evidence_present = any(
+        row.get("mirrored_pattern_occurrence_handedness_transform_suppression_volume_mass_center_inertia_owner_shape_result_generation_identity") is not None
+        for row in identity_rows
+    )
+    reference_mirrored_patterns = {
+        str(row.get("name", "")): _mirrored_pattern_generation_identity(row)
+        for row in reference
+    }
+    mirrored_pattern_identity_ok = not mirrored_pattern_evidence_present
+    if mirrored_pattern_evidence_present:
+        mirrored_pattern_identity_ok = bool(reference_mirrored_patterns) and all(value is not None for value in reference_mirrored_patterns.values())
+        for _, rows in normalized_sets:
+            mirrored_pattern_identity_ok = mirrored_pattern_identity_ok and all(
+                _mirrored_pattern_generation_identity(row) == reference_mirrored_patterns.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    offset_thicken_evidence_present = any(
+        row.get("offset_thicken_curvature_sign_selfintersection_repair_thickness_volume_topology_convergence_brep_result_generation_identity") is not None
+        for row in identity_rows
+    )
+    reference_offset_thicken = {
+        str(row.get("name", "")): _offset_thicken_generation_identity(row)
+        for row in reference
+    }
+    offset_thicken_identity_ok = not offset_thicken_evidence_present
+    if offset_thicken_evidence_present:
+        offset_thicken_identity_ok = bool(reference_offset_thicken) and all(value is not None for value in reference_offset_thicken.values())
+        for _, rows in normalized_sets:
+            offset_thicken_identity_ok = offset_thicken_identity_ok and all(
+                _offset_thicken_generation_identity(row) == reference_offset_thicken.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -7247,6 +7411,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "shell_fillets_use_current_euler_manifold_thickness_volume_area_inertia_convergence_and_brep": (
             shell_fillet_identity_ok
+        ),
+        "mirrored_patterns_use_current_occurrences_handedness_transforms_suppression_mass_center_inertia_owner_and_shape": (
+            mirrored_pattern_identity_ok
+        ),
+        "offset_thickens_use_current_curvature_sign_intersections_repair_thickness_volume_topology_convergence_and_brep": (
+            offset_thicken_identity_ok
         ),
     }
     issues = []

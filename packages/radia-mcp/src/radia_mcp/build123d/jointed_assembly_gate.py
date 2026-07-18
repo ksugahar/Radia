@@ -1531,6 +1531,105 @@ def _brep_periodic_seam_identity_ok(value: object) -> bool:
     )
 
 
+def _step_ap242_pmi_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("ap242_generation") or "")
+    try:
+        pmi = [[int(row[0]), str(row[1]), str(row[2]), float(row[3])] for row in value.get("pmi_annotations", [])]
+        names = [[int(row[0]), str(row[1])] for row in value.get("product_names", [])]
+        colors = [[int(row[0]), [float(item) for item in row[1]]] for row in value.get("colors_rgb", [])]
+        occurrences = [[int(row[0]), str(row[1])] for row in value.get("occurrence_paths", [])]
+        transforms = [[int(row[0]), str(row[1])] for row in value.get("transform_sha256", [])]
+        validity = [[int(row[0]), bool(row[1])] for row in value.get("solid_validity", [])]
+    except (IndexError, TypeError, ValueError):
+        return False
+    product_ids = {row[0] for row in names}
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("pmi_generation", "unit_generation", "name_generation", "color_generation", "occurrence_generation", "transform_generation", "validity_generation", "owner_generation", "file_generation", "result_generation"))
+        and str(value.get("schema") or "").startswith("AP242_")
+        and value.get("decoded_schema") == value.get("schema")
+        and value.get("length_unit") == "m"
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and bool(pmi)
+        and all(row[0] > 0 and row[1] and row[2] and math.isfinite(row[3]) for row in pmi)
+        and value.get("decoded_pmi_annotations") == value.get("pmi_annotations")
+        and bool(names)
+        and len(product_ids) == len(names)
+        and all(row[1] for row in names)
+        and value.get("decoded_product_names") == value.get("product_names")
+        and {row[0] for row in colors} == product_ids
+        and all(len(row[1]) == 3 and all(0.0 <= channel <= 1.0 for channel in row[1]) for row in colors)
+        and value.get("decoded_colors_rgb") == value.get("colors_rgb")
+        and {row[0] for row in occurrences} == product_ids
+        and all(row[1].startswith("root/") for row in occurrences)
+        and value.get("decoded_occurrence_paths") == value.get("occurrence_paths")
+        and {row[0] for row in transforms} == product_ids
+        and all(_valid_sha256(row[1]) for row in transforms)
+        and value.get("decoded_transform_sha256") == value.get("transform_sha256")
+        and {row[0] for row in validity} == product_ids
+        and all(row[1] is True for row in validity)
+        and value.get("decoded_solid_validity") == value.get("solid_validity")
+        and bool(str(value.get("source_owner") or ""))
+        and value.get("decoded_source_owner") == value.get("source_owner")
+        and _valid_sha256(value.get("ap242_file_sha256"))
+        and value.get("decoded_ap242_file_sha256") == value.get("ap242_file_sha256")
+    )
+
+
+def _dxf_profile_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("dxf_generation") or "")
+    try:
+        layers = [str(item) for item in value.get("layer_names", [])]
+        bulges = [[int(row[0]), float(row[1])] for row in value.get("arc_bulges", [])]
+        winding = [[str(row[0]), int(row[1])] for row in value.get("loop_winding_signs", [])]
+        loops = int(value.get("closed_loop_count"))
+        height = float(value.get("extrusion_height_m"))
+        area = float(value.get("profile_area_m2"))
+        solids = int(value.get("solid_count"))
+        volume = float(value.get("extruded_volume_m3"))
+    except (IndexError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("unit_generation", "plane_generation", "layer_generation", "arc_generation", "loop_generation", "winding_generation", "extrusion_generation", "topology_generation", "owner_generation", "file_generation", "result_generation"))
+        and value.get("length_unit") in {"mm", "m"}
+        and value.get("decoded_length_unit") == value.get("length_unit")
+        and value.get("sketch_plane") in {"XY", "XZ", "YZ"}
+        and value.get("decoded_sketch_plane") == value.get("sketch_plane")
+        and bool(layers)
+        and len(set(layers)) == len(layers)
+        and value.get("decoded_layer_names") == value.get("layer_names")
+        and bool(bulges)
+        and len({row[0] for row in bulges}) == len(bulges)
+        and all(math.isfinite(row[1]) and abs(row[1]) <= 1.0 for row in bulges)
+        and value.get("decoded_arc_bulges") == value.get("arc_bulges")
+        and winding == [["outer", 1], ["hole", -1]]
+        and value.get("decoded_loop_winding_signs") == value.get("loop_winding_signs")
+        and loops == len(winding)
+        and int(value.get("decoded_closed_loop_count", -1)) == loops
+        and height > 0.0
+        and float(value.get("decoded_extrusion_height_m")) == height
+        and area > 0.0
+        and float(value.get("decoded_profile_area_m2")) == area
+        and solids == 1
+        and int(value.get("decoded_solid_count", -1)) == solids
+        and math.isclose(volume, area * height, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        and float(value.get("decoded_extruded_volume_m3")) == volume
+        and bool(str(value.get("profile_owner") or ""))
+        and value.get("decoded_profile_owner") == value.get("profile_owner")
+        and _valid_sha256(value.get("dxf_file_sha256"))
+        and value.get("decoded_dxf_file_sha256") == value.get("dxf_file_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1879,6 +1978,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     gltf_roundtrip_identity_ok = True
     step_semantic_roundtrip_identity_ok = True
     brep_periodic_seam_identity_ok = True
+    step_ap242_pmi_roundtrip_identity_ok = True
+    dxf_profile_roundtrip_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -3595,6 +3696,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "brep_periodic_face_seam_edge_orientation_pcurve_tolerance_manifold_serializer_shape_result_generation_identity"
             )
         )
+        step_ap242_pmi_roundtrip_identity_ok = _step_ap242_pmi_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "step_ap242_pmi_unit_name_color_occurrence_transform_validity_owner_file_result_generation_identity"
+            )
+        )
+        dxf_profile_roundtrip_identity_ok = _dxf_profile_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "dxf_profile_unit_plane_layer_arc_bulge_loop_winding_extrusion_topology_owner_file_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -3772,6 +3883,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "periodic_brep_roundtrips_use_current_seams_orientations_pcurves_tolerances_manifold_serializer_and_shape": (
             brep_periodic_seam_identity_ok
+        ),
+        "step_ap242_roundtrips_use_current_pmi_units_names_colors_occurrences_transforms_validity_owner_and_file": (
+            step_ap242_pmi_roundtrip_identity_ok
+        ),
+        "dxf_profiles_use_current_units_plane_layers_arcs_bulges_winding_extrusion_topology_owner_and_file": (
+            dxf_profile_roundtrip_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
