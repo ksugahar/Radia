@@ -1366,6 +1366,53 @@ def _cogging_torque_sampling_identity_ok(value: object) -> bool:
     )
 
 
+def _bem_near_singular_force_identity_ok(value: object) -> bool:
+    if value is None: return True
+    if not isinstance(value, dict): return False
+    generation = str(value.get("bem_generation", "")).strip()
+    try:
+        gap = float(value.get("gap_m")); panel = float(value.get("panel_size_m")); order = int(value.get("quadrature_order"))
+        source_normal = [float(item) for item in value.get("source_normal", [])]; target_normal = [float(item) for item in value.get("target_normal", [])]
+        force_source = [float(item) for item in value.get("force_on_source_n", [])]; force_target = [float(item) for item in value.get("force_on_target_n", [])]
+        residual = float(value.get("action_reaction_residual_n"))
+    except (TypeError, ValueError): return False
+    return (
+        bool(generation) and all(value.get(key) == generation for key in ("gap_bem_generation", "quadrature_bem_generation", "normal_bem_generation", "order_bem_generation", "force_bem_generation", "reciprocity_bem_generation", "geometry_bem_generation", "result_bem_generation"))
+        and 0.0 < gap < panel and value.get("result_gap_m") == gap and value.get("result_panel_size_m") == panel
+        and value.get("quadrature_policy") == "gap_adaptive_duffy" and value.get("result_quadrature_policy") == value.get("quadrature_policy")
+        and order >= 8 and value.get("result_quadrature_order") == order
+        and len(source_normal) == len(target_normal) == 3 and value.get("result_source_normal") == source_normal and value.get("result_target_normal") == target_normal
+        and all(math.isclose(a, -b, abs_tol=1.0e-12) for a, b in zip(source_normal, target_normal))
+        and value.get("source_target_order") == ["body_a", "body_b"] and value.get("result_source_target_order") == value.get("source_target_order")
+        and len(force_source) == len(force_target) == 3 and value.get("result_force_on_source_n") == force_source and value.get("result_force_on_target_n") == force_target
+        and all(math.isclose(a, -b, abs_tol=1.0e-12) for a, b in zip(force_source, force_target))
+        and math.isclose(residual, 0.0, abs_tol=1.0e-12) and value.get("result_action_reaction_residual_n") == residual
+        and _valid_sha256(value.get("geometry_sha256")) and value.get("result_geometry_sha256") == value.get("geometry_sha256")
+        and _valid_sha256(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _hysteresis_minor_loop_identity_ok(value: object) -> bool:
+    if value is None: return True
+    if not isinstance(value, dict): return False
+    generation = str(value.get("loop_generation", "")).strip()
+    try:
+        time = [float(item) for item in value.get("time_s", [])]; drive = [float(item) for item in value.get("drive_h_a_per_m", [])]
+        reversals = [int(item) for item in value.get("reversal_indices", [])]; remanence = float(value.get("remanence_t")); energy = float(value.get("loop_energy_j_per_m3"))
+    except (TypeError, ValueError): return False
+    return (
+        bool(generation) and all(value.get(key) == generation for key in ("state_loop_generation", "reversal_loop_generation", "memory_loop_generation", "remanence_loop_generation", "energy_loop_generation", "time_loop_generation", "material_loop_generation", "result_loop_generation"))
+        and _valid_sha256(value.get("initial_state_sha256")) and value.get("result_initial_state_sha256") == value.get("initial_state_sha256")
+        and len(time) == len(drive) >= 5 and all(right > left for left, right in zip(time, time[1:])) and value.get("result_time_s") == time and value.get("result_drive_h_a_per_m") == drive
+        and reversals == [1, 2, 3] and value.get("result_reversal_indices") == reversals
+        and value.get("return_point_memory_closed") is True and value.get("result_return_point_memory_closed") is True
+        and math.isfinite(remanence) and remanence >= 0.0 and value.get("result_remanence_t") == remanence
+        and math.isfinite(energy) and energy > 0.0 and value.get("result_loop_energy_j_per_m3") == energy
+        and bool(str(value.get("material_owner", "")).strip()) and value.get("result_material_owner") == value.get("material_owner")
+        and _valid_sha256(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1478,6 +1525,8 @@ def magnetic_force_method_profile_gate(
     linear_motor_wave_end_effect_identity_ok = True
     maglev_stiffness_identity_ok = True
     cogging_torque_sampling_identity_ok = True
+    bem_near_singular_force_identity_ok = True
+    hysteresis_minor_loop_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1527,6 +1576,8 @@ def magnetic_force_method_profile_gate(
         linear_motor_wave_end_effect_identity_ok = False
         maglev_stiffness_identity_ok = False
         cogging_torque_sampling_identity_ok = False
+        bem_near_singular_force_identity_ok = False
+        hysteresis_minor_loop_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3261,6 +3312,16 @@ def magnetic_force_method_profile_gate(
                 "cogging_torque_slot_pole_period_origin_sampling_harmonic_phase_mesh_result_identity"
             )
         )
+        bem_near_singular_force_identity_ok = _bem_near_singular_force_identity_ok(
+            identity_value.get(
+                "bem_near_singular_gap_quadrature_normal_order_force_reciprocity_geometry_result_identity"
+            )
+        )
+        hysteresis_minor_loop_identity_ok = _hysteresis_minor_loop_identity_ok(
+            identity_value.get(
+                "hysteresis_minor_loop_state_reversal_return_memory_remanence_energy_time_material_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3463,6 +3524,12 @@ def magnetic_force_method_profile_gate(
         ),
         "cogging_torque_uses_slot_pole_period_origin_sampling_harmonics_phase_mesh_and_result": (
             cogging_torque_sampling_identity_ok
+        ),
+        "bem_near_contact_force_uses_gap_adaptive_quadrature_normals_order_reciprocity_geometry_and_result": (
+            bem_near_singular_force_identity_ok
+        ),
+        "hysteresis_minor_loop_uses_initial_state_reversals_return_memory_remanence_energy_time_and_material": (
+            hysteresis_minor_loop_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
