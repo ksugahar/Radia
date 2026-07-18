@@ -2474,6 +2474,145 @@ def _bem_demag_reciprocity_identity_ok(value: object) -> bool:
     )
 
 
+def _eddy_maglev_power_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("maglev_generation", "")).strip()
+    try:
+        velocity = float(value.get("plate_velocity_m_s"))
+        pole_pitch = float(value.get("pole_pitch_m"))
+        frequency = float(value.get("excitation_frequency_hz"))
+        conductivity = float(value.get("plate_conductivity_s_m"))
+        relative_permeability = float(value.get("relative_permeability"))
+        skin_depth = float(value.get("skin_depth_m"))
+        lift = float(value.get("lift_force_n"))
+        drag = float(value.get("drag_force_n"))
+        joule_loss = float(value.get("joule_loss_w"))
+        drag_power = float(value.get("mechanical_drag_power_w"))
+        residual = float(value.get("power_balance_residual_w"))
+        tolerance = float(value.get("power_tolerance_w"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "plate_velocity_m_s", "pole_pitch_m", "excitation_frequency_hz",
+        "plate_conductivity_s_m", "relative_permeability", "skin_depth_m",
+        "lift_force_n", "drag_force_n", "joule_loss_w",
+        "mechanical_drag_power_w", "power_balance_residual_w",
+        "power_tolerance_w",
+    )
+    values = (
+        velocity, pole_pitch, frequency, conductivity, relative_permeability,
+        skin_depth, lift, drag, joule_loss, drag_power, residual, tolerance,
+    )
+    if not all(math.isfinite(item) for item in values):
+        return False
+    expected_frequency = velocity / pole_pitch if pole_pitch > 0.0 else math.nan
+    expected_skin_depth = (
+        math.sqrt(
+            2.0
+            / (
+                2.0
+                * math.pi
+                * frequency
+                * (4.0e-7 * math.pi)
+                * relative_permeability
+                * conductivity
+            )
+        )
+        if frequency > 0.0 and conductivity > 0.0 and relative_permeability > 0.0
+        else math.nan
+    )
+    expected_drag_power = drag * velocity
+    expected_residual = drag_power - joule_loss
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "velocity_generation", "frequency_generation",
+            "conductivity_generation", "skin_generation", "force_generation",
+            "loss_generation", "power_generation", "mesh_generation",
+            "owner_generation", "result_generation"))
+        and velocity > 0.0 and pole_pitch > 0.0 and frequency > 0.0
+        and conductivity > 0.0 and relative_permeability > 0.0
+        and skin_depth > 0.0 and lift > 0.0 and drag > 0.0
+        and joule_loss >= 0.0 and drag_power >= 0.0 and tolerance >= 0.0
+        and math.isclose(frequency, expected_frequency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(skin_depth, expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(drag_power, expected_drag_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(joule_loss, drag_power, rel_tol=1.0e-12, abs_tol=tolerance)
+        and math.isclose(residual, expected_residual, rel_tol=0.0, abs_tol=1.0e-12)
+        and abs(residual) <= tolerance
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("maglev_result_sha256"))
+        and value.get("accepted_maglev_result_sha256")
+        == value.get("maglev_result_sha256")
+    )
+
+
+def _pm_coupling_energy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("coupling_generation", "")).strip()
+    pole_pairs_value = value.get("pole_pairs")
+    try:
+        angle = float(value.get("relative_angle_rad"))
+        pole_pairs = int(pole_pairs_value)
+        period = float(value.get("pole_period_rad"))
+        delta = float(value.get("angle_perturbation_rad"))
+        energy_minus = float(value.get("energy_minus_j"))
+        energy_center = float(value.get("energy_center_j"))
+        energy_plus = float(value.get("energy_plus_j"))
+        periodic_energy = float(value.get("periodic_energy_j"))
+        derivative_torque = float(value.get("energy_derivative_torque_nm"))
+        driver_torque = float(value.get("driver_torque_nm"))
+        driven_torque = float(value.get("driven_torque_nm"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "relative_angle_rad", "pole_pairs", "pole_period_rad",
+        "angle_perturbation_rad", "energy_minus_j", "energy_center_j",
+        "energy_plus_j", "periodic_energy_j", "energy_derivative_torque_nm",
+        "driver_torque_nm", "driven_torque_nm", "torque_frame",
+    )
+    values = (
+        angle, period, delta, energy_minus, energy_center, energy_plus,
+        periodic_energy, derivative_torque, driver_torque, driven_torque,
+    )
+    if not all(math.isfinite(item) for item in values):
+        return False
+    expected_period = 2.0 * math.pi / pole_pairs if pole_pairs > 0 else math.nan
+    expected_torque = -(energy_plus - energy_minus) / (2.0 * delta) if delta > 0.0 else math.nan
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "angle_generation", "periodicity_generation", "energy_generation",
+            "derivative_generation", "torque_generation", "reaction_generation",
+            "frame_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and isinstance(pole_pairs_value, int)
+        and not isinstance(pole_pairs_value, bool)
+        and pole_pairs > 0 and delta > 0.0
+        and math.isclose(period, expected_period, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(periodic_energy, energy_center, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(derivative_torque, expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(driver_torque, derivative_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(driven_torque, -driver_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(driver_torque + driven_torque, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and value.get("torque_frame") == "relative_angle_driver_positive"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("coupling_result_sha256"))
+        and value.get("accepted_coupling_result_sha256")
+        == value.get("coupling_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -2600,6 +2739,8 @@ def magnetic_force_method_profile_gate(
     pm_demag_recoil_identity_ok = True
     maglev_dynamic_stiffness_identity_ok = True
     bem_demag_reciprocity_identity_ok = True
+    eddy_maglev_power_identity_ok = True
+    pm_coupling_energy_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -2663,6 +2804,8 @@ def magnetic_force_method_profile_gate(
         pm_demag_recoil_identity_ok = False
         maglev_dynamic_stiffness_identity_ok = False
         bem_demag_reciprocity_identity_ok = False
+        eddy_maglev_power_identity_ok = False
+        pm_coupling_energy_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -4471,6 +4614,16 @@ def magnetic_force_method_profile_gate(
                 "bem_demag_reciprocity_interaction_energy_field_magnetization_surface_volume_mesh_solution_result_identity"
             )
         )
+        eddy_maglev_power_identity_ok = _eddy_maglev_power_identity_ok(
+            identity_value.get(
+                "eddy_current_maglev_plate_velocity_frequency_conductivity_skin_depth_lift_drag_loss_power_mesh_owner_result_identity"
+            )
+        )
+        pm_coupling_energy_identity_ok = _pm_coupling_energy_identity_ok(
+            identity_value.get(
+                "pm_coupling_angle_pole_periodicity_energy_derivative_driver_driven_torque_action_reaction_frame_mesh_owner_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -4715,6 +4868,12 @@ def magnetic_force_method_profile_gate(
         ),
         "bem_demag_closes_reciprocal_energy_field_magnetization_surface_volume_mesh_solution_and_result": (
             bem_demag_reciprocity_identity_ok
+        ),
+        "eddy_maglev_closes_velocity_frequency_skin_depth_lift_drag_joule_power_mesh_owner_and_result": (
+            eddy_maglev_power_identity_ok
+        ),
+        "pm_coupling_closes_pole_periodic_energy_derivative_action_reaction_frame_mesh_owner_and_result": (
+            pm_coupling_energy_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
