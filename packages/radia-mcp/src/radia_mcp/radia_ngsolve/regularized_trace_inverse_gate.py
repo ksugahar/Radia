@@ -274,6 +274,12 @@ def regularized_trace_inverse_path_gate(
     fembem_autodiff_identity_ok = (
         _optional_fembem_autodiff_identity_is_aligned(summary)
     )
+    adaptive_cq_timestep_identity_ok = (
+        _optional_cq_adaptive_timestep_identity_is_aligned(summary)
+    )
+    fembem_shape_derivative_identity_ok = (
+        _optional_fembem_shape_derivative_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -471,6 +477,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_autodiff_uses_current_wirtinger_objective_shape_fd_trace_mesh_and_gradient": (
             fembem_autodiff_identity_ok
+        ),
+        "adaptive_cq_uses_current_timesteps_contour_restart_interpolation_causality_energy_operator_and_result": (
+            adaptive_cq_timestep_identity_ok
+        ),
+        "fembem_shape_derivative_uses_current_morph_normal_velocity_trace_jacobian_fd_mesh_and_result": (
+            fembem_shape_derivative_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -4044,6 +4056,209 @@ def _optional_fembem_autodiff_identity_is_aligned(summary: Mapping[str, Any]) ->
         and value.get("accepted_gradient_owner") == value.get("gradient_owner")
         and _is_sha256(str(value.get("gradient_sha256", "")).lower())
         and value.get("accepted_gradient_sha256") == value.get("gradient_sha256")
+    )
+
+
+def _optional_cq_adaptive_timestep_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_adaptive_timestep_contour_restart_interpolation_causality_energy_operator_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["adaptive_cq_generation"]).strip()
+        time_steps = tuple(float(item) for item in value["time_step_history_s"])
+        result_time_steps = tuple(
+            float(item) for item in value["result_time_step_history_s"]
+        )
+        time_samples = tuple(float(item) for item in value["time_samples_s"])
+        result_time_samples = tuple(
+            float(item) for item in value["result_time_samples_s"]
+        )
+        anchors = tuple(float(item) for item in value["laplace_anchor_real_per_s"])
+        result_anchors = tuple(
+            float(item) for item in value["result_laplace_anchor_real_per_s"]
+        )
+        radius = float(value["contour_radius"])
+        result_radius = float(value["result_contour_radius"])
+        restart_step = _integer(value, "restart_step")
+        result_restart_step = _integer(value, "result_restart_step")
+        restart_state = tuple(float(item) for item in value["restart_history_state"])
+        result_restart_state = tuple(
+            float(item) for item in value["result_restart_history_state"]
+        )
+        prehistory = float(value["prehistory_max_abs"])
+        result_prehistory = float(value["result_prehistory_max_abs"])
+        energy = tuple(float(item) for item in value["discrete_energy_j"])
+        result_energy = tuple(float(item) for item in value["result_discrete_energy_j"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    expected_times = [0.0]
+    for time_step in time_steps:
+        expected_times.append(expected_times[-1] + time_step)
+    anchor_products = tuple(anchor * step for anchor, step in zip(anchors, time_steps))
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "timestep_generation",
+                "contour_generation",
+                "restart_generation",
+                "interpolation_generation",
+                "causality_generation",
+                "energy_generation",
+                "operator_generation",
+                "result_generation",
+            )
+        )
+        and value.get("cq_method") == "bdf2"
+        and value.get("result_cq_method") == value.get("cq_method")
+        and bool(time_steps)
+        and all(math.isfinite(item) and item > 0.0 for item in time_steps)
+        and result_time_steps == time_steps
+        and len(time_samples) == len(time_steps) + 1
+        and all(math.isfinite(item) for item in time_samples)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, expected in zip(time_samples, expected_times)
+        )
+        and result_time_samples == time_samples
+        and math.isfinite(radius)
+        and 0.0 < radius < 1.0
+        and result_radius == radius
+        and len(anchors) == len(time_steps)
+        and all(math.isfinite(item) and item > 0.0 for item in anchors)
+        and result_anchors == anchors
+        and bool(anchor_products)
+        and all(
+            math.isclose(item, anchor_products[0], rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for item in anchor_products
+        )
+        and 0 < restart_step <= len(time_steps)
+        and result_restart_step == restart_step
+        and bool(restart_state)
+        and all(math.isfinite(item) for item in restart_state)
+        and result_restart_state == restart_state
+        and value.get("history_interpolation") == "piecewise_linear_causal"
+        and value.get("result_history_interpolation")
+        == value.get("history_interpolation")
+        and math.isfinite(prehistory)
+        and prehistory == 0.0
+        and result_prehistory == prehistory
+        and len(energy) == len(time_samples)
+        and all(math.isfinite(item) and item >= 0.0 for item in energy)
+        and all(right <= left for left, right in zip(energy, energy[1:]))
+        and result_energy == energy
+        and bool(str(value.get("operator_owner", "")).strip())
+        and value.get("accepted_operator_owner") == value.get("operator_owner")
+        and _is_sha256(str(value.get("operator_sha256", "")).lower())
+        and value.get("accepted_operator_sha256") == value.get("operator_sha256")
+        and _is_sha256(str(value.get("result_sha256", "")).lower())
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _optional_fembem_shape_derivative_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "fembem_shape_derivative_morph_normal_velocity_trace_jacobian_objective_fd_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["shape_generation"]).strip()
+        step = float(value["shape_step"])
+        result_step = float(value["result_shape_step"])
+        reference = tuple(tuple(float(item) for item in row) for row in value["reference_nodes_m"])
+        result_reference = tuple(
+            tuple(float(item) for item in row) for row in value["result_reference_nodes_m"]
+        )
+        velocity = tuple(float(item) for item in value["normal_velocity_m"])
+        result_velocity = tuple(float(item) for item in value["result_normal_velocity_m"])
+        morphed = tuple(tuple(float(item) for item in row) for row in value["morphed_nodes_m"])
+        result_morphed = tuple(
+            tuple(float(item) for item in row) for row in value["result_morphed_nodes_m"]
+        )
+        trace_map = tuple(_integer({"item": item}, "item") for item in value["trace_node_map"])
+        result_trace_map = tuple(
+            _integer({"item": item}, "item") for item in value["result_trace_node_map"]
+        )
+        jacobians = tuple(float(item) for item in value["geometry_jacobian_determinant"])
+        result_jacobians = tuple(
+            float(item) for item in value["result_geometry_jacobian_determinant"]
+        )
+        derivative = float(value["objective_directional_derivative"])
+        result_derivative = float(value["result_objective_directional_derivative"])
+        objective_minus = float(value["objective_minus"])
+        result_objective_minus = float(value["result_objective_minus"])
+        objective_plus = float(value["objective_plus"])
+        result_objective_plus = float(value["result_objective_plus"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    expected_morphed = tuple(
+        (node[0], node[1], node[2] + step * normal_velocity)
+        for node, normal_velocity in zip(reference, velocity)
+    )
+    central_difference = (objective_plus - objective_minus) / (2.0 * step) if step else math.nan
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "morph_generation",
+                "normal_generation",
+                "trace_generation",
+                "jacobian_generation",
+                "objective_generation",
+                "fd_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(step)
+        and step > 0.0
+        and result_step == step
+        and bool(reference)
+        and all(len(row) == 3 and all(math.isfinite(item) for item in row) for row in reference)
+        and result_reference == reference
+        and len(velocity) == len(reference)
+        and all(math.isfinite(item) for item in velocity)
+        and result_velocity == velocity
+        and len(morphed) == len(reference)
+        and all(len(row) == 3 and all(math.isfinite(item) for item in row) for row in morphed)
+        and all(
+            all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15) for actual, expected in zip(actual_row, expected_row))
+            for actual_row, expected_row in zip(morphed, expected_morphed)
+        )
+        and result_morphed == morphed
+        and len(trace_map) == len(reference)
+        and all(item > 0 for item in trace_map)
+        and len(set(trace_map)) == len(trace_map)
+        and result_trace_map == trace_map
+        and len(jacobians) == len(reference)
+        and all(math.isfinite(item) and item > 0.0 for item in jacobians)
+        and result_jacobians == jacobians
+        and math.isfinite(derivative)
+        and result_derivative == derivative
+        and all(math.isfinite(item) for item in (objective_minus, objective_plus))
+        and result_objective_minus == objective_minus
+        and result_objective_plus == objective_plus
+        and math.isclose(central_difference, derivative, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _is_sha256(str(value.get("mesh_sha256", "")).lower())
+        and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
+        and _is_sha256(str(value.get("shape_result_sha256", "")).lower())
+        and value.get("accepted_shape_result_sha256") == value.get("shape_result_sha256")
     )
 
 
