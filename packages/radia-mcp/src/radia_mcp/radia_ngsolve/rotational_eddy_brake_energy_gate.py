@@ -3685,6 +3685,199 @@ def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     return True
 
 
+def _thermoviscous_pressure_interface_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "thermoviscous_pressure_interface_velocity_traction_dissipation_power_normal_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("interface_generation") or "")
+    try:
+        frequency = float(identity["frequency_hz"])
+        result_frequency = float(identity["result_frequency_hz"])
+        area = float(identity["interface_area_m2"])
+        result_area = float(identity["result_interface_area_m2"])
+        velocity = [float(item) for item in identity["normal_velocity_complex_m_per_s"]]
+        result_velocity = [
+            float(item) for item in identity["result_normal_velocity_complex_m_per_s"]
+        ]
+        pressure = [float(item) for item in identity["pressure_complex_pa"]]
+        result_pressure = [float(item) for item in identity["result_pressure_complex_pa"]]
+        interface_power = float(identity["interface_power_w"])
+        result_interface_power = float(identity["result_interface_power_w"])
+        viscous_loss = float(identity["viscous_loss_w"])
+        result_viscous_loss = float(identity["result_viscous_loss_w"])
+        thermal_loss = float(identity["thermal_loss_w"])
+        result_thermal_loss = float(identity["result_thermal_loss_w"])
+        outgoing_power = float(identity["outgoing_acoustic_power_w"])
+        result_outgoing_power = float(identity["result_outgoing_acoustic_power_w"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if len(velocity) != 2 or len(pressure) != 2:
+        return False
+    recomputed_power = 0.5 * area * (
+        pressure[0] * velocity[0] + pressure[1] * velocity[1]
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "velocity_generation",
+                "traction_generation",
+                "viscous_generation",
+                "thermal_generation",
+                "power_generation",
+                "normal_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and all(
+            math.isfinite(item)
+            for item in (
+                frequency,
+                area,
+                *velocity,
+                *pressure,
+                interface_power,
+                viscous_loss,
+                thermal_loss,
+                outgoing_power,
+            )
+        )
+        and frequency > 0.0
+        and area > 0.0
+        and result_frequency == frequency
+        and result_area == area
+        and result_velocity == velocity
+        and result_pressure == pressure
+        and identity.get("traction_sign") == "minus_pressure_times_outward_normal"
+        and identity.get("result_traction_sign") == identity.get("traction_sign")
+        and identity.get("normal_orientation")
+        == "thermoviscous_to_pressure_acoustics"
+        and identity.get("result_normal_orientation")
+        == identity.get("normal_orientation")
+        and interface_power > 0.0
+        and viscous_loss >= 0.0
+        and thermal_loss >= 0.0
+        and outgoing_power >= 0.0
+        and math.isclose(
+            interface_power, recomputed_power, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and math.isclose(
+            interface_power,
+            viscous_loss + thermal_loss + outgoing_power,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and result_interface_power == interface_power
+        and result_viscous_loss == viscous_loss
+        and result_thermal_loss == thermal_loss
+        and result_outgoing_power == outgoing_power
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _piezoelectric_reciprocity_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "piezoelectric_charge_strain_reciprocity_electromechanical_energy_polarization_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("piezo_generation") or "")
+    names = (
+        "direct_coefficient_c_per_n",
+        "converse_coefficient_m_per_v",
+        "electric_field_v_per_m",
+        "mechanical_stress_pa",
+        "induced_strain",
+        "induced_charge_density_c_per_m2",
+        "terminal_charge_c",
+        "electrical_work_j",
+        "elastic_energy_j",
+        "coupling_energy_j",
+        "total_stored_energy_j",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        result_values = {
+            name: float(identity[f"result_{name}"]) for name in names
+        }
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "charge_generation",
+                "strain_generation",
+                "reciprocity_generation",
+                "electrical_energy_generation",
+                "elastic_energy_generation",
+                "coupling_energy_generation",
+                "polarization_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in values.values())
+        and values["direct_coefficient_c_per_n"] > 0.0
+        and math.isclose(
+            values["direct_coefficient_c_per_n"],
+            values["converse_coefficient_m_per_v"],
+            rel_tol=1.0e-12,
+            abs_tol=0.0,
+        )
+        and math.isclose(
+            values["induced_strain"],
+            values["converse_coefficient_m_per_v"]
+            * values["electric_field_v_per_m"],
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-18,
+        )
+        and math.isclose(
+            values["induced_charge_density_c_per_m2"],
+            values["direct_coefficient_c_per_n"]
+            * values["mechanical_stress_pa"],
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-18,
+        )
+        and values["terminal_charge_c"] > 0.0
+        and values["electrical_work_j"] >= 0.0
+        and values["elastic_energy_j"] >= 0.0
+        and values["coupling_energy_j"] >= 0.0
+        and math.isclose(
+            values["total_stored_energy_j"],
+            values["electrical_work_j"]
+            + values["elastic_energy_j"]
+            - values["coupling_energy_j"],
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and result_values == values
+        and identity.get("polarization_frame") == "material_axis_3"
+        and identity.get("result_polarization_frame")
+        == identity.get("polarization_frame")
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -4126,6 +4319,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "thermoelastic_harmonics_use_current_heat_phase_temperature_displacement_work_loss_frequency_mesh_and_result": (
             _thermoelastic_harmonic_identity_ok(summary)
+        ),
+        "thermoviscous_interfaces_use_current_velocity_traction_dissipation_power_normal_mesh_and_result": (
+            _thermoviscous_pressure_interface_identity_ok(summary)
+        ),
+        "piezoelectric_results_use_current_charge_strain_reciprocity_energy_polarization_mesh_and_result": (
+            _piezoelectric_reciprocity_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
