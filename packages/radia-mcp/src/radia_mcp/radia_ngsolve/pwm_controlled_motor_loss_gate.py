@@ -843,6 +843,233 @@ def _skew_slice_average_identity_ok(value: object) -> bool:
     )
 
 
+def _iron_loss_component_volume_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("iron_loss_generation", "")).strip()
+    try:
+        frequency = float(value.get("frequency_hz"))
+        result_frequency = float(value.get("result_frequency_hz"))
+        orders = [int(item) for item in value.get("harmonic_orders", [])]
+        result_orders = [int(item) for item in value.get("result_harmonic_orders", [])]
+        flux = [float(item) for item in value.get("flux_density_harmonic_t", [])]
+        result_flux = [
+            float(item) for item in value.get("result_flux_density_harmonic_t", [])
+        ]
+        hysteresis = [
+            float(item) for item in value.get("hysteresis_component_w", [])
+        ]
+        result_hysteresis = [
+            float(item) for item in value.get("result_hysteresis_component_w", [])
+        ]
+        eddy = [float(item) for item in value.get("eddy_component_w", [])]
+        result_eddy = [
+            float(item) for item in value.get("result_eddy_component_w", [])
+        ]
+        anomalous = [
+            float(item) for item in value.get("anomalous_component_w", [])
+        ]
+        result_anomalous = [
+            float(item) for item in value.get("result_anomalous_component_w", [])
+        ]
+        total = float(value.get("total_iron_loss_w"))
+        result_total = float(value.get("result_total_iron_loss_w"))
+        element_ids = [int(item) for item in value.get("element_ids", [])]
+        result_element_ids = [
+            int(item) for item in value.get("result_element_ids", [])
+        ]
+        volumes = [float(item) for item in value.get("element_volumes_m3", [])]
+        result_volumes = [
+            float(item) for item in value.get("result_element_volumes_m3", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    count = len(orders)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "hysteresis_iron_loss_generation",
+                "eddy_iron_loss_generation",
+                "anomalous_iron_loss_generation",
+                "frequency_iron_loss_generation",
+                "harmonic_iron_loss_generation",
+                "material_iron_loss_generation",
+                "volume_iron_loss_generation",
+                "mesh_iron_loss_generation",
+                "result_iron_loss_generation",
+            )
+        )
+        and math.isfinite(frequency)
+        and frequency > 0.0
+        and math.isclose(result_frequency, frequency, rel_tol=0.0, abs_tol=1.0e-12)
+        and count > 0
+        and len(set(orders)) == count
+        and all(item > 0 for item in orders)
+        and all(left < right for left, right in zip(orders, orders[1:]))
+        and result_orders == orders
+        and all(len(items) == count for items in (flux, hysteresis, eddy, anomalous))
+        and all(
+            math.isfinite(item) and item >= 0.0
+            for items in (flux, hysteresis, eddy, anomalous)
+            for item in items
+        )
+        and result_flux == flux
+        and result_hysteresis == hysteresis
+        and result_eddy == eddy
+        and result_anomalous == anomalous
+        and math.isfinite(total)
+        and total >= 0.0
+        and math.isclose(
+            total,
+            sum(hysteresis) + sum(eddy) + sum(anomalous),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(result_total, total, rel_tol=0.0, abs_tol=1.0e-12)
+        and bool(element_ids)
+        and len(set(element_ids)) == len(element_ids)
+        and all(item > 0 for item in element_ids)
+        and len(volumes) == len(element_ids)
+        and all(math.isfinite(item) and item > 0.0 for item in volumes)
+        and result_element_ids == element_ids
+        and result_volumes == volumes
+        and _valid_sha256(value.get("material_coefficients_sha256"))
+        and value.get("result_material_coefficients_sha256")
+        == value.get("material_coefficients_sha256")
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("result_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
+def _induction_power_frame_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("induction_generation", "")).strip()
+    try:
+        stator_frequency = float(value.get("stator_frequency_hz"))
+        result_stator_frequency = float(value.get("result_stator_frequency_hz"))
+        slip = float(value.get("slip"))
+        result_slip = float(value.get("result_slip"))
+        rotor_frequency = float(value.get("rotor_frequency_hz"))
+        result_rotor_frequency = float(value.get("result_rotor_frequency_hz"))
+        pole_pairs = int(value.get("pole_pairs"))
+        result_pole_pairs = int(value.get("result_pole_pairs"))
+        rotor_current = [
+            float(item) for item in value.get("rotor_current_rms_a", [])
+        ]
+        result_rotor_current = [
+            float(item) for item in value.get("result_rotor_current_rms_a", [])
+        ]
+        torque = float(value.get("torque_nm"))
+        result_torque = float(value.get("result_torque_nm"))
+        speed = float(value.get("mechanical_speed_rad_s"))
+        result_speed = float(value.get("result_mechanical_speed_rad_s"))
+        output = float(value.get("mechanical_output_w"))
+        result_output = float(value.get("result_mechanical_output_w"))
+        stator_copper = float(value.get("stator_copper_loss_w"))
+        result_stator_copper = float(value.get("result_stator_copper_loss_w"))
+        rotor_copper = float(value.get("rotor_copper_loss_w"))
+        result_rotor_copper = float(value.get("result_rotor_copper_loss_w"))
+        iron = float(value.get("iron_loss_w"))
+        result_iron = float(value.get("result_iron_loss_w"))
+        mechanical_loss = float(value.get("mechanical_loss_w"))
+        result_mechanical_loss = float(value.get("result_mechanical_loss_w"))
+        electrical_input = float(value.get("electrical_input_w"))
+        result_electrical_input = float(value.get("result_electrical_input_w"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "stator_frequency_induction_generation",
+                "slip_induction_generation",
+                "rotor_frequency_induction_generation",
+                "rotor_current_induction_generation",
+                "frame_induction_generation",
+                "torque_induction_generation",
+                "power_induction_generation",
+                "loss_induction_generation",
+                "result_induction_generation",
+            )
+        )
+        and math.isfinite(stator_frequency)
+        and stator_frequency > 0.0
+        and math.isclose(
+            result_stator_frequency, stator_frequency, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and math.isfinite(slip)
+        and 0.0 <= slip < 1.0
+        and math.isclose(result_slip, slip, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(
+            rotor_frequency,
+            slip * stator_frequency,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            result_rotor_frequency, rotor_frequency, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and pole_pairs > 0
+        and result_pole_pairs == pole_pairs
+        and len(rotor_current) == 3
+        and all(math.isfinite(item) and item >= 0.0 for item in rotor_current)
+        and result_rotor_current == rotor_current
+        and value.get("reference_frame") == "stator-mechanical-ccw"
+        and value.get("result_reference_frame") == value.get("reference_frame")
+        and all(
+            math.isfinite(item)
+            for item in (
+                torque,
+                speed,
+                output,
+                stator_copper,
+                rotor_copper,
+                iron,
+                mechanical_loss,
+                electrical_input,
+            )
+        )
+        and all(item >= 0.0 for item in (stator_copper, rotor_copper, iron, mechanical_loss))
+        and math.isclose(
+            speed,
+            (1.0 - slip) * 2.0 * math.pi * stator_frequency / pole_pairs,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(output, torque * speed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(
+            electrical_input,
+            output + stator_copper + rotor_copper + iron + mechanical_loss,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(result_torque, torque, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_speed, speed, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_output, output, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_stator_copper, stator_copper, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_rotor_copper, rotor_copper, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(result_iron, iron, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(
+            result_mechanical_loss, mechanical_loss, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and math.isclose(
+            result_electrical_input, electrical_input, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and _valid_sha256(value.get("result_sha256"))
+        and value.get("accepted_result_sha256") == value.get("result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -924,6 +1151,8 @@ def pwm_controlled_motor_loss_gate(
     iron_loss_decomposition_element_identity_ok = True
     pwm_observable_alignment_identity_ok = True
     skew_slice_average_identity_ok = True
+    iron_loss_component_volume_identity_ok = True
+    induction_power_frame_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -967,6 +1196,8 @@ def pwm_controlled_motor_loss_gate(
         iron_loss_decomposition_element_identity_ok = False
         pwm_observable_alignment_identity_ok = False
         skew_slice_average_identity_ok = False
+        iron_loss_component_volume_identity_ok = False
+        induction_power_frame_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -2591,6 +2822,16 @@ def pwm_controlled_motor_loss_gate(
                 "skew_slice_angle_weight_frame_interpolation_torque_ripple_mesh_generation_identity"
             )
         )
+        iron_loss_component_volume_identity_ok = _iron_loss_component_volume_identity_ok(
+            identity_value.get(
+                "iron_loss_component_harmonic_frequency_volume_generation_identity"
+            )
+        )
+        induction_power_frame_identity_ok = _induction_power_frame_identity_ok(
+            identity_value.get(
+                "induction_slip_rotor_current_torque_power_frame_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -2905,6 +3146,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "skew_average_uses_current_angles_weights_frame_interpolation_torque_mesh_and_result": (
             skew_slice_average_identity_ok
+        ),
+        "iron_loss_components_use_current_frequency_harmonics_material_volumes_mesh_and_result": (
+            iron_loss_component_volume_identity_ok
+        ),
+        "induction_motor_uses_current_slip_rotor_frequency_current_frame_torque_and_power_balance": (
+            induction_power_frame_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
