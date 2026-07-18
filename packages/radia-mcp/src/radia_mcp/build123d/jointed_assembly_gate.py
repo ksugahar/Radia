@@ -915,6 +915,133 @@ def _stl_solid_reconstruction_identity_ok(value: object) -> bool:
     )
 
 
+def _step_ap242_context_owner_mass_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation") or "")
+    try:
+        contexts = [[str(item) for item in row] for row in value.get("representation_contexts", [])]
+        decoded_contexts = [[str(item) for item in row] for row in value.get("decoded_representation_contexts", [])]
+        owners = [[str(item) for item in row] for row in value.get("part_owners", [])]
+        decoded_owners = [[str(item) for item in row] for row in value.get("decoded_part_owners", [])]
+        occurrence_ids = [str(item) for item in value.get("occurrence_ids", [])]
+        decoded_occurrence_ids = [str(item) for item in value.get("decoded_occurrence_ids", [])]
+        transforms = [[str(item) for item in row] for row in value.get("occurrence_transform_sha256", [])]
+        decoded_transforms = [[str(item) for item in row] for row in value.get("decoded_occurrence_transform_sha256", [])]
+        mass_rows = [list(row) for row in value.get("occurrence_mass_properties", [])]
+        decoded_mass_rows = [list(row) for row in value.get("decoded_occurrence_mass_properties", [])]
+    except (TypeError, ValueError):
+        return False
+    valid_mass_rows = True
+    for row in mass_rows:
+        if len(row) != 5 or str(row[0]) not in occurrence_ids:
+            valid_mass_rows = False
+            break
+        try:
+            numbers = [float(item) for item in row[1:]]
+        except (TypeError, ValueError):
+            valid_mass_rows = False
+            break
+        if numbers[0] <= 0.0 or any(not math.isfinite(item) for item in numbers):
+            valid_mass_rows = False
+            break
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "schema_step_generation", "context_step_generation",
+            "owner_step_generation", "occurrence_step_generation",
+            "transform_step_generation", "mass_step_generation",
+            "structure_step_generation", "file_step_generation",
+            "result_step_generation"))
+        and value.get("ap_schema") == "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
+        and value.get("decoded_ap_schema") == value.get("ap_schema")
+        and bool(contexts)
+        and all(len(row) == 3 and all(row) for row in contexts)
+        and decoded_contexts == contexts
+        and bool(owners)
+        and all(len(row) == 2 and all(row) for row in owners)
+        and decoded_owners == owners
+        and bool(occurrence_ids)
+        and len(set(occurrence_ids)) == len(occurrence_ids)
+        and decoded_occurrence_ids == occurrence_ids
+        and len(transforms) == len(occurrence_ids)
+        and all(
+            len(row) == 2
+            and row[0] in occurrence_ids
+            and _valid_sha256(row[1])
+            for row in transforms
+        )
+        and {row[0] for row in transforms} == set(occurrence_ids)
+        and decoded_transforms == transforms
+        and len(mass_rows) == len(occurrence_ids)
+        and valid_mass_rows
+        and {str(row[0]) for row in mass_rows} == set(occurrence_ids)
+        and decoded_mass_rows == mass_rows
+        and _valid_sha256(value.get("product_structure_sha256"))
+        and value.get("decoded_product_structure_sha256")
+        == value.get("product_structure_sha256")
+        and _valid_sha256(value.get("step_file_sha256"))
+        and value.get("decoded_step_file_sha256") == value.get("step_file_sha256")
+    )
+
+
+def _stl_brep_tessellation_error_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("stl_generation") or "")
+    try:
+        chord = float(value.get("chord_tolerance_m"))
+        decoded_chord = float(value.get("decoded_chord_tolerance_m"))
+        angle = float(value.get("angular_tolerance_deg"))
+        decoded_angle = float(value.get("decoded_angular_tolerance_deg"))
+        facets = int(value.get("facet_count"))
+        decoded_facets = int(value.get("decoded_facet_count"))
+        components = int(value.get("connected_component_count"))
+        decoded_components = int(value.get("decoded_connected_component_count"))
+        deviation = float(value.get("maximum_surface_deviation_m"))
+        decoded_deviation = float(value.get("decoded_maximum_surface_deviation_m"))
+        source_area = float(value.get("source_surface_area_m2"))
+        decoded_area = float(value.get("decoded_surface_area_m2"))
+        source_volume = float(value.get("source_volume_m3"))
+        decoded_volume = float(value.get("decoded_volume_m3"))
+        area_tolerance = float(value.get("relative_area_tolerance"))
+        volume_tolerance = float(value.get("relative_volume_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    area_error = abs(decoded_area - source_area) / max(abs(source_area), 1.0e-300)
+    volume_error = abs(decoded_volume - source_volume) / max(abs(source_volume), 1.0e-300)
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "source_stl_generation", "tolerance_stl_generation",
+            "facet_stl_generation", "component_stl_generation",
+            "deviation_stl_generation", "area_stl_generation",
+            "volume_stl_generation", "file_stl_generation",
+            "result_stl_generation"))
+        and _valid_sha256(value.get("source_brep_sha256"))
+        and value.get("decoded_source_brep_sha256") == value.get("source_brep_sha256")
+        and math.isfinite(chord) and chord > 0.0 and decoded_chord == chord
+        and math.isfinite(angle) and 0.0 < angle < 180.0 and decoded_angle == angle
+        and facets > 0 and decoded_facets == facets
+        and components == 1 and decoded_components == components
+        and math.isfinite(deviation) and 0.0 <= deviation <= chord
+        and decoded_deviation == deviation
+        and all(math.isfinite(item) and item > 0.0 for item in (source_area, decoded_area, source_volume, decoded_volume))
+        and math.isfinite(area_tolerance) and 0.0 < area_tolerance < 1.0
+        and math.isfinite(volume_tolerance) and 0.0 < volume_tolerance < 1.0
+        and area_error <= area_tolerance
+        and volume_error <= volume_tolerance
+        and _valid_sha256(value.get("normal_table_sha256"))
+        and value.get("decoded_normal_table_sha256") == value.get("normal_table_sha256")
+        and _valid_sha256(value.get("stl_file_sha256"))
+        and value.get("decoded_stl_file_sha256") == value.get("stl_file_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -1255,6 +1382,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     three_mf_reconstruction_identity_ok = True
     step_assembly_reconstruction_identity_ok = True
     stl_solid_reconstruction_identity_ok = True
+    step_ap242_context_owner_mass_identity_ok = True
+    stl_brep_tessellation_error_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -1300,6 +1429,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         occt_shape_cache_identity_ok = False
         dxf_face_reconstruction_identity_ok = False
         three_mf_reconstruction_identity_ok = False
+        step_ap242_context_owner_mass_identity_ok = False
+        stl_brep_tessellation_error_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -2917,6 +3048,20 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "stl_facet_normal_winding_watertight_tolerance_volume_unit_file_generation_identity"
             )
         )
+        step_ap242_context_owner_mass_identity_ok = (
+            _step_ap242_context_owner_mass_identity_ok(
+                replay_identity_value.get(
+                    "step_ap242_representation_context_external_owner_occurrence_transform_mass_product_structure_file_generation_identity"
+                )
+            )
+        )
+        stl_brep_tessellation_error_identity_ok = (
+            _stl_brep_tessellation_error_identity_ok(
+                replay_identity_value.get(
+                    "stl_tessellation_source_brep_chord_angle_facet_component_deviation_area_volume_digest_generation_identity"
+                )
+            )
+        )
     joint_names = {
         str(name)
         for row in components
@@ -3070,6 +3215,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "stl_solids_use_current_normals_winding_watertight_edges_tolerance_volume_units_and_digests": (
             stl_solid_reconstruction_identity_ok
+        ),
+        "step_ap242_occurrences_use_current_schema_context_owners_transforms_mass_structure_and_file": (
+            step_ap242_context_owner_mass_identity_ok
+        ),
+        "stl_tessellations_use_current_brep_chord_angle_facets_components_deviation_area_volume_and_digests": (
+            stl_brep_tessellation_error_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
