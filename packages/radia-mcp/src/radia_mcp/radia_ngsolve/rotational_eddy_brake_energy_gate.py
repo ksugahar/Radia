@@ -2166,6 +2166,203 @@ def _nonlinear_eigenmode_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _frequency_time_reconstruction_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "frequency_time_hermitian_spacing_window_group_delay_parseval_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        frequencies = [float(value) for value in identity.get("frequencies_hz", [])]
+        result_frequencies = [
+            float(value) for value in identity.get("result_frequencies_hz", [])
+        ]
+        spectrum = [
+            [float(value) for value in pair]
+            for pair in identity.get("spectrum_ri", [])
+        ]
+        result_spectrum = [
+            [float(value) for value in pair]
+            for pair in identity.get("result_spectrum_ri", [])
+        ]
+        spacing = float(identity.get("frequency_spacing_hz"))
+        result_spacing = float(identity.get("result_frequency_spacing_hz"))
+        coherent_gain = float(identity.get("window_coherent_gain"))
+        result_coherent_gain = float(identity.get("result_window_coherent_gain"))
+        group_delay = float(identity.get("group_delay_s"))
+        result_group_delay = float(identity.get("result_group_delay_s"))
+        time_origin = float(identity.get("time_origin_s"))
+        result_time_origin = float(identity.get("result_time_origin_s"))
+        frequency_energy = float(identity.get("frequency_energy"))
+        time_energy = float(identity.get("time_energy"))
+        tolerance = float(identity.get("parseval_relative_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("transform_generation") or "")
+    energy_scale = max(abs(frequency_energy), abs(time_energy), 1.0e-300)
+    spacing_ok = len(frequencies) >= 2 and all(
+        abs((right - left) - spacing) <= 1.0e-12 * max(abs(spacing), 1.0)
+        for left, right in zip(frequencies, frequencies[1:])
+    )
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "spectrum_transform_generation",
+                "window_transform_generation",
+                "delay_transform_generation",
+                "energy_transform_generation",
+                "mesh_transform_generation",
+                "result_transform_generation",
+            )
+        )
+        and all(math.isfinite(value) and value >= 0.0 for value in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and result_frequencies == frequencies
+        and math.isfinite(spacing)
+        and spacing > 0.0
+        and result_spacing == spacing
+        and spacing_ok
+        and len(spectrum) == len(frequencies)
+        and all(
+            len(pair) == 2 and all(math.isfinite(value) for value in pair)
+            for pair in spectrum
+        )
+        and spectrum[0][1] == 0.0
+        and spectrum[-1][1] == 0.0
+        and result_spectrum == spectrum
+        and identity.get("hermitian_completion")
+        == "conjugate_negative_frequencies"
+        and identity.get("result_hermitian_completion")
+        == identity.get("hermitian_completion")
+        and identity.get("window_name") in {"hann_periodic", "none"}
+        and identity.get("result_window_name") == identity.get("window_name")
+        and math.isfinite(coherent_gain)
+        and 0.0 < coherent_gain <= 1.0
+        and result_coherent_gain == coherent_gain
+        and all(
+            math.isfinite(value)
+            for value in (
+                group_delay,
+                result_group_delay,
+                time_origin,
+                result_time_origin,
+            )
+        )
+        and result_group_delay == group_delay
+        and result_time_origin == time_origin
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance < 1.0
+        and abs(frequency_energy - time_energy) / energy_scale <= tolerance
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("transform_mesh_sha256", "result_transform_mesh_sha256"),
+                ("time_trace_sha256", "accepted_time_trace_sha256"),
+            )
+        )
+    )
+
+
+def _rotating_force_balance_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "rotating_force_virtual_work_stress_phase_frame_lever_angle_power_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        lever = [float(value) for value in identity.get("lever_arm_m", [])]
+        result_lever = [
+            float(value) for value in identity.get("result_lever_arm_m", [])
+        ]
+        angles = [
+            float(value) for value in identity.get("mechanical_angles_rad", [])
+        ]
+        result_angles = [
+            float(value)
+            for value in identity.get("result_mechanical_angles_rad", [])
+        ]
+        virtual_work = [
+            float(value) for value in identity.get("virtual_work_torque_nm", [])
+        ]
+        stress_tensor = [
+            float(value) for value in identity.get("stress_tensor_torque_nm", [])
+        ]
+        torque_tolerance = float(identity.get("torque_relative_tolerance"))
+        mechanical_power = float(identity.get("mechanical_power_w"))
+        airgap_power = float(identity.get("airgap_power_w"))
+        power_tolerance = float(identity.get("power_relative_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("force_generation") or "")
+    torque_scale = max(
+        max((abs(value) for value in virtual_work), default=0.0),
+        max((abs(value) for value in stress_tensor), default=0.0),
+        1.0e-300,
+    )
+    power_scale = max(abs(mechanical_power), abs(airgap_power), 1.0e-300)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "virtual_work_force_generation",
+                "stress_force_generation",
+                "phase_force_generation",
+                "frame_force_generation",
+                "angle_force_generation",
+                "power_force_generation",
+                "mesh_force_generation",
+                "result_force_generation",
+            )
+        )
+        and identity.get("phasor_convention") == "exp_positive_jwt_rms"
+        and identity.get("result_phasor_convention")
+        == identity.get("phasor_convention")
+        and identity.get("coordinate_frame") == "rotor_material"
+        and identity.get("result_coordinate_frame")
+        == identity.get("coordinate_frame")
+        and len(lever) == 3
+        and all(math.isfinite(value) for value in lever)
+        and result_lever == lever
+        and len(angles) >= 2
+        and all(math.isfinite(value) for value in angles)
+        and all(right > left for left, right in zip(angles, angles[1:]))
+        and result_angles == angles
+        and len(virtual_work) == len(stress_tensor) == len(angles)
+        and all(math.isfinite(value) for value in virtual_work + stress_tensor)
+        and math.isfinite(torque_tolerance)
+        and 0.0 < torque_tolerance < 1.0
+        and max(
+            (
+                abs(left - right)
+                for left, right in zip(virtual_work, stress_tensor, strict=True)
+            ),
+            default=math.inf,
+        )
+        / torque_scale
+        <= torque_tolerance
+        and all(math.isfinite(value) for value in (mechanical_power, airgap_power))
+        and math.isfinite(power_tolerance)
+        and 0.0 < power_tolerance < 1.0
+        and abs(mechanical_power - airgap_power) / power_scale <= power_tolerance
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("force_mesh_sha256", "result_force_mesh_sha256"),
+                ("force_result_sha256", "accepted_force_result_sha256"),
+            )
+        )
+    )
+
+
 def _thermoelastic_frequency_identity_ok(summary: dict[str, Any]) -> bool:
     identity = summary.get(
         "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
@@ -2754,6 +2951,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "nonlinear_eigenmodes_use_current_continuation_normalization_phase_mac_branch_eigenvalues_mesh_and_result": (
             _nonlinear_eigenmode_identity_ok(summary)
+        ),
+        "frequency_time_reconstruction_uses_current_hermitian_spacing_window_delay_parseval_mesh_and_result": (
+            _frequency_time_reconstruction_identity_ok(summary)
+        ),
+        "rotating_force_uses_current_virtual_work_stress_phase_frame_angle_power_mesh_and_result": (
+            _rotating_force_balance_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
