@@ -1763,6 +1763,233 @@ def _magnetic_bearing_linearization_identity_ok(value: object) -> bool:
     )
 
 
+def _magnetic_bearing_dynamic_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("bearing_dynamic_generation", "")).strip()
+    try:
+        displacement = [
+            [float(item) for item in row]
+            for row in value.get("displacement_perturbations_m", [])
+        ]
+        force = [
+            [float(item) for item in row]
+            for row in value.get("force_perturbations_n", [])
+        ]
+        stiffness = [
+            [float(item) for item in row]
+            for row in value.get("stiffness_matrix_n_per_m", [])
+        ]
+        damping = [
+            [float(item) for item in row]
+            for row in value.get("damping_matrix_n_s_per_m", [])
+        ]
+        eigenvalues = [
+            [float(item) for item in row]
+            for row in value.get("state_eigenvalues_per_s", [])
+        ]
+        operating_displacement = [
+            float(item) for item in value.get("operating_displacement_m", [])
+        ]
+        operating_velocity = [
+            float(item) for item in value.get("operating_velocity_m_s", [])
+        ]
+        currents = [float(item) for item in value.get("bias_currents_a", [])]
+    except (TypeError, ValueError):
+        return False
+    if (
+        len(stiffness) != 2
+        or any(len(row) != 2 for row in stiffness)
+        or len(damping) != 2
+        or any(len(row) != 2 for row in damping)
+    ):
+        return False
+    stiffness_positive = (
+        stiffness[0][0] > 0.0
+        and stiffness[1][1] > 0.0
+        and stiffness[0][0] * stiffness[1][1]
+        - stiffness[0][1] * stiffness[1][0]
+        > 0.0
+    )
+    symmetric_damping_cross = 0.5 * (damping[0][1] + damping[1][0])
+    damping_positive = (
+        damping[0][0] > 0.0
+        and damping[1][1] > 0.0
+        and damping[0][0] * damping[1][1]
+        - symmetric_damping_cross * symmetric_damping_cross
+        > 0.0
+    )
+    derived_force = [
+        [
+            -sum(stiffness[row][column] * delta[column] for column in range(2))
+            for row in range(2)
+        ]
+        for delta in displacement
+        if len(delta) == 2
+    ]
+    mirrored_fields = (
+        "coordinate_order",
+        "displacement_perturbations_m",
+        "force_perturbations_n",
+        "stiffness_matrix_n_per_m",
+        "damping_matrix_n_s_per_m",
+        "state_eigenvalues_per_s",
+        "operating_displacement_m",
+        "operating_velocity_m_s",
+        "bias_currents_a",
+        "bearing_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "force_generation",
+                "stiffness_generation",
+                "damping_generation",
+                "coordinate_generation",
+                "reciprocity_generation",
+                "stability_generation",
+                "operating_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and value.get("coordinate_order") == ["x", "y"]
+        and len(displacement) == len(force) >= 4
+        and all(len(row) == 2 for row in displacement + force)
+        and all(math.isfinite(item) for row in displacement + force for item in row)
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for observed_row, expected_row in zip(force, derived_force)
+            for observed, expected in zip(observed_row, expected_row)
+        )
+        and all(math.isfinite(item) for row in stiffness + damping for item in row)
+        and math.isclose(stiffness[0][1], stiffness[1][0], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and stiffness_positive
+        and damping_positive
+        and len(eigenvalues) == 4
+        and all(len(row) == 2 for row in eigenvalues)
+        and all(math.isfinite(item) for row in eigenvalues for item in row)
+        and all(row[0] < 0.0 for row in eigenvalues)
+        and len(operating_displacement) == len(operating_velocity) == 2
+        and all(
+            math.isfinite(item)
+            for item in operating_displacement + operating_velocity + currents
+        )
+        and len(currents) >= 2
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored_fields)
+        and _valid_sha256(value.get("bearing_mesh_sha256"))
+        and bool(str(value.get("bearing_result_owner", "")).strip())
+        and value.get("accepted_bearing_result_owner")
+        == value.get("bearing_result_owner")
+        and _valid_sha256(value.get("bearing_result_sha256"))
+        and value.get("accepted_bearing_result_sha256")
+        == value.get("bearing_result_sha256")
+    )
+
+
+def _moving_conductor_drag_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("moving_conductor_generation", "")).strip()
+    try:
+        velocity = [float(item) for item in value.get("velocity_m_s", [])]
+        drag = [float(item) for item in value.get("drag_force_n", [])]
+        lift = [float(item) for item in value.get("lift_force_n", [])]
+        joule_power = float(value.get("joule_power_w"))
+        mechanical_power = float(value.get("mechanical_drag_power_w"))
+        conductivity = float(value.get("conductivity_s_m"))
+        relative_permeability = float(value.get("relative_permeability"))
+        frequency = float(value.get("excitation_frequency_hz"))
+        spatial_period = float(value.get("spatial_period_m"))
+        slip_frequency = float(value.get("slip_frequency_hz"))
+        skin_depth = float(value.get("skin_depth_m"))
+    except (TypeError, ValueError):
+        return False
+    if len(velocity) != 3 or len(drag) != 3 or len(lift) != 3:
+        return False
+    speed = math.sqrt(sum(item * item for item in velocity))
+    drag_work = -sum(force * motion for force, motion in zip(drag, velocity))
+    lift_work = sum(force * motion for force, motion in zip(lift, velocity))
+    expected_skin_depth = (
+        math.sqrt(
+            2.0
+            / (
+                2.0
+                * math.pi
+                * frequency
+                * 4.0e-7
+                * math.pi
+                * relative_permeability
+                * conductivity
+            )
+        )
+        if frequency > 0.0 and conductivity > 0.0 and relative_permeability > 0.0
+        else math.nan
+    )
+    mirrored_fields = (
+        "coordinate_frame",
+        "velocity_m_s",
+        "drag_force_n",
+        "lift_force_n",
+        "joule_power_w",
+        "mechanical_drag_power_w",
+        "conductivity_s_m",
+        "relative_permeability",
+        "excitation_frequency_hz",
+        "spatial_period_m",
+        "slip_frequency_hz",
+        "skin_depth_m",
+        "conductor_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "velocity_generation",
+                "frame_generation",
+                "force_generation",
+                "power_generation",
+                "skin_generation",
+                "frequency_generation",
+                "slip_generation",
+                "mesh_generation",
+                "owner_generation",
+                "field_generation",
+                "result_generation",
+            )
+        )
+        and value.get("coordinate_frame") == "global_xyz_right_handed"
+        and all(math.isfinite(item) for item in velocity + drag + lift)
+        and speed > 0.0
+        and sum(force * motion for force, motion in zip(drag, velocity)) < 0.0
+        and math.isclose(lift_work, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and all(math.isfinite(item) and item > 0.0 for item in (joule_power, mechanical_power, conductivity, relative_permeability, frequency, spatial_period, slip_frequency, skin_depth))
+        and math.isclose(mechanical_power, drag_work, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(joule_power, mechanical_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(slip_frequency, speed / spatial_period, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(frequency, slip_frequency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(skin_depth, expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored_fields)
+        and _valid_sha256(value.get("conductor_mesh_sha256"))
+        and _valid_sha256(value.get("field_sha256"))
+        and value.get("accepted_field_sha256") == value.get("field_sha256")
+        and bool(str(value.get("conductor_result_owner", "")).strip())
+        and value.get("accepted_conductor_result_owner")
+        == value.get("conductor_result_owner")
+        and _valid_sha256(value.get("conductor_result_sha256"))
+        and value.get("accepted_conductor_result_sha256")
+        == value.get("conductor_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -1881,6 +2108,8 @@ def magnetic_force_method_profile_gate(
     bem_surface_charge_closure_identity_ok = True
     halbach_harmonic_closure_identity_ok = True
     magnetic_bearing_linearization_identity_ok = True
+    magnetic_bearing_dynamic_identity_ok = True
+    moving_conductor_drag_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -1936,6 +2165,8 @@ def magnetic_force_method_profile_gate(
         bem_surface_charge_closure_identity_ok = False
         halbach_harmonic_closure_identity_ok = False
         magnetic_bearing_linearization_identity_ok = False
+        magnetic_bearing_dynamic_identity_ok = False
+        moving_conductor_drag_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3702,6 +3933,16 @@ def magnetic_force_method_profile_gate(
                 )
             )
         )
+        magnetic_bearing_dynamic_identity_ok = _magnetic_bearing_dynamic_identity_ok(
+            identity_value.get(
+                "magnetic_bearing_perturbation_cross_coupled_stiffness_damping_coordinate_stability_operating_owner_result_identity"
+            )
+        )
+        moving_conductor_drag_identity_ok = _moving_conductor_drag_identity_ok(
+            identity_value.get(
+                "moving_conductor_velocity_frame_drag_lift_joule_work_skin_depth_frequency_slip_mesh_owner_field_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -3922,6 +4163,12 @@ def magnetic_force_method_profile_gate(
         ),
         "magnetic_bearing_uses_current_force_jacobians_bias_frame_reciprocal_positive_stiffness_mesh_and_result": (
             magnetic_bearing_linearization_identity_ok
+        ),
+        "magnetic_bearing_dynamics_use_current_force_perturbations_stiffness_damping_coordinates_stability_operating_point_owner_and_result": (
+            magnetic_bearing_dynamic_identity_ok
+        ),
+        "moving_conductor_uses_current_velocity_frame_drag_lift_power_skin_depth_slip_mesh_owner_field_and_result": (
+            moving_conductor_drag_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
