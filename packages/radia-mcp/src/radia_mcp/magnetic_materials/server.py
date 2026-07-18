@@ -183,7 +183,12 @@ def magnetic_materials_hysteresis(topic: str = "lab_core") -> str:
                                     Congruency (matches H-axis-congruent
                                     silicon steel); rotational BQM variants;
                                     complementary to the energy STOP (p=B-s).
-            "all"            - Everything (27 topics)
+            "identification_conditioning" - Basis-size/regularization guidance
+                                     for linear-in-theta convex identification;
+                                     constrained-posterior uncertainty limits,
+                                     effective DoF, held-out comparison, and
+                                     manuscript-honesty checks.
+            "all"            - Everything (28 topics)
     """
     return get_hysteresis_models_knowledge(topic)
 
