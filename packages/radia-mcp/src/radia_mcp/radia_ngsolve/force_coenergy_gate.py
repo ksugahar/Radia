@@ -2086,6 +2086,148 @@ def _heat_convection_radiation_identity_ok(value):
     )
 
 
+def _nonlinear_magnetic_circuit_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("magnetic_generation", "")).strip()
+    try:
+        h_curve = [float(item) for item in value.get("bh_curve_h_a_per_m", [])]
+        b_curve = [float(item) for item in value.get("bh_curve_b_t", [])]
+        h_operating = float(value.get("operating_h_a_per_m"))
+        b_operating = float(value.get("operating_b_t"))
+        current = float(value.get("terminal_current_a"))
+        flux = float(value.get("flux_linkage_wb_turn"))
+        energy = float(value.get("magnetic_energy_j"))
+        coenergy = float(value.get("coenergy_j"))
+        current_increment = float(value.get("current_increment_a"))
+        flux_increment = float(value.get("flux_linkage_increment_wb_turn"))
+        inductance = float(value.get("incremental_inductance_h"))
+        displacement = float(value.get("virtual_displacement_m"))
+        coenergy_increment = float(value.get("coenergy_increment_j"))
+        force = float(value.get("virtual_work_force_n"))
+        voltage = float(value.get("terminal_voltage_v"))
+        power = float(value.get("terminal_power_w"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "bh_curve_h_a_per_m", "bh_curve_b_t", "operating_h_a_per_m",
+        "operating_b_t", "terminal_current_a", "flux_linkage_wb_turn",
+        "magnetic_energy_j", "coenergy_j", "current_increment_a",
+        "flux_linkage_increment_wb_turn", "incremental_inductance_h",
+        "virtual_displacement_m",
+        "coenergy_increment_j", "virtual_work_force_n", "terminal_voltage_v",
+        "terminal_power_w",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "bh_generation", "flux_generation", "coenergy_generation",
+                "inductance_generation", "force_generation", "power_generation",
+                "mesh_generation", "result_generation",
+            )
+        )
+        and len(h_curve) == len(b_curve) >= 4
+        and all(math.isfinite(item) for item in h_curve + b_curve)
+        and h_curve[0] == 0.0 and b_curve[0] == 0.0
+        and all(right > left for left, right in zip(h_curve, h_curve[1:]))
+        and all(right > left for left, right in zip(b_curve, b_curve[1:]))
+        and any(
+            math.isclose(h_operating, h, rel_tol=0.0, abs_tol=1.0e-12)
+            and math.isclose(b_operating, b, rel_tol=0.0, abs_tol=1.0e-12)
+            for h, b in zip(h_curve, b_curve)
+        )
+        and all(
+            math.isfinite(item) and item > 0.0
+            for item in (
+                current, flux, energy, coenergy, current_increment,
+                flux_increment, inductance, displacement,
+                coenergy_increment, force, voltage, power,
+            )
+        )
+        # For nonlinear circuits W + W' = I*lambda; W' = I*lambda/2 is linear-only.
+        and math.isclose(
+            energy + coenergy,
+            current * flux,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and math.isclose(
+            inductance,
+            flux_increment / current_increment,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and math.isclose(force, coenergy_increment / displacement, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(power, voltage * current, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("nonlinear_result_sha256"))
+        and value.get("accepted_nonlinear_result_sha256") == value.get("nonlinear_result_sha256")
+    )
+
+
+def _electrostatic_matrix_gauge_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("electrostatic_generation", "")).strip()
+    try:
+        matrix = [[float(item) for item in row] for row in value.get("capacitance_matrix_f", [])]
+        result_matrix = [[float(item) for item in row] for row in value.get("result_capacitance_matrix_f", [])]
+        voltage = [float(item) for item in value.get("terminal_voltage_v", [])]
+        result_voltage = [float(item) for item in value.get("result_terminal_voltage_v", [])]
+        charge = [float(item) for item in value.get("terminal_charge_c", [])]
+        result_charge = [float(item) for item in value.get("result_terminal_charge_c", [])]
+        energy = float(value.get("field_energy_j"))
+        result_energy = float(value.get("result_field_energy_j"))
+        residual = float(value.get("reciprocity_residual_f"))
+        result_residual = float(value.get("result_reciprocity_residual_f"))
+    except (TypeError, ValueError):
+        return False
+    size = len(matrix)
+    expected_charge = [sum(matrix[row][column] * voltage[column] for column in range(size)) for row in range(size)] if size and all(len(row) == size for row in matrix) and len(voltage) == size else []
+    expected_energy = 0.5 * sum(voltage[index] * expected_charge[index] for index in range(size)) if len(expected_charge) == size else math.nan
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "matrix_generation", "charge_generation", "energy_generation",
+                "reciprocity_generation", "gauge_generation", "conductor_generation",
+                "mesh_generation", "result_generation",
+            )
+        )
+        and size >= 2 and all(len(row) == size for row in matrix)
+        and all(math.isfinite(item) for row in matrix for item in row)
+        and all(math.isclose(matrix[row][column], matrix[column][row], rel_tol=0.0, abs_tol=1.0e-18) for row in range(size) for column in range(size))
+        and all(matrix[index][index] > 0.0 for index in range(size))
+        and all(matrix[row][column] <= 0.0 for row in range(size) for column in range(size) if row != column)
+        and all(math.isclose(sum(row), 0.0, rel_tol=0.0, abs_tol=1.0e-18) for row in matrix)
+        and result_matrix == matrix and result_voltage == voltage
+        and len(charge) == size and all(math.isfinite(item) for item in charge)
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-18) for actual, expected in zip(charge, expected_charge))
+        and result_charge == charge
+        and math.isfinite(energy) and energy > 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and result_energy == energy
+        and math.isfinite(residual) and abs(residual) <= 1.0e-18 and result_residual == residual
+        and value.get("reference_gauge") == "conductor:2=0V"
+        and value.get("result_reference_gauge") == value.get("reference_gauge")
+        and bool(str(value.get("conductor_owner", "")).strip())
+        and value.get("accepted_conductor_owner") == value.get("conductor_owner")
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("electrostatic_result_sha256"))
+        and value.get("accepted_electrostatic_result_sha256") == value.get("electrostatic_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -2175,6 +2317,8 @@ def force_coenergy_displacement_gate(
     harmonic_circuit_power_identity_ok = True
     harmonic_conductor_closure_identity_ok = True
     heat_convection_radiation_identity_ok = True
+    nonlinear_magnetic_circuit_identity_ok = True
+    electrostatic_matrix_gauge_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -2238,6 +2382,8 @@ def force_coenergy_displacement_gate(
         harmonic_circuit_power_identity_ok = False
         harmonic_conductor_closure_identity_ok = False
         heat_convection_radiation_identity_ok = False
+        nonlinear_magnetic_circuit_identity_ok = False
+        electrostatic_matrix_gauge_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -3932,6 +4078,16 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        nonlinear_magnetic_circuit_identity_ok = _nonlinear_magnetic_circuit_identity_ok(
+            artifact_identity.get(
+                "nonlinear_magnetic_circuit_bh_flux_linkage_coenergy_incremental_inductance_force_power_mesh_result_generation_identity"
+            )
+        )
+        electrostatic_matrix_gauge_identity_ok = _electrostatic_matrix_gauge_identity_ok(
+            artifact_identity.get(
+                "electrostatic_capacitance_matrix_charge_energy_reciprocity_gauge_conductor_mesh_result_generation_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -4145,6 +4301,12 @@ def force_coenergy_displacement_gate(
         ),
         "heat_boundaries_close_convection_radiation_temperature_geometry_energy_owner_and_result": (
             heat_convection_radiation_identity_ok
+        ),
+        "nonlinear_magnetic_circuits_close_bh_flux_coenergy_incremental_inductance_force_power_mesh_and_result": (
+            nonlinear_magnetic_circuit_identity_ok
+        ),
+        "electrostatic_capacitance_closes_matrix_charge_energy_reciprocity_gauge_owners_and_result": (
+            electrostatic_matrix_gauge_identity_ok
         ),
     }
     return {
