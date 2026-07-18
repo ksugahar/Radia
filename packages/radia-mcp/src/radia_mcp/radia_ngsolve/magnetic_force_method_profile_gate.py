@@ -1990,6 +1990,207 @@ def _moving_conductor_drag_identity_ok(value: object) -> bool:
     )
 
 
+def _magnetic_gear_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("magnetic_gear_generation", "")).strip()
+    try:
+        high_poles = int(value.get("high_speed_pole_pairs"))
+        low_poles = int(value.get("low_speed_pole_pairs"))
+        modulator_poles = int(value.get("modulator_pole_count"))
+        harmonic = int(value.get("transmitted_harmonic_order"))
+        high_torque = float(value.get("high_speed_torque_nm"))
+        low_torque = float(value.get("low_speed_torque_nm"))
+        high_speed = float(value.get("high_speed_angular_velocity_rad_s"))
+        low_speed = float(value.get("low_speed_angular_velocity_rad_s"))
+        high_phase = float(value.get("high_speed_harmonic_phase_rad"))
+        low_phase = float(value.get("low_speed_harmonic_phase_rad"))
+        modulator_phase = float(value.get("modulator_phase_rad"))
+        transmitted_phase = float(value.get("transmitted_phase_rad"))
+    except (TypeError, ValueError):
+        return False
+    numeric = (
+        high_torque,
+        low_torque,
+        high_speed,
+        low_speed,
+        high_phase,
+        low_phase,
+        modulator_phase,
+        transmitted_phase,
+    )
+    ratio = low_poles / high_poles if high_poles > 0 else math.nan
+    phase_error = math.remainder(
+        transmitted_phase - (high_phase - low_phase + modulator_phase),
+        2.0 * math.pi,
+    )
+    mirrored_fields = (
+        "high_speed_pole_pairs",
+        "low_speed_pole_pairs",
+        "modulator_pole_count",
+        "transmitted_harmonic_order",
+        "high_speed_torque_nm",
+        "low_speed_torque_nm",
+        "high_speed_angular_velocity_rad_s",
+        "low_speed_angular_velocity_rad_s",
+        "high_speed_harmonic_phase_rad",
+        "low_speed_harmonic_phase_rad",
+        "modulator_phase_rad",
+        "transmitted_phase_rad",
+        "coordinate_frame",
+        "gear_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "pole_generation",
+                "harmonic_generation",
+                "torque_generation",
+                "phase_generation",
+                "power_generation",
+                "frame_generation",
+                "mesh_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and all(
+            isinstance(value.get(key), int) and not isinstance(value.get(key), bool)
+            for key in (
+                "high_speed_pole_pairs",
+                "low_speed_pole_pairs",
+                "modulator_pole_count",
+                "transmitted_harmonic_order",
+            )
+        )
+        and high_poles > 0
+        and low_poles > high_poles
+        and modulator_poles == high_poles + low_poles
+        and harmonic == low_poles
+        and all(math.isfinite(item) for item in numeric)
+        and high_torque * low_torque < 0.0
+        and high_speed > 0.0
+        and low_speed > 0.0
+        and math.isclose(abs(low_torque / high_torque), ratio, rel_tol=1.0e-12)
+        and math.isclose(high_speed / low_speed, ratio, rel_tol=1.0e-12)
+        and math.isclose(
+            high_torque * high_speed + low_torque * low_speed,
+            0.0,
+            rel_tol=0.0,
+            abs_tol=1.0e-9,
+        )
+        and math.isclose(phase_error, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and value.get("coordinate_frame") == "global_xyz_right_handed"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored_fields)
+        and _valid_sha256(value.get("gear_mesh_sha256"))
+        and bool(str(value.get("gear_result_owner", "")).strip())
+        and value.get("accepted_gear_result_owner") == value.get("gear_result_owner")
+        and _valid_sha256(value.get("gear_result_sha256"))
+        and value.get("accepted_gear_result_sha256") == value.get("gear_result_sha256")
+    )
+
+
+def _demag_bem_charge_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("demag_bem_generation", "")).strip()
+    try:
+        areas = [float(item) for item in value.get("panel_areas_m2", [])]
+        charges = [
+            float(item) for item in value.get("surface_charge_density_a_m", [])
+        ]
+        charge_integral = float(value.get("surface_charge_integral_a_m"))
+        normals = [
+            [float(item) for item in row] for row in value.get("outward_normals", [])
+        ]
+        jump = [float(item) for item in value.get("normal_field_jump_a_m", [])]
+        radii = [float(item) for item in value.get("farfield_radius_m", [])]
+        potential = [float(item) for item in value.get("farfield_potential_a", [])]
+        field = [float(item) for item in value.get("farfield_field_a_m", [])]
+        energy = float(value.get("magnetic_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    count = len(areas)
+    neutral_integral = sum(area * charge for area, charge in zip(areas, charges))
+    potential_scale = [item * radius**2 for item, radius in zip(potential, radii)]
+    field_scale = [item * radius**3 for item, radius in zip(field, radii)]
+    mirrored_fields = (
+        "panel_areas_m2",
+        "surface_charge_density_a_m",
+        "surface_charge_integral_a_m",
+        "outward_normals",
+        "outward_orientation_verified",
+        "normal_field_jump_a_m",
+        "farfield_radius_m",
+        "farfield_potential_a",
+        "farfield_field_a_m",
+        "magnetic_energy_j",
+        "boundary_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "charge_generation",
+                "normal_generation",
+                "jump_generation",
+                "farfield_generation",
+                "energy_generation",
+                "mesh_generation",
+                "owner_generation",
+                "solution_generation",
+            )
+        )
+        and count >= 4
+        and len(charges) == len(normals) == len(jump) == count
+        and all(area > 0.0 and math.isfinite(area) for area in areas)
+        and all(math.isfinite(charge) for charge in charges)
+        and all(len(row) == 3 for row in normals)
+        and all(math.isfinite(item) for row in normals for item in row)
+        and all(
+            math.isclose(
+                sum(item * item for item in row), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12
+            )
+            for row in normals
+        )
+        and value.get("outward_orientation_verified") is True
+        and all(
+            math.isclose(observed, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for observed, expected in zip(jump, charges)
+        )
+        and math.isclose(charge_integral, neutral_integral, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(neutral_integral, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and len(radii) == len(potential) == len(field) >= 3
+        and all(math.isfinite(item) and item > 0.0 for item in radii + potential + field)
+        and all(right > left for left, right in zip(radii, radii[1:]))
+        and all(right < left for left, right in zip(potential, potential[1:]))
+        and all(right < left for left, right in zip(field, field[1:]))
+        and all(
+            math.isclose(item, potential_scale[0], rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for item in potential_scale
+        )
+        and all(
+            math.isclose(item, field_scale[0], rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for item in field_scale
+        )
+        and math.isfinite(energy)
+        and energy > 0.0
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored_fields)
+        and _valid_sha256(value.get("boundary_mesh_sha256"))
+        and bool(str(value.get("demag_solution_owner", "")).strip())
+        and value.get("accepted_demag_solution_owner") == value.get("demag_solution_owner")
+        and _valid_sha256(value.get("demag_solution_sha256"))
+        and value.get("accepted_demag_solution_sha256") == value.get("demag_solution_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -2110,6 +2311,8 @@ def magnetic_force_method_profile_gate(
     magnetic_bearing_linearization_identity_ok = True
     magnetic_bearing_dynamic_identity_ok = True
     moving_conductor_drag_identity_ok = True
+    magnetic_gear_identity_ok = True
+    demag_bem_charge_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -2167,6 +2370,8 @@ def magnetic_force_method_profile_gate(
         magnetic_bearing_linearization_identity_ok = False
         magnetic_bearing_dynamic_identity_ok = False
         moving_conductor_drag_identity_ok = False
+        magnetic_gear_identity_ok = False
+        demag_bem_charge_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -3943,6 +4148,16 @@ def magnetic_force_method_profile_gate(
                 "moving_conductor_velocity_frame_drag_lift_joule_work_skin_depth_frequency_slip_mesh_owner_field_result_identity"
             )
         )
+        magnetic_gear_identity_ok = _magnetic_gear_identity_ok(
+            identity_value.get(
+                "magnetic_gear_pole_harmonic_torque_phase_power_frame_mesh_owner_result_identity"
+            )
+        )
+        demag_bem_charge_identity_ok = _demag_bem_charge_identity_ok(
+            identity_value.get(
+                "demag_bem_surface_charge_normal_jump_farfield_energy_mesh_owner_solution_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -4169,6 +4384,12 @@ def magnetic_force_method_profile_gate(
         ),
         "moving_conductor_uses_current_velocity_frame_drag_lift_power_skin_depth_slip_mesh_owner_field_and_result": (
             moving_conductor_drag_identity_ok
+        ),
+        "magnetic_gear_uses_current_poles_harmonic_torque_phase_power_frame_mesh_owner_and_result": (
+            magnetic_gear_identity_ok
+        ),
+        "demag_bem_uses_neutral_surface_charge_outward_normals_jump_farfield_energy_mesh_owner_and_solution": (
+            demag_bem_charge_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
