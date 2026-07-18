@@ -1633,6 +1633,127 @@ def _axial_flux_pm_closure_identity_ok(value: object) -> bool:
     )
 
 
+def _pm_demagnetization_operating_point_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    fields = (
+        "reference_temperature_c", "operating_temperature_c", "remanence_reference_t",
+        "remanence_temperature_coefficient_per_c", "remanence_operating_t",
+        "coercivity_reference_a_m", "coercivity_temperature_coefficient_per_c",
+        "coercivity_operating_a_m", "recoil_permeability_relative",
+        "loadline_slope_t_per_a_m", "operating_field_a_m", "operating_flux_density_t",
+        "knee_field_a_m", "irreversible_margin_a_m", "rotor_angle_rad",
+        "demag_mesh_sha256",
+    )
+    try:
+        numbers = {field: float(value.get(field)) for field in fields[:-1]}
+    except (TypeError, ValueError):
+        return False
+    delta_temperature = numbers["operating_temperature_c"] - numbers["reference_temperature_c"]
+    expected_remanence = numbers["remanence_reference_t"] * (
+        1.0 + numbers["remanence_temperature_coefficient_per_c"] * delta_temperature
+    )
+    expected_coercivity = numbers["coercivity_reference_a_m"] * (
+        1.0 + numbers["coercivity_temperature_coefficient_per_c"] * delta_temperature
+    )
+    expected_flux_density = numbers["remanence_operating_t"] + (
+        numbers["loadline_slope_t_per_a_m"] * numbers["operating_field_a_m"]
+    )
+    expected_margin = numbers["operating_field_a_m"] - numbers["knee_field_a_m"]
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "temperature_generation", "recoil_generation", "loadline_generation",
+            "operating_point_generation", "knee_generation", "margin_generation",
+            "angle_generation", "mesh_generation", "owner_generation", "result_generation"))
+        and all(math.isfinite(number) for number in numbers.values())
+        and numbers["operating_temperature_c"] >= numbers["reference_temperature_c"]
+        and numbers["remanence_reference_t"] > 0.0
+        and numbers["coercivity_reference_a_m"] > 0.0
+        and numbers["recoil_permeability_relative"] > 0.0
+        and numbers["loadline_slope_t_per_a_m"] > 0.0
+        and math.isclose(numbers["remanence_operating_t"], expected_remanence, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["coercivity_operating_a_m"], expected_coercivity, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and numbers["coercivity_operating_a_m"] > 0.0
+        and -numbers["coercivity_operating_a_m"] <= numbers["knee_field_a_m"] < 0.0
+        and math.isclose(numbers["operating_flux_density_t"], expected_flux_density, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["irreversible_margin_a_m"], expected_margin, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and numbers["irreversible_margin_a_m"] > 0.0
+        and all(value.get(f"result_{field}") == value.get(field) for field in fields)
+        and _valid_sha256(value.get("demag_mesh_sha256"))
+        and bool(str(value.get("demag_result_owner", "")).strip())
+        and value.get("accepted_demag_result_owner") == value.get("demag_result_owner")
+        and _valid_sha256(value.get("demag_result_sha256"))
+        and value.get("accepted_demag_result_sha256") == value.get("demag_result_sha256")
+    )
+
+
+def _eccentricity_ump_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("eccentricity_generation", "")).strip()
+    try:
+        static = [float(item) for item in value.get("static_eccentricity_m", [])]
+        dynamic = float(value.get("dynamic_eccentricity_amplitude_m"))
+        harmonics = [[int(row[0]), float(row[1]), float(row[2])] for row in value.get("radial_force_harmonics_n", [])]
+        ump = [float(item) for item in value.get("unbalanced_magnetic_pull_n", [])]
+        torque = float(value.get("torque_nm"))
+        pole_pairs = int(value.get("pole_pairs"))
+        periodicity = float(value.get("periodicity_angle_rad"))
+        angles = [float(item) for item in value.get("angle_grid_rad", [])]
+    except (IndexError, TypeError, ValueError):
+        return False
+    first_harmonic = next((row[1:] for row in harmonics if row[0] == 1), None)
+    static_norm = math.hypot(*static) if len(static) == 2 else 0.0
+    ump_norm = math.hypot(*ump) if len(ump) == 2 else 0.0
+    aligned = (
+        static_norm > 0.0
+        and ump_norm > 0.0
+        and abs(static[0] * ump[1] - static[1] * ump[0]) <= 1.0e-12 * static_norm * ump_norm
+        and static[0] * ump[0] + static[1] * ump[1] > 0.0
+    )
+    mirrored = (
+        "static_eccentricity_m", "dynamic_eccentricity_amplitude_m", "mechanical_frame",
+        "radial_force_harmonics_n", "unbalanced_magnetic_pull_n", "torque_nm",
+        "pole_pairs", "periodicity_angle_rad", "angle_grid_rad", "eccentricity_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "static_generation", "dynamic_generation", "frame_generation",
+            "harmonic_generation", "force_generation", "torque_generation",
+            "periodicity_generation", "angle_generation", "owner_generation", "result_generation"))
+        and len(static) == 2 and all(math.isfinite(item) for item in static)
+        and math.isfinite(dynamic) and dynamic >= 0.0
+        and value.get("mechanical_frame") == "stator_global_xy"
+        and len(harmonics) >= 2
+        and len({row[0] for row in harmonics}) == len(harmonics)
+        and all(row[0] >= 0 and all(math.isfinite(item) for item in row[1:]) for row in harmonics)
+        and len(ump) == 2 and all(math.isfinite(item) for item in ump)
+        and first_harmonic is not None
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for item, expected in zip(ump, first_harmonic))
+        and aligned
+        and math.isfinite(torque)
+        and pole_pairs > 0
+        and math.isclose(periodicity, 2.0 * math.pi / pole_pairs, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and len(angles) >= 3 and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and math.isclose(angles[0], 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(angles[-1], periodicity, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("eccentricity_mesh_sha256"))
+        and bool(str(value.get("eccentricity_result_owner", "")).strip())
+        and value.get("accepted_eccentricity_result_owner") == value.get("eccentricity_result_owner")
+        and _valid_sha256(value.get("eccentricity_result_sha256"))
+        and value.get("accepted_eccentricity_result_sha256") == value.get("eccentricity_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -1724,6 +1845,8 @@ def pwm_controlled_motor_loss_gate(
     synrm_dq_map_closure_identity_ok = True
     srm_commutation_closure_identity_ok = True
     axial_flux_pm_closure_identity_ok = True
+    pm_demagnetization_identity_ok = True
+    eccentricity_ump_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -1777,6 +1900,8 @@ def pwm_controlled_motor_loss_gate(
         synrm_dq_map_closure_identity_ok = False
         srm_commutation_closure_identity_ok = False
         axial_flux_pm_closure_identity_ok = False
+        pm_demagnetization_identity_ok = False
+        eccentricity_ump_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -3453,6 +3578,16 @@ def pwm_controlled_motor_loss_gate(
                 "axial_flux_pm_sector_airgap_end_effect_torque_force_surface_direction_frame_mesh_result_identity"
             )
         )
+        pm_demagnetization_identity_ok = _pm_demagnetization_operating_point_identity_ok(
+            identity_value.get(
+                "pm_demagnetization_temperature_recoil_loadline_operating_point_knee_margin_angle_mesh_owner_result_identity"
+            )
+        )
+        eccentricity_ump_identity_ok = _eccentricity_ump_identity_ok(
+            identity_value.get(
+                "eccentricity_static_dynamic_frame_radial_force_harmonic_ump_torque_pole_periodicity_angle_owner_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -3797,6 +3932,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "axial_flux_pm_uses_current_sector_airgaps_end_effect_torque_force_surface_frame_mesh_and_result": (
             axial_flux_pm_closure_identity_ok
+        ),
+        "pm_demagnetization_uses_current_temperature_recoil_loadline_knee_margin_angle_mesh_owner_and_result": (
+            pm_demagnetization_identity_ok
+        ),
+        "eccentricity_ump_uses_current_static_dynamic_frame_harmonics_force_torque_periodicity_angles_owner_and_result": (
+            eccentricity_ump_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
