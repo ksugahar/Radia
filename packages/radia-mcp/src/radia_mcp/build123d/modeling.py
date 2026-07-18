@@ -4429,6 +4429,314 @@ def _mass_inertia_parallel_axis_generation_identity(row):
     )
 
 
+def _assembly_mate_mass_inertia_generation_identity(row):
+    value = row.get(
+        "assembly_mate_transform_cycle_frame_handedness_mass_center_inertia_owner_shape_result_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+
+    def matrix(raw, size):
+        parsed = tuple(tuple(float(item) for item in matrix_row) for matrix_row in raw)
+        return parsed if len(parsed) == size and all(len(matrix_row) == size for matrix_row in parsed) else ()
+
+    def multiply(left, right):
+        return tuple(
+            tuple(
+                sum(left[row][inner] * right[inner][column] for inner in range(3))
+                for column in range(3)
+            )
+            for row in range(3)
+        )
+
+    def transpose(raw):
+        return tuple(tuple(raw[column][row] for column in range(3)) for row in range(3))
+
+    def determinant(raw):
+        return (
+            raw[0][0] * (raw[1][1] * raw[2][2] - raw[1][2] * raw[2][1])
+            - raw[0][1] * (raw[1][0] * raw[2][2] - raw[1][2] * raw[2][0])
+            + raw[0][2] * (raw[1][0] * raw[2][1] - raw[1][1] * raw[2][0])
+        )
+
+    def close(left, right):
+        return math.isclose(left, right, rel_tol=1.0e-9, abs_tol=1.0e-12)
+
+    generation = str(value.get("assembly_generation", "")).strip()
+    try:
+        part_ids = tuple(str(item).strip() for item in value.get("part_ids", []))
+        result_part_ids = tuple(str(item).strip() for item in value.get("result_part_ids", []))
+        mate_edges = tuple(tuple(str(item).strip() for item in pair) for pair in value.get("mate_edges", []))
+        result_mate_edges = tuple(
+            tuple(str(item).strip() for item in pair)
+            for pair in value.get("result_mate_edges", [])
+        )
+        cycle = matrix(value.get("mate_cycle_transform", []), 4)
+        result_cycle = matrix(value.get("result_mate_cycle_transform", []), 4)
+        frame_determinants = tuple(float(item) for item in value.get("frame_determinants", []))
+        result_frame_determinants = tuple(
+            float(item) for item in value.get("result_frame_determinants", [])
+        )
+        masses = tuple(float(item) for item in value.get("part_masses_kg", []))
+        result_masses = tuple(float(item) for item in value.get("result_part_masses_kg", []))
+        centers = tuple(tuple(float(item) for item in row) for row in value.get("part_centers_m", []))
+        result_centers = tuple(
+            tuple(float(item) for item in row)
+            for row in value.get("result_part_centers_m", [])
+        )
+        assembly_mass = float(value.get("assembly_mass_kg"))
+        result_assembly_mass = float(value.get("result_assembly_mass_kg"))
+        assembly_center = tuple(float(item) for item in value.get("assembly_center_of_mass_m", []))
+        result_assembly_center = tuple(
+            float(item) for item in value.get("result_assembly_center_of_mass_m", [])
+        )
+        rotations = tuple(matrix(raw, 3) for raw in value.get("part_rotation_matrices", []))
+        result_rotations = tuple(
+            matrix(raw, 3) for raw in value.get("result_part_rotation_matrices", [])
+        )
+        inertia_local = tuple(matrix(raw, 3) for raw in value.get("part_inertia_local_kg_m2", []))
+        result_inertia_local = tuple(
+            matrix(raw, 3) for raw in value.get("result_part_inertia_local_kg_m2", [])
+        )
+        inertia_global = tuple(matrix(raw, 3) for raw in value.get("part_inertia_global_kg_m2", []))
+        result_inertia_global = tuple(
+            matrix(raw, 3) for raw in value.get("result_part_inertia_global_kg_m2", [])
+        )
+    except (TypeError, ValueError):
+        return None
+    part_count = len(part_ids)
+    expected_identity = tuple(
+        tuple(1.0 if row == column else 0.0 for column in range(4))
+        for row in range(4)
+    )
+    edge_sources = [pair[0] for pair in mate_edges if len(pair) == 2]
+    edge_targets = [pair[1] for pair in mate_edges if len(pair) == 2]
+    weighted_center = (
+        tuple(
+            sum(mass * center[axis] for mass, center in zip(masses, centers))
+            / assembly_mass
+            for axis in range(3)
+        )
+        if assembly_mass > 0.0 and len(centers) == part_count and all(len(center) == 3 for center in centers)
+        else ()
+    )
+    inertia_rotations_ok = len(rotations) == len(inertia_local) == len(inertia_global) == part_count
+    if inertia_rotations_ok:
+        for rotation, local, global_tensor in zip(rotations, inertia_local, inertia_global):
+            if not rotation or not local or not global_tensor:
+                inertia_rotations_ok = False
+                break
+            orthogonality = multiply(rotation, transpose(rotation))
+            rotated = multiply(multiply(rotation, local), transpose(rotation))
+            if (
+                not close(determinant(rotation), 1.0)
+                or any(
+                    not close(orthogonality[row][column], 1.0 if row == column else 0.0)
+                    for row in range(3)
+                    for column in range(3)
+                )
+                or any(
+                    not close(rotated[row][column], global_tensor[row][column])
+                    for row in range(3)
+                    for column in range(3)
+                )
+            ):
+                inertia_rotations_ok = False
+                break
+    shape_digest = str(value.get("assembly_shape_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "mate_generation",
+                "cycle_generation",
+                "frame_generation",
+                "mass_generation",
+                "center_generation",
+                "inertia_generation",
+                "owner_generation",
+                "shape_generation",
+                "result_generation",
+            )
+        )
+        or part_count < 2
+        or len(set(part_ids)) != part_count
+        or not all(part_ids)
+        or result_part_ids != part_ids
+        or len(mate_edges) != part_count
+        or any(len(pair) != 2 or pair[0] == pair[1] for pair in mate_edges)
+        or set(edge_sources) != set(part_ids)
+        or set(edge_targets) != set(part_ids)
+        or result_mate_edges != mate_edges
+        or cycle != expected_identity
+        or result_cycle != cycle
+        or len(frame_determinants) != part_count
+        or any(not close(item, 1.0) for item in frame_determinants)
+        or result_frame_determinants != frame_determinants
+        or len(masses) != part_count
+        or any(not math.isfinite(item) or item <= 0.0 for item in masses)
+        or result_masses != masses
+        or len(centers) != part_count
+        or any(len(center) != 3 or any(not math.isfinite(item) for item in center) for center in centers)
+        or result_centers != centers
+        or not close(assembly_mass, sum(masses))
+        or result_assembly_mass != assembly_mass
+        or len(assembly_center) != 3
+        or len(weighted_center) != 3
+        or any(not close(item, expected) for item, expected in zip(assembly_center, weighted_center))
+        or result_assembly_center != assembly_center
+        or not inertia_rotations_ok
+        or result_rotations != rotations
+        or result_inertia_local != inertia_local
+        or result_inertia_global != inertia_global
+        or not str(value.get("assembly_owner", "")).strip()
+        or value.get("result_assembly_owner") != value.get("assembly_owner")
+        or not _valid_identity_digest(shape_digest)
+        or value.get("accepted_assembly_shape_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation,
+        part_ids,
+        mate_edges,
+        cycle,
+        masses,
+        centers,
+        assembly_mass,
+        assembly_center,
+        rotations,
+        inertia_local,
+        inertia_global,
+        value.get("assembly_owner"),
+        shape_digest,
+    )
+
+
+def _shell_fillet_topology_generation_identity(row):
+    value = row.get(
+        "shell_fillet_topology_euler_manifold_thickness_volume_area_inertia_convergence_brep_result_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("shell_fillet_generation", "")).strip()
+    try:
+        vertices = int(value.get("vertex_count"))
+        edges = int(value.get("edge_count"))
+        faces = int(value.get("face_count"))
+        euler = int(value.get("euler_characteristic"))
+        incidence = tuple(int(item) for item in value.get("edge_face_incidence_counts", []))
+        thickness = float(value.get("nominal_wall_thickness_m"))
+        thickness_samples = tuple(float(item) for item in value.get("wall_thickness_samples_m", []))
+        original_volume = float(value.get("original_volume_m3"))
+        removed_volume = float(value.get("removed_volume_m3"))
+        shell_volume = float(value.get("shell_volume_m3"))
+        area = float(value.get("surface_area_m2"))
+        inertia = tuple(
+            tuple(float(item) for item in matrix_row)
+            for matrix_row in value.get("inertia_tensor_kg_m2", [])
+        )
+        tolerances = tuple(float(item) for item in value.get("convergence_tolerances_m", []))
+        convergence_volumes = tuple(float(item) for item in value.get("convergence_volumes_m3", []))
+    except (TypeError, ValueError):
+        return None
+    mirrored_fields = (
+        "vertex_count",
+        "edge_count",
+        "face_count",
+        "euler_characteristic",
+        "edge_face_incidence_counts",
+        "nominal_wall_thickness_m",
+        "wall_thickness_samples_m",
+        "original_volume_m3",
+        "removed_volume_m3",
+        "shell_volume_m3",
+        "surface_area_m2",
+        "inertia_tensor_kg_m2",
+        "convergence_tolerances_m",
+        "convergence_volumes_m3",
+    )
+    matrix3 = len(inertia) == 3 and all(len(matrix_row) == 3 for matrix_row in inertia)
+    symmetric = matrix3 and all(
+        math.isclose(inertia[row][column], inertia[column][row], rel_tol=1.0e-9, abs_tol=1.0e-12)
+        for row in range(3)
+        for column in range(3)
+    )
+    positive_definite = (
+        symmetric
+        and inertia[0][0] > 0.0
+        and inertia[0][0] * inertia[1][1] - inertia[0][1] ** 2 > 0.0
+        and (
+            inertia[0][0] * (inertia[1][1] * inertia[2][2] - inertia[1][2] * inertia[2][1])
+            - inertia[0][1] * (inertia[1][0] * inertia[2][2] - inertia[1][2] * inertia[2][0])
+            + inertia[0][2] * (inertia[1][0] * inertia[2][1] - inertia[1][1] * inertia[2][0])
+        )
+        > 0.0
+    )
+    shape_digest = str(value.get("shell_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "topology_generation",
+                "thickness_generation",
+                "volume_generation",
+                "area_generation",
+                "inertia_generation",
+                "convergence_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or min(vertices, edges, faces) <= 0
+        or euler != 2
+        or vertices - edges + faces != euler
+        or len(incidence) != edges
+        or any(item != 2 for item in incidence)
+        or not math.isfinite(thickness)
+        or thickness <= 0.0
+        or not thickness_samples
+        or any(
+            not math.isfinite(item)
+            or not math.isclose(item, thickness, rel_tol=1.0e-3, abs_tol=1.0e-12)
+            for item in thickness_samples
+        )
+        or any(not math.isfinite(item) or item <= 0.0 for item in (original_volume, removed_volume, shell_volume, area))
+        or removed_volume >= original_volume
+        or not math.isclose(shell_volume, original_volume - removed_volume, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        or not positive_definite
+        or len(tolerances) < 3
+        or len(convergence_volumes) != len(tolerances)
+        or any(item <= 0.0 or not math.isfinite(item) for item in tolerances + convergence_volumes)
+        or any(right >= left for left, right in zip(tolerances, tolerances[1:]))
+        or not math.isclose(convergence_volumes[-1], shell_volume, rel_tol=1.0e-9, abs_tol=1.0e-12)
+        or not math.isclose(convergence_volumes[-2], convergence_volumes[-1], rel_tol=1.0e-5, abs_tol=1.0e-12)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored_fields)
+        or not _valid_identity_digest(shape_digest)
+        or value.get("accepted_shell_brep_sha256") != shape_digest
+    ):
+        return None
+    return (
+        generation,
+        vertices,
+        edges,
+        faces,
+        euler,
+        incidence,
+        thickness,
+        thickness_samples,
+        original_volume,
+        removed_volume,
+        shell_volume,
+        area,
+        inertia,
+        tolerances,
+        convergence_volumes,
+        shape_digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -4942,6 +5250,55 @@ def shape_mass_property_crosscheck_summary(
             mass_inertia_identity_ok = mass_inertia_identity_ok and all(
                 _mass_inertia_parallel_axis_generation_identity(row)
                 == reference_mass_inertias.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    assembly_mate_evidence_present = any(
+        row.get(
+            "assembly_mate_transform_cycle_frame_handedness_mass_center_inertia_owner_shape_result_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_assembly_mates = {
+        str(row.get("name", "")): _assembly_mate_mass_inertia_generation_identity(row)
+        for row in reference
+    }
+    assembly_mate_mass_inertia_identity_ok = not assembly_mate_evidence_present
+    if assembly_mate_evidence_present:
+        assembly_mate_mass_inertia_identity_ok = bool(reference_assembly_mates) and all(
+            value is not None for value in reference_assembly_mates.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_mate_mass_inertia_identity_ok = (
+                assembly_mate_mass_inertia_identity_ok
+                and all(
+                    _assembly_mate_mass_inertia_generation_identity(row)
+                    == reference_assembly_mates.get(str(row.get("name", "")))
+                    for row in rows
+                )
+            )
+
+    shell_fillet_evidence_present = any(
+        row.get(
+            "shell_fillet_topology_euler_manifold_thickness_volume_area_inertia_convergence_brep_result_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_shell_fillets = {
+        str(row.get("name", "")): _shell_fillet_topology_generation_identity(row)
+        for row in reference
+    }
+    shell_fillet_identity_ok = not shell_fillet_evidence_present
+    if shell_fillet_evidence_present:
+        shell_fillet_identity_ok = bool(reference_shell_fillets) and all(
+            value is not None for value in reference_shell_fillets.values()
+        )
+        for _, rows in normalized_sets:
+            shell_fillet_identity_ok = shell_fillet_identity_ok and all(
+                _shell_fillet_topology_generation_identity(row)
+                == reference_shell_fillets.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -6884,6 +7241,12 @@ def shape_mass_property_crosscheck_summary(
         ),
         "mass_properties_use_current_density_units_origin_center_principal_axes_parallel_axis_owner_and_shape": (
             mass_inertia_identity_ok
+        ),
+        "assembly_mates_close_current_cycles_frames_mass_centers_rotated_inertia_owner_and_shape": (
+            assembly_mate_mass_inertia_identity_ok
+        ),
+        "shell_fillets_use_current_euler_manifold_thickness_volume_area_inertia_convergence_and_brep": (
+            shell_fillet_identity_ok
         ),
     }
     issues = []
