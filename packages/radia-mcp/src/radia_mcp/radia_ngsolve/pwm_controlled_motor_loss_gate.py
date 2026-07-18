@@ -1982,6 +1982,182 @@ def _iron_loss_energy_balance_identity_ok(value: object) -> bool:
     )
 
 
+def _induction_motor_power_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("induction_generation", "")).strip()
+    try:
+        frequency = float(value.get("electrical_frequency_hz"))
+        pole_pairs = int(value.get("pole_pairs"))
+        slip = float(value.get("slip"))
+        synchronous_speed = float(value.get("synchronous_speed_rad_s"))
+        mechanical_speed = float(value.get("mechanical_speed_rad_s"))
+        airgap_power = float(value.get("airgap_power_w"))
+        torque = float(value.get("electromagnetic_torque_nm"))
+        rotor_loss = float(value.get("rotor_copper_loss_w"))
+        mechanical_output = float(value.get("mechanical_output_w"))
+        input_power = float(value.get("input_power_w"))
+        efficiency = float(value.get("efficiency"))
+    except (TypeError, ValueError):
+        return False
+    fields = (
+        "electrical_frequency_hz", "pole_pairs", "slip",
+        "synchronous_speed_rad_s", "mechanical_speed_rad_s",
+        "airgap_power_w", "electromagnetic_torque_nm",
+        "rotor_copper_loss_w", "mechanical_output_w", "input_power_w",
+        "efficiency",
+    )
+    numbers = (
+        frequency, slip, synchronous_speed, mechanical_speed, airgap_power,
+        torque, rotor_loss, mechanical_output, input_power, efficiency,
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "frequency_generation", "speed_generation", "slip_generation",
+            "airgap_generation", "torque_generation", "rotor_loss_generation",
+            "mechanical_generation", "efficiency_generation",
+            "owner_generation", "result_generation"))
+        and all(math.isfinite(item) for item in numbers)
+        and frequency > 0.0
+        and pole_pairs > 0
+        and 0.0 < slip < 1.0
+        and airgap_power > 0.0
+        and input_power >= airgap_power
+        and math.isclose(
+            synchronous_speed,
+            2.0 * math.pi * frequency / pole_pairs,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            mechanical_speed,
+            (1.0 - slip) * synchronous_speed,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            torque,
+            airgap_power / synchronous_speed,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            rotor_loss, slip * airgap_power,
+            rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and math.isclose(
+            mechanical_output, (1.0 - slip) * airgap_power,
+            rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and math.isclose(
+            mechanical_output, torque * mechanical_speed,
+            rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and 0.0 < efficiency <= 1.0
+        and math.isclose(
+            efficiency, mechanical_output / input_power,
+            rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and all(value.get(f"result_{field}") == value.get(field) for field in fields)
+        and bool(str(value.get("motor_owner", "")).strip())
+        and value.get("accepted_motor_owner") == value.get("motor_owner")
+        and _valid_sha256(value.get("motor_result_sha256"))
+        and value.get("accepted_motor_result_sha256")
+        == value.get("motor_result_sha256")
+    )
+
+
+def _axial_flux_periodicity_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("axial_flux_generation", "")).strip()
+    try:
+        sector_factor = int(value.get("sector_factor"))
+        sector_angle = float(value.get("sector_angle_rad"))
+        airgaps = [float(item) for item in value.get("dual_airgap_m", [])]
+        flux = [
+            float(item) for item in value.get("sector_axial_flux_per_gap_wb", [])
+        ]
+        sector_torque = [
+            float(item) for item in value.get("sector_torque_samples_nm", [])
+        ]
+        full_torque = [
+            float(item) for item in value.get("full_machine_torque_samples_nm", [])
+        ]
+        average_torque = float(value.get("average_torque_nm"))
+        torque_ripple = float(value.get("torque_ripple_ratio"))
+        phase_angles = [
+            float(item) for item in value.get("backemf_phase_angles_rad", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    numbers = (
+        [sector_angle, average_torque, torque_ripple]
+        + airgaps + flux + sector_torque + full_torque + phase_angles
+    )
+    mirrored = (
+        "sector_factor", "sector_angle_rad", "dual_airgap_m",
+        "sector_axial_flux_per_gap_wb", "sector_torque_samples_nm",
+        "full_machine_torque_samples_nm", "average_torque_nm",
+        "torque_ripple_ratio", "backemf_phase_angles_rad", "coordinate_frame",
+    )
+    if (
+        not all(math.isfinite(item) for item in numbers)
+        or len(airgaps) != 2
+        or len(flux) != 2
+        or len(sector_torque) < 3
+        or len(full_torque) != len(sector_torque)
+        or len(phase_angles) != 3
+    ):
+        return False
+    expected_full = [sector_factor * item for item in sector_torque]
+    expected_average = sum(expected_full) / len(expected_full)
+    phase_vector = [
+        sum(math.cos(angle) for angle in phase_angles),
+        sum(math.sin(angle) for angle in phase_angles),
+    ]
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "sector_generation", "airgap_generation", "flux_generation",
+            "torque_generation", "ripple_generation", "backemf_generation",
+            "frame_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and sector_factor >= 2
+        and math.isclose(
+            sector_angle, 2.0 * math.pi / sector_factor,
+            rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and all(item > 0.0 for item in airgaps)
+        and all(item > 0.0 for item in flux)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+                for item, expected in zip(full_torque, expected_full))
+        and average_torque > 0.0
+        and math.isclose(
+            average_torque, expected_average,
+            rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and math.isclose(
+            torque_ripple,
+            (max(full_torque) - min(full_torque)) / average_torque,
+            rel_tol=1.0e-12, abs_tol=1.0e-12
+        )
+        and all(abs(item) <= 1.0e-12 for item in phase_vector)
+        and value.get("coordinate_frame") == "cylindrical_z_axial"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("mesh_owner", "")).strip())
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("axial_flux_result_sha256"))
+        and value.get("accepted_axial_flux_result_sha256")
+        == value.get("axial_flux_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -2079,6 +2255,8 @@ def pwm_controlled_motor_loss_gate(
     ironloss_separation_identity_ok = True
     dq_mtpa_torque_identity_ok = True
     iron_loss_energy_balance_identity_ok = True
+    induction_motor_power_identity_ok = True
+    axial_flux_periodicity_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -2138,6 +2316,8 @@ def pwm_controlled_motor_loss_gate(
         ironloss_separation_identity_ok = False
         dq_mtpa_torque_identity_ok = False
         iron_loss_energy_balance_identity_ok = False
+        induction_motor_power_identity_ok = False
+        axial_flux_periodicity_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -3844,6 +4024,16 @@ def pwm_controlled_motor_loss_gate(
                 "iron_loss_component_frequency_flux_region_thermal_energy_balance_owner_result_identity"
             )
         )
+        induction_motor_power_identity_ok = _induction_motor_power_identity_ok(
+            identity_value.get(
+                "induction_motor_slip_synchronous_speed_airgap_power_torque_rotor_loss_mechanical_output_efficiency_owner_result_identity"
+            )
+        )
+        axial_flux_periodicity_identity_ok = _axial_flux_periodicity_identity_ok(
+            identity_value.get(
+                "axial_flux_motor_sector_periodicity_dual_airgap_axial_flux_torque_ripple_backemf_frame_mesh_owner_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -4206,6 +4396,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "iron_loss_closes_components_frequency_flux_regions_thermal_power_energy_owner_and_result": (
             iron_loss_energy_balance_identity_ok
+        ),
+        "induction_motor_closes_slip_speed_airgap_power_torque_rotor_loss_output_efficiency_owner_and_result": (
+            induction_motor_power_identity_ok
+        ),
+        "axial_flux_motor_closes_sector_dual_airgap_flux_torque_ripple_backemf_frame_mesh_owner_and_result": (
+            axial_flux_periodicity_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
