@@ -38,4 +38,3 @@ def test_aliases_and_unknown_topic_are_stable():
     unknown = get_technical_reports_documentation("not-a-report-topic")
     assert unknown.startswith("Unknown topic")
     assert "overview" in unknown
-
