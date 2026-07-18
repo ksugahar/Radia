@@ -1389,6 +1389,122 @@ def _airgap_force_closure_identity_ok(value):
     )
 
 
+def _inductance_matrix_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("inductance_generation", "")).strip()
+    try:
+        coils = [str(item) for item in value.get("coil_order", [])]
+        currents = [float(item) for item in value.get("currents_a", [])]
+        matrix = [[float(item) for item in row] for row in value.get("inductance_matrix_h", [])]
+        flux = [float(item) for item in value.get("flux_linkages_wb_turn", [])]
+        energy = float(value.get("stored_energy_j"))
+        minimum_eigenvalue = float(value.get("minimum_eigenvalue_h"))
+    except (TypeError, ValueError):
+        return False
+    if len(coils) != 2 or len(set(coils)) != 2 or len(currents) != 2:
+        return False
+    if len(matrix) != 2 or any(len(row) != 2 for row in matrix) or len(flux) != 2:
+        return False
+    if not all(math.isfinite(item) for item in currents + flux + [energy, minimum_eigenvalue] + matrix[0] + matrix[1]):
+        return False
+    calculated_flux = [
+        sum(matrix[row][column] * currents[column] for column in range(2))
+        for row in range(2)
+    ]
+    calculated_energy = 0.5 * sum(
+        currents[index] * calculated_flux[index] for index in range(2)
+    )
+    trace = matrix[0][0] + matrix[1][1]
+    discriminant = math.sqrt(max((matrix[0][0] - matrix[1][1]) ** 2 + 4.0 * matrix[0][1] ** 2, 0.0))
+    calculated_minimum_eigenvalue = 0.5 * (trace - discriminant)
+    mirrored = (
+        "coil_order", "currents_a", "inductance_matrix_h", "flux_linkages_wb_turn",
+        "stored_energy_j", "minimum_eigenvalue_h", "coil_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "reciprocity_generation", "psd_generation", "flux_generation",
+            "current_generation", "energy_generation", "coil_generation",
+            "mesh_generation", "owner_generation", "result_generation"))
+        and all(coils)
+        and math.isclose(matrix[0][1], matrix[1][0], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and matrix[0][0] >= 0.0 and matrix[1][1] >= 0.0
+        and calculated_minimum_eigenvalue >= -1.0e-12
+        and math.isclose(minimum_eigenvalue, calculated_minimum_eigenvalue, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-15) for item, expected in zip(flux, calculated_flux))
+        and energy >= 0.0
+        and math.isclose(energy, calculated_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("coil_mesh_sha256"))
+        and bool(str(value.get("inductance_result_owner", "")).strip())
+        and value.get("accepted_inductance_result_owner") == value.get("inductance_result_owner")
+        and _valid_sha256(value.get("inductance_result_sha256"))
+        and value.get("accepted_inductance_result_sha256") == value.get("inductance_result_sha256")
+    )
+
+
+def _nonlinear_bh_energy_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("bh_generation", "")).strip()
+    try:
+        b_samples = [float(item) for item in value.get("b_samples_t", [])]
+        h_samples = [float(item) for item in value.get("h_samples_a_m", [])]
+        differential = [float(item) for item in value.get("differential_permeability_h_m", [])]
+        operating_b = float(value.get("operating_point_b_t"))
+        operating_h = float(value.get("operating_point_h_a_m"))
+        energy = float(value.get("magnetic_energy_density_j_m3"))
+        coenergy = float(value.get("magnetic_coenergy_density_j_m3"))
+    except (TypeError, ValueError):
+        return False
+    if len(b_samples) < 3 or len(h_samples) != len(b_samples) or len(differential) != len(b_samples) - 1:
+        return False
+    if not all(math.isfinite(item) for item in b_samples + h_samples + differential + [operating_b, operating_h, energy, coenergy]):
+        return False
+    calculated_differential = [
+        (b_samples[index + 1] - b_samples[index]) / (h_samples[index + 1] - h_samples[index])
+        for index in range(len(b_samples) - 1)
+    ]
+    calculated_energy = sum(
+        0.5 * (h_samples[index] + h_samples[index + 1])
+        * (b_samples[index + 1] - b_samples[index])
+        for index in range(len(b_samples) - 1)
+    )
+    calculated_coenergy = operating_b * operating_h - calculated_energy
+    mirrored = (
+        "b_samples_t", "h_samples_a_m", "differential_permeability_h_m", "branch",
+        "operating_point_b_t", "operating_point_h_a_m", "magnetic_energy_density_j_m3",
+        "magnetic_coenergy_density_j_m3",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "interpolation_generation", "differential_generation", "branch_generation",
+            "energy_generation", "coenergy_generation", "operating_generation",
+            "material_generation", "solution_generation", "result_generation"))
+        and value.get("branch") == "ascending"
+        and all(right > left >= 0.0 for left, right in zip(b_samples, b_samples[1:]))
+        and all(right > left >= 0.0 for left, right in zip(h_samples, h_samples[1:]))
+        and all(item > 0.0 for item in differential)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-15) for item, expected in zip(differential, calculated_differential))
+        and operating_b == b_samples[-1] and operating_h == h_samples[-1]
+        and energy > 0.0 and coenergy >= 0.0
+        and math.isclose(energy, calculated_energy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(coenergy, calculated_coenergy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and bool(str(value.get("material_owner", "")).strip())
+        and value.get("accepted_material_owner") == value.get("material_owner")
+        and _valid_sha256(value.get("nonlinear_solution_sha256"))
+        and value.get("accepted_nonlinear_solution_sha256") == value.get("nonlinear_solution_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -1470,6 +1586,8 @@ def force_coenergy_displacement_gate(
     axisymmetric_heat_balance_identity_ok = True
     kelvin_open_boundary_identity_ok = True
     airgap_force_closure_identity_ok = True
+    inductance_matrix_identity_ok = True
+    nonlinear_bh_energy_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -1525,6 +1643,8 @@ def force_coenergy_displacement_gate(
         axisymmetric_heat_balance_identity_ok = False
         kelvin_open_boundary_identity_ok = False
         airgap_force_closure_identity_ok = False
+        inductance_matrix_identity_ok = False
+        nonlinear_bh_energy_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -3169,6 +3289,16 @@ def force_coenergy_displacement_gate(
                 "force_airgap_contour_stress_fourier_virtual_work_symmetry_torque_origin_field_result_identity"
             )
         )
+        inductance_matrix_identity_ok = _inductance_matrix_identity_ok(
+            artifact_identity.get(
+                "inductance_matrix_reciprocity_psd_fluxlinkage_current_energy_coil_mesh_owner_result_identity"
+            )
+        )
+        nonlinear_bh_energy_identity_ok = _nonlinear_bh_energy_identity_ok(
+            artifact_identity.get(
+                "nonlinear_bh_interpolation_differential_permeability_branch_energy_coenergy_operating_material_solution_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -3358,6 +3488,12 @@ def force_coenergy_displacement_gate(
         ),
         "airgap_force_closes_contours_fourier_virtual_work_symmetry_torque_field_owner_and_result": (
             airgap_force_closure_identity_ok
+        ),
+        "inductance_matrix_closes_reciprocity_psd_flux_current_energy_coils_mesh_owner_and_result": (
+            inductance_matrix_identity_ok
+        ),
+        "nonlinear_bh_closes_interpolation_differential_mu_branch_energy_coenergy_operating_material_and_solution": (
+            nonlinear_bh_energy_identity_ok
         ),
     }
     return {
