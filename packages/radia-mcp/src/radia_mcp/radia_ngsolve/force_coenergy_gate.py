@@ -249,6 +249,264 @@ def _axisymmetric_revolved_energy_force_identity_ok(value):
     )
 
 
+def _axisymmetric_3d_force_revolution_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("revolution_generation", "")).strip()
+    field_owner = str(value.get("field_owner", "")).strip()
+    try:
+        factor = float(value.get("revolution_factor"))
+        result_factor = float(value.get("result_revolution_factor"))
+        area = float(value.get("meridional_area_m2"))
+        result_area = float(value.get("result_meridional_area_m2"))
+        radius = float(value.get("centroid_radius_m"))
+        result_radius = float(value.get("result_centroid_radius_m"))
+        volume = float(value.get("swept_volume_m3"))
+        result_volume = float(value.get("result_swept_volume_m3"))
+        energy_per_rad = float(value.get("axisymmetric_energy_j_per_rad"))
+        result_energy_per_rad = float(
+            value.get("result_axisymmetric_energy_j_per_rad")
+        )
+        energy = float(value.get("revolved_energy_j"))
+        result_energy = float(value.get("result_revolved_energy_j"))
+        coenergy_per_rad = float(value.get("axisymmetric_coenergy_j_per_rad"))
+        result_coenergy_per_rad = float(
+            value.get("result_axisymmetric_coenergy_j_per_rad")
+        )
+        coenergy = float(value.get("revolved_coenergy_j"))
+        result_coenergy = float(value.get("result_revolved_coenergy_j"))
+        displacement = [
+            float(item) for item in value.get("virtual_displacement_m", [])
+        ]
+        result_displacement = [
+            float(item)
+            for item in value.get("result_virtual_displacement_m", [])
+        ]
+        direction = [
+            float(item) for item in value.get("force_direction_unit", [])
+        ]
+        result_direction = [
+            float(item) for item in value.get("result_force_direction_unit", [])
+        ]
+        force = [float(item) for item in value.get("force_n", [])]
+        result_force = [float(item) for item in value.get("result_force_n", [])]
+    except (TypeError, ValueError):
+        return False
+    scalars = (
+        factor, result_factor, area, result_area, radius, result_radius,
+        volume, result_volume, energy_per_rad, result_energy_per_rad,
+        energy, result_energy, coenergy_per_rad, result_coenergy_per_rad,
+        coenergy, result_coenergy,
+    )
+    vectors = (
+        displacement + result_displacement + direction + result_direction
+        + force + result_force
+    )
+    vector_groups = (
+        displacement, result_displacement, direction, result_direction,
+        force, result_force,
+    )
+    if (
+        not all(math.isfinite(item) for item in scalars + tuple(vectors))
+        or any(len(items) != 3 for items in vector_groups)
+    ):
+        return False
+    direction_norm = math.sqrt(sum(item * item for item in direction))
+    displacement_norm = math.sqrt(sum(item * item for item in displacement))
+    force_projection = sum(item * axis for item, axis in zip(force, direction))
+    displacement_projection = sum(
+        item * axis for item, axis in zip(displacement, direction)
+    )
+    force_perpendicular_sq = sum(
+        (item - force_projection * axis) ** 2
+        for item, axis in zip(force, direction)
+    )
+    displacement_perpendicular_sq = sum(
+        (item - displacement_projection * axis) ** 2
+        for item, axis in zip(displacement, direction)
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "factor_generation", "volume_generation", "energy_generation",
+                "coenergy_generation", "direction_generation",
+                "displacement_generation", "field_generation",
+                "mesh_generation", "result_generation",
+            )
+        )
+        and math.isclose(
+            factor, 2.0 * math.pi, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and math.isclose(
+            result_factor, factor, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and area > 0.0
+        and radius > 0.0
+        and math.isclose(result_area, area, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(
+            result_radius, radius, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and math.isclose(
+            volume, factor * radius * area, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and math.isclose(
+            result_volume, volume, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and energy_per_rad >= 0.0
+        and coenergy_per_rad >= 0.0
+        and math.isclose(
+            result_energy_per_rad,
+            energy_per_rad,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-18,
+        )
+        and math.isclose(
+            result_coenergy_per_rad,
+            coenergy_per_rad,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-18,
+        )
+        and math.isclose(
+            energy, factor * energy_per_rad, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and math.isclose(
+            result_energy, energy, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and math.isclose(
+            coenergy,
+            factor * coenergy_per_rad,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-18,
+        )
+        and math.isclose(
+            result_coenergy, coenergy, rel_tol=1.0e-12, abs_tol=1.0e-18
+        )
+        and result_displacement == displacement
+        and result_direction == direction
+        and result_force == force
+        and math.isclose(
+            direction_norm, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and displacement_norm > 0.0
+        and displacement_projection > 0.0
+        and displacement_perpendicular_sq <= 1.0e-24
+        and force_projection > 0.0
+        and force_perpendicular_sq <= 1.0e-20
+        and bool(field_owner)
+        and value.get("accepted_field_owner") == field_owner
+        and _valid_sha256(value.get("mesh_sha256"))
+        and value.get("accepted_mesh_sha256") == value.get("mesh_sha256")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256")
+        == value.get("force_result_sha256")
+    )
+
+
+def _harmonic_circuit_power_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("circuit_generation", "")).strip()
+    owner = str(value.get("circuit_owner", "")).strip()
+    try:
+        voltage = [float(item) for item in value.get("voltage_peak_phasor_v", [])]
+        result_voltage = [
+            float(item) for item in value.get("result_voltage_peak_phasor_v", [])
+        ]
+        current = [float(item) for item in value.get("current_peak_phasor_a", [])]
+        result_current = [
+            float(item) for item in value.get("result_current_peak_phasor_a", [])
+        ]
+        impedance = [float(item) for item in value.get("impedance_ohm", [])]
+        result_impedance = [
+            float(item) for item in value.get("result_impedance_ohm", [])
+        ]
+        power = [float(item) for item in value.get("complex_power_va", [])]
+        result_power = [
+            float(item) for item in value.get("result_complex_power_va", [])
+        ]
+        copper_loss = float(value.get("copper_loss_w"))
+        result_copper_loss = float(value.get("result_copper_loss_w"))
+        field_loss = float(value.get("field_loss_w"))
+        result_field_loss = float(value.get("result_field_loss_w"))
+    except (TypeError, ValueError):
+        return False
+    vector_groups = (
+        voltage, result_voltage, current, result_current,
+        impedance, result_impedance, power, result_power,
+    )
+    values = sum(vector_groups, []) + [
+        copper_loss, result_copper_loss, field_loss, result_field_loss
+    ]
+    if (
+        any(len(items) != 2 for items in vector_groups)
+        or not all(math.isfinite(item) for item in values)
+    ):
+        return False
+    denominator = current[0] ** 2 + current[1] ** 2
+    if denominator <= 0.0:
+        return False
+    expected_impedance = [
+        (voltage[0] * current[0] + voltage[1] * current[1]) / denominator,
+        (voltage[1] * current[0] - voltage[0] * current[1]) / denominator,
+    ]
+    expected_power = [
+        0.5 * (voltage[0] * current[0] + voltage[1] * current[1]),
+        0.5 * (voltage[1] * current[0] - voltage[0] * current[1]),
+    ]
+
+    def close_pair(left, right):
+        return all(
+            math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for item, expected in zip(left, right)
+        )
+
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "voltage_generation", "current_generation",
+                "impedance_generation", "power_generation", "loss_generation",
+                "rms_generation", "owner_generation", "result_generation",
+            )
+        )
+        and result_voltage == voltage
+        and result_current == current
+        and close_pair(impedance, expected_impedance)
+        and result_impedance == impedance
+        and close_pair(power, expected_power)
+        and result_power == power
+        and copper_loss >= 0.0
+        and field_loss >= 0.0
+        and math.isclose(
+            copper_loss + field_loss,
+            power[0],
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and math.isclose(
+            result_copper_loss, copper_loss, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and math.isclose(
+            result_field_loss, field_loss, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and value.get("phasor_convention") == "peak_cosine"
+        and value.get("result_phasor_convention")
+        == value.get("phasor_convention")
+        and bool(owner)
+        and value.get("accepted_circuit_owner") == owner
+        and _valid_sha256(value.get("circuit_result_sha256"))
+        and value.get("accepted_circuit_result_sha256")
+        == value.get("circuit_result_sha256")
+    )
+
+
 def _nonlinear_bh_incremental_force_identity_ok(value):
     if value is None:
         return True
@@ -1696,6 +1954,8 @@ def force_coenergy_displacement_gate(
     nonlinear_bh_energy_identity_ok = True
     nonlinear_incremental_energy_inductance_identity_ok = True
     weighted_stress_force_convergence_identity_ok = True
+    axisymmetric_3d_force_revolution_identity_ok = True
+    harmonic_circuit_power_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -1755,6 +2015,8 @@ def force_coenergy_displacement_gate(
         nonlinear_bh_energy_identity_ok = False
         nonlinear_incremental_energy_inductance_identity_ok = False
         weighted_stress_force_convergence_identity_ok = False
+        axisymmetric_3d_force_revolution_identity_ok = False
+        harmonic_circuit_power_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -3423,6 +3685,18 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        axisymmetric_3d_force_revolution_identity_ok = (
+            _axisymmetric_3d_force_revolution_identity_ok(
+                artifact_identity.get(
+                    "axisymmetric_3d_force_revolution_volume_energy_coenergy_direction_displacement_field_mesh_result_identity"
+                )
+            )
+        )
+        harmonic_circuit_power_identity_ok = _harmonic_circuit_power_identity_ok(
+            artifact_identity.get(
+                "harmonic_circuit_voltage_current_impedance_complex_power_copper_field_loss_rms_owner_result_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -3624,6 +3898,12 @@ def force_coenergy_displacement_gate(
         ),
         "weighted_stress_force_closes_region_air_contours_mesh_convergence_direction_owner_and_result": (
             weighted_stress_force_convergence_identity_ok
+        ),
+        "axisymmetric_3d_forces_use_current_revolution_volume_energy_coenergy_direction_displacement_field_mesh_and_result": (
+            axisymmetric_3d_force_revolution_identity_ok
+        ),
+        "harmonic_circuits_use_current_voltage_current_impedance_power_losses_rms_owner_and_result": (
+            harmonic_circuit_power_identity_ok
         ),
     }
     return {
