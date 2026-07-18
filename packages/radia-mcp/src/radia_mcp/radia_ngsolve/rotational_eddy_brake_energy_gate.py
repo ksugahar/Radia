@@ -1988,6 +1988,184 @@ def _acoustic_radiation_impedance_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _joule_heat_energy_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "joule_heat_source_current_density_resistivity_temperature_frame_time_average_energy_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        window = [float(value) for value in identity.get("averaging_window_s", [])]
+        result_window = [
+            float(value) for value in identity.get("result_averaging_window_s", [])
+        ]
+        electric_loss = float(identity.get("electric_loss_w"))
+        result_electric_loss = float(identity.get("result_electric_loss_w"))
+        heat_integral = float(identity.get("heat_source_integral_w"))
+        result_heat_integral = float(identity.get("result_heat_source_integral_w"))
+        tolerance = float(identity.get("energy_balance_relative_tolerance"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("joule_generation") or "")
+    scale = max(abs(electric_loss), abs(heat_integral), 1.0e-300)
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "mapping_joule_generation",
+                "resistivity_joule_generation",
+                "temperature_joule_generation",
+                "frame_joule_generation",
+                "averaging_joule_generation",
+                "energy_joule_generation",
+                "mesh_joule_generation",
+                "result_joule_generation",
+            )
+        )
+        and all(
+            bool(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("current_density_field_id", "result_current_density_field_id"),
+                ("temperature_field_id", "result_temperature_field_id"),
+                ("resistivity_model_id", "result_resistivity_model_id"),
+                ("source_frame", "result_source_frame"),
+            )
+        )
+        and len(window) == 2
+        and all(math.isfinite(value) for value in window)
+        and window[1] > window[0] >= 0.0
+        and result_window == window
+        and identity.get("time_average_method")
+        in {"trapezoidal_period_average", "exact_period_average"}
+        and identity.get("result_time_average_method")
+        == identity.get("time_average_method")
+        and all(
+            math.isfinite(value) and value >= 0.0
+            for value in (
+                electric_loss,
+                result_electric_loss,
+                heat_integral,
+                result_heat_integral,
+            )
+        )
+        and result_electric_loss == electric_loss
+        and result_heat_integral == heat_integral
+        and math.isfinite(tolerance)
+        and 0.0 < tolerance < 1.0
+        and abs(electric_loss - heat_integral) / scale <= tolerance
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("coupled_mesh_sha256", "result_coupled_mesh_sha256"),
+                ("joule_heat_result_sha256", "accepted_joule_heat_result_sha256"),
+            )
+        )
+    )
+
+
+def _nonlinear_eigenmode_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "nonlinear_eigenmode_continuation_parameter_normalization_phase_mac_branch_eigenvalue_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    try:
+        parameters = [
+            float(value) for value in identity.get("continuation_parameter_values", [])
+        ]
+        result_parameters = [
+            float(value)
+            for value in identity.get("result_continuation_parameter_values", [])
+        ]
+        references = [
+            int(value) for value in identity.get("mac_reference_branch_ids", [])
+        ]
+        result_references = [
+            int(value)
+            for value in identity.get("result_mac_reference_branch_ids", [])
+        ]
+        branches = [
+            [int(value) for value in row]
+            for row in identity.get("mode_branch_ids", [])
+        ]
+        result_branches = [
+            [int(value) for value in row]
+            for row in identity.get("result_mode_branch_ids", [])
+        ]
+        eigenvalues = [
+            [[float(value) for value in pair] for pair in row]
+            for row in identity.get("eigenvalues_ri", [])
+        ]
+        result_eigenvalues = [
+            [[float(value) for value in pair] for pair in row]
+            for row in identity.get("result_eigenvalues_ri", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("eigenmode_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "continuation_eigenmode_generation",
+                "normalization_eigenmode_generation",
+                "phase_eigenmode_generation",
+                "mac_eigenmode_generation",
+                "branch_eigenmode_generation",
+                "eigenvalue_eigenmode_generation",
+                "mesh_eigenmode_generation",
+                "result_eigenmode_generation",
+            )
+        )
+        and bool(str(identity.get("continuation_parameter_name") or ""))
+        and identity.get("result_continuation_parameter_name")
+        == identity.get("continuation_parameter_name")
+        and len(parameters) >= 2
+        and all(math.isfinite(value) for value in parameters)
+        and all(right > left for left, right in zip(parameters, parameters[1:]))
+        and result_parameters == parameters
+        and identity.get("mode_normalization") in {"unit_mass", "unit_energy"}
+        and identity.get("result_mode_normalization")
+        == identity.get("mode_normalization")
+        and bool(str(identity.get("phase_anchor_dof") or ""))
+        and identity.get("result_phase_anchor_dof") == identity.get("phase_anchor_dof")
+        and bool(references)
+        and len(set(references)) == len(references)
+        and all(value > 0 for value in references)
+        and result_references == references
+        and len(branches) == len(parameters)
+        and all(row == references for row in branches)
+        and result_branches == branches
+        and len(eigenvalues) == len(parameters)
+        and all(
+            len(row) == len(references)
+            and all(
+                len(pair) == 2 and all(math.isfinite(value) for value in pair)
+                for pair in row
+            )
+            for row in eigenvalues
+        )
+        and result_eigenvalues == eigenvalues
+        and all(
+            _is_sha256(str(identity.get(source) or ""))
+            and identity.get(target) == identity.get(source)
+            for source, target in (
+                ("mac_assignment_sha256", "result_mac_assignment_sha256"),
+                ("eigenmode_mesh_sha256", "result_eigenmode_mesh_sha256"),
+                ("eigenmode_result_sha256", "accepted_eigenmode_result_sha256"),
+            )
+        )
+    )
+
+
 def _thermoelastic_frequency_identity_ok(summary: dict[str, Any]) -> bool:
     identity = summary.get(
         "thermoelastic_frequency_reference_temperature_prestress_linearization_mesh_dataset_generation_identity"
@@ -2570,6 +2748,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "acoustic_radiation_uses_current_modes_trace_area_convention_frequency_power_and_result": (
             _acoustic_radiation_impedance_identity_ok(summary)
+        ),
+        "joule_heat_uses_current_mapping_resistivity_temperature_frame_average_energy_mesh_and_result": (
+            _joule_heat_energy_identity_ok(summary)
+        ),
+        "nonlinear_eigenmodes_use_current_continuation_normalization_phase_mac_branch_eigenvalues_mesh_and_result": (
+            _nonlinear_eigenmode_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
