@@ -4350,6 +4350,138 @@ def _bridge_rectifier_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _flyback_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "flyback_magnetizing_leakage_snubber_demag_flux_current_cycle_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("flyback_generation_id") or "")
+    fields = (
+        "switching_frequency_hz", "switching_period_s", "input_voltage_v",
+        "duty_cycle", "magnetizing_inductance_h", "leakage_inductance_h",
+        "peak_switch_current_a", "demagnetization_interval_s",
+        "peak_core_flux_density_t", "snubber_energy_per_cycle_j",
+        "average_snubber_dissipation_w", "magnetizing_energy_per_cycle_j",
+        "delivered_energy_per_cycle_j", "source_energy_per_cycle_j",
+        "cycle_energy_residual_j",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    frequency = values["switching_frequency_hz"]
+    period = values["switching_period_s"]
+    voltage = values["input_voltage_v"]
+    duty = values["duty_cycle"]
+    magnetizing = values["magnetizing_inductance_h"]
+    leakage = values["leakage_inductance_h"]
+    peak_current = values["peak_switch_current_a"]
+    expected_current = voltage * duty * period / magnetizing if magnetizing > 0.0 else math.nan
+    expected_magnetizing_energy = 0.5 * magnetizing * peak_current**2
+    expected_leakage_energy = 0.5 * leakage * peak_current**2
+    expected_residual = (
+        values["source_energy_per_cycle_j"]
+        - values["delivered_energy_per_cycle_j"]
+        - values["snubber_energy_per_cycle_j"]
+    )
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "magnetizing_flyback_generation_id", "leakage_flyback_generation_id",
+            "snubber_flyback_generation_id", "demag_flyback_generation_id",
+            "flux_flyback_generation_id", "current_flyback_generation_id",
+            "energy_flyback_generation_id", "waveform_flyback_generation_id",
+            "result_flyback_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(frequency, period, voltage, magnetizing, leakage) > 0.0
+        and 0.0 < duty < 1.0
+        and math.isclose(period, 1.0 / frequency, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(peak_current, expected_current, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and 0.0 < values["demagnetization_interval_s"] <= period * (1.0 - duty)
+        and 0.0 < values["peak_core_flux_density_t"] <= 2.5
+        and math.isclose(values["snubber_energy_per_cycle_j"], expected_leakage_energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["average_snubber_dissipation_w"], expected_leakage_energy * frequency, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["magnetizing_energy_per_cycle_j"], expected_magnetizing_energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["delivered_energy_per_cycle_j"], expected_magnetizing_energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["cycle_energy_residual_j"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and abs(expected_residual) <= 1.0e-12 * max(values["source_energy_per_cycle_j"], 1.0e-18)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _transimpedance_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "transimpedance_photodiode_capacitance_noise_gain_bandwidth_stability_noise_step_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("transimpedance_generation_id") or "")
+    fields = (
+        "feedback_resistance_ohm", "feedback_capacitance_f",
+        "photodiode_capacitance_f", "opamp_input_capacitance_f",
+        "transimpedance_dc_gain_v_per_a", "high_frequency_noise_gain",
+        "closed_loop_bandwidth_hz", "opamp_gain_bandwidth_hz",
+        "phase_margin_deg", "input_referred_current_noise_a_per_sqrt_hz",
+        "integrated_output_noise_v_rms", "step_rise_time_s",
+        "step_overshoot_fraction", "step_settling_time_s",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    resistance = values["feedback_resistance_ohm"]
+    feedback_capacitance = values["feedback_capacitance_f"]
+    detector_capacitance = values["photodiode_capacitance_f"]
+    input_capacitance = values["opamp_input_capacitance_f"]
+    expected_noise_gain = 1.0 + (detector_capacitance + input_capacitance) / feedback_capacitance if feedback_capacitance > 0.0 else math.nan
+    expected_bandwidth = 1.0 / (2.0 * math.pi * resistance * feedback_capacitance) if min(resistance, feedback_capacitance) > 0.0 else math.nan
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "capacitance_transimpedance_generation_id",
+            "noisegain_transimpedance_generation_id",
+            "bandwidth_transimpedance_generation_id",
+            "stability_transimpedance_generation_id",
+            "noise_transimpedance_generation_id", "step_transimpedance_generation_id",
+            "circuit_transimpedance_generation_id", "result_transimpedance_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(resistance, feedback_capacitance) > 0.0
+        and detector_capacitance >= 0.0 and input_capacitance >= 0.0
+        and math.isclose(values["transimpedance_dc_gain_v_per_a"], resistance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["high_frequency_noise_gain"], expected_noise_gain, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["closed_loop_bandwidth_hz"], expected_bandwidth, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and values["opamp_gain_bandwidth_hz"] >= expected_noise_gain * expected_bandwidth
+        and 45.0 <= values["phase_margin_deg"] <= 180.0
+        and values["input_referred_current_noise_a_per_sqrt_hz"] >= 0.0
+        and values["integrated_output_noise_v_rms"] >= 0.0
+        and math.isclose(values["step_rise_time_s"], 0.44 / expected_bandwidth, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and 0.0 <= values["step_overshoot_fraction"] < 1.0
+        and values["step_settling_time_s"] >= values["step_rise_time_s"]
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -4790,6 +4922,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "bridge_rectifier_uses_current_inrush_ripple_charge_conduction_loss_load_cycle_energy_waveform_and_result": (
             _bridge_rectifier_owner_identity_ok(positive)
+        ),
+        "flyback_uses_current_magnetizing_leakage_snubber_demag_flux_current_cycle_energy_waveform_and_result": (
+            _flyback_owner_identity_ok(positive)
+        ),
+        "transimpedance_uses_current_capacitance_noise_gain_bandwidth_stability_noise_step_circuit_and_result": (
+            _transimpedance_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
