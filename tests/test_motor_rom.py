@@ -364,5 +364,14 @@ def test_simulink_c_abi_and_fmi_boundary_bundle_is_synchronized(tmp_path):
     assert manifest["c_abi"]["abi_version"] == 1
     assert manifest["fmi"]["version"] == "3.0.2"
     assert manifest["fmi"]["packaged_fmu"] is False
+    assert manifest["simulink"]["mex_s_function"] == "radia_motor_rom_sfun"
+    assert manifest["simulink"]["state_update"] == "internal-discrete-at-fixed-sample-time"
     assert manifest["generalized_current_order"] == ["A", "eddy-bulk"]
+    from scipy.io import loadmat
+
+    mat = loadmat(paths["mat"], squeeze_me=True)
+    assert float(mat["n_phase"]) == motor.ports.n_phase
+    assert float(mat["n_generalized"]) == motor.ports.n_generalized
+    assert bool(mat["external_hysteresis_required"]) is False
+    assert np.isfinite(float(mat["thermal_capacity_J_per_K"]))
     assert ValidateMotorROMBundle(tmp_path / "motor")["passed"]

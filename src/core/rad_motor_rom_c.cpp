@@ -373,7 +373,8 @@ int rad_motor_rom_step(RadMotorROMHandle* h, RadMotorROMState* state,
         std::vector<double> q1 = q0, qnext(n), qmid(n), voltage(n, 0.0);
         for (size_t i = 0; i < h->np; ++i) voltage[i] = input->phase_voltages_V[i];
         std::vector<double> L0(n * n), L1(n * n), Lmid(n * n), dL(n * n), R(n * n);
-        std::vector<double> pm0(n), pm1(n), dpm(n), motion(n), lambda0(n), work(n), rhs(n);
+        std::vector<double> pm0(n), pm1(n), dpm(n), motion(n), lambda0(n), work(n),
+            flux_linkage(n), rhs(n);
         std::vector<double> hflux0(n, 0.0), hflux1(n, 0.0);
         if (state->hysteresis_flux_linkage_Wb != nullptr)
             std::copy(state->hysteresis_flux_linkage_Wb,
@@ -526,8 +527,10 @@ int rad_motor_rom_step(RadMotorROMHandle* h, RadMotorROMState* state,
             }
         }
         if (output->phase_flux_linkage_Wb != nullptr) {
+            matvec(L1.data(), q1.data(), n, flux_linkage.data());
             for (size_t i = 0; i < h->np; ++i)
-                output->phase_flux_linkage_Wb[i] = work[i] + pm1[i] + hflux1[i];
+                output->phase_flux_linkage_Wb[i] =
+                    flux_linkage[i] + pm1[i] + hflux1[i];
         }
         std::copy(q1.begin(), q1.end(), state->generalized_currents_A);
         if (state->hysteresis_flux_linkage_Wb != nullptr)
