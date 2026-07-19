@@ -123,6 +123,7 @@ from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _co
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
+from .femm_v44_identity import validate_public_identity as _validate_femm_v44_identity
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
 from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
 from .nonlinear_inductance_sweep_gate import (
@@ -3389,6 +3390,13 @@ def force_coenergy_displacement_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
+    if isinstance(artifact_identity, dict):
+        v44_checks = _validate_femm_v44_identity(artifact_identity)
+        if v44_checks:
+            result.setdefault("checks", {}).update(v44_checks)
+            result["femm_v44_identity_checks"] = v44_checks
+            if not all(v44_checks.values()):
+                result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
 
