@@ -308,6 +308,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_compression_identity_ok = (
         _optional_hmatrix_compression_identity_is_aligned(summary)
     )
+    lowfrequency_bem_identity_ok = (
+        _optional_lowfrequency_bem_identity_is_aligned(summary)
+    )
+    duct_scattering_identity_ok = (
+        _optional_duct_scattering_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -541,6 +547,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_compression_uses_current_clusters_admissibility_ranks_tolerance_matvec_memory_mesh_owner_and_result": (
             hmatrix_compression_identity_ok
+        ),
+        "lowfrequency_bem_uses_current_stabilized_kernel_static_limit_condition_charge_energy_mesh_owner_and_result": (
+            lowfrequency_bem_identity_ok
+        ),
+        "duct_scattering_uses_current_modes_pressures_transmission_reflection_loss_power_mesh_owner_and_result": (
+            duct_scattering_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -5163,6 +5175,139 @@ def _optional_hmatrix_compression_identity_is_aligned(
         and _is_sha256(str(value.get("hmatrix_result_sha256", "")).lower())
         and value.get("accepted_hmatrix_result_sha256") == value.get("hmatrix_result_sha256")
     )
+
+
+def _optional_lowfrequency_bem_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "lowfrequency_bem_stabilized_kernel_staticlimit_condition_charge_energy_boundarymesh_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["lowfrequency_bem_generation"]).strip()
+        frequencies = tuple(float(item) for item in value["frequency_hz"])
+        corrections = tuple(float(item) for item in value["dynamic_kernel_correction"])
+        residuals = tuple(float(item) for item in value["static_limit_residual"])
+        conditions = tuple(float(item) for item in value["condition_estimate"])
+        charges = tuple(float(item) for item in value["boundary_charge_c"])
+        potentials = tuple(float(item) for item in value["boundary_potential_v"])
+        energy = float(value["potential_energy_j"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    mirrored = (
+        "frequency_hz", "stabilized_kernel", "dynamic_kernel_correction",
+        "static_limit_residual", "condition_estimate", "boundary_charge_c",
+        "boundary_potential_v", "potential_energy_j",
+    )
+    count = len(frequencies)
+    expected_energy = 0.5 * sum(
+        charge * potential for charge, potential in zip(charges, potentials)
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "frequency_generation", "kernel_generation", "staticlimit_generation",
+            "condition_generation", "charge_generation", "energy_generation",
+            "mesh_generation", "result_generation",
+        ))
+        and count >= 3
+        and len(corrections) == len(residuals) == len(conditions) == count
+        and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(right > left for left, right in zip(frequencies, frequencies[1:]))
+        and value.get("stabilized_kernel") == "static_dynamic_split_p1"
+        and all(math.isfinite(item) and item >= 0.0 for item in corrections)
+        and all(math.isfinite(item) and 0.0 <= item <= 1.0e-3 for item in residuals)
+        and all(math.isfinite(item) and item > 0.0 for item in conditions)
+        and all(right <= left for left, right in zip(conditions, conditions[1:]))
+        and len(charges) == len(potentials) >= 2
+        and all(math.isfinite(item) for item in charges + potentials)
+        and math.isclose(sum(charges), 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isfinite(energy) and energy >= 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-10, abs_tol=1.0e-18)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("boundary_mesh_owner", "")).startswith("boundary-mesh:")
+        and value.get("accepted_boundary_mesh_owner") == value.get("boundary_mesh_owner")
+        and _is_sha256(str(value.get("bem_result_sha256", "")).lower())
+        and value.get("accepted_bem_result_sha256") == value.get("bem_result_sha256")
+    )
+
+
+def _optional_duct_scattering_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "duct_scattering_mode_pressure_transmission_reflection_loss_power_mesh_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["duct_generation"]).strip()
+        frequency = float(value["frequency_hz"])
+        incident = _complex_pair(value["incident_mode_pressure"])
+        reflected = _complex_pair(value["reflected_mode_pressure"])
+        transmitted = _complex_pair(value["transmitted_mode_pressure"])
+        incident_power = float(value["incident_modal_power_w"])
+        reflected_power = float(value["reflected_modal_power_w"])
+        transmitted_power = float(value["transmitted_modal_power_w"])
+        dissipated_power = float(value["dissipated_power_w"])
+        loss = float(value["transmission_loss_db"])
+        residual = float(value["modal_power_balance_residual_w"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    mirrored = (
+        "frequency_hz", "incident_mode_pressure", "reflected_mode_pressure",
+        "transmitted_mode_pressure", "incident_modal_power_w",
+        "reflected_modal_power_w", "transmitted_modal_power_w",
+        "dissipated_power_w", "transmission_loss_db",
+        "modal_power_balance_residual_w",
+    )
+    expected_reflected = abs(reflected / incident) ** 2 * incident_power
+    expected_transmitted = abs(transmitted / incident) ** 2 * incident_power
+    expected_loss = -10.0 * math.log10(transmitted_power / incident_power)
+    expected_residual = (
+        incident_power - reflected_power - transmitted_power - dissipated_power
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "frequency_generation", "mode_generation", "pressure_generation",
+            "reflection_generation", "transmission_generation", "loss_generation",
+            "power_generation", "mesh_generation", "result_generation",
+        ))
+        and math.isfinite(frequency) and frequency > 0.0
+        and abs(incident) > 0.0
+        and all(math.isfinite(item) and item >= 0.0 for item in (
+            incident_power, reflected_power, transmitted_power, dissipated_power,
+        ))
+        and incident_power > 0.0 and transmitted_power > 0.0
+        and math.isclose(reflected_power, expected_reflected, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and math.isclose(transmitted_power, expected_transmitted, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and math.isfinite(loss)
+        and math.isclose(loss, expected_loss, rel_tol=1.0e-10, abs_tol=1.0e-10)
+        and math.isfinite(residual)
+        and math.isclose(residual, expected_residual, rel_tol=1.0e-10, abs_tol=1.0e-12)
+        and abs(residual) <= 1.0e-10 * max(incident_power, 1.0)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _is_sha256(str(value.get("duct_result_sha256", "")).lower())
+        and value.get("accepted_duct_result_sha256") == value.get("duct_result_sha256")
+    )
+
+
+def _complex_pair(value: Any) -> complex:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or len(value) != 2:
+        raise ValueError("complex pair must contain real and imaginary components")
+    result = complex(float(value[0]), float(value[1]))
+    if not math.isfinite(result.real) or not math.isfinite(result.imag):
+        raise ValueError("complex pair must be finite")
+    return result
 
 
 def _is_sha256(value: str) -> bool:
