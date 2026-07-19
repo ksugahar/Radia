@@ -2450,6 +2450,107 @@ def _step_metadata_roundtrip_identity_ok(value: object) -> bool:
     )
 
 
+def _selector_cache_renumber_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("selector_generation") or "")
+    try:
+        renumber = dict(value.get("topology_renumber_map", {}))
+        replayed_renumber = dict(value.get("replayed_topology_renumber_map", {}))
+        geometry_generation = int(value.get("geometry_generation_id"))
+        replayed_geometry_generation = int(value.get("replayed_geometry_generation_id"))
+        selected = [str(item) for item in value.get("selected_feature_ids", [])]
+        replayed_selected = [str(item) for item in value.get("replayed_selected_feature_ids", [])]
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "topology_generation", "renumber_generation", "geometry_generation",
+            "predicate_generation", "feature_generation", "owner_generation", "result_generation",
+        ))
+        and bool(renumber) and replayed_renumber == renumber
+        and all(str(old).startswith(("face:", "edge:")) and str(new).startswith(("face:", "edge:")) for old, new in renumber.items())
+        and len(set(str(item) for item in renumber.values())) == len(renumber)
+        and geometry_generation > 0 and replayed_geometry_generation == geometry_generation
+        and bool(str(value.get("selector_predicate") or "").strip())
+        and value.get("replayed_selector_predicate") == value.get("selector_predicate")
+        and bool(selected) and len(set(selected)) == len(selected)
+        and set(selected) == {str(item) for item in renumber.values()}
+        and replayed_selected == selected
+        and str(value.get("parent_shape_owner") or "").startswith("headless:")
+        and value.get("replayed_parent_shape_owner") == value.get("parent_shape_owner")
+        and _valid_sha256(value.get("selector_result_sha256"))
+        and value.get("accepted_selector_result_sha256") == value.get("selector_result_sha256")
+    )
+
+
+def _step_assembly_export_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("assembly_generation") or "")
+    try:
+        scale = float(value.get("unit_scale_to_m"))
+        replayed_scale = float(value.get("replayed_unit_scale_to_m"))
+        names = dict(value.get("part_names", {}))
+        colors = dict(value.get("part_colors_rgb", {}))
+        transforms = dict(value.get("part_transforms_in_source_units", {}))
+        replayed_transforms = dict(value.get("replayed_part_transforms_in_source_units", {}))
+        shape_ids = dict(value.get("part_shape_ids", {}))
+        hierarchy = dict(value.get("assembly_hierarchy", {}))
+    except (TypeError, ValueError):
+        return False
+    parts = set(names)
+    unit = str(value.get("length_unit") or "")
+    expected_scale = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}.get(unit)
+    children = [str(child) for row in hierarchy.values() for child in row]
+    colors_ok = True
+    for color in colors.values():
+        try:
+            channels = [float(item) for item in color]
+        except (TypeError, ValueError):
+            colors_ok = False
+            break
+        colors_ok = colors_ok and len(channels) == 3 and all(
+            math.isfinite(item) and 0.0 <= item <= 1.0 for item in channels
+        )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "unit_generation", "color_generation", "name_generation", "transform_generation",
+            "shape_generation", "hierarchy_generation", "owner_generation", "file_generation", "result_generation",
+        ))
+        and expected_scale is not None
+        and math.isclose(scale, expected_scale, rel_tol=0.0, abs_tol=1.0e-15)
+        and replayed_scale == scale and value.get("replayed_length_unit") == unit
+        and len(parts) >= 2
+        and all(str(part).startswith("part:") and str(name).strip() for part, name in names.items())
+        and value.get("replayed_part_names") == names
+        and set(colors) == parts and colors_ok and value.get("replayed_part_colors_rgb") == colors
+        and set(transforms) == parts
+        and all(_rigid_homogeneous_transform_ok(transform) for transform in transforms.values())
+        and replayed_transforms == transforms
+        and set(shape_ids) == parts
+        and len(set(str(item) for item in shape_ids.values())) == len(parts)
+        and all(str(item).startswith("shape:") for item in shape_ids.values())
+        and value.get("replayed_part_shape_ids") == shape_ids
+        and bool(hierarchy)
+        and all(str(parent).startswith("assembly:") for parent in hierarchy)
+        and set(children) == parts and len(children) == len(parts)
+        and value.get("replayed_assembly_hierarchy") == hierarchy
+        and str(value.get("export_owner") or "").startswith("headless:")
+        and value.get("replayed_export_owner") == value.get("export_owner")
+        and _valid_sha256(value.get("step_file_sha256"))
+        and value.get("replayed_step_file_sha256") == value.get("step_file_sha256")
+        and _valid_sha256(value.get("assembly_result_sha256"))
+        and value.get("accepted_assembly_result_sha256") == value.get("assembly_result_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -4818,6 +4919,20 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "step_metadata_replays_use_current_names_colors_layers_hierarchy_labels_owners_and_result": (
             step_metadata_roundtrip_identity_ok
+        ),
+        "selector_caches_use_current_renumbering_geometry_predicate_features_parent_owner_and_result": (
+            _selector_cache_renumber_identity_ok(
+                replay_identity_value.get("selector_cache_topology_renumber_geometry_predicate_feature_parent_owner_result_generation_identity")
+                if isinstance(replay_identity_value, Mapping)
+                else None
+            )
+        ),
+        "step_assembly_exports_use_current_units_colors_names_transforms_shapes_hierarchy_owner_and_file": (
+            _step_assembly_export_identity_ok(
+                replay_identity_value.get("step_assembly_unit_color_name_transform_shape_hierarchy_export_owner_file_generation_identity")
+                if isinstance(replay_identity_value, Mapping)
+                else None
+            )
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
