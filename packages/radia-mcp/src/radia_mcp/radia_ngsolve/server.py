@@ -138,6 +138,7 @@ from .nonlinear_inductance_sweep_gate import (
 from .waveguide_emc_v44_identity import validate_public_identity as _validate_waveguide_emc_v44_identity
 from .cst_v45_identity import validate_public_identity as _validate_cst_v45_identity
 from .cst_v46_identity import validate_public_v46_identity as _validate_cst_v46_identity
+from .network_artifact_lineage_v47 import validate_public_v47_identity as _validate_network_v47_identity
 from .comsol_v46_identity import validate_public_identity as _validate_comsol_v46_identity
 from .cross_artifact_lineage_v47 import validate_public_identity as _validate_comsol_v47_identity
 from .regularized_trace_inverse_gate import (
@@ -3547,6 +3548,12 @@ def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
             result.setdefault("checks", {}).update(v46_checks)
             result["cst_v46_identity_checks"] = v46_checks
             if not all(v46_checks.values()):
+                result["status"] = "needs_attention"
+        v47_checks = _validate_network_v47_identity(payload)
+        if v47_checks:
+            result.setdefault("checks", {}).update(v47_checks)
+            result["network_v47_identity_checks"] = v47_checks
+            if not all(v47_checks.values()):
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
