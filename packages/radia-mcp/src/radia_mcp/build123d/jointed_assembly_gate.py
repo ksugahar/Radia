@@ -2082,6 +2082,209 @@ def _assembly_hierarchy_replay_identity_ok(value: object) -> bool:
     )
 
 
+def _right_handed_orthonormal_frame(rows: list[list[float]]) -> bool:
+    if len(rows) != 3 or any(len(row) != 3 for row in rows):
+        return False
+    if any(not math.isfinite(item) for row in rows for item in row):
+        return False
+    for left_index, left in enumerate(rows):
+        for right_index, right in enumerate(rows):
+            dot = sum(a * b for a, b in zip(left, right))
+            expected = 1.0 if left_index == right_index else 0.0
+            if not math.isclose(dot, expected, rel_tol=0.0, abs_tol=1.0e-12):
+                return False
+    determinant = (
+        rows[0][0] * (rows[1][1] * rows[2][2] - rows[1][2] * rows[2][1])
+        - rows[0][1] * (rows[1][0] * rows[2][2] - rows[1][2] * rows[2][0])
+        + rows[0][2] * (rows[1][0] * rows[2][1] - rows[1][1] * rows[2][0])
+    )
+    return math.isclose(determinant, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+
+
+def _oriented_bounding_box_inertia_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("obb_generation") or "")
+    try:
+        center = [float(item) for item in value.get("obb_center_m", [])]
+        replayed_center = [float(item) for item in value.get("replayed_obb_center_m", [])]
+        extents = [float(item) for item in value.get("obb_half_extents_m", [])]
+        replayed_extents = [
+            float(item) for item in value.get("replayed_obb_half_extents_m", [])
+        ]
+        axes = [[float(item) for item in row] for row in value.get("obb_axes", [])]
+        replayed_axes = [
+            [float(item) for item in row] for row in value.get("replayed_obb_axes", [])
+        ]
+        moments = [float(item) for item in value.get("principal_moments_kg_m2", [])]
+        replayed_moments = [
+            float(item) for item in value.get("replayed_principal_moments_kg_m2", [])
+        ]
+        principal_axes = [
+            [float(item) for item in row] for row in value.get("principal_axes", [])
+        ]
+        replayed_principal_axes = [
+            [float(item) for item in row]
+            for row in value.get("replayed_principal_axes", [])
+        ]
+        local_com = [float(item) for item in value.get("center_of_mass_local_m", [])]
+        replayed_local_com = [
+            float(item) for item in value.get("replayed_center_of_mass_local_m", [])
+        ]
+        world_com = [float(item) for item in value.get("center_of_mass_world_m", [])]
+        replayed_world_com = [
+            float(item) for item in value.get("replayed_center_of_mass_world_m", [])
+        ]
+        transform = [
+            [float(item) for item in row] for row in value.get("local_to_world_transform", [])
+        ]
+        replayed_transform = [
+            [float(item) for item in row]
+            for row in value.get("replayed_local_to_world_transform", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    transformed_com = (
+        [
+            sum(transform[row][column] * local_com[column] for column in range(3))
+            + transform[row][3]
+            for row in range(3)
+        ]
+        if len(transform) == 4
+        and all(len(row) == 4 for row in transform)
+        and len(local_com) == 3
+        else []
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "box_generation",
+                "inertia_generation",
+                "axis_generation",
+                "com_generation",
+                "transform_generation",
+                "unit_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and len(center) == 3
+        and all(math.isfinite(item) for item in center)
+        and replayed_center == center
+        and len(extents) == 3
+        and all(math.isfinite(item) and item > 0.0 for item in extents)
+        and replayed_extents == extents
+        and _right_handed_orthonormal_frame(axes)
+        and replayed_axes == axes
+        and len(moments) == 3
+        and all(math.isfinite(item) and item > 0.0 for item in moments)
+        and moments == sorted(moments)
+        and moments[2] <= moments[0] + moments[1]
+        and replayed_moments == moments
+        and _right_handed_orthonormal_frame(principal_axes)
+        and replayed_principal_axes == principal_axes
+        and len(local_com) == len(world_com) == 3
+        and all(math.isfinite(item) for item in local_com + world_com)
+        and replayed_local_com == local_com
+        and replayed_world_com == world_com
+        and len(transform) == 4
+        and all(len(row) == 4 and all(math.isfinite(item) for item in row) for row in transform)
+        and transform[3] == [0.0, 0.0, 0.0, 1.0]
+        and _right_handed_orthonormal_frame([row[:3] for row in transform[:3]])
+        and replayed_transform == transform
+        and all(
+            math.isclose(transformed_com[index], world_com[index], rel_tol=0.0, abs_tol=1.0e-12)
+            for index in range(3)
+        )
+        and value.get("length_unit") == "m"
+        and value.get("replayed_length_unit") == "m"
+        and value.get("inertia_unit") == "kg*m^2"
+        and value.get("replayed_inertia_unit") == "kg*m^2"
+        and str(value.get("shape_owner") or "").startswith("headless:")
+        and value.get("replayed_shape_owner") == value.get("shape_owner")
+        and _valid_sha256(value.get("obb_result_sha256"))
+        and value.get("accepted_obb_result_sha256") == value.get("obb_result_sha256")
+    )
+
+
+def _tessellation_replay_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("tessellation_generation") or "")
+    try:
+        linear = float(value.get("linear_deflection_m"))
+        replayed_linear = float(value.get("replayed_linear_deflection_m"))
+        angular = float(value.get("angular_deflection_rad"))
+        replayed_angular = float(value.get("replayed_angular_deflection_rad"))
+        triangles = int(value.get("triangle_count"))
+        replayed_triangles = int(value.get("replayed_triangle_count"))
+        vertices = [
+            [float(item) for item in vertex]
+            for vertex in value.get("vertex_coordinates_m", [])
+        ]
+        replayed_vertices = [
+            [float(item) for item in vertex]
+            for vertex in value.get("replayed_vertex_coordinates_m", [])
+        ]
+        nonmanifold = int(value.get("nonmanifold_edge_count"))
+        replayed_nonmanifold = int(value.get("replayed_nonmanifold_edge_count"))
+    except (TypeError, ValueError):
+        return False
+    vertex_tuples = [tuple(vertex) for vertex in vertices]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "linear_generation",
+                "angular_generation",
+                "triangle_generation",
+                "vertex_generation",
+                "orientation_generation",
+                "watertight_generation",
+                "stl_generation",
+                "brep_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and math.isfinite(linear)
+        and linear > 0.0
+        and replayed_linear == linear
+        and math.isfinite(angular)
+        and 0.0 < angular < math.pi
+        and replayed_angular == angular
+        and triangles >= 4
+        and replayed_triangles == triangles
+        and len(vertices) >= 4
+        and all(len(vertex) == 3 and all(math.isfinite(item) for item in vertex) for vertex in vertices)
+        and len(set(vertex_tuples)) == len(vertex_tuples)
+        and triangles >= 2 * len(vertices) - 4
+        and replayed_vertices == vertices
+        and value.get("outward_orientation") is True
+        and value.get("replayed_outward_orientation") is True
+        and value.get("watertight") is True
+        and value.get("replayed_watertight") is True
+        and nonmanifold == 0
+        and replayed_nonmanifold == 0
+        and str(value.get("stl_owner") or "").startswith("headless:")
+        and value.get("replayed_stl_owner") == value.get("stl_owner")
+        and _valid_sha256(value.get("source_brep_sha256"))
+        and value.get("replayed_source_brep_sha256") == value.get("source_brep_sha256")
+        and _valid_sha256(value.get("stl_sha256"))
+        and value.get("replayed_stl_sha256") == value.get("stl_sha256")
+        and _valid_sha256(value.get("tessellation_result_sha256"))
+        and value.get("accepted_tessellation_result_sha256")
+        == value.get("tessellation_result_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -2440,6 +2643,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     svg_extrusion_identity_ok = True
     occt_heal_replay_identity_ok = True
     assembly_hierarchy_replay_identity_ok = True
+    oriented_bounding_box_inertia_identity_ok = True
+    tessellation_replay_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2499,6 +2704,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         svg_extrusion_identity_ok = False
         occt_heal_replay_identity_ok = False
         assembly_hierarchy_replay_identity_ok = False
+        oriented_bounding_box_inertia_identity_ok = False
+        tessellation_replay_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(replay_identity_value.get("replayed_source_commit", "")).lower()
@@ -4208,6 +4415,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "assembly_hierarchy_location_joint_axis_collision_quantity_bom_owner_result_generation_identity"
             )
         )
+        oriented_bounding_box_inertia_identity_ok = _oriented_bounding_box_inertia_identity_ok(
+            replay_identity_value.get(
+                "oriented_bounding_box_principal_inertia_axis_com_frame_transform_unit_owner_result_generation_identity"
+            )
+        )
+        tessellation_replay_identity_ok = _tessellation_replay_identity_ok(
+            replay_identity_value.get(
+                "tessellation_linear_angular_deflection_triangle_vertex_orientation_watertight_stl_brep_owner_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name) for row in components for name in (row.get("joint_names") or []) if str(name)
     }
@@ -4410,6 +4627,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "assemblies_use_current_hierarchy_locations_joint_axis_collisions_quantities_bom_owner_and_result": (
             assembly_hierarchy_replay_identity_ok
+        ),
+        "mass_property_replays_use_current_obb_principal_inertia_axes_com_transform_units_owner_and_result": (
+            oriented_bounding_box_inertia_identity_ok
+        ),
+        "tessellation_replays_use_current_deflections_triangles_vertices_orientation_watertight_stl_brep_owner_and_result": (
+            tessellation_replay_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
