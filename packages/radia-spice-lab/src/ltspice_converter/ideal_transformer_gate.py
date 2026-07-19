@@ -9,6 +9,7 @@ from .ltspice_v43_gates import flyback_identity_ok, opamp_stability_identity_ok
 from .ltspice_v44_gates import validate_ltspice_v44_public_identity
 from .ltspice_v45_gates import validate_ltspice_v45_identity
 from .ltspice_v46_gates import validate_ltspice_v46_identity
+from .ltspice_v47_gates import validate_ltspice_v47_identity
 from typing import Any
 
 
@@ -5456,6 +5457,9 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
             positive
         ),
         "v46_public_replays_bind_partial_state_seed_and_finite_artifacts": validate_ltspice_v46_identity(
+            positive
+        ),
+        "v47_public_replays_bind_hierarchy_current_kcl_and_analysis_rows": validate_ltspice_v47_identity(
             positive
         ),
         "exactly_four_timing_stages": timing_ok,
