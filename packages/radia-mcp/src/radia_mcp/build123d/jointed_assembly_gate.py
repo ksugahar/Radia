@@ -7,6 +7,7 @@ import hashlib
 import json
 from datetime import datetime
 from typing import Mapping
+from .build123d_v45_identity import sketch_v45_ok, step_v45_ok
 
 
 def _relative_error(measured: float, reference: float) -> float:
@@ -5137,6 +5138,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
             checks["v44_step_export_replay_identity"] = _v44_step_identity_ok(
                 replay_identity_value.get(_V44_STEP_KEY)
             )
+        v45_sketch_key = "sketch_constraint_order_plane_frame_solver_cache_shape_generation_owner_identity"
+        v45_step_key = "step_units_tessellation_tolerance_face_topology_brep_export_owner_identity"
+        if v45_sketch_key in replay_identity_value:
+            checks["v45_sketch_replay_identity"] = sketch_v45_ok(replay_identity_value.get(v45_sketch_key))
+        if v45_step_key in replay_identity_value:
+            checks["v45_step_export_replay_identity"] = step_v45_ok(replay_identity_value.get(v45_step_key))
     issues = [name for name, ok in checks.items() if not ok]
     warnings = [] if replay_identity_present else ["replay_identity_not_recorded"]
     return {
