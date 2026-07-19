@@ -6,6 +6,7 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .ltspice_v43_gates import flyback_identity_ok, opamp_stability_identity_ok
+from .ltspice_v44_gates import validate_ltspice_v44_public_identity
 from typing import Any
 
 
@@ -5451,6 +5452,7 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "exactly_four_timing_stages": timing_ok,
     }
+    checks.update(validate_ltspice_v44_public_identity(positive))
     return {
         "schema": "radia-spice-lab.ideal-transformer-identity.v1",
         "policy": "ideal_transformer_identity_gate_v1",
