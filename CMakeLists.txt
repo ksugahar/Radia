@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 project(radia C CXX)
 
+option(RADIA_BUILD_MATLAB_MEX "Build the MATLAB MEX gateway" OFF)
+
 # C++17 required for structured bindings and inline variables
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -662,6 +664,93 @@ add_custom_command(TARGET _radia_pybind POST_BUILD
 )
 
 message(STATUS "_radia_pybind module configured (pybind11 bindings)")
+
+# ========================================
+# MATLAB MEX gateway (optional)
+# ========================================
+# Stateful C++ objects use checked uint64 handles.  NGSolve remains the owner
+# of TaskManager, mesh loading, finite-element orientation, and space updates.
+if(RADIA_BUILD_MATLAB_MEX)
+	find_package(Matlab REQUIRED COMPONENTS MX_LIBRARY MEX_LIBRARY)
+	matlab_add_mex(
+		NAME radia_mex
+		R2018a
+		SRC
+			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
+			${CORE_DIR}/rad_cln.cpp
+			${RADIA_CORE_SOURCES}
+			${EXT_DIR}/auxparse/auxparse.cpp
+			${EXT_DIR}/genmath/gmfft.cpp
+			${EXT_DIR}/genmath/gmtrans.cpp
+			${HACAPK_SOURCES}
+			${RADIA_LIB_SOURCES}
+	)
+	target_include_directories(radia_mex PRIVATE
+		${CORE_DIR}
+		${LIB_DIR}
+		${EXT_DIR}/auxparse
+		${EXT_DIR}/genmath
+		${EXT_DIR}/HACApK
+		${NGSOLVE_BUNDLED_INC}
+		${Netgen_INCLUDE_DIRS}
+		${NGSolve_INCLUDE_DIRS}
+		${Python3_INCLUDE_DIRS}
+	)
+	target_compile_definitions(radia_mex PRIVATE
+		_CRT_SECURE_NO_WARNINGS
+		_GM_WITHOUT_BASE
+		ALPHA__DLL__
+		ANSI_DECLARATORS
+		RADIA_USE_HACAPK
+		HACAPK_RADIA_LOGGING
+		NOMINMAX
+	)
+	target_compile_features(radia_mex PRIVATE cxx_std_20)
+	# FindMatlab uses the plain signature internally, so this call must too.
+	target_link_libraries(radia_mex ngstd ngfem ngcomp ngbla Python3::Python)
+	if(WIN32 AND USE_MKL_FOUND)
+		target_link_libraries(radia_mex ${BLAS_LIB})
+		target_include_directories(radia_mex PRIVATE ${BLAS_INCLUDE_DIR})
+		target_compile_definitions(radia_mex PRIVATE HAVE_LAPACK)
+	endif()
+	if(MSVC)
+		target_compile_options(radia_mex PRIVATE /O2 /fp:fast /W0)
+		target_link_options(radia_mex PRIVATE /NODEFAULTLIB:LIBCMT)
+		target_link_libraries(radia_mex version.lib)
+	endif()
+	add_custom_command(TARGET radia_mex POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/matlab"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"$<TARGET_FILE:radia_mex>"
+			"${CMAKE_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:radia_mex>"
+		COMMENT "Copying radia_mex to matlab"
+	)
+	if(WIN32 AND USE_MKL_FOUND)
+		# MATLAB resolves MEX dependencies from the module directory.  Keep the
+		# oneMKL dispatch DLLs beside radia_mex so it does not depend on the
+		# host Python installation.  Do not copy libiomp5md.dll: MATLAB already
+		# owns an OpenMP runtime and loading a second copy aborts the process.
+		add_custom_command(TARGET radia_mex POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MKL_BIN_DIR}/mkl_rt.2.dll"
+				"${CMAKE_SOURCE_DIR}/matlab/mkl_rt.2.dll"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MKL_BIN_DIR}/mkl_core.2.dll"
+				"${CMAKE_SOURCE_DIR}/matlab/mkl_core.2.dll"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MKL_BIN_DIR}/mkl_intel_thread.2.dll"
+				"${CMAKE_SOURCE_DIR}/matlab/mkl_intel_thread.2.dll"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MKL_BIN_DIR}/mkl_avx2.2.dll"
+				"${CMAKE_SOURCE_DIR}/matlab/mkl_avx2.2.dll"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${MKL_BIN_DIR}/mkl_def.2.dll"
+				"${CMAKE_SOURCE_DIR}/matlab/mkl_def.2.dll"
+			COMMENT "Copying oneMKL runtime beside radia_mex"
+		)
+	endif()
+	message(STATUS "radia_mex configured (MATLAB R2018a interleaved complex API)")
+endif()
 
 # ========================================
 # sparsesolv_ngsolve module (NGSolve preconditioners + Krylov solvers)
