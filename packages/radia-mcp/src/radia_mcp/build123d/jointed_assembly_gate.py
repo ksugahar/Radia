@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from datetime import datetime
 from typing import Mapping
 
@@ -2487,6 +2489,89 @@ def _selector_cache_renumber_identity_ok(value: object) -> bool:
     )
 
 
+def _v43_location_composition_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("location_generation") or "")
+    local = value.get("local_location")
+    global_location = value.get("global_location")
+    replayed_local = value.get("replayed_local_location")
+    replayed_global = value.get("replayed_global_location")
+    order = [str(item) for item in value.get("rotation_order", [])]
+    replayed_order = [str(item) for item in value.get("replayed_rotation_order", [])]
+    subshape = str(value.get("subshape_id") or "")
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "local_generation", "global_generation", "rotation_generation", "order_generation",
+            "subshape_generation", "owner_generation", "result_generation",
+        ))
+        and isinstance(local, Mapping) and isinstance(global_location, Mapping)
+        and replayed_local == local and replayed_global == global_location
+        and order == ["Z", "Y", "X"] and replayed_order == order
+        and value.get("translation_frame") == "parent"
+        and value.get("replayed_translation_frame") == value.get("translation_frame")
+        and subshape.startswith(("face:", "edge:", "vertex:"))
+        and value.get("replayed_subshape_id") == subshape
+        and str(value.get("shape_owner") or "").startswith("headless:")
+        and value.get("replayed_shape_owner") == value.get("shape_owner")
+        and _valid_sha256(value.get("location_result_sha256"))
+        and value.get("accepted_location_result_sha256") == value.get("location_result_sha256")
+    )
+
+
+def _v43_parametric_rebuild_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("rebuild_generation") or "")
+    dependencies = value.get("dependency_values")
+    replayed_dependencies = value.get("replayed_dependency_values")
+    topology = value.get("topology_signature")
+    replayed_topology = value.get("replayed_topology_signature")
+    invalidated = [str(item) for item in value.get("invalidated_properties", [])]
+    replayed_invalidated = [str(item) for item in value.get("replayed_invalidated_properties", [])]
+    dependency_digest = str(value.get("dependency_identity_sha256") or "").lower()
+    replayed_dependency_digest = str(value.get("replayed_dependency_identity_sha256") or "").lower()
+    canonical_dependencies = json.dumps(
+        {str(key): float(item) for key, item in sorted(dependencies.items())},
+        sort_keys=True,
+        separators=(",", ":"),
+    ) if isinstance(dependencies, Mapping) else ""
+    expected_dependency_digest = hashlib.sha256(canonical_dependencies.encode("utf-8")).hexdigest()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "dependency_generation", "cache_generation", "property_generation",
+            "invalidation_generation", "topology_generation", "export_generation",
+            "owner_generation", "result_generation",
+        ))
+        and isinstance(dependencies, Mapping) and dependencies
+        and replayed_dependencies == dependencies
+        and all(math.isfinite(float(item)) for item in dependencies.values())
+        and bool(dependency_digest) == bool(replayed_dependency_digest)
+        and (
+            not dependency_digest
+            or (
+                _valid_sha256(dependency_digest)
+                and dependency_digest == expected_dependency_digest
+                and replayed_dependency_digest == dependency_digest
+            )
+        )
+        and str(value.get("cache_key") or "") == str(value.get("replayed_cache_key") or "")
+        and invalidated and replayed_invalidated == invalidated
+        and isinstance(topology, Mapping) and topology.get("solid") == 1
+        and replayed_topology == topology
+        and str(value.get("export_owner") or "").startswith("headless:")
+        and value.get("replayed_export_owner") == value.get("export_owner")
+        and _valid_sha256(value.get("rebuild_result_sha256"))
+        and value.get("accepted_rebuild_result_sha256") == value.get("rebuild_result_sha256")
+    )
+
+
 def _step_assembly_export_identity_ok(value: object) -> bool:
     if value is None:
         return True
@@ -2913,6 +2998,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     tessellation_replay_identity_ok = True
     assembly_interference_identity_ok = True
     step_metadata_roundtrip_identity_ok = True
+    v43_location_composition_identity_ok = True
+    v43_parametric_rebuild_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2976,6 +3063,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         tessellation_replay_identity_ok = False
         assembly_interference_identity_ok = False
         step_metadata_roundtrip_identity_ok = False
+        v43_location_composition_identity_ok = False
+        v43_parametric_rebuild_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(replay_identity_value.get("replayed_source_commit", "")).lower()
@@ -4705,6 +4794,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "step_name_color_layer_hierarchy_subshape_label_source_import_owner_result_generation_identity"
             )
         )
+        v43_location_composition_identity_ok = _v43_location_composition_identity_ok(
+            replay_identity_value.get(
+                "location_composition_local_global_rotation_order_subshape_owner_result_generation_identity"
+            )
+        )
+        v43_parametric_rebuild_identity_ok = _v43_parametric_rebuild_identity_ok(
+            replay_identity_value.get(
+                "parametric_rebuild_dependency_cache_property_invalidation_export_owner_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name) for row in components for name in (row.get("joint_names") or []) if str(name)
     }
@@ -4933,6 +5032,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 if isinstance(replay_identity_value, Mapping)
                 else None
             )
+        ),
+        "locations_use_current_local_global_composition_rotation_order_subshape_owner_and_result": (
+            v43_location_composition_identity_ok
+        ),
+        "parametric_rebuilds_use_current_dependencies_cache_invalidation_topology_owner_and_result": (
+            v43_parametric_rebuild_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
