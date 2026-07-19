@@ -10,6 +10,7 @@ from .multiphysics_v44_gates import (
     acoustic_poroelastic_v44_ok,
     microwave_boundaryport_v44_ok,
 )
+from .multiphysics_v45_identity import multiphysics_v45_ok
 
 
 _UNITS = {
@@ -5051,6 +5052,9 @@ def rotational_eddy_brake_energy_gate(
         ),
         "acoustic_poroelastic_results_use_current_impedance_phase_flux_energy_window_dataset_owner_and_result": (
             acoustic_poroelastic_v44_ok(summary)
+        ),
+        "multiphysics_results_use_current_port_deembed_acoustic_window_and_result_identity": (
+            multiphysics_v45_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
