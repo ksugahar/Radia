@@ -1233,6 +1233,93 @@ def _ipm_dq_inductance_identity_ok(value: object) -> bool:
     )
 
 
+def _v43_pmsm_force_nvh_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("pmsm_generation", "")).strip()
+    try:
+        space_orders = [int(item) for item in value.get("radial_force_space_orders", [])]
+        result_space_orders = [int(item) for item in value.get("result_radial_force_space_orders", [])]
+        time_orders = [int(item) for item in value.get("radial_force_time_orders", [])]
+        result_time_orders = [int(item) for item in value.get("result_radial_force_time_orders", [])]
+        phase = float(value.get("force_phase_deg"))
+        ripple = float(value.get("torque_ripple_rms_nm"))
+        modal = float(value.get("modal_excitation_n"))
+        electromagnetic = float(value.get("electromagnetic_power_w"))
+        mechanical = float(value.get("mechanical_power_w"))
+        closure = float(value.get("energy_closure_residual"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "radial_force_generation", "space_harmonic_generation",
+            "time_harmonic_generation", "torque_generation", "nvh_generation",
+            "power_generation", "energy_generation", "mesh_generation",
+            "result_generation"))
+        and len(space_orders) >= 2 and space_orders == result_space_orders
+        and all(item > 0 for item in space_orders)
+        and len(time_orders) >= 2 and time_orders == result_time_orders
+        and all(item > 0 for item in time_orders)
+        and all(math.isfinite(item) for item in (phase, ripple, modal, electromagnetic, mechanical, closure))
+        and ripple >= 0.0 and modal >= 0.0 and electromagnetic >= 0.0
+        and mechanical >= 0.0 and mechanical <= electromagnetic
+        and 0.0 <= closure <= 1.0e-6
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("result_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("pmsm_result_sha256"))
+        and value.get("accepted_pmsm_result_sha256") == value.get("pmsm_result_sha256")
+    )
+
+
+def _v43_woundfield_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("machine_generation", "")).strip()
+    try:
+        field_current = float(value.get("field_current_a"))
+        flux = float(value.get("flux_linkage_wb"))
+        torque = float(value.get("torque_nm"))
+        stator_loss = float(value.get("stator_copper_loss_w"))
+        field_loss = float(value.get("field_copper_loss_w"))
+        input_power = float(value.get("input_power_w"))
+        mechanical = float(value.get("mechanical_power_w"))
+        efficiency = float(value.get("efficiency"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "field_excitation_generation", "flux_generation", "torque_generation",
+            "copper_loss_generation", "efficiency_generation", "energy_generation",
+            "mesh_generation", "result_generation"))
+        and all(math.isfinite(item) for item in (
+            field_current, flux, torque, stator_loss, field_loss, input_power,
+            mechanical, efficiency))
+        and field_current >= 0.0 and stator_loss >= 0.0 and field_loss >= 0.0
+        and input_power > 0.0 and 0.0 <= mechanical <= input_power
+        and math.isclose(efficiency, mechanical / input_power, rel_tol=0.0, abs_tol=1.0e-12)
+        and 0.0 < efficiency <= 1.0
+        and all(value.get(result_key) == value.get(source_key) for source_key, result_key in (
+            ("field_current_a", "result_field_current_a"),
+            ("flux_linkage_wb", "result_flux_linkage_wb"),
+            ("torque_nm", "result_torque_nm"),
+            ("stator_copper_loss_w", "result_stator_copper_loss_w"),
+            ("field_copper_loss_w", "result_field_copper_loss_w"),
+            ("input_power_w", "result_input_power_w"),
+            ("mechanical_power_w", "result_mechanical_power_w"),
+            ("efficiency", "result_efficiency")))
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("result_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("machine_result_sha256"))
+        and value.get("accepted_machine_result_sha256") == value.get("machine_result_sha256")
+    )
+
+
 def _srm_coenergy_torque_identity_ok(value: object) -> bool:
     if value is None:
         return True
@@ -3231,6 +3318,8 @@ def pwm_controlled_motor_loss_gate(
     axial_flux_sector_power_identity_ok = True
     ipm_dq_mtpv_energy_identity_ok = True
     induction_motor_slip_power_identity_ok = True
+    v43_pmsm_force_nvh_identity_ok = True
+    v43_woundfield_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -3302,6 +3391,8 @@ def pwm_controlled_motor_loss_gate(
         axial_flux_sector_power_identity_ok = False
         ipm_dq_mtpv_energy_identity_ok = False
         induction_motor_slip_power_identity_ok = False
+        v43_pmsm_force_nvh_identity_ok = False
+        v43_woundfield_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -5068,6 +5159,16 @@ def pwm_controlled_motor_loss_gate(
                 "inductionmotor_slip_rotorfrequency_copperloss_torque_airgappower_mechanicalpower_efficiency_result_generation_identity"
             )
         )
+        v43_pmsm_force_nvh_identity_ok = _v43_pmsm_force_nvh_identity_ok(
+            identity_value.get(
+                "pmsm_radialforce_space_time_harmonics_torque_nvh_power_energy_generation_identity"
+            )
+        )
+        v43_woundfield_identity_ok = _v43_woundfield_identity_ok(
+            identity_value.get(
+                "woundfield_synchronous_excitation_flux_torque_copperloss_efficiency_energy_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -5466,6 +5567,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "induction_motors_close_slip_rotor_frequency_losses_torque_airgap_mechanical_power_efficiency_and_result": (
             induction_motor_slip_power_identity_ok
+        ),
+        "pmsm_force_nvh_closes_space_time_orders_phase_torque_modal_power_energy_mesh_and_result": (
+            v43_pmsm_force_nvh_identity_ok
+        ),
+        "woundfield_motor_closes_excitation_flux_torque_copper_losses_efficiency_power_mesh_and_result": (
+            v43_woundfield_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
