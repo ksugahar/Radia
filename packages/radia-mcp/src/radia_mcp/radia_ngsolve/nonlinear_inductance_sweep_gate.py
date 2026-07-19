@@ -3870,6 +3870,174 @@ def _shielding_aperture_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _waveguide_mode_deembed_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_mode_cutoff_impedance_power_orthogonality_propagation_deembed_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("waveguide_mode_generation", "")).strip()
+    try:
+        width = float(identity.get("waveguide_width_m"))
+        height = float(identity.get("waveguide_height_m"))
+        mode_index = [int(item) for item in identity.get("mode_index", [])]
+        cutoff = float(identity.get("cutoff_frequency_hz"))
+        frequency = float(identity.get("frequency_hz"))
+        impedance = float(identity.get("modal_impedance_ohm"))
+        beta = float(identity.get("propagation_constant_rad_m"))
+        power = float(identity.get("normalized_forward_power_w"))
+        overlap_real = [
+            [float(item) for item in row]
+            for row in identity.get("mode_overlap_real", [])
+        ]
+        overlap_imag = [
+            [float(item) for item in row]
+            for row in identity.get("mode_overlap_imag", [])
+        ]
+        tolerance = float(identity.get("orthogonality_tolerance"))
+        port_plane = float(identity.get("port_plane_m"))
+        reference_plane = float(identity.get("reference_plane_m"))
+        distance = float(identity.get("deembed_distance_m"))
+        raw_phase = float(identity.get("raw_s21_phase_rad"))
+        deembedded_phase = float(identity.get("deembedded_s21_phase_rad"))
+    except (TypeError, ValueError):
+        return False
+    expected_cutoff = 299_792_458.0 / (2.0 * width) if width > 0.0 else math.nan
+    factor = (
+        math.sqrt(1.0 - (cutoff / frequency) ** 2)
+        if frequency > cutoff > 0.0
+        else math.nan
+    )
+    expected_impedance = 376.730313668 / factor if factor > 0.0 else math.nan
+    expected_beta = (
+        2.0 * math.pi * frequency * factor / 299_792_458.0
+        if factor > 0.0
+        else math.nan
+    )
+    mirrored = (
+        "waveguide_width_m", "waveguide_height_m", "mode_name", "mode_index",
+        "cutoff_frequency_hz", "frequency_hz", "modal_impedance_ohm",
+        "propagation_constant_rad_m", "normalized_forward_power_w",
+        "mode_overlap_real", "mode_overlap_imag", "orthogonality_tolerance",
+        "port_plane_m", "reference_plane_m", "deembed_distance_m",
+        "deembed_convention", "raw_s21_phase_rad",
+        "deembedded_s21_phase_rad", "waveguide_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "cutoff_generation", "impedance_generation", "power_generation",
+            "orthogonality_generation", "propagation_generation",
+            "deembed_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and all(math.isfinite(item) and item > 0.0 for item in (
+            width, height, cutoff, frequency, impedance, beta, power, tolerance
+        ))
+        and width > height
+        and identity.get("mode_name") == "TE10" and mode_index == [1, 0]
+        and math.isclose(cutoff, expected_cutoff, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and frequency > cutoff
+        and math.isclose(impedance, expected_impedance, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and math.isclose(beta, expected_beta, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and math.isclose(power, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and overlap_real == [[1.0, 0.0], [0.0, 1.0]]
+        and overlap_imag == [[0.0, 0.0], [0.0, 0.0]]
+        and math.isfinite(port_plane) and math.isfinite(reference_plane)
+        and math.isfinite(distance) and distance >= 0.0
+        and math.isclose(reference_plane - port_plane, distance, rel_tol=0.0, abs_tol=1.0e-15)
+        and identity.get("deembed_convention") == "port_to_reference_add_beta_l"
+        and math.isfinite(raw_phase) and math.isfinite(deembedded_phase)
+        and math.isclose(
+            deembedded_phase,
+            raw_phase + beta * distance,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("waveguide_mesh_sha256"))
+        and str(identity.get("waveguide_mode_owner", "")).startswith("waveguide/")
+        and identity.get("accepted_waveguide_mode_owner")
+        == identity.get("waveguide_mode_owner")
+        and _valid_sha256(identity.get("waveguide_mode_result_sha256"))
+        and identity.get("accepted_waveguide_mode_result_sha256")
+        == identity.get("waveguide_mode_result_sha256")
+    )
+
+
+def _antenna_nearfar_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "antenna_nearfar_directivity_gain_efficiency_polarization_power_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("antenna_generation", "")).strip()
+    try:
+        frequency = float(identity.get("frequency_hz"))
+        directivity = float(identity.get("directivity_linear"))
+        directivity_dbi = float(identity.get("directivity_dbi"))
+        efficiency = float(identity.get("radiation_efficiency"))
+        gain = float(identity.get("gain_linear"))
+        mismatch = float(identity.get("mismatch_efficiency"))
+        realized_gain = float(identity.get("realized_gain_linear"))
+        realized_gain_dbi = float(identity.get("realized_gain_dbi"))
+        accepted = float(identity.get("accepted_power_w"))
+        radiated = float(identity.get("radiated_power_w"))
+        loss = float(identity.get("loss_power_w"))
+        residual = float(identity.get("power_balance_residual_w"))
+        samples = int(identity.get("farfield_sphere_samples"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "frequency_hz", "nearfield_surface_closed", "near_to_far_transform",
+        "polarization_basis", "co_polar_component", "cross_polar_component",
+        "directivity_linear", "directivity_dbi", "radiation_efficiency",
+        "gain_linear", "mismatch_efficiency", "realized_gain_linear",
+        "realized_gain_dbi", "accepted_power_w", "radiated_power_w",
+        "loss_power_w", "power_balance_residual_w", "farfield_sphere_samples",
+        "antenna_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "nearfield_generation", "farfield_generation",
+            "directivity_generation", "gain_generation",
+            "efficiency_generation", "polarization_generation",
+            "power_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and all(math.isfinite(item) for item in (
+            frequency, directivity, directivity_dbi, efficiency, gain, mismatch,
+            realized_gain, realized_gain_dbi, accepted, radiated, loss, residual
+        ))
+        and frequency > 0.0 and directivity >= 1.0
+        and identity.get("nearfield_surface_closed") is True
+        and identity.get("near_to_far_transform")
+        == "equivalence_surface_stratton_chu"
+        and identity.get("polarization_basis") == "ieee_theta_phi"
+        and identity.get("co_polar_component") == "theta"
+        and identity.get("cross_polar_component") == "phi"
+        and 0.0 < efficiency <= 1.0 and 0.0 < mismatch <= 1.0
+        and math.isclose(directivity_dbi, 10.0 * math.log10(directivity), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(gain, directivity * efficiency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(realized_gain, gain * mismatch, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(realized_gain_dbi, 10.0 * math.log10(realized_gain), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and accepted > 0.0 and radiated >= 0.0 and loss >= 0.0
+        and math.isclose(radiated, efficiency * accepted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(accepted, radiated + loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(residual) <= 1.0e-12 and samples >= 100
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("antenna_mesh_sha256"))
+        and str(identity.get("antenna_owner", "")).startswith("antenna/")
+        and identity.get("accepted_antenna_owner") == identity.get("antenna_owner")
+        and _valid_sha256(identity.get("antenna_result_sha256"))
+        and identity.get("accepted_antenna_result_sha256")
+        == identity.get("antenna_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -4373,6 +4541,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "shielding_results_use_current_aperture_polarization_field_power_se_frequency_probe_mesh_owner_and_result": (
                 _shielding_aperture_inputs_are_current(raw)
+            ),
+            "waveguide_modes_use_current_cutoff_impedance_power_orthogonality_propagation_deembed_mesh_owner_and_result": (
+                _waveguide_mode_deembed_inputs_are_current(raw)
+            ),
+            "antenna_nearfar_uses_current_transform_directivity_gain_efficiency_polarization_power_mesh_owner_and_result": (
+                _antenna_nearfar_closure_inputs_are_current(raw)
             ),
         }
         row = {
