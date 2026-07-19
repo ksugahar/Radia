@@ -4038,6 +4038,152 @@ def _antenna_nearfar_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _pcb_via_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "pcb_via_stub_geometry_impedance_resonance_sparameter_current_loss_power_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("via_generation", "")).strip()
+    try:
+        board_thickness = float(identity.get("board_thickness_m"))
+        via_diameter = float(identity.get("via_diameter_m"))
+        stub_length = float(identity.get("stub_length_m"))
+        epsilon_r = float(identity.get("relative_permittivity"))
+        impedance = float(identity.get("characteristic_impedance_ohm"))
+        resonance = float(identity.get("quarterwave_resonance_hz"))
+        s11 = [float(item) for item in identity.get("s11_complex", [])]
+        s21 = [float(item) for item in identity.get("s21_complex", [])]
+        incident = float(identity.get("incident_power_w"))
+        reflected = float(identity.get("reflected_power_w"))
+        accepted = float(identity.get("accepted_power_w"))
+        transmitted = float(identity.get("transmitted_power_w"))
+        barrel_current = float(identity.get("barrel_current_rms_a"))
+        conductor_loss = float(identity.get("conductor_loss_w"))
+        dielectric_loss = float(identity.get("dielectric_loss_w"))
+        residual = float(identity.get("power_balance_residual_w"))
+    except (TypeError, ValueError):
+        return False
+    expected_impedance = (
+        60.0 / math.sqrt(epsilon_r) * math.log(4.0 * board_thickness / via_diameter)
+        if epsilon_r > 0.0 and 4.0 * board_thickness > via_diameter > 0.0
+        else math.nan
+    )
+    expected_resonance = (
+        299_792_458.0 / (4.0 * stub_length * math.sqrt(epsilon_r))
+        if stub_length > 0.0 and epsilon_r > 0.0
+        else math.nan
+    )
+    expected_reflected = incident * sum(item * item for item in s11)
+    expected_transmitted = incident * sum(item * item for item in s21)
+    expected_accepted = incident - expected_reflected
+    expected_current = math.sqrt(expected_accepted / impedance) if expected_accepted >= 0.0 and impedance > 0.0 else math.nan
+    expected_residual = accepted - transmitted - conductor_loss - dielectric_loss
+    mirrored = (
+        "board_thickness_m", "via_diameter_m", "stub_length_m",
+        "relative_permittivity", "characteristic_impedance_ohm",
+        "quarterwave_resonance_hz", "s11_complex", "s21_complex",
+        "incident_power_w", "reflected_power_w", "accepted_power_w",
+        "transmitted_power_w", "barrel_current_rms_a", "conductor_loss_w",
+        "dielectric_loss_w", "power_balance_residual_w", "pcb_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "geometry_generation", "impedance_generation", "resonance_generation",
+            "sparameter_generation", "current_generation", "loss_generation",
+            "power_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and all(math.isfinite(item) and item > 0.0 for item in (
+            board_thickness, via_diameter, stub_length, epsilon_r, impedance,
+            resonance, incident, accepted, barrel_current
+        ))
+        and len(s11) == len(s21) == 2
+        and all(math.isfinite(item) for item in s11 + s21)
+        and sum(item * item for item in s11) <= 1.0
+        and sum(item * item for item in s21) <= 1.0
+        and math.isclose(impedance, expected_impedance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(resonance, expected_resonance, rel_tol=1.0e-12, abs_tol=1.0e-3)
+        and math.isclose(reflected, expected_reflected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(transmitted, expected_transmitted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(accepted, expected_accepted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(barrel_current, expected_current, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and conductor_loss >= 0.0 and dielectric_loss >= 0.0
+        and math.isclose(residual, expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(residual) <= 1.0e-12
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("pcb_mesh_sha256"))
+        and str(identity.get("via_owner", "")).startswith("pcb/")
+        and identity.get("accepted_via_owner") == identity.get("via_owner")
+        and _valid_sha256(identity.get("via_result_sha256"))
+        and identity.get("accepted_via_result_sha256") == identity.get("via_result_sha256")
+    )
+
+
+def _cavity_degenerate_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "cavity_degenerate_mode_frequency_orthogonality_energy_symmetry_quality_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("cavity_generation", "")).strip()
+    try:
+        dimensions = [float(item) for item in identity.get("cavity_dimensions_m", [])]
+        frequencies = [float(item) for item in identity.get("mode_frequencies_hz", [])]
+        tolerance = float(identity.get("degeneracy_tolerance_relative"))
+        overlap = [[float(item) for item in row] for row in identity.get("modal_overlap_matrix", [])]
+        electric = [float(item) for item in identity.get("electric_energy_j", [])]
+        magnetic = [float(item) for item in identity.get("magnetic_energy_j", [])]
+        quality = [float(item) for item in identity.get("quality_factors", [])]
+    except (TypeError, ValueError):
+        return False
+    modes = identity.get("mode_names")
+    symmetry = identity.get("symmetry_classes")
+    expected_frequency = (
+        299_792_458.0 / 2.0 * math.sqrt(1.0 / dimensions[0] ** 2 + 1.0 / dimensions[2] ** 2)
+        if len(dimensions) == 3 and all(item > 0.0 for item in dimensions)
+        else math.nan
+    )
+    mirrored = (
+        "cavity_dimensions_m", "mode_names", "mode_frequencies_hz",
+        "degeneracy_tolerance_relative", "modal_overlap_matrix",
+        "electric_energy_j", "magnetic_energy_j", "symmetry_classes",
+        "quality_factors", "cavity_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "frequency_generation", "orthogonality_generation", "energy_generation",
+            "symmetry_generation", "quality_generation", "mesh_generation",
+            "owner_generation", "result_generation"))
+        and len(dimensions) == 3 and all(math.isfinite(item) and item > 0.0 for item in dimensions)
+        and math.isclose(dimensions[0], dimensions[1], rel_tol=0.0, abs_tol=1.0e-15)
+        and modes == ["TE101", "TE011"]
+        and len(frequencies) == 2 and all(math.isfinite(item) and item > 0.0 for item in frequencies)
+        and all(math.isclose(item, expected_frequency, rel_tol=1.0e-12, abs_tol=1.0e-3) for item in frequencies)
+        and math.isfinite(tolerance) and 0.0 < tolerance <= 1.0e-6
+        and abs(frequencies[0] - frequencies[1]) / max(frequencies) <= tolerance
+        and overlap == [[1.0, 0.0], [0.0, 1.0]]
+        and len(electric) == len(magnetic) == 2
+        and all(math.isfinite(item) and item > 0.0 for item in electric + magnetic)
+        and all(math.isclose(e, h, rel_tol=1.0e-12, abs_tol=1.0e-12) for e, h in zip(electric, magnetic))
+        and isinstance(symmetry, list) and len(symmetry) == 2
+        and all(isinstance(item, str) and item for item in symmetry)
+        and len(set(symmetry)) == 2
+        and len(quality) == 2 and all(math.isfinite(item) and item > 0.0 for item in quality)
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("cavity_mesh_sha256"))
+        and str(identity.get("cavity_owner", "")).startswith("cavity/")
+        and identity.get("accepted_cavity_owner") == identity.get("cavity_owner")
+        and _valid_sha256(identity.get("cavity_result_sha256"))
+        and identity.get("accepted_cavity_result_sha256") == identity.get("cavity_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -4547,6 +4693,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "antenna_nearfar_uses_current_transform_directivity_gain_efficiency_polarization_power_mesh_owner_and_result": (
                 _antenna_nearfar_closure_inputs_are_current(raw)
+            ),
+            "pcb_vias_use_current_geometry_impedance_resonance_sparameters_current_losses_power_mesh_owner_and_result": (
+                _pcb_via_closure_inputs_are_current(raw)
+            ),
+            "cavity_degenerate_modes_use_current_frequency_orthogonality_energy_symmetry_quality_mesh_owner_and_result": (
+                _cavity_degenerate_closure_inputs_are_current(raw)
             ),
         }
         row = {
