@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from .ltspice_v43_gates import flyback_identity_ok, opamp_stability_identity_ok
 from .ltspice_v44_gates import validate_ltspice_v44_public_identity
 from .ltspice_v45_gates import validate_ltspice_v45_identity
+from .ltspice_v46_gates import validate_ltspice_v46_identity
 from typing import Any
 
 
@@ -5452,6 +5453,9 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
             _opamp_stability_v43_identity_ok(positive)
         ),
         "v45_public_replays_bind_release_owner_and_digest": validate_ltspice_v45_identity(
+            positive
+        ),
+        "v46_public_replays_bind_partial_state_seed_and_finite_artifacts": validate_ltspice_v46_identity(
             positive
         ),
         "exactly_four_timing_stages": timing_ok,
