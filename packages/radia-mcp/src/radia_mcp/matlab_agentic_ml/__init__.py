@@ -9,6 +9,7 @@ from .artifact_gate import (
     validate_matlab_ml_rl_v48_identity,
     validate_matlab_ml_rl_v49_identity,
 )
+from .v50_identity import validate_matlab_ml_rl_v50_identity
 
 
 def matlab_agentic_ml_guide() -> str:
@@ -27,4 +28,5 @@ __all__ = [
     "validate_matlab_ml_rl_v47_identity",
     "validate_matlab_ml_rl_v48_identity",
     "validate_matlab_ml_rl_v49_identity",
+    "validate_matlab_ml_rl_v50_identity",
 ]
