@@ -9,6 +9,7 @@ from .elf_v45_identity import validate_public_v45_identity
 from .elf_v46_identity import validate_public_v46_identity
 from .magnetic_force_artifact_lineage_v47 import validate_public_v47_identity
 from .bem_hysteresis_identity_v48 import validate_public_identity as validate_public_v48_identity
+from .demag_virtual_work_identity_v49 import validate_public_identity as validate_public_v49_identity
 
 
 _DYNAMIC = "magneticbearing_dynamicstiffness_phase_damping_force_power_stability_mesh_result_identity"
@@ -118,4 +119,5 @@ def validate_public_identity(identity: object) -> dict[str, bool]:
     checks.update(validate_public_v46_identity(identity))
     checks.update(validate_public_v47_identity(identity))
     checks.update(validate_public_v48_identity(identity))
+    checks.update(validate_public_v49_identity(identity))
     return checks
