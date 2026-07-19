@@ -135,6 +135,7 @@ from .waveguide_emc_v44_identity import validate_public_identity as _validate_wa
 from .regularized_trace_inverse_gate import (
     regularized_trace_inverse_path_gate as _regularized_trace_inverse_path_gate,
 )
+from ..matlab_agentic_ml import validate_matlab_ml_rl_v44_identity as _validate_matlab_ml_rl_v44_identity
 from .sphere_mesh_convergence_gate import (
     linear_sphere_geometry_convergence_gate as _linear_sphere_geometry_convergence_gate,
 )
@@ -3510,6 +3511,17 @@ def regularized_trace_inverse_path_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
+    try:
+        payload = json.loads(summary_json)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        payload = None
+    if isinstance(payload, dict):
+        v44_checks = _validate_matlab_ml_rl_v44_identity(payload)
+        if v44_checks:
+            result.setdefault("checks", {}).update(v44_checks["checks"])
+            result["matlab_ml_rl_v44_identity"] = v44_checks
+            if v44_checks["status"] != "ok":
+                result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
 
