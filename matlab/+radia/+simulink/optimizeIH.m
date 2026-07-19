@@ -43,7 +43,7 @@ else
     solverOptions = optimset("Display", char(options.Display), ...
         "MaxIter", options.MaxIterations, ...
         "TolFun", options.FunctionTolerance);
-    [z, fval, exitflag, output] = fminsearch(evaluate, x0, solverOptions);
+    [z, ~, exitflag, output] = fminsearch(evaluate, x0, solverOptions);
     x = min(max(z(:).', lower_bound), upper_bound);
     fval = evaluate(x);
     solver = "bounded-fminsearch";
