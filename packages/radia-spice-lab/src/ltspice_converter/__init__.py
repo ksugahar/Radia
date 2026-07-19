@@ -48,6 +48,7 @@ from .series_rlc_gate import series_rlc_complex_impedance_gate
 from .noise_gate import rc_thermal_noise_psd_gate
 from .three_phase_delta_gate import balanced_three_phase_delta_rl_gate
 from .ideal_transformer_gate import ideal_transformer_identity_gate
+from .ltspice_v44_gates import validate_ltspice_v44_public_identity
 
 __all__ = [
     "netlist_to_schemdraw",
@@ -74,6 +75,7 @@ __all__ = [
     "rc_thermal_noise_psd_gate",
     "balanced_three_phase_delta_rl_gate",
     "ideal_transformer_identity_gate",
+    "validate_ltspice_v44_public_identity",
 ]
 
 __version__ = "0.4.1"
