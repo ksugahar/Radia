@@ -6819,6 +6819,207 @@ def _named_entity_transfer_identity_ok(identity: object) -> bool:
     )
 
 
+def _multisweep_hex_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        sources = [int(value) for value in identity.get("source_surface_ids", [])]
+        targets = [int(value) for value in identity.get("target_surface_ids", [])]
+        chain = [int(value) for value in identity.get("sweep_volume_chain", [])]
+        pairs = [[int(value) for value in pair] for pair in identity.get("section_node_correspondence", [])]
+        twists = [float(value) for value in identity.get("section_twist_deg", [])]
+        intervals = [int(value) for value in identity.get("chain_interval_counts", [])]
+        hex_count = int(identity.get("hex_element_count"))
+        minimum_jacobian = float(identity.get("minimum_scaled_jacobian"))
+        allowed_jacobian = float(identity.get("minimum_allowed_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("multisweep_generation") or "")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "source_generation", "target_generation", "section_generation",
+            "twist_generation", "interval_generation", "quality_generation",
+            "block_generation", "export_generation", "result_generation",
+        ))
+        and len(sources) == len(targets) == len(chain) >= 2
+        and len(set(sources)) == len(sources) and len(set(targets)) == len(targets)
+        and set(sources).isdisjoint(targets) and len(set(chain)) == len(chain)
+        and identity.get("result_source_surface_ids") == sources
+        and identity.get("result_target_surface_ids") == targets
+        and identity.get("result_sweep_volume_chain") == chain
+        and len(pairs) >= 4 and all(len(pair) == 2 and min(pair) > 0 for pair in pairs)
+        and len({pair[0] for pair in pairs}) == len(pairs)
+        and len({pair[1] for pair in pairs}) == len(pairs)
+        and identity.get("result_section_node_correspondence") == pairs
+        and len(twists) == len(chain) and all(math.isfinite(value) for value in twists)
+        and identity.get("result_section_twist_deg") == twists
+        and len(intervals) == len(chain) and len(set(intervals)) == 1 and intervals[0] > 0
+        and identity.get("result_chain_interval_counts") == intervals
+        and hex_count > 0 and identity.get("result_hex_element_count") == hex_count
+        and math.isfinite(minimum_jacobian) and minimum_jacobian >= allowed_jacobian > 0.0
+        and identity.get("result_minimum_scaled_jacobian") == minimum_jacobian
+        and identity.get("result_minimum_allowed_scaled_jacobian") == allowed_jacobian
+        and str(identity.get("block_owner") or "").startswith("block:")
+        and identity.get("result_block_owner") == identity.get("block_owner")
+        and _valid_sha256(identity.get("multisweep_export_sha256"))
+        and identity.get("accepted_multisweep_export_sha256") == identity.get("multisweep_export_sha256")
+    )
+
+
+def _imprint_merge_hex_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        tolerance = float(identity.get("merge_tolerance_m"))
+        vertex_pairs = [[int(value) for value in pair] for pair in identity.get("coincident_vertex_pairs", [])]
+        surface_pairs = [[int(value) for value in pair] for pair in identity.get("coincident_surface_pairs", [])]
+        merged = _mapping(identity.get("merged_entity_map"), "merged_entity_map")
+        volumes = _mapping(identity.get("volume_owners"), "volume_owners")
+        blocks = _mapping(identity.get("block_membership"), "block_membership")
+        sidesets = _mapping(identity.get("sideset_membership"), "sideset_membership")
+        hex_count = int(identity.get("hex_element_count"))
+        minimum_jacobian = float(identity.get("minimum_scaled_jacobian"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("imprint_merge_generation") or "")
+    block_entities = {str(value) for values in blocks.values() for value in values}
+    sideset_entities = {str(value) for values in sidesets.values() for value in values}
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "tolerance_generation", "coincident_generation", "topology_generation",
+            "volume_generation", "set_generation", "quality_generation",
+            "export_generation", "result_generation",
+        ))
+        and math.isfinite(tolerance) and 0.0 < tolerance <= 1.0e-4
+        and bool(vertex_pairs) and all(len(pair) == 2 and pair[0] != pair[1] and min(pair) > 0 for pair in vertex_pairs)
+        and bool(surface_pairs) and all(len(pair) == 2 and pair[0] != pair[1] and min(pair) > 0 for pair in surface_pairs)
+        and identity.get("result_merge_tolerance_m") == tolerance
+        and identity.get("result_coincident_vertex_pairs") == vertex_pairs
+        and identity.get("result_coincident_surface_pairs") == surface_pairs
+        and bool(merged) and identity.get("result_merged_entity_map") == merged
+        and bool(volumes) and all(str(key).startswith("volume:") and bool(str(value)) for key, value in volumes.items())
+        and identity.get("result_volume_owners") == volumes
+        and bool(blocks) and all(str(key).startswith("block:") for key in blocks)
+        and block_entities == set(volumes)
+        and identity.get("result_block_membership") == blocks
+        and bool(sidesets) and all(str(key).startswith("sideset:") for key in sidesets)
+        and all(value.startswith("surface:") for value in sideset_entities)
+        and identity.get("result_sideset_membership") == sidesets
+        and hex_count > 0 and identity.get("result_hex_element_count") == hex_count
+        and math.isfinite(minimum_jacobian) and minimum_jacobian > 0.0
+        and identity.get("result_minimum_scaled_jacobian") == minimum_jacobian
+        and _valid_sha256(identity.get("imprint_export_sha256"))
+        and identity.get("accepted_imprint_export_sha256") == identity.get("imprint_export_sha256")
+    )
+
+
+def _journal_undo_redo_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("journal_generation") or "")
+    transactions = [str(value) for value in identity.get("transactions", [])]
+    replay_transactions = [str(value) for value in identity.get("replay_transactions", [])]
+    try:
+        undo_index = int(identity.get("undo_boundary_index"))
+        redo_index = int(identity.get("redo_boundary_index"))
+        geometry_generation = int(identity.get("geometry_generation_id"))
+        replay_geometry_generation = int(identity.get("replay_geometry_generation_id"))
+        remap = _mapping(identity.get("entity_id_remap"), "entity_id_remap")
+        replay_remap = _mapping(identity.get("replay_entity_id_remap"), "replay_entity_id_remap")
+    except (TypeError, ValueError):
+        return False
+    selection = [str(value) for value in identity.get("active_selection", [])]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "transaction_generation", "undo_generation", "redo_generation",
+            "entity_generation", "selection_generation", "database_generation",
+            "owner_generation", "result_generation",
+        ))
+        and len(transactions) >= 4 and replay_transactions == transactions
+        and 0 <= undo_index < redo_index < len(transactions)
+        and transactions[undo_index].strip().lower() == "undo"
+        and transactions[redo_index].strip().lower() == "redo"
+        and identity.get("replay_undo_boundary_index") == undo_index
+        and identity.get("replay_redo_boundary_index") == redo_index
+        and bool(remap) and len(set(str(value) for value in remap.values())) == len(remap)
+        and replay_remap == remap
+        and bool(selection) and set(selection).issubset(str(value) for value in remap.values())
+        and identity.get("replay_active_selection") == selection
+        and geometry_generation > 0 and replay_geometry_generation == geometry_generation
+        and str(identity.get("database_owner") or "").startswith("headless:")
+        and identity.get("replay_database_owner") == identity.get("database_owner")
+        and str(identity.get("session_owner") or "").startswith("batch:")
+        and identity.get("replay_session_owner") == identity.get("session_owner")
+        and _valid_sha256(identity.get("database_sha256"))
+        and identity.get("replay_database_sha256") == identity.get("database_sha256")
+        and _valid_sha256(identity.get("journal_result_sha256"))
+        and identity.get("accepted_journal_result_sha256") == identity.get("journal_result_sha256")
+    )
+
+
+def _exodus_transient_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("exodus_generation") or "")
+    try:
+        times = [float(value) for value in identity.get("time_steps_s", [])]
+        replay_times = [float(value) for value in identity.get("replay_time_steps_s", [])]
+        nodal_values = [[float(value) for value in row] for row in identity.get("nodal_values", [])]
+        replay_nodal_values = [[float(value) for value in row] for row in identity.get("replay_nodal_values", [])]
+        element_values = [[float(value) for value in row] for row in identity.get("element_values", [])]
+        replay_element_values = [[float(value) for value in row] for row in identity.get("replay_element_values", [])]
+        mesh_generation = int(identity.get("mesh_generation_id"))
+        replay_mesh_generation = int(identity.get("replay_mesh_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    nodal_names = [str(value) for value in identity.get("nodal_variable_names", [])]
+    element_names = [str(value) for value in identity.get("element_variable_names", [])]
+    truth = identity.get("block_truth_table")
+    sidesets = identity.get("sideset_values")
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "time_generation", "nodal_generation", "element_generation",
+            "truth_generation", "sideset_generation", "mesh_generation",
+            "database_generation", "result_generation",
+        ))
+        and len(times) >= 2 and all(math.isfinite(value) and value >= 0.0 for value in times)
+        and all(times[index] < times[index + 1] for index in range(len(times) - 1))
+        and replay_times == times
+        and bool(nodal_names) and len(set(nodal_names)) == len(nodal_names)
+        and identity.get("replay_nodal_variable_names") == nodal_names
+        and len(nodal_values) == len(times) and all(row and all(math.isfinite(value) for value in row) for row in nodal_values)
+        and replay_nodal_values == nodal_values
+        and bool(element_names) and len(set(element_names)) == len(element_names)
+        and identity.get("replay_element_variable_names") == element_names
+        and len(element_values) == len(times) and all(row and all(math.isfinite(value) for value in row) for row in element_values)
+        and replay_element_values == element_values
+        and isinstance(truth, Mapping) and bool(truth)
+        and identity.get("replay_block_truth_table") == truth
+        and isinstance(sidesets, Mapping) and bool(sidesets)
+        and all(len(values) == len(times) for values in sidesets.values())
+        and identity.get("replay_sideset_values") == sidesets
+        and mesh_generation > 0 and replay_mesh_generation == mesh_generation
+        and str(identity.get("database_owner") or "").startswith("headless:")
+        and identity.get("replay_database_owner") == identity.get("database_owner")
+        and _valid_sha256(identity.get("database_sha256"))
+        and identity.get("replay_database_sha256") == identity.get("database_sha256")
+        and _valid_sha256(identity.get("exodus_result_sha256"))
+        and identity.get("accepted_exodus_result_sha256") == identity.get("exodus_result_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -7736,6 +7937,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "curve_chain_hexes_use_current_order_intervals_bias_corner_parity_boundary_layers_orientation_sideset_and_export": (
             _curve_chain_boundary_layer_identity_ok(
                 summary.get("curve_chain_interval_bias_corner_parity_boundary_layer_orientation_sideset_export_generation_identity")
+            )
+        ),
+        "multisweep_hexes_use_current_sources_targets_chain_sections_twist_intervals_quality_block_and_export": (
+            _multisweep_hex_identity_ok(
+                summary.get("multisweep_source_target_chain_section_correspondence_twist_interval_quality_block_export_generation_identity")
+            )
+        ),
+        "imprint_merge_hexes_use_current_tolerance_coincidence_topology_sets_quality_and_export": (
+            _imprint_merge_hex_identity_ok(
+                summary.get("imprint_merge_tolerance_coincident_topology_volume_block_sideset_quality_export_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -8677,6 +8888,16 @@ def cubit_mixed_transition_source_gate(
         "named_entity_replays_use_current_names_metadata_groups_sets_save_open_owner_database_and_export": (
             _named_entity_transfer_identity_ok(
                 summary.get("named_entity_metadata_group_transfer_save_open_export_owner_generation_identity")
+            )
+        ),
+        "journal_undo_redo_replays_use_current_transactions_entities_selection_database_owner_and_result": (
+            _journal_undo_redo_identity_ok(
+                summary.get("journal_undo_redo_transaction_entityid_selection_database_owner_generation_identity")
+            )
+        ),
+        "exodus_transients_use_current_times_variables_truth_sets_mesh_database_and_result": (
+            _exodus_transient_identity_ok(
+                summary.get("exodus_transient_timestep_nodal_element_variable_truth_sideset_mesh_database_result_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
