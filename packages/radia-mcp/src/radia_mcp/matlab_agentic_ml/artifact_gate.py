@@ -127,6 +127,82 @@ def validate_matlab_ml_rl_v45_identity(summary: Mapping[str, object]) -> dict[st
     }
 
 
+def validate_matlab_ml_rl_v46_identity(summary: Mapping[str, object]) -> dict[str, object] | None:
+    """Validate official ML/RL replay finiteness, seed, restart, and agent-call bindings."""
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    identity = summary.get("matlab_ml_rl_v46_identity")
+    if not isinstance(identity, Mapping):
+        return None
+    records = {name: identity.get(name) for name in ("supervised", "reinforcement_learning", "agentic_toolkit", "mlrl_checkpoint")}
+    checks = {f"v46_{name}_record_is_mapping": isinstance(value, Mapping) for name, value in records.items()}
+    if isinstance(records["supervised"], Mapping):
+        checks.update(_supervised_v46_checks(records["supervised"]))
+    if isinstance(records["reinforcement_learning"], Mapping):
+        checks.update(_rl_v46_checks(records["reinforcement_learning"]))
+    if isinstance(records["agentic_toolkit"], Mapping):
+        checks.update(_agentic_v46_checks(records["agentic_toolkit"]))
+    if isinstance(records["mlrl_checkpoint"], Mapping):
+        checks.update(_checkpoint_v46_checks(records["mlrl_checkpoint"]))
+    return {
+        "policy": "matlab_ml_rl_artifact_gate_v46",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, passed in checks.items() if not passed],
+    }
+
+
+def _v46_release_and_digest(value: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "v46_release_is_bound": _same_release(value),
+        "v46_digest_is_bound": _valid_digest(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256"),
+    }
+
+
+def _supervised_v46_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    checks = {
+        "v46_supervised_nonfinite_policy_is_bound": value.get("nonfinite_policy") == value.get("result_nonfinite_policy") == "drop_with_count" and value.get("nonfinite_input_count") == value.get("result_nonfinite_input_count") == 0,
+        "v46_supervised_split_and_normalization_are_bound": bool(str(value.get("split_generation", "")).strip()) and value.get("result_split_generation") == value.get("split_generation") and value.get("normalization_fit_scope") == value.get("result_normalization_fit_scope") == "training_only",
+        "v46_supervised_worker_seed_is_bound": isinstance(value.get("worker_seed"), int) and value.get("worker_seed") >= 0 and value.get("result_worker_seed") == value.get("worker_seed"),
+        "v46_supervised_restart_state_is_fresh": value.get("restart_state") == value.get("result_restart_state") == "fresh_training",
+    }
+    checks.update(_v46_release_and_digest(value))
+    return checks
+
+
+def _rl_v46_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    checks = {
+        "v46_rl_episode_timeout_is_bound": isinstance(value.get("episode_timeout_steps"), int) and value.get("episode_timeout_steps") > 0 and value.get("result_episode_timeout_steps") == value.get("episode_timeout_steps"),
+        "v46_rl_termination_is_environment_defined": value.get("termination_semantics") == value.get("result_termination_semantics") == "environment_defined",
+        "v46_rl_exploration_is_training_only": value.get("exploration_mode") == value.get("result_exploration_mode") == "training_only" and value.get("evaluation_mode") == value.get("result_evaluation_mode") == "greedy_no_exploration",
+        "v46_rl_checkpoint_is_bound": bool(str(value.get("checkpoint_generation", "")).strip()) and value.get("result_checkpoint_generation") == value.get("checkpoint_generation"),
+    }
+    checks.update(_v46_release_and_digest(value))
+    return checks
+
+
+def _agentic_v46_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    checks = {
+        "v46_agentic_argument_shape_is_json_object": value.get("argument_schema") == value.get("result_argument_schema") == "json_object" and value.get("argument_shape_valid") == value.get("result_argument_shape_valid") is True,
+        "v46_agentic_existing_session_and_timeout_are_bound": value.get("session_detection") == value.get("result_session_detection") == "existing_shared_matlab" and isinstance(value.get("timeout_s"), (int, float)) and float(value.get("timeout_s")) > 0.0 and value.get("result_timeout_s") == value.get("timeout_s"),
+        "v46_agentic_error_class_is_bound": value.get("error_class") == value.get("result_error_class") == "none",
+        "v46_agentic_tool_arguments_are_bound": _valid_digest(value.get("tool_arguments_sha256")) and value.get("result_tool_arguments_sha256") == value.get("tool_arguments_sha256") and _same_release(value) and str(value.get("owner", "")).startswith("matlab:") and value.get("result_owner") == value.get("owner"),
+    }
+    return checks
+
+
+def _checkpoint_v46_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    order = value.get("checkpoint_order")
+    checks = {
+        "v46_checkpoint_worker_seed_is_bound": isinstance(value.get("worker_seed"), int) and value.get("worker_seed") >= 0 and value.get("result_worker_seed") == value.get("worker_seed"),
+        "v46_checkpoint_order_is_monotone": isinstance(order, list) and order == value.get("result_checkpoint_order") and order == sorted(order),
+        "v46_checkpoint_optimizer_state_is_bound": value.get("optimizer_state") == value.get("result_optimizer_state") == "adam_ready",
+        "v46_checkpoint_generation_and_owner_are_bound": bool(str(value.get("checkpoint_generation", "")).strip()) and value.get("result_checkpoint_generation") == value.get("checkpoint_generation") and _same_release(value) and str(value.get("owner", "")).startswith("matlab:") and value.get("result_owner") == value.get("owner"),
+    }
+    checks.update({"v46_checkpoint_digest_is_bound": _valid_digest(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256")})
+    return checks
+
+
 def _same_release(value: Mapping[str, object]) -> bool:
     release = str(value.get("release_id", "")).strip()
     return bool(release) and value.get("result_release_id") == release
