@@ -2639,6 +2639,203 @@ def _electrostatic_capacitance_matrix_identity_ok(value):
     )
 
 
+def _weighted_stress_virtual_work_force_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("force_generation", "")).strip()
+    try:
+        force = [float(item) for item in value.get("weighted_stress_force_n", [])]
+        contours = [
+            [float(item) for item in row]
+            for row in value.get("airgap_contour_forces_n", [])
+        ]
+        reported_spread = float(value.get("contour_independence_relative_spread"))
+        displacement = float(value.get("virtual_work_displacement_m"))
+        energy_minus = float(value.get("energy_minus_j"))
+        energy_plus = float(value.get("energy_plus_j"))
+        direction = [float(item) for item in value.get("virtual_work_direction", [])]
+        virtual_force = float(value.get("virtual_work_force_n"))
+        mesh_forces = [
+            [float(item) for item in row]
+            for row in value.get("mesh_refinement_force_samples_n", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    force_norm = math.hypot(*force) if len(force) == 2 else 0.0
+    actual_spread = (
+        max(
+            math.hypot(sample[0] - force[0], sample[1] - force[1])
+            for sample in contours
+        )
+        / force_norm
+        if force_norm > 0.0 and len(contours) >= 3 and all(len(row) == 2 for row in contours)
+        else math.inf
+    )
+    expected_virtual_force = (
+        -(energy_plus - energy_minus) / (2.0 * displacement)
+        if displacement > 0.0
+        else math.nan
+    )
+    projected_force = (
+        sum(component * axis for component, axis in zip(force, direction))
+        if len(force) == len(direction) == 2
+        else math.nan
+    )
+    mesh_relative_change = (
+        math.hypot(
+            mesh_forces[-1][0] - mesh_forces[-2][0],
+            mesh_forces[-1][1] - mesh_forces[-2][1],
+        )
+        / force_norm
+        if force_norm > 0.0
+        and len(mesh_forces) >= 2
+        and all(len(row) == 2 for row in mesh_forces)
+        else math.inf
+    )
+    mirrored = (
+        "weighted_stress_force_n",
+        "airgap_contour_forces_n",
+        "contour_independence_relative_spread",
+        "virtual_work_displacement_m",
+        "energy_minus_j",
+        "energy_plus_j",
+        "virtual_work_direction",
+        "virtual_work_force_n",
+        "mesh_refinement_force_samples_n",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "weighted_stress_generation",
+                "airgap_contour_generation",
+                "virtual_work_generation",
+                "direction_generation",
+                "mesh_generation",
+                "field_generation",
+                "result_generation",
+            )
+        )
+        and len(force) == 2
+        and all(math.isfinite(item) for item in force)
+        and force_norm > 0.0
+        and len(contours) >= 3
+        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in contours)
+        and math.isfinite(reported_spread)
+        and math.isclose(reported_spread, actual_spread, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and actual_spread <= 0.01
+        and displacement > 0.0
+        and all(math.isfinite(item) for item in (energy_minus, energy_plus, virtual_force))
+        and len(direction) == 2
+        and all(math.isfinite(item) for item in direction)
+        and math.isclose(math.hypot(*direction), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(virtual_force, expected_virtual_force, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(virtual_force, projected_force, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and len(mesh_forces) >= 2
+        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in mesh_forces)
+        and mesh_forces[-1] == force
+        and mesh_relative_change <= 0.02
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("field_owner", "")).startswith("field:")
+        and value.get("accepted_field_owner") == value.get("field_owner")
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("force_result_sha256"))
+        and value.get("accepted_force_result_sha256") == value.get("force_result_sha256")
+    )
+
+
+def _harmonic_conductor_power_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("conductor_generation", "")).strip()
+    try:
+        frequency = float(value.get("frequency_hz"))
+        conductivity = float(value.get("conductivity_s_per_m"))
+        permeability = float(value.get("absolute_permeability_h_per_m"))
+        skin_depth = float(value.get("skin_depth_m"))
+        current_density = [
+            [float(item) for item in row]
+            for row in value.get("complex_current_density_a_per_m2", [])
+        ]
+        integrated_j_squared = float(value.get("integrated_abs_current_density_sq_a2_per_m"))
+        joule_loss = float(value.get("joule_loss_w"))
+        current_parts = [float(item) for item in value.get("terminal_current_a", [])]
+        voltage_parts = [float(item) for item in value.get("terminal_voltage_v", [])]
+        impedance_parts = [float(item) for item in value.get("terminal_impedance_ohm", [])]
+        power_parts = [float(item) for item in value.get("complex_power_va", [])]
+    except (TypeError, ValueError):
+        return False
+    phasors_ok = all(
+        len(parts) == 2 and all(math.isfinite(item) for item in parts)
+        for parts in (current_parts, voltage_parts, impedance_parts, power_parts)
+    )
+    current = complex(*current_parts) if len(current_parts) == 2 else 0j
+    voltage = complex(*voltage_parts) if len(voltage_parts) == 2 else 0j
+    impedance = complex(*impedance_parts) if len(impedance_parts) == 2 else 0j
+    power = complex(*power_parts) if len(power_parts) == 2 else 0j
+    expected_skin_depth = (
+        math.sqrt(2.0 / (2.0 * math.pi * frequency * permeability * conductivity))
+        if min(frequency, permeability, conductivity) > 0.0
+        else math.nan
+    )
+    expected_joule_loss = (
+        0.5 * integrated_j_squared / conductivity if conductivity > 0.0 else math.nan
+    )
+    mirrored = (
+        "frequency_hz",
+        "conductivity_s_per_m",
+        "absolute_permeability_h_per_m",
+        "skin_depth_m",
+        "complex_current_density_a_per_m2",
+        "integrated_abs_current_density_sq_a2_per_m",
+        "joule_loss_w",
+        "terminal_current_a",
+        "terminal_voltage_v",
+        "terminal_impedance_ohm",
+        "complex_power_va",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "skin_depth_generation",
+                "current_density_generation",
+                "joule_generation",
+                "impedance_generation",
+                "power_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and min(frequency, conductivity, permeability, skin_depth, integrated_j_squared, joule_loss) > 0.0
+        and all(
+            math.isfinite(item)
+            for item in (frequency, conductivity, permeability, skin_depth, integrated_j_squared, joule_loss)
+        )
+        and math.isclose(skin_depth, expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and bool(current_density)
+        and all(len(row) == 2 and all(math.isfinite(item) for item in row) for row in current_density)
+        and phasors_ok
+        and abs(current) > 0.0
+        and abs(impedance - voltage / current) <= 1.0e-12 * max(abs(impedance), 1.0)
+        and abs(power - 0.5 * voltage * current.conjugate()) <= 1.0e-12 * max(abs(power), 1.0)
+        and math.isclose(joule_loss, expected_joule_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(joule_loss, power.real, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("conductor_result_sha256"))
+        and value.get("accepted_conductor_result_sha256") == value.get("conductor_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -2734,6 +2931,8 @@ def force_coenergy_displacement_gate(
     current_flow_power_identity_ok = True
     permanent_magnet_loadline_identity_ok = True
     electrostatic_capacitance_matrix_identity_ok = True
+    weighted_stress_virtual_work_force_identity_ok = True
+    harmonic_conductor_power_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -2803,6 +3002,8 @@ def force_coenergy_displacement_gate(
         current_flow_power_identity_ok = False
         permanent_magnet_loadline_identity_ok = False
         electrostatic_capacitance_matrix_identity_ok = False
+        weighted_stress_virtual_work_force_identity_ok = False
+        harmonic_conductor_power_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -4529,6 +4730,18 @@ def force_coenergy_displacement_gate(
                 )
             )
         )
+        weighted_stress_virtual_work_force_identity_ok = (
+            _weighted_stress_virtual_work_force_identity_ok(
+                artifact_identity.get(
+                    "weightedstress_airgapcontour_virtualwork_force_direction_mesh_fieldowner_result_generation_identity"
+                )
+            )
+        )
+        harmonic_conductor_power_identity_ok = _harmonic_conductor_power_identity_ok(
+            artifact_identity.get(
+                "harmonicconductor_skin_depth_complexcurrent_jouleloss_impedance_power_mesh_result_generation_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -4760,6 +4973,12 @@ def force_coenergy_displacement_gate(
         ),
         "electrostatic_capacitance_matrices_close_symmetry_psd_charge_energy_reciprocity_mesh_and_result": (
             electrostatic_capacitance_matrix_identity_ok
+        ),
+        "weighted_stress_forces_close_airgap_contours_virtual_work_direction_mesh_field_owner_and_result": (
+            weighted_stress_virtual_work_force_identity_ok
+        ),
+        "harmonic_conductors_close_skin_depth_complex_current_joule_impedance_power_mesh_and_result": (
+            harmonic_conductor_power_identity_ok
         ),
     }
     return {
