@@ -135,6 +135,7 @@ from .jmag_v46_identity import validate_public_identity as _validate_jmag_v46_id
 from .motor_artifact_lineage_v47 import validate_public_identity as _validate_motor_v47_identity
 from .motor_semantic_identity_v48 import validate_public_identity as _validate_motor_v48_identity
 from .motor_artifact_identity_v49 import validate_public_identity as _validate_motor_v49_identity
+from .motor_artifact_identity_v50 import validate_public_identity as _validate_motor_v50_identity
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
 from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
 from .nonlinear_inductance_sweep_gate import (
@@ -4006,6 +4007,12 @@ def pwm_controlled_motor_loss_gate(
             result.setdefault("checks", {}).update(v49_checks)
             result["motor_v49_identity_checks"] = v49_checks
             if not all(v49_checks.values()):
+                result["status"] = "needs_attention"
+        v50_checks = _validate_motor_v50_identity(payload.get("artifact_identity"))
+        if v50_checks:
+            result.setdefault("checks", {}).update(v50_checks)
+            result["motor_v50_identity_checks"] = v50_checks
+            if not all(v50_checks.values()):
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
