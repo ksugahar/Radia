@@ -2831,6 +2831,177 @@ def _axial_flux_sector_power_identity_ok(value: object) -> bool:
     )
 
 
+def _ipm_dq_mtpv_energy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("dq_generation", "")).strip()
+    try:
+        pole_pairs = int(value.get("pole_pairs"))
+        fields = (
+            "current_d_a", "current_q_a", "pm_flux_linkage_wb",
+            "inductance_d_h", "inductance_q_h", "flux_d_wb", "flux_q_wb",
+            "torque_nm", "phase_resistance_ohm", "electrical_speed_rad_s",
+            "voltage_d_v", "voltage_q_v", "voltage_magnitude_v",
+            "voltage_limit_v", "active_power_w", "apparent_power_va",
+            "power_factor", "mtpv_voltage_margin_v", "field_energy_j", "coenergy_j",
+        )
+        numbers = {field: float(value.get(field)) for field in fields}
+    except (TypeError, ValueError):
+        return False
+    expected_flux_d = numbers["pm_flux_linkage_wb"] + numbers["inductance_d_h"] * numbers["current_d_a"]
+    expected_flux_q = numbers["inductance_q_h"] * numbers["current_q_a"]
+    expected_torque = 1.5 * pole_pairs * (
+        numbers["flux_d_wb"] * numbers["current_q_a"]
+        - numbers["flux_q_wb"] * numbers["current_d_a"]
+    )
+    expected_voltage_d = (
+        numbers["phase_resistance_ohm"] * numbers["current_d_a"]
+        - numbers["electrical_speed_rad_s"] * numbers["flux_q_wb"]
+    )
+    expected_voltage_q = (
+        numbers["phase_resistance_ohm"] * numbers["current_q_a"]
+        + numbers["electrical_speed_rad_s"] * numbers["flux_d_wb"]
+    )
+    expected_voltage_magnitude = math.hypot(expected_voltage_d, expected_voltage_q)
+    expected_active_power = 1.5 * (
+        expected_voltage_d * numbers["current_d_a"]
+        + expected_voltage_q * numbers["current_q_a"]
+    )
+    expected_apparent_power = 1.5 * expected_voltage_magnitude * math.hypot(
+        numbers["current_d_a"], numbers["current_q_a"]
+    )
+    expected_power_factor = (
+        expected_active_power / expected_apparent_power
+        if expected_apparent_power > 0.0
+        else math.nan
+    )
+    expected_field_energy = 0.5 * (
+        numbers["inductance_d_h"] * numbers["current_d_a"] ** 2
+        + numbers["inductance_q_h"] * numbers["current_q_a"] ** 2
+    )
+    expected_coenergy = (
+        numbers["pm_flux_linkage_wb"] * numbers["current_d_a"] + expected_field_energy
+    )
+    mirrored = ("pole_pairs",) + fields + ("mtpv_branch",)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "current_generation", "flux_generation", "torque_generation",
+                "voltage_generation", "powerfactor_generation", "mtpv_generation",
+                "energy_generation", "mesh_generation", "result_generation",
+            )
+        )
+        and pole_pairs > 0
+        and all(math.isfinite(item) for item in numbers.values())
+        and numbers["current_d_a"] < 0.0 and numbers["current_q_a"] > 0.0
+        and numbers["pm_flux_linkage_wb"] > 0.0
+        and numbers["inductance_d_h"] > 0.0 and numbers["inductance_q_h"] > 0.0
+        and math.isclose(numbers["flux_d_wb"], expected_flux_d, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["flux_q_wb"], expected_flux_q, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["torque_nm"], expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["phase_resistance_ohm"] >= 0.0
+        and numbers["electrical_speed_rad_s"] > 0.0
+        and math.isclose(numbers["voltage_d_v"], expected_voltage_d, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["voltage_q_v"], expected_voltage_q, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["voltage_magnitude_v"], expected_voltage_magnitude, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["voltage_limit_v"] >= numbers["voltage_magnitude_v"] > 0.0
+        and math.isclose(numbers["active_power_w"], expected_active_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["apparent_power_va"], expected_apparent_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["power_factor"], expected_power_factor, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and -1.0 <= numbers["power_factor"] <= 1.0
+        and value.get("mtpv_branch") == "negative_id_high_speed"
+        and math.isclose(
+            numbers["mtpv_voltage_margin_v"],
+            numbers["voltage_limit_v"] - numbers["voltage_magnitude_v"],
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and numbers["mtpv_voltage_margin_v"] >= 0.0
+        and math.isclose(numbers["field_energy_j"], expected_field_energy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["coenergy_j"], expected_coenergy, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["field_energy_j"] >= 0.0 and numbers["coenergy_j"] >= 0.0
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("ipm_result_sha256"))
+        and value.get("accepted_ipm_result_sha256") == value.get("ipm_result_sha256")
+    )
+
+
+def _induction_motor_slip_power_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("induction_generation", "")).strip()
+    try:
+        pole_pairs = int(value.get("pole_pairs"))
+        fields = (
+            "supply_frequency_hz", "synchronous_speed_rad_s", "rotor_speed_rad_s",
+            "slip", "rotor_electrical_frequency_hz", "torque_nm", "airgap_power_w",
+            "stator_copper_loss_w", "rotor_copper_loss_w", "core_loss_w",
+            "mechanical_loss_w", "converted_power_w", "mechanical_power_w",
+            "input_power_w", "efficiency",
+        )
+        numbers = {field: float(value.get(field)) for field in fields}
+    except (TypeError, ValueError):
+        return False
+    expected_sync = 2.0 * math.pi * numbers["supply_frequency_hz"] / pole_pairs if pole_pairs > 0 else math.nan
+    expected_slip = (
+        (expected_sync - numbers["rotor_speed_rad_s"]) / expected_sync
+        if expected_sync > 0.0
+        else math.nan
+    )
+    expected_rotor_frequency = expected_slip * numbers["supply_frequency_hz"]
+    expected_airgap_power = numbers["torque_nm"] * expected_sync
+    expected_rotor_loss = expected_slip * expected_airgap_power
+    expected_converted = (1.0 - expected_slip) * expected_airgap_power
+    expected_mechanical = expected_converted - numbers["mechanical_loss_w"]
+    expected_input = (
+        expected_airgap_power + numbers["stator_copper_loss_w"] + numbers["core_loss_w"]
+    )
+    expected_efficiency = expected_mechanical / expected_input if expected_input > 0.0 else math.nan
+    mirrored = ("pole_pairs",) + fields
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "slip_generation", "frequency_generation", "loss_generation",
+                "torque_generation", "airgap_power_generation",
+                "mechanical_power_generation", "efficiency_generation", "result_generation",
+            )
+        )
+        and pole_pairs > 0
+        and all(math.isfinite(item) for item in numbers.values())
+        and numbers["supply_frequency_hz"] > 0.0
+        and 0.0 < numbers["rotor_speed_rad_s"] < expected_sync
+        and math.isclose(numbers["synchronous_speed_rad_s"], expected_sync, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < numbers["slip"] < 1.0
+        and math.isclose(numbers["slip"], expected_slip, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["rotor_electrical_frequency_hz"], expected_rotor_frequency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["torque_nm"] > 0.0
+        and math.isclose(numbers["airgap_power_w"], expected_airgap_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and min(
+            numbers["stator_copper_loss_w"], numbers["rotor_copper_loss_w"],
+            numbers["core_loss_w"], numbers["mechanical_loss_w"],
+        ) >= 0.0
+        and math.isclose(numbers["rotor_copper_loss_w"], expected_rotor_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["converted_power_w"], expected_converted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["mechanical_power_w"], expected_mechanical, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["input_power_w"], expected_input, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < numbers["efficiency"] < 1.0
+        and math.isclose(numbers["efficiency"], expected_efficiency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _valid_sha256(value.get("motor_result_sha256"))
+        and value.get("accepted_motor_result_sha256") == value.get("motor_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -2938,6 +3109,8 @@ def pwm_controlled_motor_loss_gate(
     ipm_fieldweakening_power_closure_identity_ok = True
     srm_inductance_map_power_identity_ok = True
     axial_flux_sector_power_identity_ok = True
+    ipm_dq_mtpv_energy_identity_ok = True
+    induction_motor_slip_power_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -3007,6 +3180,8 @@ def pwm_controlled_motor_loss_gate(
         ipm_fieldweakening_power_closure_identity_ok = False
         srm_inductance_map_power_identity_ok = False
         axial_flux_sector_power_identity_ok = False
+        ipm_dq_mtpv_energy_identity_ok = False
+        induction_motor_slip_power_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -4763,6 +4938,16 @@ def pwm_controlled_motor_loss_gate(
                 "axial_flux_sector_periodicity_skew_end_effect_flux_torque_loss_power_mesh_result_generation_identity"
             )
         )
+        ipm_dq_mtpv_energy_identity_ok = _ipm_dq_mtpv_energy_identity_ok(
+            identity_value.get(
+                "ipm_dq_current_flux_torque_voltage_powerfactor_mtpv_energy_mesh_result_generation_identity"
+            )
+        )
+        induction_motor_slip_power_identity_ok = _induction_motor_slip_power_identity_ok(
+            identity_value.get(
+                "inductionmotor_slip_rotorfrequency_copperloss_torque_airgappower_mechanicalpower_efficiency_result_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -5155,6 +5340,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "axial_flux_closes_sector_periodicity_skew_end_effect_flux_torque_losses_power_mesh_and_result": (
             axial_flux_sector_power_identity_ok
+        ),
+        "ipm_dq_maps_close_currents_flux_torque_voltage_powerfactor_mtpv_energy_mesh_and_result": (
+            ipm_dq_mtpv_energy_identity_ok
+        ),
+        "induction_motors_close_slip_rotor_frequency_losses_torque_airgap_mechanical_power_efficiency_and_result": (
+            induction_motor_slip_power_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
