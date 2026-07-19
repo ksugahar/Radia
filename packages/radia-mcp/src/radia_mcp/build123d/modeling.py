@@ -5383,6 +5383,191 @@ def _offset_shell_mass_identity(row):
     return (generation, thickness, value.get("join_mode"), outer_area, inner_area, volume, mass, tuple(centroid), tuple(inertia), value.get("shape_owner"), digest)
 
 
+def _draft_feature_identity(row):
+    value = row.get(
+        "draft_neutral_plane_pull_direction_signed_angle_face_tangent_topology_volume_centroid_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("draft_generation", "")).strip()
+    try:
+        origin = [float(item) for item in value.get("neutral_plane_origin_m", [])]
+        normal = [float(item) for item in value.get("neutral_plane_normal", [])]
+        pull = [float(item) for item in value.get("pull_direction", [])]
+        angle = float(value.get("signed_draft_angle_rad"))
+        faces = [int(item) for item in value.get("selected_face_ids", [])]
+        topology = {
+            str(key): int(item) for key, item in value.get("topology_signature", {}).items()
+        }
+        volume = float(value.get("volume_m3"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+    except (AttributeError, TypeError, ValueError):
+        return None
+    mirrored = (
+        "neutral_plane_origin_m",
+        "neutral_plane_normal",
+        "pull_direction",
+        "signed_draft_angle_rad",
+        "selected_face_ids",
+        "tangent_continuity",
+        "topology_signature",
+        "volume_m3",
+        "centroid_m",
+        "shape_owner",
+    )
+    digest = str(value.get("draft_brep_sha256", "")).lower()
+    normal_norm = math.sqrt(sum(item * item for item in normal))
+    pull_norm = math.sqrt(sum(item * item for item in pull))
+    alignment = sum(left * right for left, right in zip(normal, pull))
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "plane_generation",
+                "pull_generation",
+                "angle_generation",
+                "face_generation",
+                "tangent_generation",
+                "topology_generation",
+                "mass_generation",
+                "owner_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or len(origin) != 3
+        or any(not math.isfinite(item) for item in origin)
+        or len(normal) != 3
+        or len(pull) != 3
+        or any(not math.isfinite(item) for item in normal + pull)
+        or not math.isclose(normal_norm, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        or not math.isclose(pull_norm, 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        or not math.isclose(abs(alignment), 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        or not math.isfinite(angle)
+        or not 0.0 < abs(angle) < 0.5 * math.pi
+        or not faces
+        or any(item <= 0 for item in faces)
+        or len(set(faces)) != len(faces)
+        or value.get("tangent_continuity") is not True
+        or set(topology) != {"solid", "shell", "face", "edge", "vertex"}
+        or topology["solid"] != 1
+        or topology["shell"] != 1
+        or topology["face"] < len(faces)
+        or topology["edge"] < topology["face"]
+        or topology["vertex"] <= 0
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or len(centroid) != 3
+        or any(not math.isfinite(item) for item in centroid)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_draft_brep_sha256") != digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(origin),
+        tuple(normal),
+        tuple(pull),
+        angle,
+        tuple(faces),
+        tuple(sorted(topology.items())),
+        volume,
+        tuple(centroid),
+        value.get("shape_owner"),
+        digest,
+    )
+
+
+def _modeled_thread_identity(row):
+    value = row.get(
+        "thread_pitch_handedness_flank_profile_diameter_runout_selfintersection_volume_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("thread_generation", "")).strip()
+    try:
+        pitch = float(value.get("pitch_m"))
+        flank_angle = float(value.get("flank_angle_rad"))
+        major = float(value.get("major_diameter_m"))
+        minor = float(value.get("minor_diameter_m"))
+        length = float(value.get("thread_length_m"))
+        turns = float(value.get("turn_count"))
+        runout = float(value.get("runout_length_m"))
+        volume = float(value.get("volume_m3"))
+    except (TypeError, ValueError):
+        return None
+    mirrored = (
+        "pitch_m",
+        "handedness",
+        "flank_angle_rad",
+        "profile_type",
+        "major_diameter_m",
+        "minor_diameter_m",
+        "thread_length_m",
+        "turn_count",
+        "runout_length_m",
+        "self_intersection_free",
+        "volume_m3",
+        "shape_owner",
+    )
+    digest = str(value.get("thread_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "pitch_generation",
+                "handedness_generation",
+                "profile_generation",
+                "diameter_generation",
+                "runout_generation",
+                "intersection_generation",
+                "mass_generation",
+                "owner_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or not math.isfinite(pitch)
+        or pitch <= 0.0
+        or value.get("handedness") not in {"left", "right"}
+        or not math.isfinite(flank_angle)
+        or not 0.0 < flank_angle < math.pi
+        or not str(value.get("profile_type", "")).strip()
+        or not all(math.isfinite(item) for item in (major, minor, length, turns, runout, volume))
+        or not major > minor > 0.0
+        or length <= 0.0
+        or turns <= 0.0
+        or not math.isclose(length, pitch * turns, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or not 0.0 <= runout <= length
+        or value.get("self_intersection_free") is not True
+        or volume <= 0.0
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_thread_brep_sha256") != digest
+    ):
+        return None
+    return (
+        generation,
+        pitch,
+        value.get("handedness"),
+        flank_angle,
+        value.get("profile_type"),
+        major,
+        minor,
+        length,
+        turns,
+        runout,
+        volume,
+        value.get("shape_owner"),
+        digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -6104,6 +6289,50 @@ def shape_mass_property_crosscheck_summary(
             offset_shell_mass_identity_ok = offset_shell_mass_identity_ok and all(
                 _offset_shell_mass_identity(row)
                 == reference_offset_shell_mass.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    draft_evidence_present = any(
+        row.get(
+            "draft_neutral_plane_pull_direction_signed_angle_face_tangent_topology_volume_centroid_owner_brep_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_drafts = {
+        str(row.get("name", "")): _draft_feature_identity(row) for row in reference
+    }
+    draft_identity_ok = not draft_evidence_present
+    if draft_evidence_present:
+        draft_identity_ok = bool(reference_drafts) and all(
+            value is not None for value in reference_drafts.values()
+        )
+        for _, rows in normalized_sets:
+            draft_identity_ok = draft_identity_ok and all(
+                _draft_feature_identity(row)
+                == reference_drafts.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    thread_evidence_present = any(
+        row.get(
+            "thread_pitch_handedness_flank_profile_diameter_runout_selfintersection_volume_owner_brep_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_threads = {
+        str(row.get("name", "")): _modeled_thread_identity(row) for row in reference
+    }
+    thread_identity_ok = not thread_evidence_present
+    if thread_evidence_present:
+        thread_identity_ok = bool(reference_threads) and all(
+            value is not None for value in reference_threads.values()
+        )
+        for _, rows in normalized_sets:
+            thread_identity_ok = thread_identity_ok and all(
+                _modeled_thread_identity(row)
+                == reference_threads.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -8044,6 +8273,8 @@ def shape_mass_property_crosscheck_summary(
         "involute_gears_use_current_module_teeth_pressure_backlash_diameters_periodicity_volume_owner_and_brep": gear_identity_ok,
         "multiwire_lofts_use_current_wire_correspondence_orientation_holes_intersection_mass_topology_owner_and_brep": multiwire_loft_identity_ok,
         "offset_shells_use_current_signed_thickness_join_repair_areas_mass_inertia_owner_and_brep": offset_shell_mass_identity_ok,
+        "drafts_use_current_neutral_plane_pull_angle_faces_tangency_topology_mass_owner_and_brep": draft_identity_ok,
+        "threads_use_current_pitch_handedness_profile_diameters_runout_intersection_mass_owner_and_brep": thread_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
