@@ -2851,6 +2851,185 @@ def _transformer_energy_force_identity_ok(value: object) -> bool:
     )
 
 
+def _maglev_equilibrium_energy_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("maglev_generation", "")).strip()
+    try:
+        air_gap = float(value.get("air_gap_m"))
+        positions = [float(item) for item in value.get("sample_position_m", [])]
+        force = [float(item) for item in value.get("force_n", [])]
+        equilibrium_position = float(value.get("equilibrium_position_m"))
+        equilibrium_force = float(value.get("equilibrium_force_n"))
+        force_gradient = float(value.get("force_gradient_n_per_m"))
+        stiffness = float(value.get("stiffness_n_per_m"))
+        energy = [float(item) for item in value.get("potential_energy_j", [])]
+        energy_curvature = float(value.get("energy_curvature_j_per_m2"))
+    except (TypeError, ValueError):
+        return False
+    if len(positions) != 3 or len(force) != 3 or len(energy) != 3:
+        return False
+    equilibrium_index = min(
+        range(len(positions)), key=lambda index: abs(positions[index] - equilibrium_position)
+    )
+    expected_force = [
+        -stiffness * (position - equilibrium_position) for position in positions
+    ]
+    energy_offset = energy[equilibrium_index]
+    expected_energy = [
+        energy_offset + 0.5 * stiffness * (position - equilibrium_position) ** 2
+        for position in positions
+    ]
+    expected_gradient = (force[2] - force[0]) / (positions[2] - positions[0])
+    left_step = positions[1] - positions[0]
+    right_step = positions[2] - positions[1]
+    expected_curvature = (
+        2.0
+        * (
+            (energy[2] - energy[1]) / right_step
+            - (energy[1] - energy[0]) / left_step
+        )
+        / (left_step + right_step)
+    )
+    mirrored = (
+        "air_gap_m", "sample_position_m", "force_n", "equilibrium_position_m",
+        "equilibrium_force_n", "force_gradient_n_per_m", "stiffness_n_per_m",
+        "potential_energy_j", "energy_curvature_j_per_m2", "stability",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "gap_generation", "position_generation", "force_generation",
+                "gradient_generation", "stiffness_generation", "energy_generation",
+                "stability_generation", "geometry_generation", "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in positions + force + energy)
+        and all(
+            math.isfinite(item)
+            for item in (
+                air_gap, equilibrium_position, equilibrium_force, force_gradient,
+                stiffness, energy_curvature,
+            )
+        )
+        and air_gap > 0.0
+        and max(abs(position - equilibrium_position) for position in positions) < air_gap
+        and all(left < right for left, right in zip(positions, positions[1:]))
+        and math.isclose(positions[equilibrium_index], equilibrium_position, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(force[equilibrium_index], equilibrium_force, rel_tol=0.0, abs_tol=1.0e-12)
+        and abs(equilibrium_force) <= 1.0e-12
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, expected in zip(force, expected_force)
+        )
+        and math.isclose(force_gradient, expected_gradient, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(stiffness, -force_gradient, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and stiffness > 0.0
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, expected in zip(energy, expected_energy)
+        )
+        and energy[equilibrium_index] == min(energy)
+        and math.isclose(energy_curvature, expected_curvature, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(energy_curvature, stiffness, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("stability") == "stable"
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("geometry_owner", "")).startswith("geometry:")
+        and value.get("accepted_geometry_owner") == value.get("geometry_owner")
+        and _valid_sha256(value.get("maglev_result_sha256"))
+        and value.get("accepted_maglev_result_sha256") == value.get("maglev_result_sha256")
+    )
+
+
+def _eddy_shield_frequency_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("eddy_shield_generation", "")).strip()
+    fields = (
+        "frequency_hz", "angular_frequency_rad_s", "relative_permeability",
+        "conductivity_s_per_m", "skin_depth_m", "shield_thickness_m",
+        "attenuation_factor", "phase_lag_rad", "incident_field_t",
+        "transmitted_field_t", "surface_resistance_ohm", "shield_area_m2",
+        "eddy_loss_w", "shield_volume_m3", "stored_energy_j",
+    )
+    try:
+        numbers = {field: float(value.get(field)) for field in fields}
+    except (TypeError, ValueError):
+        return False
+    mu0 = 4.0e-7 * math.pi
+    permeability = mu0 * numbers["relative_permeability"]
+    expected_omega = 2.0 * math.pi * numbers["frequency_hz"]
+    expected_skin_depth = math.sqrt(
+        2.0
+        / (
+            numbers["angular_frequency_rad_s"]
+            * permeability
+            * numbers["conductivity_s_per_m"]
+        )
+    )
+    expected_attenuation = math.exp(
+        -numbers["shield_thickness_m"] / numbers["skin_depth_m"]
+    )
+    expected_phase = -numbers["shield_thickness_m"] / numbers["skin_depth_m"]
+    expected_transmitted = numbers["incident_field_t"] * numbers["attenuation_factor"]
+    expected_surface_resistance = 1.0 / (
+        numbers["conductivity_s_per_m"] * numbers["skin_depth_m"]
+    )
+    magnetic_field = numbers["incident_field_t"] / permeability
+    expected_loss = (
+        0.5
+        * numbers["surface_resistance_ohm"]
+        * magnetic_field**2
+        * numbers["shield_area_m2"]
+    )
+    expected_volume = numbers["shield_area_m2"] * numbers["shield_thickness_m"]
+    expected_energy = (
+        numbers["transmitted_field_t"] ** 2
+        * numbers["shield_volume_m3"]
+        / (2.0 * permeability)
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "frequency_generation", "material_generation", "skin_depth_generation",
+                "thickness_generation", "phase_generation", "field_generation",
+                "loss_generation", "energy_generation", "geometry_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in numbers.values())
+        and numbers["frequency_hz"] > 0.0
+        and math.isclose(numbers["angular_frequency_rad_s"], expected_omega, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["relative_permeability"] > 0.0
+        and numbers["conductivity_s_per_m"] > 0.0
+        and math.isclose(numbers["skin_depth_m"], expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and numbers["shield_thickness_m"] > 0.0
+        and math.isclose(numbers["attenuation_factor"], expected_attenuation, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and 0.0 < numbers["attenuation_factor"] < 1.0
+        and math.isclose(numbers["phase_lag_rad"], expected_phase, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["incident_field_t"] > 0.0
+        and math.isclose(numbers["transmitted_field_t"], expected_transmitted, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(numbers["surface_resistance_ohm"], expected_surface_resistance, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and numbers["shield_area_m2"] > 0.0
+        and math.isclose(numbers["eddy_loss_w"], expected_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["shield_volume_m3"], expected_volume, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(numbers["stored_energy_j"], expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(value.get(f"result_{field}") == value.get(field) for field in fields)
+        and str(value.get("geometry_owner", "")).startswith("geometry:")
+        and value.get("accepted_geometry_owner") == value.get("geometry_owner")
+        and _valid_sha256(value.get("eddy_shield_result_sha256"))
+        and value.get("accepted_eddy_shield_result_sha256") == value.get("eddy_shield_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -2983,6 +3162,8 @@ def magnetic_force_method_profile_gate(
     magnetic_gear_action_reaction_identity_ok = True
     multilayer_shield_closure_identity_ok = True
     transformer_energy_force_identity_ok = True
+    maglev_equilibrium_energy_identity_ok = True
+    eddy_shield_frequency_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -3052,6 +3233,8 @@ def magnetic_force_method_profile_gate(
         magnetic_gear_action_reaction_identity_ok = False
         multilayer_shield_closure_identity_ok = False
         transformer_energy_force_identity_ok = False
+        maglev_equilibrium_energy_identity_ok = False
+        eddy_shield_frequency_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -4890,6 +5073,16 @@ def magnetic_force_method_profile_gate(
                 "transformer_leakage_mutual_inductance_fluxlinkage_reciprocity_psd_coenergy_force_winding_result_identity"
             )
         )
+        maglev_equilibrium_energy_identity_ok = _maglev_equilibrium_energy_identity_ok(
+            identity_value.get(
+                "maglev_equilibrium_airgap_position_force_gradient_stiffness_potential_energy_stability_geometry_result_identity"
+            )
+        )
+        eddy_shield_frequency_identity_ok = _eddy_shield_frequency_identity_ok(
+            identity_value.get(
+                "eddy_shield_frequency_conductivity_permeability_skin_depth_thickness_phase_attenuation_loss_energy_geometry_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -5152,6 +5345,12 @@ def magnetic_force_method_profile_gate(
         ),
         "transformers_close_inductance_leakage_flux_reciprocity_psd_coenergy_force_winding_and_result": (
             transformer_energy_force_identity_ok
+        ),
+        "maglev_equilibrium_closes_gap_force_gradient_stiffness_energy_stability_owner_and_result": (
+            maglev_equilibrium_energy_identity_ok
+        ),
+        "eddy_shields_close_frequency_skin_depth_phase_attenuation_loss_energy_owner_and_result": (
+            eddy_shield_frequency_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
