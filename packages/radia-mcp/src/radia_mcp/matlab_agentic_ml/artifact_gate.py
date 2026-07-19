@@ -205,6 +205,112 @@ def validate_matlab_ml_rl_v48_identity(summary: Mapping[str, object]) -> dict[st
     }
 
 
+def validate_matlab_ml_rl_v49_identity(summary: Mapping[str, object]) -> dict[str, object] | None:
+    """Validate replay-buffer, normalization, cancellation, and parallel-resume identity."""
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    identity = summary.get("matlab_ml_rl_v49_identity")
+    if not isinstance(identity, Mapping):
+        return None
+    records = {
+        name: identity.get(name)
+        for name in ("rl_replay", "ml_normalization", "agentic_cancel", "parallel_resume")
+    }
+    checks = {f"v49_{name}_record_is_mapping": isinstance(value, Mapping) for name, value in records.items()}
+    if isinstance(records["rl_replay"], Mapping):
+        checks.update(_rl_replay_v49_checks(records["rl_replay"]))
+    if isinstance(records["ml_normalization"], Mapping):
+        checks.update(_ml_normalization_v49_checks(records["ml_normalization"]))
+    if isinstance(records["agentic_cancel"], Mapping):
+        checks.update(_agentic_cancel_v49_checks(records["agentic_cancel"]))
+    if isinstance(records["parallel_resume"], Mapping):
+        checks.update(_parallel_resume_v49_checks(records["parallel_resume"]))
+    return {
+        "policy": "matlab_ml_rl_artifact_gate_v49",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, passed in checks.items() if not passed],
+    }
+
+
+def _rl_replay_v49_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    rows = value.get("replay_row_keys")
+    observations = value.get("observations")
+    actions = value.get("actions")
+    rewards = value.get("rewards")
+    terminals = value.get("terminals")
+    seeds = value.get("episode_seeds")
+    count = len(rows) if isinstance(rows, list) else 0
+    observations_ok = (
+        isinstance(observations, list)
+        and len(observations) == count
+        and bool(observations)
+        and all(_finite_list(row) and len(row) == len(observations[0]) for row in observations)
+    )
+    return {
+        "v49_rl_replay_generation_is_closed": _generation_v47(value, ("buffer_generation", "observation_generation", "action_generation", "reward_generation", "terminal_generation", "seed_generation", "checkpoint_generation", "policy_generation", "result_generation")),
+        "v49_rl_replay_rows_are_unique_and_bound": isinstance(rows, list) and bool(rows) and len(rows) == len(set(rows)) and value.get("result_replay_row_keys") == rows,
+        "v49_rl_observation_action_reward_rows_are_bound": observations_ok and value.get("result_observations") == observations and _finite_list(actions, count) and value.get("result_actions") == actions and _finite_list(rewards, count) and value.get("result_rewards") == rewards,
+        "v49_rl_terminal_rows_are_bound": isinstance(terminals, list) and len(terminals) == count and all(isinstance(item, bool) for item in terminals) and any(terminals) and value.get("result_terminals") == terminals,
+        "v49_rl_episode_seeds_are_unique_and_bound": isinstance(seeds, list) and len(seeds) == count and len(seeds) == len(set(seeds)) and all(isinstance(seed, int) and not isinstance(seed, bool) and seed >= 0 for seed in seeds) and value.get("result_episode_seeds") == seeds,
+        "v49_rl_checkpoint_policy_owners_are_bound": str(value.get("checkpoint_owner", "")).startswith("checkpoint:") and value.get("result_checkpoint_owner") == value.get("checkpoint_owner") and str(value.get("policy_owner", "")).startswith("policy:") and value.get("result_policy_owner") == value.get("policy_owner"),
+        "v49_rl_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _ml_normalization_v49_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    splits = value.get("split_row_keys")
+    train = splits.get("train") if isinstance(splits, Mapping) else None
+    validation = splits.get("validation") if isinstance(splits, Mapping) else None
+    test = splits.get("test") if isinstance(splits, Mapping) else None
+    split_lists = (train, validation, test)
+    all_rows = [row for group in split_lists if isinstance(group, list) for row in group]
+    encoding = value.get("class_encoding")
+    folds = value.get("training_fold_ids")
+    metric_rows = value.get("metric_row_keys")
+    metric_values = value.get("metric_values")
+    encoding_values = list(encoding.values()) if isinstance(encoding, Mapping) else []
+    return {
+        "v49_ml_normalization_generation_is_closed": _generation_v47(value, ("normalization_generation", "class_generation", "split_generation", "fold_generation", "metric_generation", "model_generation", "result_generation")),
+        "v49_ml_split_is_disjoint_and_bound": isinstance(splits, Mapping) and set(splits) == {"train", "validation", "test"} and all(isinstance(group, list) and bool(group) for group in split_lists) and len(all_rows) == len(set(all_rows)) and value.get("result_split_row_keys") == splits,
+        "v49_ml_normalization_fits_training_only": value.get("normalization_fit_scope") == value.get("result_normalization_fit_scope") == "training_partition_only" and value.get("normalization_fit_rows") == train and value.get("result_normalization_fit_rows") == train,
+        "v49_ml_class_encoding_is_canonical_and_bound": isinstance(encoding, Mapping) and bool(encoding) and all(isinstance(name, str) and name for name in encoding) and all(isinstance(index, int) and not isinstance(index, bool) and index >= 0 for index in encoding_values) and sorted(encoding_values) == list(range(len(encoding_values))) and value.get("result_class_encoding") == encoding,
+        "v49_ml_fold_identity_is_bound": isinstance(folds, list) and isinstance(train, list) and len(folds) == len(train) and len(set(folds)) >= 2 and all(isinstance(fold, int) and not isinstance(fold, bool) and fold >= 0 for fold in folds) and value.get("result_training_fold_ids") == folds,
+        "v49_ml_metric_rows_are_unique_finite_and_bound": isinstance(metric_rows, list) and bool(metric_rows) and len(metric_rows) == len(set(metric_rows)) and _finite_list(metric_values, len(metric_rows)) and value.get("result_metric_row_keys") == metric_rows and value.get("result_metric_values") == metric_values,
+        "v49_ml_model_owner_is_bound": str(value.get("model_owner", "")).startswith("model:") and value.get("result_model_owner") == value.get("model_owner"),
+        "v49_ml_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _agentic_cancel_v49_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    timeout = value.get("timeout_s")
+    return {
+        "v49_agentic_cancel_generation_is_closed": _generation_v47(value, ("timeout_generation", "cancel_generation", "partial_output_generation", "cleanup_generation", "tool_call_generation", "result_generation")),
+        "v49_agentic_timeout_is_positive_and_bound": _number(timeout) and float(timeout) > 0.0 and value.get("result_timeout_s") == timeout,
+        "v49_agentic_timeout_cancel_is_complete": value.get("timed_out") is value.get("result_timed_out") is True and value.get("cancel_requested") is value.get("result_cancel_requested") is True and value.get("cancel_completed") is value.get("result_cancel_completed") is True,
+        "v49_agentic_partial_output_is_discarded": value.get("partial_output_policy") == value.get("result_partial_output_policy") == "discard",
+        "v49_agentic_session_is_released": value.get("session_cleanup") == value.get("result_session_cleanup") == "released",
+        "v49_agentic_tool_call_owner_is_bound": str(value.get("tool_call_owner", "")).startswith("tool-call:") and value.get("result_tool_call_owner") == value.get("tool_call_owner"),
+        "v49_agentic_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _parallel_resume_v49_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    workers = value.get("worker_ids")
+    seeds = value.get("worker_seeds")
+    streams = value.get("random_streams")
+    count = len(workers) if isinstance(workers, list) else 0
+    return {
+        "v49_parallel_resume_generation_is_closed": _generation_v47(value, ("worker_generation", "seed_generation", "stream_generation", "trial_generation", "resume_generation", "checkpoint_generation", "experiment_generation", "result_generation")),
+        "v49_parallel_workers_are_unique_and_bound": isinstance(workers, list) and bool(workers) and len(workers) == len(set(workers)) and all(isinstance(worker, int) and not isinstance(worker, bool) and worker > 0 for worker in workers) and value.get("result_worker_ids") == workers,
+        "v49_parallel_seeds_are_unique_and_bound": isinstance(seeds, list) and len(seeds) == count and len(seeds) == len(set(seeds)) and all(isinstance(seed, int) and not isinstance(seed, bool) and seed >= 0 for seed in seeds) and value.get("result_worker_seeds") == seeds,
+        "v49_parallel_streams_are_independent_and_bound": isinstance(streams, list) and len(streams) == count and len(streams) == len(set(streams)) and all(isinstance(stream, str) and stream.startswith("Threefry:") for stream in streams) and value.get("result_random_streams") == streams,
+        "v49_parallel_trial_resume_state_is_bound": str(value.get("trial_state", "")).startswith("completed:") and value.get("result_trial_state") == value.get("trial_state") and str(value.get("resume_state", "")).startswith("resumed_from:") and value.get("result_resume_state") == value.get("resume_state"),
+        "v49_parallel_checkpoint_experiment_owners_are_bound": str(value.get("checkpoint_owner", "")).startswith("checkpoint:") and value.get("result_checkpoint_owner") == value.get("checkpoint_owner") and str(value.get("experiment_owner", "")).startswith("experiment:") and value.get("result_experiment_owner") == value.get("experiment_owner"),
+        "v49_parallel_result_digest_is_bound": _digest_v47(value),
+    }
+
+
 def _generation_v47(value: Mapping[str, object], fields: tuple[str, ...]) -> bool:
     generation = str(value.get("generation", "")).strip()
     return bool(generation) and all(value.get(field) == generation for field in fields)
