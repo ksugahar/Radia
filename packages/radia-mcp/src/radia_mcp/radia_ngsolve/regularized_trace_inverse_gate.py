@@ -296,6 +296,12 @@ def regularized_trace_inverse_path_gate(
     cq_contour_reconstruction_identity_ok = (
         _optional_cq_contour_reconstruction_identity_is_aligned(summary)
     )
+    johnson_nedelec_identity_ok = (
+        _optional_johnson_nedelec_identity_is_aligned(summary)
+    )
+    adjoint_hessian_identity_ok = (
+        _optional_adjoint_hessian_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -517,6 +523,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_contour_uses_current_nodes_interpolation_aliasing_passivity_reconstruction_time_operator_and_result": (
             cq_contour_reconstruction_identity_ok
+        ),
+        "johnson_nedelec_uses_current_trace_normals_operators_sign_residual_energy_mesh_owner_and_result": (
+            johnson_nedelec_identity_ok
+        ),
+        "adjoint_hessian_uses_current_design_gradients_constraints_hvp_kkt_fd_model_owner_and_result": (
+            adjoint_hessian_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -4834,6 +4846,159 @@ def _optional_cq_contour_reconstruction_identity_is_aligned(
         and value.get("accepted_operator_owner") == value.get("operator_owner")
         and _is_sha256(str(value.get("cq_result_sha256", "")).lower())
         and value.get("accepted_cq_result_sha256") == value.get("cq_result_sha256")
+    )
+
+
+def _optional_johnson_nedelec_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "johnson_nedelec_volume_trace_normal_single_double_layer_sign_residual_energy_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["fembem_generation"]).strip()
+        trace = tuple(tuple(float(item) for item in row) for row in value["volume_trace_matrix"])
+        normals = tuple(tuple(float(item) for item in row) for row in value["boundary_normals"])
+        outward = tuple(tuple(float(item) for item in row) for row in value["outward_reference_vectors"])
+        single_layer = tuple(tuple(float(item) for item in row) for row in value["single_layer_matrix"])
+        double_layer = tuple(tuple(float(item) for item in row) for row in value["double_layer_matrix"])
+        coupling_sign = float(value["coupling_sign"])
+        residual = tuple(float(item) for item in value["interface_residual_vector"])
+        residual_tolerance = float(value["interface_residual_tolerance"])
+        interior_flux = float(value["interior_energy_flux_w"])
+        exterior_flux = float(value["exterior_energy_flux_w"])
+        energy_residual = float(value["energy_flux_residual_w"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    boundary_size = len(single_layer)
+    trace_ok = (
+        boundary_size > 0
+        and len(trace) == boundary_size
+        and all(len(row) > boundary_size and all(math.isfinite(item) for item in row) for row in trace)
+        and all(sum(abs(item) > 1.0e-15 for item in row) == 1 for row in trace)
+        and all(math.isclose(sum(row), 1.0, rel_tol=0.0, abs_tol=1.0e-12) for row in trace)
+    )
+    normals_ok = (
+        len(normals) == len(outward) == boundary_size
+        and all(len(row) == 3 and all(math.isfinite(item) for item in row) for row in normals + outward)
+        and all(math.isclose(math.sqrt(sum(item * item for item in row)), 1.0, rel_tol=0.0, abs_tol=1.0e-12) for row in normals)
+        and all(sum(n * reference for n, reference in zip(normal, reference_row)) > 0.0 for normal, reference_row in zip(normals, outward))
+    )
+    operators_ok = (
+        _is_symmetric_positive_definite_matrix(single_layer)
+        and len(double_layer) == boundary_size
+        and all(len(row) == boundary_size and all(math.isfinite(item) for item in row) for row in double_layer)
+    )
+    mirrored = (
+        "volume_trace_matrix", "boundary_normals", "outward_reference_vectors",
+        "single_layer_matrix", "double_layer_matrix", "coupling_sign",
+        "interface_residual_vector", "interface_residual_tolerance",
+        "interior_energy_flux_w", "exterior_energy_flux_w",
+        "energy_flux_residual_w", "fembem_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "trace_generation", "normal_generation", "single_layer_generation",
+            "double_layer_generation", "coupling_generation", "residual_generation",
+            "energy_generation", "mesh_generation", "owner_generation",
+            "result_generation",
+        ))
+        and trace_ok and normals_ok and operators_ok
+        and coupling_sign == -1.0
+        and len(residual) == boundary_size
+        and all(math.isfinite(item) for item in residual)
+        and math.isfinite(residual_tolerance) and 0.0 < residual_tolerance <= 1.0e-6
+        and math.sqrt(sum(item * item for item in residual)) <= residual_tolerance
+        and all(math.isfinite(item) for item in (interior_flux, exterior_flux, energy_residual))
+        and math.isclose(energy_residual, interior_flux + exterior_flux, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(energy_residual) <= 1.0e-12
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("fembem_mesh_sha256", "")).lower())
+        and str(value.get("fembem_owner", "")).startswith("acoustic/")
+        and value.get("accepted_fembem_owner") == value.get("fembem_owner")
+        and _is_sha256(str(value.get("fembem_result_sha256", "")).lower())
+        and value.get("accepted_fembem_result_sha256") == value.get("fembem_result_sha256")
+    )
+
+
+def _optional_adjoint_hessian_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "adjoint_hessian_design_objective_constraint_hvp_kkt_fd_model_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["optimization_generation"]).strip()
+        design = tuple(float(item) for item in value["design_variables"])
+        objective_gradient = tuple(float(item) for item in value["objective_gradient"])
+        jacobian = tuple(tuple(float(item) for item in row) for row in value["constraint_jacobian"])
+        multipliers = tuple(float(item) for item in value["lagrange_multipliers"])
+        constraints = tuple(float(item) for item in value["constraint_values"])
+        direction = tuple(float(item) for item in value["hessian_vector_direction"])
+        adjoint_hvp = tuple(float(item) for item in value["adjoint_hessian_vector_product"])
+        finite_difference_hvp = tuple(float(item) for item in value["finite_difference_hessian_vector_product"])
+        hvp_tolerance = float(value["hessian_vector_relative_tolerance"])
+        kkt_residual = tuple(float(item) for item in value["kkt_stationarity_residual"])
+        kkt_tolerance = float(value["kkt_residual_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    size = len(design)
+    expected_stationarity = tuple(
+        objective_gradient[column]
+        + sum(jacobian[row][column] * multipliers[row] for row in range(len(jacobian)))
+        for column in range(size)
+    ) if size and len(jacobian) == len(multipliers) else ()
+    hvp_scale = max(
+        math.sqrt(sum(item * item for item in adjoint_hvp)),
+        math.sqrt(sum(item * item for item in finite_difference_hvp)),
+        1.0e-300,
+    )
+    hvp_error = math.sqrt(sum((left - right) ** 2 for left, right in zip(adjoint_hvp, finite_difference_hvp))) / hvp_scale
+    mirrored = (
+        "design_variables", "objective_gradient", "constraint_jacobian",
+        "lagrange_multipliers", "constraint_values", "hessian_vector_direction",
+        "adjoint_hessian_vector_product", "finite_difference_hessian_vector_product",
+        "hessian_vector_relative_tolerance", "kkt_stationarity_residual",
+        "kkt_residual_tolerance", "optimization_model_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "design_generation", "gradient_generation", "constraint_generation",
+            "adjoint_generation", "hessian_generation", "kkt_generation",
+            "finite_difference_generation", "model_generation", "owner_generation",
+            "result_generation",
+        ))
+        and size >= 2
+        and len(objective_gradient) == len(direction) == len(adjoint_hvp) == len(finite_difference_hvp) == len(kkt_residual) == size
+        and all(math.isfinite(item) for item in design + objective_gradient + direction + adjoint_hvp + finite_difference_hvp + kkt_residual)
+        and len(jacobian) == len(multipliers) == len(constraints) >= 1
+        and all(len(row) == size and all(math.isfinite(item) for item in row) for row in jacobian)
+        and all(math.isfinite(item) for item in multipliers + constraints)
+        and all(abs(item) <= 1.0e-10 for item in constraints)
+        and len(expected_stationarity) == size
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for actual, expected in zip(kkt_residual, expected_stationarity))
+        and math.isfinite(kkt_tolerance) and 0.0 < kkt_tolerance <= 1.0e-6
+        and math.sqrt(sum(item * item for item in kkt_residual)) <= kkt_tolerance
+        and math.isfinite(hvp_tolerance) and 0.0 < hvp_tolerance <= 1.0e-6
+        and len(adjoint_hvp) == len(finite_difference_hvp)
+        and hvp_error <= hvp_tolerance
+        and sum(left * right for left, right in zip(direction, adjoint_hvp)) > 0.0
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("optimization_model_sha256", "")).lower())
+        and str(value.get("model_owner", "")).startswith("optimization/")
+        and value.get("accepted_model_owner") == value.get("model_owner")
+        and _is_sha256(str(value.get("optimization_result_sha256", "")).lower())
+        and value.get("accepted_optimization_result_sha256") == value.get("optimization_result_sha256")
     )
 
 
