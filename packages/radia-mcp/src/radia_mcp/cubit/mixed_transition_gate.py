@@ -6,6 +6,8 @@ import math
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from .coreform_v45_identity import coreform_v45_ok, journal_v45_ok, periodic_hex_v45_ok, quality_v45_ok
+
 
 _VOLUME_FAMILIES = ("hex", "pyramid", "tet", "wedge")
 
@@ -7842,6 +7844,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
 
     if not isinstance(summary, Mapping):
         raise TypeError("summary must be a mapping")
+    if "hex_sweep_periodic_pairing_curvature_jacobian_block_export_identity" in summary:
+        base = _v44_public_gate(summary)
+        checks = dict(base["checks"])
+        checks["periodic_hex_v45_identity_is_current"] = periodic_hex_v45_ok(summary)
+        issues = [name for name, ok in checks.items() if not ok]
+        return {**base, "status": "ok" if not issues else "needs_attention", "checks": checks, "issues": issues}
     if _V44_PUBLIC_KEY in summary:
         return _v44_public_gate(summary)
     threshold = _finite(min_scaled_jacobian, "min_scaled_jacobian")
@@ -8848,6 +8856,13 @@ def cubit_mixed_transition_source_gate(
 
     if not isinstance(summary, Mapping):
         raise TypeError("summary must be a mapping")
+    if "headless_journal_units_command_status_geometry_mesh_database_owner_identity" in summary or "quality_metric_reference_element_dimension_threshold_block_export_owner_identity" in summary:
+        base = _v44_source_combined_gate(summary)
+        checks = dict(base["checks"])
+        checks["headless_journal_v45_identity_is_current"] = journal_v45_ok(summary)
+        checks["quality_report_v45_identity_is_current"] = quality_v45_ok(summary)
+        issues = [name for name, ok in checks.items() if not ok]
+        return {**base, "status": "ok" if not issues else "needs_attention", "checks": checks, "issues": issues}
     if _V44_SOURCE_JOURNAL_KEY in summary or _V44_SOURCE_QUALITY_KEY in summary:
         return _v44_source_combined_gate(summary)
     commands_raw = summary.get("source_commands")
