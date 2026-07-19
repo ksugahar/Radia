@@ -2393,6 +2393,252 @@ def _current_flow_power_identity_ok(value):
     )
 
 
+def _permanent_magnet_loadline_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("magnet_generation", "")).strip()
+    try:
+        recoil_mu_r = float(value.get("recoil_relative_permeability"))
+        remanence = float(value.get("remanence_t"))
+        coercive_field = float(value.get("coercive_field_a_per_m"))
+        permeance = float(value.get("loadline_permeance_coefficient"))
+        operating_h = float(value.get("operating_h_a_per_m"))
+        operating_b = float(value.get("operating_b_t"))
+        demag_knee_h = float(value.get("demag_knee_h_a_per_m"))
+        demag_margin = float(value.get("demag_margin_a_per_m"))
+        volume = float(value.get("magnet_volume_m3"))
+        energy = float(value.get("field_energy_j"))
+        displacement = float(value.get("virtual_work_displacement_m"))
+        energy_minus = float(value.get("energy_minus_j"))
+        energy_plus = float(value.get("energy_plus_j"))
+        force = float(value.get("virtual_work_force_n"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "recoil_relative_permeability",
+        "remanence_t",
+        "coercive_field_a_per_m",
+        "loadline_permeance_coefficient",
+        "operating_h_a_per_m",
+        "operating_b_t",
+        "demag_knee_h_a_per_m",
+        "demag_margin_a_per_m",
+        "magnet_volume_m3",
+        "field_energy_j",
+        "virtual_work_displacement_m",
+        "energy_minus_j",
+        "energy_plus_j",
+        "virtual_work_force_n",
+    )
+    mu0 = 4.0e-7 * math.pi
+    expected_coercive_field = remanence / (mu0 * recoil_mu_r) if recoil_mu_r else math.nan
+    expected_h = (
+        -remanence / (mu0 * (recoil_mu_r + permeance))
+        if recoil_mu_r + permeance
+        else math.nan
+    )
+    expected_b = remanence + mu0 * recoil_mu_r * operating_h
+    expected_margin = abs(demag_knee_h) - abs(operating_h)
+    expected_energy = 0.5 * operating_b * operating_b * volume / mu0
+    expected_force = (
+        -(energy_plus - energy_minus) / (2.0 * displacement)
+        if displacement
+        else math.nan
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "recoil_generation",
+                "loadline_generation",
+                "operating_generation",
+                "demag_generation",
+                "energy_generation",
+                "force_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and all(
+            math.isfinite(item)
+            for item in (
+                recoil_mu_r,
+                remanence,
+                coercive_field,
+                permeance,
+                operating_h,
+                operating_b,
+                demag_knee_h,
+                demag_margin,
+                volume,
+                energy,
+                displacement,
+                energy_minus,
+                energy_plus,
+                force,
+            )
+        )
+        and recoil_mu_r > 0.0
+        and remanence > 0.0
+        and coercive_field > 0.0
+        and math.isclose(
+            coercive_field, expected_coercive_field, rel_tol=1.0e-12, abs_tol=1.0e-9
+        )
+        and permeance > 0.0
+        and operating_h < 0.0
+        and operating_b > 0.0
+        and math.isclose(operating_h, expected_h, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and math.isclose(operating_b, expected_b, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(
+            operating_b, -mu0 * permeance * operating_h, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and demag_knee_h < operating_h
+        and demag_margin > 0.0
+        and math.isclose(demag_margin, expected_margin, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and volume > 0.0
+        and energy > 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and displacement > 0.0
+        and energy_minus > 0.0
+        and energy_plus > 0.0
+        and math.isclose(force, expected_force, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("magnetics:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("magnet_result_sha256"))
+        and value.get("accepted_magnet_result_sha256") == value.get("magnet_result_sha256")
+    )
+
+
+def _symmetric_psd_matrix(matrix):
+    size = len(matrix)
+    if size == 0 or any(len(row) != size for row in matrix):
+        return False
+    scale = max((abs(item) for row in matrix for item in row), default=0.0)
+    tolerance = max(scale * 1.0e-12, 1.0e-30)
+    if any(
+        not math.isfinite(matrix[row][column])
+        or not math.isclose(
+            matrix[row][column], matrix[column][row], rel_tol=0.0, abs_tol=tolerance
+        )
+        for row in range(size)
+        for column in range(size)
+    ):
+        return False
+    factor = [[0.0] * size for _ in range(size)]
+    for row in range(size):
+        diagonal = matrix[row][row] - sum(factor[row][k] ** 2 for k in range(row))
+        if diagonal < -tolerance:
+            return False
+        factor[row][row] = math.sqrt(max(diagonal, 0.0))
+        for lower in range(row + 1, size):
+            residual = matrix[lower][row] - sum(
+                factor[lower][k] * factor[row][k] for k in range(row)
+            )
+            if factor[row][row] > tolerance:
+                factor[lower][row] = residual / factor[row][row]
+            elif abs(residual) > tolerance:
+                return False
+    return True
+
+
+def _electrostatic_capacitance_matrix_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("capacitance_generation", "")).strip()
+    try:
+        names = [str(item) for item in value.get("conductor_names", [])]
+        matrix = [
+            [float(item) for item in row] for row in value.get("capacitance_matrix_f", [])
+        ]
+        voltages = [float(item) for item in value.get("drive_voltage_v", [])]
+        charges = [float(item) for item in value.get("conductor_charge_c", [])]
+        energy = float(value.get("stored_energy_j"))
+        symmetry_residual = float(value.get("symmetry_residual_f"))
+        reciprocity_residual = float(value.get("reciprocity_residual_f"))
+    except (TypeError, ValueError):
+        return False
+    size = len(names)
+    expected_charges = (
+        [sum(matrix[row][column] * voltages[column] for column in range(size)) for row in range(size)]
+        if len(matrix) == size
+        and all(len(row) == size for row in matrix)
+        and len(voltages) == size
+        else []
+    )
+    expected_energy = (
+        0.5 * sum(voltages[index] * expected_charges[index] for index in range(size))
+        if len(expected_charges) == size
+        else math.nan
+    )
+    actual_symmetry_residual = (
+        max(
+            abs(matrix[row][column] - matrix[column][row])
+            for row in range(size)
+            for column in range(size)
+        )
+        if size and len(matrix) == size and all(len(row) == size for row in matrix)
+        else math.inf
+    )
+    mirrored = (
+        "conductor_names",
+        "capacitance_matrix_f",
+        "drive_voltage_v",
+        "conductor_charge_c",
+        "stored_energy_j",
+        "symmetry_residual_f",
+        "reciprocity_residual_f",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "matrix_generation",
+                "symmetry_generation",
+                "psd_generation",
+                "charge_generation",
+                "energy_generation",
+                "reciprocity_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and size >= 2
+        and all(names)
+        and len(set(names)) == size
+        and _symmetric_psd_matrix(matrix)
+        and len(voltages) == size
+        and all(math.isfinite(item) for item in voltages)
+        and len(charges) == size
+        and all(math.isfinite(item) for item in charges)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-18)
+            for actual, expected in zip(charges, expected_charges)
+        )
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isfinite(symmetry_residual)
+        and math.isclose(
+            symmetry_residual, actual_symmetry_residual, rel_tol=0.0, abs_tol=1.0e-18
+        )
+        and math.isfinite(reciprocity_residual)
+        and abs(reciprocity_residual) <= 1.0e-18
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("electrostatics:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("capacitance_result_sha256"))
+        and value.get("accepted_capacitance_result_sha256")
+        == value.get("capacitance_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -2486,6 +2732,8 @@ def force_coenergy_displacement_gate(
     electrostatic_matrix_gauge_identity_ok = True
     heat_contact_convection_identity_ok = True
     current_flow_power_identity_ok = True
+    permanent_magnet_loadline_identity_ok = True
+    electrostatic_capacitance_matrix_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -2553,6 +2801,8 @@ def force_coenergy_displacement_gate(
         electrostatic_matrix_gauge_identity_ok = False
         heat_contact_convection_identity_ok = False
         current_flow_power_identity_ok = False
+        permanent_magnet_loadline_identity_ok = False
+        electrostatic_capacitance_matrix_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -4267,6 +4517,18 @@ def force_coenergy_displacement_gate(
                 "current_flow_electrode_voltage_current_resistance_joule_power_reciprocity_conductor_mesh_result_generation_identity"
             )
         )
+        permanent_magnet_loadline_identity_ok = _permanent_magnet_loadline_identity_ok(
+            artifact_identity.get(
+                "permanent_magnet_recoil_loadline_operating_demag_energy_virtualwork_force_mesh_result_generation_identity"
+            )
+        )
+        electrostatic_capacitance_matrix_identity_ok = (
+            _electrostatic_capacitance_matrix_identity_ok(
+                artifact_identity.get(
+                    "electrostatic_capacitance_matrix_symmetry_psd_charge_energy_reciprocity_mesh_result_generation_identity"
+                )
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -4492,6 +4754,12 @@ def force_coenergy_displacement_gate(
         ),
         "current_flow_models_close_electrodes_currents_resistance_joule_terminal_power_reciprocity_owners_and_result": (
             current_flow_power_identity_ok
+        ),
+        "permanent_magnets_close_recoil_loadline_operating_demag_energy_virtualwork_mesh_and_result": (
+            permanent_magnet_loadline_identity_ok
+        ),
+        "electrostatic_capacitance_matrices_close_symmetry_psd_charge_energy_reciprocity_mesh_and_result": (
+            electrostatic_capacitance_matrix_identity_ok
         ),
     }
     return {
