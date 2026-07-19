@@ -55,6 +55,126 @@ def _sample_index(value: Any) -> int:
     return int(parsed)
 
 
+def _valid_sha256(value: object) -> bool:
+    digest = str(value or "").lower()
+    return len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    )
+
+
+def _winding_current_torque_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("motor_sweep_generation", "")).strip()
+    winding_order = [str(item).strip() for item in value.get("winding_order", [])]
+    torque_winding_order = [
+        str(item).strip() for item in value.get("torque_winding_order", [])
+    ]
+    phase_convention = str(value.get("current_phase_convention", "")).strip()
+    try:
+        sequence_ids = [int(item) for item in value.get("circuit_sequence_ids", [])]
+        torque_sequence_ids = [
+            int(item) for item in value.get("torque_circuit_sequence_ids", [])
+        ]
+        angles = [float(item) for item in value.get("rotor_angles_deg", [])]
+        torque_angles = [
+            float(item) for item in value.get("torque_rotor_angles_deg", [])
+        ]
+        torque = [float(item) for item in value.get("torque_nm", [])]
+        reported_torque = [
+            float(item) for item in value.get("reported_torque_nm", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    current_digest = str(value.get("phase_current_table_sha256", "")).lower()
+    torque_digest = str(value.get("torque_table_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "winding_order_motor_sweep_generation",
+                "phase_convention_motor_sweep_generation",
+                "circuit_sequence_motor_sweep_generation",
+                "rotor_angle_motor_sweep_generation",
+                "torque_result_motor_sweep_generation",
+            )
+        )
+        and len(winding_order) == 3
+        and all(winding_order)
+        and len(set(winding_order)) == 3
+        and torque_winding_order == winding_order
+        and phase_convention in {"abc_positive_sequence", "acb_negative_sequence"}
+        and value.get("torque_current_phase_convention") == phase_convention
+        and len(sequence_ids) == 3
+        and all(item > 0 for item in sequence_ids)
+        and len(set(sequence_ids)) == 3
+        and torque_sequence_ids == sequence_ids
+        and len(angles) >= 3
+        and all(math.isfinite(item) for item in angles)
+        and all(left < right for left, right in zip(angles, angles[1:]))
+        and torque_angles == angles
+        and _valid_sha256(current_digest)
+        and value.get("torque_phase_current_table_sha256") == current_digest
+        and len(torque) == len(angles)
+        and all(math.isfinite(item) for item in torque)
+        and reported_torque == torque
+        and _valid_sha256(torque_digest)
+        and value.get("reported_torque_table_sha256") == torque_digest
+    )
+
+
+def _demag_knee_operating_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("demag_generation", "")).strip()
+    operating_state = str(value.get("operating_state_id", "")).strip()
+    try:
+        temperature = float(value.get("temperature_c"))
+        margin_temperature = float(value.get("margin_temperature_c"))
+        margins = [float(item) for item in value.get("demag_margin_a_per_m", [])]
+        reported_margins = [
+            float(item) for item in value.get("reported_demag_margin_a_per_m", [])
+        ]
+    except (TypeError, ValueError):
+        return False
+    knee_digest = str(value.get("knee_curve_sha256", "")).lower()
+    recoil_digest = str(value.get("recoil_line_sha256", "")).lower()
+    state_digest = str(value.get("demag_state_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "knee_curve_demag_generation",
+                "temperature_demag_generation",
+                "recoil_line_demag_generation",
+                "operating_state_demag_generation",
+                "margin_result_demag_generation",
+            )
+        )
+        and _valid_sha256(knee_digest)
+        and value.get("margin_knee_curve_sha256") == knee_digest
+        and math.isfinite(temperature)
+        and math.isclose(
+            margin_temperature, temperature, rel_tol=0.0, abs_tol=1.0e-12
+        )
+        and _valid_sha256(recoil_digest)
+        and value.get("margin_recoil_line_sha256") == recoil_digest
+        and bool(operating_state)
+        and value.get("margin_operating_state_id") == operating_state
+        and bool(margins)
+        and all(math.isfinite(item) for item in margins)
+        and reported_margins == margins
+        and _valid_sha256(state_digest)
+        and value.get("reported_demag_state_sha256") == state_digest
+    )
+
+
 def _loss_power_balance_identity_ok(value: object) -> bool:
     if value is None:
         return True
