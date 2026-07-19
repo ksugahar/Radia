@@ -2635,6 +2635,202 @@ def _ipm_fieldweakening_power_closure_identity_ok(value: object) -> bool:
     )
 
 
+def _srm_inductance_map_power_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("srm_generation", "")).strip()
+    try:
+        positions = [float(item) for item in value.get("rotor_position_rad", [])]
+        currents = [float(item) for item in value.get("current_samples_a", [])]
+        inductance = [
+            [float(item) for item in row]
+            for row in value.get("inductance_h_by_current", [])
+        ]
+        selected_current = float(value.get("selected_current_a"))
+        coenergy = [float(item) for item in value.get("coenergy_j", [])]
+        torque = [float(item) for item in value.get("torque_nm", [])]
+        average_torque = float(value.get("average_torque_nm"))
+        torque_ripple = float(value.get("torque_ripple_nm"))
+        phase_count = int(value.get("phase_count"))
+        phase_resistance = float(value.get("phase_resistance_ohm"))
+        copper_loss = float(value.get("copper_loss_w"))
+        mechanical_speed = float(value.get("mechanical_speed_rad_s"))
+        mechanical_power = float(value.get("mechanical_power_w"))
+        electrical_power = float(value.get("electrical_power_w"))
+    except (TypeError, ValueError):
+        return False
+    if selected_current not in currents:
+        return False
+    selected_row = inductance[currents.index(selected_current)] if len(inductance) == len(currents) else []
+    expected_coenergy = [
+        0.5 * item * selected_current**2 for item in selected_row
+    ]
+    expected_torque: list[float] = []
+    if len(expected_coenergy) == len(positions) >= 3:
+        for index in range(len(positions)):
+            if index == 0:
+                left, right = 0, 1
+            elif index == len(positions) - 1:
+                left, right = index - 1, index
+            else:
+                left, right = index - 1, index + 1
+            expected_torque.append(
+                (expected_coenergy[right] - expected_coenergy[left])
+                / (positions[right] - positions[left])
+            )
+    expected_average = (
+        sum(expected_torque) / len(expected_torque) if expected_torque else math.nan
+    )
+    expected_ripple = (
+        max(expected_torque) - min(expected_torque) if expected_torque else math.nan
+    )
+    expected_copper = phase_count * phase_resistance * selected_current**2
+    expected_mechanical = expected_average * mechanical_speed
+    expected_electrical = expected_mechanical + expected_copper
+    mirrored = (
+        "rotor_position_rad", "current_samples_a", "inductance_h_by_current",
+        "selected_current_a", "coenergy_j", "torque_nm", "average_torque_nm",
+        "torque_ripple_nm", "phase_count", "phase_resistance_ohm",
+        "copper_loss_w", "mechanical_speed_rad_s", "mechanical_power_w",
+        "electrical_power_w",
+    )
+    finite_values = (
+        positions + currents + [item for row in inductance for item in row]
+        + coenergy + torque
+        + [
+            selected_current, average_torque, torque_ripple, phase_resistance,
+            copper_loss, mechanical_speed, mechanical_power, electrical_power,
+        ]
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "position_generation", "current_generation",
+                "inductance_generation", "coenergy_generation",
+                "torque_generation", "ripple_generation", "loss_generation",
+                "power_generation", "model_generation", "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in finite_values)
+        and len(positions) >= 3
+        and all(left < right for left, right in zip(positions, positions[1:]))
+        and len(currents) >= 2
+        and all(0.0 < left < right for left, right in zip(currents, currents[1:]))
+        and len(inductance) == len(currents)
+        and all(len(row) == len(positions) for row in inductance)
+        and all(item > 0.0 for row in inductance for item in row)
+        and len(coenergy) == len(torque) == len(positions)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, expected in zip(coenergy, expected_coenergy)
+        )
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, expected in zip(torque, expected_torque)
+        )
+        and math.isclose(average_torque, expected_average, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(torque_ripple, expected_ripple, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and torque_ripple >= 0.0
+        and phase_count > 0 and phase_resistance > 0.0
+        and math.isclose(copper_loss, expected_copper, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and mechanical_speed > 0.0
+        and math.isclose(mechanical_power, expected_mechanical, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(electrical_power, expected_electrical, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("model_owner", "")).startswith("motor:")
+        and value.get("accepted_model_owner") == value.get("model_owner")
+        and _valid_sha256(value.get("srm_result_sha256"))
+        and value.get("accepted_srm_result_sha256") == value.get("srm_result_sha256")
+    )
+
+
+def _axial_flux_sector_power_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("axial_flux_generation", "")).strip()
+    try:
+        sector_count = int(value.get("sector_count"))
+        pole_pairs = int(value.get("pole_pairs"))
+        fields = (
+            "sector_angle_deg", "skew_angle_deg", "skew_factor",
+            "end_effect_factor", "uncorrected_airgap_flux_wb",
+            "corrected_airgap_flux_wb", "current_q_a", "sector_torque_nm",
+            "full_torque_nm", "phase_resistance_ohm", "copper_loss_w",
+            "iron_loss_w", "mechanical_speed_rad_s", "mechanical_power_w",
+            "electrical_power_w",
+        )
+        numbers = {field: float(value.get(field)) for field in fields}
+    except (TypeError, ValueError):
+        return False
+    skew_argument = pole_pairs * math.radians(numbers["skew_angle_deg"]) / 2.0
+    expected_skew = (
+        math.sin(skew_argument) / skew_argument
+        if abs(skew_argument) > 1.0e-15
+        else 1.0
+    )
+    expected_flux = (
+        numbers["uncorrected_airgap_flux_wb"]
+        * numbers["skew_factor"]
+        * numbers["end_effect_factor"]
+    )
+    expected_torque = (
+        1.5 * pole_pairs * numbers["corrected_airgap_flux_wb"] * numbers["current_q_a"]
+    )
+    expected_copper = 3.0 * numbers["phase_resistance_ohm"] * numbers["current_q_a"] ** 2
+    expected_mechanical = numbers["full_torque_nm"] * numbers["mechanical_speed_rad_s"]
+    expected_electrical = expected_mechanical + expected_copper + numbers["iron_loss_w"]
+    mirrored = (
+        "sector_count", "sector_angle_deg", "periodicity", "pole_pairs",
+        "skew_angle_deg", "skew_factor", "end_effect_factor",
+        "uncorrected_airgap_flux_wb", "corrected_airgap_flux_wb",
+        "current_q_a", "sector_torque_nm", "full_torque_nm",
+        "phase_resistance_ohm", "copper_loss_w", "iron_loss_w",
+        "mechanical_speed_rad_s", "mechanical_power_w", "electrical_power_w",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "sector_generation", "periodicity_generation", "skew_generation",
+                "end_effect_generation", "flux_generation", "torque_generation",
+                "loss_generation", "power_generation", "mesh_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in numbers.values())
+        and sector_count > 0
+        and math.isclose(numbers["sector_angle_deg"], 360.0 / sector_count, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and value.get("periodicity") == "periodic"
+        and pole_pairs > 0
+        and math.isclose(numbers["skew_factor"], expected_skew, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < numbers["skew_factor"] <= 1.0
+        and 0.0 < numbers["end_effect_factor"] <= 1.0
+        and numbers["uncorrected_airgap_flux_wb"] > 0.0
+        and math.isclose(numbers["corrected_airgap_flux_wb"], expected_flux, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["current_q_a"] > 0.0
+        and math.isclose(numbers["full_torque_nm"], expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["sector_torque_nm"], numbers["full_torque_nm"] / sector_count, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["phase_resistance_ohm"] > 0.0
+        and math.isclose(numbers["copper_loss_w"], expected_copper, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["iron_loss_w"] >= 0.0
+        and numbers["mechanical_speed_rad_s"] > 0.0
+        and math.isclose(numbers["mechanical_power_w"], expected_mechanical, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["electrical_power_w"], expected_electrical, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("axial_flux_result_sha256"))
+        and value.get("accepted_axial_flux_result_sha256") == value.get("axial_flux_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -2740,6 +2936,8 @@ def pwm_controlled_motor_loss_gate(
     pm_irreversible_demag_closure_identity_ok = True
     induction_cage_power_closure_identity_ok = True
     ipm_fieldweakening_power_closure_identity_ok = True
+    srm_inductance_map_power_identity_ok = True
+    axial_flux_sector_power_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -2807,6 +3005,8 @@ def pwm_controlled_motor_loss_gate(
         pm_irreversible_demag_closure_identity_ok = False
         induction_cage_power_closure_identity_ok = False
         ipm_fieldweakening_power_closure_identity_ok = False
+        srm_inductance_map_power_identity_ok = False
+        axial_flux_sector_power_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -4553,6 +4753,16 @@ def pwm_controlled_motor_loss_gate(
                 "ipm_fieldweakening_dq_flux_voltage_limit_current_angle_speed_torque_power_model_result_identity"
             )
         )
+        srm_inductance_map_power_identity_ok = _srm_inductance_map_power_identity_ok(
+            identity_value.get(
+                "srm_inductance_position_current_coenergy_torque_ripple_power_model_result_generation_identity"
+            )
+        )
+        axial_flux_sector_power_identity_ok = _axial_flux_sector_power_identity_ok(
+            identity_value.get(
+                "axial_flux_sector_periodicity_skew_end_effect_flux_torque_loss_power_mesh_result_generation_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -4939,6 +5149,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "ipm_fieldweakening_closes_dq_flux_voltage_current_limits_angle_speed_torque_power_owner_and_result": (
             ipm_fieldweakening_power_closure_identity_ok
+        ),
+        "srm_map_closes_position_current_inductance_coenergy_torque_ripple_loss_power_owner_and_result": (
+            srm_inductance_map_power_identity_ok
+        ),
+        "axial_flux_closes_sector_periodicity_skew_end_effect_flux_torque_losses_power_mesh_and_result": (
+            axial_flux_sector_power_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
