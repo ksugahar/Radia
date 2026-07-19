@@ -4337,6 +4337,139 @@ def _antenna_farfield_power_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _cavity_mode_volume_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "cavity_eigenmode_frequency_qfactor_fieldenergy_orthogonality_modevolume_mesh_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("cavity_mode_generation", "")).strip()
+    try:
+        dimensions = [float(item) for item in identity.get("cavity_dimensions_m", [])]
+        modes = [[int(item) for item in row] for row in identity.get("mode_indices", [])]
+        frequencies = [float(item) for item in identity.get("eigenfrequency_hz", [])]
+        quality = [float(item) for item in identity.get("unloaded_q", [])]
+        electric = [float(item) for item in identity.get("electric_energy_j", [])]
+        magnetic = [float(item) for item in identity.get("magnetic_energy_j", [])]
+        total = [float(item) for item in identity.get("total_field_energy_j", [])]
+        overlap = [[float(item) for item in row] for row in identity.get("mode_overlap_matrix", [])]
+        mode_volume = [float(item) for item in identity.get("mode_volume_m3", [])]
+    except (TypeError, ValueError):
+        return False
+    count = len(modes)
+    if len(dimensions) != 3 or count < 2:
+        return False
+    expected_frequencies = [
+        0.5 * 299_792_458.0 * math.sqrt(
+            sum((mode[index] / dimensions[index]) ** 2 for index in range(3))
+        )
+        for mode in modes
+    ]
+    cavity_volume = math.prod(dimensions)
+    mirrored = (
+        "cavity_dimensions_m", "mode_indices", "eigenfrequency_hz", "unloaded_q",
+        "electric_energy_j", "magnetic_energy_j", "total_field_energy_j",
+        "mode_overlap_matrix", "mode_volume_m3",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "geometry_generation", "frequency_generation", "qfactor_generation",
+            "energy_generation", "orthogonality_generation", "modevolume_generation",
+            "mesh_generation", "result_generation"))
+        and all(math.isfinite(item) and item > 0.0 for item in dimensions)
+        and all(len(mode) == 3 and any(index > 0 for index in mode) and all(index >= 0 for index in mode) for mode in modes)
+        and len(frequencies) == len(quality) == len(electric) == len(magnetic) == len(total) == len(mode_volume) == count
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-3) for actual, expected in zip(frequencies, expected_frequencies))
+        and all(math.isfinite(item) and item > 0.0 for item in quality)
+        and all(math.isfinite(item) and item > 0.0 for item in electric + magnetic)
+        and all(math.isclose(e, h, rel_tol=1.0e-12, abs_tol=1.0e-12) for e, h in zip(electric, magnetic))
+        and all(math.isclose(value, e + h, rel_tol=1.0e-12, abs_tol=1.0e-12) for value, e, h in zip(total, electric, magnetic))
+        and len(overlap) == count
+        and all(len(row) == count for row in overlap)
+        and all(math.isclose(overlap[i][j], 1.0 if i == j else 0.0, rel_tol=0.0, abs_tol=1.0e-12) for i in range(count) for j in range(count))
+        and all(math.isfinite(item) and 0.0 < item <= cavity_volume for item in mode_volume)
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and str(identity.get("mesh_owner", "")).startswith("mesh:")
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _valid_sha256(identity.get("cavity_result_sha256"))
+        and identity.get("accepted_cavity_result_sha256") == identity.get("cavity_result_sha256")
+    )
+
+
+def _tdr_deembed_energy_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "tdr_time_distance_impedance_reflection_deembed_risetime_loss_waveform_energy_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("tdr_generation", "")).strip()
+    try:
+        times = [float(item) for item in identity.get("time_s", [])]
+        relative_permittivity = float(identity.get("relative_permittivity"))
+        velocity = float(identity.get("propagation_velocity_m_per_s"))
+        deembed_time = float(identity.get("deembed_time_s"))
+        distances = [float(item) for item in identity.get("distance_m", [])]
+        reference_impedance = float(identity.get("reference_impedance_ohm"))
+        impedance = [float(item) for item in identity.get("impedance_ohm", [])]
+        reflection = [float(item) for item in identity.get("reflection_coefficient", [])]
+        rise_time = float(identity.get("source_rise_time_s"))
+        losses = [float(item) for item in identity.get("line_loss_db", [])]
+        waveform = [float(item) for item in identity.get("tdr_waveform_v", [])]
+        energy = float(identity.get("waveform_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    count = len(times)
+    if count < 3 or any(len(items) != count for items in (distances, impedance, reflection, losses, waveform)):
+        return False
+    expected_velocity = 299_792_458.0 / math.sqrt(relative_permittivity) if relative_permittivity > 0.0 else math.nan
+    expected_distances = [0.5 * velocity * max(0.0, time - deembed_time) for time in times]
+    expected_reflection = [(value - reference_impedance) / (value + reference_impedance) for value in impedance]
+    expected_waveform = [(1.0 + gamma) * 10.0 ** (-loss / 20.0) for gamma, loss in zip(reflection, losses)]
+    power = [value * value / reference_impedance for value in waveform]
+    expected_energy = sum(
+        0.5 * (left_power + right_power) * (right_time - left_time)
+        for left_time, right_time, left_power, right_power in zip(
+            times, times[1:], power, power[1:]
+        )
+    )
+    mirrored = (
+        "time_s", "relative_permittivity", "propagation_velocity_m_per_s",
+        "deembed_time_s", "distance_m", "reference_impedance_ohm", "impedance_ohm",
+        "reflection_coefficient", "source_rise_time_s", "line_loss_db",
+        "tdr_waveform_v", "waveform_energy_j",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "time_generation", "distance_generation", "impedance_generation",
+            "reflection_generation", "deembed_generation", "risetime_generation",
+            "loss_generation", "energy_generation", "result_generation"))
+        and all(math.isfinite(item) for item in times + distances + impedance + reflection + losses + waveform)
+        and all(left < right for left, right in zip(times, times[1:]))
+        and relative_permittivity >= 1.0
+        and math.isclose(velocity, expected_velocity, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and 0.0 <= deembed_time < times[-1]
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15) for actual, expected in zip(distances, expected_distances))
+        and reference_impedance > 0.0
+        and all(value > 0.0 for value in impedance)
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for actual, expected in zip(reflection, expected_reflection))
+        and all(abs(value) < 1.0 for value in reflection)
+        and 0.0 < rise_time < times[-1] - times[0]
+        and all(value >= 0.0 for value in losses)
+        and all(math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for actual, expected in zip(waveform, expected_waveform))
+        and math.isfinite(energy) and energy > 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and _valid_sha256(identity.get("tdr_result_sha256"))
+        and identity.get("accepted_tdr_result_sha256") == identity.get("tdr_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -4858,6 +4991,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "antenna_farfields_use_current_directivity_gain_efficiency_power_polarization_owner_and_result": (
                 _antenna_farfield_power_inputs_are_current(raw)
+            ),
+            "cavity_modes_use_current_frequency_q_energy_orthogonality_mode_volume_mesh_and_result": (
+                _cavity_mode_volume_inputs_are_current(raw)
+            ),
+            "tdr_results_use_current_time_distance_impedance_reflection_deembed_risetime_loss_energy_and_result": (
+                _tdr_deembed_energy_inputs_are_current(raw)
             ),
         }
         row = {
