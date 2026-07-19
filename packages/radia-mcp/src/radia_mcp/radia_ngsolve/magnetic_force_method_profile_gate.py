@@ -3251,6 +3251,86 @@ def _linear_motor_periodic_work_identity_ok(value: object) -> bool:
     )
 
 
+def _v43_bearing_stiffness_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("bearing_generation", "")).strip()
+    try:
+        equilibrium = [float(item) for item in value.get("force_equilibrium_n", [])]
+        result_equilibrium = [float(item) for item in value.get("result_force_equilibrium_n", [])]
+        matrix = [[float(item) for item in row] for row in value.get("stiffness_matrix_n_per_m", [])]
+        result_matrix = [[float(item) for item in row] for row in value.get("result_stiffness_matrix_n_per_m", [])]
+        curvature = float(value.get("energy_curvature_n_per_m"))
+        gap = float(value.get("gap_m"))
+    except (TypeError, ValueError):
+        return False
+    symmetric = len(matrix) == 2 and all(len(row) == 2 for row in matrix) and math.isclose(matrix[0][1], matrix[1][0], rel_tol=1.0e-12, abs_tol=1.0e-12)
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "equilibrium_generation", "stiffness_generation", "symmetry_generation",
+            "energy_generation", "stability_generation", "gap_generation",
+            "mesh_generation", "result_generation"))
+        and len(equilibrium) == 2 and result_equilibrium == equilibrium
+        and all(math.isfinite(item) for item in equilibrium)
+        and symmetric and result_matrix == matrix
+        and all(math.isfinite(item) for row in matrix for item in row)
+        and matrix[0][0] > 0.0 and matrix[1][1] > 0.0
+        and math.isfinite(curvature) and curvature > 0.0
+        and value.get("result_energy_curvature_n_per_m") == curvature
+        and value.get("stability_sign") == "stable"
+        and value.get("result_stability_sign") == "stable"
+        and math.isfinite(gap) and gap > 0.0 and value.get("result_gap_m") == gap
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("result_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("bearing_result_sha256"))
+        and value.get("accepted_bearing_result_sha256") == value.get("bearing_result_sha256")
+    )
+
+
+def _v43_hysteresis_minorloop_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("hysteresis_generation", "")).strip()
+    try:
+        field = [float(item) for item in value.get("field_path_a_per_m", [])]
+        result_field = [float(item) for item in value.get("result_field_path_a_per_m", [])]
+        magnetization = [float(item) for item in value.get("magnetization_a_per_m", [])]
+        result_magnetization = [float(item) for item in value.get("result_magnetization_a_per_m", [])]
+        remanence = float(value.get("remanence_a_per_m"))
+        coercivity = float(value.get("coercivity_a_per_m"))
+        loss = float(value.get("loop_area_loss_j_per_m3"))
+        energy = float(value.get("cycle_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "path_generation", "branch_generation", "remanence_generation",
+            "coercivity_generation", "loss_generation", "energy_generation",
+            "material_generation", "mesh_generation", "result_generation"))
+        and len(field) == len(magnetization) >= 3
+        and field == result_field and magnetization == result_magnetization
+        and all(math.isfinite(item) for item in field + magnetization)
+        and math.isfinite(remanence) and remanence >= 0.0
+        and value.get("result_remanence_a_per_m") == remanence
+        and math.isfinite(coercivity) and coercivity > 0.0
+        and value.get("result_coercivity_a_per_m") == coercivity
+        and math.isfinite(loss) and loss >= 0.0 and value.get("result_loop_area_loss_j_per_m3") == loss
+        and math.isfinite(energy) and energy >= 0.0 and value.get("result_cycle_energy_j") == energy
+        and str(value.get("material_owner", "")).startswith("material:")
+        and value.get("result_material_owner") == value.get("material_owner")
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("result_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("hysteresis_result_sha256"))
+        and value.get("accepted_hysteresis_result_sha256") == value.get("hysteresis_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -3387,6 +3467,8 @@ def magnetic_force_method_profile_gate(
     eddy_shield_frequency_identity_ok = True
     demagnetizing_tensor_identity_ok = True
     linear_motor_periodic_work_identity_ok = True
+    v43_bearing_stiffness_identity_ok = True
+    v43_hysteresis_minorloop_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -3460,6 +3542,8 @@ def magnetic_force_method_profile_gate(
         eddy_shield_frequency_identity_ok = False
         demagnetizing_tensor_identity_ok = False
         linear_motor_periodic_work_identity_ok = False
+        v43_bearing_stiffness_identity_ok = False
+        v43_hysteresis_minorloop_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -5318,6 +5402,16 @@ def magnetic_force_method_profile_gate(
                 "linear_motor_cogging_force_position_periodicity_work_coenergy_phase_thrust_mesh_result_identity"
             )
         )
+        v43_bearing_stiffness_identity_ok = _v43_bearing_stiffness_identity_ok(
+            identity_value.get(
+                "magneticbearing_stiffnessmatrix_symmetry_crosscoupling_force_energy_stability_mesh_result_identity"
+            )
+        )
+        v43_hysteresis_minorloop_identity_ok = _v43_hysteresis_minorloop_identity_ok(
+            identity_value.get(
+                "hysteresis_minorloop_remanence_coercivity_loss_path_energy_material_mesh_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -5592,6 +5686,12 @@ def magnetic_force_method_profile_gate(
         ),
         "linear_motors_close_position_periodicity_phase_cogging_work_coenergy_thrust_mesh_and_result": (
             linear_motor_periodic_work_identity_ok
+        ),
+        "magnetic_bearings_close_stiffness_symmetry_crosscoupling_force_energy_stability_gap_mesh_and_result": (
+            v43_bearing_stiffness_identity_ok
+        ),
+        "hysteresis_minorloops_close_field_path_branch_remanence_coercivity_loss_energy_material_mesh_and_result": (
+            v43_hysteresis_minorloop_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
