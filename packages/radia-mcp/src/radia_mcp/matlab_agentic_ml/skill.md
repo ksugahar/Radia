@@ -21,6 +21,13 @@ adds small, solver-neutral artifact gates; it is not a second MATLAB runtime.
    v2 split/evaluation contract, `validate_matlab_ml_rl_v44_identity` before
    treating it as a learning result.
 
+For the v46 generalization contract, also bind nonfinite filtering, worker
+seed, restart state, RL episode timeout, environment-defined termination,
+training-only exploration, checkpoint lineage, structured tool-argument shape,
+existing-session attachment, timeout/error class, and monotone checkpoint
+order. Treat any mismatch as `needs_attention` even when the numeric output
+looks plausible.
+
 For supervised learning, cross-validation or a holdout is required; a
 resubstitution score is not a validation result. For reinforcement learning,
 the environment, training episode count, evaluation episode count, and mean
