@@ -249,6 +249,67 @@ def _axisymmetric_revolved_energy_force_identity_ok(value):
     )
 
 
+def _v43_axisymmetric_solenoid_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("solenoid_generation", "")).strip()
+    try:
+        current = float(value.get("current_a")); result_current = float(value.get("result_current_a"))
+        radius = float(value.get("mean_radius_m")); result_radius = float(value.get("result_mean_radius_m"))
+        flux = float(value.get("flux_linkage_wb_turn")); result_flux = float(value.get("result_flux_linkage_wb_turn"))
+        inductance = float(value.get("inductance_h")); result_inductance = float(value.get("result_inductance_h"))
+        force = float(value.get("axial_force_n")); result_force = float(value.get("result_axial_force_n"))
+        derivative = float(value.get("coenergy_force_derivative_n")); result_derivative = float(value.get("result_coenergy_force_derivative_n"))
+        factor = float(value.get("two_pi_r_factor_m")); result_factor = float(value.get("result_two_pi_r_factor_m"))
+    except (TypeError, ValueError):
+        return False
+    digest = str(value.get("solenoid_result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("flux_generation", "inductance_generation", "force_generation", "coenergy_generation", "axis_factor_generation", "mesh_generation", "result_generation"))
+        and current > 0.0 and result_current == current
+        and radius > 0.0 and result_radius == radius
+        and flux > 0.0 and result_flux == flux
+        and math.isclose(inductance, flux / current, rel_tol=1.0e-12, abs_tol=1.0e-15) and result_inductance == inductance
+        and math.isfinite(force) and result_force == force and math.isclose(force, derivative, rel_tol=1.0e-12, abs_tol=1.0e-12) and result_derivative == derivative
+        and math.isclose(factor, 2.0 * math.pi * radius, rel_tol=1.0e-12, abs_tol=1.0e-15) and result_factor == factor
+        and str(value.get("mesh_owner", "")).startswith("mesh:") and value.get("result_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(digest) and value.get("accepted_solenoid_result_sha256") == digest
+    )
+
+
+def _v43_dielectric_interface_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("dielectric_generation", "")).strip()
+    try:
+        voltage = float(value.get("voltage_v")); result_voltage = float(value.get("result_voltage_v"))
+        capacitance = float(value.get("capacitance_f")); result_capacitance = float(value.get("result_capacitance_f"))
+        charge = float(value.get("conductor_charge_c")); result_charge = float(value.get("result_conductor_charge_c"))
+        flux = float(value.get("normal_displacement_flux_c")); result_flux = float(value.get("result_normal_displacement_flux_c"))
+        energy = float(value.get("stored_energy_j")); result_energy = float(value.get("result_stored_energy_j"))
+        continuity = float(value.get("interface_continuity_residual_c")); result_continuity = float(value.get("result_interface_continuity_residual_c"))
+        reciprocity = float(value.get("reciprocity_residual_f")); result_reciprocity = float(value.get("result_reciprocity_residual_f"))
+    except (TypeError, ValueError):
+        return False
+    digest = str(value.get("dielectric_result_sha256", "")).lower()
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in ("capacitance_generation", "charge_generation", "flux_generation", "energy_generation", "interface_generation", "mesh_generation", "result_generation"))
+        and voltage > 0.0 and result_voltage == voltage and capacitance > 0.0 and result_capacitance == capacitance
+        and math.isclose(charge, capacitance * voltage, rel_tol=1.0e-12, abs_tol=1.0e-15) and result_charge == charge
+        and result_flux == flux and math.isclose(energy, 0.5 * capacitance * voltage * voltage, rel_tol=1.0e-12, abs_tol=1.0e-15) and result_energy == energy
+        and 0.0 <= continuity <= 1.0e-8 and result_continuity == continuity
+        and 0.0 <= reciprocity <= 1.0e-8 and result_reciprocity == reciprocity
+        and str(value.get("mesh_owner", "")).startswith("mesh:") and value.get("result_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(digest) and value.get("accepted_dielectric_result_sha256") == digest
+    )
+
+
 def _axisymmetric_3d_force_revolution_identity_ok(value):
     if value is None:
         return True
@@ -2933,6 +2994,8 @@ def force_coenergy_displacement_gate(
     electrostatic_capacitance_matrix_identity_ok = True
     weighted_stress_virtual_work_force_identity_ok = True
     harmonic_conductor_power_identity_ok = True
+    v43_axisymmetric_solenoid_identity_ok = True
+    v43_dielectric_interface_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -3004,6 +3067,8 @@ def force_coenergy_displacement_gate(
         electrostatic_capacitance_matrix_identity_ok = False
         weighted_stress_virtual_work_force_identity_ok = False
         harmonic_conductor_power_identity_ok = False
+        v43_axisymmetric_solenoid_identity_ok = False
+        v43_dielectric_interface_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -4742,6 +4807,16 @@ def force_coenergy_displacement_gate(
                 "harmonicconductor_skin_depth_complexcurrent_jouleloss_impedance_power_mesh_result_generation_identity"
             )
         )
+        v43_axisymmetric_solenoid_identity_ok = _v43_axisymmetric_solenoid_identity_ok(
+            artifact_identity.get(
+                "axisymmetric_solenoid_flux_inductance_force_coenergy_axisfactor_mesh_generation_identity"
+            )
+        )
+        v43_dielectric_interface_identity_ok = _v43_dielectric_interface_identity_ok(
+            artifact_identity.get(
+                "dielectric_interface_capacitance_charge_flux_energy_reciprocity_mesh_generation_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -4979,6 +5054,12 @@ def force_coenergy_displacement_gate(
         ),
         "harmonic_conductors_close_skin_depth_complex_current_joule_impedance_power_mesh_and_result": (
             harmonic_conductor_power_identity_ok
+        ),
+        "axisymmetric_solenoids_close_flux_inductance_coenergy_force_two_pi_r_mesh_and_result": (
+            v43_axisymmetric_solenoid_identity_ok
+        ),
+        "dielectric_interfaces_close_capacitance_charge_flux_energy_reciprocity_mesh_and_result": (
+            v43_dielectric_interface_identity_ok
         ),
     }
     return {
