@@ -4585,6 +4585,172 @@ def _bjt_amplifier_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _boost_converter_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "boost_duty_inductor_ripple_ccm_output_ripple_efficiency_stress_cycle_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("boost_generation_id") or "")
+    fields = (
+        "input_voltage_v", "output_voltage_v", "duty_ratio",
+        "switching_frequency_hz", "inductance_h",
+        "inductor_average_current_a", "inductor_ripple_peak_to_peak_a",
+        "ccm_boundary_current_a", "output_capacitance_f", "output_current_a",
+        "output_voltage_ripple_peak_to_peak_v", "efficiency",
+        "switch_voltage_stress_v", "diode_reverse_voltage_stress_v",
+        "switch_peak_current_a", "input_energy_per_cycle_j",
+        "output_energy_per_cycle_j", "loss_energy_per_cycle_j",
+        "cycle_energy_residual_j",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    vin = values["input_voltage_v"]
+    vout = values["output_voltage_v"]
+    duty = values["duty_ratio"]
+    frequency = values["switching_frequency_hz"]
+    inductance = values["inductance_h"]
+    capacitance = values["output_capacitance_f"]
+    output_current = values["output_current_a"]
+    efficiency = values["efficiency"]
+    expected_duty = 1.0 - vin / vout if vout > 0.0 else math.nan
+    expected_ripple = vin * duty / (inductance * frequency) if min(inductance, frequency) > 0.0 else math.nan
+    output_power = vout * output_current
+    input_power = output_power / efficiency if efficiency > 0.0 else math.nan
+    expected_average = input_power / vin if vin > 0.0 else math.nan
+    expected_output_ripple = output_current * duty / (capacitance * frequency) if min(capacitance, frequency) > 0.0 else math.nan
+    expected_residual = (
+        values["input_energy_per_cycle_j"]
+        - values["output_energy_per_cycle_j"]
+        - values["loss_energy_per_cycle_j"]
+    )
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "duty_boost_generation_id", "ripple_boost_generation_id",
+            "ccm_boost_generation_id", "output_boost_generation_id",
+            "efficiency_boost_generation_id", "stress_boost_generation_id",
+            "energy_boost_generation_id", "waveform_boost_generation_id",
+            "result_boost_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(vin, vout, frequency, inductance, capacitance, output_current) > 0.0
+        and vout > vin and 0.0 < duty < 1.0 and 0.0 < efficiency <= 1.0
+        and math.isclose(duty, expected_duty, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["inductor_ripple_peak_to_peak_a"], expected_ripple, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["ccm_boundary_current_a"], expected_ripple / 2.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["inductor_average_current_a"], expected_average, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and contract.get("ccm_condition_met") is True
+        and contract.get("result_ccm_condition_met") is True
+        and expected_average > expected_ripple / 2.0
+        and math.isclose(values["output_voltage_ripple_peak_to_peak_v"], expected_output_ripple, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["switch_voltage_stress_v"] >= vout
+        and values["diode_reverse_voltage_stress_v"] >= vout
+        and math.isclose(values["switch_peak_current_a"], expected_average + expected_ripple / 2.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["input_energy_per_cycle_j"], input_power / frequency, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["output_energy_per_cycle_j"], output_power / frequency, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and values["loss_energy_per_cycle_j"] >= 0.0
+        and math.isclose(values["cycle_energy_residual_j"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and abs(expected_residual) <= 1.0e-12 * max(values["input_energy_per_cycle_j"], 1.0e-18)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _active_filter_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "active_filter_pole_zero_q_gain_noise_slew_saturation_power_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("filter_generation_id") or "")
+    fields = (
+        "natural_frequency_rad_s", "quality_factor", "passband_gain_v_per_v",
+        "input_noise_density_v_per_sqrt_hz", "noise_bandwidth_hz",
+        "integrated_output_noise_v_rms", "input_frequency_hz",
+        "input_amplitude_v_peak", "output_amplitude_v_peak",
+        "slew_rate_demand_v_per_s", "available_slew_rate_v_per_s",
+        "positive_supply_v", "negative_supply_v", "saturation_margin_v",
+        "quiescent_supply_current_a", "supply_power_w",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+        poles = tuple(complex(float(row[0]), float(row[1])) for row in contract["pole_locations_rad_s"])
+        result_poles = tuple(complex(float(row[0]), float(row[1])) for row in contract["result_pole_locations_rad_s"])
+        zeros = tuple(complex(float(row[0]), float(row[1])) for row in contract["zero_locations_rad_s"])
+        result_zeros = tuple(complex(float(row[0]), float(row[1])) for row in contract["result_zero_locations_rad_s"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    natural_frequency = values["natural_frequency_rad_s"]
+    quality = values["quality_factor"]
+    gain = values["passband_gain_v_per_v"]
+    output_peak = values["output_amplitude_v_peak"]
+    expected_noise = values["input_noise_density_v_per_sqrt_hz"] * math.sqrt(values["noise_bandwidth_hz"])
+    expected_slew = 2.0 * math.pi * values["input_frequency_hz"] * output_peak
+    expected_margin = min(
+        values["positive_supply_v"] - output_peak,
+        -values["negative_supply_v"] - output_peak,
+    )
+    expected_power = (
+        values["positive_supply_v"] - values["negative_supply_v"]
+    ) * values["quiescent_supply_current_a"]
+    pole_model_ok = (
+        len(poles) == 2
+        and poles[0].real < 0.0
+        and math.isclose(poles[0].real, poles[1].real, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(poles[0].imag, -poles[1].imag, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(abs(poles[0]), natural_frequency, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and math.isclose(natural_frequency / (-2.0 * poles[0].real), quality, rel_tol=1.0e-12, abs_tol=1.0e-15)
+    )
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "pole_filter_generation_id", "zero_filter_generation_id",
+            "q_filter_generation_id", "gain_filter_generation_id",
+            "noise_filter_generation_id", "slew_filter_generation_id",
+            "saturation_filter_generation_id", "power_filter_generation_id",
+            "circuit_filter_generation_id", "result_filter_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(
+            natural_frequency, quality, gain,
+            values["input_noise_density_v_per_sqrt_hz"], values["noise_bandwidth_hz"],
+            values["input_frequency_hz"], values["input_amplitude_v_peak"],
+            values["available_slew_rate_v_per_s"],
+            values["quiescent_supply_current_a"],
+        ) > 0.0
+        and pole_model_ok and poles == result_poles and zeros == result_zeros
+        and math.isclose(output_peak, gain * values["input_amplitude_v_peak"], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["integrated_output_noise_v_rms"], expected_noise, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["slew_rate_demand_v_per_s"], expected_slew, rel_tol=1.0e-12, abs_tol=1.0e-9)
+        and values["available_slew_rate_v_per_s"] > expected_slew
+        and values["positive_supply_v"] > 0.0 > values["negative_supply_v"]
+        and math.isclose(values["saturation_margin_v"], expected_margin, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and expected_margin > 0.0
+        and math.isclose(values["supply_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def _transimpedance_contract_ok(contract: object) -> bool:
     if contract is None:
         return True
@@ -5096,6 +5262,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "bjt_amplifiers_use_current_bias_gm_gain_pole_noise_distortion_thermal_power_circuit_and_result": (
             _bjt_amplifier_owner_identity_ok(positive)
+        ),
+        "boost_converters_use_current_duty_ripple_ccm_output_efficiency_stress_energy_waveform_and_result": (
+            _boost_converter_owner_identity_ok(positive)
+        ),
+        "active_filters_use_current_poles_zeros_q_gain_noise_slew_saturation_power_circuit_and_result": (
+            _active_filter_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
