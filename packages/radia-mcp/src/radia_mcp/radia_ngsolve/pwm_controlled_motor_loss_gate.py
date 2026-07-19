@@ -2488,6 +2488,153 @@ def _pm_irreversible_demag_closure_identity_ok(value: object) -> bool:
     )
 
 
+def _induction_cage_power_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("induction_generation", "")).strip()
+    fields = (
+        "synchronous_mechanical_speed_rad_s", "rotor_mechanical_speed_rad_s",
+        "slip", "rotor_bar_current_rms_a", "rotor_bar_resistance_ohm",
+        "endring_current_rms_a", "endring_segment_resistance_ohm",
+        "rotor_bar_loss_w", "endring_loss_w", "rotor_copper_loss_w",
+        "airgap_power_w", "electromagnetic_torque_nm", "mechanical_power_w",
+    )
+    try:
+        numbers = {field: float(value.get(field)) for field in fields}
+        bar_count = int(value.get("rotor_bar_count"))
+    except (TypeError, ValueError):
+        return False
+    expected_slip = (
+        numbers["synchronous_mechanical_speed_rad_s"]
+        - numbers["rotor_mechanical_speed_rad_s"]
+    ) / numbers["synchronous_mechanical_speed_rad_s"]
+    expected_bar_loss = (
+        bar_count
+        * numbers["rotor_bar_current_rms_a"] ** 2
+        * numbers["rotor_bar_resistance_ohm"]
+    )
+    expected_endring_loss = (
+        2.0
+        * numbers["endring_current_rms_a"] ** 2
+        * numbers["endring_segment_resistance_ohm"]
+    )
+    expected_rotor_loss = expected_bar_loss + expected_endring_loss
+    expected_airgap_power = expected_rotor_loss / numbers["slip"]
+    expected_torque = expected_airgap_power / numbers["synchronous_mechanical_speed_rad_s"]
+    expected_mechanical_power = expected_torque * numbers["rotor_mechanical_speed_rad_s"]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "slip_generation", "rotorbar_generation", "endring_generation",
+                "loss_generation", "airgap_generation", "torque_generation",
+                "power_generation", "model_generation", "mesh_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(number) for number in numbers.values())
+        and numbers["synchronous_mechanical_speed_rad_s"] > 0.0
+        and 0.0 < numbers["rotor_mechanical_speed_rad_s"] < numbers["synchronous_mechanical_speed_rad_s"]
+        and 0.0 < numbers["slip"] < 1.0
+        and math.isclose(numbers["slip"], expected_slip, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and bar_count > 0
+        and value.get("result_rotor_bar_count") == value.get("rotor_bar_count")
+        and numbers["rotor_bar_current_rms_a"] > 0.0
+        and numbers["rotor_bar_resistance_ohm"] > 0.0
+        and numbers["endring_current_rms_a"] > 0.0
+        and numbers["endring_segment_resistance_ohm"] > 0.0
+        and math.isclose(numbers["rotor_bar_loss_w"], expected_bar_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["endring_loss_w"], expected_endring_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["rotor_copper_loss_w"], expected_rotor_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["airgap_power_w"], expected_airgap_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["electromagnetic_torque_nm"], expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["mechanical_power_w"], expected_mechanical_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["mechanical_power_w"], numbers["airgap_power_w"] - numbers["rotor_copper_loss_w"], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in fields)
+        and str(value.get("model_owner", "")).startswith("motor:")
+        and value.get("accepted_model_owner") == value.get("model_owner")
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("induction_result_sha256"))
+        and value.get("accepted_induction_result_sha256") == value.get("induction_result_sha256")
+    )
+
+
+def _ipm_fieldweakening_power_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("fieldweakening_generation", "")).strip()
+    fields = (
+        "phase_resistance_ohm", "ld_h", "lq_h", "magnet_flux_wb",
+        "current_d_a", "current_q_a", "flux_d_wb", "flux_q_wb",
+        "electrical_speed_rad_s", "mechanical_speed_rad_s", "voltage_d_v",
+        "voltage_q_v", "current_magnitude_a", "current_limit_a",
+        "voltage_magnitude_v", "voltage_limit_v", "current_angle_deg",
+        "electromagnetic_torque_nm", "copper_loss_w", "electrical_power_w",
+        "mechanical_power_w",
+    )
+    try:
+        numbers = {field: float(value.get(field)) for field in fields}
+        pole_pairs = int(value.get("pole_pairs"))
+    except (TypeError, ValueError):
+        return False
+    expected_flux_d = numbers["magnet_flux_wb"] + numbers["ld_h"] * numbers["current_d_a"]
+    expected_flux_q = numbers["lq_h"] * numbers["current_q_a"]
+    expected_voltage_d = numbers["phase_resistance_ohm"] * numbers["current_d_a"] - numbers["electrical_speed_rad_s"] * numbers["flux_q_wb"]
+    expected_voltage_q = numbers["phase_resistance_ohm"] * numbers["current_q_a"] + numbers["electrical_speed_rad_s"] * numbers["flux_d_wb"]
+    expected_current = math.hypot(numbers["current_d_a"], numbers["current_q_a"])
+    expected_voltage = math.hypot(numbers["voltage_d_v"], numbers["voltage_q_v"])
+    expected_angle = math.degrees(math.atan2(-numbers["current_d_a"], numbers["current_q_a"]))
+    expected_torque = 1.5 * pole_pairs * (numbers["flux_d_wb"] * numbers["current_q_a"] - numbers["flux_q_wb"] * numbers["current_d_a"])
+    expected_copper_loss = 1.5 * numbers["phase_resistance_ohm"] * expected_current**2
+    expected_electrical_power = 1.5 * (numbers["voltage_d_v"] * numbers["current_d_a"] + numbers["voltage_q_v"] * numbers["current_q_a"])
+    expected_mechanical_power = expected_torque * numbers["mechanical_speed_rad_s"]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "flux_generation", "voltage_generation", "current_generation",
+                "angle_generation", "speed_generation", "torque_generation",
+                "power_generation", "model_generation", "result_generation",
+            )
+        )
+        and all(math.isfinite(number) for number in numbers.values())
+        and pole_pairs > 0 and value.get("result_pole_pairs") == value.get("pole_pairs")
+        and numbers["phase_resistance_ohm"] > 0.0
+        and numbers["ld_h"] > 0.0 and numbers["lq_h"] > numbers["ld_h"]
+        and numbers["magnet_flux_wb"] > 0.0
+        and numbers["current_d_a"] < 0.0 and numbers["current_q_a"] > 0.0
+        and math.isclose(numbers["flux_d_wb"], expected_flux_d, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["flux_q_wb"], expected_flux_q, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["electrical_speed_rad_s"] > 0.0
+        and math.isclose(numbers["mechanical_speed_rad_s"], numbers["electrical_speed_rad_s"] / pole_pairs, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["voltage_d_v"], expected_voltage_d, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["voltage_q_v"], expected_voltage_q, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["current_magnitude_a"], expected_current, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < numbers["current_magnitude_a"] <= numbers["current_limit_a"]
+        and math.isclose(numbers["voltage_magnitude_v"], expected_voltage, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < numbers["voltage_magnitude_v"] <= numbers["voltage_limit_v"]
+        and math.isclose(numbers["current_angle_deg"], expected_angle, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["electromagnetic_torque_nm"], expected_torque, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["electromagnetic_torque_nm"] > 0.0
+        and math.isclose(numbers["copper_loss_w"], expected_copper_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["electrical_power_w"], expected_electrical_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["mechanical_power_w"], expected_mechanical_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["electrical_power_w"], numbers["mechanical_power_w"] + numbers["copper_loss_w"], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in fields)
+        and str(value.get("model_owner", "")).startswith("motor:")
+        and value.get("accepted_model_owner") == value.get("model_owner")
+        and _valid_sha256(value.get("fieldweakening_result_sha256"))
+        and value.get("accepted_fieldweakening_result_sha256") == value.get("fieldweakening_result_sha256")
+    )
+
+
 def pwm_controlled_motor_loss_gate(
     payload: dict[str, Any],
     *,
@@ -2591,6 +2738,8 @@ def pwm_controlled_motor_loss_gate(
     flux_switching_pm_identity_ok = True
     skewed_rotor_slice_closure_identity_ok = True
     pm_irreversible_demag_closure_identity_ok = True
+    induction_cage_power_closure_identity_ok = True
+    ipm_fieldweakening_power_closure_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -2656,6 +2805,8 @@ def pwm_controlled_motor_loss_gate(
         flux_switching_pm_identity_ok = False
         skewed_rotor_slice_closure_identity_ok = False
         pm_irreversible_demag_closure_identity_ok = False
+        induction_cage_power_closure_identity_ok = False
+        ipm_fieldweakening_power_closure_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -4392,6 +4543,16 @@ def pwm_controlled_motor_loss_gate(
                 "pm_irreversible_demag_temperature_recoil_knee_operating_flux_torque_mesh_owner_result_identity"
             )
         )
+        induction_cage_power_closure_identity_ok = _induction_cage_power_closure_identity_ok(
+            identity_value.get(
+                "induction_cage_slip_rotorbar_current_loss_endring_airgap_torque_power_model_mesh_result_identity"
+            )
+        )
+        ipm_fieldweakening_power_closure_identity_ok = _ipm_fieldweakening_power_closure_identity_ok(
+            identity_value.get(
+                "ipm_fieldweakening_dq_flux_voltage_limit_current_angle_speed_torque_power_model_result_identity"
+            )
+        )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
@@ -4772,6 +4933,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "pm_demagnetization_closes_temperature_recoil_knee_irreversible_loss_flux_torque_mesh_and_result": (
             pm_irreversible_demag_closure_identity_ok
+        ),
+        "induction_cage_closes_slip_bar_endring_losses_airgap_torque_power_owners_and_result": (
+            induction_cage_power_closure_identity_ok
+        ),
+        "ipm_fieldweakening_closes_dq_flux_voltage_current_limits_angle_speed_torque_power_owner_and_result": (
+            ipm_fieldweakening_power_closure_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
