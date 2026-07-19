@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+from .motor_v45_identity import validate_public_v45_identity
+
 
 def _sha(value: object) -> bool:
     text = str(value or "").lower()
@@ -52,4 +54,5 @@ def validate_public_identity(identity: object) -> dict[str, bool]:
             "motor_v44_induction_energy_mesh_owner": 0.0 <= residual <= 1.0e-8 and result_residual == residual and str(induction.get("mesh_owner", "")).startswith("mesh:") and induction.get("result_mesh_owner") == induction.get("mesh_owner"),
             "motor_v44_induction_result_digest": _sha(induction.get("result_sha256")) and induction.get("accepted_result_sha256") == induction.get("result_sha256"),
         })
+    checks.update(validate_public_v45_identity(identity))
     return checks
