@@ -1,9 +1,14 @@
 ---
 name: matlab-acoustic-fembem
-description: Work on Sugahara Lab MATLAB acoustic FEM-BEM / Gypsilab-style workflows. Use when the task mentions MATLAB FEM/BEM, acoustic BEM, Gypsilab APIs, .vol meshes, P1 elements, convolution quadrature, or MATLAB-vs-NGSolve validation. This skill keeps MathWorks' official MATLAB MCP Server as the execution layer and adds lab-specific domain gates above it.
+description: Maintain the frozen Sugahara Lab MATLAB acoustic FEM-BEM / Gypsilab-style workflow. Use for regression replay of existing .vol/P1/CQ artifacts; new MATLAB learning is handled by the official ML/RL workflow.
 ---
 
-# MATLAB Acoustic FEM-BEM
+# MATLAB Acoustic FEM-BEM (Legacy/Frozen)
+
+This lane is retained for replay and result interpretation. Gypsilab is no
+longer a new-feature maintenance target. Do not add new solver APIs here; send
+new MATLAB capability work to `matlab-agentic-ml` or the official MATLAB MCP
+server workflow.
 
 ## Stack Contract
 

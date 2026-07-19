@@ -1,0 +1,30 @@
+---
+name: matlab-agentic-ml
+description: Use the official MATLAB MCP execution layer for machine-learning and reinforcement-learning workflows, with explicit split, evaluation, release, seed, environment, and result-artifact gates.
+---
+
+# MATLAB ML/RL Workflow
+
+Use the official MATLAB MCP server as the execution substrate. This package
+adds a small, solver-neutral artifact gate; it is not a second MATLAB runtime.
+
+## Workflow
+
+1. Pin MATLAB release, toolbox availability, session owner, and random seed.
+2. Define the data split or RL environment before training.
+3. Train with recorded options and elapsed-time stages.
+4. Evaluate on data/episodes disjoint from training and record the evaluation
+   metric separately from the training metric.
+5. Store a result artifact with schema, units, release, seed, split/environment,
+   digest, and one to four dominant timing stages.
+6. Replay the artifact through `validate_matlab_ml_rl_artifact` before treating
+   it as a learning result.
+
+For supervised learning, cross-validation or a holdout is required; a
+resubstitution score is not a validation result. For reinforcement learning,
+the environment, training episode count, evaluation episode count, and mean
+evaluation return are required. A training curve alone is insufficient.
+
+Use MathWorks' official MATLAB MCP/Agentic Toolkit for tool discovery,
+execution, testing, and code analysis. Keep public knowledge generic: do not
+embed lab paths, licensed solver results, or private MATLAB MCP implementation.
