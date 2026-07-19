@@ -5257,6 +5257,118 @@ def _involute_gear_identity(row):
     )
 
 
+def _v43_involute_gear_identity(row):
+    value = row.get(
+        "involute_gear_module_teeth_pressureangle_backlash_volume_inertia_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("gear_generation", "")).strip()
+    try:
+        module = float(value.get("module_m"))
+        result_module = float(value.get("result_module_m"))
+        teeth = int(value.get("tooth_count"))
+        result_teeth = int(value.get("result_tooth_count"))
+        pressure = float(value.get("pressure_angle_deg"))
+        result_pressure = float(value.get("result_pressure_angle_deg"))
+        backlash = float(value.get("backlash_m"))
+        result_backlash = float(value.get("result_backlash_m"))
+        pitch = float(value.get("pitch_diameter_m"))
+        result_pitch = float(value.get("result_pitch_diameter_m"))
+        base = float(value.get("base_diameter_m"))
+        result_base = float(value.get("result_base_diameter_m"))
+        volume = float(value.get("gear_volume_m3"))
+        result_volume = float(value.get("result_gear_volume_m3"))
+        inertia = value.get("inertia_tensor_kg_m2")
+        result_inertia = value.get("result_inertia_tensor_kg_m2")
+    except (TypeError, ValueError):
+        return None
+    digest = str(value.get("gear_brep_sha256", "")).lower()
+    valid_inertia = (
+        isinstance(inertia, list)
+        and len(inertia) == 3
+        and all(isinstance(row_value, list) and len(row_value) == 3 for row_value in inertia)
+        and all(math.isfinite(float(item)) for row_value in inertia for item in row_value)
+        and all(float(inertia[index][index]) > 0.0 for index in range(3))
+        and all(float(inertia[i][j]) == float(inertia[j][i]) for i in range(3) for j in range(3))
+        and result_inertia == inertia
+    )
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "module_generation", "teeth_generation", "pressure_angle_generation",
+            "backlash_generation", "volume_generation", "inertia_generation",
+            "owner_generation", "brep_generation", "result_generation",
+        ))
+        or not math.isfinite(module) or module <= 0.0 or result_module != module
+        or teeth < 4 or result_teeth != teeth
+        or not math.isfinite(pressure) or not 0.0 < pressure < 45.0 or result_pressure != pressure
+        or not math.isfinite(backlash) or not 0.0 <= backlash < 0.5 * module or result_backlash != backlash
+        or not math.isclose(pitch, module * teeth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or result_pitch != pitch
+        # Imported CAD reports often round diameters to a few significant digits;
+        # keep the analytic pressure-angle relation while allowing that report precision.
+        or not math.isclose(base, pitch * math.cos(math.radians(pressure)), rel_tol=2.0e-5, abs_tol=1.0e-15)
+        or result_base != base
+        or not math.isfinite(volume) or volume <= 0.0 or result_volume != volume
+        or not valid_inertia
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_gear_brep_sha256") != digest
+    ):
+        return None
+    return generation, module, teeth, pressure, backlash, pitch, base, volume, tuple(tuple(item) for item in inertia), value.get("shape_owner"), digest
+
+
+def _v43_sheet_metal_identity(row):
+    value = row.get(
+        "sheetmetal_bend_radius_kfactor_thickness_neutralaxis_volume_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("sheet_generation", "")).strip()
+    try:
+        radius = float(value.get("bend_radius_m"))
+        result_radius = float(value.get("result_bend_radius_m"))
+        angle = float(value.get("bend_angle_deg"))
+        result_angle = float(value.get("result_bend_angle_deg"))
+        k_factor = float(value.get("k_factor"))
+        result_k_factor = float(value.get("result_k_factor"))
+        thickness = float(value.get("thickness_m"))
+        result_thickness = float(value.get("result_thickness_m"))
+        neutral = float(value.get("neutral_axis_radius_m"))
+        result_neutral = float(value.get("result_neutral_axis_radius_m"))
+        volume = float(value.get("volume_m3"))
+        result_volume = float(value.get("result_volume_m3"))
+        area = float(value.get("surface_area_m2"))
+        result_area = float(value.get("result_surface_area_m2"))
+    except (TypeError, ValueError):
+        return None
+    digest = str(value.get("sheet_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "bend_radius_generation", "kfactor_generation", "thickness_generation",
+            "neutral_axis_generation", "volume_generation", "owner_generation",
+            "brep_generation", "result_generation",
+        ))
+        or not all(math.isfinite(item) for item in (radius, angle, k_factor, thickness, neutral, volume, area))
+        or radius <= 0.0 or not 0.0 < abs(angle) <= 180.0 or not 0.0 <= k_factor <= 1.0
+        or thickness <= 0.0 or not math.isclose(neutral, radius + k_factor * thickness, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or volume <= 0.0 or area <= 0.0
+        or result_radius != radius or result_angle != angle or result_k_factor != k_factor
+        or result_thickness != thickness or result_neutral != neutral
+        or result_volume != volume or result_area != area
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or value.get("result_shape_owner") != value.get("shape_owner")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_sheet_brep_sha256") != digest
+    ):
+        return None
+    return generation, radius, angle, k_factor, thickness, neutral, volume, area, value.get("shape_owner"), digest
+
+
 def _multiwire_loft_identity(row):
     value = row.get(
         "loft_multiwire_hole_correspondence_section_orientation_selfintersection_volume_centroid_euler_owner_brep_generation_identity"
@@ -6704,6 +6816,48 @@ def shape_mass_property_crosscheck_summary(
             v42_fuzzy_boolean_sliver_identity_ok = v42_fuzzy_boolean_sliver_identity_ok and all(
                 _v42_fuzzy_boolean_sliver_identity(row)
                 == reference_v42_fuzzy_boolean_slivers.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    v43_gear_evidence_present = any(
+        row.get("involute_gear_module_teeth_pressureangle_backlash_volume_inertia_brep_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_v43_gears = {
+        str(row.get("name", "")): _v43_involute_gear_identity(row)
+        for row in reference
+    }
+    v43_gear_identity_ok = not v43_gear_evidence_present
+    if v43_gear_evidence_present:
+        v43_gear_identity_ok = bool(reference_v43_gears) and all(
+            value is not None for value in reference_v43_gears.values()
+        )
+        for _, rows in normalized_sets:
+            v43_gear_identity_ok = v43_gear_identity_ok and all(
+                _v43_involute_gear_identity(row)
+                == reference_v43_gears.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    v43_sheet_evidence_present = any(
+        row.get("sheetmetal_bend_radius_kfactor_thickness_neutralaxis_volume_brep_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_v43_sheets = {
+        str(row.get("name", "")): _v43_sheet_metal_identity(row)
+        for row in reference
+    }
+    v43_sheet_identity_ok = not v43_sheet_evidence_present
+    if v43_sheet_evidence_present:
+        v43_sheet_identity_ok = bool(reference_v43_sheets) and all(
+            value is not None for value in reference_v43_sheets.values()
+        )
+        for _, rows in normalized_sets:
+            v43_sheet_identity_ok = v43_sheet_identity_ok and all(
+                _v43_sheet_metal_identity(row)
+                == reference_v43_sheets.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -8650,6 +8804,8 @@ def shape_mass_property_crosscheck_summary(
         "shells_use_current_faces_offset_thickness_join_intersection_validity_mass_owner_and_brep": shell_validity_identity_ok,
         "helical_sweeps_use_current_pitch_turns_frame_transport_torsion_validity_mass_owner_and_brep": v42_helical_frenet_identity_ok,
         "fuzzy_booleans_use_current_tolerance_slivers_topology_validity_mass_owner_and_brep": v42_fuzzy_boolean_sliver_identity_ok,
+        "involute_gears_use_current_module_teeth_pressure_angle_backlash_volume_inertia_owner_and_brep": v43_gear_identity_ok,
+        "sheet_metal_bends_use_current_radius_kfactor_thickness_neutral_axis_volume_area_owner_and_brep": v43_sheet_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
