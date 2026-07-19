@@ -5745,6 +5745,113 @@ def _shell_offset_validity_identity(row):
     )
 
 
+def _v42_helical_frenet_sweep_identity(row):
+    value = row.get(
+        "helicalsweep_pitch_turns_profile_frame_frenet_torsion_validity_volume_centroid_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("helical_generation", "")).strip()
+    try:
+        radius = float(value.get("helix_radius_m"))
+        pitch = float(value.get("pitch_m"))
+        turns = float(value.get("turns"))
+        rise = float(value.get("axial_rise_m"))
+        area = float(value.get("profile_area_m2"))
+        path_length = float(value.get("path_length_m"))
+        torsion = float(value.get("torsion_per_m"))
+        volume = float(value.get("volume_m3"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+    except (TypeError, ValueError):
+        return None
+    mirrored = (
+        "helix_radius_m", "pitch_m", "turns", "axial_rise_m",
+        "profile_area_m2", "profile_frame", "frenet_transport",
+        "path_length_m", "torsion_per_m", "solid_valid", "volume_m3",
+        "centroid_m", "shape_owner",
+    )
+    helix_b = pitch / (2.0 * math.pi)
+    expected_rise = pitch * turns
+    expected_path = turns * math.sqrt((2.0 * math.pi * radius) ** 2 + pitch**2)
+    expected_torsion = helix_b / (radius**2 + helix_b**2)
+    digest = str(value.get("helical_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "pitch_generation", "turn_generation", "profile_generation",
+            "frame_generation", "torsion_generation", "validity_generation",
+            "mass_generation", "owner_generation", "brep_generation", "result_generation",
+        ))
+        or not all(math.isfinite(item) for item in (radius, pitch, turns, rise, area, path_length, torsion, volume))
+        or min(radius, pitch, turns, area, path_length, torsion, volume) <= 0.0
+        or not math.isclose(rise, expected_rise, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or not math.isclose(path_length, expected_path, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or not math.isclose(torsion, expected_torsion, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        or value.get("profile_frame") != "frenet"
+        or value.get("frenet_transport") is not True
+        or value.get("solid_valid") is not True
+        or not math.isclose(volume, area * path_length, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or len(centroid) != 3
+        or any(not math.isfinite(item) for item in centroid)
+        or not math.isclose(centroid[2], rise / 2.0, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_helical_brep_sha256") != digest
+    ):
+        return None
+    return generation, radius, pitch, turns, area, path_length, torsion, volume, tuple(centroid), value.get("shape_owner"), digest
+
+
+def _v42_fuzzy_boolean_sliver_identity(row):
+    value = row.get(
+        "boolean_fuzzy_tolerance_sliver_topology_validity_volume_surfacearea_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("boolean_generation", "")).strip()
+    try:
+        tolerance = float(value.get("fuzzy_tolerance_m"))
+        feature_size = float(value.get("minimum_feature_size_m"))
+        slivers_before = int(value.get("sliver_face_count_before"))
+        slivers_after = int(value.get("sliver_face_count_after"))
+        topology = {str(key): int(item) for key, item in value.get("topology_signature", {}).items()}
+        volume = float(value.get("volume_m3"))
+        area = float(value.get("surface_area_m2"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    mirrored = (
+        "operation", "fuzzy_tolerance_m", "minimum_feature_size_m",
+        "sliver_face_count_before", "sliver_face_count_after",
+        "topology_signature", "solid_valid", "volume_m3", "surface_area_m2",
+        "shape_owner",
+    )
+    digest = str(value.get("boolean_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(value.get(key) != generation for key in (
+            "tolerance_generation", "sliver_generation", "topology_generation",
+            "validity_generation", "mass_generation", "owner_generation",
+            "brep_generation", "result_generation",
+        ))
+        or value.get("operation") not in {"cut", "fuse", "intersect"}
+        or not all(math.isfinite(item) for item in (tolerance, feature_size, volume, area))
+        or not 0.0 < tolerance <= 0.01 * feature_size
+        or slivers_before < 0 or slivers_after != 0 or slivers_after > slivers_before
+        or set(topology) != {"solid", "shell", "face", "edge", "vertex"}
+        or topology["solid"] != 1 or topology["shell"] != 1
+        or min(topology["face"], topology["edge"], topology["vertex"]) <= 0
+        or value.get("solid_valid") is not True
+        or volume <= 0.0 or area <= 0.0
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_boolean_brep_sha256") != digest
+    ):
+        return None
+    return generation, value.get("operation"), tolerance, slivers_before, tuple(sorted(topology.items())), volume, area, value.get("shape_owner"), digest
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -6555,6 +6662,48 @@ def shape_mass_property_crosscheck_summary(
             shell_validity_identity_ok = shell_validity_identity_ok and all(
                 _shell_offset_validity_identity(row)
                 == reference_shell_validity.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    v42_helical_frenet_evidence_present = any(
+        row.get("helicalsweep_pitch_turns_profile_frame_frenet_torsion_validity_volume_centroid_owner_brep_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_v42_helical_frenet_sweeps = {
+        str(row.get("name", "")): _v42_helical_frenet_sweep_identity(row)
+        for row in reference
+    }
+    v42_helical_frenet_identity_ok = not v42_helical_frenet_evidence_present
+    if v42_helical_frenet_evidence_present:
+        v42_helical_frenet_identity_ok = bool(reference_v42_helical_frenet_sweeps) and all(
+            value is not None for value in reference_v42_helical_frenet_sweeps.values()
+        )
+        for _, rows in normalized_sets:
+            v42_helical_frenet_identity_ok = v42_helical_frenet_identity_ok and all(
+                _v42_helical_frenet_sweep_identity(row)
+                == reference_v42_helical_frenet_sweeps.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    v42_fuzzy_boolean_sliver_evidence_present = any(
+        row.get("boolean_fuzzy_tolerance_sliver_topology_validity_volume_surfacearea_owner_brep_generation_identity")
+        is not None
+        for row in identity_rows
+    )
+    reference_v42_fuzzy_boolean_slivers = {
+        str(row.get("name", "")): _v42_fuzzy_boolean_sliver_identity(row)
+        for row in reference
+    }
+    v42_fuzzy_boolean_sliver_identity_ok = not v42_fuzzy_boolean_sliver_evidence_present
+    if v42_fuzzy_boolean_sliver_evidence_present:
+        v42_fuzzy_boolean_sliver_identity_ok = bool(reference_v42_fuzzy_boolean_slivers) and all(
+            value is not None for value in reference_v42_fuzzy_boolean_slivers.values()
+        )
+        for _, rows in normalized_sets:
+            v42_fuzzy_boolean_sliver_identity_ok = v42_fuzzy_boolean_sliver_identity_ok and all(
+                _v42_fuzzy_boolean_sliver_identity(row)
+                == reference_v42_fuzzy_boolean_slivers.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -8499,6 +8648,8 @@ def shape_mass_property_crosscheck_summary(
         "threads_use_current_pitch_handedness_profile_diameters_runout_intersection_mass_owner_and_brep": thread_identity_ok,
         "lofts_use_current_sections_parameters_seams_twist_closure_topology_mass_owner_and_brep": loft_parameterization_identity_ok,
         "shells_use_current_faces_offset_thickness_join_intersection_validity_mass_owner_and_brep": shell_validity_identity_ok,
+        "helical_sweeps_use_current_pitch_turns_frame_transport_torsion_validity_mass_owner_and_brep": v42_helical_frenet_identity_ok,
+        "fuzzy_booleans_use_current_tolerance_slivers_topology_validity_mass_owner_and_brep": v42_fuzzy_boolean_sliver_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
