@@ -74,6 +74,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "cubit",
             "fem",
             "gmsh",
+            "radia-matlab",
             "mathematica",
             "matrix-solvers",
             "mor",
@@ -81,6 +82,14 @@ CATALOG: dict[str, dict[str, Any]] = {
             "radia-streamfunction",
         ],
         "tags": ["fem", "solver"],
+    },
+    "radia-matlab": {
+        "subpackage": "radia_mcp.matlab",
+        "entry_point": "mcp-server-radia-matlab",
+        "description": "Official MATLAB MCP composition and generic ML/RL gates",
+        "primary_tools": ["matlab_extension_contract", "matlab_official_server_config"],
+        "related": ["radia-ngsolve"],
+        "tags": ["ml", "solver"],
     },
     "radia-streamfunction": {
         "subpackage": "radia_mcp.streamfunction",

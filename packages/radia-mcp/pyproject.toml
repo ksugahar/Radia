@@ -100,6 +100,7 @@ mcp-server-gmsh = "radia_mcp.gmsh.server:main"
 # mcp-server-elf moved to standalone package: pip install mcp-server-elf
 # (https://github.com/ksugahar/mcp-server-elf, https://pypi.org/project/mcp-server-elf/)
 mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
+mcp-server-radia-matlab = "radia_mcp.matlab.server:main"
 mcp-server-radia-streamfunction = "radia_mcp.streamfunction.server:main"
 mcp-server-ih = "radia_mcp.ih.server:main"
 mcp-server-peec = "radia_mcp.peec.server:main"
@@ -191,6 +192,7 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"radia_mcp.matlab" = ["skill.md", "extensions/*.json", "matlab/+radia_mcp_matlab/*.m"]
 "radia_mcp.matlab_acoustic_fembem" = [
     "skill.md",
 ]

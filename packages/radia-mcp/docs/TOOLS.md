@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **782 tools** across 41 MCP servers.
+Total: **787 tools** across 42 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,6 +10,7 @@ Total: **782 tools** across 41 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 140 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 5 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -391,6 +392,20 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
 | `voice_coil_force_flux_sweep_gate` | Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence. |
+
+## `mcp-server-radia-matlab`
+
+_Official MATLAB MCP composition and generic ML/RL gates_
+
+Module: `radia_mcp.matlab.server`
+
+| Tool | Description |
+|---|---|
+| `matlab_agent_guide` | (no description) |
+| `matlab_extension_contract` | (no description) |
+| `matlab_official_server_config` | (no description) |
+| `matlab_radia_acoustic_interface_contract` | (no description) |
+| `radia_matlab_status` | (no description) |
 
 ## `mcp-server-radia-streamfunction`
 
