@@ -2613,6 +2613,116 @@ def _pm_coupling_energy_identity_ok(value: object) -> bool:
     )
 
 
+def _thin_conductor_surface_impedance_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("thin_generation", "")).strip()
+    try:
+        frequency = float(value.get("frequency_hz"))
+        conductivity = float(value.get("conductivity_s_m"))
+        mu_r = float(value.get("relative_permeability"))
+        skin_depth = float(value.get("skin_depth_m"))
+        impedance = [float(item) for item in value.get("surface_impedance_ohm", [])]
+        current = [float(item) for item in value.get("sheet_current_peak_a_m", [])]
+        field_jump = [float(item) for item in value.get("tangential_field_jump_peak_a_m", [])]
+        area = float(value.get("surface_area_m2"))
+        loss = float(value.get("joule_loss_w"))
+        reactive = float(value.get("reactive_power_var"))
+    except (TypeError, ValueError):
+        return False
+    mu = 4.0e-7 * math.pi * mu_r
+    expected_skin = math.sqrt(2.0 / (2.0 * math.pi * frequency * mu * conductivity)) if frequency > 0.0 and mu > 0.0 and conductivity > 0.0 else math.nan
+    expected_resistance = math.sqrt(math.pi * frequency * mu / conductivity) if frequency > 0.0 and mu > 0.0 and conductivity > 0.0 else math.nan
+    current_norm_sq = sum(item * item for item in current)
+    expected_loss = 0.5 * expected_resistance * current_norm_sq * area
+    mirrored = (
+        "frequency_hz", "conductivity_s_m", "relative_permeability",
+        "skin_depth_m", "surface_impedance_ohm", "sheet_current_peak_a_m",
+        "tangential_field_jump_peak_a_m", "surface_area_m2", "joule_loss_w",
+        "reactive_power_var",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "impedance_generation", "skin_generation", "current_generation",
+            "field_generation", "power_generation", "surface_generation",
+            "owner_generation", "result_generation"))
+        and frequency > 0.0 and conductivity > 0.0 and mu_r > 0.0
+        and math.isfinite(skin_depth) and skin_depth > 0.0
+        and math.isclose(skin_depth, expected_skin, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and len(impedance) == 2
+        and math.isclose(impedance[0], expected_resistance, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(impedance[1], expected_resistance, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and len(current) == len(field_jump) == 2
+        and all(math.isfinite(item) for item in current + field_jump)
+        and current == field_jump and current_norm_sq > 0.0
+        and math.isfinite(area) and area > 0.0
+        and math.isclose(loss, expected_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(reactive, expected_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("surface_owner", "")).startswith("surface:")
+        and value.get("accepted_surface_owner") == value.get("surface_owner")
+        and _valid_sha256(value.get("thin_result_sha256"))
+        and value.get("accepted_thin_result_sha256") == value.get("thin_result_sha256")
+    )
+
+
+def _magnetic_gear_action_reaction_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("gear_generation", "")).strip()
+    try:
+        high_poles = int(value.get("high_speed_pole_pairs"))
+        low_poles = int(value.get("low_speed_pole_pairs"))
+        modulators = int(value.get("modulator_segment_count"))
+        harmonic = int(value.get("working_harmonic_order"))
+        phase = float(value.get("mechanical_phase_rad"))
+        high_speed = float(value.get("high_speed_rad_s"))
+        low_speed = float(value.get("low_speed_rad_s"))
+        ratio = float(value.get("gear_ratio"))
+        high_torque = float(value.get("high_speed_torque_nm"))
+        low_torque = float(value.get("low_speed_torque_nm"))
+        reaction = float(value.get("modulator_reaction_torque_nm"))
+        residual = float(value.get("power_balance_residual_w"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "high_speed_pole_pairs", "low_speed_pole_pairs",
+        "modulator_segment_count", "working_harmonic_order",
+        "mechanical_phase_rad", "high_speed_rad_s", "low_speed_rad_s",
+        "gear_ratio", "high_speed_torque_nm", "low_speed_torque_nm",
+        "modulator_reaction_torque_nm", "power_balance_residual_w",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "harmonic_generation", "pole_generation", "phase_generation",
+            "ratio_generation", "torque_generation", "reaction_generation",
+            "power_generation", "owner_generation", "result_generation"))
+        and high_poles > 0 and low_poles > 0
+        and modulators == high_poles + low_poles and harmonic == modulators
+        and math.isfinite(phase) and 0.0 <= phase < 2.0 * math.pi / modulators
+        and all(math.isfinite(item) for item in (high_speed, low_speed, ratio, high_torque, low_torque, reaction, residual))
+        and high_speed != 0.0 and low_speed != 0.0
+        and math.isclose(high_poles * high_speed + low_poles * low_speed, 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(ratio, low_speed / high_speed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(ratio, -high_poles / low_poles, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and high_torque > 0.0 and low_torque > 0.0
+        and math.isclose(reaction, -(high_torque + low_torque), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(residual, high_torque * high_speed + low_torque * low_speed, rel_tol=0.0, abs_tol=1.0e-12)
+        and abs(residual) <= 1.0e-12
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("model_owner", "")).startswith("gear:")
+        and value.get("accepted_model_owner") == value.get("model_owner")
+        and _valid_sha256(value.get("gear_result_sha256"))
+        and value.get("accepted_gear_result_sha256") == value.get("gear_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -2741,6 +2851,8 @@ def magnetic_force_method_profile_gate(
     bem_demag_reciprocity_identity_ok = True
     eddy_maglev_power_identity_ok = True
     pm_coupling_energy_identity_ok = True
+    thin_conductor_surface_impedance_identity_ok = True
+    magnetic_gear_action_reaction_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -2806,6 +2918,8 @@ def magnetic_force_method_profile_gate(
         bem_demag_reciprocity_identity_ok = False
         eddy_maglev_power_identity_ok = False
         pm_coupling_energy_identity_ok = False
+        thin_conductor_surface_impedance_identity_ok = False
+        magnetic_gear_action_reaction_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -4624,6 +4738,16 @@ def magnetic_force_method_profile_gate(
                 "pm_coupling_angle_pole_periodicity_energy_derivative_driver_driven_torque_action_reaction_frame_mesh_owner_result_identity"
             )
         )
+        thin_conductor_surface_impedance_identity_ok = _thin_conductor_surface_impedance_identity_ok(
+            identity_value.get(
+                "thin_conductor_surface_impedance_skin_sheetcurrent_fieldjump_complexpower_surface_owner_result_identity"
+            )
+        )
+        magnetic_gear_action_reaction_identity_ok = _magnetic_gear_action_reaction_identity_ok(
+            identity_value.get(
+                "magnetic_gear_harmonic_polepair_modulation_phase_ratio_torque_actionreaction_power_owner_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -4874,6 +4998,12 @@ def magnetic_force_method_profile_gate(
         ),
         "pm_coupling_closes_pole_periodic_energy_derivative_action_reaction_frame_mesh_owner_and_result": (
             pm_coupling_energy_identity_ok
+        ),
+        "thin_conductors_close_surface_impedance_skin_current_field_jump_complex_power_owner_and_result": (
+            thin_conductor_surface_impedance_identity_ok
+        ),
+        "magnetic_gears_close_harmonics_poles_ratio_torque_reaction_power_owner_and_result": (
+            magnetic_gear_action_reaction_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
