@@ -4015,6 +4015,138 @@ def _rotating_induction_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _thermoacoustic_meanflow_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "thermoacoustic_meanflow_convected_wavenumber_flux_impedance_power_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("thermoacoustic_generation") or "")
+    names = (
+        "frequency_hz", "sound_speed_m_per_s", "mean_flow_mach",
+        "mean_flow_speed_m_per_s", "downstream_wavenumber_rad_per_m",
+        "upstream_wavenumber_rad_per_m", "density_kg_per_m3",
+        "pressure_rms_pa", "particle_velocity_rms_m_per_s",
+        "acoustic_intensity_w_per_m2", "boundary_area_m2",
+        "boundary_impedance_pa_s_per_m", "boundary_flux_power_w",
+        "impedance_work_w", "dissipated_power_w", "power_balance_residual_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    frequency = values["frequency_hz"]
+    sound_speed = values["sound_speed_m_per_s"]
+    mach = values["mean_flow_mach"]
+    density = values["density_kg_per_m3"]
+    pressure = values["pressure_rms_pa"]
+    area = values["boundary_area_m2"]
+    expected_speed = mach * sound_speed
+    expected_particle_velocity = pressure / (density * sound_speed)
+    expected_intensity = pressure * expected_particle_velocity
+    expected_power = expected_intensity * area
+    expected_residual = values["boundary_flux_power_w"] - values["dissipated_power_w"]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "meanflow_generation", "wavenumber_generation", "flux_generation",
+            "impedance_generation", "power_generation", "mesh_generation",
+            "result_generation",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(frequency, sound_speed, density, pressure, area) > 0.0
+        and 0.0 <= mach < 1.0
+        and math.isclose(values["mean_flow_speed_m_per_s"], expected_speed, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["downstream_wavenumber_rad_per_m"], 2.0 * math.pi * frequency / (sound_speed + expected_speed), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["upstream_wavenumber_rad_per_m"], 2.0 * math.pi * frequency / (sound_speed - expected_speed), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["particle_velocity_rms_m_per_s"], expected_particle_velocity, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["acoustic_intensity_w_per_m2"], expected_intensity, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["boundary_impedance_pa_s_per_m"], density * sound_speed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["boundary_flux_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["impedance_work_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["dissipated_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["power_balance_residual_w"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and abs(expected_residual) <= 1.0e-12 * max(expected_power, 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _battery_electrothermal_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "battery_electrothermal_soc_current_heat_temperature_energy_safety_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("battery_generation") or "")
+    names = (
+        "capacity_c", "initial_state_of_charge", "terminal_current_a",
+        "terminal_voltage_v", "time_step_s", "final_state_of_charge",
+        "internal_resistance_ohm", "irreversible_heat_j", "reversible_heat_j",
+        "thermal_energy_j", "electrical_energy_j", "cell_mass_kg",
+        "specific_heat_j_per_kg_k", "initial_temperature_k",
+        "final_temperature_k", "maximum_safe_temperature_k",
+        "thermal_balance_residual_j",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    capacity = values["capacity_c"]
+    initial_soc = values["initial_state_of_charge"]
+    current = values["terminal_current_a"]
+    voltage = values["terminal_voltage_v"]
+    timestep = values["time_step_s"]
+    resistance = values["internal_resistance_ohm"]
+    mass = values["cell_mass_kg"]
+    heat_capacity = values["specific_heat_j_per_kg_k"]
+    expected_final_soc = initial_soc - current * timestep / capacity
+    expected_irreversible_heat = current * current * resistance * timestep
+    expected_thermal_energy = values["irreversible_heat_j"] + values["reversible_heat_j"]
+    expected_temperature = values["initial_temperature_k"] + expected_thermal_energy / (mass * heat_capacity)
+    expected_residual = values["thermal_energy_j"] - expected_thermal_energy
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "soc_generation", "current_generation", "heat_generation",
+            "temperature_generation", "energy_generation", "safety_generation",
+            "mesh_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(capacity, current, voltage, timestep, resistance, mass, heat_capacity) > 0.0
+        and 0.0 <= initial_soc <= 1.0
+        and math.isclose(values["final_state_of_charge"], expected_final_soc, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and 0.0 <= values["final_state_of_charge"] <= 1.0
+        and math.isclose(values["irreversible_heat_j"], expected_irreversible_heat, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["reversible_heat_j"] >= 0.0
+        and math.isclose(values["thermal_energy_j"], expected_thermal_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["electrical_energy_j"], voltage * current * timestep, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["final_temperature_k"], expected_temperature, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["initial_temperature_k"] > 0.0
+        and values["initial_temperature_k"] <= values["final_temperature_k"] <= values["maximum_safe_temperature_k"]
+        and math.isclose(values["thermal_balance_residual_j"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and abs(expected_residual) <= 1.0e-12 * max(expected_thermal_energy, 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -4468,6 +4600,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "rotating_induction_results_use_current_slip_frequency_current_loss_torque_power_frame_mesh_and_result": (
             _rotating_induction_identity_ok(summary)
+        ),
+        "thermoacoustic_results_use_current_meanflow_wavenumber_flux_impedance_power_mesh_and_result": (
+            _thermoacoustic_meanflow_identity_ok(summary)
+        ),
+        "battery_results_use_current_soc_current_heat_temperature_energy_safety_mesh_and_result": (
+            _battery_electrothermal_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
