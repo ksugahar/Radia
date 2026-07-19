@@ -6,6 +6,11 @@ import math
 import statistics
 from typing import Any
 
+from .multiphysics_v44_gates import (
+    acoustic_poroelastic_v44_ok,
+    microwave_boundaryport_v44_ok,
+)
+
 
 _UNITS = {
     "time": "s",
@@ -5040,6 +5045,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "poroelastic_wave_results_use_current_pressure_displacement_flux_mass_energy_mesh_and_result": (
             _poroelastic_wave_identity_ok(summary)
+        ),
+        "microwave_boundary_ports_use_current_normalization_power_temperature_restart_owner_and_result": (
+            microwave_boundaryport_v44_ok(summary)
+        ),
+        "acoustic_poroelastic_results_use_current_impedance_phase_flux_energy_window_dataset_owner_and_result": (
+            acoustic_poroelastic_v44_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
