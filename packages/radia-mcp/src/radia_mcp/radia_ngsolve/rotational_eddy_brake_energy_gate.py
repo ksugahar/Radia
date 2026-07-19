@@ -4147,6 +4147,131 @@ def _battery_electrothermal_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _piezoelectric_admittance_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "piezoelectric_admittance_resonance_antiresonance_coupling_energy_phase_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("piezoelectric_generation") or "")
+    names = (
+        "resonance_frequency_hz", "antiresonance_frequency_hz",
+        "electromechanical_coupling_squared", "voltage_rms_v", "current_rms_a",
+        "admittance_magnitude_s", "admittance_phase_deg",
+        "real_electrical_power_w", "reactive_electrical_power_var",
+        "mechanical_output_power_w", "dielectric_loss_w",
+        "mechanical_stored_energy_j", "electric_stored_energy_j",
+        "power_balance_residual_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    resonance = values["resonance_frequency_hz"]
+    antiresonance = values["antiresonance_frequency_hz"]
+    voltage = values["voltage_rms_v"]
+    current = values["current_rms_a"]
+    phase = math.radians(values["admittance_phase_deg"])
+    apparent_power = voltage * current
+    expected_coupling = 1.0 - (resonance / antiresonance) ** 2 if antiresonance > 0.0 else math.nan
+    expected_residual = (
+        values["real_electrical_power_w"]
+        - values["mechanical_output_power_w"]
+        - values["dielectric_loss_w"]
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "admittance_generation", "resonance_generation", "coupling_generation",
+            "phase_generation", "energy_generation", "power_generation",
+            "mesh_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(resonance, antiresonance, voltage, current) > 0.0
+        and antiresonance > resonance
+        and math.isclose(values["electromechanical_coupling_squared"], expected_coupling, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and 0.0 < values["electromechanical_coupling_squared"] < 1.0
+        and math.isclose(values["admittance_magnitude_s"], current / voltage, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and -180.0 <= values["admittance_phase_deg"] <= 180.0
+        and math.isclose(values["real_electrical_power_w"], apparent_power * math.cos(phase), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["reactive_electrical_power_var"], apparent_power * math.sin(phase), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["mechanical_output_power_w"] >= 0.0
+        and values["dielectric_loss_w"] >= 0.0
+        and values["mechanical_stored_energy_j"] >= 0.0
+        and values["electric_stored_energy_j"] >= 0.0
+        and math.isclose(values["power_balance_residual_w"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and abs(expected_residual) <= 1.0e-12 * max(values["real_electrical_power_w"], 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _fluidfilm_bearing_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "fluidfilm_bearing_reynolds_pressure_load_friction_temperature_power_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("fluidfilm_generation") or "")
+    names = (
+        "journal_radius_m", "bearing_length_m", "radial_clearance_m",
+        "eccentricity_ratio", "minimum_film_thickness_m", "maximum_pressure_pa",
+        "integrated_load_n", "attitude_angle_deg", "angular_speed_rad_per_s",
+        "friction_torque_nm", "shaft_power_w", "viscous_dissipation_w",
+        "removed_heat_w", "inlet_temperature_k", "maximum_temperature_k",
+        "power_balance_residual_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    expected_thickness = values["radial_clearance_m"] * (1.0 - values["eccentricity_ratio"])
+    expected_power = values["friction_torque_nm"] * values["angular_speed_rad_per_s"]
+    expected_residual = expected_power - values["viscous_dissipation_w"] - values["removed_heat_w"]
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "film_generation", "pressure_generation", "load_generation",
+            "friction_generation", "temperature_generation", "power_generation",
+            "mesh_generation", "result_generation",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(
+            values["journal_radius_m"], values["bearing_length_m"],
+            values["radial_clearance_m"], values["maximum_pressure_pa"],
+            values["integrated_load_n"], values["angular_speed_rad_per_s"],
+            values["friction_torque_nm"], values["inlet_temperature_k"],
+        ) > 0.0
+        and 0.0 <= values["eccentricity_ratio"] < 1.0
+        and math.isclose(values["minimum_film_thickness_m"], expected_thickness, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and -180.0 <= values["attitude_angle_deg"] <= 180.0
+        and math.isclose(values["shaft_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["viscous_dissipation_w"] >= 0.0
+        and values["removed_heat_w"] >= 0.0
+        and values["maximum_temperature_k"] >= values["inlet_temperature_k"]
+        and math.isclose(values["power_balance_residual_w"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(expected_residual) <= 1.0e-12 * max(expected_power, 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -4606,6 +4731,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "battery_results_use_current_soc_current_heat_temperature_energy_safety_mesh_and_result": (
             _battery_electrothermal_identity_ok(summary)
+        ),
+        "piezoelectric_admittance_results_use_current_resonance_coupling_phase_energy_power_mesh_and_result": (
+            _piezoelectric_admittance_identity_ok(summary)
+        ),
+        "fluidfilm_bearing_results_use_current_film_pressure_load_friction_temperature_power_mesh_and_result": (
+            _fluidfilm_bearing_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
