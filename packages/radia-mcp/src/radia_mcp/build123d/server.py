@@ -68,6 +68,10 @@ from .lofted_shell_handoff_gate import (
     build123d_loft_example_source_replay_gate as _build123d_loft_example_source_replay_gate,
     build123d_lofted_shell_handoff_gate as _build123d_lofted_shell_handoff_gate,
 )
+from .build123d_v46_identity import (
+    validate_public_identity as _validate_build123d_v46_public_identity,
+    validate_source_identity as _validate_build123d_v46_source_identity,
+)
 from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
@@ -178,7 +182,17 @@ def build123d_jointed_assembly_heal_invariance_gate(summary_json: str) -> str:
 @mcp.tool()
 def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
     """Gate immutable source, joint graph, and headless external-CAD evidence."""
-    try: result=_jointed_assembly_source_replay_gate(json.loads(summary_json))
+    try:
+        payload = json.loads(summary_json)
+        result = _jointed_assembly_source_replay_gate(payload)
+        v46_identity = _validate_build123d_v46_source_identity(payload)
+        if v46_identity:
+            result["build123d_v46_source_identity"] = v46_identity
+            checks = result.setdefault("checks", {})
+            if isinstance(checks, dict):
+                checks.update(v46_identity.get("checks", {}))
+            if v46_identity.get("status") != "ok":
+                result["status"] = "needs_attention"
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
 
@@ -999,6 +1013,18 @@ def build123d_mass_property_crosscheck(
             "stage": "mass_property_crosscheck",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
+
+    v46_identity = _validate_build123d_v46_public_identity({
+        "reference": reference_rows,
+        "measured": measured_sets,
+    })
+    if v46_identity:
+        summary["build123d_v46_public_identity"] = v46_identity
+        checks = summary.setdefault("checks", {})
+        if isinstance(checks, dict):
+            checks.update(v46_identity.get("checks", {}))
+        if v46_identity.get("status") != "ok":
+            summary["status"] = "needs_attention"
 
     return json.dumps(summary, indent=2)
 
