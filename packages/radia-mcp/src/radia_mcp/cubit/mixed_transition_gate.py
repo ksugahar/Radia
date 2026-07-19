@@ -7547,6 +7547,205 @@ def _mesh_recipe_dag_identity_ok(identity: object) -> bool:
     )
 
 
+_V44_PUBLIC_KEY = (
+    "hex_sweep_periodic_interface_quality_jacobian_block_sideset_export_generation_identity"
+)
+_V44_SOURCE_JOURNAL_KEY = (
+    "journal_replay_command_order_session_units_geometry_generation_database_owner_identity"
+)
+_V44_SOURCE_QUALITY_KEY = (
+    "mesh_quality_metric_reference_element_dimension_block_export_owner_identity"
+)
+
+
+def _v44_result(policy: str, checks: Mapping[str, bool], generation: str) -> dict[str, object]:
+    failed = sorted(name for name, ok in checks.items() if not ok)
+    return {
+        "policy": policy,
+        "status": "ok" if not failed else "needs_attention",
+        "checks": dict(checks),
+        "issues": failed,
+        "generation": generation,
+    }
+
+
+def _v44_public_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    identity = _mapping(summary.get(_V44_PUBLIC_KEY), _V44_PUBLIC_KEY)
+    generation = str(identity.get("sweep_generation") or "")
+    generation_names = (
+        "periodic_generation", "interface_generation", "quality_generation",
+        "jacobian_generation", "block_generation", "sideset_generation",
+        "export_generation", "result_generation",
+    )
+    checks: dict[str, bool] = {
+        "generation_lineage": bool(generation)
+        and all(identity.get(name) == generation for name in generation_names),
+        "periodic_surface_pair": (
+            identity.get("source_surface_id") == identity.get("result_source_surface_id")
+            and identity.get("target_surface_id") == identity.get("result_target_surface_id")
+            and int(identity.get("source_node_count", 0)) > 0
+            and identity.get("result_source_node_count") == identity.get("source_node_count")
+            and identity.get("result_target_node_count") == identity.get("target_node_count")
+        ),
+        "periodic_node_pairing": (
+            list(identity.get("result_paired_source_node_ids") or [])
+            == list(identity.get("paired_source_node_ids") or [])
+            and list(identity.get("result_paired_target_node_ids") or [])
+            == list(identity.get("paired_target_node_ids") or [])
+            and len(list(identity.get("paired_source_node_ids") or []))
+            == len(list(identity.get("paired_target_node_ids") or []))
+            and len(list(identity.get("paired_source_node_ids") or [])) > 0
+        ),
+        "coordinate_frame_and_transform": (
+            identity.get("coordinate_frame") == "global_cartesian"
+            and identity.get("result_coordinate_frame") == identity.get("coordinate_frame")
+            and identity.get("result_periodic_transform_matrix")
+            == identity.get("periodic_transform_matrix")
+        ),
+        "opposed_interface_normals": (
+            math.isclose(float(identity.get("interface_normal_dot")), -1.0, abs_tol=1.0e-12)
+            and identity.get("result_interface_normal_dot")
+            == identity.get("interface_normal_dot")
+        ),
+        "positive_jacobian": (
+            float(identity.get("minimum_scaled_jacobian"))
+            >= float(identity.get("minimum_allowed_scaled_jacobian")) > 0.0
+            and identity.get("result_minimum_scaled_jacobian")
+            == identity.get("minimum_scaled_jacobian")
+        ),
+        "block_and_sideset_ownership": (
+            identity.get("result_block_membership") == identity.get("block_membership")
+            and identity.get("result_sideset_membership") == identity.get("sideset_membership")
+            and bool(identity.get("block_membership"))
+            and bool(identity.get("sideset_membership"))
+        ),
+        "headless_owner": (
+            str(identity.get("mesh_owner") or "").startswith("headless:")
+            and identity.get("result_mesh_owner") == identity.get("mesh_owner")
+        ),
+        "export_digest": (
+            _valid_sha256(identity.get("mesh_export_sha256"))
+            and identity.get("accepted_mesh_export_sha256")
+            == identity.get("mesh_export_sha256")
+        ),
+    }
+    return _v44_result("cubit_periodic_hex_transition_v44_gate_v1", checks, generation)
+
+
+def _v44_source_journal_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    identity = _mapping(summary.get(_V44_SOURCE_JOURNAL_KEY), _V44_SOURCE_JOURNAL_KEY)
+    generation = str(identity.get("journal_generation") or "")
+    generation_names = (
+        "command_order_generation", "session_units_generation", "geometry_generation",
+        "status_generation", "database_generation", "mesh_generation", "result_generation",
+    )
+    commands = list(identity.get("journal_commands") or [])
+    replay_commands = list(identity.get("replay_journal_commands") or [])
+    statuses = list(identity.get("command_status") or [])
+    replay_statuses = list(identity.get("replay_command_status") or [])
+    checks = {
+        "generation_lineage": bool(generation)
+        and all(identity.get(name) == generation for name in generation_names),
+        "journal_order_and_units": (
+            bool(commands) and replay_commands == commands
+            and identity.get("session_units") == "mm"
+            and identity.get("replay_session_units") == identity.get("session_units")
+        ),
+        "command_status": (
+            statuses == ["success"] * len(statuses)
+            and replay_statuses == statuses
+            and bool(statuses)
+        ),
+        "geometry_generation": (
+            int(identity.get("geometry_generation_id", -1)) > 0
+            and identity.get("replay_geometry_generation_id")
+            == identity.get("geometry_generation_id")
+        ),
+        "headless_database_owner": (
+            str(identity.get("database_owner") or "").startswith("headless:")
+            and identity.get("replay_database_owner") == identity.get("database_owner")
+        ),
+        "mesh_export_digest": (
+            _valid_sha256(identity.get("mesh_export_sha256"))
+            and identity.get("replay_mesh_export_sha256")
+            == identity.get("mesh_export_sha256")
+        ),
+        "result_digest": (
+            True
+            if identity.get("result_sha256") is None
+            else (
+                _valid_sha256(identity.get("result_sha256"))
+                and identity.get("replay_result_sha256") == identity.get("result_sha256")
+                and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+            )
+        ),
+    }
+    return _v44_result("cubit_v44_source_replay_quality_gate_v1", checks, generation)
+
+
+def _v44_source_quality_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    identity = _mapping(summary.get(_V44_SOURCE_QUALITY_KEY), _V44_SOURCE_QUALITY_KEY)
+    generation = str(identity.get("quality_generation") or "")
+    generation_names = (
+        "reference_element_generation", "dimension_generation", "metric_generation",
+        "block_generation", "export_generation", "owner_generation", "result_generation",
+    )
+    checks = {
+        "generation_lineage": bool(generation)
+        and all(identity.get(name) == generation for name in generation_names),
+        "reference_element_and_dimension": (
+            identity.get("reference_element") == "hex8"
+            and identity.get("replay_reference_element") == identity.get("reference_element")
+            and int(identity.get("dimension", 0)) == 3
+            and identity.get("replay_dimension") == identity.get("dimension")
+        ),
+        "metric_definition_and_value": (
+            identity.get("metric_definition") == "scaled_jacobian"
+            and identity.get("replay_metric_definition") == identity.get("metric_definition")
+            and float(identity.get("minimum_scaled_jacobian")) > 0.0
+            and identity.get("replay_minimum_scaled_jacobian")
+            == identity.get("minimum_scaled_jacobian")
+        ),
+        "block_membership": (
+            bool(identity.get("block_membership"))
+            and identity.get("replay_block_membership") == identity.get("block_membership")
+        ),
+        "export_generation": (
+            int(identity.get("export_generation_id", -1)) > 0
+            and identity.get("replay_export_generation_id")
+            == identity.get("export_generation_id")
+        ),
+        "headless_owner": (
+            str(identity.get("database_owner") or "").startswith("headless:")
+            and identity.get("replay_database_owner") == identity.get("database_owner")
+        ),
+        "quality_export_digest": (
+            _valid_sha256(identity.get("quality_export_sha256"))
+            and identity.get("accepted_quality_export_sha256")
+            == identity.get("quality_export_sha256")
+        ),
+    }
+    return _v44_result("cubit_v44_source_replay_quality_gate_v1", checks, generation)
+
+
+def _v44_source_combined_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    results = []
+    if _V44_SOURCE_JOURNAL_KEY in summary:
+        results.append(_v44_source_journal_gate(summary))
+    if _V44_SOURCE_QUALITY_KEY in summary:
+        results.append(_v44_source_quality_gate(summary))
+    checks: dict[str, bool] = {}
+    generations: list[str] = []
+    for result in results:
+        checks.update(result.get("checks", {}))
+        generations.append(str(result.get("generation") or ""))
+    return _v44_result(
+        "cubit_v44_source_replay_quality_gate_v1",
+        checks,
+        "+".join(generations),
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -7564,6 +7763,8 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
 
     if not isinstance(summary, Mapping):
         raise TypeError("summary must be a mapping")
+    if _V44_PUBLIC_KEY in summary:
+        return _v44_public_gate(summary)
     threshold = _finite(min_scaled_jacobian, "min_scaled_jacobian")
     tolerance = _finite(max_volume_relative_error, "max_volume_relative_error")
     if threshold <= 0.0 or tolerance < 0.0:
@@ -8568,6 +8769,8 @@ def cubit_mixed_transition_source_gate(
 
     if not isinstance(summary, Mapping):
         raise TypeError("summary must be a mapping")
+    if _V44_SOURCE_JOURNAL_KEY in summary or _V44_SOURCE_QUALITY_KEY in summary:
+        return _v44_source_combined_gate(summary)
     commands_raw = summary.get("source_commands")
     if isinstance(commands_raw, (str, bytes)) or not isinstance(commands_raw, Sequence):
         raise ValueError("source_commands must be a sequence")
