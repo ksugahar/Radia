@@ -2228,6 +2228,171 @@ def _electrostatic_matrix_gauge_identity_ok(value):
     )
 
 
+def _heat_contact_convection_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("heat_generation", "")).strip()
+    try:
+        conductivity = float(value.get("conductivity_w_per_m_k"))
+        length = float(value.get("conduction_length_m"))
+        area = float(value.get("boundary_area_m2"))
+        contact_resistance_area = float(value.get("contact_resistance_m2_k_per_w"))
+        convection = float(value.get("convection_coefficient_w_per_m2_k"))
+        hot_temperature = float(value.get("hot_temperature_k"))
+        ambient_temperature = float(value.get("ambient_temperature_k"))
+        heat_flux = float(value.get("boundary_heat_flux_w_per_m2"))
+        temperature_jump = float(value.get("interface_temperature_jump_k"))
+        surface_temperature = float(value.get("convection_surface_temperature_k"))
+        heat_rate = float(value.get("total_heat_rate_w"))
+        residual = float(value.get("energy_balance_residual_w"))
+    except (TypeError, ValueError):
+        return False
+    mirrored = (
+        "conductivity_w_per_m_k",
+        "conduction_length_m",
+        "boundary_area_m2",
+        "contact_resistance_m2_k_per_w",
+        "convection_coefficient_w_per_m2_k",
+        "hot_temperature_k",
+        "ambient_temperature_k",
+        "boundary_heat_flux_w_per_m2",
+        "interface_temperature_jump_k",
+        "convection_surface_temperature_k",
+        "total_heat_rate_w",
+        "energy_balance_residual_w",
+    )
+    finite = all(
+        math.isfinite(item)
+        for item in (
+            conductivity,
+            length,
+            area,
+            contact_resistance_area,
+            convection,
+            hot_temperature,
+            ambient_temperature,
+            heat_flux,
+            temperature_jump,
+            surface_temperature,
+            heat_rate,
+            residual,
+        )
+    )
+    if not finite or conductivity <= 0.0 or length <= 0.0 or area <= 0.0 or convection <= 0.0:
+        return False
+    conduction_resistance = length / (conductivity * area)
+    contact_resistance = contact_resistance_area / area
+    convection_resistance = 1.0 / (convection * area)
+    expected_heat_rate = (hot_temperature - ambient_temperature) / (
+        conduction_resistance + contact_resistance + convection_resistance
+    )
+    expected_surface_temperature = ambient_temperature + expected_heat_rate * convection_resistance
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "conductivity_generation",
+                "contact_generation",
+                "convection_generation",
+                "flux_generation",
+                "temperature_generation",
+                "energy_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and contact_resistance_area >= 0.0
+        and hot_temperature > ambient_temperature > 0.0
+        and heat_rate > 0.0
+        and math.isclose(heat_rate, expected_heat_rate, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(heat_flux, heat_rate / area, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(temperature_jump, heat_rate * contact_resistance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(surface_temperature, expected_surface_temperature, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and ambient_temperature < surface_temperature < hot_temperature
+        and abs(residual) <= max(1.0e-12, abs(heat_rate) * 1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("heat:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("heat_result_sha256"))
+        and value.get("accepted_heat_result_sha256") == value.get("heat_result_sha256")
+    )
+
+
+def _current_flow_power_identity_ok(value):
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("current_generation", "")).strip()
+    try:
+        voltages = [float(item) for item in value.get("electrode_voltage_v", [])]
+        result_voltages = [float(item) for item in value.get("result_electrode_voltage_v", [])]
+        currents = [float(item) for item in value.get("terminal_current_a", [])]
+        result_currents = [float(item) for item in value.get("result_terminal_current_a", [])]
+        resistance = float(value.get("effective_resistance_ohm"))
+        result_resistance = float(value.get("result_effective_resistance_ohm"))
+        joule_loss = float(value.get("joule_loss_w"))
+        result_joule_loss = float(value.get("result_joule_loss_w"))
+        terminal_power = float(value.get("terminal_power_w"))
+        result_terminal_power = float(value.get("result_terminal_power_w"))
+        reciprocity = float(value.get("reciprocity_residual_ohm"))
+        result_reciprocity = float(value.get("result_reciprocity_residual_ohm"))
+    except (TypeError, ValueError):
+        return False
+    if len(voltages) != 2 or len(currents) != 2:
+        return False
+    voltage_drop = voltages[0] - voltages[1]
+    through_current = currents[0]
+    expected_power = sum(voltage * current for voltage, current in zip(voltages, currents))
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "electrode_generation",
+                "voltage_generation",
+                "current_generation_id",
+                "resistance_generation",
+                "joule_generation",
+                "power_generation",
+                "reciprocity_generation",
+                "conductor_generation",
+                "mesh_generation",
+                "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in voltages + currents)
+        and result_voltages == voltages
+        and result_currents == currents
+        and abs(sum(currents)) <= 1.0e-12 * max(abs(through_current), 1.0)
+        and voltage_drop * through_current > 0.0
+        and math.isfinite(resistance)
+        and resistance > 0.0
+        and math.isclose(resistance, voltage_drop / through_current, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_resistance == resistance
+        and math.isfinite(joule_loss)
+        and joule_loss > 0.0
+        and math.isclose(joule_loss, through_current * through_current * resistance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_joule_loss == joule_loss
+        and math.isfinite(terminal_power)
+        and math.isclose(terminal_power, expected_power, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(terminal_power, joule_loss, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and result_terminal_power == terminal_power
+        and math.isfinite(reciprocity)
+        and abs(reciprocity) <= 1.0e-12
+        and result_reciprocity == reciprocity
+        and str(value.get("conductor_owner", "")).startswith("current:")
+        and value.get("accepted_conductor_owner") == value.get("conductor_owner")
+        and str(value.get("mesh_owner", "")).startswith("current:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("current_result_sha256"))
+        and value.get("accepted_current_result_sha256") == value.get("current_result_sha256")
+    )
+
+
 def force_coenergy_displacement_gate(
     positions_m,
     coenergy_j,
@@ -2319,6 +2484,8 @@ def force_coenergy_displacement_gate(
     heat_convection_radiation_identity_ok = True
     nonlinear_magnetic_circuit_identity_ok = True
     electrostatic_matrix_gauge_identity_ok = True
+    heat_contact_convection_identity_ok = True
+    current_flow_power_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -2384,6 +2551,8 @@ def force_coenergy_displacement_gate(
         heat_convection_radiation_identity_ok = False
         nonlinear_magnetic_circuit_identity_ok = False
         electrostatic_matrix_gauge_identity_ok = False
+        heat_contact_convection_identity_ok = False
+        current_flow_power_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -4088,6 +4257,16 @@ def force_coenergy_displacement_gate(
                 "electrostatic_capacitance_matrix_charge_energy_reciprocity_gauge_conductor_mesh_result_generation_identity"
             )
         )
+        heat_contact_convection_identity_ok = _heat_contact_convection_identity_ok(
+            artifact_identity.get(
+                "heat_conduction_contact_convection_flux_temperature_energy_mesh_result_generation_identity"
+            )
+        )
+        current_flow_power_identity_ok = _current_flow_power_identity_ok(
+            artifact_identity.get(
+                "current_flow_electrode_voltage_current_resistance_joule_power_reciprocity_conductor_mesh_result_generation_identity"
+            )
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -4307,6 +4486,12 @@ def force_coenergy_displacement_gate(
         ),
         "electrostatic_capacitance_closes_matrix_charge_energy_reciprocity_gauge_owners_and_result": (
             electrostatic_matrix_gauge_identity_ok
+        ),
+        "heat_contact_models_close_conduction_contact_convection_flux_temperature_energy_mesh_and_result": (
+            heat_contact_convection_identity_ok
+        ),
+        "current_flow_models_close_electrodes_currents_resistance_joule_terminal_power_reciprocity_owners_and_result": (
+            current_flow_power_identity_ok
         ),
     }
     return {
