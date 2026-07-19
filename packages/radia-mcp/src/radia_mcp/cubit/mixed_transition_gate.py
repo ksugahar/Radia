@@ -6461,6 +6461,364 @@ def _adaptive_size_field_replay_identity_ok(identity: object) -> bool:
     )
 
 
+def _medial_axis_hex_decomposition_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        sheet_pairs = [
+            [int(value) for value in pair]
+            for pair in identity.get("paired_sheet_ids", [])
+        ]
+        result_sheet_pairs = [
+            [int(value) for value in pair]
+            for pair in identity.get("result_paired_sheet_ids", [])
+        ]
+        thicknesses = [float(value) for value in identity.get("local_thickness_m", [])]
+        result_thicknesses = [
+            float(value) for value in identity.get("result_local_thickness_m", [])
+        ]
+        cells = _mapping(identity.get("decomposition_cells"), "decomposition_cells")
+        result_cells = _mapping(
+            identity.get("result_decomposition_cells"), "result_decomposition_cells"
+        )
+        shared_faces = [int(value) for value in identity.get("shared_topology_faces", [])]
+        result_shared_faces = [
+            int(value) for value in identity.get("result_shared_topology_faces", [])
+        ]
+        intervals = {
+            str(key): int(value)
+            for key, value in _mapping(identity.get("interval_counts"), "interval_counts").items()
+        }
+        result_intervals = {
+            str(key): int(value)
+            for key, value in _mapping(
+                identity.get("result_interval_counts"), "result_interval_counts"
+            ).items()
+        }
+        minimum_jacobian = float(identity.get("minimum_scaled_jacobian"))
+        result_minimum_jacobian = float(identity.get("result_minimum_scaled_jacobian"))
+        allowed_jacobian = float(identity.get("minimum_allowed_scaled_jacobian"))
+        result_allowed_jacobian = float(
+            identity.get("result_minimum_allowed_scaled_jacobian")
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("medial_axis_generation") or "")
+    flattened_sheets = [value for pair in sheet_pairs for value in pair]
+    normalized_cells = {
+        str(key): [int(value) for value in values] for key, values in cells.items()
+    }
+    normalized_result_cells = {
+        str(key): [int(value) for value in values] for key, values in result_cells.items()
+    }
+    shared_face_set = set(shared_faces)
+    face_incidence = {
+        face: sum(face in values for values in normalized_cells.values())
+        for face in shared_face_set
+    }
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "sheet_generation",
+                "thickness_generation",
+                "decomposition_generation",
+                "topology_generation",
+                "interval_generation",
+                "quality_generation",
+                "block_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and bool(sheet_pairs)
+        and all(len(pair) == 2 and pair[0] != pair[1] and min(pair) > 0 for pair in sheet_pairs)
+        and len(flattened_sheets) == len(set(flattened_sheets))
+        and result_sheet_pairs == sheet_pairs
+        and len(thicknesses) == len(sheet_pairs)
+        and all(math.isfinite(value) and value > 0.0 for value in thicknesses)
+        and result_thicknesses == thicknesses
+        and len(normalized_cells) >= 2
+        and all(
+            str(key).startswith("cell:")
+            and len(values) >= 4
+            and len(values) == len(set(values))
+            and all(value > 0 for value in values)
+            for key, values in normalized_cells.items()
+        )
+        and normalized_result_cells == normalized_cells
+        and bool(shared_face_set)
+        and len(shared_face_set) == len(shared_faces)
+        and result_shared_faces == shared_faces
+        and all(count == 2 for count in face_incidence.values())
+        and bool(intervals)
+        and all(key.startswith("curve:") and value > 0 and value % 2 == 0 for key, value in intervals.items())
+        and result_intervals == intervals
+        and identity.get("interval_parity") == "compatible_even"
+        and identity.get("result_interval_parity") == identity.get("interval_parity")
+        and math.isfinite(minimum_jacobian)
+        and math.isfinite(allowed_jacobian)
+        and minimum_jacobian >= allowed_jacobian > 0.0
+        and result_minimum_jacobian == minimum_jacobian
+        and result_allowed_jacobian == allowed_jacobian
+        and str(identity.get("block_owner") or "").startswith("block:")
+        and identity.get("result_block_owner") == identity.get("block_owner")
+        and _valid_sha256(identity.get("medial_axis_export_sha256"))
+        and identity.get("accepted_medial_axis_export_sha256")
+        == identity.get("medial_axis_export_sha256")
+    )
+
+
+def _curve_chain_boundary_layer_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        chain = [int(value) for value in identity.get("curve_chain_order", [])]
+        result_chain = [int(value) for value in identity.get("result_curve_chain_order", [])]
+        intervals = [int(value) for value in identity.get("interval_counts", [])]
+        result_intervals = [int(value) for value in identity.get("result_interval_counts", [])]
+        corner_sums = [int(value) for value in identity.get("corner_interval_sums", [])]
+        result_corner_sums = [
+            int(value) for value in identity.get("result_corner_interval_sums", [])
+        ]
+        thicknesses = [
+            float(value) for value in identity.get("boundary_layer_thickness_m", [])
+        ]
+        result_thicknesses = [
+            float(value) for value in identity.get("result_boundary_layer_thickness_m", [])
+        ]
+        total_thickness = float(identity.get("total_boundary_layer_thickness_m"))
+        result_total_thickness = float(
+            identity.get("result_total_boundary_layer_thickness_m")
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("curve_chain_generation") or "")
+    biases = list(identity.get("bias_directions") or [])
+    result_biases = list(identity.get("result_bias_directions") or [])
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "chain_generation",
+                "interval_generation",
+                "bias_generation",
+                "corner_generation",
+                "boundary_layer_generation",
+                "orientation_generation",
+                "sideset_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and len(chain) >= 4
+        and all(value > 0 for value in chain)
+        and len(chain) == len(set(chain))
+        and result_chain == chain
+        and identity.get("chain_orientation") == "counterclockwise"
+        and identity.get("result_chain_orientation") == identity.get("chain_orientation")
+        and len(intervals) == len(chain)
+        and all(value > 0 for value in intervals)
+        and result_intervals == intervals
+        and len(biases) == len(chain)
+        and all(value in {"forward", "reverse"} for value in biases)
+        and result_biases == biases
+        and len(corner_sums) == len(chain)
+        and all(value > 0 and value % 2 == 0 for value in corner_sums)
+        and result_corner_sums == corner_sums
+        and len(thicknesses) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in thicknesses)
+        and all(thicknesses[index] <= thicknesses[index + 1] for index in range(len(thicknesses) - 1))
+        and math.isfinite(total_thickness)
+        and math.isclose(sum(thicknesses), total_thickness, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and result_thicknesses == thicknesses
+        and result_total_thickness == total_thickness
+        and identity.get("element_orientation") == "outward_positive"
+        and identity.get("result_element_orientation") == identity.get("element_orientation")
+        and str(identity.get("sideset_owner") or "").startswith("sideset:")
+        and identity.get("result_sideset_owner") == identity.get("sideset_owner")
+        and _valid_sha256(identity.get("curve_chain_export_sha256"))
+        and identity.get("accepted_curve_chain_export_sha256")
+        == identity.get("curve_chain_export_sha256")
+    )
+
+
+def _smoothing_replay_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        iterations = int(identity.get("iteration_count"))
+        replay_iterations = int(identity.get("replay_iteration_count"))
+        fixed_nodes = [int(value) for value in identity.get("fixed_node_ids", [])]
+        replay_fixed_nodes = [int(value) for value in identity.get("replay_fixed_node_ids", [])]
+        fixed_displacements = [
+            float(value) for value in identity.get("fixed_node_displacement_m", [])
+        ]
+        replay_fixed_displacements = [
+            float(value) for value in identity.get("replay_fixed_node_displacement_m", [])
+        ]
+        moved_nodes = [int(value) for value in identity.get("moved_node_ids", [])]
+        replay_moved_nodes = [int(value) for value in identity.get("replay_moved_node_ids", [])]
+        displacements = [float(value) for value in identity.get("node_displacement_m", [])]
+        replay_displacements = [
+            float(value) for value in identity.get("replay_node_displacement_m", [])
+        ]
+        maximum_displacement = float(identity.get("maximum_allowed_displacement_m"))
+        replay_maximum_displacement = float(
+            identity.get("replay_maximum_allowed_displacement_m")
+        )
+        quality = [float(value) for value in identity.get("quality_history", [])]
+        replay_quality = [float(value) for value in identity.get("replay_quality_history", [])]
+        checkpoint = int(identity.get("checkpoint_generation_id"))
+        replay_checkpoint = int(identity.get("replay_checkpoint_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("smoothing_generation") or "")
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "algorithm_generation",
+                "iteration_generation",
+                "constraint_generation",
+                "motion_generation",
+                "quality_generation",
+                "checkpoint_generation",
+                "database_generation",
+                "result_generation",
+            )
+        )
+        and str(identity.get("algorithm") or "") in {"smart_laplacian", "optimization"}
+        and identity.get("replay_algorithm") == identity.get("algorithm")
+        and iterations > 0
+        and replay_iterations == iterations
+        and bool(fixed_nodes)
+        and len(fixed_nodes) == len(set(fixed_nodes))
+        and all(value > 0 for value in fixed_nodes)
+        and replay_fixed_nodes == fixed_nodes
+        and len(fixed_displacements) == len(fixed_nodes)
+        and all(math.isfinite(value) and abs(value) <= 1.0e-15 for value in fixed_displacements)
+        and replay_fixed_displacements == fixed_displacements
+        and bool(moved_nodes)
+        and len(moved_nodes) == len(set(moved_nodes))
+        and set(moved_nodes).isdisjoint(fixed_nodes)
+        and replay_moved_nodes == moved_nodes
+        and len(displacements) == len(moved_nodes)
+        and math.isfinite(maximum_displacement)
+        and maximum_displacement > 0.0
+        and all(math.isfinite(value) and 0.0 <= value <= maximum_displacement for value in displacements)
+        and replay_displacements == displacements
+        and replay_maximum_displacement == maximum_displacement
+        and len(quality) >= 2
+        and all(math.isfinite(value) and value > 0.0 for value in quality)
+        and all(quality[index] <= quality[index + 1] for index in range(len(quality) - 1))
+        and quality[-1] > quality[0]
+        and replay_quality == quality
+        and checkpoint > 0
+        and replay_checkpoint == checkpoint
+        and str(identity.get("database_owner") or "").startswith("headless:")
+        and identity.get("replay_database_owner") == identity.get("database_owner")
+        and _valid_sha256(identity.get("database_sha256"))
+        and identity.get("replay_database_sha256") == identity.get("database_sha256")
+        and _valid_sha256(identity.get("smoothing_result_sha256"))
+        and identity.get("accepted_smoothing_result_sha256")
+        == identity.get("smoothing_result_sha256")
+    )
+
+
+def _named_entity_transfer_identity_ok(identity: object) -> bool:
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        names = _mapping(identity.get("entity_names"), "entity_names")
+        replay_names = _mapping(identity.get("replay_entity_names"), "replay_entity_names")
+        metadata = _mapping(identity.get("metadata_attributes"), "metadata_attributes")
+        replay_metadata = _mapping(
+            identity.get("replay_metadata_attributes"), "replay_metadata_attributes"
+        )
+        groups = _mapping(identity.get("group_membership"), "group_membership")
+        replay_groups = _mapping(identity.get("replay_group_membership"), "replay_group_membership")
+        blocks = _mapping(identity.get("block_membership"), "block_membership")
+        replay_blocks = _mapping(identity.get("replay_block_membership"), "replay_block_membership")
+        sidesets = _mapping(identity.get("sideset_membership"), "sideset_membership")
+        replay_sidesets = _mapping(identity.get("replay_sideset_membership"), "replay_sideset_membership")
+        save_generation = int(identity.get("save_generation_id"))
+        replay_save_generation = int(identity.get("replay_save_generation_id"))
+        open_generation = int(identity.get("open_generation_id"))
+        replay_open_generation = int(identity.get("replay_open_generation_id"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("named_entity_generation") or "")
+    entity_ids = set(names)
+    grouped_ids = {str(value) for values in groups.values() for value in values}
+    blocked_ids = {str(value) for values in blocks.values() for value in values}
+    sideset_ids = {str(value) for values in sidesets.values() for value in values}
+    return (
+        bool(generation)
+        and all(
+            identity.get(key) == generation
+            for key in (
+                "name_generation",
+                "metadata_generation",
+                "group_generation",
+                "set_generation",
+                "save_generation",
+                "open_generation",
+                "export_generation",
+                "result_generation",
+            )
+        )
+        and bool(names)
+        and all(
+            str(key).startswith(("volume:", "surface:", "curve:", "vertex:"))
+            and bool(str(value))
+            for key, value in names.items()
+        )
+        and len(set(str(value) for value in names.values())) == len(names)
+        and replay_names == names
+        and bool(metadata)
+        and set(metadata).issubset(entity_ids)
+        and all(isinstance(value, Mapping) and bool(value) for value in metadata.values())
+        and replay_metadata == metadata
+        and bool(groups)
+        and all(str(key).startswith("group:") and bool(value) for key, value in groups.items())
+        and grouped_ids.issubset(entity_ids)
+        and replay_groups == groups
+        and bool(blocks)
+        and all(str(key).startswith("block:") and bool(value) for key, value in blocks.items())
+        and blocked_ids.issubset(entity_ids)
+        and all(value.startswith("volume:") for value in blocked_ids)
+        and replay_blocks == blocks
+        and bool(sidesets)
+        and all(str(key).startswith("sideset:") and bool(value) for key, value in sidesets.items())
+        and sideset_ids.issubset(entity_ids)
+        and all(value.startswith("surface:") for value in sideset_ids)
+        and replay_sidesets == sidesets
+        and save_generation > 0
+        and replay_save_generation == save_generation
+        and open_generation == save_generation
+        and replay_open_generation == open_generation
+        and str(identity.get("export_owner") or "").startswith("headless:")
+        and identity.get("replay_export_owner") == identity.get("export_owner")
+        and _valid_sha256(identity.get("database_sha256"))
+        and identity.get("replay_database_sha256") == identity.get("database_sha256")
+        and _valid_sha256(identity.get("named_entity_export_sha256"))
+        and identity.get("accepted_named_entity_export_sha256")
+        == identity.get("named_entity_export_sha256")
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -7368,6 +7726,16 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "thin_sweeps_use_current_surfaces_intervals_layers_thickness_topology_orientation_owner_and_export": (
             _thin_sweep_replay_identity_ok(
                 summary.get("thin_sweep_hex_source_target_interval_propagation_layer_thickness_side_topology_orientation_volume_export_generation_identity")
+            )
+        ),
+        "medial_axis_hexes_use_current_sheet_pairs_thickness_cells_topology_intervals_quality_block_and_export": (
+            _medial_axis_hex_decomposition_identity_ok(
+                summary.get("medial_axis_hex_decomposition_sheet_pair_thickness_topology_interval_quality_block_export_generation_identity")
+            )
+        ),
+        "curve_chain_hexes_use_current_order_intervals_bias_corner_parity_boundary_layers_orientation_sideset_and_export": (
+            _curve_chain_boundary_layer_identity_ok(
+                summary.get("curve_chain_interval_bias_corner_parity_boundary_layer_orientation_sideset_export_generation_identity")
             )
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
@@ -8299,6 +8667,16 @@ def cubit_mixed_transition_source_gate(
         "adaptive_mesh_replays_use_current_size_field_projection_region_quality_blocks_session_and_export": (
             _adaptive_size_field_replay_identity_ok(
                 summary.get("adaptive_size_field_node_projection_region_boundary_quality_block_session_export_generation_identity")
+            )
+        ),
+        "smoothing_replays_use_current_algorithm_iterations_constraints_motion_quality_checkpoint_database_and_result": (
+            _smoothing_replay_identity_ok(
+                summary.get("smoothing_iteration_constraint_node_motion_quality_history_checkpoint_database_result_generation_identity")
+            )
+        ),
+        "named_entity_replays_use_current_names_metadata_groups_sets_save_open_owner_database_and_export": (
+            _named_entity_transfer_identity_ok(
+                summary.get("named_entity_metadata_group_transfer_save_open_export_owner_generation_identity")
             )
         ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
