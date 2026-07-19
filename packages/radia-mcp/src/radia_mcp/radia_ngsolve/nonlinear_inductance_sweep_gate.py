@@ -4676,6 +4676,89 @@ def _active_array_closure_inputs_are_current(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _emc_shielding_power_identity_is_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "emc_shielding_incident_transmitted_reflected_poynting_se_power_energy_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("emc_generation", "")).strip()
+    generations = identity.get("generations")
+    values = identity.get("values")
+    result_values = identity.get("result_values")
+    if not isinstance(generations, Mapping) or not isinstance(values, Mapping) or not isinstance(result_values, Mapping):
+        return False
+    try:
+        incident = float(values["incident_power_w"])
+        transmitted = float(values["transmitted_power_w"])
+        reflected = float(values["reflected_power_w"])
+        absorbed = float(values["absorbed_power_w"])
+        shielding = float(values["shielding_effectiveness_db"])
+        closure = float(values["power_closure_residual_w"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and set(generations) == {"incident", "transmitted", "reflected", "poynting", "shielding", "power", "mesh", "result"}
+        and all(generations.get(name) == generation for name in generations)
+        and all(math.isfinite(value) and value >= 0.0 for value in (incident, transmitted, reflected, absorbed))
+        and incident > 0.0
+        and transmitted > 0.0
+        and math.isclose(closure, incident - transmitted - reflected - absorbed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(shielding, 10.0 * math.log10(incident / transmitted), rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values.get("poynting_flux_orientation") == "outward"
+        and str(values.get("mesh_owner", "")).startswith("mesh:")
+        and result_values == values
+        and _valid_sha256(identity.get("emc_result_sha256"))
+        and identity.get("accepted_emc_result_sha256") == identity.get("emc_result_sha256")
+    )
+
+
+def _differential_connector_power_identity_is_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "differential_connector_sdd_scc_modeconversion_passivity_loss_power_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("connector_generation", "")).strip()
+    generations = identity.get("generations")
+    values = identity.get("values")
+    result_values = identity.get("result_values")
+    if not isinstance(generations, Mapping) or not isinstance(values, Mapping) or not isinstance(result_values, Mapping):
+        return False
+    try:
+        reference_impedance = float(values["reference_impedance_ohm"])
+        passivity_margin = float(values["passivity_margin"])
+        dissipated_power = float(values["dissipated_power_w"])
+        return_loss = [float(value) for value in values["return_loss_db"]]
+        insertion_loss = [float(value) for value in values["insertion_loss_db"]]
+    except (KeyError, TypeError, ValueError):
+        return False
+    port_order = values.get("port_order")
+    mixed_order = values.get("mixed_mode_order")
+    return (
+        bool(generation)
+        and set(generations) == {"port", "mixed_mode", "sdd", "scc", "loss", "passivity", "power", "impedance", "mesh", "result"}
+        and all(generations.get(name) == generation for name in generations)
+        and isinstance(port_order, list) and port_order == ["P1+", "P1-", "P2+", "P2-"]
+        and isinstance(mixed_order, list) and mixed_order == ["Sdd11", "Sdd21", "Scc11", "Scc21"]
+        and isinstance(values.get("sdd_ri"), list) and isinstance(values.get("scc_ri"), list)
+        and len(return_loss) == len(insertion_loss) == 2
+        and all(math.isfinite(value) and value >= 0.0 for value in return_loss + insertion_loss)
+        and math.isfinite(reference_impedance) and reference_impedance > 0.0
+        and math.isfinite(passivity_margin) and passivity_margin >= 0.0
+        and math.isfinite(dissipated_power) and dissipated_power >= 0.0
+        and str(values.get("mesh_owner", "")).startswith("mesh:")
+        and result_values == values
+        and _valid_sha256(identity.get("connector_result_sha256"))
+        and identity.get("accepted_connector_result_sha256") == identity.get("connector_result_sha256")
+    )
+
+
 def nonlinear_inductance_sweep_gate(
     summary: Mapping[str, Any],
     *,
@@ -4997,6 +5080,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "tdr_results_use_current_time_distance_impedance_reflection_deembed_risetime_loss_energy_and_result": (
                 _tdr_deembed_energy_inputs_are_current(raw)
+            ),
+            "emc_shielding_uses_current_incident_transmitted_reflected_poynting_se_closure_mesh_and_digest": (
+                _emc_shielding_power_identity_is_current(raw)
+            ),
+            "differential_connector_uses_current_port_pairs_mixed_modes_losses_passivity_power_mesh_and_digest": (
+                _differential_connector_power_identity_is_current(raw)
             ),
         }
         row = {
