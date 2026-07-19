@@ -4751,6 +4751,154 @@ def _active_filter_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     )
 
 
+def _mosfet_gatedrive_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "mosfet_gatedrive_charge_current_deadtime_switching_conduction_loss_temperature_cycle_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("gatedrive_generation_id") or "")
+    fields = (
+        "gate_charge_c", "driver_source_current_a", "driver_sink_current_a",
+        "rise_time_s", "fall_time_s", "dead_time_s", "switching_frequency_hz",
+        "drain_voltage_v", "drain_current_a", "duty_ratio", "rds_on_ohm",
+        "switching_loss_w", "conduction_loss_w", "total_loss_w",
+        "ambient_temperature_c", "junction_to_ambient_k_per_w",
+        "junction_temperature_c", "cycle_loss_energy_j",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    charge = values["gate_charge_c"]
+    source_current = values["driver_source_current_a"]
+    sink_current = values["driver_sink_current_a"]
+    frequency = values["switching_frequency_hz"]
+    expected_rise = charge / source_current if source_current > 0.0 else math.nan
+    expected_fall = charge / sink_current if sink_current > 0.0 else math.nan
+    expected_switching = (
+        0.5 * values["drain_voltage_v"] * values["drain_current_a"]
+        * (values["rise_time_s"] + values["fall_time_s"]) * frequency
+    )
+    expected_conduction = (
+        values["drain_current_a"] ** 2 * values["rds_on_ohm"] * values["duty_ratio"]
+    )
+    expected_total = expected_switching + expected_conduction
+    expected_temperature = (
+        values["ambient_temperature_c"]
+        + expected_total * values["junction_to_ambient_k_per_w"]
+    )
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "charge_gatedrive_generation_id", "current_gatedrive_generation_id",
+            "timing_gatedrive_generation_id", "loss_gatedrive_generation_id",
+            "temperature_gatedrive_generation_id", "energy_gatedrive_generation_id",
+            "waveform_gatedrive_generation_id", "result_gatedrive_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(
+            charge, source_current, sink_current, frequency,
+            values["drain_voltage_v"], values["drain_current_a"],
+            values["rds_on_ohm"], values["junction_to_ambient_k_per_w"],
+        ) > 0.0
+        and 0.0 < values["duty_ratio"] < 1.0
+        and math.isclose(values["rise_time_s"], expected_rise, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["fall_time_s"], expected_fall, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and values["dead_time_s"] >= max(expected_rise, expected_fall) > 0.0
+        and math.isclose(values["switching_loss_w"], expected_switching, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["conduction_loss_w"], expected_conduction, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["total_loss_w"], expected_total, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["junction_temperature_c"], expected_temperature, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["junction_temperature_c"] > values["ambient_temperature_c"]
+        and math.isclose(values["cycle_loss_energy_j"], expected_total / frequency, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and str(contract.get("waveform_owner") or "").startswith("gate-drive/")
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _instrumentation_amplifier_owner_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "instrumentation_amplifier_gain_cmrr_inputrange_noise_output_headroom_power_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("instrumentation_generation_id") or "")
+    fields = (
+        "feedback_resistance_ohm", "gain_resistance_ohm",
+        "differential_gain_v_per_v", "differential_input_v",
+        "common_mode_input_v", "input_common_mode_min_v",
+        "input_common_mode_max_v", "cmrr_db", "common_mode_gain_v_per_v",
+        "signal_output_v", "common_mode_output_error_v",
+        "input_noise_density_v_per_sqrt_hz", "noise_bandwidth_hz",
+        "integrated_output_noise_v_rms", "output_low_limit_v",
+        "output_high_limit_v", "output_headroom_v", "supply_voltage_v",
+        "quiescent_supply_current_a", "supply_power_w",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    gain = values["differential_gain_v_per_v"]
+    expected_gain = 1.0 + values["feedback_resistance_ohm"] / values["gain_resistance_ohm"]
+    expected_common_mode_gain = gain / (10.0 ** (values["cmrr_db"] / 20.0))
+    expected_output = gain * values["differential_input_v"]
+    expected_cm_error = expected_common_mode_gain * values["common_mode_input_v"]
+    expected_noise = values["input_noise_density_v_per_sqrt_hz"] * math.sqrt(values["noise_bandwidth_hz"])
+    expected_headroom = min(
+        expected_output - values["output_low_limit_v"],
+        values["output_high_limit_v"] - expected_output,
+    )
+    expected_power = values["supply_voltage_v"] * values["quiescent_supply_current_a"]
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "gain_instrumentation_generation_id", "cmrr_instrumentation_generation_id",
+            "inputrange_instrumentation_generation_id", "noise_instrumentation_generation_id",
+            "headroom_instrumentation_generation_id", "power_instrumentation_generation_id",
+            "circuit_instrumentation_generation_id", "result_instrumentation_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(
+            values["feedback_resistance_ohm"], values["gain_resistance_ohm"],
+            gain, values["input_noise_density_v_per_sqrt_hz"],
+            values["noise_bandwidth_hz"], values["supply_voltage_v"],
+            values["quiescent_supply_current_a"],
+        ) > 0.0
+        and values["input_common_mode_min_v"] <= values["common_mode_input_v"] <= values["input_common_mode_max_v"]
+        and values["cmrr_db"] > 0.0
+        and math.isclose(gain, expected_gain, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["common_mode_gain_v_per_v"], expected_common_mode_gain, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["signal_output_v"], expected_output, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["common_mode_output_error_v"], expected_cm_error, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["integrated_output_noise_v_rms"], expected_noise, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and values["output_low_limit_v"] < expected_output < values["output_high_limit_v"]
+        and math.isclose(values["output_headroom_v"], expected_headroom, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and expected_headroom > 0.0
+        and math.isclose(values["supply_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and str(contract.get("circuit_owner") or "").startswith("instrumentation-amplifier/")
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
 def _transimpedance_contract_ok(contract: object) -> bool:
     if contract is None:
         return True
@@ -5268,6 +5416,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "active_filters_use_current_poles_zeros_q_gain_noise_slew_saturation_power_circuit_and_result": (
             _active_filter_owner_identity_ok(positive)
+        ),
+        "mosfet_gate_drives_use_current_charge_current_deadtime_losses_temperature_cycle_energy_waveform_and_result": (
+            _mosfet_gatedrive_owner_identity_ok(positive)
+        ),
+        "instrumentation_amplifiers_use_current_gain_cmrr_input_range_noise_headroom_power_circuit_and_result": (
+            _instrumentation_amplifier_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
