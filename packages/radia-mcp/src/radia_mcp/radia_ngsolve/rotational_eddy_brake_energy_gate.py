@@ -4272,6 +4272,161 @@ def _fluidfilm_bearing_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _induction_heating_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "inductionheating_skin_proximity_joule_thermal_flux_temperature_energy_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("induction_generation") or "")
+    names = (
+        "frequency_hz", "conductivity_s_per_m", "relative_permeability",
+        "skin_depth_m", "joule_loss_w", "magnetic_loss_w",
+        "electromagnetic_input_power_w", "outward_thermal_flux_w",
+        "ambient_temperature_k", "maximum_temperature_k", "temperature_rise_k",
+        "electromagnetic_power_balance_residual_w",
+        "thermal_power_balance_residual_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+        surface_current = [
+            float(value) for value in identity["surface_current_density_a_per_m"]
+        ]
+        result_surface_current = [
+            float(value)
+            for value in identity["result_surface_current_density_a_per_m"]
+        ]
+        proximity_current = [
+            float(value)
+            for value in identity["proximity_current_density_a_per_m2"]
+        ]
+        result_proximity_current = [
+            float(value)
+            for value in identity["result_proximity_current_density_a_per_m2"]
+        ]
+    except (KeyError, TypeError, ValueError):
+        return False
+    omega = 2.0 * math.pi * values["frequency_hz"]
+    permeability = 4.0e-7 * math.pi * values["relative_permeability"]
+    expected_skin_depth = math.sqrt(
+        2.0 / (omega * permeability * values["conductivity_s_per_m"])
+    )
+    expected_em_residual = (
+        values["electromagnetic_input_power_w"]
+        - values["joule_loss_w"]
+        - values["magnetic_loss_w"]
+    )
+    expected_thermal_residual = (
+        values["joule_loss_w"]
+        + values["magnetic_loss_w"]
+        - values["outward_thermal_flux_w"]
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "skin_generation", "proximity_generation", "joule_generation",
+            "thermal_generation", "temperature_generation", "energy_generation",
+            "mesh_generation", "result_generation",
+        ))
+        and all(math.isfinite(value) for value in values.values())
+        and min(
+            values["frequency_hz"], values["conductivity_s_per_m"],
+            values["relative_permeability"], values["skin_depth_m"],
+            values["electromagnetic_input_power_w"],
+            values["ambient_temperature_k"], values["maximum_temperature_k"],
+        ) > 0.0
+        and values["joule_loss_w"] >= 0.0
+        and values["magnetic_loss_w"] >= 0.0
+        and bool(surface_current) and bool(proximity_current)
+        and all(math.isfinite(value) and value >= 0.0 for value in surface_current)
+        and all(math.isfinite(value) and value >= 0.0 for value in proximity_current)
+        and result_surface_current == surface_current
+        and result_proximity_current == proximity_current
+        and math.isclose(values["skin_depth_m"], expected_skin_depth, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["temperature_rise_k"], values["maximum_temperature_k"] - values["ambient_temperature_k"], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["temperature_rise_k"] >= 0.0
+        and math.isclose(values["electromagnetic_power_balance_residual_w"], expected_em_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["thermal_power_balance_residual_w"], expected_thermal_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(expected_em_residual) <= 1.0e-12 * max(values["electromagnetic_input_power_w"], 1.0e-15)
+        and abs(expected_thermal_residual) <= 1.0e-12 * max(values["outward_thermal_flux_w"], 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _reacting_species_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "species_transport_reaction_diffusion_flux_massbalance_rate_temperature_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("species_generation") or "")
+    names = (
+        "diffusivity_m2_per_s", "temperature_k", "gas_constant_j_per_mol_k",
+        "preexponential_factor_per_s", "activation_energy_j_per_mol",
+        "reaction_rate_constant_per_s", "mean_concentration_mol_per_m3",
+        "domain_volume_m3", "integrated_species_mol",
+        "integrated_consumption_mol_per_s", "inward_boundary_flux_mol_per_s",
+        "mass_balance_residual_mol_per_s",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    expected_rate = values["preexponential_factor_per_s"] * math.exp(
+        -values["activation_energy_j_per_mol"]
+        / (values["gas_constant_j_per_mol_k"] * values["temperature_k"])
+    )
+    expected_amount = (
+        values["mean_concentration_mol_per_m3"] * values["domain_volume_m3"]
+    )
+    expected_consumption = expected_rate * expected_amount
+    expected_residual = (
+        values["inward_boundary_flux_mol_per_s"]
+        - values["integrated_consumption_mol_per_s"]
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "diffusion_generation", "reaction_generation", "flux_generation",
+            "mass_generation", "temperature_generation", "mesh_generation",
+            "result_generation",
+        ))
+        and all(math.isfinite(value) for value in values.values())
+        and min(
+            values["diffusivity_m2_per_s"], values["temperature_k"],
+            values["gas_constant_j_per_mol_k"],
+            values["preexponential_factor_per_s"],
+            values["mean_concentration_mol_per_m3"], values["domain_volume_m3"],
+        ) > 0.0
+        and values["activation_energy_j_per_mol"] >= 0.0
+        and math.isclose(values["reaction_rate_constant_per_s"], expected_rate, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["integrated_species_mol"], expected_amount, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["integrated_consumption_mol_per_s"], expected_consumption, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["inward_boundary_flux_mol_per_s"] >= 0.0
+        and math.isclose(values["mass_balance_residual_mol_per_s"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and abs(expected_residual) <= 1.0e-12 * max(expected_consumption, 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -4737,6 +4892,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "fluidfilm_bearing_results_use_current_film_pressure_load_friction_temperature_power_mesh_and_result": (
             _fluidfilm_bearing_identity_ok(summary)
+        ),
+        "induction_heating_results_use_current_skin_proximity_joule_thermal_temperature_energy_mesh_and_result": (
+            _induction_heating_identity_ok(summary)
+        ),
+        "reacting_species_results_use_current_diffusion_rate_flux_mass_temperature_mesh_and_result": (
+            _reacting_species_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
