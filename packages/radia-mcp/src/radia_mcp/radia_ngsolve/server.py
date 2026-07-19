@@ -129,6 +129,7 @@ from .femm_v46_identity import validate_public_identity as _validate_femm_v46_id
 from .magnetic_artifact_lineage_v47 import validate_public_identity as _validate_femm_v47_identity
 from .electromagnetic_semantic_identity_v48 import validate_public_identity as _validate_femm_v48_identity
 from .electromagnetic_artifact_identity_v49 import validate_public_identity as _validate_femm_v49_identity
+from .electromagnetic_artifact_identity_v50 import validate_public_identity as _validate_femm_v50_identity
 from .motor_v44_identity import validate_public_identity as _validate_motor_v44_identity
 from .jmag_v46_identity import validate_public_identity as _validate_jmag_v46_identity
 from .motor_artifact_lineage_v47 import validate_public_identity as _validate_motor_v47_identity
@@ -3493,6 +3494,12 @@ def force_coenergy_displacement_gate(
             result.setdefault("checks", {}).update(v49_checks)
             result["electromagnetic_v49_identity_checks"] = v49_checks
             if not all(v49_checks.values()):
+                result["status"] = "needs_attention"
+        v50_checks = _validate_femm_v50_identity(artifact_identity)
+        if v50_checks:
+            result.setdefault("checks", {}).update(v50_checks)
+            result["electromagnetic_v50_identity_checks"] = v50_checks
+            if not all(v50_checks.values()):
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
