@@ -149,6 +149,7 @@ from .comsol_v46_identity import validate_public_identity as _validate_comsol_v4
 from .cross_artifact_lineage_v47 import validate_public_identity as _validate_comsol_v47_identity
 from .transform_normalization_v48 import validate_public_v48_identity as _validate_comsol_v48_identity
 from .solver_state_identity_v49 import validate_public_v49_identity as _validate_comsol_v49_identity
+from .frequency_contact_identity_v50 import validate_public_v50_identity as _validate_comsol_v50_identity
 from .regularized_trace_inverse_gate import (
     regularized_trace_inverse_path_gate as _regularized_trace_inverse_path_gate,
 )
@@ -2945,6 +2946,12 @@ def rotational_eddy_brake_energy_gate(summary_json: str) -> str:
             result.setdefault("checks", {}).update(v49_checks["checks"])
             result["solver_state_identity_v49"] = v49_checks
             if v49_checks["status"] != "ok":
+                result["status"] = "needs_attention"
+        v50_checks = _validate_comsol_v50_identity(payload)
+        if v50_checks:
+            result.setdefault("checks", {}).update(v50_checks["checks"])
+            result["frequency_contact_identity_v50"] = v50_checks
+            if v50_checks["status"] != "ok":
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
