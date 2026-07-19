@@ -4424,6 +4424,168 @@ def _transimpedance_owner_identity_ok(positive: Mapping[str, object]) -> bool:
     contract = positive.get(
         "transimpedance_photodiode_capacitance_noise_gain_bandwidth_stability_noise_step_circuit_result_identity"
     )
+    return _transimpedance_contract_ok(contract)
+
+
+def _llc_resonant_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "llc_resonant_elements_frequency_gain_zvs_current_loss_cycle_energy_waveform_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("llc_generation_id") or "")
+    fields = (
+        "resonant_inductance_h", "resonant_capacitance_f",
+        "magnetizing_inductance_h", "resonant_frequency_hz",
+        "switching_frequency_hz", "normalized_switching_frequency",
+        "input_voltage_v", "transformer_turns_ratio", "conversion_gain_v_per_v",
+        "output_voltage_v", "dead_time_s", "switch_output_capacitance_f",
+        "magnetizing_current_at_transition_a", "required_zvs_current_a",
+        "circulating_current_rms_a", "switch_conduction_resistance_ohm",
+        "conduction_loss_w", "switching_loss_w", "device_loss_w", "tank_loss_w",
+        "input_energy_per_cycle_j", "output_energy_per_cycle_j",
+        "device_loss_energy_per_cycle_j", "tank_loss_energy_per_cycle_j",
+        "cycle_energy_residual_j",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    resonant_frequency = 1.0 / (
+        2.0 * math.pi * math.sqrt(
+            values["resonant_inductance_h"] * values["resonant_capacitance_f"]
+        )
+    ) if min(values["resonant_inductance_h"], values["resonant_capacitance_f"]) > 0.0 else math.nan
+    required_zvs_current = (
+        2.0 * values["switch_output_capacitance_f"] * values["input_voltage_v"]
+        / values["dead_time_s"]
+        if values["dead_time_s"] > 0.0
+        else math.nan
+    )
+    expected_residual = (
+        values["input_energy_per_cycle_j"]
+        - values["output_energy_per_cycle_j"]
+        - values["device_loss_energy_per_cycle_j"]
+        - values["tank_loss_energy_per_cycle_j"]
+    )
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "element_llc_generation_id", "frequency_llc_generation_id",
+            "gain_llc_generation_id", "zvs_llc_generation_id",
+            "current_llc_generation_id", "loss_llc_generation_id",
+            "energy_llc_generation_id", "waveform_llc_generation_id",
+            "result_llc_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(
+            values["resonant_inductance_h"], values["resonant_capacitance_f"],
+            values["magnetizing_inductance_h"], values["switching_frequency_hz"],
+            values["input_voltage_v"], values["transformer_turns_ratio"],
+            values["conversion_gain_v_per_v"], values["dead_time_s"],
+            values["switch_output_capacitance_f"],
+            values["magnetizing_current_at_transition_a"],
+            values["circulating_current_rms_a"],
+            values["switch_conduction_resistance_ohm"],
+        ) > 0.0
+        and values["magnetizing_inductance_h"] > values["resonant_inductance_h"]
+        and math.isclose(values["resonant_frequency_hz"], resonant_frequency, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and math.isclose(values["normalized_switching_frequency"], values["switching_frequency_hz"] / resonant_frequency, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["output_voltage_v"], values["input_voltage_v"] * values["transformer_turns_ratio"] * values["conversion_gain_v_per_v"], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["required_zvs_current_a"], required_zvs_current, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and contract.get("zvs_condition_met") is True
+        and contract.get("result_zvs_condition_met") is True
+        and values["magnetizing_current_at_transition_a"] >= required_zvs_current
+        and math.isclose(values["conduction_loss_w"], values["circulating_current_rms_a"] ** 2 * values["switch_conduction_resistance_ohm"], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["switching_loss_w"] >= 0.0 and values["tank_loss_w"] >= 0.0
+        and math.isclose(values["device_loss_w"], values["conduction_loss_w"] + values["switching_loss_w"], rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["device_loss_energy_per_cycle_j"], values["device_loss_w"] / values["switching_frequency_hz"], rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["tank_loss_energy_per_cycle_j"], values["tank_loss_w"] / values["switching_frequency_hz"], rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and math.isclose(values["cycle_energy_residual_j"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-18)
+        and abs(expected_residual) <= 1.0e-12 * max(values["input_energy_per_cycle_j"], 1.0e-18)
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-18) for field in fields)
+        and bool(str(contract.get("waveform_owner") or ""))
+        and contract.get("accepted_waveform_owner") == contract.get("waveform_owner")
+        and _is_sha256(str(contract.get("waveform_sha256") or ""))
+        and contract.get("accepted_waveform_sha256") == contract.get("waveform_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _bjt_amplifier_owner_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "bjt_bias_gm_gain_pole_noise_distortion_thermal_power_circuit_result_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("bjt_generation_id") or "")
+    fields = (
+        "collector_current_a", "collector_emitter_voltage_v", "thermal_voltage_v",
+        "transconductance_s", "collector_resistance_ohm", "load_resistance_ohm",
+        "voltage_gain_v_per_v", "output_capacitance_f",
+        "dominant_pole_frequency_hz", "input_noise_density_v_per_sqrt_hz",
+        "integrated_output_noise_v_rms", "fundamental_output_v",
+        "second_harmonic_v", "third_harmonic_v", "total_harmonic_distortion",
+        "ambient_temperature_c", "junction_to_ambient_k_per_w",
+        "device_power_w", "junction_temperature_c",
+    )
+    try:
+        values = {field: float(contract[field]) for field in fields}
+        results = {field: float(contract[f"result_{field}"]) for field in fields}
+    except (KeyError, TypeError, ValueError):
+        return False
+    parallel_resistance = 1.0 / (
+        1.0 / values["collector_resistance_ohm"] + 1.0 / values["load_resistance_ohm"]
+    ) if min(values["collector_resistance_ohm"], values["load_resistance_ohm"]) > 0.0 else math.nan
+    expected_gm = values["collector_current_a"] / values["thermal_voltage_v"] if values["thermal_voltage_v"] > 0.0 else math.nan
+    expected_gain = -expected_gm * parallel_resistance
+    expected_pole = 1.0 / (2.0 * math.pi * parallel_resistance * values["output_capacitance_f"]) if values["output_capacitance_f"] > 0.0 else math.nan
+    expected_noise = values["input_noise_density_v_per_sqrt_hz"] * abs(expected_gain) * math.sqrt(expected_pole)
+    expected_thd = math.sqrt(values["second_harmonic_v"] ** 2 + values["third_harmonic_v"] ** 2) / values["fundamental_output_v"] if values["fundamental_output_v"] > 0.0 else math.nan
+    expected_power = values["collector_emitter_voltage_v"] * values["collector_current_a"]
+    expected_temperature = values["ambient_temperature_c"] + values["junction_to_ambient_k_per_w"] * expected_power
+    return (
+        bool(generation)
+        and all(contract.get(key) == generation for key in (
+            "bias_bjt_generation_id", "gm_bjt_generation_id", "gain_bjt_generation_id",
+            "pole_bjt_generation_id", "noise_bjt_generation_id",
+            "distortion_bjt_generation_id", "thermal_bjt_generation_id",
+            "circuit_bjt_generation_id", "result_bjt_generation_id",
+        ))
+        and all(math.isfinite(item) for item in values.values())
+        and min(
+            values["collector_current_a"], values["collector_emitter_voltage_v"],
+            values["thermal_voltage_v"], values["collector_resistance_ohm"],
+            values["load_resistance_ohm"], values["output_capacitance_f"],
+            values["input_noise_density_v_per_sqrt_hz"], values["fundamental_output_v"],
+            values["junction_to_ambient_k_per_w"],
+        ) > 0.0
+        and math.isclose(values["transconductance_s"], expected_gm, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["voltage_gain_v_per_v"], expected_gain, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["dominant_pole_frequency_hz"], expected_pole, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and math.isclose(values["integrated_output_noise_v_rms"], expected_noise, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and values["second_harmonic_v"] >= 0.0 and values["third_harmonic_v"] >= 0.0
+        and math.isclose(values["total_harmonic_distortion"], expected_thd, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["device_power_w"], expected_power, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["junction_temperature_c"], expected_temperature, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["junction_temperature_c"] > values["ambient_temperature_c"]
+        and all(math.isclose(results[field], values[field], rel_tol=1.0e-12, abs_tol=1.0e-15) for field in fields)
+        and bool(str(contract.get("circuit_owner") or ""))
+        and contract.get("accepted_circuit_owner") == contract.get("circuit_owner")
+        and _is_sha256(str(contract.get("circuit_sha256") or ""))
+        and contract.get("accepted_circuit_sha256") == contract.get("circuit_sha256")
+        and _is_sha256(str(contract.get("result_sha256") or ""))
+        and contract.get("accepted_result_sha256") == contract.get("result_sha256")
+    )
+
+
+def _transimpedance_contract_ok(contract: object) -> bool:
     if contract is None:
         return True
     if not isinstance(contract, Mapping):
@@ -4928,6 +5090,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "transimpedance_uses_current_capacitance_noise_gain_bandwidth_stability_noise_step_circuit_and_result": (
             _transimpedance_owner_identity_ok(positive)
+        ),
+        "llc_resonant_converters_use_current_elements_frequency_gain_zvs_current_loss_cycle_energy_waveform_and_result": (
+            _llc_resonant_owner_identity_ok(positive)
+        ),
+        "bjt_amplifiers_use_current_bias_gm_gain_pole_noise_distortion_thermal_power_circuit_and_result": (
+            _bjt_amplifier_owner_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
