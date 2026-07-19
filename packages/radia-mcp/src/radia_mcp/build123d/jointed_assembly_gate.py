@@ -29,6 +29,58 @@ def _valid_sha256(value: object) -> bool:
     )
 
 
+_V44_SKETCH_KEY = "sketch_constraint_solver_order_plane_frame_parameter_cache_shape_owner_generation_identity"
+_V44_STEP_KEY = "step_export_units_tessellation_tolerance_facecount_brep_digest_owner_generation_identity"
+
+
+def _v44_sketch_identity_ok(value: object) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("sketch_generation") or "")
+    names = ("constraint_generation", "solver_order_generation", "plane_frame_generation", "parameter_cache_generation", "shape_generation", "owner_generation", "result_generation")
+    return (
+        bool(generation)
+        and all(value.get(name) == generation for name in names)
+        and list(value.get("replayed_constraint_order") or []) == list(value.get("constraint_order") or [])
+        and bool(value.get("constraint_order"))
+        and value.get("plane_frame") == "XY"
+        and value.get("replayed_plane_frame") == value.get("plane_frame")
+        and value.get("replayed_parameter_cache_key") == value.get("parameter_cache_key")
+        and value.get("solver_status") == "solved"
+        and value.get("replayed_solver_status") == value.get("solver_status")
+        and int(value.get("shape_generation_id", -1)) > 0
+        and value.get("replayed_shape_generation_id") == value.get("shape_generation_id")
+        and str(value.get("shape_owner") or "").startswith("headless:")
+        and value.get("replayed_shape_owner") == value.get("shape_owner")
+        and _valid_sha256(value.get("sketch_result_sha256"))
+        and value.get("accepted_sketch_result_sha256") == value.get("sketch_result_sha256")
+    )
+
+
+def _v44_step_identity_ok(value: object) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation") or "")
+    names = ("unit_generation", "tessellation_generation", "tolerance_generation", "facecount_generation", "brep_generation", "digest_generation", "owner_generation", "result_generation")
+    return (
+        bool(generation)
+        and all(value.get(name) == generation for name in names)
+        and value.get("length_unit") == "mm"
+        and value.get("replayed_length_unit") == value.get("length_unit")
+        and float(value.get("tessellation_tolerance_m", -1.0)) > 0.0
+        and value.get("replayed_tessellation_tolerance_m") == value.get("tessellation_tolerance_m")
+        and int(value.get("face_count", 0)) > 0
+        and value.get("replayed_face_count") == value.get("face_count")
+        and value.get("replayed_topology_signature") == value.get("topology_signature")
+        and int(value.get("brep_generation_id", -1)) > 0
+        and value.get("replayed_brep_generation_id") == value.get("brep_generation_id")
+        and str(value.get("export_owner") or "").startswith("headless:")
+        and value.get("replayed_export_owner") == value.get("export_owner")
+        and _valid_sha256(value.get("step_digest_sha256"))
+        and value.get("replayed_step_digest_sha256") == value.get("step_digest_sha256")
+    )
+
+
 def _step_import_metadata_topology_identity_ok(value: object) -> bool:
     if value is None:
         return True
@@ -5045,6 +5097,15 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         "four_dominant_timing_stages_recorded": len(timing) == 4
         and all(float(value) >= 0.0 for value in timing.values()),
     }
+    if isinstance(replay_identity_value, Mapping):
+        if _V44_SKETCH_KEY in replay_identity_value:
+            checks["v44_sketch_constraint_replay_identity"] = _v44_sketch_identity_ok(
+                replay_identity_value.get(_V44_SKETCH_KEY)
+            )
+        if _V44_STEP_KEY in replay_identity_value:
+            checks["v44_step_export_replay_identity"] = _v44_step_identity_ok(
+                replay_identity_value.get(_V44_STEP_KEY)
+            )
     issues = [name for name, ok in checks.items() if not ok]
     warnings = [] if replay_identity_present else ["replay_identity_not_recorded"]
     return {

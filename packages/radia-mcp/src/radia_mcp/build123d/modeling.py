@@ -5964,6 +5964,64 @@ def _v42_fuzzy_boolean_sliver_identity(row):
     return generation, value.get("operation"), tolerance, slivers_before, tuple(sorted(topology.items())), volume, area, value.get("shape_owner"), digest
 
 
+_V44_BOOLEAN_KEY = "boolean_shell_fillet_massproperties_centerofmass_volume_brep_owner_generation_identity"
+_V44_LOFT_KEY = "loft_sweep_section_orientation_tangent_area_volume_inertia_brep_generation_identity"
+
+
+def _v44_valid_sha256(value) -> bool:
+    digest = str(value or "").lower()
+    return len(digest) == 64 and all(char in "0123456789abcdef" for char in digest)
+
+
+def _v44_boolean_identity_ok(value) -> bool:
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("boolean_generation") or "")
+    names = ("history_generation", "shell_generation", "fillet_generation", "mass_generation", "center_generation", "volume_generation", "owner_generation", "brep_generation", "result_generation")
+    return (
+        bool(generation)
+        and all(value.get(name) == generation for name in names)
+        and value.get("operation") == "cut"
+        and value.get("result_operation") == value.get("operation")
+        and float(value.get("shell_thickness_m", -1.0)) > 0.0
+        and value.get("result_shell_thickness_m") == value.get("shell_thickness_m")
+        and float(value.get("fillet_radius_m", -1.0)) > 0.0
+        and value.get("result_fillet_radius_m") == value.get("fillet_radius_m")
+        and value.get("result_center_of_mass_m") == value.get("center_of_mass_m")
+        and float(value.get("volume_m3", -1.0)) > 0.0
+        and value.get("result_volume_m3") == value.get("volume_m3")
+        and value.get("result_surface_area_m2") == value.get("surface_area_m2")
+        and value.get("result_topology_signature") == value.get("topology_signature")
+        and str(value.get("shape_owner") or "") == str(value.get("result_shape_owner") or "")
+        and _v44_valid_sha256(value.get("boolean_brep_sha256"))
+        and value.get("accepted_boolean_brep_sha256") == value.get("boolean_brep_sha256")
+    )
+
+
+def _v44_loft_identity_ok(value) -> bool:
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("loft_generation") or "")
+    names = ("section_generation", "orientation_generation", "tangent_generation", "area_generation", "volume_generation", "inertia_generation", "owner_generation", "brep_generation", "result_generation")
+    return (
+        bool(generation)
+        and all(value.get(name) == generation for name in names)
+        and int(value.get("section_count", 0)) >= 2
+        and value.get("result_section_count") == value.get("section_count")
+        and value.get("section_orientation") == "consistent_ccw"
+        and value.get("result_section_orientation") == value.get("section_orientation")
+        and value.get("tangent_continuity") == "C1"
+        and value.get("result_tangent_continuity") == value.get("tangent_continuity")
+        and value.get("result_section_area_m2") == value.get("section_area_m2")
+        and float(value.get("volume_m3", -1.0)) > 0.0
+        and value.get("result_volume_m3") == value.get("volume_m3")
+        and value.get("result_inertia_tensor_kg_m2") == value.get("inertia_tensor_kg_m2")
+        and str(value.get("shape_owner") or "") == str(value.get("result_shape_owner") or "")
+        and _v44_valid_sha256(value.get("loft_brep_sha256"))
+        and value.get("accepted_loft_brep_sha256") == value.get("loft_brep_sha256")
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -8920,6 +8978,21 @@ def shape_mass_property_crosscheck_summary(
         issues.append(
             "assembly mates mix stale transforms, DOF state, solver, or loop closure"
         )
+    v44_boolean_present = any(_V44_BOOLEAN_KEY in row for row in identity_rows)
+    v44_loft_present = any(_V44_LOFT_KEY in row for row in identity_rows)
+    if v44_boolean_present:
+        checks["v44_boolean_shell_fillet_identity"] = all(
+            _v44_boolean_identity_ok(row.get(_V44_BOOLEAN_KEY)) for row in identity_rows
+        )
+        if not checks["v44_boolean_shell_fillet_identity"]:
+            issues.append("Boolean shell/fillet identity is stale or internally inconsistent")
+    if v44_loft_present:
+        checks["v44_loft_sweep_identity"] = all(
+            _v44_loft_identity_ok(row.get(_V44_LOFT_KEY)) for row in identity_rows
+        )
+        if not checks["v44_loft_sweep_identity"]:
+            issues.append("loft/sweep section, tangent, mass, or BREP identity is stale")
+
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
