@@ -4184,6 +4184,159 @@ def _cavity_degenerate_closure_inputs_are_current(raw: Mapping[str, Any]) -> boo
     )
 
 
+def _waveguide_cutoff_power_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "waveguide_cutoff_propagation_impedance_mode_orthogonality_sparameter_power_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("waveguide_generation", "")).strip()
+    try:
+        width = float(identity.get("waveguide_width_m"))
+        height = float(identity.get("waveguide_height_m"))
+        frequency = float(identity.get("frequency_hz"))
+        cutoff = float(identity.get("cutoff_frequency_hz"))
+        propagation = float(identity.get("propagation_constant_rad_per_m"))
+        guide_wavelength = float(identity.get("guide_wavelength_m"))
+        guide_impedance = float(identity.get("guide_impedance_ohm"))
+        overlap = [[float(item) for item in row] for row in identity.get("modal_overlap_matrix", [])]
+        s11 = [float(item) for item in identity.get("s11_complex", [])]
+        s21 = [float(item) for item in identity.get("s21_complex", [])]
+        incident = float(identity.get("incident_power_w"))
+        reflected = float(identity.get("reflected_power_w"))
+        transmitted = float(identity.get("transmitted_power_w"))
+        wall_loss = float(identity.get("wall_loss_w"))
+        residual = float(identity.get("power_balance_residual_w"))
+    except (TypeError, ValueError):
+        return False
+    c0 = 299_792_458.0
+    mu0 = 4.0e-7 * math.pi
+    omega = 2.0 * math.pi * frequency
+    expected_cutoff = c0 / (2.0 * width) if width > 0.0 else math.nan
+    expected_propagation = (
+        math.sqrt((omega / c0) ** 2 - (math.pi / width) ** 2)
+        if width > 0.0 and frequency > expected_cutoff
+        else math.nan
+    )
+    expected_wavelength = 2.0 * math.pi / expected_propagation
+    expected_impedance = omega * mu0 / expected_propagation
+    expected_reflected = incident * sum(item * item for item in s11)
+    expected_transmitted = incident * sum(item * item for item in s21)
+    expected_residual = incident - reflected - transmitted - wall_loss
+    mirrored = (
+        "waveguide_width_m", "waveguide_height_m", "mode_name", "frequency_hz",
+        "cutoff_frequency_hz", "propagation_constant_rad_per_m",
+        "guide_wavelength_m", "guide_impedance_ohm", "modal_overlap_matrix",
+        "s11_complex", "s21_complex", "incident_power_w", "reflected_power_w",
+        "transmitted_power_w", "wall_loss_w", "power_balance_residual_w",
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "geometry_generation", "mode_generation", "cutoff_generation",
+            "propagation_generation", "impedance_generation",
+            "orthogonality_generation", "sparameter_generation",
+            "power_generation", "owner_generation", "result_generation"))
+        and all(math.isfinite(item) and item > 0.0 for item in (
+            width, height, frequency, cutoff, propagation, guide_wavelength,
+            guide_impedance, incident))
+        and identity.get("mode_name") == "TE10"
+        and frequency > cutoff
+        and math.isclose(cutoff, expected_cutoff, rel_tol=1.0e-12, abs_tol=1.0e-3)
+        and math.isclose(propagation, expected_propagation, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(guide_wavelength, expected_wavelength, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(guide_impedance, expected_impedance, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and overlap == [[1.0, 0.0], [0.0, 1.0]]
+        and len(s11) == len(s21) == 2
+        and all(math.isfinite(item) for item in s11 + s21)
+        and sum(item * item for item in s11) <= 1.0
+        and sum(item * item for item in s21) <= 1.0
+        and math.isclose(reflected, expected_reflected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(transmitted, expected_transmitted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and wall_loss >= 0.0
+        and math.isclose(residual, expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(residual) <= 1.0e-12
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and str(identity.get("waveguide_owner", "")).startswith("waveguide/")
+        and identity.get("accepted_waveguide_owner") == identity.get("waveguide_owner")
+        and _valid_sha256(identity.get("waveguide_result_sha256"))
+        and identity.get("accepted_waveguide_result_sha256") == identity.get("waveguide_result_sha256")
+    )
+
+
+def _antenna_farfield_power_inputs_are_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get(
+        "antenna_farfield_directivity_gain_efficiency_power_polarization_mesh_owner_result_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    generation = str(identity.get("antenna_generation", "")).strip()
+    fields = (
+        "incident_power_w", "reflected_power_w", "accepted_power_w",
+        "radiated_power_w", "conductor_loss_w", "dielectric_loss_w",
+        "radiation_efficiency", "directivity_linear", "gain_linear",
+        "maximum_radiation_intensity_w_per_sr", "co_polar_fraction",
+        "cross_polar_fraction", "power_balance_residual_w",
+    )
+    try:
+        numbers = {field: float(identity.get(field)) for field in fields}
+    except (TypeError, ValueError):
+        return False
+    expected_accepted = numbers["incident_power_w"] - numbers["reflected_power_w"]
+    expected_radiated = (
+        numbers["accepted_power_w"]
+        - numbers["conductor_loss_w"]
+        - numbers["dielectric_loss_w"]
+    )
+    expected_efficiency = numbers["radiated_power_w"] / numbers["accepted_power_w"]
+    expected_gain = numbers["directivity_linear"] * numbers["radiation_efficiency"]
+    expected_intensity = (
+        numbers["directivity_linear"] * numbers["radiated_power_w"]
+        / (4.0 * math.pi)
+    )
+    expected_residual = numbers["accepted_power_w"] - (
+        numbers["radiated_power_w"]
+        + numbers["conductor_loss_w"]
+        + numbers["dielectric_loss_w"]
+    )
+    mirrored = fields + ("polarization_basis",)
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "excitation_generation", "farfield_generation", "directivity_generation",
+            "gain_generation", "efficiency_generation", "power_generation",
+            "polarization_generation", "mesh_generation", "owner_generation",
+            "result_generation"))
+        and all(math.isfinite(item) for item in numbers.values())
+        and numbers["incident_power_w"] > 0.0
+        and 0.0 <= numbers["reflected_power_w"] < numbers["incident_power_w"]
+        and math.isclose(numbers["accepted_power_w"], expected_accepted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["conductor_loss_w"] >= 0.0 and numbers["dielectric_loss_w"] >= 0.0
+        and math.isclose(numbers["radiated_power_w"], expected_radiated, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and numbers["radiated_power_w"] > 0.0
+        and math.isclose(numbers["radiation_efficiency"], expected_efficiency, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and 0.0 < numbers["radiation_efficiency"] <= 1.0
+        and numbers["directivity_linear"] >= 1.0
+        and math.isclose(numbers["gain_linear"], expected_gain, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(numbers["maximum_radiation_intensity_w_per_sr"], expected_intensity, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and identity.get("polarization_basis") == "linear_xy"
+        and 0.0 <= numbers["co_polar_fraction"] <= 1.0
+        and 0.0 <= numbers["cross_polar_fraction"] <= 1.0
+        and math.isclose(numbers["co_polar_fraction"] + numbers["cross_polar_fraction"], 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(numbers["power_balance_residual_w"], expected_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(numbers["power_balance_residual_w"]) <= 1.0e-12
+        and all(identity.get(f"result_{field}") == identity.get(field) for field in mirrored)
+        and str(identity.get("antenna_owner", "")).startswith("antenna/")
+        and identity.get("accepted_antenna_owner") == identity.get("antenna_owner")
+        and _valid_sha256(identity.get("antenna_result_sha256"))
+        and identity.get("accepted_antenna_result_sha256") == identity.get("antenna_result_sha256")
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -4699,6 +4852,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "cavity_degenerate_modes_use_current_frequency_orthogonality_energy_symmetry_quality_mesh_owner_and_result": (
                 _cavity_degenerate_closure_inputs_are_current(raw)
+            ),
+            "waveguides_use_current_cutoff_propagation_impedance_modes_sparameters_power_owner_and_result": (
+                _waveguide_cutoff_power_inputs_are_current(raw)
+            ),
+            "antenna_farfields_use_current_directivity_gain_efficiency_power_polarization_owner_and_result": (
+                _antenna_farfield_power_inputs_are_current(raw)
             ),
         }
         row = {
