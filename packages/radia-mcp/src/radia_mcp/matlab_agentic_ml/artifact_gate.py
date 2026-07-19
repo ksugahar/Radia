@@ -180,6 +180,31 @@ def validate_matlab_ml_rl_v47_identity(summary: Mapping[str, object]) -> dict[st
     }
 
 
+def validate_matlab_ml_rl_v48_identity(summary: Mapping[str, object]) -> dict[str, object] | None:
+    """Validate autodiff, sequence, agentic-workspace, and experiment selection lineage."""
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    identity = summary.get("matlab_ml_rl_v48_identity")
+    if not isinstance(identity, Mapping):
+        return None
+    records = {name: identity.get(name) for name in ("autodiff", "sequence_model", "agentic_workspace", "experiment_selection")}
+    checks = {f"v48_{name}_record_is_mapping": isinstance(value, Mapping) for name, value in records.items()}
+    if isinstance(records["autodiff"], Mapping):
+        checks.update(_autodiff_v48_checks(records["autodiff"]))
+    if isinstance(records["sequence_model"], Mapping):
+        checks.update(_sequence_v48_checks(records["sequence_model"]))
+    if isinstance(records["agentic_workspace"], Mapping):
+        checks.update(_agentic_workspace_v48_checks(records["agentic_workspace"]))
+    if isinstance(records["experiment_selection"], Mapping):
+        checks.update(_experiment_selection_v48_checks(records["experiment_selection"]))
+    return {
+        "policy": "matlab_ml_rl_artifact_gate_v48",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, passed in checks.items() if not passed],
+    }
+
+
 def _generation_v47(value: Mapping[str, object], fields: tuple[str, ...]) -> bool:
     generation = str(value.get("generation", "")).strip()
     return bool(generation) and all(value.get(field) == generation for field in fields)
@@ -248,6 +273,84 @@ def _experiment_v47_checks(value: Mapping[str, object]) -> dict[str, bool]:
         "v47_experiment_result_indices_are_unique_ordered_and_bound": isinstance(indices, list) and len(indices) == len(trials or []) and all(isinstance(index, int) and index >= 0 for index in indices) and indices == sorted(indices) and len(indices) == len(set(indices)) and value.get("replayed_result_indices") == indices,
         "v47_experiment_owner_is_bound": str(value.get("experiment_owner", "")).startswith("experiment:") and value.get("result_experiment_owner") == value.get("experiment_owner"),
         "v47_experiment_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _finite_list(value: object, length: int | None = None) -> bool:
+    return isinstance(value, list) and (length is None or len(value) == length) and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
+
+
+def _autodiff_v48_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    parameters = value.get("parameter_order")
+    gradient = value.get("gradient")
+    indices = value.get("fd_spotcheck_indices")
+    fd_gradient = value.get("fd_gradient")
+    spotcheck_ok = (
+        isinstance(indices, list)
+        and _finite_list(fd_gradient, len(indices))
+        and isinstance(gradient, list)
+        and all(isinstance(index, int) and 0 <= index < len(gradient) for index in indices)
+        and len(indices) == len(set(indices))
+        and all(abs(float(gradient[index]) - float(fd)) <= 1.0e-3 * max(1.0, abs(float(fd))) for index, fd in zip(indices, fd_gradient))
+    )
+    return {
+        "v48_autodiff_generation_is_closed": _generation_v47(value, ("parameter_generation", "tape_generation", "objective_generation", "gradient_generation", "fd_generation", "checkpoint_generation", "result_generation")),
+        "v48_autodiff_parameters_and_gradient_are_bound": isinstance(parameters, list) and bool(parameters) and len(parameters) == len(set(parameters)) and value.get("result_parameter_order") == parameters and _finite_list(gradient, len(parameters)) and value.get("result_gradient") == gradient,
+        "v48_autodiff_tape_and_objective_are_bound": _valid_digest(value.get("gradient_tape_sha256")) and value.get("result_gradient_tape_sha256") == value.get("gradient_tape_sha256") and str(value.get("objective_id", "")).startswith("objective:") and value.get("result_objective_id") == value.get("objective_id"),
+        "v48_autodiff_fd_spotcheck_is_bound": spotcheck_ok and value.get("result_fd_spotcheck_indices") == indices and value.get("result_fd_gradient") == fd_gradient,
+        "v48_autodiff_checkpoint_owner_is_bound": str(value.get("checkpoint_owner", "")).startswith("checkpoint:") and value.get("result_checkpoint_owner") == value.get("checkpoint_owner"),
+        "v48_autodiff_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _sequence_v48_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    masks = value.get("padding_mask")
+    lengths = value.get("sequence_lengths")
+    shuffle = value.get("shuffle_order")
+    rows = value.get("minibatch_row_keys")
+    mask_ok = isinstance(masks, list) and isinstance(lengths, list) and len(masks) == len(lengths) > 0
+    if mask_ok:
+        width = max(lengths) if all(isinstance(length, int) and length > 0 for length in lengths) else 0
+        mask_ok = width > 0 and all(mask == [1] * length + [0] * (width - length) for mask, length in zip(masks, lengths))
+    return {
+        "v48_sequence_generation_is_closed": _generation_v47(value, ("padding_generation", "mask_generation", "length_generation", "shuffle_generation", "minibatch_generation", "checkpoint_generation", "result_generation")),
+        "v48_sequence_padding_mask_lengths_are_bound": value.get("padding_policy") == value.get("result_padding_policy") == "right_zero" and mask_ok and value.get("result_padding_mask") == masks and value.get("result_sequence_lengths") == lengths,
+        "v48_sequence_shuffle_minibatch_rows_are_bound": isinstance(shuffle, list) and sorted(shuffle) == list(range(len(lengths or []))) and value.get("result_shuffle_order") == shuffle and isinstance(rows, list) and rows == [f"sequence:{index}" for index in shuffle] and value.get("result_minibatch_row_keys") == rows,
+        "v48_sequence_checkpoint_owner_is_bound": str(value.get("checkpoint_owner", "")).startswith("checkpoint:") and value.get("result_checkpoint_owner") == value.get("checkpoint_owner"),
+        "v48_sequence_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _agentic_workspace_v48_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    mutations = value.get("workspace_mutations")
+    return {
+        "v48_agentic_workspace_generation_is_closed": _generation_v47(value, ("mutation_generation", "diff_generation", "approval_generation", "rollback_generation", "tool_call_generation", "result_generation")),
+        "v48_agentic_workspace_mutations_are_bound": isinstance(mutations, list) and bool(mutations) and len(mutations) == len(set(mutations)) and all(isinstance(path, str) and path and ".." not in path for path in mutations) and value.get("result_workspace_mutations") == mutations,
+        "v48_agentic_workspace_diff_is_bound": _valid_digest(value.get("workspace_diff_sha256")) and value.get("result_workspace_diff_sha256") == value.get("workspace_diff_sha256"),
+        "v48_agentic_approval_and_rollback_are_bound": value.get("approval_scope") == value.get("result_approval_scope") == "workspace_write:approved_paths" and value.get("rollback_state") == value.get("result_rollback_state") == "not_required",
+        "v48_agentic_tool_call_owner_is_bound": str(value.get("tool_call_owner", "")).startswith("tool-call:") and value.get("result_tool_call_owner") == value.get("tool_call_owner"),
+        "v48_agentic_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _experiment_selection_v48_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    direction = value.get("metric_direction")
+    encoding = value.get("categorical_encoding")
+    rows = value.get("trial_row_keys")
+    metrics = value.get("metric_values")
+    best = value.get("best_trial_index")
+    expected = None
+    if isinstance(metrics, list) and metrics and _finite_list(metrics):
+        expected = min(range(len(metrics)), key=metrics.__getitem__) if direction == "minimize" else max(range(len(metrics)), key=metrics.__getitem__) if direction == "maximize" else None
+    encoding_ok = isinstance(encoding, Mapping) and bool(encoding) and all(isinstance(options, list) and bool(options) and len(options) == len(set(options)) for options in encoding.values())
+    return {
+        "v48_experiment_generation_is_closed": _generation_v47(value, ("metric_generation", "direction_generation", "encoding_generation", "trial_generation", "selection_generation", "result_generation")),
+        "v48_experiment_metric_direction_is_bound": bool(str(value.get("metric_name", ""))) and value.get("result_metric_name") == value.get("metric_name") and direction in {"minimize", "maximize"} and value.get("result_metric_direction") == direction,
+        "v48_experiment_categorical_encoding_is_bound": encoding_ok and value.get("result_categorical_encoding") == encoding,
+        "v48_experiment_trials_and_metrics_are_bound": isinstance(rows, list) and bool(rows) and len(rows) == len(set(rows)) and value.get("result_trial_row_keys") == rows and _finite_list(metrics, len(rows)) and value.get("result_metric_values") == metrics,
+        "v48_experiment_best_trial_is_bound": isinstance(best, int) and best == expected and value.get("result_best_trial_index") == best and value.get("best_result_row") == rows[best] and value.get("result_best_result_row") == rows[best],
+        "v48_experiment_owner_is_bound": str(value.get("experiment_owner", "")).startswith("experiment:") and value.get("result_experiment_owner") == value.get("experiment_owner"),
+        "v48_experiment_result_digest_is_bound": _digest_v47(value),
     }
 
 
