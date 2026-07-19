@@ -56,6 +56,7 @@ from .harmonic_force_triplet_gate import (
 from .magnetic_force_method_profile_gate import (
     magnetic_force_method_profile_gate as _magnetic_force_method_profile_gate,
 )
+from .magnetic_force_v44_identity import validate_public_identity as _validate_force_v44_identity
 from .harmonic_port_identity_gate import (
     harmonic_current_port_power_energy_identity_gate as _harmonic_current_port_power_energy_identity_gate,
 )
@@ -2763,6 +2764,17 @@ def magnetic_force_method_profile_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
+    try:
+        payload = json.loads(summary_json)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        payload = None
+    if isinstance(payload, dict):
+        v44_checks = _validate_force_v44_identity(payload.get("artifact_identity"))
+        if v44_checks:
+            result.setdefault("checks", {}).update(v44_checks)
+            result["force_v44_identity_checks"] = v44_checks
+            if not all(v44_checks.values()):
+                result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
 
