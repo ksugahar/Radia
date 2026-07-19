@@ -5568,6 +5568,183 @@ def _modeled_thread_identity(row):
     )
 
 
+def _loft_section_parameterization_identity(row):
+    value = row.get(
+        "loft_section_order_parameterization_seam_twist_closure_topology_volume_centroid_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("loft_generation", "")).strip()
+    try:
+        section_ids = [int(item) for item in value.get("section_ids", [])]
+        parameters = [float(item) for item in value.get("section_parameters", [])]
+        seam_ids = [int(item) for item in value.get("seam_vertex_ids", [])]
+        twist = [float(item) for item in value.get("section_twist_deg", [])]
+        topology = {
+            str(key): int(item) for key, item in value.get("topology_signature", {}).items()
+        }
+        volume = float(value.get("volume_m3"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+    except (AttributeError, TypeError, ValueError):
+        return None
+    mirrored = (
+        "section_ids",
+        "section_parameters",
+        "seam_vertex_ids",
+        "section_twist_deg",
+        "closed_profile",
+        "solid_valid",
+        "topology_signature",
+        "volume_m3",
+        "centroid_m",
+        "shape_owner",
+    )
+    digest = str(value.get("loft_brep_sha256", "")).lower()
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "section_generation",
+                "parameter_generation",
+                "seam_generation",
+                "twist_generation",
+                "closure_generation",
+                "topology_generation",
+                "mass_generation",
+                "owner_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or len(section_ids) < 2
+        or len(parameters) != len(section_ids)
+        or len(seam_ids) != len(section_ids)
+        or len(twist) != len(section_ids)
+        or any(item <= 0 for item in section_ids + seam_ids)
+        or len(set(section_ids)) != len(section_ids)
+        or len(set(seam_ids)) != len(seam_ids)
+        or any(not math.isfinite(item) for item in parameters + twist)
+        or not math.isclose(parameters[0], 0.0, rel_tol=0.0, abs_tol=1.0e-12)
+        or not math.isclose(parameters[-1], 1.0, rel_tol=0.0, abs_tol=1.0e-12)
+        or any(right <= left for left, right in zip(parameters, parameters[1:]))
+        or any(abs(right - left) >= 180.0 for left, right in zip(twist, twist[1:]))
+        or value.get("closed_profile") is not True
+        or value.get("solid_valid") is not True
+        or set(topology) != {"solid", "shell", "face", "edge", "vertex"}
+        or topology["solid"] != 1
+        or topology["shell"] != 1
+        or topology["face"] < len(section_ids)
+        or topology["edge"] < topology["face"]
+        or topology["vertex"] <= 0
+        or not math.isfinite(volume)
+        or volume <= 0.0
+        or len(centroid) != 3
+        or any(not math.isfinite(item) for item in centroid)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_loft_brep_sha256") != digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(section_ids),
+        tuple(parameters),
+        tuple(seam_ids),
+        tuple(twist),
+        tuple(sorted(topology.items())),
+        volume,
+        tuple(centroid),
+        value.get("shape_owner"),
+        digest,
+    )
+
+
+def _shell_offset_validity_identity(row):
+    value = row.get(
+        "shell_offset_removedface_direction_thickness_join_selfintersection_validity_mass_owner_brep_generation_identity"
+    )
+    if not isinstance(value, dict):
+        return None
+    generation = str(value.get("shell_generation", "")).strip()
+    try:
+        face_ids = [int(item) for item in value.get("removed_face_ids", [])]
+        offset = float(value.get("signed_offset_m"))
+        thickness = float(value.get("wall_thickness_m"))
+        volume = float(value.get("volume_m3"))
+        area = float(value.get("surface_area_m2"))
+        centroid = [float(item) for item in value.get("centroid_m", [])]
+    except (TypeError, ValueError):
+        return None
+    mirrored = (
+        "removed_face_ids",
+        "offset_direction",
+        "signed_offset_m",
+        "wall_thickness_m",
+        "join_mode",
+        "self_intersection_free",
+        "solid_valid",
+        "volume_m3",
+        "surface_area_m2",
+        "centroid_m",
+        "shape_owner",
+    )
+    direction = value.get("offset_direction")
+    digest = str(value.get("shell_brep_sha256", "")).lower()
+    expected_offset = -thickness if direction == "inward" else thickness
+    if (
+        not generation
+        or any(
+            value.get(key) != generation
+            for key in (
+                "face_generation",
+                "offset_generation",
+                "thickness_generation",
+                "join_generation",
+                "intersection_generation",
+                "validity_generation",
+                "mass_generation",
+                "owner_generation",
+                "brep_generation",
+                "result_generation",
+            )
+        )
+        or not face_ids
+        or any(item <= 0 for item in face_ids)
+        or len(set(face_ids)) != len(face_ids)
+        or direction not in {"inward", "outward"}
+        or not all(math.isfinite(item) for item in (offset, thickness, volume, area))
+        or thickness <= 0.0
+        or not math.isclose(offset, expected_offset, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        or value.get("join_mode") not in {"arc", "intersection", "tangent"}
+        or value.get("self_intersection_free") is not True
+        or value.get("solid_valid") is not True
+        or volume <= 0.0
+        or area <= 0.0
+        or len(centroid) != 3
+        or any(not math.isfinite(item) for item in centroid)
+        or any(value.get(f"result_{field}") != value.get(field) for field in mirrored)
+        or not str(value.get("shape_owner", "")).startswith("part:")
+        or not _valid_identity_digest(digest)
+        or value.get("accepted_shell_brep_sha256") != digest
+    ):
+        return None
+    return (
+        generation,
+        tuple(face_ids),
+        direction,
+        offset,
+        thickness,
+        value.get("join_mode"),
+        volume,
+        area,
+        tuple(centroid),
+        value.get("shape_owner"),
+        digest,
+    )
+
+
 def shape_mass_property_crosscheck_summary(
     reference_rows,
     measured_sets,
@@ -6333,6 +6510,51 @@ def shape_mass_property_crosscheck_summary(
             thread_identity_ok = thread_identity_ok and all(
                 _modeled_thread_identity(row)
                 == reference_threads.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    loft_parameterization_evidence_present = any(
+        row.get(
+            "loft_section_order_parameterization_seam_twist_closure_topology_volume_centroid_owner_brep_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_loft_parameterizations = {
+        str(row.get("name", "")): _loft_section_parameterization_identity(row)
+        for row in reference
+    }
+    loft_parameterization_identity_ok = not loft_parameterization_evidence_present
+    if loft_parameterization_evidence_present:
+        loft_parameterization_identity_ok = bool(reference_loft_parameterizations) and all(
+            value is not None for value in reference_loft_parameterizations.values()
+        )
+        for _, rows in normalized_sets:
+            loft_parameterization_identity_ok = loft_parameterization_identity_ok and all(
+                _loft_section_parameterization_identity(row)
+                == reference_loft_parameterizations.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    shell_validity_evidence_present = any(
+        row.get(
+            "shell_offset_removedface_direction_thickness_join_selfintersection_validity_mass_owner_brep_generation_identity"
+        )
+        is not None
+        for row in identity_rows
+    )
+    reference_shell_validity = {
+        str(row.get("name", "")): _shell_offset_validity_identity(row) for row in reference
+    }
+    shell_validity_identity_ok = not shell_validity_evidence_present
+    if shell_validity_evidence_present:
+        shell_validity_identity_ok = bool(reference_shell_validity) and all(
+            value is not None for value in reference_shell_validity.values()
+        )
+        for _, rows in normalized_sets:
+            shell_validity_identity_ok = shell_validity_identity_ok and all(
+                _shell_offset_validity_identity(row)
+                == reference_shell_validity.get(str(row.get("name", "")))
                 for row in rows
             )
 
@@ -8275,6 +8497,8 @@ def shape_mass_property_crosscheck_summary(
         "offset_shells_use_current_signed_thickness_join_repair_areas_mass_inertia_owner_and_brep": offset_shell_mass_identity_ok,
         "drafts_use_current_neutral_plane_pull_angle_faces_tangency_topology_mass_owner_and_brep": draft_identity_ok,
         "threads_use_current_pitch_handedness_profile_diameters_runout_intersection_mass_owner_and_brep": thread_identity_ok,
+        "lofts_use_current_sections_parameters_seams_twist_closure_topology_mass_owner_and_brep": loft_parameterization_identity_ok,
+        "shells_use_current_faces_offset_thickness_join_intersection_validity_mass_owner_and_brep": shell_validity_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
