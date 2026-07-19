@@ -3030,6 +3030,227 @@ def _eddy_shield_frequency_identity_ok(value: object) -> bool:
     )
 
 
+def _symmetric_eigenvalues_3x3(matrix: list[list[float]]) -> list[float]:
+    diagonal = [matrix[index][index] for index in range(3)]
+    off_diagonal_square = (
+        matrix[0][1] ** 2 + matrix[0][2] ** 2 + matrix[1][2] ** 2
+    )
+    if off_diagonal_square <= 1.0e-30:
+        return sorted(diagonal)
+    mean = sum(diagonal) / 3.0
+    variance = (
+        sum((value - mean) ** 2 for value in diagonal)
+        + 2.0 * off_diagonal_square
+    )
+    scale = math.sqrt(variance / 6.0)
+    normalized = [
+        [
+            (matrix[row][column] - (mean if row == column else 0.0)) / scale
+            for column in range(3)
+        ]
+        for row in range(3)
+    ]
+    determinant = (
+        normalized[0][0]
+        * (normalized[1][1] * normalized[2][2] - normalized[1][2] * normalized[2][1])
+        - normalized[0][1]
+        * (normalized[1][0] * normalized[2][2] - normalized[1][2] * normalized[2][0])
+        + normalized[0][2]
+        * (normalized[1][0] * normalized[2][1] - normalized[1][1] * normalized[2][0])
+    )
+    angle = math.acos(max(-1.0, min(1.0, determinant / 2.0))) / 3.0
+    largest = mean + 2.0 * scale * math.cos(angle)
+    smallest = mean + 2.0 * scale * math.cos(angle + 2.0 * math.pi / 3.0)
+    middle = 3.0 * mean - largest - smallest
+    return sorted([smallest, middle, largest])
+
+
+def _demagnetizing_tensor_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("demag_tensor_generation", "")).strip()
+    try:
+        matrix = [[float(item) for item in row] for row in value.get("demag_tensor", [])]
+        eigenvalues = [float(item) for item in value.get("tensor_eigenvalues", [])]
+        magnetization = [float(item) for item in value.get("magnetization_a_per_m", [])]
+        probe = [float(item) for item in value.get("probe_magnetization_a_per_m", [])]
+        field = [float(item) for item in value.get("demag_field_a_per_m", [])]
+        trace = float(value.get("tensor_trace"))
+        reciprocity_left = float(value.get("reciprocity_left"))
+        reciprocity_right = float(value.get("reciprocity_right"))
+        volume = float(value.get("magnet_volume_m3"))
+        energy = float(value.get("demag_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    if (
+        len(matrix) != 3
+        or any(len(row) != 3 for row in matrix)
+        or len(eigenvalues) != 3
+        or len(magnetization) != 3
+        or len(probe) != 3
+        or len(field) != 3
+    ):
+        return False
+    tensor_m = [sum(row[index] * magnetization[index] for index in range(3)) for row in matrix]
+    tensor_probe = [sum(row[index] * probe[index] for index in range(3)) for row in matrix]
+    expected_eigenvalues = _symmetric_eigenvalues_3x3(matrix)
+    expected_left = sum(magnetization[index] * tensor_probe[index] for index in range(3))
+    expected_right = sum(probe[index] * tensor_m[index] for index in range(3))
+    mu0 = 4.0e-7 * math.pi
+    expected_energy = 0.5 * mu0 * volume * sum(
+        magnetization[index] * tensor_m[index] for index in range(3)
+    )
+    mirrored = (
+        "demag_tensor", "tensor_trace", "tensor_eigenvalues",
+        "magnetization_a_per_m", "probe_magnetization_a_per_m",
+        "demag_field_a_per_m", "reciprocity_left", "reciprocity_right",
+        "magnet_volume_m3", "demag_energy_j",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "symmetry_generation", "trace_generation", "eigenvalue_generation",
+                "reciprocity_generation", "energy_generation", "mesh_generation",
+                "magnetization_generation", "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for row in matrix for item in row)
+        and all(math.isfinite(item) for item in eigenvalues + magnetization + probe + field)
+        and all(
+            math.isclose(matrix[row][column], matrix[column][row], rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for row in range(3)
+            for column in range(3)
+        )
+        and math.isclose(trace, sum(matrix[index][index] for index in range(3)), rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(trace, 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, expected in zip(sorted(eigenvalues), expected_eigenvalues)
+        )
+        and all(-1.0e-12 <= item <= 1.0 + 1.0e-12 for item in eigenvalues)
+        and all(
+            math.isclose(actual, -expected, rel_tol=1.0e-12, abs_tol=1.0e-9)
+            for actual, expected in zip(field, tensor_m)
+        )
+        and math.isclose(reciprocity_left, expected_left, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and math.isclose(reciprocity_right, expected_right, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and math.isclose(reciprocity_left, reciprocity_right, rel_tol=1.0e-12, abs_tol=1.0e-6)
+        and volume > 0.0
+        and math.isfinite(energy)
+        and energy >= 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(value.get(f"result_{field_name}") == value.get(field_name) for field_name in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and str(value.get("magnetization_owner", "")).startswith("magnetization:")
+        and value.get("accepted_magnetization_owner") == value.get("magnetization_owner")
+        and _valid_sha256(value.get("demag_result_sha256"))
+        and value.get("accepted_demag_result_sha256") == value.get("demag_result_sha256")
+    )
+
+
+def _linear_motor_periodic_work_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("linear_motor_generation", "")).strip()
+    try:
+        positions = [float(item) for item in value.get("position_m", [])]
+        period = float(value.get("period_m"))
+        phase_currents = [
+            [float(item) for item in row] for row in value.get("phase_currents_a", [])
+        ]
+        current_peak = float(value.get("current_peak_a"))
+        amplitude = float(value.get("coenergy_amplitude_j"))
+        coenergy = [float(item) for item in value.get("coenergy_j", [])]
+        cogging_force = [float(item) for item in value.get("cogging_force_n", [])]
+        base_thrust = float(value.get("base_thrust_n"))
+        thrust = [float(item) for item in value.get("thrust_n", [])]
+        periodic_work = float(value.get("periodic_work_j"))
+    except (TypeError, ValueError):
+        return False
+    count = len(positions)
+    if (
+        count < 5
+        or len(phase_currents) != count
+        or any(len(row) != 3 for row in phase_currents)
+        or any(len(items) != count for items in (coenergy, cogging_force, thrust))
+    ):
+        return False
+    wave_number = 2.0 * math.pi / period if period > 0.0 else math.nan
+    expected_phase_currents = [
+        [
+            current_peak * math.sin(wave_number * position),
+            current_peak * math.sin(wave_number * position - 2.0 * math.pi / 3.0),
+            current_peak * math.sin(wave_number * position + 2.0 * math.pi / 3.0),
+        ]
+        for position in positions
+    ]
+    expected_coenergy = [-amplitude * math.cos(wave_number * position) for position in positions]
+    expected_force = [amplitude * wave_number * math.sin(wave_number * position) for position in positions]
+    expected_work = _trapezoid_integral(positions, cogging_force)
+    mirrored = (
+        "position_m", "period_m", "phase_order", "phase_currents_a",
+        "current_peak_a", "coenergy_amplitude_j", "coenergy_j",
+        "cogging_force_n", "base_thrust_n", "thrust_n", "periodic_work_j",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "position_generation", "periodicity_generation", "phase_generation",
+                "force_generation", "thrust_generation", "work_generation",
+                "coenergy_generation", "mesh_generation", "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for item in positions + coenergy + cogging_force + thrust)
+        and all(math.isfinite(item) for row in phase_currents for item in row)
+        and period > 0.0
+        and current_peak > 0.0
+        and amplitude > 0.0
+        and all(left < right for left, right in zip(positions, positions[1:]))
+        and math.isclose(positions[-1] - positions[0], period, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and value.get("phase_order") == ["U", "V", "W"]
+        and all(abs(sum(row)) <= 1.0e-12 for row in phase_currents)
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for row, expected_row in zip(phase_currents, expected_phase_currents)
+            for actual, expected in zip(row, expected_row)
+        )
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-15)
+            for actual, expected in zip(coenergy, expected_coenergy)
+        )
+        and all(
+            math.isclose(actual, expected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, expected in zip(cogging_force, expected_force)
+        )
+        and all(
+            math.isclose(actual, base_thrust + force, rel_tol=1.0e-12, abs_tol=1.0e-12)
+            for actual, force in zip(thrust, cogging_force)
+        )
+        and math.isclose(cogging_force[0], cogging_force[-1], rel_tol=0.0, abs_tol=1.0e-12)
+        and math.isclose(coenergy[0], coenergy[-1], rel_tol=0.0, abs_tol=1.0e-15)
+        and all(
+            math.isclose(left, right, rel_tol=0.0, abs_tol=1.0e-12)
+            for left, right in zip(phase_currents[0], phase_currents[-1])
+        )
+        and math.isclose(periodic_work, expected_work, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(periodic_work) <= 1.0e-12
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("mesh_owner", "")).startswith("mesh:")
+        and value.get("accepted_mesh_owner") == value.get("mesh_owner")
+        and _valid_sha256(value.get("linear_motor_result_sha256"))
+        and value.get("accepted_linear_motor_result_sha256") == value.get("linear_motor_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -3164,6 +3385,8 @@ def magnetic_force_method_profile_gate(
     transformer_energy_force_identity_ok = True
     maglev_equilibrium_energy_identity_ok = True
     eddy_shield_frequency_identity_ok = True
+    demagnetizing_tensor_identity_ok = True
+    linear_motor_periodic_work_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -3235,6 +3458,8 @@ def magnetic_force_method_profile_gate(
         transformer_energy_force_identity_ok = False
         maglev_equilibrium_energy_identity_ok = False
         eddy_shield_frequency_identity_ok = False
+        demagnetizing_tensor_identity_ok = False
+        linear_motor_periodic_work_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -5083,6 +5308,16 @@ def magnetic_force_method_profile_gate(
                 "eddy_shield_frequency_conductivity_permeability_skin_depth_thickness_phase_attenuation_loss_energy_geometry_result_identity"
             )
         )
+        demagnetizing_tensor_identity_ok = _demagnetizing_tensor_identity_ok(
+            identity_value.get(
+                "demagnetizing_tensor_symmetry_trace_eigenvalue_reciprocity_energy_mesh_magnetization_result_identity"
+            )
+        )
+        linear_motor_periodic_work_identity_ok = _linear_motor_periodic_work_identity_ok(
+            identity_value.get(
+                "linear_motor_cogging_force_position_periodicity_work_coenergy_phase_thrust_mesh_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -5351,6 +5586,12 @@ def magnetic_force_method_profile_gate(
         ),
         "eddy_shields_close_frequency_skin_depth_phase_attenuation_loss_energy_owner_and_result": (
             eddy_shield_frequency_identity_ok
+        ),
+        "demagnetizing_tensors_close_symmetry_trace_eigenvalues_reciprocity_energy_owners_and_result": (
+            demagnetizing_tensor_identity_ok
+        ),
+        "linear_motors_close_position_periodicity_phase_cogging_work_coenergy_thrust_mesh_and_result": (
+            linear_motor_periodic_work_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
