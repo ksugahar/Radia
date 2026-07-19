@@ -92,6 +92,95 @@ def validate_matlab_ml_rl_v44_identity(summary: Mapping[str, object]) -> dict[st
     }
 
 
+def validate_matlab_ml_rl_v45_identity(summary: Mapping[str, object]) -> dict[str, object] | None:
+    """Validate v45 official ML/RL and Agentic Toolkit replay bindings."""
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    identity = summary.get("matlab_ml_rl_v45_identity")
+    if not isinstance(identity, Mapping):
+        return None
+    records = {
+        "supervised": identity.get("supervised"),
+        "reinforcement_learning": identity.get("reinforcement_learning"),
+        "agentic_toolkit": identity.get("agentic_toolkit"),
+        "mlrl_checkpoint": identity.get("mlrl_checkpoint"),
+    }
+    checks = {
+        "v45_supervised_record_is_mapping": isinstance(records["supervised"], Mapping),
+        "v45_rl_record_is_mapping": isinstance(records["reinforcement_learning"], Mapping),
+        "v45_agentic_record_is_mapping": isinstance(records["agentic_toolkit"], Mapping),
+        "v45_checkpoint_record_is_mapping": isinstance(records["mlrl_checkpoint"], Mapping),
+    }
+    if isinstance(records["supervised"], Mapping):
+        checks.update(_supervised_v45_checks(records["supervised"]))
+    if isinstance(records["reinforcement_learning"], Mapping):
+        checks.update(_rl_v45_checks(records["reinforcement_learning"]))
+    if isinstance(records["agentic_toolkit"], Mapping):
+        checks.update(_agentic_v45_checks(records["agentic_toolkit"]))
+    if isinstance(records["mlrl_checkpoint"], Mapping):
+        checks.update(_checkpoint_v45_checks(records["mlrl_checkpoint"]))
+    return {
+        "policy": "matlab_ml_rl_artifact_gate_v45",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, passed in checks.items() if not passed],
+    }
+
+
+def _same_release(value: Mapping[str, object]) -> bool:
+    release = str(value.get("release_id", "")).strip()
+    return bool(release) and value.get("result_release_id") == release
+
+
+def _supervised_v45_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "v45_supervised_schema_is_pinned": value.get("schema") == "cae-ai-lab.matlab-ml-rl-result.v3",
+        "v45_datastore_is_pinned": bool(str(value.get("datastore_id", "")).strip()),
+        "v45_split_generation_is_bound": bool(str(value.get("split_generation", "")).strip()) and value.get("result_split_generation") == value.get("split_generation"),
+        "v45_normalization_is_fit_on_training_only": value.get("normalization_fit_scope") == "training_only" and value.get("result_normalization_fit_scope") == "training_only",
+        "v45_hyperparameter_selection_uses_training_cv": value.get("hyperparameter_selection_source") == "training_cross_validation" and value.get("result_hyperparameter_selection_source") == "training_cross_validation",
+        "v45_holdout_is_separate": bool(str(value.get("holdout_id", "")).strip()) and value.get("holdout_id") not in set(_string_list(value.get("training_ids"))),
+        "v45_model_card_matches_release": value.get("model_card_release") == value.get("release_id"),
+        "v45_release_is_bound": _same_release(value),
+        "v45_digest_is_bound": _valid_digest(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256"),
+    }
+
+
+def _rl_v45_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    discount = value.get("discount_factor")
+    return {
+        "v45_rl_replay_buffer_is_bound": bool(str(value.get("replay_buffer_generation", "")).strip()) and value.get("result_replay_buffer_generation") == value.get("replay_buffer_generation"),
+        "v45_rl_termination_semantics_are_environment_defined": value.get("termination_semantics") == "environment_defined" and value.get("result_termination_semantics") == "environment_defined",
+        "v45_rl_discount_is_valid_and_bound": _number(discount) and 0.0 < float(discount) <= 1.0 and value.get("result_discount_factor") == discount,
+        "v45_rl_policy_seed_is_recorded": isinstance(value.get("policy_seed"), int) and value.get("policy_seed") >= 0,
+        "v45_rl_evaluation_is_separate": value.get("evaluation_mode") == "greedy_no_exploration" and value.get("result_evaluation_mode") == "greedy_no_exploration",
+        "v45_rl_release_is_bound": _same_release(value),
+        "v45_rl_digest_is_bound": _valid_digest(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256"),
+    }
+
+
+def _agentic_v45_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "v45_agentic_capability_route_is_pinned": value.get("capability_route") == "matlab_tool" and value.get("result_capability_route") == "matlab_tool",
+        "v45_agentic_consent_is_recorded": value.get("consent_recorded") is True and value.get("result_consent_recorded") is True,
+        "v45_agentic_tool_arguments_digest_is_bound": _valid_digest(value.get("tool_arguments_sha256")) and value.get("result_tool_arguments_sha256") == value.get("tool_arguments_sha256"),
+        "v45_agentic_existing_session_is_explicit": value.get("session_detection") == "existing_shared_matlab" and value.get("result_session_detection") == "existing_shared_matlab",
+        "v45_agentic_release_and_owner_are_bound": _same_release(value) and str(value.get("owner", "")).startswith("matlab:") and value.get("result_owner") == value.get("owner"),
+    }
+
+
+def _checkpoint_v45_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "v45_checkpoint_generation_is_bound": bool(str(value.get("checkpoint_generation", "")).strip()) and value.get("result_checkpoint_generation") == value.get("checkpoint_generation"),
+        "v45_datastore_state_is_replayed": value.get("datastore_state") == "replayed" and value.get("result_datastore_state") == "replayed",
+        "v45_optimizer_is_recorded": bool(str(value.get("optimizer", "")).strip()) and value.get("result_optimizer") == value.get("optimizer"),
+        "v45_discount_is_bound": _number(value.get("discount_factor")) and value.get("result_discount_factor") == value.get("discount_factor"),
+        "v45_evaluation_id_is_separate": bool(str(value.get("evaluation_id", "")).strip()) and value.get("evaluation_id") != value.get("checkpoint_generation"),
+        "v45_checkpoint_release_and_owner_are_bound": _same_release(value) and str(value.get("owner", "")).startswith("matlab:") and value.get("result_owner") == value.get("owner"),
+        "v45_checkpoint_digest_is_bound": _valid_digest(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256"),
+    }
+
+
 def _supervised_v44_checks(value: Mapping[str, object]) -> dict[str, bool]:
     training_ids = _string_list(value.get("training_ids"))
     evaluation_ids = _string_list(value.get("evaluation_ids"))
