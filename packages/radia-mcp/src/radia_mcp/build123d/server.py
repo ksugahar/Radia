@@ -72,6 +72,10 @@ from .build123d_v46_identity import (
     validate_public_identity as _validate_build123d_v46_public_identity,
     validate_source_identity as _validate_build123d_v46_source_identity,
 )
+from .cross_artifact_cad_lineage_v47 import (
+    validate_public_identity as _validate_build123d_v47_public_identity,
+    validate_source_identity as _validate_build123d_v47_source_identity,
+)
 from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
@@ -192,6 +196,14 @@ def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
             if isinstance(checks, dict):
                 checks.update(v46_identity.get("checks", {}))
             if v46_identity.get("status") != "ok":
+                result["status"] = "needs_attention"
+        v47_identity = _validate_build123d_v47_source_identity(payload)
+        if v47_identity:
+            result["build123d_v47_source_identity"] = v47_identity
+            checks = result.setdefault("checks", {})
+            if isinstance(checks, dict):
+                checks.update(v47_identity.get("checks", {}))
+            if v47_identity.get("status") != "ok":
                 result["status"] = "needs_attention"
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
@@ -1024,6 +1036,17 @@ def build123d_mass_property_crosscheck(
         if isinstance(checks, dict):
             checks.update(v46_identity.get("checks", {}))
         if v46_identity.get("status") != "ok":
+            summary["status"] = "needs_attention"
+    v47_identity = _validate_build123d_v47_public_identity({
+        "reference": reference_rows,
+        "measured": measured_sets,
+    })
+    if v47_identity:
+        summary["build123d_v47_public_identity"] = v47_identity
+        checks = summary.setdefault("checks", {})
+        if isinstance(checks, dict):
+            checks.update(v47_identity.get("checks", {}))
+        if v47_identity.get("status") != "ok":
             summary["status"] = "needs_attention"
 
     return json.dumps(summary, indent=2)
