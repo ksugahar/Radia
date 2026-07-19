@@ -5,6 +5,7 @@ from .artifact_gate import (
     validate_matlab_ml_rl_v44_identity,
     validate_matlab_ml_rl_v45_identity,
     validate_matlab_ml_rl_v46_identity,
+    validate_matlab_ml_rl_v47_identity,
 )
 
 
@@ -21,4 +22,5 @@ __all__ = [
     "validate_matlab_ml_rl_v44_identity",
     "validate_matlab_ml_rl_v45_identity",
     "validate_matlab_ml_rl_v46_identity",
+    "validate_matlab_ml_rl_v47_identity",
 ]

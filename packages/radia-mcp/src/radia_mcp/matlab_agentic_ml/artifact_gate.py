@@ -152,6 +152,105 @@ def validate_matlab_ml_rl_v46_identity(summary: Mapping[str, object]) -> dict[st
     }
 
 
+def validate_matlab_ml_rl_v47_identity(summary: Mapping[str, object]) -> dict[str, object] | None:
+    """Validate ML/RL data, environment, agent-call, and experiment lineage."""
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    identity = summary.get("matlab_ml_rl_v47_identity")
+    if not isinstance(identity, Mapping):
+        return None
+    records = {
+        name: identity.get(name)
+        for name in ("ml_datastore", "reinforcement_learning", "agentic_toolkit", "experiment_trials")
+    }
+    checks = {f"v47_{name}_record_is_mapping": isinstance(value, Mapping) for name, value in records.items()}
+    if isinstance(records["ml_datastore"], Mapping):
+        checks.update(_ml_datastore_v47_checks(records["ml_datastore"]))
+    if isinstance(records["reinforcement_learning"], Mapping):
+        checks.update(_rl_v47_checks(records["reinforcement_learning"]))
+    if isinstance(records["agentic_toolkit"], Mapping):
+        checks.update(_agentic_v47_checks(records["agentic_toolkit"]))
+    if isinstance(records["experiment_trials"], Mapping):
+        checks.update(_experiment_v47_checks(records["experiment_trials"]))
+    return {
+        "policy": "matlab_ml_rl_artifact_gate_v47",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, passed in checks.items() if not passed],
+    }
+
+
+def _generation_v47(value: Mapping[str, object], fields: tuple[str, ...]) -> bool:
+    generation = str(value.get("generation", "")).strip()
+    return bool(generation) and all(value.get(field) == generation for field in fields)
+
+
+def _digest_v47(value: Mapping[str, object]) -> bool:
+    return _valid_digest(value.get("result_sha256")) and value.get("accepted_result_sha256") == value.get("result_sha256")
+
+
+def _ml_datastore_v47_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    order = value.get("datastore_order")
+    labels = value.get("labels")
+    partition = value.get("partition")
+    train = partition.get("train") if isinstance(partition, Mapping) else None
+    validation = partition.get("validation") if isinstance(partition, Mapping) else None
+    return {
+        "v47_ml_generation_is_closed": _generation_v47(
+            value,
+            ("datastore_generation", "label_generation", "preprocess_generation", "partition_generation", "owner_generation", "result_generation"),
+        ),
+        "v47_ml_datastore_labels_are_bound": isinstance(order, list) and bool(order) and len(order) == len(set(order)) and order == value.get("result_datastore_order") and isinstance(labels, list) and len(labels) == len(order) and labels == value.get("result_labels"),
+        "v47_ml_preprocess_is_bound": _valid_digest(value.get("preprocess_sha256")) and value.get("result_preprocess_sha256") == value.get("preprocess_sha256"),
+        "v47_ml_partition_is_disjoint_and_bound": isinstance(train, list) and bool(train) and isinstance(validation, list) and bool(validation) and set(train).isdisjoint(validation) and value.get("result_partition") == partition,
+        "v47_ml_partition_owner_is_bound": str(value.get("partition_owner", "")).startswith("partition:") and value.get("result_partition_owner") == value.get("partition_owner"),
+        "v47_ml_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _rl_v47_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "v47_rl_generation_is_closed": _generation_v47(
+            value,
+            ("observation_generation", "action_generation", "environment_generation", "reset_generation", "policy_generation", "result_generation"),
+        ),
+        "v47_rl_observation_spec_is_bound": _valid_digest(value.get("observation_spec_sha256")) and value.get("result_observation_spec_sha256") == value.get("observation_spec_sha256"),
+        "v47_rl_action_spec_is_bound": _valid_digest(value.get("action_spec_sha256")) and value.get("result_action_spec_sha256") == value.get("action_spec_sha256"),
+        "v47_rl_environment_reset_is_bound": str(value.get("environment_id", "")).startswith("environment:") and value.get("result_environment_id") == value.get("environment_id") and value.get("reset_policy") == value.get("result_reset_policy") == "deterministic_seeded",
+        "v47_rl_policy_owner_is_bound": str(value.get("policy_owner", "")).startswith("policy:") and value.get("result_policy_owner") == value.get("policy_owner"),
+        "v47_rl_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _agentic_v47_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    return {
+        "v47_agentic_generation_is_closed": _generation_v47(
+            value,
+            ("call_generation", "correlation_generation", "session_generation", "workspace_generation", "release_generation", "result_generation"),
+        ),
+        "v47_agentic_call_correlation_is_bound": str(value.get("tool_call_id", "")).startswith("call:") and value.get("result_tool_call_id") == value.get("tool_call_id") and str(value.get("correlation_id", "")).startswith("correlation:") and value.get("result_correlation_id") == value.get("correlation_id"),
+        "v47_agentic_session_workspace_release_is_bound": str(value.get("session_identity", "")).startswith("matlab:") and value.get("result_session_identity") == value.get("session_identity") and _valid_digest(value.get("workspace_sha256")) and value.get("result_workspace_sha256") == value.get("workspace_sha256") and _same_release(value),
+        "v47_agentic_result_digest_is_bound": _digest_v47(value),
+    }
+
+
+def _experiment_v47_checks(value: Mapping[str, object]) -> dict[str, bool]:
+    trials = value.get("trial_row_keys")
+    folds = value.get("cv_partition_ids")
+    indices = value.get("result_indices")
+    return {
+        "v47_experiment_generation_is_closed": _generation_v47(
+            value,
+            ("experiment_generation", "trial_generation", "cv_generation", "result_index_generation", "result_generation"),
+        ),
+        "v47_experiment_trial_rows_are_unique_and_bound": isinstance(trials, list) and bool(trials) and len(trials) == len(set(trials)) and value.get("result_trial_row_keys") == trials,
+        "v47_experiment_cv_partitions_are_unique_and_bound": isinstance(folds, list) and len(folds) == len(trials or []) and len(folds) == len(set(folds)) and value.get("result_cv_partition_ids") == folds,
+        "v47_experiment_result_indices_are_unique_ordered_and_bound": isinstance(indices, list) and len(indices) == len(trials or []) and all(isinstance(index, int) and index >= 0 for index in indices) and indices == sorted(indices) and len(indices) == len(set(indices)) and value.get("replayed_result_indices") == indices,
+        "v47_experiment_owner_is_bound": str(value.get("experiment_owner", "")).startswith("experiment:") and value.get("result_experiment_owner") == value.get("experiment_owner"),
+        "v47_experiment_result_digest_is_bound": _digest_v47(value),
+    }
+
+
 def _v46_release_and_digest(value: Mapping[str, object]) -> dict[str, bool]:
     return {
         "v46_release_is_bound": _same_release(value),
