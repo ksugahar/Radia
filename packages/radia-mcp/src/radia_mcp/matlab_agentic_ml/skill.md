@@ -6,7 +6,7 @@ description: Use the official MATLAB MCP execution layer for machine-learning an
 # MATLAB ML/RL Workflow
 
 Use the official MATLAB MCP server as the execution substrate. This package
-adds a small, solver-neutral artifact gate; it is not a second MATLAB runtime.
+adds small, solver-neutral artifact gates; it is not a second MATLAB runtime.
 
 ## Workflow
 
@@ -17,14 +17,19 @@ adds a small, solver-neutral artifact gate; it is not a second MATLAB runtime.
    metric separately from the training metric.
 5. Store a result artifact with schema, units, release, seed, split/environment,
    digest, and one to four dominant timing stages.
-6. Replay the artifact through `validate_matlab_ml_rl_artifact` before treating
-   it as a learning result.
+6. Replay the artifact through `validate_matlab_ml_rl_artifact` and, for the
+   v2 split/evaluation contract, `validate_matlab_ml_rl_v44_identity` before
+   treating it as a learning result.
 
 For supervised learning, cross-validation or a holdout is required; a
 resubstitution score is not a validation result. For reinforcement learning,
 the environment, training episode count, evaluation episode count, and mean
-evaluation return are required. A training curve alone is insufficient.
+evaluation return are required. Evaluation must use the pinned environment, a
+fresh evaluation seed, and no exploration. A training curve alone is
+insufficient.
 
 Use MathWorks' official MATLAB MCP/Agentic Toolkit for tool discovery,
 execution, testing, and code analysis. Keep public knowledge generic: do not
 embed lab paths, licensed solver results, or private MATLAB MCP implementation.
+The legacy Gypsilab acoustic lane is replay-only; new MATLAB learning belongs
+to this official ML/RL lane.
