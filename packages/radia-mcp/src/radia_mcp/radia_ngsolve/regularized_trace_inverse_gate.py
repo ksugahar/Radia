@@ -302,6 +302,12 @@ def regularized_trace_inverse_path_gate(
     adjoint_hessian_identity_ok = (
         _optional_adjoint_hessian_identity_is_aligned(summary)
     )
+    cq_acoustic_history_identity_ok = (
+        _optional_cq_acoustic_history_identity_is_aligned(summary)
+    )
+    hmatrix_compression_identity_ok = (
+        _optional_hmatrix_compression_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -529,6 +535,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "adjoint_hessian_uses_current_design_gradients_constraints_hvp_kkt_fd_model_owner_and_result": (
             adjoint_hessian_identity_ok
+        ),
+        "cq_acoustic_history_uses_current_causality_passivity_timestep_ztransform_energy_mesh_owner_and_result": (
+            cq_acoustic_history_identity_ok
+        ),
+        "hmatrix_compression_uses_current_clusters_admissibility_ranks_tolerance_matvec_memory_mesh_owner_and_result": (
+            hmatrix_compression_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -4999,6 +5011,157 @@ def _optional_adjoint_hessian_identity_is_aligned(
         and value.get("accepted_model_owner") == value.get("model_owner")
         and _is_sha256(str(value.get("optimization_result_sha256", "")).lower())
         and value.get("accepted_optimization_result_sha256") == value.get("optimization_result_sha256")
+    )
+
+
+def _optional_cq_acoustic_history_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_acoustic_causality_passivity_timestep_ztransform_energy_history_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["cq_generation"]).strip()
+        timestep = float(value["time_step_s"])
+        radius = float(value["z_transform_radius"])
+        symbols = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["multistep_symbol_samples"]
+        )
+        frequencies = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["laplace_frequency_samples_rad_s"]
+        )
+        excitation = tuple(float(item) for item in value["excitation_history"])
+        pressure = tuple(float(item) for item in value["pressure_history"])
+        causal_prefix = _integer(value, "causal_prefix_length")
+        passivity = float(value["minimum_passivity_real_part"])
+        work = float(value["boundary_work_j"])
+        radiated = float(value["radiated_energy_j"])
+        dissipated = float(value["dissipated_energy_j"])
+        residual = float(value["energy_balance_residual_j"])
+        tolerance = float(value["energy_balance_tolerance_j"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    mirrored = (
+        "multistep_method", "time_step_s", "z_transform_radius",
+        "multistep_symbol_samples", "laplace_frequency_samples_rad_s",
+        "excitation_history", "pressure_history", "causal_prefix_length",
+        "minimum_passivity_real_part", "boundary_work_j", "radiated_energy_j",
+        "dissipated_energy_j", "energy_balance_residual_j",
+        "energy_balance_tolerance_j", "boundary_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "multistep_generation", "timestep_generation", "ztransform_generation",
+            "frequency_generation", "history_generation", "passivity_generation",
+            "energy_generation", "mesh_generation", "owner_generation",
+            "result_generation",
+        ))
+        and value.get("multistep_method") == "bdf2"
+        and math.isfinite(timestep) and timestep > 0.0
+        and math.isfinite(radius) and 0.0 < radius < 1.0
+        and len(symbols) == len(frequencies) >= 3
+        and all(math.isfinite(item.real) and math.isfinite(item.imag) for item in symbols)
+        and all(
+            math.isfinite(item.real) and math.isfinite(item.imag) and item.real > 0.0
+            for item in frequencies
+        )
+        and len(excitation) == len(pressure) >= 3
+        and all(math.isfinite(item) for item in excitation + pressure)
+        and 1 <= causal_prefix < len(pressure)
+        and all(abs(item) <= 1.0e-12 for item in pressure[:causal_prefix])
+        and math.isfinite(passivity) and passivity >= 0.0
+        and all(math.isfinite(item) and item >= 0.0 for item in (
+            work, radiated, dissipated, tolerance,
+        ))
+        and tolerance > 0.0
+        and math.isfinite(residual)
+        and math.isclose(
+            residual, work - radiated - dissipated,
+            rel_tol=1.0e-10, abs_tol=1.0e-12,
+        )
+        and abs(residual) <= tolerance
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("boundary_mesh_sha256", "")).lower())
+        and str(value.get("cq_owner", "")).startswith("acoustic/")
+        and value.get("accepted_cq_owner") == value.get("cq_owner")
+        and _is_sha256(str(value.get("cq_result_sha256", "")).lower())
+        and value.get("accepted_cq_result_sha256") == value.get("cq_result_sha256")
+    )
+
+
+def _optional_hmatrix_compression_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "hmatrix_admissibility_cluster_rank_tolerance_matvec_error_memory_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["hmatrix_generation"]).strip()
+        leaf_size = _integer(value, "cluster_leaf_size")
+        permutation = tuple(_integer({"item": item}, "item") for item in value["cluster_permutation"])
+        eta = float(value["admissibility_eta"])
+        partition = tuple(tuple(str(item) for item in row) for row in value["block_partition"])
+        ranks = tuple(tuple(_integer({"item": item}, "item") for item in row) for row in value["numerical_ranks"])
+        tolerance = float(value["compression_relative_tolerance"])
+        matvec_error = float(value["measured_matvec_relative_error"])
+        dense_memory = _integer(value, "dense_memory_bytes")
+        compressed_memory = _integer(value, "compressed_memory_bytes")
+    except (KeyError, TypeError, ValueError):
+        return False
+    block_count = len(partition)
+    partition_ok = (
+        block_count > 0
+        and all(len(row) == block_count for row in partition)
+        and len(ranks) == block_count
+        and all(len(row) == block_count for row in ranks)
+        and all(item in {"low_rank", "dense"} for row in partition for item in row)
+        and all(
+            (rank > 0 if kind == "low_rank" else rank == 0)
+            and rank <= leaf_size
+            for kinds, rank_row in zip(partition, ranks)
+            for kind, rank in zip(kinds, rank_row)
+        )
+    )
+    mirrored = (
+        "cluster_leaf_size", "cluster_permutation", "admissibility_eta",
+        "block_partition", "numerical_ranks", "compression_relative_tolerance",
+        "measured_matvec_relative_error", "dense_memory_bytes",
+        "compressed_memory_bytes", "boundary_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "cluster_generation", "admissibility_generation", "partition_generation",
+            "rank_generation", "tolerance_generation", "matvec_generation",
+            "memory_generation", "mesh_generation", "owner_generation",
+            "result_generation",
+        ))
+        and leaf_size > 0
+        and len(permutation) >= 2
+        and all(item > 0 for item in permutation)
+        and len(set(permutation)) == len(permutation)
+        and math.isfinite(eta) and eta > 0.0
+        and partition_ok
+        and math.isfinite(tolerance) and 0.0 < tolerance <= 1.0e-2
+        and math.isfinite(matvec_error) and 0.0 <= matvec_error <= tolerance
+        and dense_memory > 0 and 0 < compressed_memory < dense_memory
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("boundary_mesh_sha256", "")).lower())
+        and str(value.get("hmatrix_owner", "")).startswith("acoustic/")
+        and value.get("accepted_hmatrix_owner") == value.get("hmatrix_owner")
+        and _is_sha256(str(value.get("hmatrix_result_sha256", "")).lower())
+        and value.get("accepted_hmatrix_result_sha256") == value.get("hmatrix_result_sha256")
     )
 
 
