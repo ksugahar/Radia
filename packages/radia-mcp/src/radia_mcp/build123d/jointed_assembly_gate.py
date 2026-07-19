@@ -2285,6 +2285,171 @@ def _tessellation_replay_identity_ok(value: object) -> bool:
     )
 
 
+def _rigid_homogeneous_transform_ok(value: object) -> bool:
+    try:
+        rows = [[float(item) for item in row] for row in value]
+    except (TypeError, ValueError):
+        return False
+    return (
+        len(rows) == 4
+        and all(len(row) == 4 for row in rows)
+        and all(math.isfinite(item) for row in rows for item in row)
+        and rows[3] == [0.0, 0.0, 0.0, 1.0]
+        and _right_handed_orthonormal_frame([row[:3] for row in rows[:3]])
+    )
+
+
+def _assembly_interference_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("interference_generation") or "")
+    try:
+        part_names = [str(item) for item in value.get("part_names", [])]
+        transforms = dict(value.get("part_transforms", {}))
+        replayed_transforms = dict(value.get("replayed_part_transforms", {}))
+        contact_pairs = [list(pair) for pair in value.get("contact_pairs", [])]
+        replayed_pairs = [list(pair) for pair in value.get("replayed_contact_pairs", [])]
+        overlaps = [float(item) for item in value.get("overlap_volumes_m3", [])]
+        replayed_overlaps = [
+            float(item) for item in value.get("replayed_overlap_volumes_m3", [])
+        ]
+        clearance = float(value.get("minimum_clearance_m"))
+        replayed_clearance = float(value.get("replayed_minimum_clearance_m"))
+        assembly_generation = int(value.get("assembly_generation_id"))
+        replayed_assembly_generation = int(value.get("replayed_assembly_generation_id"))
+        owners = dict(value.get("shape_owners", {}))
+        replayed_owners = dict(value.get("replayed_shape_owners", {}))
+    except (TypeError, ValueError):
+        return False
+    part_set = set(part_names)
+    contact_parts = [
+        [str(endpoint).split(":", 1)[0] for endpoint in pair]
+        for pair in contact_pairs
+        if len(pair) == 2
+    ]
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "part_generation",
+                "transform_generation",
+                "unit_generation",
+                "contact_generation",
+                "overlap_generation",
+                "clearance_generation",
+                "owner_generation",
+                "result_generation",
+            )
+        )
+        and len(part_names) >= 2
+        and all(part_names)
+        and len(part_set) == len(part_names)
+        and value.get("replayed_part_names") == part_names
+        and set(transforms) == part_set
+        and all(_rigid_homogeneous_transform_ok(transform) for transform in transforms.values())
+        and replayed_transforms == transforms
+        and value.get("length_unit") == "m"
+        and value.get("replayed_length_unit") == "m"
+        and bool(contact_pairs)
+        and len(contact_parts) == len(contact_pairs)
+        and all(len(pair) == 2 and pair[0] != pair[1] and set(pair).issubset(part_set) for pair in contact_parts)
+        and replayed_pairs == contact_pairs
+        and len(overlaps) == len(contact_pairs)
+        and all(math.isfinite(item) and item >= 0.0 for item in overlaps)
+        and replayed_overlaps == overlaps
+        and math.isfinite(clearance)
+        and clearance >= 0.0
+        and replayed_clearance == clearance
+        and (not any(item > 0.0 for item in overlaps) or math.isclose(clearance, 0.0, abs_tol=1.0e-15))
+        and assembly_generation > 0
+        and replayed_assembly_generation == assembly_generation
+        and set(owners) == part_set
+        and all(str(owner).startswith("headless:") for owner in owners.values())
+        and replayed_owners == owners
+        and _valid_sha256(value.get("assembly_result_sha256"))
+        and value.get("accepted_assembly_result_sha256") == value.get("assembly_result_sha256")
+    )
+
+
+def _step_metadata_roundtrip_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("step_generation") or "")
+    try:
+        names = dict(value.get("product_names", {}))
+        colors = dict(value.get("colors_rgb", {}))
+        layers = dict(value.get("layers", {}))
+        hierarchy = dict(value.get("assembly_hierarchy", {}))
+        labels = dict(value.get("subshape_labels", {}))
+    except (TypeError, ValueError):
+        return False
+    parts = set(names)
+    hierarchy_children = [str(child) for children in hierarchy.values() for child in children]
+    colors_ok = True
+    for color in colors.values():
+        try:
+            channels = [float(item) for item in color]
+        except (TypeError, ValueError):
+            colors_ok = False
+            break
+        colors_ok = colors_ok and len(channels) == 3 and all(
+            math.isfinite(item) and 0.0 <= item <= 1.0 for item in channels
+        )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "name_generation",
+                "color_generation",
+                "layer_generation",
+                "hierarchy_generation",
+                "label_generation",
+                "source_generation",
+                "import_generation",
+                "result_generation",
+            )
+        )
+        and bool(parts)
+        and all(str(part).startswith("part:") and str(name).strip() for part, name in names.items())
+        and value.get("replayed_product_names") == names
+        and set(colors) == parts
+        and colors_ok
+        and value.get("replayed_colors_rgb") == colors
+        and set(layers) == parts
+        and all(str(layer).strip() for layer in layers.values())
+        and value.get("replayed_layers") == layers
+        and bool(hierarchy)
+        and all(str(parent).startswith("assembly:") for parent in hierarchy)
+        and set(hierarchy_children) == parts
+        and len(hierarchy_children) == len(parts)
+        and value.get("replayed_assembly_hierarchy") == hierarchy
+        and bool(labels)
+        and all(
+            "/" in str(path)
+            and str(path).split("/", 1)[0] in parts
+            and str(label).strip()
+            for path, label in labels.items()
+        )
+        and value.get("replayed_subshape_labels") == labels
+        and str(value.get("source_shape_owner") or "").startswith("headless:")
+        and value.get("replayed_source_shape_owner") == value.get("source_shape_owner")
+        and str(value.get("imported_shape_owner") or "").startswith("headless:")
+        and value.get("replayed_imported_shape_owner") == value.get("imported_shape_owner")
+        and _valid_sha256(value.get("source_brep_sha256"))
+        and value.get("replayed_source_brep_sha256") == value.get("source_brep_sha256")
+        and _valid_sha256(value.get("step_file_sha256"))
+        and value.get("replayed_step_file_sha256") == value.get("step_file_sha256")
+        and _valid_sha256(value.get("metadata_result_sha256"))
+        and value.get("accepted_metadata_result_sha256") == value.get("metadata_result_sha256")
+    )
+
+
 def jointed_assembly_step_closure_gate(
     summary: Mapping[str, object],
     *,
@@ -2645,6 +2810,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     assembly_hierarchy_replay_identity_ok = True
     oriented_bounding_box_inertia_identity_ok = True
     tessellation_replay_identity_ok = True
+    assembly_interference_identity_ok = True
+    step_metadata_roundtrip_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -2706,6 +2873,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         assembly_hierarchy_replay_identity_ok = False
         oriented_bounding_box_inertia_identity_ok = False
         tessellation_replay_identity_ok = False
+        assembly_interference_identity_ok = False
+        step_metadata_roundtrip_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(replay_identity_value.get("replayed_source_commit", "")).lower()
@@ -4425,6 +4594,16 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 "tessellation_linear_angular_deflection_triangle_vertex_orientation_watertight_stl_brep_owner_result_generation_identity"
             )
         )
+        assembly_interference_identity_ok = _assembly_interference_identity_ok(
+            replay_identity_value.get(
+                "assembly_interference_part_transform_unit_contact_overlap_clearance_owner_result_generation_identity"
+            )
+        )
+        step_metadata_roundtrip_identity_ok = _step_metadata_roundtrip_identity_ok(
+            replay_identity_value.get(
+                "step_name_color_layer_hierarchy_subshape_label_source_import_owner_result_generation_identity"
+            )
+        )
     joint_names = {
         str(name) for row in components for name in (row.get("joint_names") or []) if str(name)
     }
@@ -4633,6 +4812,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "tessellation_replays_use_current_deflections_triangles_vertices_orientation_watertight_stl_brep_owner_and_result": (
             tessellation_replay_identity_ok
+        ),
+        "assembly_interference_replays_use_current_parts_transforms_units_contacts_overlap_clearance_owner_and_result": (
+            assembly_interference_identity_ok
+        ),
+        "step_metadata_replays_use_current_names_colors_layers_hierarchy_labels_owners_and_result": (
+            step_metadata_roundtrip_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
