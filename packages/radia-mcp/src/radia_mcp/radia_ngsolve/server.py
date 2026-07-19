@@ -131,6 +131,7 @@ from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance
 from .nonlinear_inductance_sweep_gate import (
     nonlinear_inductance_sweep_gate as _nonlinear_inductance_sweep_gate,
 )
+from .waveguide_emc_v44_identity import validate_public_identity as _validate_waveguide_emc_v44_identity
 from .regularized_trace_inverse_gate import (
     regularized_trace_inverse_path_gate as _regularized_trace_inverse_path_gate,
 )
@@ -3484,6 +3485,17 @@ def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
+    try:
+        payload = json.loads(summary_json)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        payload = None
+    if isinstance(payload, dict):
+        v44_checks = _validate_waveguide_emc_v44_identity(payload)
+        if v44_checks:
+            result.setdefault("checks", {}).update(v44_checks)
+            result["waveguide_emc_v44_identity_checks"] = v44_checks
+            if not all(v44_checks.values()):
+                result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
 
