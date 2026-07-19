@@ -86,6 +86,10 @@ from .cross_artifact_mesh_lineage_v47 import (
 	validate_public_identity as _validate_cubit_v47_public_identity,
 	validate_source_identity as _validate_cubit_v47_source_identity,
 )
+from .semantic_mesh_identity_v48 import (
+	validate_public_identity as _validate_cubit_v48_public_identity,
+	validate_source_identity as _validate_cubit_v48_source_identity,
+)
 from .structured_hex_gate import (
 	cubit_structured_hex_lattice_gate as _cubit_structured_hex_lattice_gate,
 	cubit_structured_hex_source_replay_gate as _cubit_structured_hex_source_replay_gate,
@@ -1216,6 +1220,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
 		result["cubit_v47_public_identity"] = v47_checks
 		if v47_checks["status"] != "ok":
 			result["status"] = "needs_attention"
+	v48_checks = _validate_cubit_v48_public_identity(summary)
+	if v48_checks:
+		result.setdefault("checks", {}).update(v48_checks["checks"])
+		result["cubit_v48_public_identity"] = v48_checks
+		if v48_checks["status"] != "ok":
+			result["status"] = "needs_attention"
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -1249,6 +1259,12 @@ def cubit_mixed_transition_source_gate(
 		result.setdefault("checks", {}).update(v47_checks["checks"])
 		result["cubit_v47_source_identity"] = v47_checks
 		if v47_checks["status"] != "ok":
+			result["status"] = "needs_attention"
+	v48_checks = _validate_cubit_v48_source_identity(summary)
+	if v48_checks:
+		result.setdefault("checks", {}).update(v48_checks["checks"])
+		result["cubit_v48_source_identity"] = v48_checks
+		if v48_checks["status"] != "ok":
 			result["status"] = "needs_attention"
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
