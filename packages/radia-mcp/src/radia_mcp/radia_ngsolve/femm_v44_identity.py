@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+from .femm_v45_identity import validate_public_v45_identity
+
 
 def _sha(value: object) -> bool:
     text = str(value or "").lower()
@@ -109,4 +111,5 @@ def validate_public_identity(identity: object) -> dict[str, bool]:
                 ),
             }
         )
+    checks.update(validate_public_v45_identity(identity))
     return checks
