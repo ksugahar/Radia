@@ -3,6 +3,7 @@
 from .artifact_gate import (
     validate_matlab_ml_rl_artifact,
     validate_matlab_ml_rl_v44_identity,
+    validate_matlab_ml_rl_v45_identity,
 )
 
 
@@ -17,4 +18,5 @@ __all__ = [
     "matlab_agentic_ml_guide",
     "validate_matlab_ml_rl_artifact",
     "validate_matlab_ml_rl_v44_identity",
+    "validate_matlab_ml_rl_v45_identity",
 ]
