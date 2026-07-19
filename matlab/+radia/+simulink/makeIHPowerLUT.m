@@ -52,7 +52,11 @@ end
 if any(~isfinite(power_W(:))) || any(power_W(:) < 0)
     error("radia:simulink:LUTPower", "power_W must be finite and nonnegative.");
 end
-power_W = reshape(power_W, shape);
+if nDim == 1
+    power_W = reshape(power_W, shape(1), 1);
+else
+    power_W = reshape(power_W, shape);
+end
 
 lut = struct( ...
     "schema", "radia.ih.simulink.power_lut.v1", ...
