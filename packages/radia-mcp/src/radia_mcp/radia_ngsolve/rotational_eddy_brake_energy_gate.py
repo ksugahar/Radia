@@ -4427,6 +4427,142 @@ def _reacting_species_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _microwave_heating_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "microwaveheating_sparameter_absorbedpower_jouleheat_temperature_energy_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("microwave_generation") or "")
+    names = (
+        "frequency_hz", "reference_impedance_ohm", "s11_magnitude",
+        "s21_magnitude", "incident_power_w", "reflected_power_w",
+        "transmitted_power_w", "absorbed_power_w", "joule_heat_w",
+        "dielectric_heat_w", "electromagnetic_power_residual_w",
+        "outward_thermal_flux_w", "ambient_temperature_k",
+        "maximum_temperature_k", "temperature_rise_k",
+        "thermal_power_residual_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    incident = values["incident_power_w"]
+    expected_reflected = incident * values["s11_magnitude"] ** 2
+    expected_transmitted = incident * values["s21_magnitude"] ** 2
+    expected_absorbed = incident - expected_reflected - expected_transmitted
+    expected_em_residual = (
+        expected_absorbed - values["joule_heat_w"] - values["dielectric_heat_w"]
+    )
+    expected_thermal_residual = (
+        values["joule_heat_w"]
+        + values["dielectric_heat_w"]
+        - values["outward_thermal_flux_w"]
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "sparameter_generation", "power_generation", "heat_generation",
+            "temperature_generation", "energy_generation", "mesh_generation",
+            "result_generation",
+        ))
+        and all(math.isfinite(value) for value in values.values())
+        and min(
+            values["frequency_hz"], values["reference_impedance_ohm"],
+            incident, values["ambient_temperature_k"],
+            values["maximum_temperature_k"],
+        ) > 0.0
+        and 0.0 <= values["s11_magnitude"] <= 1.0
+        and 0.0 <= values["s21_magnitude"] <= 1.0
+        and values["joule_heat_w"] >= 0.0
+        and values["dielectric_heat_w"] >= 0.0
+        and expected_absorbed >= 0.0
+        and math.isclose(values["reflected_power_w"], expected_reflected, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["transmitted_power_w"], expected_transmitted, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["absorbed_power_w"], expected_absorbed, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["electromagnetic_power_residual_w"], expected_em_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(values["thermal_power_residual_w"], expected_thermal_residual, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and abs(expected_em_residual) <= 1.0e-12 * max(incident, 1.0e-15)
+        and abs(expected_thermal_residual) <= 1.0e-12 * max(expected_absorbed, 1.0e-15)
+        and math.isclose(values["temperature_rise_k"], values["maximum_temperature_k"] - values["ambient_temperature_k"], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and values["temperature_rise_k"] >= 0.0
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
+def _poroelastic_wave_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get(
+        "poroelastic_wave_pressure_displacement_flux_dissipation_mass_energy_mesh_result_generation_identity"
+    )
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("poroelastic_generation") or "")
+    names = (
+        "frequency_hz", "porosity", "solid_displacement_amplitude_m",
+        "pore_pressure_amplitude_pa", "darcy_flux_amplitude_m_per_s",
+        "pressure_displacement_phase_deg", "fluid_mass_kg",
+        "fluid_mass_rate_kg_per_s", "net_inward_mass_flux_kg_per_s",
+        "solid_energy_j", "fluid_energy_j", "dissipated_power_w",
+        "input_power_w", "mass_balance_residual_kg_per_s",
+        "energy_balance_residual_w",
+    )
+    try:
+        values = {name: float(identity[name]) for name in names}
+        results = {name: float(identity[f"result_{name}"]) for name in names}
+    except (KeyError, TypeError, ValueError):
+        return False
+    expected_mass_residual = (
+        values["net_inward_mass_flux_kg_per_s"]
+        - values["fluid_mass_rate_kg_per_s"]
+    )
+    expected_energy_residual = (
+        values["input_power_w"] - values["dissipated_power_w"]
+    )
+    return (
+        bool(generation)
+        and all(identity.get(key) == generation for key in (
+            "pressure_generation", "displacement_generation", "flux_generation",
+            "mass_generation", "energy_generation", "mesh_generation",
+            "result_generation",
+        ))
+        and all(math.isfinite(value) for value in values.values())
+        and values["frequency_hz"] > 0.0
+        and 0.0 < values["porosity"] < 1.0
+        and min(
+            values["solid_displacement_amplitude_m"],
+            values["pore_pressure_amplitude_pa"],
+            values["darcy_flux_amplitude_m_per_s"], values["fluid_mass_kg"],
+        ) >= 0.0
+        and -180.0 <= values["pressure_displacement_phase_deg"] <= 180.0
+        and values["solid_energy_j"] >= 0.0
+        and values["fluid_energy_j"] >= 0.0
+        and values["dissipated_power_w"] >= 0.0
+        and values["input_power_w"] >= 0.0
+        and math.isclose(values["mass_balance_residual_kg_per_s"], expected_mass_residual, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isclose(values["energy_balance_residual_w"], expected_energy_residual, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and abs(expected_mass_residual) <= 1.0e-12 * max(abs(values["fluid_mass_rate_kg_per_s"]), 1.0e-15)
+        and abs(expected_energy_residual) <= 1.0e-12 * max(values["input_power_w"], 1.0e-15)
+        and all(math.isclose(results[name], values[name], rel_tol=1.0e-12, abs_tol=1.0e-15) for name in names)
+        and bool(str(identity.get("mesh_owner") or ""))
+        and identity.get("accepted_mesh_owner") == identity.get("mesh_owner")
+        and _is_sha256(str(identity.get("mesh_sha256") or ""))
+        and identity.get("accepted_mesh_sha256") == identity.get("mesh_sha256")
+        and _is_sha256(str(identity.get("result_sha256") or ""))
+        and identity.get("accepted_result_sha256") == identity.get("result_sha256")
+    )
+
+
 def rotational_eddy_brake_energy_gate(
     summary: dict[str, Any],
     *,
@@ -4898,6 +5034,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "reacting_species_results_use_current_diffusion_rate_flux_mass_temperature_mesh_and_result": (
             _reacting_species_identity_ok(summary)
+        ),
+        "microwave_heating_results_use_current_sparameters_power_heat_temperature_energy_mesh_and_result": (
+            _microwave_heating_identity_ok(summary)
+        ),
+        "poroelastic_wave_results_use_current_pressure_displacement_flux_mass_energy_mesh_and_result": (
+            _poroelastic_wave_identity_ok(summary)
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
