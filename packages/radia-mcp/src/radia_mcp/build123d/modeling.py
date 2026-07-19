@@ -23,6 +23,7 @@ archetypes that compose them (Halbach ring, dipole/quadrupole yokes, C-core, sol
 from __future__ import annotations
 
 from collections import Counter
+from .build123d_v45_identity import boolean_v45_ok, loft_v45_ok
 import math
 
 try:
@@ -9064,6 +9065,20 @@ def shape_mass_property_crosscheck_summary(
         )
         if not checks["v44_loft_sweep_identity"]:
             issues.append("loft/sweep section, tangent, mass, or BREP identity is stale")
+    v45_boolean_key = "boolean_fillet_shell_massproperties_volume_area_brep_owner_identity"
+    v45_loft_key = "loft_sweep_section_frame_tangent_continuity_inertia_export_digest_identity"
+    if any(v45_boolean_key in row for row in identity_rows):
+        checks["v45_boolean_fillet_shell_brep_identity"] = all(
+            boolean_v45_ok(row.get(v45_boolean_key)) for row in identity_rows
+        )
+        if not checks["v45_boolean_fillet_shell_brep_identity"]:
+            issues.append("v45 Boolean/fillet/shell BREP identity is stale")
+    if any(v45_loft_key in row for row in identity_rows):
+        checks["v45_loft_sweep_brep_identity"] = all(
+            loft_v45_ok(row.get(v45_loft_key)) for row in identity_rows
+        )
+        if not checks["v45_loft_sweep_brep_identity"]:
+            issues.append("v45 loft/sweep BREP identity is stale")
 
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
