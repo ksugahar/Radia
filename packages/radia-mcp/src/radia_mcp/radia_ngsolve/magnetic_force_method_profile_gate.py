@@ -2723,6 +2723,134 @@ def _magnetic_gear_action_reaction_identity_ok(value: object) -> bool:
     )
 
 
+def _multilayer_shield_closure_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("shield_generation", "")).strip()
+    try:
+        permeability = [float(item) for item in value.get("relative_permeability", [])]
+        thickness = [float(item) for item in value.get("layer_thickness_m", [])]
+        radii = [float(item) for item in value.get("layer_mean_radius_m", [])]
+        factors = [float(item) for item in value.get("layer_shielding_factor", [])]
+        flux = [float(item) for item in value.get("interface_normal_flux_t", [])]
+        external_field = float(value.get("external_field_t"))
+        attenuation = float(value.get("attenuation_factor"))
+        leakage = float(value.get("leakage_field_t"))
+        volume = float(value.get("cavity_volume_m3"))
+        energy = float(value.get("stored_energy_j"))
+    except (TypeError, ValueError):
+        return False
+    expected_factors = [
+        1.0 + (mu_r - 1.0) * layer_thickness / (2.0 * radius)
+        for mu_r, layer_thickness, radius in zip(permeability, thickness, radii)
+    ]
+    expected_attenuation = math.prod(expected_factors)
+    expected_leakage = external_field / expected_attenuation
+    expected_energy = expected_leakage**2 * volume / (2.0 * 4.0e-7 * math.pi)
+    mirrored = (
+        "relative_permeability", "layer_thickness_m", "layer_mean_radius_m",
+        "layer_shielding_factor", "interface_normal_flux_t", "external_field_t",
+        "attenuation_factor", "leakage_field_t", "cavity_volume_m3",
+        "stored_energy_j",
+    )
+    count = len(permeability)
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "material_generation", "thickness_generation", "geometry_generation",
+                "flux_generation", "attenuation_generation", "field_generation",
+                "energy_generation", "owner_generation", "result_generation",
+            )
+        )
+        and count >= 2 and len(thickness) == len(radii) == len(factors) == count
+        and len(flux) == count + 1
+        and all(math.isfinite(item) for item in permeability + thickness + radii + factors + flux)
+        and all(item > 1.0 for item in permeability)
+        and all(item > 0.0 for item in thickness + radii)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-12) for item, expected in zip(factors, expected_factors))
+        and external_field > 0.0 and attenuation > 1.0 and leakage > 0.0
+        and math.isclose(attenuation, expected_attenuation, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isclose(leakage, expected_leakage, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(item, leakage, rel_tol=1.0e-12, abs_tol=1.0e-15) for item in flux)
+        and volume > 0.0 and energy > 0.0
+        and math.isclose(energy, expected_energy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("geometry_owner", "")).startswith("geometry:")
+        and value.get("accepted_geometry_owner") == value.get("geometry_owner")
+        and _valid_sha256(value.get("shield_result_sha256"))
+        and value.get("accepted_shield_result_sha256") == value.get("shield_result_sha256")
+    )
+
+
+def _transformer_energy_force_identity_ok(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    generation = str(value.get("transformer_generation", "")).strip()
+    try:
+        matrix = [[float(item) for item in row] for row in value.get("inductance_matrix_h", [])]
+        leakage = float(value.get("primary_leakage_inductance_h"))
+        currents = [float(item) for item in value.get("winding_currents_a", [])]
+        linkages = [float(item) for item in value.get("flux_linkages_wb_turn", [])]
+        reciprocity = float(value.get("reciprocity_residual_h"))
+        coenergy = float(value.get("coenergy_j"))
+        mutual_gradient = float(value.get("mutual_inductance_gradient_h_per_m"))
+        force = float(value.get("force_n"))
+    except (TypeError, ValueError):
+        return False
+    if len(matrix) != 2 or any(len(row) != 2 for row in matrix) or len(currents) != 2 or len(linkages) != 2:
+        return False
+    l_primary, mutual_12 = matrix[0]
+    mutual_21, l_secondary = matrix[1]
+    if l_primary <= 0.0 or l_secondary <= 0.0:
+        return False
+    expected_leakage = l_primary - mutual_12**2 / l_secondary
+    expected_linkages = [
+        l_primary * currents[0] + mutual_12 * currents[1],
+        mutual_21 * currents[0] + l_secondary * currents[1],
+    ]
+    expected_coenergy = 0.5 * sum(current * linkage for current, linkage in zip(currents, expected_linkages))
+    expected_force = mutual_gradient * currents[0] * currents[1]
+    mirrored = (
+        "inductance_matrix_h", "primary_leakage_inductance_h",
+        "winding_currents_a", "flux_linkages_wb_turn", "reciprocity_residual_h",
+        "coenergy_j", "mutual_inductance_gradient_h_per_m", "force_n",
+    )
+    return (
+        bool(generation)
+        and all(
+            value.get(key) == generation
+            for key in (
+                "inductance_generation", "leakage_generation", "flux_generation",
+                "reciprocity_generation", "energy_generation", "force_generation",
+                "winding_generation", "result_generation",
+            )
+        )
+        and all(math.isfinite(item) for row in matrix for item in row)
+        and all(math.isfinite(item) for item in currents + linkages)
+        and math.isclose(mutual_12, mutual_21, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and l_primary * l_secondary - mutual_12**2 >= -1.0e-15
+        and leakage >= 0.0
+        and math.isclose(leakage, expected_leakage, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and all(math.isclose(item, expected, rel_tol=1.0e-12, abs_tol=1.0e-15) for item, expected in zip(linkages, expected_linkages))
+        and math.isfinite(reciprocity) and abs(reciprocity) <= 1.0e-12
+        and math.isfinite(coenergy) and coenergy >= 0.0
+        and math.isclose(coenergy, expected_coenergy, rel_tol=1.0e-12, abs_tol=1.0e-15)
+        and math.isfinite(mutual_gradient) and math.isfinite(force)
+        and math.isclose(force, expected_force, rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and str(value.get("winding_owner", "")).startswith("winding:")
+        and value.get("accepted_winding_owner") == value.get("winding_owner")
+        and _valid_sha256(value.get("transformer_result_sha256"))
+        and value.get("accepted_transformer_result_sha256") == value.get("transformer_result_sha256")
+    )
+
+
 def magnetic_force_method_profile_gate(
     summary: Mapping[str, object],
     *,
@@ -2853,6 +2981,8 @@ def magnetic_force_method_profile_gate(
     pm_coupling_energy_identity_ok = True
     thin_conductor_surface_impedance_identity_ok = True
     magnetic_gear_action_reaction_identity_ok = True
+    multilayer_shield_closure_identity_ok = True
+    transformer_energy_force_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -2920,6 +3050,8 @@ def magnetic_force_method_profile_gate(
         pm_coupling_energy_identity_ok = False
         thin_conductor_surface_impedance_identity_ok = False
         magnetic_gear_action_reaction_identity_ok = False
+        multilayer_shield_closure_identity_ok = False
+        transformer_energy_force_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -4748,6 +4880,16 @@ def magnetic_force_method_profile_gate(
                 "magnetic_gear_harmonic_polepair_modulation_phase_ratio_torque_actionreaction_power_owner_result_identity"
             )
         )
+        multilayer_shield_closure_identity_ok = _multilayer_shield_closure_identity_ok(
+            identity_value.get(
+                "multilayer_magnetic_shield_permeability_thickness_radius_interface_flux_attenuation_leakage_energy_geometry_result_identity"
+            )
+        )
+        transformer_energy_force_identity_ok = _transformer_energy_force_identity_ok(
+            identity_value.get(
+                "transformer_leakage_mutual_inductance_fluxlinkage_reciprocity_psd_coenergy_force_winding_result_identity"
+            )
+        )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -5004,6 +5146,12 @@ def magnetic_force_method_profile_gate(
         ),
         "magnetic_gears_close_harmonics_poles_ratio_torque_reaction_power_owner_and_result": (
             magnetic_gear_action_reaction_identity_ok
+        ),
+        "multilayer_shields_close_material_thickness_flux_attenuation_leakage_energy_geometry_and_result": (
+            multilayer_shield_closure_identity_ok
+        ),
+        "transformers_close_inductance_leakage_flux_reciprocity_psd_coenergy_force_winding_and_result": (
+            transformer_energy_force_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
