@@ -30,6 +30,13 @@ verifyEqual(testCase, power_W, [15; 25], "AbsTol", 1e-12);
 verifyEqual(testCase, lut.schema, "radia.ih.simulink.power_lut.v1");
 end
 
+function testOneDimensionalPowerLUT(testCase)
+lut = radia.simulink.makeIHPowerLUT({[0, 1]}, [5, 7]);
+power_W = radia.simulink.evaluateIHPowerLUT(lut, [0.5; 2]);
+verifyEqual(testCase, power_W, [6; 7], "AbsTol", 1e-12);
+verifySize(testCase, lut.table_power_W, [2, 1]);
+end
+
 function testDriveMotionAndTemperatureFeedback(testCase)
 position = [0, 1];
 drive = [0, 10];
