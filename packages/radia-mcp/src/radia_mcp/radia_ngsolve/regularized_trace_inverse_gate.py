@@ -290,6 +290,12 @@ def regularized_trace_inverse_path_gate(
     fembem_model_reduction_identity_ok = (
         _optional_fembem_model_reduction_identity_is_aligned(summary)
     )
+    nonlinear_fem_newton_identity_ok = (
+        _optional_nonlinear_fem_newton_identity_is_aligned(summary)
+    )
+    cq_contour_reconstruction_identity_ok = (
+        _optional_cq_contour_reconstruction_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -505,6 +511,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_model_reduction_uses_current_projection_order_stability_passivity_moments_frequency_error_full_model_mesh_owners_and_result": (
             fembem_model_reduction_identity_ok
+        ),
+        "nonlinear_fem_uses_current_residual_tangent_newton_linesearch_energy_mesh_owner_and_result": (
+            nonlinear_fem_newton_identity_ok
+        ),
+        "cq_contour_uses_current_nodes_interpolation_aliasing_passivity_reconstruction_time_operator_and_result": (
+            cq_contour_reconstruction_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -4611,6 +4623,217 @@ def _optional_fembem_model_reduction_identity_is_aligned(
         and value.get("accepted_reduction_owner") == value.get("reduction_owner")
         and _is_sha256(str(value.get("reduction_result_sha256", "")).lower())
         and value.get("accepted_reduction_result_sha256") == value.get("reduction_result_sha256")
+    )
+
+
+def _is_symmetric_positive_definite_matrix(
+    matrix: tuple[tuple[float, ...], ...],
+) -> bool:
+    size = len(matrix)
+    if size == 0 or any(len(row) != size for row in matrix):
+        return False
+    if not all(math.isfinite(item) for row in matrix for item in row):
+        return False
+    scale = max(1.0, max(abs(item) for row in matrix for item in row))
+    tolerance = 1.0e-12 * scale
+    if any(
+        abs(matrix[row][column] - matrix[column][row]) > tolerance
+        for row in range(size)
+        for column in range(size)
+    ):
+        return False
+    lower = [[0.0] * size for _ in range(size)]
+    for row in range(size):
+        for column in range(row + 1):
+            remainder = matrix[row][column] - sum(
+                lower[row][index] * lower[column][index]
+                for index in range(column)
+            )
+            if row == column:
+                if remainder <= tolerance:
+                    return False
+                lower[row][column] = math.sqrt(remainder)
+            else:
+                lower[row][column] = remainder / lower[column][column]
+    return True
+
+
+def _optional_nonlinear_fem_newton_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "nonlinear_fem_newton_residual_consistent_tangent_linesearch_step_energy_mesh_owner_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["nonlinear_generation"]).strip()
+        residuals = tuple(float(item) for item in value["residual_norm_history"])
+        tangent = tuple(
+            tuple(float(item) for item in row)
+            for row in value["consistent_tangent_matrix"]
+        )
+        tangent_product = tuple(
+            float(item) for item in value["directional_tangent_product"]
+        )
+        finite_difference = tuple(
+            float(item) for item in value["finite_difference_directional_derivative"]
+        )
+        tangent_tolerance = float(value["tangent_relative_tolerance"])
+        steps = tuple(
+            tuple(float(item) for item in row)
+            for row in value["newton_step_history"]
+        )
+        alphas = tuple(float(item) for item in value["line_search_alpha_history"])
+        trial_residuals = tuple(
+            float(item) for item in value["line_search_trial_residual_norm"]
+        )
+        armijo = float(value["line_search_armijo_constant"])
+        energies = tuple(float(item) for item in value["strain_energy_history_j"])
+        external_work = float(value["external_work_final_j"])
+        energy_residual = float(value["energy_balance_residual_j"])
+        convergence_tolerance = float(value["convergence_tolerance"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    size = len(tangent)
+    if size == 0 or any(len(row) != size for row in tangent):
+        return False
+    positive_definite = _is_symmetric_positive_definite_matrix(tangent)
+    mirrored = (
+        "nonlinear_formulation", "residual_norm_history",
+        "consistent_tangent_matrix", "directional_tangent_product",
+        "finite_difference_directional_derivative", "tangent_relative_tolerance",
+        "newton_step_history", "line_search_alpha_history",
+        "line_search_trial_residual_norm", "line_search_armijo_constant",
+        "strain_energy_history_j", "external_work_final_j",
+        "energy_balance_residual_j", "convergence_tolerance",
+        "nonlinear_mesh_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "residual_generation", "tangent_generation", "step_generation",
+            "linesearch_generation", "iteration_generation", "energy_generation",
+            "mesh_generation", "owner_generation", "result_generation",
+        ))
+        and value.get("nonlinear_formulation") == "total_lagrangian_hyperelastic"
+        and len(residuals) >= 3
+        and all(math.isfinite(item) and item >= 0.0 for item in residuals)
+        and all(left > right for left, right in zip(residuals, residuals[1:]))
+        and math.isfinite(convergence_tolerance) and convergence_tolerance > 0.0
+        and residuals[-1] <= convergence_tolerance
+        and positive_definite
+        and len(tangent_product) == len(finite_difference) == size
+        and math.isfinite(tangent_tolerance) and 0.0 < tangent_tolerance <= 1.0e-4
+        and all(
+            abs(left - right) / max(abs(left), abs(right), 1.0e-300)
+            <= tangent_tolerance
+            for left, right in zip(tangent_product, finite_difference)
+        )
+        and len(steps) == len(alphas) == len(trial_residuals) == len(residuals) - 1
+        and all(len(row) == size and all(math.isfinite(item) for item in row) for row in steps)
+        and all(math.isfinite(item) and 0.0 < item <= 1.0 for item in alphas)
+        and math.isfinite(armijo) and 0.0 < armijo < 1.0
+        and all(
+            math.isfinite(trial) and trial <= previous * (1.0 - armijo * alpha)
+            for previous, trial, alpha in zip(residuals, trial_residuals, alphas)
+        )
+        and trial_residuals == residuals[1:]
+        and len(energies) == len(residuals)
+        and all(math.isfinite(item) and item >= 0.0 for item in energies)
+        and all(left <= right for left, right in zip(energies, energies[1:]))
+        and math.isfinite(external_work) and external_work >= 0.0
+        and math.isclose(external_work, energies[-1], rel_tol=1.0e-12, abs_tol=1.0e-12)
+        and math.isfinite(energy_residual) and abs(energy_residual) <= 1.0e-12
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("nonlinear_mesh_sha256", "")).lower())
+        and str(value.get("nonlinear_owner", "")).startswith("fem/")
+        and value.get("accepted_nonlinear_owner") == value.get("nonlinear_owner")
+        and _is_sha256(str(value.get("nonlinear_result_sha256", "")).lower())
+        and value.get("accepted_nonlinear_result_sha256")
+        == value.get("nonlinear_result_sha256")
+    )
+
+
+def _optional_cq_contour_reconstruction_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get(
+        "cq_contour_frequency_interpolation_aliasing_passivity_reconstruction_time_operator_result_identity"
+    )
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        generation = str(value["cq_generation"]).strip()
+        timestep = float(value["time_step_s"])
+        count = _integer(value, "time_step_count")
+        radius = float(value["contour_radius"])
+        contour = tuple(
+            complex(float(row[0]), float(row[1]))
+            for row in value["contour_nodes_complex"]
+        )
+        interpolation_error = float(value["frequency_interpolation_relative_error"])
+        interpolation_limit = float(value["maximum_frequency_interpolation_relative_error"])
+        aliasing_error = float(value["aliasing_error_bound"])
+        aliasing_limit = float(value["maximum_aliasing_error"])
+        passivity = float(value["minimum_transfer_passivity_eigenvalue"])
+        reconstruction_error = float(value["time_reconstruction_relative_error"])
+        reconstruction_limit = float(value["maximum_time_reconstruction_relative_error"])
+        history = tuple(float(item) for item in value["time_history"])
+        reconstructed = tuple(float(item) for item in value["reconstructed_time_history"])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return False
+    expected_contour = tuple(
+        radius * complex(
+            math.cos(2.0 * math.pi * index / count),
+            math.sin(2.0 * math.pi * index / count),
+        )
+        for index in range(count)
+    ) if count > 0 else ()
+    mirrored = (
+        "cq_method", "time_step_s", "time_step_count", "contour_radius",
+        "contour_nodes_complex", "frequency_interpolation_relative_error",
+        "maximum_frequency_interpolation_relative_error", "aliasing_error_bound",
+        "maximum_aliasing_error", "minimum_transfer_passivity_eigenvalue",
+        "time_reconstruction_relative_error",
+        "maximum_time_reconstruction_relative_error", "time_history",
+        "reconstructed_time_history", "cq_operator_sha256",
+    )
+    return (
+        bool(generation)
+        and all(value.get(key) == generation for key in (
+            "contour_generation", "frequency_generation",
+            "interpolation_generation", "aliasing_generation",
+            "passivity_generation", "reconstruction_generation",
+            "time_generation", "operator_generation", "result_generation",
+        ))
+        and value.get("cq_method") == "bdf2"
+        and math.isfinite(timestep) and timestep > 0.0
+        and count >= 4 and 0.0 < radius < 1.0 and len(contour) == count
+        and all(
+            abs(actual - expected) <= 1.0e-12
+            for actual, expected in zip(contour, expected_contour)
+        )
+        and all(math.isfinite(item) and item >= 0.0 for item in (
+            interpolation_error, interpolation_limit, aliasing_error,
+            aliasing_limit, passivity, reconstruction_error, reconstruction_limit,
+        ))
+        and interpolation_error <= interpolation_limit
+        and aliasing_error <= aliasing_limit
+        and reconstruction_error <= reconstruction_limit
+        and len(history) == len(reconstructed) == count
+        and all(math.isfinite(item) for item in (*history, *reconstructed))
+        and history == reconstructed
+        and all(value.get(f"result_{field}") == value.get(field) for field in mirrored)
+        and _is_sha256(str(value.get("cq_operator_sha256", "")).lower())
+        and str(value.get("operator_owner", "")).startswith("cq/")
+        and value.get("accepted_operator_owner") == value.get("operator_owner")
+        and _is_sha256(str(value.get("cq_result_sha256", "")).lower())
+        and value.get("accepted_cq_result_sha256") == value.get("cq_result_sha256")
     )
 
 
