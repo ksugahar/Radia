@@ -156,6 +156,9 @@ radia = [
     "panels/*.json",
     "panels/notebooks/*.ipynb",
     "panels/notebooks/*.json",
+    "simulink/*.m",
+    "simulink/*.cpp",
+    "simulink/*.md",
     "CONVENTIONS.md",
 ]
 

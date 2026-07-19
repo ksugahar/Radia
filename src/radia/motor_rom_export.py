@@ -70,6 +70,26 @@ def MotorROMPortManifest(motor: AnglePeriodicMotorROM) -> dict[str, object]:
         "simulink": {
             "payload": "MAT mirrors canonical NPZ arrays",
             "step_function": "rad_motor_rom_step",
+            "mex_s_function": "radia_motor_rom_sfun",
+            "input_order": [
+                "phase_voltages_V",
+                "load_torque_Nm",
+                "ambient_temperature_K",
+            ],
+            "output_order": [
+                "phase_currents_A",
+                "eddy_currents_A",
+                "phase_flux_linkage_Wb",
+                "rotor_angle_rad",
+                "rotor_speed_rad_s",
+                "electromagnetic_torque_Nm",
+                "resistive_loss_W",
+                "hysteresis_loss_W",
+                "temperature_K",
+                "energy_balance_residual_W",
+                "nonlinear_iterations",
+            ],
+            "state_update": "internal-discrete-at-fixed-sample-time",
             "sample_time": "inherited/fixed communication step",
         },
         "fmi": {
@@ -144,6 +164,24 @@ def SaveMotorROMBundle(motor: AnglePeriodicMotorROM, path) -> dict[str, str]:
     motor.save_npz(npz_path)
     with np.load(npz_path, allow_pickle=False) as payload:
         mat_payload = {name: np.asarray(payload[name]) for name in payload.files}
+    # Keep scalar contract fields as doubles: this is the least surprising
+    # representation for MATLAB MEX/S-function parameter inspection.
+    mat_payload["n_phase"] = np.asarray(motor.ports.n_phase, dtype=np.float64)
+    mat_payload["n_eddy"] = np.asarray(motor.ports.n_eddy, dtype=np.float64)
+    mat_payload["n_generalized"] = np.asarray(
+        motor.ports.n_generalized, dtype=np.float64
+    )
+    if motor.thermal_capacity_J_per_K is None:
+        mat_payload["thermal_capacity_J_per_K"] = np.asarray(0.0, dtype=np.float64)
+    mat_payload["has_motional_v_cross_b"] = np.asarray(
+        motor.motion_flux_gradient_Wb_per_rad is not None, dtype=bool
+    )
+    mat_payload["has_cogging_coenergy"] = np.asarray(
+        motor.cogging_coenergy_J is not None, dtype=bool
+    )
+    mat_payload["external_hysteresis_required"] = np.asarray(
+        motor.hysteresis_port is not None, dtype=bool
+    )
     mat_payload["c_abi_version"] = np.asarray(1, dtype=np.uint32)
     savemat(mat_path, mat_payload, do_compression=True, long_field_names=True)
 
