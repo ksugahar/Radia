@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .elf_v45_identity import validate_public_v45_identity
+
 
 _DYNAMIC = "magneticbearing_dynamicstiffness_phase_damping_force_power_stability_mesh_result_identity"
 _DEMAG = "demag_minorloop_fieldpath_remanence_loss_energy_temperature_material_mesh_result_identity"
@@ -109,4 +111,5 @@ def validate_public_identity(identity: object) -> dict[str, bool]:
     if _DEMAG in identity:
         row = identity[_DEMAG]
         checks["magnetic_force_v44_demag_minorloop_identity"] = isinstance(row, Mapping) and _demag_ok(row)
+    checks.update(validate_public_v45_identity(identity))
     return checks
