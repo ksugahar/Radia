@@ -127,6 +127,7 @@ from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coen
 from .femm_v44_identity import validate_public_identity as _validate_femm_v44_identity
 from .femm_v46_identity import validate_public_identity as _validate_femm_v46_identity
 from .motor_v44_identity import validate_public_identity as _validate_motor_v44_identity
+from .jmag_v46_identity import validate_public_identity as _validate_jmag_v46_identity
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
 from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
 from .nonlinear_inductance_sweep_gate import (
@@ -3866,6 +3867,12 @@ def pwm_controlled_motor_loss_gate(
             result.setdefault("checks", {}).update(v44_checks)
             result["motor_v44_identity_checks"] = v44_checks
             if not all(v44_checks.values()):
+                result["status"] = "needs_attention"
+        v46_checks = _validate_jmag_v46_identity(payload.get("artifact_identity"))
+        if v46_checks:
+            result.setdefault("checks", {}).update(v46_checks)
+            result["motor_v46_identity_checks"] = v46_checks
+            if not all(v46_checks.values()):
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
