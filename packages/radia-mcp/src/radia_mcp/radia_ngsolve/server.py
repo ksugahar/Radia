@@ -126,6 +126,7 @@ from .force_position_profile_gate import force_position_profile_gate as _force_p
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .femm_v44_identity import validate_public_identity as _validate_femm_v44_identity
 from .femm_v46_identity import validate_public_identity as _validate_femm_v46_identity
+from .magnetic_artifact_lineage_v47 import validate_public_identity as _validate_femm_v47_identity
 from .motor_v44_identity import validate_public_identity as _validate_motor_v44_identity
 from .jmag_v46_identity import validate_public_identity as _validate_jmag_v46_identity
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
@@ -3442,6 +3443,12 @@ def force_coenergy_displacement_gate(
             result.setdefault("checks", {}).update(v46_checks)
             result["femm_v46_identity_checks"] = v46_checks
             if not all(v46_checks.values()):
+                result["status"] = "needs_attention"
+        v47_checks = _validate_femm_v47_identity(artifact_identity)
+        if v47_checks:
+            result.setdefault("checks", {}).update(v47_checks)
+            result["magnetic_v47_identity_checks"] = v47_checks
+            if not all(v47_checks.values()):
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
