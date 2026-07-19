@@ -962,6 +962,380 @@ def test_v17_public_nearfield_farfield_phase_center_coordinate_frame_mismatch():
     )
 
 
+def test_v18_public_sparameter_deembed_reference_plane_per_port_generation_mismatch():
+    bad = _with_v14_bindings(_summary())
+    deembed = bad["runs"][0][
+        "sparameter_deembed_reference_plane_per_port_generation_identity"
+    ]
+    deembed.update(
+        {
+            "reference_plane_port_generation": "port-19",
+            "deembedded_result_port_generation": "port-19",
+            "reference_plane_port_ids": ["P2", "P1"],
+            "applied_reference_plane_offsets_m": [0.002, 0.001],
+            "deembedded_reference_plane_map_sha256": "9" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameter_deembed_uses_current_per_port_reference_planes"
+        ]
+        is False
+    )
+
+
+def test_v18_public_time_domain_port_signal_gate_window_generation_mismatch():
+    bad = _with_v14_bindings(_summary())
+    gate_window = bad["runs"][0][
+        "time_domain_port_signal_gate_window_generation_identity"
+    ]
+    gate_window.update(
+        {
+            "gate_window_signal_generation": "port-signal-19",
+            "transform_gate_generation": "gate-19",
+            "transform_gate_window": [80, 760],
+            "transform_normalization_basis": "total_signal_peak",
+            "transform_gate_window_sha256": "9" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "time_domain_port_transform_uses_current_gate_window"
+        ]
+        is False
+    )
+
+
+def test_v19_public_sparameter_port_renormalization_reference_impedance_generation_mismatch():
+    summary = _with_v14_bindings(_summary())
+    identity = summary["runs"][0][
+        "sparameter_port_renormalization_reference_impedance_generation_identity"
+    ]
+    identity.update(
+        {
+            "reference_impedance_port_calibration_generation": "port-calibration-20",
+            "renormalized_result_port_calibration_generation": "port-calibration-20",
+            "reference_impedance_port_ids": ["P2", "P1"],
+            "applied_reference_impedances_ohm": [75.0, 50.0],
+            "renormalized_reference_impedance_map_sha256": "9" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameter_renormalization_uses_current_port_reference_impedances"
+        ]
+        is False
+    )
+
+
+def test_v19_public_realized_gain_accepted_power_port_excitation_generation_mismatch():
+    summary = _with_v14_bindings(_summary())
+    identity = summary["runs"][0][
+        "realized_gain_accepted_power_port_excitation_generation_identity"
+    ]
+    identity.update(
+        {
+            "accepted_power_excitation_generation": "excitation-20",
+            "realized_gain_excitation_generation": "excitation-20",
+            "accepted_power_port_ids": ["P2", "P1"],
+            "realized_gain_accepted_power_w": [0.4, 0.6],
+            "realized_gain_excitation_coefficients_re_im": [
+                [0.0, 0.0],
+                [1.0, 0.0],
+            ],
+            "realized_gain_excitation_table_sha256": "9" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "realized_gain_uses_current_excitation_and_accepted_power"
+        ]
+        is False
+    )
+
+
+def test_v20_public_farfield_polarization_basis_phase_center_coordinate_generation_mismatch():
+    summary = _with_v14_bindings(_summary())
+    identity = summary["runs"][0][
+        "farfield_polarization_basis_phase_center_coordinate_generation_identity"
+    ]
+    identity.update(
+        {
+            "theta_basis_monitor_coordinate_generation": "farfield-monitor-21",
+            "phase_center_monitor_coordinate_generation": "farfield-monitor-21",
+            "result_sample_ids": [3, 2, 1],
+            "result_theta_basis_sha256": ["3" * 64, "2" * 64, "1" * 64],
+            "result_phi_basis_sha256": ["6" * 64, "5" * 64, "4" * 64],
+            "result_phase_center_m": [0.01, 0.0, 0.0],
+            "result_polarization_table_sha256": "f" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "farfield_polarization_basis_and_phase_center_use_current_coordinates"
+        ]
+        is False
+    )
+
+
+def test_v20_public_broadband_energy_q_port_loss_normalization_generation_mismatch():
+    summary = _with_v14_bindings(_summary())
+    identity = summary["runs"][0][
+        "broadband_energy_q_port_loss_normalization_generation_identity"
+    ]
+    identity.update(
+        {
+            "port_power_analysis_generation": "broadband-analysis-21",
+            "loss_frequency_grid_generation": "frequency-grid-21",
+            "energy_excitation_generation": "excitation-21",
+            "q_frequencies_hz": [1.0e9, 2.0e9, 1.5e9],
+            "q_stored_energy_j": [1.2e-6, 1.0e-6, 1.1e-6],
+            "q_port_power_w": [0.9, 1.0, 1.0],
+            "q_loss_power_w": [0.12, 0.1, 0.11],
+            "result_energy_q_input_sha256": "f" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "broadband_energy_q_uses_current_port_and_loss_normalization"
+        ]
+        is False
+    )
+
+
+def _summary_v21():
+    summary = _with_v14_bindings(_summary())
+    for index, row in enumerate(summary["runs"]):
+        port_generation = f"mixed-mode-port-{31 + index}"
+        row["mixed_mode_pair_impedance_reference_plane_generation_identity"] = {
+            "result_generation": f"mixed-mode-result-{31 + index}",
+            "decoded_result_generation": f"mixed-mode-result-{31 + index}",
+            "port_generation": port_generation,
+            "pair_map_port_generation": port_generation,
+            "modal_impedance_port_generation": port_generation,
+            "polarity_port_generation": port_generation,
+            "reference_plane_port_generation": port_generation,
+            "pair_ids": [["P1", "P2"], ["P3", "P4"]],
+            "result_pair_ids": [["P1", "P2"], ["P3", "P4"]],
+            "pair_polarities": [[1, -1], [1, -1]],
+            "result_pair_polarities": [[1, -1], [1, -1]],
+            "differential_impedances_ohm": [100.0, 100.0],
+            "result_differential_impedances_ohm": [100.0, 100.0],
+            "common_impedances_ohm": [25.0, 25.0],
+            "result_common_impedances_ohm": [25.0, 25.0],
+            "reference_planes_m": [0.0, 0.01],
+            "result_reference_planes_m": [0.0, 0.01],
+            "mixed_mode_port_table_sha256": "1" * 64,
+            "result_mixed_mode_port_table_sha256": "1" * 64,
+        }
+        monitor_generation = f"time-farfield-monitor-{31 + index}"
+        row["time_farfield_fft_window_phase_center_generation_identity"] = {
+            "farfield_generation": f"time-farfield-{31 + index}",
+            "result_farfield_generation": f"time-farfield-{31 + index}",
+            "monitor_generation": monitor_generation,
+            "time_grid_monitor_generation": monitor_generation,
+            "window_monitor_generation": monitor_generation,
+            "fft_scaling_monitor_generation": monitor_generation,
+            "phase_center_monitor_generation": monitor_generation,
+            "time_samples_s": [0.0, 1.0e-12, 2.0e-12, 3.0e-12],
+            "fft_time_samples_s": [0.0, 1.0e-12, 2.0e-12, 3.0e-12],
+            "window_samples": [0.0, 0.75, 0.75, 0.0],
+            "fft_window_samples": [0.0, 0.75, 0.75, 0.0],
+            "fft_scaling": "one_sided_amplitude",
+            "result_fft_scaling": "one_sided_amplitude",
+            "phase_center_m": [0.0, 0.0, 0.01],
+            "result_phase_center_m": [0.0, 0.0, 0.01],
+            "time_farfield_input_sha256": "2" * 64,
+            "result_time_farfield_input_sha256": "2" * 64,
+        }
+    return summary
+
+
+def test_v21_public_positive_mixed_mode_and_time_farfield_identity():
+    result = nonlinear_inductance_sweep_gate(_summary_v21())
+    assert result["status"] == "ok"
+    assert all(
+        row["checks"][
+            "mixed_mode_uses_current_pairs_impedances_polarities_and_planes"
+        ]
+        for row in result["runs"]
+    )
+    assert all(
+        row["checks"][
+            "time_farfield_fft_uses_current_grid_window_scaling_and_phase_center"
+        ]
+        for row in result["runs"]
+    )
+
+
+def test_v21_public_mixed_mode_pair_impedance_reference_plane_generation_mismatch():
+    summary = _summary_v21()
+    summary["runs"][0][
+        "mixed_mode_pair_impedance_reference_plane_generation_identity"
+    ].update(
+        {
+            "pair_map_port_generation": "mixed-mode-port-30",
+            "modal_impedance_port_generation": "mixed-mode-port-29",
+            "polarity_port_generation": "mixed-mode-port-28",
+            "reference_plane_port_generation": "mixed-mode-port-27",
+            "result_pair_ids": [["P2", "P1"], ["P4", "P3"]],
+            "result_pair_polarities": [[-1, 1], [-1, 1]],
+            "result_differential_impedances_ohm": [90.0, 110.0],
+            "result_common_impedances_ohm": [30.0, 20.0],
+            "result_reference_planes_m": [0.01, 0.0],
+            "result_mixed_mode_port_table_sha256": "a" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["runs"][0]["checks"][
+        "mixed_mode_uses_current_pairs_impedances_polarities_and_planes"
+    ] is False
+
+
+def test_v21_public_time_farfield_fft_window_phase_center_generation_mismatch():
+    summary = _summary_v21()
+    summary["runs"][0][
+        "time_farfield_fft_window_phase_center_generation_identity"
+    ].update(
+        {
+            "time_grid_monitor_generation": "time-farfield-monitor-30",
+            "window_monitor_generation": "time-farfield-monitor-29",
+            "fft_scaling_monitor_generation": "time-farfield-monitor-28",
+            "phase_center_monitor_generation": "time-farfield-monitor-27",
+            "fft_time_samples_s": [0.0, 2.0e-12, 1.0e-12, 3.0e-12],
+            "fft_window_samples": [1.0, 1.0, 1.0, 1.0],
+            "result_fft_scaling": "two_sided_power",
+            "result_phase_center_m": [0.01, 0.0, 0.0],
+            "result_time_farfield_input_sha256": "b" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["runs"][0]["checks"][
+        "time_farfield_fft_uses_current_grid_window_scaling_and_phase_center"
+    ] is False
+
+
+def _summary_v22():
+    summary = _summary_v21()
+    for index, row in enumerate(summary["runs"]):
+        sweep_generation = f"mode-sweep-{41 + index}"
+        row["waveguide_degenerate_mode_phase_order_overlap_generation_identity"] = {
+            "sweep_generation": sweep_generation,
+            "mesh_sweep_generation": sweep_generation,
+            "phase_sweep_generation": sweep_generation,
+            "modal_order_sweep_generation": sweep_generation,
+            "overlap_sweep_generation": sweep_generation,
+            "result_sweep_generation": sweep_generation,
+            "mode_ids": ["degenerate-a", "degenerate-b"],
+            "result_mode_ids": ["degenerate-a", "degenerate-b"],
+            "modal_order": [1, 2],
+            "result_modal_order": [1, 2],
+            "phase_reference_deg": [0.0, 90.0],
+            "result_phase_reference_deg": [0.0, 90.0],
+            "overlap_vectors": [[1.0, 0.0], [0.0, 1.0]],
+            "result_overlap_vectors": [[1.0, 0.0], [0.0, 1.0]],
+            "mode_tracking_table_sha256": "1" * 64,
+            "result_mode_tracking_table_sha256": "1" * 64,
+        }
+        fit_generation = f"dispersive-fit-{41 + index}"
+        row["dispersive_causal_pole_fit_temperature_unit_generation_identity"] = {
+            "fit_generation": fit_generation,
+            "pole_fit_generation": fit_generation,
+            "causal_convention_fit_generation": fit_generation,
+            "temperature_fit_generation": fit_generation,
+            "frequency_unit_fit_generation": fit_generation,
+            "field_result_fit_generation": fit_generation,
+            "causal_convention": "exp(-iwt)",
+            "result_causal_convention": "exp(-iwt)",
+            "temperature_c": 85.0,
+            "result_temperature_c": 85.0,
+            "frequency_unit": "Hz",
+            "result_frequency_unit": "Hz",
+            "pole_pairs_rad_per_s": [[-1.0e9, 2.0e10], [-1.0e9, -2.0e10]],
+            "result_pole_pairs_rad_per_s": [
+                [-1.0e9, 2.0e10],
+                [-1.0e9, -2.0e10],
+            ],
+            "residues": [[2.0e9, 1.0e8], [2.0e9, -1.0e8]],
+            "result_residues": [[2.0e9, 1.0e8], [2.0e9, -1.0e8]],
+            "pole_fit_sha256": "2" * 64,
+            "result_pole_fit_sha256": "2" * 64,
+        }
+    return summary
+
+
+def test_v22_public_positive_mode_tracking_and_dispersive_fit_identity():
+    assert nonlinear_inductance_sweep_gate(_summary_v22())["status"] == "ok"
+
+
+def test_v22_public_waveguide_degenerate_mode_tracking_phase_order_generation_mismatch():
+    summary = _summary_v22()
+    identity = summary["runs"][0][
+        "waveguide_degenerate_mode_phase_order_overlap_generation_identity"
+    ]
+    identity.update(
+        {
+            "mesh_sweep_generation": "mode-sweep-40",
+            "phase_sweep_generation": "mode-sweep-39",
+            "modal_order_sweep_generation": "mode-sweep-38",
+            "overlap_sweep_generation": "mode-sweep-37",
+            "result_mode_ids": ["degenerate-b", "degenerate-a"],
+            "result_modal_order": [2, 1],
+            "result_phase_reference_deg": [90.0, 0.0],
+            "result_overlap_vectors": [[0.0, 1.0], [1.0, 0.0]],
+            "result_mode_tracking_table_sha256": "a" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["runs"][0]["checks"][
+        "degenerate_modes_use_current_mesh_phase_order_and_overlap"
+    ]
+
+
+def test_v22_public_dispersive_material_causal_pole_fit_temperature_unit_generation_mismatch():
+    summary = _summary_v22()
+    identity = summary["runs"][0][
+        "dispersive_causal_pole_fit_temperature_unit_generation_identity"
+    ]
+    identity.update(
+        {
+            "pole_fit_generation": "dispersive-fit-40",
+            "causal_convention_fit_generation": "dispersive-fit-39",
+            "temperature_fit_generation": "dispersive-fit-38",
+            "frequency_unit_fit_generation": "dispersive-fit-37",
+            "result_causal_convention": "exp(+iwt)",
+            "result_temperature_c": 25.0,
+            "result_frequency_unit": "GHz",
+            "result_pole_pairs_rad_per_s": [
+                [-1.0e8, 2.0e9],
+                [-1.0e8, -2.0e9],
+            ],
+            "result_residues": [[2.0e8, -1.0e7], [2.0e8, 1.0e7]],
+            "result_pole_fit_sha256": "b" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert not result["runs"][0]["checks"][
+        "dispersive_fields_use_current_causal_poles_temperature_and_units"
+    ]
+
+
 def test_v17_public_mixed_mode_identity_rejects_malformed_types() -> None:
     bad = _with_v14_bindings(_summary())
     identity = bad["runs"][0]["mixed_mode_sparameter_port_pair_order_identity"]
