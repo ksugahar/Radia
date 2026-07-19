@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+
+from .ltspice_v43_gates import flyback_identity_ok, opamp_stability_identity_ok
 from typing import Any
 
 
@@ -4958,6 +4960,24 @@ def _transimpedance_contract_ok(contract: object) -> bool:
     )
 
 
+def _flyback_v43_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "flyback_turnsratio_magnetizing_leakage_clamp_stress_loss_power_energy_waveform_result_identity"
+    )
+    return contract is None or (
+        isinstance(contract, Mapping) and flyback_identity_ok(contract)
+    )
+
+
+def _opamp_stability_v43_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get(
+        "opamp_loopgain_phasemargin_crossover_step_overshoot_slew_power_result_identity"
+    )
+    return contract is None or (
+        isinstance(contract, Mapping) and opamp_stability_identity_ok(contract)
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -5422,6 +5442,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "instrumentation_amplifiers_use_current_gain_cmrr_input_range_noise_headroom_power_circuit_and_result": (
             _instrumentation_amplifier_owner_identity_ok(positive)
+        ),
+        "flyback_converters_use_current_turnsratio_magnetizing_leakage_clamp_stress_loss_power_energy_waveform_and_result": (
+            _flyback_v43_identity_ok(positive)
+        ),
+        "opamps_use_current_loopgain_phasemargin_crossover_step_overshoot_slew_power_waveform_and_result": (
+            _opamp_stability_v43_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
