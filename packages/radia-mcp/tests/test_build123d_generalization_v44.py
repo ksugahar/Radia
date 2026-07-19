@@ -106,3 +106,32 @@ def test_v44_rejects_step_export_mismatch():
     row = _source_v44()
     row["replay_identity"][_STEP]["replayed_length_unit"] = "m"
     assert _source_result(row)["status"] == "needs_attention"
+
+
+def test_v44_rejects_malformed_numeric_identity_without_raising():
+    reference, measured = _public_v44()
+    measured["external_cad"][0][_BOOLEAN]["volume_m3"] = {"bad": "value"}
+    assert _public_result(reference, measured)["status"] == "needs_attention"
+
+    row = _source_v44()
+    row["replay_identity"][_STEP]["face_count"] = {"bad": "value"}
+    assert _source_result(row)["status"] == "needs_attention"
+
+
+def test_v44_rejects_self_consistent_invalid_mass_properties_and_owner():
+    reference, measured = _public_v44()
+    identity = measured["external_cad"][0][_BOOLEAN]
+    identity["center_of_mass_m"] = [float("nan"), 0.0, 0.0]
+    identity["result_center_of_mass_m"] = identity["center_of_mass_m"]
+    identity["shape_owner"] = identity["result_shape_owner"] = ""
+    assert _public_result(reference, measured)["status"] == "needs_attention"
+
+
+def test_v44_rejects_self_consistent_invalid_loft_geometry():
+    reference, measured = _public_v44()
+    identity = measured["external_cad"][0][_LOFT]
+    identity["section_area_m2"] = [1.0e-4, -1.0, 1.0e-4]
+    identity["result_section_area_m2"] = identity["section_area_m2"]
+    identity["inertia_tensor_kg_m2"] = [[-1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]]
+    identity["result_inertia_tensor_kg_m2"] = identity["inertia_tensor_kg_m2"]
+    assert _public_result(reference, measured)["status"] == "needs_attention"

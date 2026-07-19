@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **787 tools** across 42 MCP servers.
+Total: **789 tools** across 42 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,7 +10,7 @@ Total: **787 tools** across 42 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 140 |
-| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 5 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 7 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -402,7 +402,9 @@ Module: `radia_mcp.matlab.server`
 | Tool | Description |
 |---|---|
 | `matlab_agent_guide` | (no description) |
+| `matlab_agentic_ml_guide` | (no description) |
 | `matlab_extension_contract` | (no description) |
+| `matlab_ml_rl_artifact_gate` | (no description) |
 | `matlab_official_server_config` | (no description) |
 | `matlab_radia_acoustic_interface_contract` | (no description) |
 | `radia_matlab_status` | (no description) |
