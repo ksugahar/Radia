@@ -11,6 +11,7 @@ from .ltspice_v45_gates import validate_ltspice_v45_identity
 from .ltspice_v46_gates import validate_ltspice_v46_identity
 from .ltspice_v47_gates import validate_ltspice_v47_identity
 from .ltspice_v48_gates import validate_ltspice_v48_identity
+from .ltspice_v49_gates import validate_ltspice_v49_identity
 from typing import Any
 
 
@@ -5464,6 +5465,9 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
             positive
         ),
         "v48_public_replays_bind_behavioral_events_and_fourier_basis": validate_ltspice_v48_identity(
+            positive
+        ),
+        "v49_public_replays_bind_monte_carlo_and_switch_state": validate_ltspice_v49_identity(
             positive
         ),
         "exactly_four_timing_stages": timing_ok,
