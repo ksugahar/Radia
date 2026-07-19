@@ -29,6 +29,26 @@ def _valid_sha256(value: object) -> bool:
     )
 
 
+def _positive_integer(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return False
+    if isinstance(value, float) and not value.is_integer():
+        return False
+    return parsed > 0
+
+
+def _positive_finite(value: object) -> bool:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(parsed) and parsed > 0.0
+
+
 _V44_SKETCH_KEY = "sketch_constraint_solver_order_plane_frame_parameter_cache_shape_owner_generation_identity"
 _V44_STEP_KEY = "step_export_units_tessellation_tolerance_facecount_brep_digest_owner_generation_identity"
 
@@ -38,17 +58,22 @@ def _v44_sketch_identity_ok(value: object) -> bool:
         return False
     generation = str(value.get("sketch_generation") or "")
     names = ("constraint_generation", "solver_order_generation", "plane_frame_generation", "parameter_cache_generation", "shape_generation", "owner_generation", "result_generation")
+    constraint_order = value.get("constraint_order")
     return (
         bool(generation)
         and all(value.get(name) == generation for name in names)
-        and list(value.get("replayed_constraint_order") or []) == list(value.get("constraint_order") or [])
-        and bool(value.get("constraint_order"))
+        and isinstance(constraint_order, list)
+        and bool(constraint_order)
+        and all(isinstance(item, str) and bool(item.strip()) for item in constraint_order)
+        and len(set(constraint_order)) == len(constraint_order)
+        and value.get("replayed_constraint_order") == constraint_order
         and value.get("plane_frame") == "XY"
         and value.get("replayed_plane_frame") == value.get("plane_frame")
+        and bool(str(value.get("parameter_cache_key") or ""))
         and value.get("replayed_parameter_cache_key") == value.get("parameter_cache_key")
         and value.get("solver_status") == "solved"
         and value.get("replayed_solver_status") == value.get("solver_status")
-        and int(value.get("shape_generation_id", -1)) > 0
+        and _positive_integer(value.get("shape_generation_id"))
         and value.get("replayed_shape_generation_id") == value.get("shape_generation_id")
         and str(value.get("shape_owner") or "").startswith("headless:")
         and value.get("replayed_shape_owner") == value.get("shape_owner")
@@ -62,22 +87,28 @@ def _v44_step_identity_ok(value: object) -> bool:
         return False
     generation = str(value.get("step_generation") or "")
     names = ("unit_generation", "tessellation_generation", "tolerance_generation", "facecount_generation", "brep_generation", "digest_generation", "owner_generation", "result_generation")
+    topology = value.get("topology_signature")
     return (
         bool(generation)
         and all(value.get(name) == generation for name in names)
         and value.get("length_unit") == "mm"
         and value.get("replayed_length_unit") == value.get("length_unit")
-        and float(value.get("tessellation_tolerance_m", -1.0)) > 0.0
+        and _positive_finite(value.get("tessellation_tolerance_m"))
         and value.get("replayed_tessellation_tolerance_m") == value.get("tessellation_tolerance_m")
-        and int(value.get("face_count", 0)) > 0
+        and _positive_integer(value.get("face_count"))
         and value.get("replayed_face_count") == value.get("face_count")
-        and value.get("replayed_topology_signature") == value.get("topology_signature")
-        and int(value.get("brep_generation_id", -1)) > 0
+        and isinstance(topology, Mapping)
+        and topology.get("solid") == 1
+        and _positive_integer(topology.get("shell"))
+        and topology.get("face") == value.get("face_count")
+        and value.get("replayed_topology_signature") == topology
+        and _positive_integer(value.get("brep_generation_id"))
         and value.get("replayed_brep_generation_id") == value.get("brep_generation_id")
         and str(value.get("export_owner") or "").startswith("headless:")
         and value.get("replayed_export_owner") == value.get("export_owner")
         and _valid_sha256(value.get("step_digest_sha256"))
         and value.get("replayed_step_digest_sha256") == value.get("step_digest_sha256")
+        and _valid_sha256(value.get("accepted_step_result_sha256"))
     )
 
 

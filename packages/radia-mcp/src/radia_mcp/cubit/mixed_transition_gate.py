@@ -7558,6 +7558,49 @@ _V44_SOURCE_QUALITY_KEY = (
 )
 
 
+def _v44_positive_integer(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _v44_finite_number(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _v44_id_list(value: object) -> list[int] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    if not all(
+        isinstance(item, int) and not isinstance(item, bool) and item > 0
+        for item in value
+    ):
+        return None
+    return value if len(set(value)) == len(value) else None
+
+
+def _v44_numeric_matrix(value: object) -> list[list[float]] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    try:
+        rows = [[float(item) for item in row] for row in value]
+    except (TypeError, ValueError):
+        return None
+    if not rows[0] or any(len(row) != len(rows[0]) for row in rows):
+        return None
+    return rows if all(math.isfinite(item) for row in rows for item in row) else None
+
+
 def _v44_result(policy: str, checks: Mapping[str, bool], generation: str) -> dict[str, object]:
     failed = sorted(name for name, ok in checks.items() if not ok)
     return {
@@ -7577,39 +7620,61 @@ def _v44_public_gate(summary: Mapping[str, object]) -> dict[str, object]:
         "jacobian_generation", "block_generation", "sideset_generation",
         "export_generation", "result_generation",
     )
+    source_surface = _v44_positive_integer(identity.get("source_surface_id"))
+    target_surface = _v44_positive_integer(identity.get("target_surface_id"))
+    source_node_count = _v44_positive_integer(identity.get("source_node_count"))
+    target_node_count = _v44_positive_integer(identity.get("target_node_count"))
+    source_node_ids = _v44_id_list(identity.get("paired_source_node_ids"))
+    target_node_ids = _v44_id_list(identity.get("paired_target_node_ids"))
+    transform = _v44_numeric_matrix(identity.get("periodic_transform_matrix"))
+    normal_dot = _v44_finite_number(identity.get("interface_normal_dot"))
+    minimum_jacobian = _v44_finite_number(identity.get("minimum_scaled_jacobian"))
+    allowed_jacobian = _v44_finite_number(
+        identity.get("minimum_allowed_scaled_jacobian")
+    )
     checks: dict[str, bool] = {
         "generation_lineage": bool(generation)
         and all(identity.get(name) == generation for name in generation_names),
         "periodic_surface_pair": (
-            identity.get("source_surface_id") == identity.get("result_source_surface_id")
+            source_surface is not None
+            and target_surface is not None
+            and source_surface != target_surface
+            and identity.get("source_surface_id")
+            == identity.get("result_source_surface_id")
             and identity.get("target_surface_id") == identity.get("result_target_surface_id")
-            and int(identity.get("source_node_count", 0)) > 0
+            and source_node_count is not None
+            and target_node_count is not None
             and identity.get("result_source_node_count") == identity.get("source_node_count")
             and identity.get("result_target_node_count") == identity.get("target_node_count")
         ),
         "periodic_node_pairing": (
-            list(identity.get("result_paired_source_node_ids") or [])
-            == list(identity.get("paired_source_node_ids") or [])
-            and list(identity.get("result_paired_target_node_ids") or [])
-            == list(identity.get("paired_target_node_ids") or [])
-            and len(list(identity.get("paired_source_node_ids") or []))
-            == len(list(identity.get("paired_target_node_ids") or []))
-            and len(list(identity.get("paired_source_node_ids") or [])) > 0
+            source_node_ids is not None
+            and target_node_ids is not None
+            and source_node_count is not None
+            and target_node_count is not None
+            and identity.get("result_paired_source_node_ids") == source_node_ids
+            and identity.get("result_paired_target_node_ids") == target_node_ids
+            and len(source_node_ids) == len(target_node_ids)
+            and len(source_node_ids) <= source_node_count
+            and len(target_node_ids) <= target_node_count
         ),
         "coordinate_frame_and_transform": (
             identity.get("coordinate_frame") == "global_cartesian"
             and identity.get("result_coordinate_frame") == identity.get("coordinate_frame")
+            and transform is not None
             and identity.get("result_periodic_transform_matrix")
             == identity.get("periodic_transform_matrix")
         ),
         "opposed_interface_normals": (
-            math.isclose(float(identity.get("interface_normal_dot")), -1.0, abs_tol=1.0e-12)
+            normal_dot is not None
+            and math.isclose(normal_dot, -1.0, abs_tol=1.0e-12)
             and identity.get("result_interface_normal_dot")
             == identity.get("interface_normal_dot")
         ),
         "positive_jacobian": (
-            float(identity.get("minimum_scaled_jacobian"))
-            >= float(identity.get("minimum_allowed_scaled_jacobian")) > 0.0
+            minimum_jacobian is not None
+            and allowed_jacobian is not None
+            and minimum_jacobian >= allowed_jacobian > 0.0
             and identity.get("result_minimum_scaled_jacobian")
             == identity.get("minimum_scaled_jacobian")
         ),
@@ -7639,25 +7704,32 @@ def _v44_source_journal_gate(summary: Mapping[str, object]) -> dict[str, object]
         "command_order_generation", "session_units_generation", "geometry_generation",
         "status_generation", "database_generation", "mesh_generation", "result_generation",
     )
-    commands = list(identity.get("journal_commands") or [])
-    replay_commands = list(identity.get("replay_journal_commands") or [])
-    statuses = list(identity.get("command_status") or [])
-    replay_statuses = list(identity.get("replay_command_status") or [])
+    commands = identity.get("journal_commands")
+    replay_commands = identity.get("replay_journal_commands")
+    statuses = identity.get("command_status")
+    replay_statuses = identity.get("replay_command_status")
+    geometry_generation_id = _v44_positive_integer(
+        identity.get("geometry_generation_id")
+    )
     checks = {
         "generation_lineage": bool(generation)
         and all(identity.get(name) == generation for name in generation_names),
         "journal_order_and_units": (
-            bool(commands) and replay_commands == commands
+            isinstance(commands, list)
+            and bool(commands)
+            and all(isinstance(command, str) and bool(command.strip()) for command in commands)
+            and replay_commands == commands
             and identity.get("session_units") == "mm"
             and identity.get("replay_session_units") == identity.get("session_units")
         ),
         "command_status": (
-            statuses == ["success"] * len(statuses)
+            isinstance(statuses, list)
+            and statuses == ["success"] * len(statuses)
             and replay_statuses == statuses
             and bool(statuses)
         ),
         "geometry_generation": (
-            int(identity.get("geometry_generation_id", -1)) > 0
+            geometry_generation_id is not None
             and identity.get("replay_geometry_generation_id")
             == identity.get("geometry_generation_id")
         ),
@@ -7671,13 +7743,9 @@ def _v44_source_journal_gate(summary: Mapping[str, object]) -> dict[str, object]
             == identity.get("mesh_export_sha256")
         ),
         "result_digest": (
-            True
-            if identity.get("result_sha256") is None
-            else (
-                _valid_sha256(identity.get("result_sha256"))
-                and identity.get("replay_result_sha256") == identity.get("result_sha256")
-                and identity.get("accepted_result_sha256") == identity.get("result_sha256")
-            )
+            _valid_sha256(identity.get("result_sha256"))
+            and identity.get("replay_result_sha256") == identity.get("result_sha256")
+            and identity.get("accepted_result_sha256") == identity.get("result_sha256")
         ),
     }
     return _v44_result("cubit_v44_source_replay_quality_gate_v1", checks, generation)
@@ -7690,19 +7758,25 @@ def _v44_source_quality_gate(summary: Mapping[str, object]) -> dict[str, object]
         "reference_element_generation", "dimension_generation", "metric_generation",
         "block_generation", "export_generation", "owner_generation", "result_generation",
     )
+    dimension = _v44_positive_integer(identity.get("dimension"))
+    minimum_jacobian = _v44_finite_number(identity.get("minimum_scaled_jacobian"))
+    export_generation_id = _v44_positive_integer(
+        identity.get("export_generation_id")
+    )
     checks = {
         "generation_lineage": bool(generation)
         and all(identity.get(name) == generation for name in generation_names),
         "reference_element_and_dimension": (
             identity.get("reference_element") == "hex8"
             and identity.get("replay_reference_element") == identity.get("reference_element")
-            and int(identity.get("dimension", 0)) == 3
+            and dimension == 3
             and identity.get("replay_dimension") == identity.get("dimension")
         ),
         "metric_definition_and_value": (
             identity.get("metric_definition") == "scaled_jacobian"
             and identity.get("replay_metric_definition") == identity.get("metric_definition")
-            and float(identity.get("minimum_scaled_jacobian")) > 0.0
+            and minimum_jacobian is not None
+            and minimum_jacobian > 0.0
             and identity.get("replay_minimum_scaled_jacobian")
             == identity.get("minimum_scaled_jacobian")
         ),
@@ -7711,7 +7785,7 @@ def _v44_source_quality_gate(summary: Mapping[str, object]) -> dict[str, object]
             and identity.get("replay_block_membership") == identity.get("block_membership")
         ),
         "export_generation": (
-            int(identity.get("export_generation_id", -1)) > 0
+            export_generation_id is not None
             and identity.get("replay_export_generation_id")
             == identity.get("export_generation_id")
         ),
@@ -7729,15 +7803,20 @@ def _v44_source_quality_gate(summary: Mapping[str, object]) -> dict[str, object]
 
 
 def _v44_source_combined_gate(summary: Mapping[str, object]) -> dict[str, object]:
-    results = []
+    results: list[tuple[str, dict[str, object]]] = []
     if _V44_SOURCE_JOURNAL_KEY in summary:
-        results.append(_v44_source_journal_gate(summary))
+        results.append(("journal", _v44_source_journal_gate(summary)))
     if _V44_SOURCE_QUALITY_KEY in summary:
-        results.append(_v44_source_quality_gate(summary))
+        results.append(("quality", _v44_source_quality_gate(summary)))
     checks: dict[str, bool] = {}
     generations: list[str] = []
-    for result in results:
-        checks.update(result.get("checks", {}))
+    for prefix, result in results:
+        checks.update(
+            {
+                f"{prefix}.{name}": ok
+                for name, ok in result.get("checks", {}).items()
+            }
+        )
         generations.append(str(result.get("generation") or ""))
     return _v44_result(
         "cubit_v44_source_replay_quality_gate_v1",

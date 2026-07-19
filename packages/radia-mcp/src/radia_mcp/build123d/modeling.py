@@ -5973,26 +5973,84 @@ def _v44_valid_sha256(value) -> bool:
     return len(digest) == 64 and all(char in "0123456789abcdef" for char in digest)
 
 
+def _v44_positive_float(value):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed > 0.0 else None
+
+
+def _v44_positive_int(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _v44_finite_vector(value, size):
+    if not isinstance(value, list) or len(value) != size:
+        return None
+    try:
+        parsed = [float(item) for item in value]
+    except (TypeError, ValueError):
+        return None
+    return parsed if all(math.isfinite(item) for item in parsed) else None
+
+
+def _v44_inertia_tensor(value):
+    if not isinstance(value, list) or len(value) != 3:
+        return None
+    rows = [_v44_finite_vector(row, 3) for row in value]
+    if any(row is None for row in rows):
+        return None
+    if any(rows[index][index] <= 0.0 for index in range(3)):
+        return None
+    if any(
+        not math.isclose(rows[i][j], rows[j][i], rel_tol=1.0e-12, abs_tol=1.0e-18)
+        for i in range(3)
+        for j in range(3)
+    ):
+        return None
+    return rows
+
+
 def _v44_boolean_identity_ok(value) -> bool:
     if not isinstance(value, dict):
         return False
     generation = str(value.get("boolean_generation") or "")
     names = ("history_generation", "shell_generation", "fillet_generation", "mass_generation", "center_generation", "volume_generation", "owner_generation", "brep_generation", "result_generation")
+    shell_thickness = _v44_positive_float(value.get("shell_thickness_m"))
+    fillet_radius = _v44_positive_float(value.get("fillet_radius_m"))
+    center = _v44_finite_vector(value.get("center_of_mass_m"), 3)
+    volume = _v44_positive_float(value.get("volume_m3"))
+    surface_area = _v44_positive_float(value.get("surface_area_m2"))
+    topology = value.get("topology_signature")
     return (
         bool(generation)
         and all(value.get(name) == generation for name in names)
         and value.get("operation") == "cut"
         and value.get("result_operation") == value.get("operation")
-        and float(value.get("shell_thickness_m", -1.0)) > 0.0
+        and shell_thickness is not None
         and value.get("result_shell_thickness_m") == value.get("shell_thickness_m")
-        and float(value.get("fillet_radius_m", -1.0)) > 0.0
+        and fillet_radius is not None
         and value.get("result_fillet_radius_m") == value.get("fillet_radius_m")
+        and center is not None
         and value.get("result_center_of_mass_m") == value.get("center_of_mass_m")
-        and float(value.get("volume_m3", -1.0)) > 0.0
+        and volume is not None
         and value.get("result_volume_m3") == value.get("volume_m3")
+        and surface_area is not None
         and value.get("result_surface_area_m2") == value.get("surface_area_m2")
-        and value.get("result_topology_signature") == value.get("topology_signature")
-        and str(value.get("shape_owner") or "") == str(value.get("result_shape_owner") or "")
+        and isinstance(topology, dict)
+        and all(_v44_positive_int(topology.get(name)) is not None for name in ("solid", "shell", "face"))
+        and value.get("result_topology_signature") == topology
+        and str(value.get("shape_owner") or "").startswith("part:")
+        and value.get("result_shape_owner") == value.get("shape_owner")
         and _v44_valid_sha256(value.get("boolean_brep_sha256"))
         and value.get("accepted_boolean_brep_sha256") == value.get("boolean_brep_sha256")
     )
@@ -6003,20 +6061,34 @@ def _v44_loft_identity_ok(value) -> bool:
         return False
     generation = str(value.get("loft_generation") or "")
     names = ("section_generation", "orientation_generation", "tangent_generation", "area_generation", "volume_generation", "inertia_generation", "owner_generation", "brep_generation", "result_generation")
+    section_count = _v44_positive_int(value.get("section_count"))
+    section_areas = value.get("section_area_m2")
+    parsed_areas = (
+        [_v44_positive_float(item) for item in section_areas]
+        if isinstance(section_areas, list)
+        else []
+    )
+    volume = _v44_positive_float(value.get("volume_m3"))
+    inertia = _v44_inertia_tensor(value.get("inertia_tensor_kg_m2"))
     return (
         bool(generation)
         and all(value.get(name) == generation for name in names)
-        and int(value.get("section_count", 0)) >= 2
+        and section_count is not None
+        and section_count >= 2
         and value.get("result_section_count") == value.get("section_count")
         and value.get("section_orientation") == "consistent_ccw"
         and value.get("result_section_orientation") == value.get("section_orientation")
         and value.get("tangent_continuity") == "C1"
         and value.get("result_tangent_continuity") == value.get("tangent_continuity")
+        and len(parsed_areas) == section_count
+        and all(item is not None for item in parsed_areas)
         and value.get("result_section_area_m2") == value.get("section_area_m2")
-        and float(value.get("volume_m3", -1.0)) > 0.0
+        and volume is not None
         and value.get("result_volume_m3") == value.get("volume_m3")
+        and inertia is not None
         and value.get("result_inertia_tensor_kg_m2") == value.get("inertia_tensor_kg_m2")
-        and str(value.get("shape_owner") or "") == str(value.get("result_shape_owner") or "")
+        and str(value.get("shape_owner") or "").startswith("part:")
+        and value.get("result_shape_owner") == value.get("shape_owner")
         and _v44_valid_sha256(value.get("loft_brep_sha256"))
         and value.get("accepted_loft_brep_sha256") == value.get("loft_brep_sha256")
     )

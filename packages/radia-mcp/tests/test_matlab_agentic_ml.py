@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import json
+
 from radia_mcp.matlab_agentic_ml import validate_matlab_ml_rl_artifact
 
 
@@ -33,3 +36,24 @@ def test_training_only_result_is_rejected():
     artifact = _artifact("reinforcement_learning")
     artifact["training_evaluation_disjoint"] = False
     assert validate_matlab_ml_rl_artifact(artifact)["status"] == "needs_attention"
+
+
+def test_boolean_integer_fields_are_rejected():
+    artifact = _artifact("reinforcement_learning")
+    artifact["random_seed"] = True
+    artifact["training_episodes"] = True
+    artifact["evaluation_episodes"] = True
+    result = validate_matlab_ml_rl_artifact(artifact)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["seed_is_recorded"] is False
+    assert result["checks"]["training_episodes_are_positive"] is False
+    assert result["checks"]["evaluation_episodes_are_positive"] is False
+
+
+def test_matlab_mcp_exposes_ml_guide_and_artifact_gate():
+    from radia_mcp.matlab.server import matlab_ml_rl_artifact_gate, mcp
+
+    tool_names = {item.name for item in asyncio.run(mcp.list_tools())}
+    assert {"matlab_agentic_ml_guide", "matlab_ml_rl_artifact_gate"} <= tool_names
+    result = json.loads(matlab_ml_rl_artifact_gate(json.dumps(_artifact("regression"))))
+    assert result["status"] == "ok"

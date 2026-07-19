@@ -84,6 +84,8 @@ def _summary() -> dict:
             "replay_database_owner": "headless:journal-731",
             "mesh_export_sha256": "b" * 64,
             "replay_mesh_export_sha256": "b" * 64,
+            "result_sha256": "c" * 64,
+            "replay_result_sha256": "c" * 64,
             "accepted_result_sha256": "c" * 64,
         },
         "mesh_quality_metric_reference_element_dimension_block_export_owner_identity": {
@@ -155,3 +157,39 @@ def test_v44_rejects_quality_report_mismatch() -> None:
 
 def test_v44_case_ids_are_promoted_to_owner_regression() -> None:
     assert all(case_id.startswith("v44_") for case_id in (_PUBLIC_CASE, _MIXED_CASE, _JOURNAL_CASE, _QUALITY_CASE))
+
+
+def test_v44_combined_source_gate_does_not_mask_journal_lineage_failure() -> None:
+    row = _summary()
+    row[
+        "journal_replay_command_order_session_units_geometry_generation_database_owner_identity"
+    ]["command_order_generation"] = "journal-replay-v44-stale"
+    result = cubit_mixed_transition_source_gate(row)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal.generation_lineage"] is False
+    assert result["checks"]["quality.generation_lineage"] is True
+
+
+def test_v44_rejects_missing_result_digest() -> None:
+    row = _summary()
+    identity = row[
+        "journal_replay_command_order_session_units_geometry_generation_database_owner_identity"
+    ]
+    identity.pop("result_sha256")
+    assert cubit_mixed_transition_source_gate(row)["status"] == "needs_attention"
+
+
+def test_v44_rejects_malformed_numeric_values_without_raising() -> None:
+    row = _summary()
+    identity = row[
+        "hex_sweep_periodic_interface_quality_jacobian_block_sideset_export_generation_identity"
+    ]
+    identity["minimum_scaled_jacobian"] = {"bad": "value"}
+    assert cubit_conformal_hex_pyramid_tet_interface_gate(row)["status"] == "needs_attention"
+
+    row = _summary()
+    identity = row[
+        "mesh_quality_metric_reference_element_dimension_block_export_owner_identity"
+    ]
+    identity["export_generation_id"] = {"bad": "value"}
+    assert cubit_mixed_transition_source_gate(row)["status"] == "needs_attention"

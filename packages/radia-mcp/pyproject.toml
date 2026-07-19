@@ -196,6 +196,9 @@ where = ["src"]
 "radia_mcp.matlab_acoustic_fembem" = [
     "skill.md",
 ]
+"radia_mcp.matlab_agentic_ml" = [
+    "skill.md",
+]
 "radia_mcp.mathematica" = [
     "*.md",
     "basis_functions/*.md",

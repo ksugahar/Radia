@@ -1,11 +1,21 @@
 import json,sys
 from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool
+from radia_mcp.matlab_agentic_ml import (
+    matlab_agentic_ml_guide as _ml_guide,
+    validate_matlab_ml_rl_artifact as _validate_ml_rl_artifact,
+)
 from . import matlab_agent_guide as _guide
 from .runtime import matlab_extension_contract as _contract,matlab_official_server_config as _config,matlab_radia_acoustic_interface_contract as _boundary
 mcp=FastMCP("mcp-server-radia-matlab")
 @mcp.tool()
 def matlab_agent_guide()->str: return _guide()
+@mcp.tool()
+def matlab_agentic_ml_guide()->str: return _ml_guide()
+@mcp.tool()
+def matlab_ml_rl_artifact_gate(artifact_json:str)->str:
+    artifact=json.loads(artifact_json)
+    return json.dumps(_validate_ml_rl_artifact(artifact),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_extension_contract()->str: return json.dumps(_contract(),ensure_ascii=False,indent=2)
 @mcp.tool()
