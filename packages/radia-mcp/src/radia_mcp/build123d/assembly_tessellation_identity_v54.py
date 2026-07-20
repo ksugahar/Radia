@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .thread_sheet_identity_v55 import (
+    validate_public_identity as validate_public_v55_identity,
+    validate_source_identity as validate_source_v55_identity,
+)
+
 
 ASSEMBLY = "assembly_massproperty_density_location_center_inertia_owner_identity"
 LOFT = "loft_section_orientation_parameter_seam_topology_owner_identity"
@@ -262,6 +267,9 @@ def validate_public_identity(payload: object) -> dict[str, object]:
         return {}
     rows = _public_rows(payload)
     checks: dict[str, bool] = {}
+    v55 = validate_public_v55_identity(payload)
+    if v55:
+        checks.update(v55["checks"])
     assemblies = [row.get(ASSEMBLY) for row in rows if ASSEMBLY in row]
     lofts = [row.get(LOFT) for row in rows if LOFT in row]
     if assemblies:
@@ -276,6 +284,9 @@ def validate_source_identity(payload: object) -> dict[str, object]:
         return {}
     identity = payload["replay_identity"]
     checks: dict[str, bool] = {}
+    v55 = validate_source_v55_identity(payload)
+    if v55:
+        checks.update(v55["checks"])
     if identity.get(STEP) is not None:
         checks["v54_step_ap242_unit_structure_color_layer_owner"] = isinstance(identity[STEP], Mapping) and _step_ok(identity[STEP])
     if identity.get(TESSELLATION) is not None:
