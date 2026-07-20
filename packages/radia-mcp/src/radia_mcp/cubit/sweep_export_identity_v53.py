@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .topology_transaction_identity_v54 import (
+    validate_public_identity as validate_public_v54_identity,
+    validate_source_identity as validate_source_v54_identity,
+)
+
 
 HEX_SWEEP = "hex_sweep_source_target_face_layer_orientation_volume_owner_identity"
 PYRAMID = "pyramid_transition_apex_basequad_conformity_jacobian_owner_identity"
@@ -115,6 +120,8 @@ def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
 def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping): return {}
     checks: dict[str, bool] = {}
+    v54 = validate_public_v54_identity(payload)
+    if v54: checks.update(v54["checks"])
     if payload.get(HEX_SWEEP) is not None: checks["v53_hex_sweep_face_layer_orientation_owner"] = isinstance(payload[HEX_SWEEP], Mapping) and _hex_sweep_ok(payload[HEX_SWEEP])
     if payload.get(PYRAMID) is not None: checks["v53_pyramid_apex_base_conformity_jacobian_owner"] = isinstance(payload[PYRAMID], Mapping) and _pyramid_ok(payload[PYRAMID])
     return _report("cubit_v53_public_identity_v1", checks) if checks else {}
@@ -123,6 +130,8 @@ def validate_public_identity(payload: object) -> dict[str, object]:
 def validate_source_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping): return {}
     checks: dict[str, bool] = {}
+    v54 = validate_source_v54_identity(payload)
+    if v54: checks.update(v54["checks"])
     if payload.get(EXODUS) is not None: checks["v53_exodus_sideset_element_side_topology_block_owner"] = isinstance(payload[EXODUS], Mapping) and _exodus_ok(payload[EXODUS])
     if payload.get(JOURNAL) is not None: checks["v53_journal_include_aprepro_workdir_owner"] = isinstance(payload[JOURNAL], Mapping) and _journal_ok(payload[JOURNAL])
     return _report("cubit_v53_source_identity_v1", checks) if checks else {}
