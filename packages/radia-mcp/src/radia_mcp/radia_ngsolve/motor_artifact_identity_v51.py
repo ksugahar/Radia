@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .motor_artifact_identity_v52 import validate_public_identity as validate_public_v52_identity
+
 
 TORQUE = "torque_ripple_rotor_angle_electrical_mechanical_period_fft_window_owner_identity"
 WINDING = "winding_temperature_resistance_endturn_length_fillfactor_copperloss_owner_identity"
@@ -148,7 +150,7 @@ def _winding_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v52_identity(identity)
     torque = identity.get(TORQUE)
     winding = identity.get(WINDING)
     if torque is not None:
