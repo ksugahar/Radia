@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .femm_artifact_identity_v54 import validate_public_identity as validate_public_v54_identity
+
 
 HYSTERESIS = "hysteresis_complex_permeability_phasor_loss_material_owner_identity"
 VIRTUAL_WORK = "electrostatic_virtualwork_voltage_charge_constraint_force_owner_identity"
@@ -107,7 +109,7 @@ def _virtual_work_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v54_identity(identity)
     hysteresis = identity.get(HYSTERESIS)
     virtual_work = identity.get(VIRTUAL_WORK)
     if hysteresis is not None:
