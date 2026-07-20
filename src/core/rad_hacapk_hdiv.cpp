@@ -4,6 +4,9 @@
  * charge-cluster Coulomb sum N[i][j] = sum_a sum_b B[a][i] G[a][b] B[b][j]). */
 #include "rad_hacapk_hdiv.h"
 #include "rad_parallel.h"
+extern "C" {
+#include "../ext/HACApK/cHACApK_base.h"
+}
 #include <cmath>
 #include <utility>
 #include <algorithm>
@@ -4179,6 +4182,10 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
     else {cellNodeStride=54;faceNodeStride=27;cellStride=m_cellCharges.size()*54;faceStride=m_faceCharges.size()*27;}
     if(cellVelocity.size()!=(size_t)nDirections*cellStride||faceVelocity.size()!=(size_t)nDirections*faceStride)
         throw std::invalid_argument("batched derivative velocity shape mismatch");
+    const auto* leaves=static_cast<const st_cHACApK_leafmtxp_t*>(m_leafmtxp);
+    const auto* control=static_cast<const st_cHACApK_lcontrol_t*>(m_control);
+    if(!IsValid()||!leaves||!control||!control->lod)
+        throw std::runtime_error("ChargeGram H-matrix must be built before derivative contraction");
     std::vector<double> result((size_t)nDirections,0.0);
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
     ngcore::ParallelFor(ngcore::IntRange(nDirections),[&](size_t kk){
@@ -4186,19 +4193,64 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
         std::vector<double> fv(faceVelocity.begin()+kk*faceStride,faceVelocity.begin()+(kk+1)*faceStride);
         auto hostActive=[](const std::vector<double>& velocity,size_t offset,size_t count){
             for(size_t p=offset;p<offset+count;++p)if(velocity[p]!=0.0)return true;return false;};
-        std::vector<int> moving,fixed;moving.reserve(m_n);fixed.reserve(m_n);
-        for(int charge=0;charge<m_n;++charge){
-            const int kind=m_kind[charge],host=m_host[charge];
-            const bool active=kind==0?hostActive(cv,(size_t)host*cellNodeStride,cellNodeStride)
-                                     :hostActive(fv,(size_t)host*faceNodeStride,faceNodeStride);
-            (active?moving:fixed).push_back(charge);
-        }
+        std::vector<unsigned char> active((size_t)m_n,0);
+        for(int charge=0;charge<m_n;++charge){const int kind=m_kind[charge],host=m_host[charge];active[charge]=
+            kind==0?hostActive(cv,(size_t)host*cellNodeStride,cellNodeStride)
+                   :hostActive(fv,(size_t)host*faceNodeStride,faceNodeStride);}
         RadHACApKChargeGramDerivative derivative(*this,family,std::move(cv),std::move(fv));
         long double sum=0.0L;
-        for(size_t ii=0;ii<moving.size();++ii){
-            const int i=moving[ii];sum+=(long double)left[i]*derivative.GetInteractionMatrixElement(i,i)*right[i];
-            for(size_t jj=ii+1;jj<moving.size();++jj){const int j=moving[jj];const double value=derivative.GetInteractionMatrixElement(i,j);sum+=(long double)value*((long double)left[i]*right[j]+(long double)left[j]*right[i]);}
-            for(int j:fixed){const double value=derivative.GetInteractionMatrixElement(i,j);sum+=(long double)value*((long double)left[i]*right[j]+(long double)left[j]*right[i]);}
+        for(int ip=1;ip<=leaves->nlf;++ip){
+            const st_cHACApK_leafmtx_t* leaf=leaves->st_lf[ip];
+            if(!leaf||leaf->nstrtl>leaf->nstrtt)continue;
+            const int nr=leaf->ndl,nc=leaf->ndt,r0=leaf->nstrtl,c0=leaf->nstrtt;
+            bool blockActive=false;
+            for(int i=0;i<nr&&!blockActive;++i)blockActive=active[(size_t)control->lod[r0+i]-1]!=0;
+            for(int j=0;j<nc&&!blockActive;++j)blockActive=active[(size_t)control->lod[c0+j]-1]!=0;
+            if(!blockActive)continue;
+            const bool upper=r0<c0;
+            auto rowDof=[&](int i){return control->lod[r0+i]-1;};
+            auto colDof=[&](int j){return control->lod[c0+j]-1;};
+            auto addRankOne=[&](const std::vector<double>&u,const std::vector<double>&v){
+                long double lu=0,ur=0,lv=0,vr=0;
+                for(int i=0;i<nr;++i){const int g=rowDof(i);lu+=(long double)left[g]*u[i];ur+=(long double)u[i]*right[g];}
+                for(int j=0;j<nc;++j){const int g=colDof(j);lv+=(long double)left[g]*v[j];vr+=(long double)v[j]*right[g];}
+                sum+=lu*vr;if(upper)sum+=lv*ur;
+            };
+            if(leaf->ltmtx!=1){
+                for(int i=0;i<nr;++i){const int gi=rowDof(i);for(int j=0;j<nc;++j){const int gj=colDof(j);const double a=derivative.GetInteractionMatrixElement(gi,gj);sum+=(long double)left[gi]*a*right[gj];if(upper)sum+=(long double)left[gj]*a*right[gi];}}
+                continue;
+            }
+            // ACA on this admissible derivative leaf.  The rank-one factors
+            // are contracted immediately and discarded: no dG H-matrix is
+            // materialised, while entry values remain the analytic kernel.
+            const int rankLimit=std::min({nr,nc,m_derivativeMaxRank});
+            std::vector<std::vector<double>> us,vs;us.reserve(rankLimit);vs.reserve(rankLimit);
+            std::vector<unsigned char> used((size_t)nr,0);int pivotRow=0;
+            long double approximationNorm2=0;
+            for(int rank=0;rank<rankLimit;++rank){
+                std::vector<double> v((size_t)nc),u((size_t)nr);
+                int pivotCol=-1;double pivotAbs=0;
+                // A zero residual row need not imply a zero block.  Search
+                // unused cluster rows until a stable pivot is found.
+                for(int attempt=0;attempt<nr&&pivotCol<0;++attempt){
+                    while(pivotRow<nr&&used[pivotRow])++pivotRow;
+                    if(pivotRow>=nr){pivotRow=0;while(pivotRow<nr&&used[pivotRow])++pivotRow;}
+                    if(pivotRow>=nr)break;
+                    for(int j=0;j<nc;++j){double value=derivative.GetInteractionMatrixElement(rowDof(pivotRow),colDof(j));for(size_t s=0;s<us.size();++s)value-=us[s][pivotRow]*vs[s][j];v[j]=value;if(std::abs(value)>pivotAbs){pivotAbs=std::abs(value);pivotCol=j;}}
+                    if(pivotAbs<=1e-30){used[pivotRow]=1;pivotCol=-1;pivotAbs=0;++pivotRow;}
+                }
+                if(pivotCol<0)break;
+                const double pivot=v[pivotCol];
+                for(int i=0;i<nr;++i){double value=derivative.GetInteractionMatrixElement(rowDof(i),colDof(pivotCol));for(size_t s=0;s<us.size();++s)value-=us[s][i]*vs[s][pivotCol];u[i]=value/pivot;}
+                used[pivotRow]=1;
+                addRankOne(u,v);
+                long double un2=0,vn2=0,cross=0;for(double x:u)un2+=(long double)x*x;for(double x:v)vn2+=(long double)x*x;
+                for(size_t s=0;s<us.size();++s){long double uu=0,vv=0;for(int i=0;i<nr;++i)uu+=(long double)us[s][i]*u[i];for(int j=0;j<nc;++j)vv+=(long double)vs[s][j]*v[j];cross+=uu*vv;}
+                const long double termNorm2=un2*vn2;approximationNorm2+=termNorm2+2*cross;
+                us.push_back(std::move(u));vs.push_back(std::move(v));
+                int next=-1;double nextAbs=0;for(int i=0;i<nr;++i)if(!used[i]&&std::abs(us.back()[i])>nextAbs){nextAbs=std::abs(us.back()[i]);next=i;}pivotRow=next<0?0:next;
+                if(rank>0&&termNorm2<=m_derivativeAcaEps*m_derivativeAcaEps*std::max((long double)0,approximationNorm2))break;
+            }
         }
         result[kk]=(double)sum;
     });
@@ -5285,6 +5337,8 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     // strictly-lower leaves at fill time -- ~2x build, identical upper leaves (MatVecSym bit-identical).
     // Set/reset around this ONE build; base BuildHMatrix returns bool (no exceptions cross the C fill).
     ResetHexCacheStats();
+    m_derivativeAcaEps=params.aca_eps;
+    m_derivativeMaxRank=params.max_rank;
     cHACApK_set_sym_fill(1);
     const bool ok = RadHACApKBase::BuildHMatrix(params);
     cHACApK_set_sym_fill(0);

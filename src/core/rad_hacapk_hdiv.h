@@ -543,6 +543,11 @@ private:
     std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
     int  m_n = 0;
     bool m_sampledLaplace = false;
+    // Accuracy/rank controls reused by the matrix-free derivative contraction.
+    // They are captured from the primal H-matrix build so derivative far leaves
+    // follow the same cluster-tree compression contract.
+    double m_derivativeAcaEps = 1.0e-4;
+    int m_derivativeMaxRank = 200;
     bool m_sampledPlanarLog = false;
     double m_sampledKernelEpsilon = 0.0;
     double m_sampledReferenceLength = 1.0;
