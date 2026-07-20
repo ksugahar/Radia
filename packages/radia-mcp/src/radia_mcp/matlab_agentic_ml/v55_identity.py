@@ -131,7 +131,11 @@ def _prefixed_equal(value: Mapping[str, object], left: str, right: str, prefix: 
 
 def _result_digest_bound(value: Mapping[str, object]) -> bool:
     digest = value.get("result_sha256")
-    return bool(_DIGEST.fullmatch(str(digest))) and value.get("accepted_result_sha256") == digest
+    return (
+        isinstance(digest, str)
+        and bool(_DIGEST.fullmatch(digest))
+        and value.get("accepted_result_sha256") == digest
+    )
 
 
 def _finite(value: object) -> bool:

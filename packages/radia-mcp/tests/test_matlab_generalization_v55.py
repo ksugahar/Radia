@@ -81,3 +81,14 @@ def test_v55_self_consistent_cv_leakage_and_unstratified_folds_are_rejected() ->
     cross_validation["preprocess_fit_rows"] = cross_validation["result_preprocess_fit_rows"] = fit_rows
     result = validate_matlab_ml_rl_v55_identity(summary)
     assert result and result["status"] == "needs_attention"
+
+
+def test_v55_numeric_digests_are_rejected() -> None:
+    summary = deepcopy(_summary())
+    numeric_digest = int("1" * 64)
+    identity = summary["matlab_ml_rl_v54_identity"]
+    for contract_name in ("nstep_return", "cross_validation"):
+        identity[contract_name]["result_sha256"] = numeric_digest
+        identity[contract_name]["accepted_result_sha256"] = numeric_digest
+    result = validate_matlab_ml_rl_v55_identity(summary)
+    assert result and result["status"] == "needs_attention"
