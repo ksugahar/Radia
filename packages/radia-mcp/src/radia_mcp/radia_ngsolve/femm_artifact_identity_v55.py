@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .femm_force_heat_identity_v56 import validate_public_identity as validate_public_v56_identity
+
 
 INDUCTION = "induction_skin_depth_jouleloss_complexfield_frequency_conductor_owner_identity"
 CAPACITANCE = "electrostatic_capacitance_charge_voltage_energy_symmetry_owner_identity"
@@ -180,7 +182,7 @@ def _capacitance_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks: dict[str, bool] = validate_public_v56_identity(identity)
     induction = identity.get(INDUCTION)
     capacitance = identity.get(CAPACITANCE)
     if induction is not None:
