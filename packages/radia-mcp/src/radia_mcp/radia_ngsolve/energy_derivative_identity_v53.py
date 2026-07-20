@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .energy_derivative_identity_v54 import validate_public_identity as validate_public_v54_identity
+
 
 QUADRATURE = "bem_singular_quadrature_self_near_far_panel_owner_identity"
 MAGLEV = "maglev_equilibrium_force_stiffness_displacement_body_owner_identity"
@@ -94,7 +96,7 @@ def _maglev_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v54_identity(identity)
     quadrature = identity.get(QUADRATURE)
     maglev = identity.get(MAGLEV)
     if quadrature is not None:
