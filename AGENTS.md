@@ -127,20 +127,70 @@ replacement MATLAB bridge.
 |-------|----------------|
 | MATLAB MCP Server | Start/connect MATLAB, evaluate code, run `.m` files, run MATLAB unit tests, detect toolboxes, and run Code Analyzer checks. |
 | MATLAB Agentic Toolkit skills | Teach agents idiomatic MATLAB workflows: functions/classes, tests, apps, debugging, toolbox-aware coding, and MATLAB style. |
+| Simulink Agentic Toolkit | Own generic Simulink model reading, editing, checking, testing, parameter queries, and Model-Based Design guidance. |
 | Sugahara Lab extensions | Add domain knowledge and gates for `.vol`, P1 FEM/BEM, convolution quadrature, Gypsilab-like APIs, acoustic FEM-BEM, and NGSolve/`ngsolve.bem` cross-validation. |
 
 **Rules**:
+- Keep this shared policy section synchronized with the corresponding section
+  in `CLAUDE.md` in the same change.  `AGENTS.md` and `CLAUDE.md` are separate
+  agent entry points; neither may carry a stale MATLAB/Simulink architecture.
 - Do not fork or replace the official MATLAB MCP Server for ordinary MATLAB
   execution.  If a workflow needs MATLAB code execution or `runtests`, route it
   through the official server first.
 - Keep lab-specific knowledge in skills and `radia_mcp.<topic>` packages.
   Tools may call MATLAB, but they should document the domain operation they add
   above the official execution layer.
+- Treat `radia-mcp` as the canonical executable manual for Radia-specific
+  MATLAB and Simulink workflows.  Its knowledge/contract tools should explain
+  the supported operation, return machine-readable configuration and limits,
+  and route execution through the official MathWorks server.  Do not duplicate
+  generic MATLAB or Simulink documentation already owned by the official MCP
+  Server and Agentic Toolkits.
+- Keep `matlab/README.md` concise: installation, architecture, minimal examples,
+  and pointers to the relevant `radia-mcp` tools.  Do not maintain a second
+  prose manual that can drift from the executable MCP contract.  Numerical
+  behavior remains authoritative in source code and focused MATLAB tests.
+- User-facing Simulink blocks may be published through one Radia library in the
+  Simulink Library Browser.  Group Radia MEX/ROM, LTspice coupling, NGSolve
+  numeric bridges, and MATLAB Optuna orchestration by subsystem; library blocks
+  must delegate to the same tested `radia.*` APIs and must not reimplement
+  solver logic inside the library model.
+- The supported Radia LTspice--Simulink implementation uses direct LTspice
+  execution, real/complex RAW import, parallel trials, and Pareto optimization.
+  Do not add automatic circuit-ROM generation to this integration unless a
+  future policy explicitly changes the scope.  This is an internal development
+  boundary, not a user prohibition: do not emit it from MCP tools or user-facing
+  capability contracts, and do not prevent users from building ROMs separately.
 - For any new MATLAB acoustic FEM-BEM / Gypsilab-style workflow, require a
   MATLAB test entry point plus an independent Python/NGSolve or analytical
   cross-check whenever feasible.
 - Treat mdx as the compute node for long MATLAB validation runs; LAB and 100
   remain development / agent hosts.
+
+### Python-to-MATLAB Capability Parity Policy (2026-07-19)
+
+**POLICY**: Every user-facing capability available through Radia's Python API,
+including pybind11-backed kernels and NGSolve integrations, MUST also be
+available from MATLAB. MATLAB does not need to copy Python syntax or object
+identity, but it must provide an equivalent numerical method, supported input
+contract, output contract, and documented error behavior.
+
+**Rules**:
+- Keep the C++ implementation as the single numerical source of truth; expose
+  it through thin pybind11 and MEX adapters rather than maintaining separate
+  Python and MATLAB algorithms.
+- Translate Python objects into MATLAB-friendly contracts: numeric arrays,
+  file/path-based meshes, MATLAB structs, sparse matrices, and checked native
+  `uint64` handles where persistent state is required.
+- A new public Python feature is not production-complete until its MATLAB
+  entry point, documentation, and focused MATLAB regression test exist. When
+  Python uses callbacks or interactive objects, add an equivalent numeric or
+  handle-based MATLAB workflow instead of silently omitting the capability.
+- Maintain Python/MATLAB parity for solver options, supported element families,
+  matrix layouts, model-reduction stages, and diagnostic metadata. Record any
+  intentional numerical limitation explicitly and test it on both sides.
+- Keep the official MATLAB MCP Server as the execution foundation; this policy
+  governs Radia's domain API surface above that execution layer.
 
 ---
 

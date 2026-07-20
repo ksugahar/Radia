@@ -137,6 +137,51 @@ cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit
 
 ---
 
+### MATLAB Agentic Stack Policy (2026-07-20)
+
+**POLICY**: Use MathWorks' official MATLAB MCP Server as the MATLAB execution
+foundation. Radia-specific MATLAB, LTspice, NGSolve, Optuna, and Simulink
+workflows are domain extensions above the official server, not a replacement
+MATLAB bridge.
+
+| Layer | Responsibility |
+|-------|----------------|
+| MATLAB MCP Server | Start/connect MATLAB, evaluate code, run `.m` files, run MATLAB unit tests, detect toolboxes, and run Code Analyzer checks. |
+| MATLAB Agentic Toolkit skills | Teach agents idiomatic MATLAB workflows: functions/classes, tests, apps, debugging, toolbox-aware coding, and MATLAB style. |
+| Simulink Agentic Toolkit | Own generic Simulink model reading, editing, checking, testing, parameter queries, and Model-Based Design guidance. |
+| Radia extensions | Add Radia MEX/ROM, LTspice coupling, NGSolve numeric bridges, MATLAB Optuna orchestration, and lab-specific domain gates. |
+
+**Rules**:
+- Keep this shared policy section synchronized with the corresponding section
+  in `AGENTS.md` in the same change. `AGENTS.md` and `CLAUDE.md` are separate
+  agent entry points; neither may carry a stale MATLAB/Simulink architecture.
+- Do not fork or replace the official MATLAB MCP Server for ordinary MATLAB
+  execution. Route MATLAB execution, `runtests`, toolbox detection, and Code
+  Analyzer checks through the official server first.
+- Treat `radia-mcp` as the canonical executable manual for Radia-specific
+  MATLAB and Simulink workflows. Its knowledge/contract tools explain the
+  supported operation, machine-readable configuration, and limitations. Do
+  not duplicate generic MATLAB or Simulink documentation owned by MathWorks.
+- Keep `matlab/README.md` concise: installation, architecture, minimal examples,
+  and pointers to `radia-mcp`. Source code and focused MATLAB tests remain the
+  authority for numerical behavior.
+- Publish user-facing blocks through one Radia entry in the Simulink Library
+  Browser. Group Radia MEX/ROM, LTspice coupling, NGSolve numeric bridges, and
+  MATLAB Optuna by subsystem. Library blocks delegate to tested `radia.*` APIs
+  and never reimplement solver logic.
+- The supported Radia LTspice--Simulink implementation uses direct LTspice
+  execution, real/complex RAW import, parallel trials, and Pareto optimization.
+  Do not add automatic circuit-ROM generation to this integration unless a
+  future policy explicitly changes the scope.  This is an internal development
+  boundary, not a user prohibition: do not emit it from MCP tools or user-facing
+  capability contracts, and do not prevent users from building ROMs separately.
+- MATLAB Agentic Toolkit owns generic MATLAB guidance; Simulink Agentic Toolkit
+  owns generic model operations. Radia owns only the domain-specific layer.
+- Long or solver-heavy MATLAB validation runs execute on mdx or hibino; LAB and
+  100号機 remain development and fast-test hosts.
+
+---
+
 ## Critical Policies
 
 ### Repository First, Not Papers — Don't Publish the Unfinished (2026-06-01)
