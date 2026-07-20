@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .energy_derivative_identity_v52 import validate_public_identity as validate_public_v52_identity
+
 
 POTENTIAL = "scalar_vector_potential_gauge_domain_interface_trace_solution_owner_identity"
 BEM = "bem_matrix_reciprocity_symmetry_panel_orientation_cache_revision_owner_identity"
@@ -95,7 +97,7 @@ def _bem_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v52_identity(identity)
     potential = identity.get(POTENTIAL)
     bem = identity.get(BEM)
     if potential is not None:
