@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .imprint_import_identity_v52 import (
+    validate_public_identity as validate_public_v52_identity,
+    validate_source_identity as validate_source_v52_identity,
+)
+
 
 _QUALITY = "hex_quality_metric_reference_jacobian_samples_order_mesh_owner_identity"
 _PERIODIC = "periodic_highorder_node_edge_face_parametric_rotation_owner_identity"
@@ -226,6 +231,9 @@ def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v52 = validate_public_v52_identity(payload)
+    if v52:
+        checks.update(v52["checks"])
     quality = payload.get(_QUALITY)
     periodic = payload.get(_PERIODIC)
     if quality is not None:
@@ -239,6 +247,9 @@ def validate_source_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v52 = validate_source_v52_identity(payload)
+    if v52:
+        checks.update(v52["checks"])
     sculpt = payload.get(_SCULPT)
     exodus = payload.get(_EXODUS)
     if sculpt is not None:
