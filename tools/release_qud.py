@@ -253,6 +253,12 @@ def cmd_phase0(args):
     return 0
 
 
+_CONSOLE_SCRIPT_WRAPPER_RE = (
+    r'(?i)^\s*"?[^\"]*pythonw?\.exe"?\s+"?'
+    r'[^\"]*(?:mcp-server-|radia[-_])[^\"\s]*\.exe(?:[\"\s]|$)'
+)
+
+
 def _kill_cubit_local():
     info("force-kill any local Cubit process")
     run(["pwsh", "-NoProfile", "-Command",
@@ -269,10 +275,10 @@ def _kill_mcp_local():
          "Where-Object { $_.ProcessId -ne $PID -and ("
          "$_.Name -like 'mcp-server*' -or $_.Name -like 'radia-*' -or "
          "$_.Name -like 'radia_*' -or "
-         "$_.CommandLine -like '*mcp-server-*.exe*' -or "
-         "$_.CommandLine -like '*radia-*.exe*' -or "
-         "$_.CommandLine -like '*radia_*.exe*' "
-         ") } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; "
+         "((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and "
+         f"$_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}') "
+         ") } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force "
+         "-ErrorAction SilentlyContinue }; "
          "Start-Sleep -Seconds 2"], check=False)
 
 
@@ -306,13 +312,12 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
     $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
     $_.Name -like 'mcp-server*' -or
     $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
-    $_.CommandLine -like '*mcp-server-*.exe*' -or
-    $_.CommandLine -like '*radia-*.exe*' -or
-    $_.CommandLine -like '*radia_*.exe*'
+    ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
+      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
   )
 }} | ForEach-Object {{
   Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
-  Stop-Process -Id $_.ProcessId -Force
+  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }}
 Start-Sleep -Seconds 2
 pip install -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export" -e "{repo}\\packages\\radia-mcp" --no-deps --no-cache-dir
@@ -404,13 +409,12 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
     $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
     $_.Name -like 'mcp-server*' -or
     $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
-    $_.CommandLine -like '*mcp-server-*.exe*' -or
-    $_.CommandLine -like '*radia-*.exe*' -or
-    $_.CommandLine -like '*radia_*.exe*'
+    ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
+      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
   )
 }} | ForEach-Object {{
   Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
-  Stop-Process -Id $_.ProcessId -Force
+  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }}
 Start-Sleep -Seconds 2
 {mcp_uninstall_ps}        # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
