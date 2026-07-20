@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .magnetostatic_energy_identity_v55 import validate_public_identity as validate_public_v55_identity
+
 
 CHARGE = "magneticcharge_neutrality_surface_normal_material_region_owner_identity"
 STIFFNESS = "maglev_stiffness_forcegradient_coordinate_loadpoint_owner_identity"
@@ -104,7 +106,7 @@ def _stiffness_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v55_identity(identity)
     charge = identity.get(CHARGE)
     stiffness = identity.get(STIFFNESS)
     if charge is not None:
