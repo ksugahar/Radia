@@ -134,32 +134,64 @@ def matlab_cad_topology_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
 
 
 def matlab_sheet_metal_topology_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
-    """Generate one Radia-VIM/LP sheet update and adaptive mesh-routing step."""
+    """Generate the two-level GetTrafo/Cubit sheet-topology workflow."""
     if isinstance(spec,str): spec=json.loads(spec)
     if not isinstance(spec,Mapping): raise ValueError("sheet-metal topology spec must be a JSON object")
     design_data=str(spec.get("design_data",""))
     if not design_data: raise ValueError("design_data MAT-file is required")
+    mesh_path=str(spec.get("mesh_path",""))
+    if not mesh_path: raise ValueError("mesh_path VOL-file is required")
     linearize=_function(spec.get("linearize_fcn"),"linearize_fcn")
-    volume_max=float(spec.get("volume_max",0)); displacement_move=float(spec.get("displacement_move",0))
-    thickness_move=float(spec.get("thickness_move",0)); bounds=spec.get("thickness_bounds")
-    if volume_max<=0 or displacement_move<=0 or thickness_move<=0: raise ValueError("positive volume_max and move limits are required")
-    if not isinstance(bounds,list) or len(bounds)!=2 or not 0<float(bounds[0])<=float(bounds[1]): raise ValueError("thickness_bounds must be [positive_min,max]")
+    deformation=_function(spec.get("deformation_fcn"),"deformation_fcn")
+    objective=_function(spec.get("objective_fcn"),"objective_fcn")
+    rebuild_hmatrix=_function(spec.get("rebuild_hmatrix_fcn"),"rebuild_hmatrix_fcn")
+    cubit_rebuild=_function(spec.get("cubit_rebuild_fcn"),"cubit_rebuild_fcn")
+    inner_iterations=int(spec.get("inner_iterations",10))
+    max_outer_iterations=int(spec.get("max_outer_iterations",10))
+    activation_remove_threshold=float(spec.get("activation_remove_threshold",0.35))
+    activation_restore_threshold=float(spec.get("activation_restore_threshold",0.65))
+    cubit_batch_interval=int(spec.get("cubit_batch_interval",5))
+    cubit_batch_fraction=float(spec.get("cubit_batch_fraction",0.05))
+    if not 5<=inner_iterations<=20: raise ValueError("inner_iterations must be between 5 and 20")
+    if max_outer_iterations<1: raise ValueError("max_outer_iterations must be positive")
+    if not 0<=activation_remove_threshold<activation_restore_threshold<=1:
+        raise ValueError("activation hysteresis must satisfy 0 <= remove < restore <= 1")
+    if cubit_batch_interval<1 or not 0<cubit_batch_fraction<=1:
+        raise ValueError("invalid Cubit batching controls")
+    work_directory=str(spec.get("work_directory",r"C:\temp\radia_hex_topopt"))
     code=(
         f"data=load('{_quote(design_data)}');\n"
-        f"model={linearize}(data.normalDisplacement,data.thickness,data.activation);\n"
-        "update=radia.topopt.solveSheetMetalLP(data.normalDisplacement,data.thickness,data.activation,model.objective_gradient,data.cellAreas,"
-        f"VolumeMax={volume_max:.17g},DisplacementMove={displacement_move:.17g},ThicknessMove={thickness_move:.17g},"
-        f"ThicknessBounds=[{float(bounds[0]):.17g},{float(bounds[1]):.17g}],Laplacian=data.laplacian,CurvatureLimit=data.curvatureLimit);\n"
-        "acceptance=radia.topopt.acceptTrafoStep(model.quality_fcn,model.relative_displacements);\n"
-        "meshRoute=acceptance.route;\n"
+        f"mesh=radia.ngsolve.Mesh.create('{_quote(mesh_path)}');\n"
+        "initialState=struct('mesh',mesh,'model',data.model,"
+        "'normal_displacement',data.normalDisplacement,'thickness',data.thickness,"
+        "'activation',data.activation,'objective',data.objective);\n"
+        "result=radia.topopt.optimizeHexSheetTopology(initialState,"
+        f"@{linearize},@{deformation},@{objective},@{rebuild_hmatrix},@{cubit_rebuild},"
+        f"data.elementSizes,InnerIterations={inner_iterations},"
+        f"MaxOuterIterations={max_outer_iterations},"
+        f"ActivationRemoveThreshold={activation_remove_threshold:.17g},"
+        f"ActivationRestoreThreshold={activation_restore_threshold:.17g},"
+        f"CubitBatchInterval={cubit_batch_interval},"
+        f"CubitBatchFraction={cubit_batch_fraction:.17g},"
+        f"WorkDirectory='{_quote(work_directory)}');\n"
     )
     return {
-        "schema":"radia-mcp.matlab-sheet-metal-topology-build/v1","status":"ready",
+        "schema":"radia-mcp.matlab-sheet-metal-topology-build/v3","status":"ready",
         "runtime_owner":"MathWorks MATLAB MCP Server","domain_owner":"radia-mcp.matlab.optimize",
-        "method":"Radia-VIM linearization -> local trust-region LP -> Trafo quality backtracking -> NGSolve deform/refine or Cubit rebuild",
+        "method":"5-20 continuous-activation GetTrafo iterations -> conditional Cubit topology commit -> one H-matrix rebuild",
         "matlab_code":code,"execute_with":"official MATLAB MCP evaluate_matlab_code",
         "mesh_routes":["ngsolve_deform","ngsolve_refine","cubit_rebuild"],
-        "design_data_contract":{"normalDisplacement":"n-by-1","thickness":"n-by-1","activation":"n-by-1", "cellAreas":"n-by-1","laplacian":"k-by-n","curvatureLimit":"scalar or k-by-1"},
+        "inner_iteration_range":[5,20],
+        "activation_hysteresis":{
+            "remove_threshold":activation_remove_threshold,
+            "restore_threshold":activation_restore_threshold,
+        },
+        "cubit_batching":{
+            "maximum_pending_iterations":cubit_batch_interval,
+            "pending_fraction":cubit_batch_fraction,
+        },
+        "hmatrix_rebuild_policy":"exactly once after a successful Cubit rebuild; never inside the GetTrafo inner loop",
+        "design_data_contract":{"model":"current VIM/H-matrix model","normalDisplacement":"n-by-1","thickness":"n-by-1","activation":"n-by-1 continuous values in [0,1]","objective":"finite scalar","elementSizes":"n-by-1 positive values"},
     }
 
 

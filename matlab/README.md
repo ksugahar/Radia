@@ -38,9 +38,10 @@ info = radia.ngsolve.space_info("model.vol", 6);
 
 `radia.ngsolve.matrix_dump` assembles a native NGSolve `T_BilinearForm<double>` and
 returns a MATLAB sparse matrix with NGSolve's global DoF ordering unchanged.
-The supported spaces are `h1`, `hcurl`, and `hdiv`; supported forms are
-`mass` and `stiffness`, with `curlcurl` and `divdiv` available for the vector
-spaces. The optional second output records the mesh dimension, order, DoF
+Persistent spaces support `h1`, `vectorh1`, `hcurl`, and `hdiv`.
+`vectorh1` is the native mesh-deformation space; matrix assembly supports
+`h1`, `hcurl`, and `hdiv` with `mass` and `stiffness`, plus `curlcurl` and
+`divdiv` for the corresponding vector spaces. The optional second output records the mesh dimension, order, DoF
 count, structural nonzero count, numeric nonzero count, and TaskManager
 thread count. The MEX gateway uses 1-based row/column triplets so no MATLAB
 index conversion is needed by callers.
@@ -190,6 +191,8 @@ This setup operation is cached; numerical calls enter C++ directly.
 - NGSolve TaskManager execution and HCurl/HDiv p-space construction
 - native NGSolve H1/HCurl/HDiv mass, stiffness, curl-curl, and div-div matrix
   assembly with MATLAB sparse export
+- native VectorH1 deformation handles with SetDeformation/UnsetDeformation and
+  per-element GetTrafo Jacobian-ratio / spectral-condition sampling
 - native NGSolve CoefficientFunction expression handles with constant,
   arithmetic, scaling, metadata, and GridFunction views
 - native NGSolve GridFunction handles with real/complex DoF vectors,
@@ -491,6 +494,27 @@ CAD material topology optimization uses Cubit element IDs and volumes,
 Cubit. Generate the executable workflow with the `matlab_cad_topology_build`
 MCP tool.
 
+For sheet topology with geometry motion, use the two-level production driver:
+
+```matlab
+result = radia.topopt.optimizeHexSheetTopology( ...
+    initialState, @linearizeStep, @makeVectorH1Deformation, ...
+    @evaluateObjective, @rebuildHMatrix, cubitBackend, elementSizes, ...
+    InnerIterations=10, MaxOuterIterations=10, ...
+    ActivationRemoveThreshold=0.35, ActivationRestoreThreshold=0.65, ...
+    CubitBatchInterval=5, CubitBatchFraction=0.05);
+```
+
+The inner batch is restricted to 5--20 iterations. Activation remains
+continuous throughout that batch while native `Mesh.setDeformation` and
+`Mesh.trafoQuality` sample NGSolve `GetTrafo`. The 0.35/0.65 activation
+hysteresis prevents remove/restore chatter. Pending topology changes remain
+continuous until either their fraction or age reaches the Cubit batch limit.
+Cubit is called only when the batch must commit those changes, an explicit rebuild is
+requested, a converged deformation needs a CAD commit, or the Jacobian gate
+rejects in-place deformation. `rebuildHMatrix` is then called exactly once
+after Cubit and never inside the inner loop.
+
 ## Reinforcement learning
 
 The same MEX boundary can be used as a fast reinforcement-learning
@@ -549,14 +573,21 @@ dGwedge = gram.wedgeChargeGramDirectionalDerivative(wedgeVelocity, faceVelocity)
 dGop = gram.directionalDerivativeOperator( ...
     "hex", hexVelocity, quadVelocity, AcaEps=1e-8);
 directionalProduct = dGop.matvecSym(chargeVector);
+products = gram.directionalDerivativeContractions( ...
+    "hex", batchedHexVelocity, batchedQuadVelocity, left, right);
 ```
+
+The batched contraction returns one `left.'*dG(k)*right` value per deformation
+mode. It traverses the already-built parent H-matrix leaves and contracts ACA
+factors immediately, so neither dense derivatives nor derivative H-matrices are
+materialized in the optimization loop.
 
 ## Binding policy
 
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 94 public top-level names, 20 underscore-prefixed
 numerical kernels, and 110 stateful class members. All 224 entries are covered
-by the current 284-command gateway. Three internal mesh/test helpers are
+by the current 288-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:

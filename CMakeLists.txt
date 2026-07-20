@@ -683,6 +683,9 @@ if(RADIA_BUILD_MATLAB_MEX)
 			${EXT_DIR}/genmath/gmfft.cpp
 			${EXT_DIR}/genmath/gmtrans.cpp
 			${HACAPK_SOURCES}
+			# The legacy C ABI is still the native Radia compatibility layer.  Its
+			# MEX build is Python-free because radentry.cpp is compiled with the
+			# RADIA_MEX_NO_PYTHON feature below.
 			${RADIA_LIB_SOURCES}
 	)
 	target_include_directories(radia_mex PRIVATE
@@ -704,17 +707,29 @@ if(RADIA_BUILD_MATLAB_MEX)
 		RADIA_USE_HACAPK
 		HACAPK_RADIA_LOGGING
 		NOMINMAX
+		RADIA_MEX_NO_PYTHON
 	)
 	target_compile_features(radia_mex PRIVATE cxx_std_20)
 	# FindMatlab uses the plain signature internally, so this call must too.
-	target_link_libraries(radia_mex ngstd ngfem ngcomp ngbla Python3::Python)
+	# The MEX gateway uses NGSolve's native C++ API directly.  Do not link the
+	# Python runtime here: MATLAB/Simulink must be able to load radia_mex
+	# without starting or embedding Python.
+	target_link_libraries(radia_mex ngstd ngfem ngcomp ngbla)
 	if(WIN32 AND USE_MKL_FOUND)
 		target_link_libraries(radia_mex ${BLAS_LIB})
 		target_include_directories(radia_mex PRIVATE ${BLAS_INCLUDE_DIR})
 		target_compile_definitions(radia_mex PRIVATE HAVE_LAPACK)
 	endif()
 	if(MSVC)
-		target_compile_options(radia_mex PRIVATE /O2 /fp:fast /W0)
+		# The bundled Windows NGSolve package is built with Python support and
+		# propagates these feature macros through its imported targets.  The MEX
+		# gateway uses only the native C++ API, so suppress Python-only header
+		# instantiations here; otherwise radia_mex.obj requests python312.lib.
+		target_compile_options(radia_mex PRIVATE
+			/O2 /fp:fast /W0
+			/UNGS_PYTHON /UNETGEN_PYTHON /UNG_PYTHON
+			/UPYBIND11_SIMPLE_GIL_MANAGEMENT
+		)
 		target_link_options(radia_mex PRIVATE /NODEFAULTLIB:LIBCMT)
 		target_link_libraries(radia_mex version.lib)
 	endif()
