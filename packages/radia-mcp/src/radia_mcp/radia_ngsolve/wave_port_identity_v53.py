@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .wave_sar_identity_v54 import validate_public_v54_identity
+
 
 WAVEGUIDE = "waveguide_mode_cutoff_normalization_referenceplane_port_owner_identity"
 FARFIELD = "farfield_realizedgain_polarization_basis_angulargrid_monitor_owner_identity"
@@ -62,7 +64,7 @@ def _farfield_ok(row: Mapping[str, object]) -> bool:
 
 def validate_public_v53_identity(payload: object) -> dict[str, bool]:
     if not isinstance(payload, Mapping): return {}
-    rows = [row for row in (payload.get("runs") or []) if isinstance(row, Mapping)]; checks: dict[str, bool] = {}
+    rows = [row for row in (payload.get("runs") or []) if isinstance(row, Mapping)]; checks = validate_public_v54_identity(payload)
     waveguides = [row[WAVEGUIDE] for row in rows if WAVEGUIDE in row]; farfields = [row[FARFIELD] for row in rows if FARFIELD in row]
     if waveguides: checks["wave_v53_waveguide_cutoff_normalization_plane_port_owner"] = len(waveguides) == len(rows) and all(isinstance(row, Mapping) and _waveguide_ok(row) for row in waveguides)
     if farfields: checks["wave_v53_farfield_gain_polarization_grid_monitor_owner"] = len(farfields) == len(rows) and all(isinstance(row, Mapping) and _farfield_ok(row) for row in farfields)
