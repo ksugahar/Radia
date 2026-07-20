@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .motor_artifact_identity_v53 import validate_public_identity as validate_public_v53_identity
+
 
 IRON_LOSS = "ironloss_fft_window_harmonic_rotation_frequency_coefficient_waveform_owner_identity"
 COGGING = "cogging_slot_pole_period_sampling_phase_torque_owner_identity"
@@ -143,7 +145,7 @@ def _cogging_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v53_identity(identity)
     iron_loss = identity.get(IRON_LOSS)
     cogging = identity.get(COGGING)
     if iron_loss is not None:
