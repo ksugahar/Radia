@@ -13,7 +13,9 @@ _NETGEN = "netgen_export_order_curved_node_boundary_name_index_digest_owner_iden
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -30,7 +32,7 @@ def _pairs(value: object) -> bool:
     return (
         isinstance(value, list)
         and bool(value)
-        and all(isinstance(pair, list) and len(pair) == 2 and all(isinstance(node, int) and node > 0 for node in pair) for pair in value)
+        and all(isinstance(pair, list) and len(pair) == 2 and all(isinstance(node, int) and not isinstance(node, bool) and node > 0 for node in pair) for pair in value)
         and len({pair[0] for pair in value}) == len(value)
         and len({pair[1] for pair in value}) == len(value)
     )
@@ -49,6 +51,7 @@ def _hex_ok(row: Mapping[str, object]) -> bool:
         and int(topology.get("side_count", 0)) > 0
         and row.get("result_source_target_topology") == topology
         and isinstance(layers, int)
+        and not isinstance(layers, bool)
         and layers > 0
         and row.get("result_layer_count") == layers
         and isinstance(bias, (int, float))
@@ -82,7 +85,13 @@ def _pyramid_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_minimum_scaled_jacobian") == jacobian
         and isinstance(blocks, Mapping)
         and bool(blocks)
-        and all(str(name) and isinstance(value, int) and value > 0 for name, value in blocks.items())
+        and all(
+            str(name)
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+            and value > 0
+            for name, value in blocks.items()
+        )
         and row.get("result_boundary_blocks") == blocks
         and str(row.get("mesh_owner") or "").startswith("headless:")
         and row.get("result_mesh_owner") == row.get("mesh_owner")
@@ -99,9 +108,16 @@ def _journal_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_undo_checkpoint") == row.get("undo_checkpoint")
         and isinstance(allocator, Mapping)
         and bool(allocator)
-        and all(str(name) and isinstance(value, int) and value > 0 for name, value in allocator.items())
+        and all(
+            str(name)
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+            and value > 0
+            for name, value in allocator.items()
+        )
         and row.get("result_entity_id_allocator") == allocator
         and isinstance(cursor, int)
+        and not isinstance(cursor, bool)
         and cursor >= 0
         and row.get("result_replay_cursor") == cursor
         and bool(str(row.get("model_revision") or ""))
@@ -116,7 +132,7 @@ def _node_map(value: object) -> bool:
     return (
         isinstance(value, Mapping)
         and bool(value)
-        and all(str(entity) and isinstance(nodes, list) and bool(nodes) and all(isinstance(node, int) and node > 0 for node in nodes) for entity, nodes in value.items())
+        and all(str(entity) and isinstance(nodes, list) and bool(nodes) and all(isinstance(node, int) and not isinstance(node, bool) and node > 0 for node in nodes) for entity, nodes in value.items())
     )
 
 
@@ -127,6 +143,7 @@ def _netgen_ok(row: Mapping[str, object]) -> bool:
     return (
         _generations(row, "order_generation", "curved_node_generation", "boundary_generation", "index_generation", "file_generation", "result_generation")
         and isinstance(order, int)
+        and not isinstance(order, bool)
         and order >= 2
         and row.get("result_element_order") == order
         and _node_map(nodes)
@@ -174,4 +191,3 @@ def validate_source_identity(payload: object) -> dict[str, object]:
     if netgen is not None:
         checks["v49_netgen_order_curved_nodes_boundaries_index_digest_owner"] = isinstance(netgen, Mapping) and _netgen_ok(netgen)
     return _report("cubit_v49_source_identity_v1", checks) if checks else {}
-

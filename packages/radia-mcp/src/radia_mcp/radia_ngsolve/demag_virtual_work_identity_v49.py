@@ -11,7 +11,9 @@ VIRTUAL_WORK = "virtual_work_displacement_frame_mesh_state_energy_owner_identity
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
@@ -58,6 +60,7 @@ def _demag_ok(row: Mapping[str, object]) -> bool:
         and -273.15 < float(temperature) <= 500.0
         and row.get("result_temperature_c") == temperature
         and isinstance(load_step, int)
+        and not isinstance(load_step, bool)
         and load_step >= 0
         and row.get("result_load_step") == load_step
         and owner.startswith("magnet:")

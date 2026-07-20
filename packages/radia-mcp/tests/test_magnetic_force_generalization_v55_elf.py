@@ -33,3 +33,12 @@ def test_v55_self_consistent_nonphysical_records_are_rejected():
 def test_v55_malformed_values_reject_without_raising():
     payload = deepcopy(_payload()); payload[DEMAG]["hb_samples"] = [{"h_a_per_m": [0.0], "b_t": 1.2}]; payload[BEARING]["coordinate_basis"] = {"x": [[1.0], 0.0, 0.0]}
     assert not all(validate_public_identity(payload).values())
+
+
+def test_v55_numeric_sha256_values_are_rejected():
+    payload = _payload()
+    numeric_digest = int("9" * 64)
+    for row in payload.values():
+        row["result_sha256"] = numeric_digest
+        row["accepted_result_sha256"] = numeric_digest
+    assert not all(validate_public_identity(payload).values())

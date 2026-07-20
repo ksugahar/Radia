@@ -44,3 +44,12 @@ def test_v55_self_consistent_nonphysical_records_are_rejected():
 def test_v55_malformed_values_reject_without_raising():
     payload = deepcopy(_payload()); payload[DQ]["current_dq_a"] = {"d": [1.0], "q": 2.0}; payload[IRON]["flux_density_waveform_t"] = [0.0, [1.0], 0.0]
     assert not all(validate_public_identity(payload).values())
+
+
+def test_v55_numeric_sha256_values_are_rejected():
+    payload = _payload()
+    numeric_digest = int("9" * 64)
+    for row in payload.values():
+        row["result_sha256"] = numeric_digest
+        row["accepted_result_sha256"] = numeric_digest
+    assert not all(validate_public_identity(payload).values())

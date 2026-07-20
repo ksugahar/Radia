@@ -13,7 +13,9 @@ SELECTOR = "topology_selector_query_cardinality_witness_feature_history_identity
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -163,6 +165,7 @@ def _selector_ok(row: Mapping[str, object]) -> bool:
         and bool(query)
         and row.get("result_query") == query
         and isinstance(cardinality, int)
+        and not isinstance(cardinality, bool)
         and cardinality >= 0
         and isinstance(entities, list)
         and len(entities) == cardinality

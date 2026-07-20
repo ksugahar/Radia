@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **789 tools** across 42 MCP servers.
+Total: **796 tools** across 42 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,7 +10,7 @@ Total: **789 tools** across 42 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 140 |
-| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 7 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 14 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -403,10 +403,17 @@ Module: `radia_mcp.matlab.server`
 |---|---|
 | `matlab_agent_guide` | (no description) |
 | `matlab_agentic_ml_guide` | (no description) |
+| `matlab_cad_topology_build` | Build a Cubit + Radia-VIM linearization + LP topology workflow. |
 | `matlab_extension_contract` | (no description) |
 | `matlab_ml_rl_artifact_gate` | (no description) |
 | `matlab_official_server_config` | (no description) |
+| `matlab_optimize_build` | Build validated MATLAB code for objective, Simulink, or LTspice optimization. |
+| `matlab_optimize_resume` | Build official-MATLAB-MCP-ready code to resume a persisted Study. |
+| `matlab_optuna_simulink_contract` | Describe the table-backed MATLAB Optuna-like and Simulink workflow. |
 | `matlab_radia_acoustic_interface_contract` | (no description) |
+| `matlab_radia_mex_contract` | Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract. |
+| `matlab_sheet_metal_topology_build` | Build a Radia-VIM + LP + adaptive NGSolve/Cubit sheet-metal workflow. |
+| `matlab_simulink_library_contract` | Describe Radia Library Browser registration and LTspice compatibility. |
 | `radia_matlab_status` | (no description) |
 
 ## `mcp-server-radia-streamfunction`

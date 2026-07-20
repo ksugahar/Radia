@@ -12,7 +12,9 @@ MOTOR_LANES = ["ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble"]
 
 
 def _sha(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -100,12 +102,12 @@ def _force_ok(row: Mapping[str, object]) -> bool:
         )
         and isinstance(displacement, list)
         and len(displacement) == 2
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in displacement)
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in displacement)
         and float(displacement[0]) < float(displacement[1])
         and row.get("result_displacement_pair_m") == displacement
         and isinstance(coenergy, list)
         and len(coenergy) == 2
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in coenergy)
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in coenergy)
         and row.get("result_coenergy_pair_j") == coenergy
         and str(row.get("body_owner") or "").startswith("body:")
         and row.get("result_body_owner") == row.get("body_owner")

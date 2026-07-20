@@ -11,7 +11,9 @@ _SEGREGATED = "segregated_variable_scaling_residual_iteration_solution_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -70,7 +72,7 @@ def _segregated_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_variable_groups") == groups
         and isinstance(scaling, Mapping)
         and set(scaling) == set(groups)
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) > 0.0 for value in scaling.values())
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) > 0.0 for value in scaling.values())
         and row.get("result_variable_scaling") == scaling
         and row.get("residual_norm") == row.get("result_residual_norm") == "scaled_l2"
         and _unique_strings(iterations)

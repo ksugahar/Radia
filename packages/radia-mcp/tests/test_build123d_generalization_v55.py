@@ -63,3 +63,16 @@ def test_v55_self_consistent_dangling_pmi_or_open_brep_is_rejected():
     source["replay_identity"][BREP]["sewn_shells"][0]["closed"] = False
     source["replay_identity"][BREP]["replayed_sewn_shells"] = source["replay_identity"][BREP]["sewn_shells"]
     assert validate_source_identity(source)["status"] == "needs_attention"
+
+
+def test_v55_numeric_sha256_values_are_rejected():
+    public, source = _payloads()
+    numeric_digest = int("9" * 64)
+    rows = [*public["reference"], source["replay_identity"]]
+    for container in rows:
+        for row in container.values():
+            for name in tuple(row):
+                if name.endswith("_sha256"):
+                    row[name] = numeric_digest
+    assert validate_public_identity(public)["status"] == "needs_attention"
+    assert validate_source_identity(source)["status"] == "needs_attention"

@@ -623,7 +623,7 @@ def _string_list(value: object) -> list[str]:
 
 
 def _valid_digest(value: object) -> bool:
-    return bool(_DIGEST.fullmatch(str(value)))
+    return isinstance(value, str) and bool(_DIGEST.fullmatch(value))
 
 
 def _valid_timings(value: object) -> bool:

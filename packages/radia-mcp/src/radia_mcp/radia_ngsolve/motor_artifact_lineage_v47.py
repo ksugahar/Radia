@@ -11,7 +11,9 @@ WINDOW = "v47_public_torque_loss_integration_window_parameter_row_key_mismatch"
 
 
 def _sha(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -44,6 +46,7 @@ def _dq_ok(row: Mapping[str, object]) -> bool:
         and phases == ["A", "B", "C"]
         and row.get("result_phase_order") == phases
         and isinstance(pole_pairs, int)
+        and not isinstance(pole_pairs, bool)
         and pole_pairs > 0
         and row.get("result_pole_pairs") == pole_pairs
         and isinstance(angle, (int, float))
@@ -72,7 +75,7 @@ def _window_ok(row: Mapping[str, object]) -> bool:
         )
         and isinstance(window, list)
         and len(window) == 2
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in window)
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in window)
         and float(window[0]) < float(window[1])
         and row.get("result_integration_window_s") == window
         and isinstance(row.get("parameter_row_key"), str)

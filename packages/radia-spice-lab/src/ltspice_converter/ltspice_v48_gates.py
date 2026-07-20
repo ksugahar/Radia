@@ -11,7 +11,9 @@ FOURIER = "fourier_harmonic_window_fundamental_phase_reference_trace_owner_ident
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -21,7 +23,7 @@ def _generation(contract: Mapping[str, object], *names: str) -> bool:
 
 
 def _finite(values: object, *, minimum: int = 1) -> bool:
-    return isinstance(values, list) and len(values) >= minimum and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in values)
+    return isinstance(values, list) and len(values) >= minimum and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in values)
 
 
 def _behavior_ok(contract: Mapping[str, object]) -> bool:
@@ -72,7 +74,7 @@ def _fourier_ok(contract: Mapping[str, object]) -> bool:
         and abs(cycles - round(cycles)) <= 1.0e-9
         and isinstance(orders, list)
         and bool(orders)
-        and all(isinstance(order, int) and order > 0 for order in orders)
+        and all(isinstance(order, int) and not isinstance(order, bool) and order > 0 for order in orders)
         and orders == sorted(set(orders))
         and contract.get("result_harmonic_orders") == orders
         and _finite(amplitudes, minimum=len(orders))

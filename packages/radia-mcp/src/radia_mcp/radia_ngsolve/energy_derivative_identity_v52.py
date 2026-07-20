@@ -13,7 +13,9 @@ MAGNET_TORQUE = "magnet_torque_angular_energy_periodic_unwrap_derivative_owner_i
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 

@@ -11,7 +11,9 @@ THERMAL = "thermal_loss_map_convection_temperature_material_owner_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
@@ -25,7 +27,7 @@ def _result(row: Mapping[str, object]) -> bool:
 
 
 def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and math.isfinite(float(value))
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _numeric_map(value: object, keys: set[str], *, positive: bool = False) -> bool:
