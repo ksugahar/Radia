@@ -93,6 +93,21 @@ struct ChargeGramDerivativeHandle {
     int n_dof = 0;
 };
 
+struct HCurlTopologyOperatorHandle {
+    std::shared_ptr<HACApKChargeGram> gram;
+    // Row-major [component][charge][mode].
+    std::vector<double> charge_maps;
+    // Row-major [subtet][vertex][xyz].
+    std::vector<double> cell_vertices;
+    std::vector<int> charge_hosts;
+    std::vector<int> host_parents;
+    int charge_count = 0;
+    int mode_count = 0;
+    int cell_count = 0;
+    int parent_count = 0;
+    double mu = 0.0;
+};
+
 struct NGSolveCoefficientHandle {
     std::shared_ptr<ngfem::CoefficientFunction> coefficient;
 };
@@ -193,6 +208,8 @@ std::unordered_map<std::uint64_t, std::unique_ptr<PEECHandle>> peec_registry;
 std::unordered_map<std::uint64_t, std::unique_ptr<ChargeGramHandle>> charge_gram_registry;
 std::unordered_map<std::uint64_t, std::unique_ptr<ChargeGramDerivativeHandle>>
     charge_gram_derivative_registry;
+std::unordered_map<std::uint64_t, std::unique_ptr<HCurlTopologyOperatorHandle>>
+    hcurl_topology_registry;
 std::unordered_map<std::uint64_t, std::shared_ptr<HDivFieldEvaluator>> field_registry;
 std::unordered_map<std::uint64_t, std::shared_ptr<PlanarFieldEvaluator>> planar_registry;
 std::unordered_map<std::uint64_t, std::unique_ptr<NGSolveCoefficientHandle>>
@@ -483,6 +500,36 @@ std::vector<double> RealTensor4(const mxArray* value, std::size_t& dim0,
     return result;
 }
 
+std::vector<Complex> ComplexTensor3(const mxArray* value, std::size_t& dim0,
+                                    std::size_t& dim1, std::size_t& dim2,
+                                    const char* name) {
+    if (!mxIsDouble(value) || mxGetNumberOfDimensions(value) != 3)
+        BadArgument(std::string(name) + " must be a double three-dimensional array");
+    const mwSize* dims = mxGetDimensions(value);
+    dim0 = static_cast<std::size_t>(dims[0]);
+    dim1 = static_cast<std::size_t>(dims[1]);
+    dim2 = static_cast<std::size_t>(dims[2]);
+    std::vector<Complex> result(dim0 * dim1 * dim2);
+    if (mxIsComplex(value)) {
+        const auto* data = mxGetComplexDoubles(value);
+        for (std::size_t i = 0; i < dim0; ++i)
+            for (std::size_t j = 0; j < dim1; ++j)
+                for (std::size_t k = 0; k < dim2; ++k) {
+                    const auto& item = data[i + dim0 * (j + dim1 * k)];
+                    result[(i * dim1 + j) * dim2 + k] =
+                        Complex(item.real, item.imag);
+                }
+    } else {
+        const double* data = mxGetDoubles(value);
+        for (std::size_t i = 0; i < dim0; ++i)
+            for (std::size_t j = 0; j < dim1; ++j)
+                for (std::size_t k = 0; k < dim2; ++k)
+                    result[(i * dim1 + j) * dim2 + k] =
+                        Complex(data[i + dim0 * (j + dim1 * k)], 0.0);
+    }
+    return result;
+}
+
 void ReadQuadrature(const mxArray* point_value, const mxArray* weight_value,
                     std::size_t dimension, bool required,
                     const char* point_name, const char* weight_name,
@@ -614,6 +661,40 @@ mxArray* RealMatrixOutput(const std::vector<double>& values,
     return result;
 }
 
+mxArray* RealTensor3Output(const std::vector<double>& values,
+                           std::size_t dim0, std::size_t dim1,
+                           std::size_t dim2) {
+    const mwSize dims[] = {static_cast<mwSize>(dim0),
+                           static_cast<mwSize>(dim1),
+                           static_cast<mwSize>(dim2)};
+    mxArray* result = mxCreateNumericArray(3, dims, mxDOUBLE_CLASS, mxREAL);
+    double* data = mxGetDoubles(result);
+    for (std::size_t i = 0; i < dim0; ++i)
+        for (std::size_t j = 0; j < dim1; ++j)
+            for (std::size_t k = 0; k < dim2; ++k)
+                data[i + dim0 * (j + dim1 * k)] =
+                    values[(i * dim1 + j) * dim2 + k];
+    return result;
+}
+
+mxArray* RealTensor4Output(const std::vector<double>& values,
+                           std::size_t dim0, std::size_t dim1,
+                           std::size_t dim2, std::size_t dim3) {
+    const mwSize dims[] = {static_cast<mwSize>(dim0),
+                           static_cast<mwSize>(dim1),
+                           static_cast<mwSize>(dim2),
+                           static_cast<mwSize>(dim3)};
+    mxArray* result = mxCreateNumericArray(4, dims, mxDOUBLE_CLASS, mxREAL);
+    double* data = mxGetDoubles(result);
+    for (std::size_t i = 0; i < dim0; ++i)
+        for (std::size_t j = 0; j < dim1; ++j)
+            for (std::size_t k = 0; k < dim2; ++k)
+                for (std::size_t l = 0; l < dim3; ++l)
+                    data[i + dim0 * (j + dim1 * (k + dim2 * l))] =
+                        values[((i * dim1 + j) * dim2 + k) * dim3 + l];
+    return result;
+}
+
 mxArray* TextOutput(const char* value) {
     return mxCreateString(value ? value : "");
 }
@@ -710,6 +791,7 @@ void Cleanup() {
     peec_registry.clear();
     charge_gram_registry.clear();
     charge_gram_derivative_registry.clear();
+    hcurl_topology_registry.clear();
     field_registry.clear();
     planar_registry.clear();
     coefficient_registry.clear();
@@ -733,6 +815,7 @@ bool HandleInUse(std::uint64_t handle) {
            bem_registry.count(handle) != 0 || peec_registry.count(handle) != 0 ||
            charge_gram_registry.count(handle) != 0 ||
            charge_gram_derivative_registry.count(handle) != 0 ||
+           hcurl_topology_registry.count(handle) != 0 ||
            field_registry.count(handle) != 0 ||
            planar_registry.count(handle) != 0 || coefficient_registry.count(handle) != 0 ||
            gridfunction_registry.count(handle) != 0 || vector_registry.count(handle) != 0 ||
@@ -1262,6 +1345,7 @@ mxArray* Commands() {
         "ngsolve.solver.create", "ngsolve.solver.info",
         "ngsolve.solver.solve", "ngsolve.solver.destroy",
         "ngsolve.coefficient_function.constant_create",
+        "ngsolve.coefficient_function.coordinates_create",
         "ngsolve.coefficient_function.add",
         "ngsolve.coefficient_function.subtract",
         "ngsolve.coefficient_function.multiply",
@@ -1304,6 +1388,18 @@ mxArray* Commands() {
         "simulink.state_space.reset",
         "simulink.state_space.destroy",
         "hcurl.eddy_cln.native_basis",
+        "hcurl.topopt.operator.create", "hcurl.topopt.operator.destroy",
+        "hcurl.topopt.operator.info", "hcurl.topopt.operator.matvec",
+        "hcurl.topopt.operator.to_dense",
+        "hcurl.topopt.operator.directional_contractions",
+        "hcurl.topopt.operator.activation_matvec",
+        "hcurl.topopt.operator.activation_to_dense",
+        "hcurl.topopt.operator.activation_contractions",
+        "hcurl.topopt.resistance_shape_tangents",
+        "hcurl.topopt.cell_curl_grams",
+        "hcurl.topopt.sample_subtet_velocities",
+        "hcurl.topopt.multifrequency_joule",
+        "hcurl.topopt.activation_multifrequency_joule",
         "energy_stop.create", "energy_stop.destroy", "energy_stop.info",
         "energy_stop.state0", "energy_stop.forward", "energy_stop.commit",
         "energy_stop.stored_energy", "hybrid_vim.solve", "hybrid_vim.schur",
@@ -1438,6 +1534,8 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
                                                            bem_registry.size() +
                                                            peec_registry.size() +
                                                            charge_gram_registry.size() +
+                                                           charge_gram_derivative_registry.size() +
+                                                           hcurl_topology_registry.size() +
                                                            field_registry.size() +
                                                            planar_registry.size() +
                                                            coefficient_registry.size() +
@@ -3021,6 +3119,21 @@ void NGSolveCoefficientConstantCreate(int nlhs, mxArray* plhs[], int nrhs,
     std::size_t cols = 0;
     auto coefficient = MakeNGSolveConstantCoefficient(
         prhs[1], rows, cols);
+    plhs[0] = Uint64Output(RegisterCoefficient(std::move(coefficient)));
+}
+
+void NGSolveCoefficientCoordinatesCreate(int nlhs, mxArray* plhs[], int nrhs,
+                                         const mxArray* prhs[]) {
+    CheckArity(nrhs, 2, nlhs, 1,
+        "h = radia_mex('ngsolve.coefficient_function.coordinates_create', dimension)");
+    const int dimension = PositiveInteger(prhs[1], "dimension");
+    if (dimension != 2 && dimension != 3)
+        BadArgument("coordinate dimension must be 2 or 3");
+    ngcore::Array<std::shared_ptr<ngfem::CoefficientFunction>> components(dimension);
+    for (int component = 0; component < dimension; ++component)
+        components[component] = ngfem::MakeCoordinateCoefficientFunction(component);
+    auto coefficient = ngfem::MakeVectorialCoefficientFunction(std::move(components));
+    coefficient->SetDimensions(ngcore::Array<int>{dimension});
     plhs[0] = Uint64Output(RegisterCoefficient(std::move(coefficient)));
 }
 
@@ -5855,6 +5968,36 @@ void ChargeGramDirectionalDerivativeOperatorCreate(
     plhs[0] = Uint64Output(RegisterChargeGramDerivative(std::move(holder)));
 }
 
+HCurlTopologyOperatorHandle& HCurlTopologyOperator(std::uint64_t handle) {
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    const auto found = hcurl_topology_registry.find(handle);
+    if (found == hcurl_topology_registry.end())
+        BadArgument("invalid or stale HCurl topology operator handle");
+    return *found->second;
+}
+
+std::uint64_t RegisterHCurlTopologyOperator(
+    std::unique_ptr<HCurlTopologyOperatorHandle> value) {
+    if (!value || !value->gram)
+        BadArgument("HCurl topology operator construction returned null");
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    while (HandleInUse(next_handle))
+        ++next_handle;
+    const std::uint64_t handle = next_handle++;
+    hcurl_topology_registry.emplace(handle, std::move(value));
+    mexLock();
+    ++lock_count;
+    return handle;
+}
+
+void DestroyHCurlTopologyOperator(std::uint64_t handle) {
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    if (hcurl_topology_registry.erase(handle) == 0)
+        BadArgument("invalid or stale HCurl topology operator handle");
+    mexUnlock();
+    --lock_count;
+}
+
 void ChargeGramDirectionalDerivativeContractions(
     int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     CheckArity(nrhs, 7, nlhs, 1,
@@ -5964,6 +6107,996 @@ void ChargeGramDerivativeMatVecSym(int nlhs, mxArray* plhs[], int nrhs,
     std::vector<double> y(static_cast<std::size_t>(holder.n_dof));
     holder.manager->MatVecSym(x, y);
     plhs[0] = RealColumn(y);
+}
+
+std::vector<Complex> HCurlTopologyChargeApply(
+    const HCurlTopologyOperatorHandle& op, int component,
+    const std::vector<Complex>& x) {
+    std::vector<Complex> result(static_cast<std::size_t>(op.charge_count));
+    const std::size_t offset = static_cast<std::size_t>(component) *
+                               op.charge_count * op.mode_count;
+    for (int charge = 0; charge < op.charge_count; ++charge)
+        for (int mode = 0; mode < op.mode_count; ++mode)
+            result[static_cast<std::size_t>(charge)] +=
+                op.charge_maps[offset + static_cast<std::size_t>(charge) *
+                                           op.mode_count + mode] *
+                x[static_cast<std::size_t>(mode)];
+    return result;
+}
+
+std::vector<Complex> HCurlTopologyGramApply(
+    const HCurlTopologyOperatorHandle& op,
+    const std::vector<Complex>& x) {
+    std::vector<double> real(x.size()), imag(x.size());
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        real[i] = x[i].real();
+        imag[i] = x[i].imag();
+    }
+    std::vector<double> gr(x.size()), gi(x.size());
+    op.gram->MatVecSym(real, gr);
+    op.gram->MatVecSym(imag, gi);
+    std::vector<Complex> result(x.size());
+    for (std::size_t i = 0; i < x.size(); ++i)
+        result[i] = Complex(gr[i], gi[i]);
+    return result;
+}
+
+std::vector<Complex> HCurlTopologyMatVecValues(
+    const HCurlTopologyOperatorHandle& op,
+    const std::vector<Complex>& x,
+    const std::vector<double>* charge_scale = nullptr) {
+    if (x.size() != static_cast<std::size_t>(op.mode_count))
+        BadArgument("HCurl topology vector size does not match the reduced mode count");
+    std::vector<Complex> result(static_cast<std::size_t>(op.mode_count));
+    for (int component = 0; component < 3; ++component) {
+        auto charge = HCurlTopologyChargeApply(op, component, x);
+        if (charge_scale)
+            for (int i = 0; i < op.charge_count; ++i)
+                charge[static_cast<std::size_t>(i)] *=
+                    (*charge_scale)[static_cast<std::size_t>(i)];
+        auto gram_charge = HCurlTopologyGramApply(op, charge);
+        if (charge_scale)
+            for (int i = 0; i < op.charge_count; ++i)
+                gram_charge[static_cast<std::size_t>(i)] *=
+                    (*charge_scale)[static_cast<std::size_t>(i)];
+        const std::size_t offset = static_cast<std::size_t>(component) *
+                                   op.charge_count * op.mode_count;
+        for (int mode = 0; mode < op.mode_count; ++mode)
+            for (int charge_index = 0; charge_index < op.charge_count;
+                 ++charge_index)
+                result[static_cast<std::size_t>(mode)] +=
+                    op.charge_maps[offset +
+                        static_cast<std::size_t>(charge_index) * op.mode_count + mode] *
+                    gram_charge[static_cast<std::size_t>(charge_index)];
+    }
+    for (auto& value : result)
+        value *= op.mu;
+    return result;
+}
+
+std::vector<double> HCurlTopologyChargeScale(
+    const HCurlTopologyOperatorHandle& op,
+    const std::vector<double>& activation, double power,
+    std::vector<double>* parent_derivative = nullptr) {
+    if (activation.size() != static_cast<std::size_t>(op.parent_count))
+        BadArgument("activation must contain one value per HCurl parent cell");
+    if (!std::isfinite(power) || power < 1.0)
+        BadArgument("activation power must be finite and at least one");
+    for (double value : activation)
+        if (!std::isfinite(value) || value < 0.0 || value > 1.0)
+            BadArgument("activation must be finite and lie in [0,1]");
+    if (parent_derivative) {
+        parent_derivative->resize(activation.size());
+        for (std::size_t i = 0; i < activation.size(); ++i)
+            (*parent_derivative)[i] = power == 1.0
+                ? 1.0 : power * std::pow(activation[i], power - 1.0);
+    }
+    std::vector<double> scale(static_cast<std::size_t>(op.charge_count));
+    for (int charge = 0; charge < op.charge_count; ++charge) {
+        const int cell = op.charge_hosts[static_cast<std::size_t>(charge)];
+        const int parent = op.host_parents[static_cast<std::size_t>(cell)];
+        scale[static_cast<std::size_t>(charge)] =
+            std::pow(activation[static_cast<std::size_t>(parent)], power);
+    }
+    return scale;
+}
+
+std::vector<double> HCurlTopologyDense(
+    const HCurlTopologyOperatorHandle& op,
+    const std::vector<double>* charge_scale = nullptr) {
+    const int n = op.mode_count;
+    std::vector<double> result(static_cast<std::size_t>(n) * n);
+    for (int column = 0; column < n; ++column) {
+        std::vector<Complex> unit(static_cast<std::size_t>(n));
+        unit[static_cast<std::size_t>(column)] = 1.0;
+        const auto applied = HCurlTopologyMatVecValues(op, unit, charge_scale);
+        for (int row = 0; row < n; ++row)
+            result[static_cast<std::size_t>(row) * n + column] =
+                applied[static_cast<std::size_t>(row)].real();
+    }
+    for (int i = 0; i < n; ++i)
+        for (int j = i + 1; j < n; ++j) {
+            const double value = 0.5 *
+                (result[static_cast<std::size_t>(i) * n + j] +
+                 result[static_cast<std::size_t>(j) * n + i]);
+            result[static_cast<std::size_t>(i) * n + j] = value;
+            result[static_cast<std::size_t>(j) * n + i] = value;
+        }
+    return result;
+}
+
+Complex HCurlDot(const std::vector<Complex>& left,
+                 const std::vector<Complex>& right) {
+    Complex result = 0.0;
+    for (std::size_t i = 0; i < left.size(); ++i)
+        result += std::conj(left[i]) * right[i];
+    return result;
+}
+
+void HCurlTopologyOperatorCreate(int nlhs, mxArray* plhs[], int nrhs,
+                                 const mxArray* prhs[]) {
+    CheckArity(nrhs, 7, nlhs, 1,
+        "h = radia_mex('hcurl.topopt.operator.create', gram, charge_maps, "
+        "cell_vertices, charge_hosts, host_parents, mu)");
+    const auto& parent = ChargeGram(Handle(prhs[1]));
+    std::size_t components = 0, charges = 0, modes = 0;
+    auto maps = RealTensor3(prhs[2], components, charges, modes, "charge_maps");
+    std::size_t cells = 0, vertices = 0, coordinates = 0;
+    auto cell_vertices = RealTensor3(
+        prhs[3], cells, vertices, coordinates, "cell_vertices");
+    auto charge_hosts = IntegerVector(prhs[4], "charge_hosts");
+    auto host_parents = IntegerVector(prhs[5], "host_parents");
+    const double mu = Scalar(prhs[6], "mu");
+    if (components != 3 || charges != static_cast<std::size_t>(parent.n_dof) ||
+        modes == 0)
+        BadArgument("charge_maps must have shape 3-by-gram_ndof-by-nmode");
+    if (cells == 0 || vertices != 4 || coordinates != 3)
+        BadArgument("cell_vertices must have shape nsubtet-by-4-by-3");
+    if (charge_hosts.size() != charges || host_parents.size() != cells)
+        BadArgument("charge_hosts/host_parents sizes do not match HCurl topology data");
+    if (!std::isfinite(mu) || mu <= 0.0)
+        BadArgument("mu must be positive and finite");
+    int parent_count = 0;
+    for (int host : charge_hosts) {
+        if (host < 0 || host >= static_cast<int>(cells))
+            BadArgument("charge_hosts must use zero-based sub-tetrahedron indices");
+    }
+    for (int parent_index : host_parents) {
+        if (parent_index < 0)
+            BadArgument("host_parents must use nonnegative zero-based indices");
+        parent_count = std::max(parent_count, parent_index + 1);
+    }
+    const auto finite = [](double value) { return std::isfinite(value); };
+    if (!std::all_of(maps.begin(), maps.end(), finite) ||
+        !std::all_of(cell_vertices.begin(), cell_vertices.end(), finite))
+        BadArgument("HCurl topology maps and vertices must be finite");
+    auto holder = std::make_unique<HCurlTopologyOperatorHandle>();
+    holder->gram = parent.manager;
+    holder->charge_maps = std::move(maps);
+    holder->cell_vertices = std::move(cell_vertices);
+    holder->charge_hosts = std::move(charge_hosts);
+    holder->host_parents = std::move(host_parents);
+    holder->charge_count = static_cast<int>(charges);
+    holder->mode_count = static_cast<int>(modes);
+    holder->cell_count = static_cast<int>(cells);
+    holder->parent_count = parent_count;
+    holder->mu = mu;
+    plhs[0] = Uint64Output(RegisterHCurlTopologyOperator(std::move(holder)));
+}
+
+void HCurlTopologyOperatorInfo(int nlhs, mxArray* plhs[], int nrhs,
+                               const mxArray* prhs[]) {
+    CheckArity(nrhs, 2, nlhs, 1,
+        "info = radia_mex('hcurl.topopt.operator.info', handle)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    const char* fields[] = {"mode_count", "charge_count", "subtet_count",
+                            "parent_count", "mu", "matrix_free"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 6, fields);
+    mxSetField(plhs[0], 0, "mode_count", mxCreateDoubleScalar(op.mode_count));
+    mxSetField(plhs[0], 0, "charge_count", mxCreateDoubleScalar(op.charge_count));
+    mxSetField(plhs[0], 0, "subtet_count", mxCreateDoubleScalar(op.cell_count));
+    mxSetField(plhs[0], 0, "parent_count", mxCreateDoubleScalar(op.parent_count));
+    mxSetField(plhs[0], 0, "mu", mxCreateDoubleScalar(op.mu));
+    mxSetField(plhs[0], 0, "matrix_free", mxCreateLogicalScalar(true));
+}
+
+void HCurlTopologyOperatorMatVec(int nlhs, mxArray* plhs[], int nrhs,
+                                 const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 1,
+        "y = radia_mex('hcurl.topopt.operator.matvec', handle, x)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    std::size_t rows = 0, cols = 0;
+    const auto x = ComplexMatrix(prhs[2], rows, cols, "x");
+    if (rows != static_cast<std::size_t>(op.mode_count))
+        BadArgument("x must have one row per reduced HCurl mode");
+    std::vector<Complex> y(rows * cols);
+    for (std::size_t column = 0; column < cols; ++column) {
+        std::vector<Complex> input(rows);
+        for (std::size_t row = 0; row < rows; ++row)
+            input[row] = x[row * cols + column];
+        const auto output = HCurlTopologyMatVecValues(op, input);
+        for (std::size_t row = 0; row < rows; ++row)
+            y[row * cols + column] = output[row];
+    }
+    plhs[0] = ComplexMatrixOutput(y, rows, cols);
+}
+
+void HCurlTopologyOperatorDense(int nlhs, mxArray* plhs[], int nrhs,
+                                const mxArray* prhs[]) {
+    CheckArity(nrhs, 2, nlhs, 1,
+        "L = radia_mex('hcurl.topopt.operator.to_dense', handle)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    plhs[0] = RealMatrixOutput(HCurlTopologyDense(op), op.mode_count, op.mode_count);
+}
+
+void HCurlTopologyActivationMatVec(int nlhs, mxArray* plhs[], int nrhs,
+                                   const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+        "y = radia_mex('hcurl.topopt.operator.activation_matvec', "
+        "handle, activation, x, power)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    const auto activation = RealVector(prhs[2], "activation");
+    const auto scale = HCurlTopologyChargeScale(
+        op, activation, Scalar(prhs[4], "power"));
+    std::size_t rows = 0, cols = 0;
+    const auto x = ComplexMatrix(prhs[3], rows, cols, "x");
+    if (rows != static_cast<std::size_t>(op.mode_count))
+        BadArgument("x must have one row per reduced HCurl mode");
+    std::vector<Complex> y(rows * cols);
+    for (std::size_t column = 0; column < cols; ++column) {
+        std::vector<Complex> input(rows);
+        for (std::size_t row = 0; row < rows; ++row)
+            input[row] = x[row * cols + column];
+        const auto output = HCurlTopologyMatVecValues(op, input, &scale);
+        for (std::size_t row = 0; row < rows; ++row)
+            y[row * cols + column] = output[row];
+    }
+    plhs[0] = ComplexMatrixOutput(y, rows, cols);
+}
+
+void HCurlTopologyActivationDense(int nlhs, mxArray* plhs[], int nrhs,
+                                  const mxArray* prhs[]) {
+    CheckArity(nrhs, 4, nlhs, 1,
+        "L = radia_mex('hcurl.topopt.operator.activation_to_dense', "
+        "handle, activation, power)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    const auto activation = RealVector(prhs[2], "activation");
+    const auto scale = HCurlTopologyChargeScale(
+        op, activation, Scalar(prhs[3], "power"));
+    plhs[0] = RealMatrixOutput(
+        HCurlTopologyDense(op, &scale), op.mode_count, op.mode_count);
+}
+
+std::vector<Complex> HCurlTopologyDirectionalContractionValues(
+    const HCurlTopologyOperatorHandle& op,
+    const std::vector<double>& velocity, int direction_count,
+    const std::vector<Complex>& left, const std::vector<Complex>& right) {
+    const int ncharge = op.charge_count;
+    std::vector<std::vector<Complex>> charge_left(3), charge_right(3);
+    std::vector<std::vector<Complex>> gram_charge_right(3);
+    for (int component = 0; component < 3; ++component) {
+        charge_left[component] = HCurlTopologyChargeApply(op, component, left);
+        charge_right[component] = HCurlTopologyChargeApply(op, component, right);
+        gram_charge_right[component] =
+            HCurlTopologyGramApply(op, charge_right[component]);
+    }
+    std::vector<Complex> result(static_cast<std::size_t>(direction_count));
+    const std::vector<double> empty_faces;
+    auto real_contractions = [&](const std::vector<double>& a,
+                                 const std::vector<double>& b) {
+        return op.gram->DirectionalDerivativeContractions(
+            ChargeDerivativeFamily::Tet, direction_count, velocity,
+            empty_faces, a, b);
+    };
+    for (int component = 0; component < 3; ++component) {
+        std::vector<double> a(ncharge), b(ncharge), c(ncharge), d(ncharge);
+        for (int i = 0; i < ncharge; ++i) {
+            a[static_cast<std::size_t>(i)] =
+                charge_left[component][static_cast<std::size_t>(i)].real();
+            b[static_cast<std::size_t>(i)] =
+                charge_left[component][static_cast<std::size_t>(i)].imag();
+            c[static_cast<std::size_t>(i)] =
+                charge_right[component][static_cast<std::size_t>(i)].real();
+            d[static_cast<std::size_t>(i)] =
+                charge_right[component][static_cast<std::size_t>(i)].imag();
+        }
+        const auto ac = real_contractions(a, c);
+        const auto bd = real_contractions(b, d);
+        const auto ad = real_contractions(a, d);
+        const auto bc = real_contractions(b, c);
+        for (int q = 0; q < direction_count; ++q)
+            result[static_cast<std::size_t>(q)] += Complex(
+                ac[static_cast<std::size_t>(q)] + bd[static_cast<std::size_t>(q)],
+                ad[static_cast<std::size_t>(q)] - bc[static_cast<std::size_t>(q)]);
+    }
+
+    std::vector<std::array<double, 9>> inverse(
+        static_cast<std::size_t>(op.cell_count));
+    for (int cell = 0; cell < op.cell_count; ++cell) {
+        const std::size_t base = static_cast<std::size_t>(cell) * 12;
+        double e[9];
+        for (int coordinate = 0; coordinate < 3; ++coordinate)
+            for (int column = 0; column < 3; ++column)
+                e[coordinate * 3 + column] =
+                    op.cell_vertices[base + static_cast<std::size_t>(column + 1) * 3 + coordinate] -
+                    op.cell_vertices[base + coordinate];
+        const double det =
+            e[0] * (e[4] * e[8] - e[5] * e[7]) -
+            e[1] * (e[3] * e[8] - e[5] * e[6]) +
+            e[2] * (e[3] * e[7] - e[4] * e[6]);
+        if (!std::isfinite(det) || std::abs(det) <= 1e-30)
+            BadArgument("HCurl topology sub-tetrahedron is singular");
+        auto& inv = inverse[static_cast<std::size_t>(cell)];
+        inv = {(e[4]*e[8]-e[5]*e[7])/det, (e[2]*e[7]-e[1]*e[8])/det,
+               (e[1]*e[5]-e[2]*e[4])/det, (e[5]*e[6]-e[3]*e[8])/det,
+               (e[0]*e[8]-e[2]*e[6])/det, (e[2]*e[3]-e[0]*e[5])/det,
+               (e[3]*e[7]-e[4]*e[6])/det, (e[1]*e[6]-e[0]*e[7])/det,
+               (e[0]*e[4]-e[1]*e[3])/det};
+    }
+
+    for (int q = 0; q < direction_count; ++q) {
+        std::vector<std::array<double, 9>> gradient(
+            static_cast<std::size_t>(op.cell_count));
+        std::vector<double> trace(static_cast<std::size_t>(op.cell_count));
+        for (int cell = 0; cell < op.cell_count; ++cell) {
+            const std::size_t base =
+                (static_cast<std::size_t>(q) * op.cell_count + cell) * 12;
+            double de[9];
+            for (int coordinate = 0; coordinate < 3; ++coordinate)
+                for (int column = 0; column < 3; ++column)
+                    de[coordinate * 3 + column] =
+                        velocity[base + static_cast<std::size_t>(column + 1) * 3 + coordinate] -
+                        velocity[base + coordinate];
+            auto& grad = gradient[static_cast<std::size_t>(cell)];
+            const auto& inv = inverse[static_cast<std::size_t>(cell)];
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j) {
+                    grad[i * 3 + j] = 0.0;
+                    for (int k = 0; k < 3; ++k)
+                        grad[i * 3 + j] += de[i * 3 + k] * inv[k * 3 + j];
+                }
+            trace[static_cast<std::size_t>(cell)] =
+                grad[0] + grad[4] + grad[8];
+        }
+        for (int component = 0; component < 3; ++component) {
+            std::vector<Complex> db_left(static_cast<std::size_t>(ncharge));
+            std::vector<Complex> db_right(static_cast<std::size_t>(ncharge));
+            for (int charge = 0; charge < ncharge; ++charge) {
+                const int cell = op.charge_hosts[static_cast<std::size_t>(charge)];
+                const auto& grad = gradient[static_cast<std::size_t>(cell)];
+                for (int source = 0; source < 3; ++source) {
+                    double coefficient = grad[component * 3 + source];
+                    if (component == source)
+                        coefficient -= trace[static_cast<std::size_t>(cell)];
+                    db_left[static_cast<std::size_t>(charge)] += coefficient *
+                        charge_left[source][static_cast<std::size_t>(charge)];
+                    db_right[static_cast<std::size_t>(charge)] += coefficient *
+                        charge_right[source][static_cast<std::size_t>(charge)];
+                }
+            }
+            const auto gram_db_right = HCurlTopologyGramApply(op, db_right);
+            result[static_cast<std::size_t>(q)] +=
+                HCurlDot(db_left, gram_charge_right[component]) +
+                HCurlDot(charge_left[component], gram_db_right);
+        }
+    }
+    for (auto& value : result)
+        value *= op.mu;
+    return result;
+}
+
+void HCurlTopologyDirectionalContractions(int nlhs, mxArray* plhs[], int nrhs,
+                                          const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+        "values = radia_mex('hcurl.topopt.operator.directional_contractions', "
+        "handle, cell_vertex_velocities, left, right)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    std::size_t directions = 0, cells = 0, vertices = 0, coordinates = 0;
+    const auto velocity = RealTensor4(
+        prhs[2], directions, cells, vertices, coordinates,
+        "cell_vertex_velocities");
+    if (directions == 0 || cells != static_cast<std::size_t>(op.cell_count) ||
+        vertices != 4 || coordinates != 3)
+        BadArgument("cell_vertex_velocities must have shape q-by-nsubtet-by-4-by-3");
+    std::size_t left_rows = 0, left_cols = 0, right_rows = 0, right_cols = 0;
+    const auto left_matrix = ComplexMatrix(prhs[3], left_rows, left_cols, "left");
+    const auto right_matrix = ComplexMatrix(prhs[4], right_rows, right_cols, "right");
+    if (left_rows * left_cols != static_cast<std::size_t>(op.mode_count) ||
+        right_rows * right_cols != static_cast<std::size_t>(op.mode_count))
+        BadArgument("left/right must contain one value per reduced HCurl mode");
+    const auto result = HCurlTopologyDirectionalContractionValues(
+        op, velocity, static_cast<int>(directions), left_matrix, right_matrix);
+    plhs[0] = ComplexMatrixOutput(result, directions, 1);
+}
+
+std::vector<Complex> HCurlTopologyActivationContractionValues(
+    const HCurlTopologyOperatorHandle& op,
+    const std::vector<double>& activation, double power,
+    const std::vector<Complex>& left, const std::vector<Complex>& right) {
+    std::vector<double> derivative;
+    const auto scale = HCurlTopologyChargeScale(op, activation, power, &derivative);
+    std::vector<Complex> result(static_cast<std::size_t>(op.parent_count));
+    for (int component = 0; component < 3; ++component) {
+        const auto raw_left = HCurlTopologyChargeApply(op, component, left);
+        const auto raw_right = HCurlTopologyChargeApply(op, component, right);
+        auto scaled_left = raw_left;
+        auto scaled_right = raw_right;
+        for (int charge = 0; charge < op.charge_count; ++charge) {
+            scaled_left[static_cast<std::size_t>(charge)] *=
+                scale[static_cast<std::size_t>(charge)];
+            scaled_right[static_cast<std::size_t>(charge)] *=
+                scale[static_cast<std::size_t>(charge)];
+        }
+        const auto gram_left = HCurlTopologyGramApply(op, scaled_left);
+        const auto gram_right = HCurlTopologyGramApply(op, scaled_right);
+        for (int charge = 0; charge < op.charge_count; ++charge) {
+            const int cell = op.charge_hosts[static_cast<std::size_t>(charge)];
+            const int parent = op.host_parents[static_cast<std::size_t>(cell)];
+            const Complex local =
+                std::conj(raw_left[static_cast<std::size_t>(charge)]) *
+                    gram_right[static_cast<std::size_t>(charge)] +
+                std::conj(gram_left[static_cast<std::size_t>(charge)]) *
+                    raw_right[static_cast<std::size_t>(charge)];
+            result[static_cast<std::size_t>(parent)] +=
+                derivative[static_cast<std::size_t>(parent)] * local;
+        }
+    }
+    for (auto& value : result)
+        value *= op.mu;
+    return result;
+}
+
+void HCurlTopologyActivationContractions(int nlhs, mxArray* plhs[], int nrhs,
+                                         const mxArray* prhs[]) {
+    CheckArity(nrhs, 6, nlhs, 1,
+        "values = radia_mex('hcurl.topopt.operator.activation_contractions', "
+        "handle, activation, left, right, power)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    const auto activation = RealVector(prhs[2], "activation");
+    std::size_t lr = 0, lc = 0, rr = 0, rc = 0;
+    const auto left = ComplexMatrix(prhs[3], lr, lc, "left");
+    const auto right = ComplexMatrix(prhs[4], rr, rc, "right");
+    if (lr * lc != static_cast<std::size_t>(op.mode_count) ||
+        rr * rc != static_cast<std::size_t>(op.mode_count))
+        BadArgument("left/right must contain one value per reduced HCurl mode");
+    const auto result = HCurlTopologyActivationContractionValues(
+        op, activation, Scalar(prhs[5], "power"), left, right);
+    plhs[0] = ComplexMatrixOutput(result, result.size(), 1);
+}
+
+std::vector<double> ProjectNGSolveRealMatrix(
+    const std::shared_ptr<ngla::BaseMatrix>& matrix,
+    const std::vector<double>& basis, int ndof, int mode_count) {
+    std::vector<double> result(static_cast<std::size_t>(mode_count) * mode_count);
+    for (int column = 0; column < mode_count; ++column) {
+        std::vector<double> input(static_cast<std::size_t>(ndof));
+        for (int row = 0; row < ndof; ++row)
+            input[static_cast<std::size_t>(row)] =
+                basis[static_cast<std::size_t>(row) * mode_count + column];
+        const auto output = ApplyNGSolveMatrixValues(matrix, input, ndof);
+        for (int row_mode = 0; row_mode < mode_count; ++row_mode)
+            for (int row = 0; row < ndof; ++row)
+                result[static_cast<std::size_t>(row_mode) * mode_count + column] +=
+                    basis[static_cast<std::size_t>(row) * mode_count + row_mode] *
+                    output[static_cast<std::size_t>(row)];
+    }
+    return result;
+}
+
+std::shared_ptr<ngcore::BitArray> HCurlTopologyElementMask(
+    const std::shared_ptr<ngcomp::MeshAccess>& mesh,
+    const std::vector<int>& elements) {
+    if (elements.empty())
+        return nullptr;
+    auto mask = std::make_shared<ngcore::BitArray>(mesh->GetNE(ngfem::VOL));
+    mask->Clear();
+    for (int element : elements) {
+        if (element < 0 || element >= static_cast<int>(mesh->GetNE(ngfem::VOL)))
+            BadArgument("element_indices contains an out-of-range volume element");
+        mask->SetBit(element);
+    }
+    return mask;
+}
+
+std::vector<double> HCurlTopologyResistanceShapeTangentsValues(
+    const NGSolveFESpaceHandle& space,
+    const std::vector<double>& basis, int mode_count,
+    const std::vector<std::uint64_t>& deformation_handles,
+    double conductivity, const std::vector<int>& elements,
+    std::vector<double>& resistance) {
+    if (space.space != "hcurl" || space.is_complex)
+        BadArgument("HCurl topology resistance requires a real HCurl FESpace");
+    if (space.mesh->GetDimension() != 3)
+        BadArgument("HCurl topology resistance currently requires a 3-D mesh");
+    if (!std::isfinite(conductivity) || conductivity <= 0.0)
+        BadArgument("conductivity must be positive and finite");
+    const int ndof = space.fespace->GetNDof();
+    auto mask = HCurlTopologyElementMask(space.mesh, elements);
+    ngstd::LocalHeap local_heap(1 << 26, "radia_hcurl_topopt_resistance");
+    ngcore::Flags flags;
+    auto base = std::make_shared<ngcomp::T_BilinearForm<double>>(
+        space.fespace, "radia_hcurl_topopt_resistance", flags);
+    auto base_integrator = MakeNGSolveIntegrator(
+        "hcurl", "curlcurl", 3, ngfem::ConstantCF(1.0 / conductivity));
+    if (mask)
+        base_integrator->SetDefinedOnElements(mask);
+    base->AddIntegrator(base_integrator);
+    base->Assemble(local_heap);
+    resistance = ProjectNGSolveRealMatrix(
+        base->GetMatrixPtr(), basis, ndof, mode_count);
+
+    std::vector<double> jacobian(
+        deformation_handles.size() * static_cast<std::size_t>(mode_count) * mode_count);
+    const auto trial = space.fespace->GetTrialFunction();
+    const auto test = space.fespace->GetTestFunction();
+    const auto curl_trial = (*trial)->Operator("curl");
+    const auto curl_test = (*test)->Operator("curl");
+    for (std::size_t q = 0; q < deformation_handles.size(); ++q) {
+        const auto& mode = GridFunction(deformation_handles[q]);
+        if (mode.space != "vectorh1" || mode.mesh.get() != space.mesh.get() ||
+            mode.gridfunction->IsComplex())
+            BadArgument("deformation modes must be real VectorH1 GridFunctions on the HCurl mesh");
+        const auto gradient = mode.gridfunction->Operator("Grad");
+        const auto divergence = ngfem::TraceCF(gradient);
+        auto integrand = ngfem::InnerProduct(
+                ngfem::operator*(gradient, curl_trial), curl_test) +
+            ngfem::InnerProduct(
+                curl_trial, ngfem::operator*(gradient, curl_test)) -
+            ngfem::operator*(divergence,
+                ngfem::InnerProduct(curl_trial, curl_test));
+        integrand = ngfem::operator*(1.0 / conductivity, integrand);
+        auto tangent_integrator =
+            std::make_shared<ngfem::SymbolicBilinearFormIntegrator>(
+                integrand, ngfem::VOL, ngfem::VOL);
+        if (mask)
+            tangent_integrator->SetDefinedOnElements(mask);
+        auto tangent = std::make_shared<ngcomp::T_BilinearForm<double>>(
+            space.fespace, "radia_hcurl_topopt_resistance_tangent", flags);
+        tangent->AddIntegrator(tangent_integrator);
+        local_heap.CleanUp();
+        tangent->Assemble(local_heap);
+        const auto projected = ProjectNGSolveRealMatrix(
+            tangent->GetMatrixPtr(), basis, ndof, mode_count);
+        std::copy(projected.begin(), projected.end(),
+                  jacobian.begin() + q * static_cast<std::size_t>(mode_count) * mode_count);
+    }
+    return jacobian;
+}
+
+void HCurlTopologyResistanceShapeTangents(int nlhs, mxArray* plhs[], int nrhs,
+                                          const mxArray* prhs[]) {
+    CheckArity(nrhs, 6, nlhs, 1,
+        "out = radia_mex('hcurl.topopt.resistance_shape_tangents', "
+        "fespace, basis, deformation_handles, conductivity, element_indices)");
+    const auto& space = FESpace(Handle(prhs[1]));
+    std::size_t rows = 0, modes = 0;
+    const auto basis = RealMatrix(prhs[2], rows, modes, "basis");
+    if (rows != static_cast<std::size_t>(space.fespace->GetNDof()) || modes == 0)
+        BadArgument("basis must have shape fespace.ndof-by-nmode");
+    const auto deformation_handles = HandleVector(prhs[3], "deformation_handles");
+    const auto elements = IntegerVector(prhs[5], "element_indices");
+    std::vector<double> resistance;
+    std::vector<double> jacobian;
+    {
+        ngcore::RegionTaskManager task_manager;
+        jacobian = HCurlTopologyResistanceShapeTangentsValues(
+            space, basis, static_cast<int>(modes), deformation_handles,
+            Scalar(prhs[4], "conductivity"), elements, resistance);
+    }
+    const char* fields[] = {"schema", "matrix", "jacobian",
+                            "mode_count", "direction_count"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(plhs[0], 0, "schema",
+               TextOutput("radia.hcurl.topopt.resistance-linearization/v1"));
+    mxSetField(plhs[0], 0, "matrix",
+               RealMatrixOutput(resistance, modes, modes));
+    mxSetField(plhs[0], 0, "jacobian",
+               RealTensor3Output(jacobian, deformation_handles.size(), modes, modes));
+    mxSetField(plhs[0], 0, "mode_count", mxCreateDoubleScalar(modes));
+    mxSetField(plhs[0], 0, "direction_count",
+               mxCreateDoubleScalar(deformation_handles.size()));
+}
+
+void HCurlTopologyCellCurlGrams(int nlhs, mxArray* plhs[], int nrhs,
+                                const mxArray* prhs[]) {
+    CheckArity(nrhs, 4, nlhs, 1,
+        "grams = radia_mex('hcurl.topopt.cell_curl_grams', "
+        "fespace, basis, element_indices)");
+    const auto& space = FESpace(Handle(prhs[1]));
+    if (space.space != "hcurl" || space.is_complex ||
+        space.mesh->GetDimension() != 3)
+        BadArgument("cell curl Grams require a real 3-D HCurl FESpace");
+    std::size_t ndof = 0, modes = 0;
+    const auto basis = RealMatrix(prhs[2], ndof, modes, "basis");
+    if (ndof != static_cast<std::size_t>(space.fespace->GetNDof()) || modes == 0)
+        BadArgument("basis must have shape fespace.ndof-by-nmode");
+    auto elements = IntegerVector(prhs[3], "element_indices");
+    if (elements.empty()) {
+        elements.resize(space.mesh->GetNE(ngfem::VOL));
+        std::iota(elements.begin(), elements.end(), 0);
+    }
+    std::vector<double> result(elements.size() * modes * modes);
+    ngcore::RegionTaskManager task_manager;
+    ngstd::LocalHeap local_heap(1 << 24, "radia_hcurl_topopt_cell_grams");
+    auto integrator = MakeNGSolveIntegrator("hcurl", "curlcurl", 3);
+    for (std::size_t cell = 0; cell < elements.size(); ++cell) {
+        const int element = elements[cell];
+        if (element < 0 || element >= static_cast<int>(space.mesh->GetNE(ngfem::VOL)))
+            BadArgument("element_indices contains an out-of-range volume element");
+        local_heap.CleanUp();
+        const ngcomp::ElementId id(ngfem::VOL, element);
+        auto& finite_element = space.fespace->GetFE(id, local_heap);
+        auto& transformation = space.mesh->GetTrafo(id, local_heap);
+        ngbla::FlatMatrix<double> local_matrix(
+            finite_element.GetNDof(), finite_element.GetNDof(), local_heap);
+        integrator->CalcElementMatrix(
+            finite_element, transformation, local_matrix, local_heap);
+        space.fespace->TransformMat(
+            id, local_matrix, ngcomp::TRANSFORM_MAT_LEFT_RIGHT);
+        ngcore::Array<ngcomp::DofId> dofs;
+        space.fespace->GetDofNrs(id, dofs);
+        for (std::size_t a = 0; a < modes; ++a)
+            for (std::size_t b = 0; b < modes; ++b) {
+                long double value = 0.0L;
+                for (int i = 0; i < dofs.Size(); ++i) {
+                    const int gi = dofs[i];
+                    if (gi < 0)
+                        continue;
+                    for (int j = 0; j < dofs.Size(); ++j) {
+                        const int gj = dofs[j];
+                        if (gj < 0)
+                            continue;
+                        value += static_cast<long double>(
+                            basis[static_cast<std::size_t>(gi) * modes + a]) *
+                            local_matrix(i, j) *
+                            basis[static_cast<std::size_t>(gj) * modes + b];
+                    }
+                }
+                result[(cell * modes + a) * modes + b] = static_cast<double>(value);
+            }
+    }
+    plhs[0] = RealTensor3Output(result, elements.size(), modes, modes);
+}
+
+void HCurlTopologySampleSubtetVelocities(int nlhs, mxArray* plhs[], int nrhs,
+                                         const mxArray* prhs[]) {
+    CheckArity(nrhs, 4, nlhs, 1,
+        "velocity = radia_mex('hcurl.topopt.sample_subtet_velocities', "
+        "reference_vertices, parent_elements, deformation_handles)");
+    std::size_t cells = 0, vertices = 0, coordinates = 0;
+    const auto reference_vertices = RealTensor3(
+        prhs[1], cells, vertices, coordinates, "reference_vertices");
+    auto parent_elements = IntegerVector(prhs[2], "parent_elements");
+    const auto deformation_handles = HandleVector(prhs[3], "deformation_handles");
+    if (cells == 0 || vertices != 4 || coordinates != 3 ||
+        parent_elements.size() != cells)
+        BadArgument("reference_vertices must be nsubtet-by-4-by-3 with one parent element per subtet");
+    if (deformation_handles.empty())
+        BadArgument("at least one deformation mode is required");
+    const auto& first = GridFunction(deformation_handles.front());
+    if (first.space != "vectorh1" || first.gridfunction->IsComplex() ||
+        first.mesh->GetDimension() != 3)
+        BadArgument("deformation modes must be real 3-D VectorH1 GridFunctions");
+    for (auto handle : deformation_handles) {
+        const auto& mode = GridFunction(handle);
+        if (mode.space != "vectorh1" || mode.gridfunction->IsComplex() ||
+            mode.mesh.get() != first.mesh.get())
+            BadArgument("all deformation modes must be real VectorH1 GridFunctions on one mesh");
+    }
+    std::vector<const NGSolveGridFunctionHandle*> modes;
+    modes.reserve(deformation_handles.size());
+    for (auto handle : deformation_handles)
+        modes.push_back(&GridFunction(handle));
+    std::vector<double> result(
+        deformation_handles.size() * cells * vertices * coordinates);
+    ngcore::RegionTaskManager task_manager;
+    ngstd::LocalHeap local_heap(1 << 20, "radia_hcurl_topopt_velocity_sampling");
+    for (std::size_t cell = 0; cell < cells; ++cell) {
+        const int parent = parent_elements[cell];
+        if (parent < 0 || parent >= static_cast<int>(first.mesh->GetNE(ngfem::VOL)))
+            BadArgument("parent_elements contains an out-of-range volume element");
+        local_heap.CleanUp();
+        const ngcomp::ElementId id(ngfem::VOL, parent);
+        auto& transformation = first.mesh->GetTrafo(id, local_heap);
+        for (std::size_t vertex = 0; vertex < vertices; ++vertex) {
+            const std::size_t source = (cell * vertices + vertex) * coordinates;
+            const ngfem::IntegrationPoint point(
+                reference_vertices[source], reference_vertices[source + 1],
+                reference_vertices[source + 2], 1.0);
+            auto& mapped = transformation(point, local_heap);
+            for (std::size_t q = 0; q < deformation_handles.size(); ++q) {
+                std::array<double, 3> storage{};
+                ngbla::FlatVector<double> value(3, storage.data());
+                modes[q]->gridfunction->Evaluate(mapped, value);
+                for (std::size_t component = 0; component < 3; ++component)
+                    result[((q * cells + cell) * vertices + vertex) * 3 + component] =
+                        value[static_cast<int>(component)];
+            }
+        }
+    }
+    plhs[0] = RealTensor4Output(
+        result, deformation_handles.size(), cells, vertices, coordinates);
+}
+
+std::vector<Complex> HCurlRealMatrixApply(
+    const std::vector<double>& matrix, int n,
+    const std::vector<Complex>& vector) {
+    std::vector<Complex> result(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            result[static_cast<std::size_t>(i)] +=
+                matrix[static_cast<std::size_t>(i) * n + j] *
+                vector[static_cast<std::size_t>(j)];
+    return result;
+}
+
+std::vector<Complex> HCurlDenseSolve(
+    const std::vector<Complex>& matrix, int n,
+    const std::vector<Complex>& rhs, bool adjoint = false) {
+    std::vector<Complex> system = matrix;
+    if (adjoint)
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                system[static_cast<std::size_t>(i) * n + j] =
+                    std::conj(matrix[static_cast<std::size_t>(j) * n + i]);
+    return radia::hybrid_vim::DenseSolve(
+        system, n, n, rhs, n, 1);
+}
+
+void HCurlTopologySetLinearizationOutput(
+    mxArray*& output, const std::vector<Complex>& states,
+    const std::vector<Complex>& adjoints,
+    const std::vector<double>& case_objectives,
+    const std::vector<double>& case_gradients, int mode_count,
+    int design_count, int case_count, double objective,
+    const std::vector<double>& gradient,
+    const std::vector<double>& weights,
+    const std::vector<double>& resistance,
+    const std::vector<double>& resistance_jacobian,
+    int resistance_direction_count,
+    const std::vector<double>& inductance,
+    const char* schema) {
+    const char* fields[] = {
+        "schema", "state", "adjoint", "case_objective", "case_gradient",
+        "objective", "gradient", "weights", "resistance",
+        "resistance_jacobian", "inductance"};
+    output = mxCreateStructMatrix(1, 1, 11, fields);
+    mxSetField(output, 0, "schema", TextOutput(schema));
+    mxSetField(output, 0, "state",
+               ComplexMatrixOutput(states, mode_count, case_count));
+    mxSetField(output, 0, "adjoint",
+               ComplexMatrixOutput(adjoints, mode_count, case_count));
+    mxSetField(output, 0, "case_objective", RealColumn(case_objectives));
+    mxSetField(output, 0, "case_gradient",
+               RealMatrixOutput(case_gradients, design_count, case_count));
+    mxSetField(output, 0, "objective", mxCreateDoubleScalar(objective));
+    mxSetField(output, 0, "gradient", RealColumn(gradient));
+    mxSetField(output, 0, "weights", RealColumn(weights));
+    mxSetField(output, 0, "resistance",
+               RealMatrixOutput(resistance, mode_count, mode_count));
+    mxSetField(output, 0, "resistance_jacobian",
+               RealTensor3Output(resistance_jacobian,
+                   resistance_direction_count, mode_count, mode_count));
+    mxSetField(output, 0, "inductance",
+               RealMatrixOutput(inductance, mode_count, mode_count));
+}
+
+void HCurlTopologyMultifrequencyJoule(int nlhs, mxArray* plhs[], int nrhs,
+                                      const mxArray* prhs[]) {
+    CheckArity(nrhs, 9, nlhs, 1,
+        "out = radia_mex('hcurl.topopt.multifrequency_joule', handle, R, dR, "
+        "cell_velocity, frequencies, rhs, weights, rhs_jacobian)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    const int n = op.mode_count;
+    std::size_t rr = 0, rc = 0;
+    const auto resistance = RealMatrix(prhs[2], rr, rc, "R");
+    if (rr != static_cast<std::size_t>(n) || rc != static_cast<std::size_t>(n))
+        BadArgument("R must be nmode-by-nmode");
+    std::size_t directions = 0, dr1 = 0, dr2 = 0;
+    const auto dR = RealTensor3(prhs[3], directions, dr1, dr2, "dR");
+    std::size_t velocity_directions = 0, cells = 0, vertices = 0, coordinates = 0;
+    const auto velocity = RealTensor4(
+        prhs[4], velocity_directions, cells, vertices, coordinates,
+        "cell_vertex_velocities");
+    if (directions == 0 || dr1 != static_cast<std::size_t>(n) ||
+        dr2 != static_cast<std::size_t>(n) ||
+        velocity_directions != directions ||
+        cells != static_cast<std::size_t>(op.cell_count) ||
+        vertices != 4 || coordinates != 3)
+        BadArgument("dR and cell velocities must share q directions and the HCurl topology shape");
+    const auto frequencies = RealVector(prhs[5], "frequencies_hz");
+    const auto weights = RealVector(prhs[7], "weights");
+    std::size_t rhs_rows = 0, case_count = 0;
+    const auto rhs = ComplexMatrix(prhs[6], rhs_rows, case_count, "rhs");
+    if (case_count == 0 || rhs_rows != static_cast<std::size_t>(n) ||
+        frequencies.size() != case_count || weights.size() != case_count)
+        BadArgument("rhs, frequencies, and weights must define the same nonempty load cases");
+    std::vector<Complex> db(directions * static_cast<std::size_t>(n) * case_count);
+    if (!mxIsEmpty(prhs[8])) {
+        std::size_t q = 0, dn = 0, dc = 0;
+        db = ComplexTensor3(prhs[8], q, dn, dc, "rhs_jacobian");
+        if (q != directions || dn != static_cast<std::size_t>(n) || dc != case_count)
+            BadArgument("rhs_jacobian must have shape q-by-nmode-by-ncase");
+    }
+    const auto inductance = HCurlTopologyDense(op);
+    std::vector<Complex> states(static_cast<std::size_t>(n) * case_count);
+    std::vector<Complex> adjoints(static_cast<std::size_t>(n) * case_count);
+    std::vector<double> case_objectives(case_count);
+    std::vector<double> case_gradients(directions * case_count);
+    std::vector<double> total_gradient(directions);
+    double total_objective = 0.0;
+    for (std::size_t load_case = 0; load_case < case_count; ++load_case) {
+        const double frequency = frequencies[load_case];
+        const double weight = weights[load_case];
+        if (!std::isfinite(frequency) || frequency <= 0.0 ||
+            !std::isfinite(weight) || weight < 0.0)
+            BadArgument("frequencies must be positive and weights nonnegative");
+        const double omega = 2.0 * std::acos(-1.0) * frequency;
+        std::vector<Complex> system(static_cast<std::size_t>(n) * n);
+        for (int i = 0; i < n * n; ++i)
+            system[static_cast<std::size_t>(i)] = Complex(
+                resistance[static_cast<std::size_t>(i)],
+                omega * inductance[static_cast<std::size_t>(i)]);
+        std::vector<Complex> load(static_cast<std::size_t>(n));
+        for (int i = 0; i < n; ++i)
+            load[static_cast<std::size_t>(i)] =
+                rhs[static_cast<std::size_t>(i) * case_count + load_case];
+        const auto state = HCurlDenseSolve(system, n, load);
+        const auto r_state = HCurlRealMatrixApply(resistance, n, state);
+        const double case_objective = 0.5 * HCurlDot(state, r_state).real();
+        const auto adjoint = HCurlDenseSolve(system, n, r_state, true);
+        const auto dL = HCurlTopologyDirectionalContractionValues(
+            op, velocity, static_cast<int>(directions), adjoint, state);
+        for (int i = 0; i < n; ++i) {
+            states[static_cast<std::size_t>(i) * case_count + load_case] =
+                state[static_cast<std::size_t>(i)];
+            adjoints[static_cast<std::size_t>(i) * case_count + load_case] =
+                adjoint[static_cast<std::size_t>(i)];
+        }
+        case_objectives[load_case] = case_objective;
+        total_objective += weight * case_objective;
+        for (std::size_t q = 0; q < directions; ++q) {
+            const auto dR_begin = dR.begin() +
+                q * static_cast<std::size_t>(n) * n;
+            const std::vector<double> dR_matrix(
+                dR_begin, dR_begin + static_cast<std::size_t>(n) * n);
+            const auto dR_state = HCurlRealMatrixApply(dR_matrix, n, state);
+            std::vector<Complex> residual(static_cast<std::size_t>(n));
+            for (int i = 0; i < n; ++i)
+                residual[static_cast<std::size_t>(i)] =
+                    db[(q * static_cast<std::size_t>(n) + i) * case_count + load_case] -
+                    dR_state[static_cast<std::size_t>(i)];
+            const double value = 0.5 * HCurlDot(state, dR_state).real() +
+                (HCurlDot(adjoint, residual) - Complex(0.0, omega) * dL[q]).real();
+            case_gradients[q * case_count + load_case] = value;
+            total_gradient[q] += weight * value;
+        }
+    }
+    HCurlTopologySetLinearizationOutput(
+        plhs[0], states, adjoints, case_objectives, case_gradients, n,
+        static_cast<int>(directions), static_cast<int>(case_count),
+        total_objective, total_gradient, weights, resistance, dR,
+        static_cast<int>(directions), inductance,
+        "radia.hcurl.topopt.multifrequency-joule/v1");
+}
+
+void HCurlTopologyActivationMultifrequencyJoule(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 12, nlhs, 1,
+        "out = radia_mex('hcurl.topopt.activation_multifrequency_joule', "
+        "handle, cell_curl_grams, activation, frequencies, rhs, weights, "
+        "rhs_jacobian, sigma_solid, sigma_void, sigma_power, inductance_power)");
+    const auto& op = HCurlTopologyOperator(Handle(prhs[1]));
+    const int n = op.mode_count;
+    std::size_t parents = 0, gr1 = 0, gr2 = 0;
+    const auto cell_grams = RealTensor3(prhs[2], parents, gr1, gr2, "cell_curl_grams");
+    if (parents != static_cast<std::size_t>(op.parent_count) ||
+        gr1 != static_cast<std::size_t>(n) || gr2 != static_cast<std::size_t>(n))
+        BadArgument("cell_curl_grams must have shape nparent-by-nmode-by-nmode");
+    const auto activation = RealVector(prhs[3], "activation");
+    if (activation.size() != parents)
+        BadArgument("activation must contain one value per parent cell");
+    const double sigma_solid = Scalar(prhs[8], "sigma_solid");
+    const double sigma_void = Scalar(prhs[9], "sigma_void");
+    const double sigma_power = Scalar(prhs[10], "sigma_power");
+    const double inductance_power = Scalar(prhs[11], "inductance_power");
+    if (!std::isfinite(sigma_solid) || !std::isfinite(sigma_void) ||
+        !(sigma_solid > sigma_void && sigma_void > 0.0) ||
+        !std::isfinite(sigma_power) || sigma_power < 1.0)
+        BadArgument("conductivity interpolation requires solid > void > 0 and power >= 1");
+    std::vector<double> inverse_sigma(parents), inverse_sigma_derivative(parents);
+    for (std::size_t cell = 0; cell < parents; ++cell) {
+        const double rho = activation[cell];
+        if (!std::isfinite(rho) || rho < 0.0 || rho > 1.0)
+            BadArgument("activation must be finite and lie in [0,1]");
+        const double sigma = sigma_void +
+            (sigma_solid - sigma_void) * std::pow(rho, sigma_power);
+        const double dsigma = (sigma_solid - sigma_void) * sigma_power *
+            (sigma_power == 1.0 ? 1.0 : std::pow(rho, sigma_power - 1.0));
+        inverse_sigma[cell] = 1.0 / sigma;
+        inverse_sigma_derivative[cell] = -dsigma / (sigma * sigma);
+    }
+    std::vector<double> resistance(static_cast<std::size_t>(n) * n);
+    for (std::size_t cell = 0; cell < parents; ++cell)
+        for (int i = 0; i < n * n; ++i)
+            resistance[static_cast<std::size_t>(i)] += inverse_sigma[cell] *
+                cell_grams[cell * static_cast<std::size_t>(n) * n + i];
+    const auto charge_scale = HCurlTopologyChargeScale(
+        op, activation, inductance_power);
+    const auto inductance = HCurlTopologyDense(op, &charge_scale);
+    const auto frequencies = RealVector(prhs[4], "frequencies_hz");
+    const auto weights = RealVector(prhs[6], "weights");
+    std::size_t rhs_rows = 0, case_count = 0;
+    const auto rhs = ComplexMatrix(prhs[5], rhs_rows, case_count, "rhs");
+    if (case_count == 0 || rhs_rows != static_cast<std::size_t>(n) ||
+        frequencies.size() != case_count || weights.size() != case_count)
+        BadArgument("rhs, frequencies, and weights must define the same nonempty load cases");
+    std::vector<Complex> db(parents * static_cast<std::size_t>(n) * case_count);
+    if (!mxIsEmpty(prhs[7])) {
+        std::size_t dq = 0, dn = 0, dc = 0;
+        db = ComplexTensor3(prhs[7], dq, dn, dc, "rhs_jacobian");
+        if (dq != parents || dn != static_cast<std::size_t>(n) || dc != case_count)
+            BadArgument("rhs_jacobian must have shape nparent-by-nmode-by-ncase");
+    }
+    std::vector<Complex> states(static_cast<std::size_t>(n) * case_count);
+    std::vector<Complex> adjoints(static_cast<std::size_t>(n) * case_count);
+    std::vector<double> case_objectives(case_count);
+    std::vector<double> case_gradients(parents * case_count);
+    std::vector<double> total_gradient(parents);
+    double total_objective = 0.0;
+    for (std::size_t load_case = 0; load_case < case_count; ++load_case) {
+        const double frequency = frequencies[load_case];
+        const double weight = weights[load_case];
+        if (!std::isfinite(frequency) || frequency <= 0.0 ||
+            !std::isfinite(weight) || weight < 0.0)
+            BadArgument("frequencies must be positive and weights nonnegative");
+        const double omega = 2.0 * std::acos(-1.0) * frequency;
+        std::vector<Complex> system(static_cast<std::size_t>(n) * n);
+        for (int i = 0; i < n * n; ++i)
+            system[static_cast<std::size_t>(i)] = Complex(
+                resistance[static_cast<std::size_t>(i)],
+                omega * inductance[static_cast<std::size_t>(i)]);
+        std::vector<Complex> load(static_cast<std::size_t>(n));
+        for (int i = 0; i < n; ++i)
+            load[static_cast<std::size_t>(i)] =
+                rhs[static_cast<std::size_t>(i) * case_count + load_case];
+        const auto state = HCurlDenseSolve(system, n, load);
+        const auto r_state = HCurlRealMatrixApply(resistance, n, state);
+        const double case_objective = 0.5 * HCurlDot(state, r_state).real();
+        const auto adjoint = HCurlDenseSolve(system, n, r_state, true);
+        const auto dL = HCurlTopologyActivationContractionValues(
+            op, activation, inductance_power, adjoint, state);
+        for (int i = 0; i < n; ++i) {
+            states[static_cast<std::size_t>(i) * case_count + load_case] = state[i];
+            adjoints[static_cast<std::size_t>(i) * case_count + load_case] = adjoint[i];
+        }
+        case_objectives[load_case] = case_objective;
+        total_objective += weight * case_objective;
+        for (std::size_t cell = 0; cell < parents; ++cell) {
+            const auto begin = cell_grams.begin() +
+                cell * static_cast<std::size_t>(n) * n;
+            const std::vector<double> gram(begin, begin + static_cast<std::size_t>(n) * n);
+            const auto gram_state = HCurlRealMatrixApply(gram, n, state);
+            std::vector<Complex> db_cell(static_cast<std::size_t>(n));
+            for (int i = 0; i < n; ++i)
+                db_cell[static_cast<std::size_t>(i)] =
+                    db[(cell * static_cast<std::size_t>(n) + i) * case_count + load_case];
+            const double value =
+                0.5 * HCurlDot(state, gram_state).real() * inverse_sigma_derivative[cell] -
+                HCurlDot(adjoint, gram_state).real() * inverse_sigma_derivative[cell] +
+                HCurlDot(adjoint, db_cell).real() -
+                (Complex(0.0, omega) * dL[cell]).real();
+            case_gradients[cell * case_count + load_case] = value;
+            total_gradient[cell] += weight * value;
+        }
+    }
+    const std::vector<double> empty_jacobian;
+    HCurlTopologySetLinearizationOutput(
+        plhs[0], states, adjoints, case_objectives, case_gradients, n,
+        static_cast<int>(parents), static_cast<int>(case_count),
+        total_objective, total_gradient, weights, resistance, empty_jacobian,
+        0, inductance,
+        "radia.hcurl.topopt.activation-multifrequency-joule/v1");
 }
 
 void ChargeGramInfo(int nlhs, mxArray* plhs[], int nrhs,
@@ -7951,6 +9084,64 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         AffineCellSelfEnergyShapeDerivative(nlhs, plhs, nrhs, prhs);
         return;
     }
+    if (command == "hcurl.topopt.operator.create") {
+        HCurlTopologyOperatorCreate(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.destroy") {
+        CheckArity(nrhs, 2, nlhs, 0,
+            "radia_mex('hcurl.topopt.operator.destroy', handle)");
+        DestroyHCurlTopologyOperator(Handle(prhs[1]));
+        return;
+    }
+    if (command == "hcurl.topopt.operator.info") {
+        HCurlTopologyOperatorInfo(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.matvec") {
+        HCurlTopologyOperatorMatVec(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.to_dense") {
+        HCurlTopologyOperatorDense(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.directional_contractions") {
+        HCurlTopologyDirectionalContractions(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.activation_matvec") {
+        HCurlTopologyActivationMatVec(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.activation_to_dense") {
+        HCurlTopologyActivationDense(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.operator.activation_contractions") {
+        HCurlTopologyActivationContractions(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.resistance_shape_tangents") {
+        HCurlTopologyResistanceShapeTangents(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.cell_curl_grams") {
+        HCurlTopologyCellCurlGrams(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.sample_subtet_velocities") {
+        HCurlTopologySampleSubtetVelocities(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.multifrequency_joule") {
+        HCurlTopologyMultifrequencyJoule(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hcurl.topopt.activation_multifrequency_joule") {
+        HCurlTopologyActivationMultifrequencyJoule(nlhs, plhs, nrhs, prhs);
+        return;
+    }
     if (command == "stream.aca_tsvd") {
         StreamACATSVD(nlhs, plhs, nrhs, prhs);
         return;
@@ -8093,6 +9284,8 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         NGSolveMatrixDump(nlhs, plhs, nrhs, prhs);
     else if (command == "ngsolve.coefficient_function.constant_create")
         NGSolveCoefficientConstantCreate(nlhs, plhs, nrhs, prhs);
+    else if (command == "ngsolve.coefficient_function.coordinates_create")
+        NGSolveCoefficientCoordinatesCreate(nlhs, plhs, nrhs, prhs);
     else if (command == "ngsolve.coefficient_function.add" ||
              command == "ngsolve.coefficient_function.subtract" ||
              command == "ngsolve.coefficient_function.multiply")
