@@ -41,6 +41,11 @@ void TetField(const double V[4][3], const double P[3], double out[3]);
 void TriMoment1(const double V[3][3], const double r[3], double out[3]);          /* INT_T r'/R dS' */
 void TriMoment2(const double V[3][3], const double r[3], double out[3][3]);       /* INT_T r'(x)r'/R dS' */
 void TetMoment1(const double V[4][3], const double r[3], double out[3]);          /* INT_V r'/R dV' */
+/* Forward directional derivative of the same closed-form PhiTet/TetMoment1
+ * path.  value/direction use moment ordering [1,x,y,z]. */
+void TetPotentialMomentsDirectionalUpTo1(
+    const double V[4][3], const double dV[4][3], const double r[3], const double dr[3],
+    double value[4], double direction[4]);
 double TetPotentialPolynomial(const double V[4][3], const double r[3],
                               const std::vector<std::array<int,3>>& exps,
                               const std::vector<double>& coeffs);                 /* SUM c_a INT_V x^a/R dV */
@@ -55,6 +60,10 @@ void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],
                               double out[84]);                                    /* total-degree <= 6 moments */
+void TetPotentialMomentsDirectionalUpTo3(const double V[4][3],const double dV[4][3],
+    const double r[3],const double dr[3],double value[20],double direction[20]);
+void TetPotentialMomentsDirectionalUpTo6(const double V[4][3],const double dV[4][3],
+    const double r[3],const double dr[3],double value[84],double direction[84]);
 /* Reduced HCurl-VIM vector-potential Gram on affine tetrahedra.
  *
  * Each vector mode is supplied as three polynomials in the tetrahedron's
@@ -75,6 +84,12 @@ void TriPotentialMomentsUpTo4(const double V[3][3], const double r[3],
                               double out[35]);                                    /* total-degree <= 4 moments */
 void TriPotentialMomentsUpTo2(const double V[3][3], const double r[3],
                               double out[10]);                                    /* total-degree <= 2 moments */
+void TriPotentialMomentsDirectionalUpTo4(
+    const double V[3][3],const double dV[3][3],const double r[3],const double dr[3],
+    double value[35],double direction[35]);
+void TriPotentialMomentsDirectionalUpTo2(
+    const double V[3][3],const double dV[3][3],const double r[3],const double dr[3],
+    double value[10],double direction[10]);
 void TetVolFieldLinear(const double V[4][3], const double r[3], double rho0,
                        const double g[3], double out[3]);                          /* linear volume charge */
 void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,
@@ -111,6 +126,18 @@ double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, con
  * element dA = |Xu x Xv| for a P2 face, volume element dV = |det dX/dxi| for a P2 tet) at a reference point. */
 void CurvedTriMapMeasure(const double nodes[6][3], double xi, double eta, double X[3], double& dA);
 void CurvedTetMapMeasure(const double nodes[10][3], double xi, double eta, double zeta, double X[3], double& dV);
+
+/* Affine constant-volume-charge self energy and analytic directional shape
+ * derivatives for one TET/HEX/WEDGE cell.  The scalar is
+ *   (4*pi)^-1 INT_D INT_D |x-y|^-1 dx dy.
+ * `cell_type` is 0=TET (4 nodes), 1=HEX (8 nodes), 2=WEDGE (6 nodes), with
+ * the usual corner ordering. `node_velocities` is row-major [mode][node][3].
+ * The implementation uses the existing exact PhiTet singular inner kernel
+ * and the Hadamard boundary derivative; no finite difference and no FE basis
+ * reconstruction occurs here.  Return layout is [value,dvalue_0,...]. */
+std::vector<double> AffineCellSelfEnergyShapeDerivative(
+    int cell_type, const std::vector<double>& nodes,
+    const std::vector<double>& node_velocities, int n_modes);
 
 } // namespace rad_hdiv
 #endif

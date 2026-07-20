@@ -101,6 +101,9 @@ extern "C" {
 #include "rad_hdiv_hysteresis.h" // Energy-based B-input vector Stop material
 #include "rad_hdiv_field_evaluator.h" // Persistent BDM1 field source + target tree
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
+#include "rad_ngsolve_field_coefficients.h" // Shared evaluator CoefficientFunctions
+#include "rad_ngsolve_operators.h" // Shared native matrices for pybind11 and MATLAB MEX
+#include "rad_ngsolve_radia_field.h" // Shared Radia-backed CoefficientFunction
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include "rad_parallel.h"        // NGSolve TaskManager thread policy
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
@@ -294,293 +297,7 @@ ScalarSparseCOO extract_ngsolve_scalar_sparse(
     return result;
 }
 
-// Native NGSolve matrix facade for N = B^T G B.  Keeping this in C++ means
-// ngsolve.krylovspace, BlockMatrix and BilinearForm compositions can apply the
-// persistent HDiv operator without NumPy buffers or Python callbacks.
-class RadHDivDemagMatrix final : public ngla::BaseMatrix {
-public:
-    explicit RadHDivDemagMatrix(std::shared_ptr<RadHACApKChargeGram> gram)
-        : gram_(std::move(gram)), ndof_(gram_ ? gram_->ConfiguredNFace() : 0) {
-        if (!gram_ || !gram_->HasConfiguredChargeMap())
-            throw std::runtime_error("HDivDemagMatrix: charge map is not configured");
-    }
-
-    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
-        auto xv = x.FV<double>();
-        auto yv = y.FV<double>();
-        if (xv.Size() != ndof_ || yv.Size() != ndof_)
-            throw std::runtime_error("HDivDemagMatrix.Mult: vector size mismatch");
-        gram_->ApplyConfiguredDemag(xv.Data(), yv.Data(), true);
-    }
-
-    void MultAdd(double scale, const ngla::BaseVector& x, ngla::BaseVector& y) const override {
-        auto xv = x.FV<double>();
-        auto yv = y.FV<double>();
-        if (xv.Size() != ndof_ || yv.Size() != ndof_)
-            throw std::runtime_error("HDivDemagMatrix.MultAdd: vector size mismatch");
-        gram_->ApplyConfiguredDemagAdd(scale, xv.Data(), yv.Data(), true);
-    }
-
-    void MultTransAdd(double scale, const ngla::BaseVector& x, ngla::BaseVector& y) const override {
-        MultAdd(scale, x, y);
-    }
-
-    int VHeight() const override { return ndof_; }
-    int VWidth() const override { return ndof_; }
-    ngla::AutoVector CreateRowVector() const override {
-        return std::make_unique<ngla::VVector<double>>(ndof_);
-    }
-    ngla::AutoVector CreateColVector() const override {
-        return std::make_unique<ngla::VVector<double>>(ndof_);
-    }
-
-private:
-    std::shared_ptr<RadHACApKChargeGram> gram_;
-    int ndof_;
-};
-
-// Native complex diagonal inverse used as the reduced HCurl/HDiv-HCurl block
-// preconditioner.  The reduced resistance/material blocks provide the local
-// diagonal; long-range HACApK terms stay exclusively in the system matvec.
-class RadComplexDiagonalInverseMatrix final : public ngla::BaseMatrix {
-public:
-    explicit RadComplexDiagonalInverseMatrix(
-            std::vector<std::complex<double>> inverse_diagonal)
-        : inverse_diagonal_(std::move(inverse_diagonal)) {
-        if (inverse_diagonal_.empty())
-            throw std::invalid_argument("diagonal inverse must not be empty");
-    }
-
-    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
-        auto xv = x.FVComplex();
-        auto yv = y.FVComplex();
-        if (xv.Size() != static_cast<int>(inverse_diagonal_.size()) ||
-            yv.Size() != static_cast<int>(inverse_diagonal_.size()))
-            throw std::runtime_error("ComplexDiagonalInverse.Mult: vector size mismatch");
-        for (int i = 0; i < xv.Size(); ++i)
-            yv[i] = inverse_diagonal_[i] * xv[i];
-    }
-
-    int VHeight() const override { return static_cast<int>(inverse_diagonal_.size()); }
-    int VWidth() const override { return static_cast<int>(inverse_diagonal_.size()); }
-    bool IsComplex() const override { return true; }
-    ngla::AutoVector CreateRowVector() const override {
-        return std::make_unique<ngla::VVector<ngcore::Complex>>(VHeight());
-    }
-    ngla::AutoVector CreateColVector() const override {
-        return std::make_unique<ngla::VVector<ngcore::Complex>>(VWidth());
-    }
-
-private:
-    std::vector<std::complex<double>> inverse_diagonal_;
-};
-
-// Galerkin projection P^H A P of an arbitrary NGSolve matrix.  This is the
-// adapter used for ngsolve.bem LaplaceSL/DtN matrices: the parent BEM matrix
-// remains an NGSolve BaseMatrix and only reduced vectors cross the interface.
-class RadProjectedBaseMatrix final : public ngla::BaseMatrix {
-public:
-    RadProjectedBaseMatrix(std::shared_ptr<ngla::BaseMatrix> parent,
-                           std::vector<std::complex<double>> projection,
-                           int parent_size, int reduced_size)
-        : parent_(std::move(parent)), projection_(std::move(projection)),
-          parent_size_(parent_size), reduced_size_(reduced_size) {
-        if (!parent_ || parent_size_ < 1 || reduced_size_ < 1 ||
-            parent_->VHeight() != parent_size_ || parent_->VWidth() != parent_size_ ||
-            projection_.size() != static_cast<size_t>(parent_size_) * reduced_size_)
-            throw std::invalid_argument("ProjectedBaseMatrix shape mismatch");
-    }
-
-    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
-        auto xv = x.FVComplex();
-        auto yv = y.FVComplex();
-        if (xv.Size() != reduced_size_ || yv.Size() != reduced_size_)
-            throw std::runtime_error("ProjectedBaseMatrix.Mult: vector size mismatch");
-        std::vector<std::complex<double>> parent_x(parent_size_, 0.0);
-        for (int row = 0; row < parent_size_; ++row) {
-            const auto* p = &projection_[static_cast<size_t>(row) * reduced_size_];
-            for (int col = 0; col < reduced_size_; ++col)
-                parent_x[row] += p[col] * xv[col];
-        }
-        const auto parent_y = ApplyParent(parent_x);
-        for (int col = 0; col < reduced_size_; ++col) {
-            std::complex<double> value = 0.0;
-            for (int row = 0; row < parent_size_; ++row)
-                value += std::conj(
-                    projection_[static_cast<size_t>(row) * reduced_size_ + col])
-                    * parent_y[row];
-            yv[col] = value;
-        }
-    }
-
-    int VHeight() const override { return reduced_size_; }
-    int VWidth() const override { return reduced_size_; }
-    bool IsComplex() const override { return true; }
-    ngla::AutoVector CreateRowVector() const override {
-        return std::make_unique<ngla::VVector<ngcore::Complex>>(reduced_size_);
-    }
-    ngla::AutoVector CreateColVector() const override {
-        return std::make_unique<ngla::VVector<ngcore::Complex>>(reduced_size_);
-    }
-
-private:
-    std::vector<std::complex<double>> ApplyParent(
-            const std::vector<std::complex<double>>& input) const {
-        std::vector<std::complex<double>> output(parent_size_);
-        if (parent_->IsComplex()) {
-            auto px = parent_->CreateColVector();
-            auto py = parent_->CreateRowVector();
-            auto pxv = px.FVComplex();
-            auto pyv = py.FVComplex();
-            for (int i = 0; i < parent_size_; ++i) pxv[i] = input[i];
-            parent_->Mult(*px, *py);
-            for (int i = 0; i < parent_size_; ++i) output[i] = pyv[i];
-            return output;
-        }
-        auto px = parent_->CreateColVector();
-        auto py = parent_->CreateRowVector();
-        auto pxv = px.FV<double>();
-        auto pyv = py.FV<double>();
-        for (int i = 0; i < parent_size_; ++i) pxv[i] = input[i].real();
-        parent_->Mult(*px, *py);
-        for (int i = 0; i < parent_size_; ++i) output[i] = pyv[i];
-        for (int i = 0; i < parent_size_; ++i) pxv[i] = input[i].imag();
-        parent_->Mult(*px, *py);
-        for (int i = 0; i < parent_size_; ++i)
-            output[i] += std::complex<double>(0.0, pyv[i]);
-        return output;
-    }
-
-    std::shared_ptr<ngla::BaseMatrix> parent_;
-    std::vector<std::complex<double>> projection_;
-    int parent_size_ = 0;
-    int reduced_size_ = 0;
-};
-
-// Dense reduced correction plus independently compressed NGSolve BaseMatrix
-// terms embedded into sub-blocks.  This is the common production operator for
-// HCurl Eddy Bubble, projected BEM/DtN, and coupled HDiv-MMM/HCurl-VIM solves.
-// Each HACApK hierarchy remains independent; GMRES/COCR only sees one native
-// BaseMatrix matvec.
-class RadReducedBlockMatrix final : public ngla::BaseMatrix {
-public:
-    struct Term {
-        std::shared_ptr<ngla::BaseMatrix> matrix;
-        int start = 0;
-        int stop = 0;
-        std::complex<double> scale = 1.0;
-    };
-
-    RadReducedBlockMatrix(std::vector<std::complex<double>> dense, int size,
-                          std::vector<Term> terms)
-        : dense_(std::move(dense)), size_(size), terms_(std::move(terms)) {
-        if (size_ < 1 || dense_.size() != static_cast<size_t>(size_) * size_)
-            throw std::invalid_argument(
-                "ReducedBlockMatrix dense correction must be a non-empty square matrix");
-        for (const auto& term : terms_) {
-            if (!term.matrix || term.start < 0 || term.stop <= term.start ||
-                term.stop > size_ || term.matrix->VHeight() != term.stop - term.start ||
-                term.matrix->VWidth() != term.stop - term.start)
-                throw std::invalid_argument("ReducedBlockMatrix embedded term shape mismatch");
-            if (!std::isfinite(term.scale.real()) || !std::isfinite(term.scale.imag()))
-                throw std::invalid_argument("ReducedBlockMatrix term scale must be finite");
-        }
-    }
-
-    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
-        auto xv = x.FVComplex();
-        auto yv = y.FVComplex();
-        if (xv.Size() != size_ || yv.Size() != size_)
-            throw std::runtime_error("ReducedBlockMatrix.Mult: vector size mismatch");
-        for (int row = 0; row < size_; ++row) {
-            std::complex<double> value = 0.0;
-            const auto* dense_row = &dense_[static_cast<size_t>(row) * size_];
-            for (int col = 0; col < size_; ++col)
-                value += dense_row[col] * xv[col];
-            yv[row] = value;
-        }
-        for (const auto& term : terms_)
-            ApplyTerm(term, xv, yv);
-    }
-
-    void MultAdd(double scale, const ngla::BaseVector& x,
-                 ngla::BaseVector& y) const override {
-        auto tmp = CreateRowVector();
-        Mult(x, *tmp);
-        y += scale * *tmp;
-    }
-
-    int VHeight() const override { return size_; }
-    int VWidth() const override { return size_; }
-    bool IsComplex() const override { return true; }
-    ngla::AutoVector CreateRowVector() const override {
-        return std::make_unique<ngla::VVector<ngcore::Complex>>(size_);
-    }
-    ngla::AutoVector CreateColVector() const override {
-        return std::make_unique<ngla::VVector<ngcore::Complex>>(size_);
-    }
-
-    std::shared_ptr<RadComplexDiagonalInverseMatrix> DiagonalPreconditioner(
-            double relative_floor = 1.0e-14) const {
-        if (!std::isfinite(relative_floor) || relative_floor <= 0.0)
-            throw std::invalid_argument("relative_floor must be positive");
-        double scale = 0.0;
-        for (int i = 0; i < size_; ++i)
-            scale = std::max(scale, std::abs(dense_[static_cast<size_t>(i) * size_ + i]));
-        if (scale == 0.0)
-            throw std::runtime_error(
-                "reduced block diagonal is zero; provide a physical resistance/material block");
-        const double floor = relative_floor * scale;
-        std::vector<std::complex<double>> inverse(size_);
-        for (int i = 0; i < size_; ++i) {
-            const auto value = dense_[static_cast<size_t>(i) * size_ + i];
-            if (std::abs(value) <= floor)
-                throw std::runtime_error(
-                    "reduced block diagonal is singular; provide a physical resistance/material block");
-            inverse[i] = 1.0 / value;
-        }
-        return std::make_shared<RadComplexDiagonalInverseMatrix>(std::move(inverse));
-    }
-
-    int TermCount() const { return static_cast<int>(terms_.size()); }
-
-private:
-    static void ApplyTerm(const Term& term,
-                          ngbla::FlatVector<ngcore::Complex> x,
-                          ngbla::FlatVector<ngcore::Complex> y) {
-        const int n = term.stop - term.start;
-        if (term.matrix->IsComplex()) {
-            auto tx = term.matrix->CreateColVector();
-            auto ty = term.matrix->CreateRowVector();
-            auto txv = tx.FVComplex();
-            auto tyv = ty.FVComplex();
-            for (int i = 0; i < n; ++i) txv[i] = x[term.start + i];
-            term.matrix->Mult(*tx, *ty);
-            for (int i = 0; i < n; ++i)
-                y[term.start + i] += term.scale * tyv[i];
-            return;
-        }
-
-        auto tx = term.matrix->CreateColVector();
-        auto ty = term.matrix->CreateRowVector();
-        auto txv = tx.FV<double>();
-        auto tyv = ty.FV<double>();
-        std::vector<double> real_part(n), imag_part(n);
-        for (int i = 0; i < n; ++i) txv[i] = x[term.start + i].real();
-        term.matrix->Mult(*tx, *ty);
-        for (int i = 0; i < n; ++i) real_part[i] = tyv[i];
-        for (int i = 0; i < n; ++i) txv[i] = x[term.start + i].imag();
-        term.matrix->Mult(*tx, *ty);
-        for (int i = 0; i < n; ++i) imag_part[i] = tyv[i];
-        for (int i = 0; i < n; ++i)
-            y[term.start + i] += term.scale
-                * std::complex<double>(real_part[i], imag_part[i]);
-    }
-
-    std::vector<std::complex<double>> dense_;
-    int size_ = 0;
-    std::vector<Term> terms_;
-};
+// Native NGSolve matrix facades are shared with the MATLAB MEX gateway.
 
 /**
  * @brief Convert 2D Python list to flat array with vertex data
@@ -2463,629 +2180,7 @@ double UtiVer() {
 } // namespace radia_utility_ext
 
 
-// ============================================================================
-// NGSolve CoefficientFunction: RadiaFieldCF
-// ============================================================================
-
-namespace ngfem
-{
-
-class RadiaFieldCF : public CoefficientFunction
-{
-public:
-	int radia_obj;
-	std::string field_type;
-
-	// Coordinate transformation
-	double origin[3];
-	double u_axis[3];
-	double v_axis[3];
-	double w_axis[3];
-	bool use_transform;
-
-	// Computation settings
-	std::optional<double> precision;
-
-	// Point cache for batch evaluation
-	mutable std::unordered_map<uint64_t, std::array<double,3>> point_cache_;
-	mutable bool use_cache_;
-	double cache_tolerance_;
-	mutable std::atomic<size_t> cache_hits_;
-	mutable std::atomic<size_t> cache_misses_;
-
-	// Cached Radia module
-	mutable py::module_ rad_module_;
-
-	RadiaFieldCF(int obj, const std::string& ftype = "b",
-	             std::optional<std::vector<double>> opt_origin = std::nullopt,
-	             std::optional<std::vector<double>> opt_u = std::nullopt,
-	             std::optional<std::vector<double>> opt_v = std::nullopt,
-	             std::optional<std::vector<double>> opt_w = std::nullopt,
-	             std::optional<double> opt_precision = std::nullopt,
-	             const std::string& units = "m")
-	    : CoefficientFunction(ftype == "phi" ? 1 : 3),
-	      radia_obj(obj), field_type(ftype), use_transform(false),
-	      precision(opt_precision),
-	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0)
-	{
-		if (field_type != "b" && field_type != "h" &&
-		    field_type != "a" && field_type != "m" && field_type != "phi") {
-			throw std::invalid_argument(
-				"Invalid field_type. Must be 'b', 'h', 'a', 'm', or 'phi'");
-		}
-		if (units != "m") {
-			throw std::invalid_argument(
-				"RadiaField requires units='m'. Radia always uses meters.");
-		}
-
-		origin[0] = 0; origin[1] = 0; origin[2] = 0;
-		u_axis[0] = 1; u_axis[1] = 0; u_axis[2] = 0;
-		v_axis[0] = 0; v_axis[1] = 1; v_axis[2] = 0;
-		w_axis[0] = 0; w_axis[1] = 0; w_axis[2] = 1;
-
-		auto apply_vec = [this](const std::optional<std::vector<double>>& opt,
-		                        double dst[3], bool do_normalize) {
-			if (!opt.has_value()) return;
-			const auto& v = opt.value();
-			if (v.size() != 3)
-				throw std::invalid_argument("Vector must have 3 components");
-			dst[0] = v[0]; dst[1] = v[1]; dst[2] = v[2];
-			if (do_normalize) normalize(dst);
-			use_transform = true;
-		};
-
-		apply_vec(opt_origin, origin, false);
-		apply_vec(opt_u, u_axis, true);
-		apply_vec(opt_v, v_axis, true);
-		apply_vec(opt_w, w_axis, true);
-
-		py::gil_scoped_acquire acquire;
-		rad_module_ = py::module_::import("radia");
-
-		if (precision.has_value()) {
-			double prec = precision.value();
-			std::string prec_str = "PrcB->" + std::to_string(prec) +
-			                       ",PrcA->" + std::to_string(prec) +
-			                       ",PrcH->" + std::to_string(prec) +
-			                       ",PrcM->" + std::to_string(prec);
-			rad_module_.attr("FldCmpPrc")(prec_str);
-		}
-	}
-
-private:
-	void normalize(double vec[3]) {
-		double norm = std::sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
-		if (norm < 1e-12)
-			throw std::invalid_argument("Cannot normalize zero vector");
-		vec[0] /= norm; vec[1] /= norm; vec[2] /= norm;
-	}
-
-	double dot(const double a[3], const double b[3]) const {
-		return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-	}
-
-	uint64_t hash_point(double x, double y, double z) const {
-		int64_t ix = static_cast<int64_t>(x / cache_tolerance_);
-		int64_t iy = static_cast<int64_t>(y / cache_tolerance_);
-		int64_t iz = static_cast<int64_t>(z / cache_tolerance_);
-		uint64_t hash = 14695981039346656037ULL;
-		hash ^= static_cast<uint64_t>(ix); hash *= 1099511628211ULL;
-		hash ^= static_cast<uint64_t>(iy); hash *= 1099511628211ULL;
-		hash ^= static_cast<uint64_t>(iz); hash *= 1099511628211ULL;
-		return hash;
-	}
-
-	void transform_to_local(const double p_global[3], double p_local[3]) const {
-		if (use_transform) {
-			double p_t[3] = {p_global[0]-origin[0], p_global[1]-origin[1], p_global[2]-origin[2]};
-			p_local[0] = dot(u_axis, p_t);
-			p_local[1] = dot(v_axis, p_t);
-			p_local[2] = dot(w_axis, p_t);
-		} else {
-			p_local[0] = p_global[0]; p_local[1] = p_global[1]; p_local[2] = p_global[2];
-		}
-	}
-
-	void transform_to_global(const double f_local[3], double f_global[3]) const {
-		if (use_transform) {
-			f_global[0] = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
-			f_global[1] = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
-			f_global[2] = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
-		} else {
-			f_global[0] = f_local[0]; f_global[1] = f_local[1]; f_global[2] = f_local[2];
-		}
-	}
-
-	static void CheckRadErr(int err) {
-		if (err > 0)
-			throw std::runtime_error(
-				"RadiaField: Radia error " + std::to_string(err) +
-				" during field evaluation");
-	}
-
-	// GIL-free, job-safe field evaluation via the SERIAL direct C API.
-	//
-	// NGSolve assembly calls CoefficientFunction::Evaluate concurrently from
-	// TaskManager worker threads, i.e. from INSIDE a running ngcore job.  Two
-	// things are therefore forbidden here:
-	//  1. Any Python round-trip (py::gil_scoped_acquire + rad.Fld): GIL
-	//     save/restore on worker threads interleaves across the job and
-	//     corrupts the interpreter state.
-	//  2. The PARALLEL batch entries (RadFldBatch etc.): their internal
-	//     ParallelFor issues a nested CreateJob, and ngcore job state is
-	//     static -- nesting corrupts the running assembly job
-	//     (0xC0000374 / 0xC0000005 heap corruption, 2026-07-10 incident).
-	// The RadFld*Serial C entries evaluate the (small, per-integration-rule)
-	// point loop in the calling thread; parallelism stays where it belongs,
-	// in NGSolve's element loop.  Single-point RadFld is also banned: it
-	// round-trips results through the non-thread-safe global ioBuffer.
-	//
-	// pts_local: npts*3 coordinates (already CF-local frame).
-	// vals: filled with npts values for "phi", npts*3 otherwise.
-	void ComputeLocalField(std::vector<double>& pts_local, size_t npts,
-	                       std::vector<double>& vals) const
-	{
-		int n = static_cast<int>(npts);
-		if (field_type == "phi") {
-			vals.assign(npts, 0.0);
-			CheckRadErr(RadFldPhiSerial(vals.data(), n, pts_local.data(), radia_obj));
-		} else if (field_type == "a") {
-			vals.assign(npts * 3, 0.0);
-			CheckRadErr(RadFldASerial(vals.data(), n, pts_local.data(), radia_obj));
-		} else {
-			std::vector<double> B(npts * 3, 0.0), H(npts * 3, 0.0);
-			CheckRadErr(RadFldBatchSerial(B.data(), H.data(), n, pts_local.data(), radia_obj));
-			if (field_type == "b") vals = std::move(B);
-			else if (field_type == "h") vals = std::move(H);
-			else {
-				// "m": M = B/mu0 - H (exact identity; B and H come from one batch call)
-				const double InvMu0 = 1.0 / (4. * 3.1415926535897932 * 1.e-7);
-				vals.resize(npts * 3);
-				for (size_t k = 0; k < npts * 3; k++) vals[k] = B[k] * InvMu0 - H[k];
-			}
-		}
-	}
-
-public:
-	void PrepareCache(py::list points_list) {
-		py::gil_scoped_acquire acquire;
-		size_t npts = points_list.size();
-		point_cache_.clear();
-		cache_hits_ = 0;
-		cache_misses_ = 0;
-
-		if (npts == 0) { use_cache_ = false; return; }
-
-		py::array_t<double> pts_arr({(py::ssize_t)npts, (py::ssize_t)3});
-		auto pts_buf = pts_arr.mutable_unchecked<2>();
-		std::vector<double> globals(npts * 3);
-
-		for (size_t i = 0; i < npts; i++) {
-			py::list pt = points_list[i].cast<py::list>();
-			double x = pt[0].cast<double>();
-			double y = pt[1].cast<double>();
-			double z = pt[2].cast<double>();
-			globals[i*3] = x; globals[i*3+1] = y; globals[i*3+2] = z;
-			double p_global[3] = {x, y, z};
-			double p_local[3];
-			transform_to_local(p_global, p_local);
-			pts_buf(i, 0) = p_local[0];
-			pts_buf(i, 1) = p_local[1];
-			pts_buf(i, 2) = p_local[2];
-		}
-
-		// Use unified Fld(obj, field_type, points_array)
-		py::object fld_result = rad_module_.attr("Fld")(radia_obj, field_type, pts_arr);
-
-		if (field_type == "phi") {
-			py::array_t<double> phi_arr = fld_result.cast<py::array_t<double>>();
-			auto phi = phi_arr.unchecked<1>();
-			for (size_t i = 0; i < npts; i++) {
-				uint64_t hash = hash_point(globals[i*3], globals[i*3+1], globals[i*3+2]);
-				point_cache_[hash] = {phi(i), 0.0, 0.0};
-			}
-		} else {
-			py::array_t<double> fld_arr = fld_result.cast<py::array_t<double>>();
-			auto fld = fld_arr.unchecked<2>();
-			for (size_t i = 0; i < npts; i++) {
-				double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
-				double f_global[3];
-				transform_to_global(f_local, f_global);
-				uint64_t hash = hash_point(globals[i*3], globals[i*3+1], globals[i*3+2]);
-				point_cache_[hash] = {f_global[0], f_global[1], f_global[2]};
-			}
-		}
-		use_cache_ = true;
-	}
-
-	void ClearCache() {
-		point_cache_.clear();
-		use_cache_ = false;
-		cache_hits_ = 0;
-		cache_misses_ = 0;
-	}
-
-	py::dict GetCacheStats() const {
-		py::dict stats;
-		size_t hits = cache_hits_.load(), misses = cache_misses_.load();
-		stats["enabled"] = use_cache_;
-		stats["size"] = point_cache_.size();
-		stats["hits"] = hits;
-		stats["misses"] = misses;
-		double total = static_cast<double>(hits + misses);
-		stats["hit_rate"] = (total > 0) ? (hits / total) : 0.0;
-		return stats;
-	}
-
-	// VoxelCoefficient generation for trajectory calculations
-	py::object AsVoxelCF(py::object mesh, int resolution) const {
-		py::gil_scoped_acquire acquire;
-
-		py::module_ ngsolve = py::module_::import("ngsolve");
-		py::object VoxelCoefficient = ngsolve.attr("VoxelCoefficient");
-		py::object CF = ngsolve.attr("CF");
-		py::module_ np = py::module_::import("numpy");
-
-		// Get bounding box from mesh
-		py::object ngmesh = mesh.attr("ngmesh");
-		py::tuple bbox = ngmesh.attr("bounding_box").cast<py::tuple>();
-		py::object pmin_obj = bbox[0];
-		py::object pmax_obj = bbox[1];
-		double pmin[3], pmax[3];
-		for (int i = 0; i < 3; i++) {
-			pmin[i] = pmin_obj[py::int_(i)].cast<double>();
-			pmax[i] = pmax_obj[py::int_(i)].cast<double>();
-		}
-		double max_dim = 0;
-		for (int i = 0; i < 3; i++)
-			max_dim = std::max(max_dim, pmax[i] - pmin[i]);
-		double margin = 0.01 * max_dim;
-		for (int i = 0; i < 3; i++) {
-			pmin[i] -= margin;
-			pmax[i] += margin;
-		}
-
-		int nx = resolution, ny = resolution, nz = resolution;
-		size_t total = (size_t)nx * ny * nz;
-
-		// Generate grid points
-		py::array_t<double> pts_arr({(py::ssize_t)total, (py::ssize_t)3});
-		auto pts = pts_arr.mutable_unchecked<2>();
-		size_t idx = 0;
-		for (int ix = 0; ix < nx; ix++) {
-			double x = pmin[0] + (pmax[0] - pmin[0]) * ix / (nx - 1);
-			for (int iy = 0; iy < ny; iy++) {
-				double y = pmin[1] + (pmax[1] - pmin[1]) * iy / (ny - 1);
-				for (int iz = 0; iz < nz; iz++) {
-					double z = pmin[2] + (pmax[2] - pmin[2]) * iz / (nz - 1);
-					double p_global[3] = {x, y, z};
-					double p_local[3];
-					transform_to_local(p_global, p_local);
-					pts(idx, 0) = p_local[0];
-					pts(idx, 1) = p_local[1];
-					pts(idx, 2) = p_local[2];
-					idx++;
-				}
-			}
-		}
-
-		py::tuple start = py::make_tuple(pmin[0], pmin[1], pmin[2]);
-		py::tuple end = py::make_tuple(pmax[0], pmax[1], pmax[2]);
-
-		// Use unified Fld(obj, field_type, points_array)
-		py::object fld_result = rad_module_.attr("Fld")(radia_obj, field_type, pts_arr);
-
-		if (field_type == "phi") {
-			py::array_t<double> phi_arr = fld_result.cast<py::array_t<double>>();
-			py::object data = phi_arr.attr("reshape")(nx, ny, nz);
-			data = np.attr("ascontiguousarray")(data.attr("transpose")(2, 1, 0));
-			return VoxelCoefficient(start, end, data, "linear"_a = true);
-		}
-
-		// Vector fields
-		py::array_t<double> field_arr = fld_result.cast<py::array_t<double>>();
-
-		{
-			// Vector: 3 components, each (nz, ny, nx)
-			auto fld = field_arr.unchecked<2>();
-			py::list cfs;
-			for (int comp = 0; comp < 3; comp++) {
-				py::array_t<double> comp_data({(py::ssize_t)total});
-				auto cd = comp_data.mutable_unchecked<1>();
-				for (size_t i = 0; i < total; i++) {
-					double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
-					double f_global[3];
-					transform_to_global(f_local, f_global);
-					cd(i) = f_global[comp];
-				}
-				py::object data = comp_data.attr("reshape")(nx, ny, nz);
-				data = np.attr("ascontiguousarray")(data.attr("transpose")(2, 1, 0));
-				cfs.append(VoxelCoefficient(start, end, data, "linear"_a = true));
-			}
-			return CF(py::tuple(cfs));
-		}
-	}
-
-	virtual ~RadiaFieldCF() {}
-
-	// Scalar evaluation for 'phi'.
-	// GIL-free: direct C API only (see ComputeLocalField) -- NGSolve may call
-	// this from TaskManager worker threads.
-	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
-	{
-		if (field_type != "phi") return 0.0;
-
-		auto pnt = mip.GetPoint();
-		int dim = pnt.Size();
-		double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-		std::vector<double> pts(3);
-		transform_to_local(p_global, pts.data());
-
-		std::vector<double> vals;
-		ComputeLocalField(pts, 1, vals);
-		return vals[0];
-	}
-
-	// Single-point vector evaluation (GIL-free, direct C API)
-	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-	                      FlatVector<> result) const override
-	{
-		auto pnt = mip.GetPoint();
-		int dim = pnt.Size();
-		double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-
-		if (field_type == "phi") {
-			result(0) = Evaluate(mip);
-			return;
-		}
-
-		// Check cache
-		if (use_cache_) {
-			uint64_t hash = hash_point(p_global[0], p_global[1], p_global[2]);
-			auto it = point_cache_.find(hash);
-			if (it != point_cache_.end()) {
-				cache_hits_++;
-				result(0) = it->second[0];
-				result(1) = it->second[1];
-				result(2) = it->second[2];
-				return;
-			}
-			cache_misses_++;
-		}
-
-		std::vector<double> pts(3);
-		transform_to_local(p_global, pts.data());
-
-		std::vector<double> vals;
-		ComputeLocalField(pts, 1, vals);
-
-		double f_global[3];
-		transform_to_global(vals.data(), f_global);
-		result(0) = f_global[0]; result(1) = f_global[1]; result(2) = f_global[2];
-	}
-
-	// Batch evaluation (called by NGSolve for integration rules).
-	// GIL-free: NGSolve assembly invokes this concurrently from TaskManager
-	// worker threads; any Python/GIL use here corrupts the interpreter (see
-	// ComputeLocalField).  Errors propagate as C++ exceptions (fail fast) --
-	// no silent zero-fill.
-	virtual void Evaluate(const BaseMappedIntegrationRule& mir,
-	                      BareSliceMatrix<> result) const override
-	{
-		size_t npts = mir.Size();
-
-		// Try cache first
-		if (use_cache_) {
-			bool all_cached = true;
-			for (size_t i = 0; i < npts; i++) {
-				auto pnt = mir[i].GetPoint();
-				int dim = pnt.Size();
-				double p[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-				uint64_t hash = hash_point(p[0], p[1], p[2]);
-				auto it = point_cache_.find(hash);
-				if (it != point_cache_.end()) {
-					cache_hits_++;
-					result(i,0) = it->second[0];
-					result(i,1) = it->second[1];
-					result(i,2) = it->second[2];
-				} else {
-					cache_misses_++;
-					all_cached = false;
-					break;
-				}
-			}
-			if (all_cached) return;
-		}
-
-		// Local-frame coordinates
-		std::vector<double> pts(npts * 3);
-		for (size_t i = 0; i < npts; i++) {
-			auto pnt = mir[i].GetPoint();
-			int dim = pnt.Size();
-			double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-			transform_to_local(p_global, pts.data() + i * 3);
-		}
-
-		std::vector<double> vals;
-		ComputeLocalField(pts, npts, vals);
-
-		if (field_type == "phi") {
-			for (size_t i = 0; i < npts; i++) result(i, 0) = vals[i];
-		} else {
-			for (size_t i = 0; i < npts; i++) {
-				double f_global[3];
-				transform_to_global(vals.data() + i * 3, f_global);
-				result(i, 0) = f_global[0];
-				result(i, 1) = f_global[1];
-				result(i, 2) = f_global[2];
-			}
-		}
-	}
-};
-
-// Immutable HDiv charge-source field exposed as a native NGSolve
-// CoefficientFunction.  The evaluator returns the unscaled Coulomb-gradient
-// integral; physical H therefore carries the conventional 1/(4*pi) factor.
-// Evaluation is serial inside each integration rule because NGSolve already
-// parallelizes element assembly with TaskManager.
-class HDivFieldCF : public CoefficientFunction
-{
-    std::shared_ptr<rad_hdiv::HDivFieldEvaluator> evaluator_;
-    rad_hdiv::HDivFieldEvaluator::Algorithm algorithm_;
-
-    static constexpr double scale_ = 0.079577471545947667884441881686257181;
-
-public:
-    HDivFieldCF(std::shared_ptr<rad_hdiv::HDivFieldEvaluator> evaluator,
-                const std::string& algorithm = "direct")
-        : CoefficientFunction(3), evaluator_(std::move(evaluator)),
-          algorithm_(rad_hdiv::HDivFieldEvaluator::ParseAlgorithm(algorithm))
-    {
-        if (!evaluator_)
-            throw std::invalid_argument("_HDivFieldCoefficient: evaluator must not be null");
-    }
-
-    virtual double Evaluate(const BaseMappedIntegrationPoint&) const override
-    {
-        return 0.0;
-    }
-
-    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-                          FlatVector<> result) const override
-    {
-        auto point = mip.GetPoint();
-        const int dim = point.Size();
-        double observation[3] = {
-            point[0], (dim >= 2) ? point[1] : 0.0, (dim >= 3) ? point[2] : 0.0
-        };
-        double value[3];
-        evaluator_->EvaluateSerial(observation, 1, value, algorithm_);
-        result(0) = scale_*value[0];
-        result(1) = scale_*value[1];
-        result(2) = scale_*value[2];
-    }
-
-    virtual void Evaluate(const BaseMappedIntegrationRule& mir,
-                          BareSliceMatrix<> result) const override
-    {
-        const std::size_t count = mir.Size();
-        thread_local std::vector<double> observations;
-        thread_local std::vector<double> values;
-        observations.resize(3*count);
-        values.resize(3*count);
-        for (std::size_t i = 0; i < count; ++i) {
-            auto point = mir[i].GetPoint();
-            const int dim = point.Size();
-            observations[3*i] = point[0];
-            observations[3*i+1] = (dim >= 2) ? point[1] : 0.0;
-            observations[3*i+2] = (dim >= 3) ? point[2] : 0.0;
-        }
-        evaluator_->EvaluateSerial(observations.data(), count, values.data(), algorithm_);
-        for (std::size_t i = 0; i < count; ++i) {
-            result(i, 0) = scale_*values[3*i];
-            result(i, 1) = scale_*values[3*i+1];
-            result(i, 2) = scale_*values[3*i+2];
-        }
-    }
-
-    const std::shared_ptr<rad_hdiv::HDivFieldEvaluator>& Evaluator() const { return evaluator_; }
-    const char* AlgorithmName() const {
-        return rad_hdiv::HDivFieldEvaluator::AlgorithmName(algorithm_);
-    }
-};
-
-// Persistent planar HDiv source field in a target body's local frame.  Both
-// bodies may rotate rigidly about the same center.  NGSolve owns the outer
-// TaskManager element loop, so the immutable source evaluator is called
-// serially for each integration rule.
-class PlanarHDivFieldCF : public CoefficientFunction
-{
-    std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> evaluator_;
-    double center_x_;
-    double center_y_;
-    double cos_delta_;
-    double sin_delta_;
-    double source_angle_;
-    double target_angle_;
-
-    void TargetToSource(double tx, double ty, double& sx, double& sy) const
-    {
-        const double dx = tx-center_x_;
-        const double dy = ty-center_y_;
-        // R(target-source) == R(-(source-target)).
-        sx = center_x_ + cos_delta_*dx + sin_delta_*dy;
-        sy = center_y_ - sin_delta_*dx + cos_delta_*dy;
-    }
-
-    void SourceFieldToTarget(double hsx, double hsy, double& htx, double& hty) const
-    {
-        // R(-target) R(source) == R(source-target).
-        htx = cos_delta_*hsx - sin_delta_*hsy;
-        hty = sin_delta_*hsx + cos_delta_*hsy;
-    }
-
-public:
-    PlanarHDivFieldCF(
-        std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> evaluator,
-        double source_angle = 0.0, double target_angle = 0.0,
-        double center_x = 0.0, double center_y = 0.0)
-        : CoefficientFunction(2), evaluator_(std::move(evaluator)),
-          center_x_(center_x), center_y_(center_y),
-          cos_delta_(std::cos(source_angle-target_angle)),
-          sin_delta_(std::sin(source_angle-target_angle)),
-          source_angle_(source_angle), target_angle_(target_angle)
-    {
-        if (!evaluator_)
-            throw std::invalid_argument(
-                "_PlanarHDivFieldCoefficient: evaluator must not be null");
-        if (!std::isfinite(source_angle_) || !std::isfinite(target_angle_)
-                || !std::isfinite(center_x_) || !std::isfinite(center_y_))
-            throw std::invalid_argument(
-                "_PlanarHDivFieldCoefficient: angles and center must be finite");
-    }
-
-    virtual double Evaluate(const BaseMappedIntegrationPoint&) const override
-    {
-        return 0.0;
-    }
-
-    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-                          FlatVector<> result) const override
-    {
-        auto point = mip.GetPoint();
-        double source_point[2];
-        TargetToSource(point[0], point[1], source_point[0], source_point[1]);
-        double source_field[2];
-        evaluator_->EvaluateFieldSerial(source_point, 1, source_field);
-        SourceFieldToTarget(
-            source_field[0], source_field[1], result(0), result(1));
-    }
-
-    virtual void Evaluate(const BaseMappedIntegrationRule& mir,
-                          BareSliceMatrix<> result) const override
-    {
-        const std::size_t count = mir.Size();
-        thread_local std::vector<double> source_points;
-        thread_local std::vector<double> source_fields;
-        source_points.resize(2*count);
-        source_fields.resize(2*count);
-        for (std::size_t i = 0; i < count; ++i) {
-            auto point = mir[i].GetPoint();
-            TargetToSource(point[0], point[1],
-                           source_points[2*i], source_points[2*i+1]);
-        }
-        evaluator_->EvaluateFieldSerial(
-            source_points.data(), count, source_fields.data());
-        for (std::size_t i = 0; i < count; ++i)
-            SourceFieldToTarget(source_fields[2*i], source_fields[2*i+1],
-                                result(i, 0), result(i, 1));
-    }
-
-    double SourceAngle() const { return source_angle_; }
-    double TargetAngle() const { return target_angle_; }
-};
-
-} // namespace ngfem
+// RadiaField is implemented in rad_ngsolve_radia_field.h and shared with MEX.
 
 
 // ============================================================================
@@ -3594,26 +2689,31 @@ PYBIND11_MODULE(_radia_pybind, m) {
             return result;
         });
 
-    py::class_<ngfem::HDivFieldCF,
-               std::shared_ptr<ngfem::HDivFieldCF>,
+    py::class_<radia::ngsolve_bridge::HDivFieldCoefficient,
+               std::shared_ptr<radia::ngsolve_bridge::HDivFieldCoefficient>,
                ngfem::CoefficientFunction>(m, "_HDivFieldCoefficient")
         .def(py::init<std::shared_ptr<FieldEvaluator>, const std::string&>(),
              py::arg("evaluator"), py::arg("algorithm") = "direct",
              "Native NGSolve H-field CoefficientFunction backed by an immutable HDiv charge source.")
-        .def_property_readonly("algorithm", [](const ngfem::HDivFieldCF& field) {
+        .def_property_readonly("algorithm", [](
+                const radia::ngsolve_bridge::HDivFieldCoefficient& field) {
             return std::string(field.AlgorithmName());
         });
 
-    py::class_<ngfem::PlanarHDivFieldCF,
-               std::shared_ptr<ngfem::PlanarHDivFieldCF>,
+    py::class_<radia::ngsolve_bridge::PlanarHDivFieldCoefficient,
+               std::shared_ptr<radia::ngsolve_bridge::PlanarHDivFieldCoefficient>,
                ngfem::CoefficientFunction>(m, "_PlanarHDivFieldCoefficient")
         .def(py::init<std::shared_ptr<PlanarFieldEvaluator>, double, double, double, double>(),
              py::arg("evaluator"), py::arg("source_angle") = 0.0,
              py::arg("target_angle") = 0.0, py::arg("center_x") = 0.0,
              py::arg("center_y") = 0.0,
              "Native planar H-field CoefficientFunction with rigid source/target rotation.")
-        .def_property_readonly("source_angle", &ngfem::PlanarHDivFieldCF::SourceAngle)
-        .def_property_readonly("target_angle", &ngfem::PlanarHDivFieldCF::TargetAngle);
+        .def_property_readonly(
+            "source_angle",
+            &radia::ngsolve_bridge::PlanarHDivFieldCoefficient::SourceAngle)
+        .def_property_readonly(
+            "target_angle",
+            &radia::ngsolve_bridge::PlanarHDivFieldCoefficient::TargetAngle);
 
 
     m.def("_TetHCurlReducedGram",
@@ -3646,31 +2746,68 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "with analytic source moments through total degree 18. "
           "the returned matrix includes 1/(4*pi) but not permeability.");
 
+    m.def("_AffineCellSelfEnergyShapeDerivative",
+          [](const std::string& cell_type, F64Array nodes_a,
+             F64Array velocities_a) {
+              const int kind = cell_type == "tet" ? 0 :
+                               cell_type == "hex" ? 1 :
+                               cell_type == "wedge" ? 2 : -1;
+              if (kind < 0) throw std::invalid_argument(
+                  "cell_type must be 'tet', 'hex', or 'wedge'");
+              const int nn = kind == 0 ? 4 : (kind == 1 ? 8 : 6);
+              auto nb = nodes_a.request(), vb = velocities_a.request();
+              if (nb.ndim != 2 || nb.shape[0] != nn || nb.shape[1] != 3)
+                  throw std::invalid_argument("nodes must have shape (element_nodes,3)");
+              if (vb.ndim != 3 || vb.shape[1] != nn || vb.shape[2] != 3)
+                  throw std::invalid_argument("velocities must have shape (modes,element_nodes,3)");
+              const auto* nptr = static_cast<const double*>(nb.ptr);
+              const auto* vptr = static_cast<const double*>(vb.ptr);
+              std::vector<double> nodes(nptr, nptr + nn*3);
+              std::vector<double> velocities(vptr, vptr + vb.shape[0]*nn*3);
+              std::vector<double> result;
+              { py::gil_scoped_release release;
+                result = rad_hdiv::AffineCellSelfEnergyShapeDerivative(
+                    kind, nodes, velocities, static_cast<int>(vb.shape[0])); }
+              py::dict out;
+              out["value"] = result[0];
+              py::array_t<double> derivative(result.size()-1);
+              if (result.size()>1) std::memcpy(derivative.mutable_data(), result.data()+1,
+                                               (result.size()-1)*sizeof(double));
+              out["derivative"] = std::move(derivative);
+              return out;
+          }, py::arg("cell_type"), py::arg("nodes"), py::arg("velocities"),
+          "Analytic affine TET/HEX/WEDGE constant-volume-charge self-energy shape derivative.");
+
 
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
     // Charges (cell rho + boundary-face sigma) extracted from an HDiv mesh; pass charge
     // centroids/measures + the caller-computed diagonal self-energies.  The
     // demag operator N = B^T G B is applied as B^T (matvec(B m)) with B the sparse charge map.
-    py::class_<RadHDivDemagMatrix, std::shared_ptr<RadHDivDemagMatrix>, ngla::BaseMatrix>(
+    py::class_<radia::ngsolve_bridge::HDivDemagMatrix,
+               std::shared_ptr<radia::ngsolve_bridge::HDivDemagMatrix>,
+               ngla::BaseMatrix>(
         m, "_HDivDemagMatrix");
 
-    py::class_<RadComplexDiagonalInverseMatrix,
-               std::shared_ptr<RadComplexDiagonalInverseMatrix>, ngla::BaseMatrix>(
+    py::class_<radia::ngsolve_bridge::ComplexDiagonalInverseMatrix,
+               std::shared_ptr<radia::ngsolve_bridge::ComplexDiagonalInverseMatrix>,
+               ngla::BaseMatrix>(
         m, "_ComplexDiagonalInverseMatrix");
-    py::class_<RadProjectedBaseMatrix,
-               std::shared_ptr<RadProjectedBaseMatrix>, ngla::BaseMatrix>(
+    py::class_<radia::ngsolve_bridge::ProjectedBaseMatrix,
+               std::shared_ptr<radia::ngsolve_bridge::ProjectedBaseMatrix>,
+               ngla::BaseMatrix>(
         m, "_ProjectedBaseMatrix")
         .def(py::init([](
                 std::shared_ptr<ngla::BaseMatrix> parent,
                 py::array_t<std::complex<double>,
                             py::array::c_style | py::array::forcecast> projection_a) {
             auto projection = to_complex_matrix_2d(projection_a, "projection");
-            return std::make_shared<RadProjectedBaseMatrix>(
+            return std::make_shared<radia::ngsolve_bridge::ProjectedBaseMatrix>(
                 std::move(parent), std::move(projection.values),
                 projection.rows, projection.cols);
         }), py::arg("parent"), py::arg("projection"));
-    py::class_<RadReducedBlockMatrix,
-               std::shared_ptr<RadReducedBlockMatrix>, ngla::BaseMatrix>(
+    py::class_<radia::ngsolve_bridge::ReducedBlockMatrix,
+               std::shared_ptr<radia::ngsolve_bridge::ReducedBlockMatrix>,
+               ngla::BaseMatrix>(
         m, "_ReducedBlockMatrix")
         .def(py::init([](
                 py::array_t<std::complex<double>,
@@ -3688,22 +2825,30 @@ PYBIND11_MODULE(_radia_pybind, m) {
                 stops.size() != scales.size())
                 throw std::invalid_argument(
                     "matrices, starts, stops, and scales must have equal length");
-            std::vector<RadReducedBlockMatrix::Term> terms;
+            std::vector<radia::ngsolve_bridge::ReducedBlockMatrix::Term> terms;
             terms.reserve(starts.size());
             for (size_t i = 0; i < starts.size(); ++i) {
                 terms.push_back({
                     matrices_a[i].cast<std::shared_ptr<ngla::BaseMatrix>>(),
                     starts[i], stops[i], scales[i]});
             }
-            return std::make_shared<RadReducedBlockMatrix>(
+            return std::make_shared<radia::ngsolve_bridge::ReducedBlockMatrix>(
                 std::move(dense.values), dense.rows, std::move(terms));
         }), py::arg("dense"), py::arg("matrices"), py::arg("starts"),
             py::arg("stops"), py::arg("scales"))
         .def("diagonal_preconditioner",
-             &RadReducedBlockMatrix::DiagonalPreconditioner,
+             &radia::ngsolve_bridge::ReducedBlockMatrix::DiagonalPreconditioner,
              py::arg("relative_floor") = 1.0e-14,
              "Return a native complex Jacobi/block-diagonal preconditioner.")
-        .def_property_readonly("term_count", &RadReducedBlockMatrix::TermCount);
+        .def_property_readonly(
+            "term_count", &radia::ngsolve_bridge::ReducedBlockMatrix::TermCount);
+
+    py::class_<RadHACApKChargeGramDerivative>(m, "HACApKChargeGramDerivative")
+        .def_property_readonly("ndof", &RadHACApKChargeGramDerivative::GetNDOF)
+        .def("entry", &RadHACApKChargeGramDerivative::GetInteractionMatrixElement,
+             py::arg("i"), py::arg("j"))
+        .def("matvec_sym", [](RadHACApKChargeGramDerivative& s,F64Array a){auto x=to_1d_vector<double>(a,"x");std::vector<double>y((size_t)s.GetNDOF());{py::gil_scoped_release release;s.MatVecSym(x,y);}return to_numpy_1d(y);},py::arg("x"))
+        .def_property_readonly("stats", [](const RadHACApKChargeGramDerivative& s){const auto&v=s.GetStats();py::dict d;d["n_lowrank"]=v.n_lowrank;d["n_dense"]=v.n_dense;d["max_rank"]=v.max_rank;d["n_leaves"]=v.n_leaves;d["n_dof"]=v.n_dof;d["compression"]=v.compression;d["build_time"]=v.build_time;d["memory_mb"]=v.memory_mb;return d;});
 
     py::class_<RadHACApKChargeGram, std::shared_ptr<RadHACApKChargeGram>>(m, "_ChargeGramHMatrix")
         .def(py::init([](F64Array centroids_a, F64Array measures_a,
@@ -4253,6 +3398,70 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "so CG/MINRES on B^T G_sym B use a machine-symmetric operator (the ACA-asymmetry failure mode is removed).")
         .def("entry", &RadHACApKChargeGram::GetInteractionMatrixElement, py::arg("i"), py::arg("j"),
              "Charge-Gram entry G[i,j] from the analytic / polytope / high-order kernel.")
+        .def("hex_volume_self_block_directional_derivative",
+             [](RadHACApKChargeGram& s, int host, F64Array velocity_a) {
+                 auto b=velocity_a.request();
+                 if(b.ndim!=2 || b.shape[0]!=27 || b.shape[1]!=3)
+                     throw std::invalid_argument("node_velocity must have shape (27,3)");
+                 const double* p=static_cast<const double*>(b.ptr);
+                 std::vector<double> velocity(p,p+81), d;
+                 { py::gil_scoped_release release;
+                   d=s.HexVolumeSelfBlockDirectionalDerivative(host,velocity); }
+                 const int n=(int)std::sqrt((double)d.size());
+                 return to_numpy_2d(d,n,n);
+             }, py::arg("host"), py::arg("node_velocity"),
+             "Analytic derivative of a production HEX polynomial volume-charge self block.")
+        .def("hex_face_self_block_directional_derivative",
+             [](RadHACApKChargeGram& s, int host, F64Array velocity_a) {
+                 auto b=velocity_a.request();
+                 if(b.ndim!=2 || b.shape[0]!=9 || b.shape[1]!=3)
+                     throw std::invalid_argument("node_velocity must have shape (9,3)");
+                 const double* p=static_cast<const double*>(b.ptr);
+                 std::vector<double> velocity(p,p+27),d;
+                 { py::gil_scoped_release release; d=s.HexFaceSelfBlockDirectionalDerivative(host,velocity); }
+                 const int n=(int)std::sqrt((double)d.size()); return to_numpy_2d(d,n,n);
+             }, py::arg("host"), py::arg("node_velocity"),
+             "Analytic derivative of a production HEX polynomial quad-face self block.")
+        .def("hex_charge_gram_directional_derivative",
+             [](RadHACApKChargeGram& s,F64Array ca,F64Array fa){auto c=ca.request(),f=fa.request();if(c.ndim!=3||c.shape[1]!=27||c.shape[2]!=3)throw std::invalid_argument("cell_node_velocity must have shape (ncell,27,3)");if(f.ndim!=3||f.shape[1]!=9||f.shape[2]!=3)throw std::invalid_argument("face_node_velocity must have shape (nface,9,3)");const double* cp=static_cast<const double*>(c.ptr),*fp=static_cast<const double*>(f.ptr);std::vector<double>cv(cp,cp+c.size),fv(fp,fp+f.size),d;{py::gil_scoped_release release;d=s.HexChargeGramDirectionalDerivative(cv,fv);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("cell_node_velocity"),py::arg("face_node_velocity"),
+             "Analytic dense row-major derivative of the complete production HEX ChargeGram.")
+        .def("directional_derivative_operator",
+             [](RadHACApKChargeGram& s,const std::string& family,F64Array ca,F64Array fa,double eps,int leaf,double eta){
+                 ChargeDerivativeFamily f;
+                 if(family=="hex")f=ChargeDerivativeFamily::Hex;else if(family=="tet")f=ChargeDerivativeFamily::Tet;else if(family=="wedge")f=ChargeDerivativeFamily::Wedge;else throw std::invalid_argument("family must be 'hex', 'tet', or 'wedge'");
+                 auto c=ca.request(),q=fa.request();if(c.ndim!=3||c.shape[2]!=3||q.ndim!=3||q.shape[2]!=3)throw std::invalid_argument("velocity arrays must have shape (nhost,nnode,3)");
+                 const double* cp=static_cast<const double*>(c.ptr),*qp=static_cast<const double*>(q.ptr);std::vector<double>cv(cp,cp+c.size),fv(qp,qp+q.size);RadHACApKParams p;p.aca_eps=eps;p.leaf_size=leaf;p.eta=eta;py::gil_scoped_release release;return s.BuildDirectionalDerivativeOperator(f,std::move(cv),std::move(fv),p);
+             },py::arg("family"),py::arg("cell_velocity"),py::arg("face_velocity"),py::arg("eps")=1e-8,py::arg("leaf")=32,py::arg("eta")=2.0,py::keep_alive<0,1>(),
+             "Build an analytic HACApK directional-derivative operator without materialising dense dG.")
+        .def("tet_volume_self_block_directional_derivative",
+             [](RadHACApKChargeGram& s,int host,F64Array a){auto b=a.request();if(b.ndim!=2||b.shape[0]!=4||b.shape[1]!=3)throw std::invalid_argument("vertex_velocity must have shape (4,3)");const double*p=static_cast<const double*>(b.ptr);std::vector<double>v(p,p+12),d;{py::gil_scoped_release release;d=s.TetVolumeSelfBlockDirectionalDerivative(host,v);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("host"),py::arg("vertex_velocity"),
+             "Analytic derivative of a production affine TET polynomial volume-charge self block.")
+        .def("tet_face_self_block_directional_derivative",
+             [](RadHACApKChargeGram& s,int host,F64Array a){auto b=a.request();if(b.ndim!=2||b.shape[0]!=3||b.shape[1]!=3)throw std::invalid_argument("vertex_velocity must have shape (3,3)");const double*p=static_cast<const double*>(b.ptr);std::vector<double>v(p,p+9),d;{py::gil_scoped_release release;d=s.TetFaceSelfBlockDirectionalDerivative(host,v);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("host"),py::arg("vertex_velocity"),
+             "Analytic derivative of a production affine TET polynomial triangular-face self block.")
+        .def("tet_charge_gram_directional_derivative",
+             [](RadHACApKChargeGram& s,F64Array ca,F64Array fa){auto c=ca.request(),f=fa.request();if(c.ndim!=3||c.shape[1]!=4||c.shape[2]!=3)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");if(f.ndim!=3||f.shape[1]!=3||f.shape[2]!=3)throw std::invalid_argument("face_vertex_velocity must have shape (nface,3,3)");const double*cp=static_cast<const double*>(c.ptr),*fp=static_cast<const double*>(f.ptr);std::vector<double>cv(cp,cp+c.size),fv(fp,fp+f.size),d;{py::gil_scoped_release release;d=s.TetChargeGramDirectionalDerivative(cv,fv);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("cell_vertex_velocity"),py::arg("face_vertex_velocity"),
+             "Analytic dense row-major derivative of the complete flat affine TET ChargeGram.")
+        .def("tet_charge_map_row_directional_rates",
+             [](RadHACApKChargeGram& s,F64Array ca,F64Array fa){auto c=ca.request(),f=fa.request();if(c.ndim!=3||c.shape[1]!=4||c.shape[2]!=3)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");if(f.ndim!=3||f.shape[1]!=3||f.shape[2]!=3)throw std::invalid_argument("face_vertex_velocity must have shape (nface,3,3)");const double*cp=static_cast<const double*>(c.ptr),*fp=static_cast<const double*>(f.ptr);std::vector<double>cv(cp,cp+c.size),fv(fp,fp+f.size),d;{py::gil_scoped_release release;d=s.TetChargeMapRowDirectionalRates(cv,fv);}return to_numpy_1d(d);},
+             py::arg("cell_vertex_velocity"),py::arg("face_vertex_velocity"),
+             "Per-charge-row analytic rate such that dB = rates[:,None] * B for flat TET Piola charges.")
+        .def("wedge_volume_self_block_directional_derivative",
+             [](RadHACApKChargeGram& s,int host,F64Array a){auto b=a.request();if(b.ndim!=2||b.shape[0]!=18||b.shape[1]!=3)throw std::invalid_argument("node_velocity must have shape (18,3)");const double*p=static_cast<const double*>(b.ptr);std::vector<double>v(p,p+54),d;{py::gil_scoped_release release;d=s.WedgeVolumeSelfBlockDirectionalDerivative(host,v);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("host"),py::arg("node_velocity"),
+             "Analytic derivative of a production WEDGE polynomial volume-charge self block.")
+        .def("wedge_face_self_block_directional_derivative",
+             [](RadHACApKChargeGram& s,int host,F64Array a){auto b=a.request();if(b.ndim!=2||(b.shape[0]!=6&&b.shape[0]!=9)||b.shape[1]!=3)throw std::invalid_argument("node_velocity must have shape (6,3) or (9,3)");const double*p=static_cast<const double*>(b.ptr);std::vector<double>v(p,p+3*b.shape[0]),d;{py::gil_scoped_release release;d=s.WedgeFaceSelfBlockDirectionalDerivative(host,v);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("host"),py::arg("node_velocity"),
+             "Analytic derivative of a production WEDGE triangular/quad face self block.")
+        .def("wedge_charge_gram_directional_derivative",
+             [](RadHACApKChargeGram&s,F64Array ca,F64Array fa){auto c=ca.request(),f=fa.request();if(c.ndim!=3||c.shape[1]!=18||c.shape[2]!=3)throw std::invalid_argument("cell_node_velocity must have shape (ncell,18,3)");if(f.ndim!=3||f.shape[1]!=9||f.shape[2]!=3)throw std::invalid_argument("face_node_velocity must have shape (nface,9,3), with triangular faces padded to nine nodes");const double*cp=static_cast<const double*>(c.ptr),*fp=static_cast<const double*>(f.ptr);std::vector<double>cv(cp,cp+c.size),fv(fp,fp+f.size),d;{py::gil_scoped_release release;d=s.WedgeChargeGramDirectionalDerivative(cv,fv);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
+             py::arg("cell_node_velocity"),py::arg("face_node_velocity"),
+             "Analytic dense row-major derivative of the complete production WEDGE ChargeGram.")
         .def("hex_state_check", [](RadHACApKChargeGram& s) {
                  py::dict d;
                  d["ctor"] = s.HexStateCtorChecksum();
@@ -4366,7 +3575,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def_property_readonly("constraint_count", &RadHACApKChargeGram::ConfiguredConstraintCount)
         .def("demag_matrix",
              [](std::shared_ptr<RadHACApKChargeGram> s) {
-                 return std::make_shared<RadHDivDemagMatrix>(std::move(s));
+                 return std::make_shared<radia::ngsolve_bridge::HDivDemagMatrix>(
+                     std::move(s));
              },
              "Return the persistent C++ N=B^T G B operator as an NGSolve BaseMatrix.")
         .def("apply_configured_demag",
@@ -5882,156 +5092,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Extended Object Creation Functions
     // ========================================================================
 
-    // ObjMltExtPgn - Multiple extruded polygons
-    m.def("ObjMltExtPgn", [](const py::list& slices,
-                              const py::list& magnetization = py::list()) -> int {
-        // Parse slices: [[[[x11,y11],[x12,y12],...],z1], ...]
-        int ns = static_cast<int>(py::len(slices));
-        if (ns < 2) {
-            throw std::runtime_error("At least 2 slices required");
-        }
-
-        std::vector<double> flatVert;
-        std::vector<int> slicesLen;
-        std::vector<double> attitudes;
-
-        for (const auto& slice : slices) {
-            py::list s = slice.cast<py::list>();
-            if (py::len(s) != 2) {
-                throw std::runtime_error("Each slice must be [polygon, altitude]");
-            }
-
-            py::list polygon = s[0].cast<py::list>();
-            double z = s[1].cast<double>();
-
-            attitudes.push_back(z);
-            slicesLen.push_back(static_cast<int>(py::len(polygon)));
-
-            for (const auto& pt : polygon) {
-                auto coord = to_vector(pt.cast<py::object>());
-                if (coord.size() != 2) {
-                    throw std::runtime_error("Each 2D point must have 2 coordinates");
-                }
-                flatVert.push_back(coord[0]);
-                flatVert.push_back(coord[1]);
-            }
-        }
-
-        double M[3] = {0, 0, 0};
-        if (py::len(magnetization) >= 3) {
-            auto m = to_vector(magnetization.cast<py::object>());
-            M[0] = m[0]; M[1] = m[1]; M[2] = m[2];
-        }
-
-        int n = 0;
-        int err = RadObjMltExtPgn(&n, flatVert.data(), slicesLen.data(),
-                                   attitudes.data(), ns, M);
-        check_error(err);
-        return n;
-    },
-    py::arg("slices"), py::arg("magnetization") = py::list(),
-    R"pbdoc(
-        Create polyhedron from extruded polygon slices.
-
-        Args:
-            slices: List of [polygon_2d, altitude] pairs
-            magnetization: [Mx, My, Mz] in A/m
-
-        Returns:
-            Object handle
-    )pbdoc");
-
-    // ObjMltExtRtg - Multiple extruded rectangles
-    m.def("ObjMltExtRtg", [](const py::list& slices,
-                              const py::list& magnetization = py::list()) -> int {
-        int ns = static_cast<int>(py::len(slices));
-        if (ns < 2) {
-            throw std::runtime_error("At least 2 slices required");
-        }
-
-        std::vector<double> flatCenPts;
-        std::vector<double> flatRtgSizes;
-
-        for (const auto& slice : slices) {
-            py::list s = slice.cast<py::list>();
-            if (py::len(s) != 2) {
-                throw std::runtime_error("Each slice must be [[x,y,z], [wx,wy]]");
-            }
-
-            auto center = to_vector(s[0].cast<py::object>());
-            auto size = to_vector(s[1].cast<py::object>());
-
-            if (center.size() != 3 || size.size() != 2) {
-                throw std::runtime_error("Center must be [x,y,z], size must be [wx,wy]");
-            }
-
-            flatCenPts.insert(flatCenPts.end(), center.begin(), center.end());
-            flatRtgSizes.insert(flatRtgSizes.end(), size.begin(), size.end());
-        }
-
-        double M[3] = {0, 0, 0};
-        if (py::len(magnetization) >= 3) {
-            auto m = to_vector(magnetization.cast<py::object>());
-            M[0] = m[0]; M[1] = m[1]; M[2] = m[2];
-        }
-
-        int n = 0;
-        int err = RadObjMltExtRtg(&n, flatCenPts.data(), flatRtgSizes.data(), ns, M);
-        check_error(err);
-        return n;
-    },
-    py::arg("slices"), py::arg("magnetization") = py::list(),
-    R"pbdoc(
-        Create polyhedron from rectangular slices.
-
-        Args:
-            slices: List of [[x,y,z], [wx,wy]] pairs
-            magnetization: [Mx, My, Mz] in A/m
-
-        Returns:
-            Object handle
-    )pbdoc");
-
-    // ObjMltExtTri - disabled legacy Triangle-based API
-    m.def("ObjMltExtTri", [](double xc, double lx,
-                              const py::list& vertices,
-                              const py::list& subdiv,
-                              const std::string& axis = "x",
-                              const py::list& magnetization = py::list(),
-                              const std::string& opt = "") -> int {
-        (void)xc;
-        (void)lx;
-        (void)vertices;
-        (void)subdiv;
-        (void)axis;
-        (void)magnetization;
-        (void)opt;
-        throw std::runtime_error(
-            "ObjMltExtTri is disabled because Radia no longer bundles Triangle. "
-            "Use the Netgen/Cubit mesh workflow instead.");
-    },
-    py::arg("xc"), py::arg("lx"), py::arg("vertices"), py::arg("subdiv"),
-    py::arg("axis") = "x", py::arg("magnetization") = py::list(),
-    py::arg("opt") = "",
-    R"pbdoc(
-        Legacy triangulated extruded polygon API.
-
-        This function is disabled because Radia no longer bundles Triangle.
-        Use the Netgen/Cubit mesh workflow instead.
-
-        Args:
-            xc: Center position in extrusion direction
-            lx: Thickness in extrusion direction
-            vertices: 2D polygon vertices [[y1,z1], [y2,z2], ...]
-            subdiv: Subdivision params [[k1,q1], [k2,q2], ...]
-            axis: Extrusion axis ("x", "y", or "z")
-            magnetization: [Mx, My, Mz] in A/m
-            opt: Options string
-
-        Returns:
-            Object handle
-    )pbdoc");
-
     // ObjArcPgnMag - Arc polygon magnet
     m.def("ObjArcPgnMag", [](const py::list& center,
                               const std::string& axis,
@@ -6156,8 +5216,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // NGSolve CoefficientFunction: RadiaField
     // ========================================================================
 
-    py::class_<ngfem::RadiaFieldCF,
-               std::shared_ptr<ngfem::RadiaFieldCF>,
+    using SharedRadiaField = radia::ngsolve_bridge::RadiaFieldCoefficient;
+    py::class_<SharedRadiaField,
+               std::shared_ptr<SharedRadiaField>,
                ngfem::CoefficientFunction>(m, "RadiaField")
         .def(py::init<int, const std::string&,
                       std::optional<std::vector<double>>,
@@ -6196,18 +5257,59 @@ PYBIND11_MODULE(_radia_pybind, m) {
                      # VoxelCoefficient for trajectory:
                      B_voxel = B_cf.as_voxel_cf(mesh, resolution=61)
              )pbdoc")
-        .def_readonly("radia_obj", &ngfem::RadiaFieldCF::radia_obj)
-        .def_readonly("field_type", &ngfem::RadiaFieldCF::field_type)
-        .def_readonly("use_transform", &ngfem::RadiaFieldCF::use_transform)
-        .def_readonly("precision", &ngfem::RadiaFieldCF::precision)
-        .def("PrepareCache", &ngfem::RadiaFieldCF::PrepareCache,
+        .def_property_readonly("radia_obj", &SharedRadiaField::Object)
+        .def_property_readonly("field_type", &SharedRadiaField::FieldType)
+        .def_property_readonly("use_transform", &SharedRadiaField::UsesTransform)
+        .def_property_readonly("precision", &SharedRadiaField::Precision)
+        .def("PrepareCache", [](SharedRadiaField& field, py::list points) {
+                 std::vector<double> coordinates;
+                 coordinates.reserve(points.size() * 3);
+                 for (const auto& item : points) {
+                     const auto point = item.cast<std::vector<double>>();
+                     if (point.size() != 3)
+                         throw std::invalid_argument(
+                             "cache points must contain coordinate triples");
+                     coordinates.insert(
+                         coordinates.end(), point.begin(), point.end());
+                 }
+                 field.PrepareCache(coordinates);
+             },
              py::arg("points"),
-             "Pre-cache field values at given points for fast gf.Set() (direct rad.Fld per point).")
-        .def("ClearCache", &ngfem::RadiaFieldCF::ClearCache,
+             "Pre-cache field values at given points for fast gf.Set().")
+        .def("ClearCache", &SharedRadiaField::ClearCache,
              "Clear cached field values")
-        .def("GetCacheStats", &ngfem::RadiaFieldCF::GetCacheStats,
+        .def("GetCacheStats", [](const SharedRadiaField& field) {
+                 const auto stats = field.CacheStats();
+                 py::dict result;
+                 result["enabled"] = stats.enabled;
+                 result["size"] = stats.size;
+                 result["hits"] = stats.hits;
+                 result["misses"] = stats.misses;
+                 result["hit_rate"] = stats.hit_rate;
+                 return result;
+             },
              "Get cache statistics: enabled, size, hits, misses, hit_rate")
-        .def("as_voxel_cf", &ngfem::RadiaFieldCF::AsVoxelCF,
+        .def("as_voxel_cf", [](const SharedRadiaField& field,
+                                py::object mesh, int resolution) {
+                 py::tuple bbox = mesh.attr("ngmesh").attr("bounding_box")
+                     .cast<py::tuple>();
+                 std::array<double, 3> lower{}, upper{};
+                 double maximum_extent = 0.0;
+                 for (int component = 0; component < 3; ++component) {
+                     lower[component] =
+                         bbox[0][py::int_(component)].cast<double>();
+                     upper[component] =
+                         bbox[1][py::int_(component)].cast<double>();
+                     maximum_extent = std::max(
+                         maximum_extent, upper[component] - lower[component]);
+                 }
+                 const double margin = 0.01 * maximum_extent;
+                 for (int component = 0; component < 3; ++component) {
+                     lower[component] -= margin;
+                     upper[component] += margin;
+                 }
+                 return field.AsVoxelCoefficient(lower, upper, resolution);
+             },
              py::arg("mesh"), py::arg("resolution") = 41,
              R"pbdoc(
                  Create VoxelCoefficient for fast repeated evaluation.
