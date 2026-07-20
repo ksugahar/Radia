@@ -98,6 +98,10 @@ from .topology_replay_identity_v50 import (
 	validate_public_identity as _validate_cubit_v50_public_identity,
 	validate_source_identity as _validate_cubit_v50_source_identity,
 )
+from .quality_parallel_identity_v51 import (
+	validate_public_identity as _validate_cubit_v51_public_identity,
+	validate_source_identity as _validate_cubit_v51_source_identity,
+)
 from .structured_hex_gate import (
 	cubit_structured_hex_lattice_gate as _cubit_structured_hex_lattice_gate,
 	cubit_structured_hex_source_replay_gate as _cubit_structured_hex_source_replay_gate,
@@ -1246,6 +1250,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
 		result["cubit_v50_public_identity"] = v50_checks
 		if v50_checks["status"] != "ok":
 			result["status"] = "needs_attention"
+	v51_checks = _validate_cubit_v51_public_identity(summary)
+	if v51_checks:
+		result.setdefault("checks", {}).update(v51_checks["checks"])
+		result["cubit_v51_public_identity"] = v51_checks
+		if v51_checks["status"] != "ok":
+			result["status"] = "needs_attention"
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -1297,6 +1307,12 @@ def cubit_mixed_transition_source_gate(
 		result.setdefault("checks", {}).update(v50_checks["checks"])
 		result["cubit_v50_source_identity"] = v50_checks
 		if v50_checks["status"] != "ok":
+			result["status"] = "needs_attention"
+	v51_checks = _validate_cubit_v51_source_identity(summary)
+	if v51_checks:
+		result.setdefault("checks", {}).update(v51_checks["checks"])
+		result["cubit_v51_source_identity"] = v51_checks
+		if v51_checks["status"] != "ok":
 			result["status"] = "needs_attention"
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
