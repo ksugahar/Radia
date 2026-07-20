@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .multiphysics_identity_v56 import validate_public_v56_identity
+
 
 THERMO = (
     "thermoelastic_damping_complexeigenfrequency_energy_dissipation_"
@@ -171,7 +173,8 @@ def validate_public_v55_identity(payload: object) -> dict[str, object]:
     """Validate optional v55 damping and reaction identities."""
     if not isinstance(payload, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    v56 = validate_public_v56_identity(payload)
+    checks: dict[str, bool] = dict(v56.get("checks", {}))
     thermo = payload.get(THERMO)
     electrochem = payload.get(ELECTROCHEM)
     if thermo is not None:
