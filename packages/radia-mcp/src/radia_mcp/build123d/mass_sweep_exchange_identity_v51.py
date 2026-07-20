@@ -6,6 +6,11 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 
+from .selector_exchange_identity_v52 import (
+    validate_public_identity as validate_public_v52_identity,
+    validate_source_identity as validate_source_v52_identity,
+)
+
 
 MASS = "mass_properties_frame_inertia_parallel_axis_density_shape_owner_identity"
 SWEEP = "sweep_profile_path_trihedron_transition_selfintersection_history_owner_identity"
@@ -196,6 +201,9 @@ def validate_public_identity(payload: object) -> dict[str, object]:
         return {}
     rows = _public_rows(payload)
     checks: dict[str, bool] = {}
+    v52 = validate_public_v52_identity(payload)
+    if v52:
+        checks.update(v52["checks"])
     mass = [row.get(MASS) for row in rows if MASS in row]
     sweep = [row.get(SWEEP) for row in rows if SWEEP in row]
     if mass:
@@ -210,6 +218,9 @@ def validate_source_identity(payload: object) -> dict[str, object]:
         return {}
     identity = payload["replay_identity"]
     checks: dict[str, bool] = {}
+    v52 = validate_source_v52_identity(payload)
+    if v52:
+        checks.update(v52["checks"])
     step = identity.get(STEP)
     brep = identity.get(BREP)
     if step is not None:
