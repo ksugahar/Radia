@@ -150,6 +150,7 @@ from .network_artifact_lineage_v47 import validate_public_v47_identity as _valid
 from .network_semantic_identity_v48 import validate_public_v48_identity as _validate_network_v48_identity
 from .network_artifact_identity_v49 import validate_public_v49_identity as _validate_network_v49_identity
 from .network_artifact_identity_v50 import validate_public_v50_identity as _validate_network_v50_identity
+from .network_artifact_identity_v51 import validate_public_v51_identity as _validate_network_v51_identity
 from .comsol_v46_identity import validate_public_identity as _validate_comsol_v46_identity
 from .cross_artifact_lineage_v47 import validate_public_identity as _validate_comsol_v47_identity
 from .transform_normalization_v48 import validate_public_v48_identity as _validate_comsol_v48_identity
@@ -3639,6 +3640,12 @@ def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
             result.setdefault("checks", {}).update(v50_checks)
             result["network_v50_identity_checks"] = v50_checks
             if not all(v50_checks.values()):
+                result["status"] = "needs_attention"
+        v51_checks = _validate_network_v51_identity(payload)
+        if v51_checks:
+            result.setdefault("checks", {}).update(v51_checks)
+            result["network_v51_identity_checks"] = v51_checks
+            if not all(v51_checks.values()):
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
