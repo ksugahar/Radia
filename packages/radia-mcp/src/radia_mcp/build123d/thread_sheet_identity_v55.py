@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .gear_pipe_exchange_identity_v56 import (
+    validate_public_identity as validate_public_v56_identity,
+    validate_source_identity as validate_source_v56_identity,
+)
+
 
 THREAD = "screwthread_pitch_handedness_start_topology_volume_owner_identity"
 SHEET = (
@@ -333,7 +338,8 @@ def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     rows = _public_rows(payload)
-    checks: dict[str, bool] = {}
+    v56 = validate_public_v56_identity(payload)
+    checks: dict[str, bool] = dict(v56.get("checks", {}))
     threads = [row.get(THREAD) for row in rows if THREAD in row]
     sheets = [row.get(SHEET) for row in rows if SHEET in row]
     if threads:
@@ -353,7 +359,8 @@ def validate_source_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping) or not isinstance(payload.get("replay_identity"), Mapping):
         return {}
     identity = payload["replay_identity"]
-    checks: dict[str, bool] = {}
+    v56 = validate_source_v56_identity(payload)
+    checks: dict[str, bool] = dict(v56.get("checks", {}))
     if identity.get(PMI) is not None:
         checks["v55_step_pmi_tolerance_datum_product_owner"] = (
             isinstance(identity[PMI], Mapping) and _pmi_ok(identity[PMI])
