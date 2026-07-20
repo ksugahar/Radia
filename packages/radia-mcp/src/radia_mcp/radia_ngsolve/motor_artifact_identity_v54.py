@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .motor_artifact_identity_v55 import validate_public_identity as validate_public_v55_identity
+
 
 TORQUE = "torqueripple_harmonic_mechanical_electrical_angle_polepair_owner_identity"
 DEMAG = "demag_irreversible_knee_temperature_currentvector_recovery_owner_identity"
@@ -112,7 +114,7 @@ def _demag_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v55_identity(identity)
     torque = identity.get(TORQUE)
     demag = identity.get(DEMAG)
     if torque is not None:
