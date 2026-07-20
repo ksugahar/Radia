@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .ltspice_v55_gates import validate_ltspice_v55_identity
+
 
 MONTE = "montecarlo_seed_distribution_parameter_yield_sample_owner_identity"
 LOOP = "loopgain_injection_breakpoint_sign_crossover_phasemargin_owner_identity"
@@ -121,5 +123,5 @@ def validate_ltspice_v54_identity(positive: Mapping[str, object]) -> bool:
     monte = positive.get(MONTE)
     loop = positive.get(LOOP)
     if monte is None and loop is None:
-        return True
-    return isinstance(monte, Mapping) and isinstance(loop, Mapping) and _monte_ok(monte) and _loop_ok(loop)
+        return validate_ltspice_v55_identity(positive)
+    return isinstance(monte, Mapping) and isinstance(loop, Mapping) and _monte_ok(monte) and _loop_ok(loop) and validate_ltspice_v55_identity(positive)
