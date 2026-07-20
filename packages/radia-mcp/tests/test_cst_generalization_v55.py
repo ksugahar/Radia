@@ -23,3 +23,12 @@ def test_v55_self_consistent_nonphysical_artifacts_are_rejected():
     p=deepcopy(_payload());p["runs"][0][RESONATOR]["stored_energy_j"]=p["runs"][0][RESONATOR]["result_stored_energy_j"]=-1.0;p["runs"][0][ANTENNA]["radiation_efficiency"]=p["runs"][0][ANTENNA]["result_radiation_efficiency"]=1.5;assert not all(validate_public_v55_identity(p).values())
 def test_v55_malformed_values_reject_without_raising():
     p=deepcopy(_payload());p["runs"][0][RESONATOR]["loaded_q"]=[1200.0];p["runs"][0][ANTENNA]["accepted_power_w"]=[1.0];assert not all(validate_public_v55_identity(p).values())
+
+
+def test_v55_numeric_digests_are_rejected():
+    p = deepcopy(_payload())
+    numeric_digest = int("1" * 64)
+    for identity in (RESONATOR, ANTENNA):
+        p["runs"][0][identity]["result_sha256"] = numeric_digest
+        p["runs"][0][identity]["accepted_result_sha256"] = numeric_digest
+    assert not all(validate_public_v55_identity(p).values())
