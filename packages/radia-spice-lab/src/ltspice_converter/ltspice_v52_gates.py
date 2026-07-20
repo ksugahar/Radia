@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .ltspice_v53_gates import validate_ltspice_v53_identity
+
 
 MOS = "mosfet_operatingpoint_region_gm_gds_capacitance_temperature_owner_identity"
 TLINE = "transmissionline_delay_impedance_termination_reflection_event_owner_identity"
@@ -86,5 +88,5 @@ def validate_ltspice_v52_identity(positive: Mapping[str, object]) -> bool:
     mos = positive.get(MOS)
     tline = positive.get(TLINE)
     if mos is None and tline is None:
-        return True
-    return isinstance(mos, Mapping) and isinstance(tline, Mapping) and _mos_ok(mos) and _tline_ok(tline)
+        return validate_ltspice_v53_identity(positive)
+    return isinstance(mos, Mapping) and isinstance(tline, Mapping) and _mos_ok(mos) and _tline_ok(tline) and validate_ltspice_v53_identity(positive)
