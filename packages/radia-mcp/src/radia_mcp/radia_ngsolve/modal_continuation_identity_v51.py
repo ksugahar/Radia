@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .adjoint_weakform_identity_v52 import validate_public_v52_identity
+
 
 _EIGENMODE = "eigenmode_frequency_normalization_phase_subspace_mesh_owner_identity"
 _CONTINUATION = "continuation_branch_predictor_corrector_loadpath_turningpoint_owner_identity"
@@ -117,6 +119,9 @@ def validate_public_v51_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v52 = validate_public_v52_identity(payload)
+    if v52:
+        checks.update(v52["checks"])
     eigenmode = payload.get(_EIGENMODE)
     continuation = payload.get(_CONTINUATION)
     if eigenmode is not None:
