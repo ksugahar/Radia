@@ -24,7 +24,7 @@ and ``B_m = 0`` at ``H_m = -Hc``. An element is IRREVERSIBLY demagnetized once
 temperature; NdFeB's knee moves toward 0 as temperature rises).
 
 Validated on the transverse-magnetized cylinder (uniform interior operating
-point): ``H_m = -mu_r*Hc/(mu_r+1)`` exactly -- see tests/test_demag_knee.py.
+point): ``H_m = -mu_r*Hc/(mu_r+1)`` exactly -- see validation_test/radia_mcp/test_demag_knee.py.
 """
 from __future__ import annotations
 

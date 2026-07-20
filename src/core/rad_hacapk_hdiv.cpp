@@ -1789,7 +1789,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
     int selected_host_a,int selected_host_b) const
 {
-    if(!m_highorder||m_curved||m_hexmode||m_wedgemode||m_polyCombo)
+    if(!m_highorder||m_curved||m_hexmode||m_wedgemode)
         throw std::logic_error("TET ChargeGram derivative requires a flat polynomial TET charge Gram");
     const int nc=(int)m_hoCellCharges.size(),nf=(int)m_hoFaceCharges.size();
     if(cell_velocity.size()!=(size_t)nc*12)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");
@@ -1822,6 +1822,12 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         const auto& g=kind==0?m_hoCellCharges[host]:m_hoFaceCharges[host];val.resize(g.size());der.resize(g.size());
         if(kind==0){
             const double*s=&m_cellV[(size_t)host*12],*ds=&cell_velocity[(size_t)host*12];double V[4][3],dV[4][3],E[9],dE[9],I[9],dI[9];for(int a=0;a<4;++a)for(int k=0;k<3;++k){V[a][k]=s[3*a+k];dV[a][k]=ds[3*a+k];}for(int k=0;k<3;++k)for(int j=0;j<3;++j){E[3*k+j]=V[j+1][k]-V[0][k];dE[3*k+j]=dV[j+1][k]-dV[0][k];}Inverse3Directional(E,dE,I,dI);
+            if(m_polyCombo){
+                std::vector<double> moments((size_t)m_comboNMono),dmoments((size_t)m_comboNMono);
+                rad_hdiv::TetReferencePotentialMomentsDirectional(V,dV,p,dp,m_comboExponents,moments.data(),dmoments.data());
+                for(size_t l=0;l<g.size();++l){const double*c=&m_comboCoeffs[(size_t)g[l]*m_comboNMono];val[l]=der[l]=0;for(int m=0;m<m_comboNMono;++m){val[l]+=c[m]*moments[m];der[l]+=c[m]*dmoments[m];}}
+                return;
+            }
             double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dp,mv,dm);for(int k=0;k<4;++k){mv[k]=-mv[k];dm[k]=-dm[k];}
             for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");val[l]=mv[0];der[l]=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double alpha=0,dalpha=0;for(int k=0;k<3;++k){const double beta=I[3*c+k],dbeta=dI[3*c+k];alpha-=beta*V[0][k];dalpha-=dbeta*V[0][k]+beta*dV[0][k];val[l]+=beta*mv[k+1];der[l]+=dbeta*mv[k+1]+beta*dm[k+1];}val[l]+=(alpha-1.0)*mv[0];der[l]+=(dalpha)*mv[0]+(alpha-1.0)*dm[0];}}
             return;
@@ -1832,7 +1838,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
     };
     auto directed=[&](int kt,int ht,int ks,int hs){const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];std::vector<double>b((size_t)gt.size()*gs.size()),v,d;for(size_t q=0;q<m_qp[gt[0]].size();++q){const auto&pp=m_qp[gt[0]][q];double p[3]={pp[0],pp[1],pp[2]},dp[3],rate;target_kinematics(kt,ht,p,dp,rate);source_inner(ks,hs,p,dp,v,d);for(size_t i=0;i<gt.size();++i){const double w=m_qw[gt[i]][q];for(size_t j=0;j<gs.size();++j)b[i*gs.size()+j]+=w*(d[j]+rate*v[j]);}}for(double&x:b)x*=RAD_INV_FOUR_PI;return b;};
     const int nh=nc+nf;
-    auto pair_block=[&](int ga,int gb){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc,kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];std::vector<double> block;if(ga==gb)block=ka==0?TetVolumeSelfBlockDirectionalDerivative(ha,std::vector<double>(cell_velocity.begin()+(size_t)ha*12,cell_velocity.begin()+(size_t)(ha+1)*12)):TetFaceSelfBlockDirectionalDerivative(ha,std::vector<double>(face_velocity.begin()+(size_t)ha*9,face_velocity.begin()+(size_t)(ha+1)*9));else{auto ab=directed(ka,ha,kb,hb),ba=directed(kb,hb,ka,ha);block.resize((size_t)A.size()*B.size());for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)block[i*B.size()+j]=.5*(ab[i*B.size()+j]+ba[j*A.size()+i]);}return block;};
+    auto pair_block=[&](int ga,int gb){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc,kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];std::vector<double> block;if(ga==gb&&!m_polyCombo)block=ka==0?TetVolumeSelfBlockDirectionalDerivative(ha,std::vector<double>(cell_velocity.begin()+(size_t)ha*12,cell_velocity.begin()+(size_t)(ha+1)*12)):TetFaceSelfBlockDirectionalDerivative(ha,std::vector<double>(face_velocity.begin()+(size_t)ha*9,face_velocity.begin()+(size_t)(ha+1)*9));else{auto ab=directed(ka,ha,kb,hb),ba=directed(kb,hb,ka,ha);block.resize((size_t)A.size()*B.size());for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)block[i*B.size()+j]=.5*(ab[i*B.size()+j]+ba[j*A.size()+i]);}return block;};
     if(selected_host_a>=0){if(selected_host_a>selected_host_b)std::swap(selected_host_a,selected_host_b);if(selected_host_b>=nh)throw std::out_of_range("TET derivative host out of range");return pair_block(selected_host_a,selected_host_b);}
     out.assign((size_t)m_n*m_n,0.0);
     for(int ga=0;ga<nh;++ga){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];for(int gb=ga;gb<nh;++gb){const int kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];const auto block=pair_block(ga,gb);for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j){const double x=block[i*B.size()+j];out[(size_t)A[i]*m_n+B[j]]=x;out[(size_t)B[j]*m_n+A[i]]=x;}}}
@@ -4184,8 +4190,7 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
         throw std::invalid_argument("batched derivative velocity shape mismatch");
     const auto* leaves=static_cast<const st_cHACApK_leafmtxp_t*>(m_leafmtxp);
     const auto* control=static_cast<const st_cHACApK_lcontrol_t*>(m_control);
-    if(!IsValid()||!leaves||!control||!control->lod)
-        throw std::runtime_error("ChargeGram H-matrix must be built before derivative contraction");
+    const bool useTree=IsValid()&&leaves&&control&&control->lod;
     std::vector<double> result((size_t)nDirections,0.0);
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
     ngcore::ParallelFor(ngcore::IntRange(nDirections),[&](size_t kk){
@@ -4199,6 +4204,10 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
                    :hostActive(fv,(size_t)host*faceNodeStride,faceNodeStride);}
         RadHACApKChargeGramDerivative derivative(*this,family,std::move(cv),std::move(fv));
         long double sum=0.0L;
+        if(!useTree){
+            for(int i=0;i<m_n;++i){sum+=(long double)left[i]*derivative.GetInteractionMatrixElement(i,i)*right[i];for(int j=i+1;j<m_n;++j){const double a=derivative.GetInteractionMatrixElement(i,j);sum+=(long double)a*((long double)left[i]*right[j]+(long double)left[j]*right[i]);}}
+            result[kk]=(double)sum;return;
+        }
         for(int ip=1;ip<=leaves->nlf;++ip){
             const st_cHACApK_leafmtx_t* leaf=leaves->st_lf[ip];
             if(!leaf||leaf->nstrtl>leaf->nstrtt)continue;
@@ -6051,7 +6060,7 @@ double RadHACApKChargeGram::TetChargeGramDirectionalDerivativeElement(
     int row,int col,const std::vector<double>&cellVelocity,const std::vector<double>&faceVelocity,
     unsigned long long cacheToken) const
 {
-    if(!m_highorder||m_curved||m_hexmode||m_wedgemode||m_polyCombo)
+    if(!m_highorder||m_curved||m_hexmode||m_wedgemode)
         throw std::logic_error("TET derivative entry requires a flat polynomial TET Gram");
     if(row<0||row>=m_n||col<0||col>=m_n)throw std::out_of_range("TET derivative entry index out of range");
     if(cellVelocity.size()!=m_hoCellCharges.size()*12)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");

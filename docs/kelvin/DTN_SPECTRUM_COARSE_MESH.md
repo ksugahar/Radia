@@ -606,9 +606,9 @@ MCP knowledge tool for the live recipe.
   [`OPEN_BOUNDARY_MAP.md` §5](../open_boundary/OPEN_BOUNDARY_MAP.md). See the directory
   [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md).
 - **Tests:**
-  [`tests/test_dtn_spectrum_coarse.py`](../../packages/radia-mcp/tests/test_dtn_spectrum_coarse.py)
+  [`validation_test/radia_mcp/test_dtn_spectrum_coarse.py`](../../validation_test/radia_mcp/test_dtn_spectrum_coarse.py)
   (BEM spectrum + Kelvin + 2-D Kelvin),
-  [`tests/test_fem_bem_coupling.py`](../../packages/radia-mcp/tests/test_fem_bem_coupling.py)
+  [`validation_test/radia_mcp/test_fem_bem_coupling.py`](../../validation_test/radia_mcp/test_fem_bem_coupling.py)
   (analytic shell, full BEM Schur, error-isolation, exterior-mesh sweep,
   two-sphere periodic Kelvin).
 

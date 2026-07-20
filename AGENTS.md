@@ -21,7 +21,7 @@ S:\Radia\01_GitHub\
       radia/server.py     # mcp-server-radia
       ngsolve/server.py   # mcp-server-ngsolve
       cubit/server.py     # mcp-server-cubit
-    panels/               # Official panel package: notebook workbenches, calc_*.py, samples, Cubit toolbar
+    panels/               # Headless calc_*.py, samples, IH notebook comparison surface, Cubit toolbar
     *.py                  # Python modules
   src/core/               # C++ source
   src/ext/
@@ -72,7 +72,7 @@ one generic GUI.
 | Linear algebra | Reuse proven solvers and compression tools such as shifted ICCG, AMS, ACA / TSVD, HACApK, BiCGSTAB, and BDDC. |
 | Physical methods | Primary development focus: ESIM / SIBC, reduced potentials, Kelvin transforms, CLN, stream functions, and related open-region physics. |
 | Application examples | Induction heating, MagLev, electromagnets, printed circuit boards, motors, and similar concrete engineering workflows. |
-| Interfaces | Application-level notebook workbenches, Cubit toolbar surfaces, and MCP servers; no generic catch-all GUI layer. |
+| Interfaces | Simulink application blocks for human production, Python/MCP for AI, result-bearing docs notebooks, and the Cubit toolbar. |
 
 **Policy**:
 - Follow NGSolve's Python API design wherever possible.  If NGSolve already has
@@ -88,8 +88,9 @@ one generic GUI.
   infrastructure.
 - For an important model, prefer two or more independent analysis routes when
   feasible, so cross-validation is possible without relying on one formulation.
-- GUI surfaces belong to application workflows only.  Reusable capability should
-  stay in Python APIs, CLI tools, notebooks, validation tests, and MCP servers.
+- Human production interfaces belong to application-specific Simulink blocks.
+  Reusable capability stays in C++/Python/MATLAB APIs, headless CLI tools,
+  result-bearing notebooks, validation tests, and MCP servers.
 - MCP servers are part of the development loop: they encode executable
   knowledge, support autonomous validation / self-learning, and should reflect
   the same layer boundaries as the source tree.
@@ -116,56 +117,62 @@ transforms, Piola maps, curved geometry, quadrature, weak-form assembly, and
 - Keep the caller-owned `with ngsolve.TaskManager():` convention for Python FE
   work; C++ kernels use the repository's TaskManager self-wrap policy.
 
-### MATLAB Agentic Stack Policy (2026-07-06)
+### MATLAB and Simulink Production Interface Policy (2026-07-20)
 
 **POLICY**: Use MathWorks' official MATLAB MCP Server as the MATLAB execution
-foundation.  Sugahara Lab MATLAB / Gypsilab / acoustic FEM-BEM work should be
-layered above it as domain skills or `radia_mcp` extension tools, not as a
-replacement MATLAB bridge.
+foundation and the Simulink Agentic Toolkit for generic model operations.
+Radia-specific MATLAB, LTspice, NGSolve, optimization, and Simulink behavior is
+the domain layer above those official foundations.  The final human-facing
+production interface for Radia applications is a masked block in the single
+**Radia** Simulink Library Browser entry, not a Jupyter notebook panel.
 
 | Layer | Responsibility |
 |-------|----------------|
-| MATLAB MCP Server | Start/connect MATLAB, evaluate code, run `.m` files, run MATLAB unit tests, detect toolboxes, and run Code Analyzer checks. |
-| MATLAB Agentic Toolkit skills | Teach agents idiomatic MATLAB workflows: functions/classes, tests, apps, debugging, toolbox-aware coding, and MATLAB style. |
-| Simulink Agentic Toolkit | Own generic Simulink model reading, editing, checking, testing, parameter queries, and Model-Based Design guidance. |
-| Sugahara Lab extensions | Add domain knowledge and gates for `.vol`, P1 FEM/BEM, convolution quadrature, Gypsilab-like APIs, acoustic FEM-BEM, and NGSolve/`ngsolve.bem` cross-validation. |
+| MATLAB MCP Server | Start/connect MATLAB, evaluate code, run `.m` files and tests, detect toolboxes, and run Code Analyzer checks. |
+| Simulink Agentic Toolkit | Read, edit, check, test, and query generic Simulink models and Model-Based Design settings. |
+| Radia C++ / Python / MATLAB APIs | Own numerical methods, NGSolve integration, artifact schemas, and the headless computation contract. |
+| Radia Simulink blocks | Provide the final application-specific human operating surface through masks, typed ports, initialization, diagnostics, and result artifacts. |
+| Python / MCP | Provide the first-class AI operating surface over the same numerical and artifact contracts. |
 
 **Rules**:
-- Keep this shared policy section synchronized with the corresponding section
-  in `CLAUDE.md` in the same change.  `AGENTS.md` and `CLAUDE.md` are separate
-  agent entry points; neither may carry a stale MATLAB/Simulink architecture.
-- Do not fork or replace the official MATLAB MCP Server for ordinary MATLAB
-  execution.  If a workflow needs MATLAB code execution or `runtests`, route it
-  through the official server first.
-- Keep lab-specific knowledge in skills and `radia_mcp.<topic>` packages.
-  Tools may call MATLAB, but they should document the domain operation they add
-  above the official execution layer.
+- Keep this entire policy section synchronized verbatim with the corresponding
+  section in the other agent-policy file in the same change.
+- Publish application blocks through one **Radia** library. The production
+  application grouping covers Electromagnet, PCB/PEEC, Motor, Stream Function,
+  and Induction Heating. Additional validated MEX/ROM, LTspice, optimization,
+  or application subsystems may coexist without changing this contract.
+- `radia-ih` is the only dual-production exception during the migration study:
+  keep both its Jupyter notebook workbench and its Simulink block supported,
+  exercise both on the same inputs, and compare setup effort, failure recovery,
+  result inspection, automation, and operator throughput.  The intended
+  direction is Simulink. Retire the IH notebook only after the block matches the
+  same headless goldens, preserves result/log diagnostics and recovery, succeeds
+  in an operational trial, and an explicit policy decision accepts the move.
+- For every other application, a Simulink block is the final production
+  interface. Remove the EM, PCB, Motor, and Stream Function notebook
+  workbenches and their adapters; do not retain them as alternate production
+  paths, add notebook-only production features, or create new notebook panels.
+- `docs/**/*.ipynb` remains the result-bearing documentation, derivation,
+  reproduction, and validation layer. A docs notebook is not a production GUI.
+- Blocks must delegate to tested `radia.*` APIs, MEX/ROM handles, or validated
+  headless application entry points. They must not reimplement solver logic.
+- The initial application-block backend may be the validated Python/headless
+  CLI, launched only on an explicit trigger or update. MEX/ROM is an optional
+  later backend promotion, not a prerequisite for the Simulink interface. Move
+  a path to MEX only after numerical parity, error propagation, lifecycle, and
+  long-run stability are independently tested; keep the block contract stable.
+- Expensive CAD, mesh, basis construction, and field solves occur during model
+  initialization, explicit update commands, or artifact generation. Per-step
+  simulation uses checked native MEX/ROM state where available and must not
+  spawn Python once per time step.
+- Each production block must have a mask parameter contract, typed and
+  documented ports, sample-time semantics, fail-fast dependency checks,
+  `run.log` / `result.json` compatible provenance, a MATLAB test entry point,
+  and a numerical cross-check against the corresponding headless golden.
 - Treat `radia-mcp` as the canonical executable manual for Radia-specific
-  MATLAB and Simulink workflows.  Its knowledge/contract tools should explain
-  the supported operation, return machine-readable configuration and limits,
-  and route execution through the official MathWorks server.  Do not duplicate
-  generic MATLAB or Simulink documentation already owned by the official MCP
-  Server and Agentic Toolkits.
-- Keep `matlab/README.md` concise: installation, architecture, minimal examples,
-  and pointers to the relevant `radia-mcp` tools.  Do not maintain a second
-  prose manual that can drift from the executable MCP contract.  Numerical
-  behavior remains authoritative in source code and focused MATLAB tests.
-- User-facing Simulink blocks may be published through one Radia library in the
-  Simulink Library Browser.  Group Radia MEX/ROM, LTspice coupling, NGSolve
-  numeric bridges, and MATLAB Optuna orchestration by subsystem; library blocks
-  must delegate to the same tested `radia.*` APIs and must not reimplement
-  solver logic inside the library model.
-- The supported Radia LTspice--Simulink implementation uses direct LTspice
-  execution, real/complex RAW import, parallel trials, and Pareto optimization.
-  Do not add automatic circuit-ROM generation to this integration unless a
-  future policy explicitly changes the scope.  This is an internal development
-  boundary, not a user prohibition: do not emit it from MCP tools or user-facing
-  capability contracts, and do not prevent users from building ROMs separately.
-- For any new MATLAB acoustic FEM-BEM / Gypsilab-style workflow, require a
-  MATLAB test entry point plus an independent Python/NGSolve or analytical
-  cross-check whenever feasible.
-- Treat mdx as the compute node for long MATLAB validation runs; LAB and 100
-  remain development / agent hosts.
+  MATLAB and Simulink workflows. Do not duplicate generic MathWorks guidance.
+- Long or solver-heavy MATLAB validation runs execute on mdx or hibino; LAB and
+  100号機 remain development and fast-test hosts.
 
 ### Python-to-MATLAB Capability Parity Policy (2026-07-19)
 
@@ -396,11 +403,8 @@ their owning `tests/`, `validation_test/`, `docs/`, or `src/radia/panels/`
 driver.
 - Do NOT place generated files at the repository root
 - Build output goes to `build*/` or `dist/` (both gitignored)
-- `docs/<topic>/` MAY contain `.py` helper modules that a result-bearing
-  `*.ipynb` imports, especially when the same helper is also useful to
-  `radia_mcp`. Notebook-coupled Python should live beside the notebook; reusable
-  behavior should be promoted to a `src/` API instead of staying as a loose
-  example script.
+- `docs/<topic>/` MAY contain `.py` helpers imported by that topic's
+  result-bearing notebook. Reusable behavior belongs in a `src/` API.
 - Every `docs/<topic>/*.ipynb` method/showcase notebook must be result-saving:
   execute it before committing so code-cell outputs, figures, and tables are
   embedded. Main computed values should also be written to adjacent JSON with
@@ -410,14 +414,16 @@ driver.
   must be synchronized in the same change: after rerunning or editing notebook
   outputs, refresh the JSON sidecar so its recorded `notebook_sha256` matches
   the committed result-bearing `.ipynb`.
-- Radia panel operating surfaces live under the importable package
-  `src/radia/panels/`.  This is the official location, not a legacy staging
-  area: packaged notebook workbenches, headless `calc_*.py` scripts, samples,
-  and panel manifests stay there so they ship in the wheel and resolve through
-  one implementation path.  Do not create a parallel repo-root `panels/` tree.
-  Reusable non-panel computation belongs in ordinary `src/radia/` APIs.
+- `src/radia/panels/` owns headless `calc_*.py` application entry points,
+  samples, artifact schemas, and the temporary IH notebook comparison surface.
+  It is not the final human UI location. Do not create a repo-root `panels/`
+  tree.
+- `matlab/+radia/+simulink/` owns Simulink builders and runtime adapters;
+  `matlab/radia_simulink_library.slx` is the distributable human-facing block
+  library. Native block kernels and build sources may live under
+  `src/radia/simulink/`.
 
-### Promotion Ladder: C:\temp → tests / validation_test / docs / src/radia/panels (2026-07-04)
+### Promotion Ladder: C:\temp → tests / validation_test / docs / src / Simulink (2026-07-20)
 
 **POLICY**: New exploratory scripts start outside the repository in `C:\temp`.
 `examples/` is retired forever.  A file enters the source tree only when it has
@@ -429,8 +435,9 @@ a durable role:
 | `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, executed on idle `mdx` or `hibino` for large runs. | developer / agent / research validation | No |
 | `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
-| `src/` | Reusable API, parser, formula, solver helper, computation kernel. | package users / panels / validation / MCP | Yes |
-| `src/radia/panels/` | Final engineering operating surface promoted from a mature docs notebook/workbench. | end users | Yes |
+| `src/` | Reusable API, parser, formula, solver helper, and computation kernel. | package users / validation / MCP / blocks | Yes |
+| `src/radia/panels/` | Validated headless application CLI, `DesignSpec`, samples, and IH notebook comparison support. | blocks / AI / validation | Yes |
+| `matlab/+radia/+simulink/` + `matlab/radia_simulink_library.slx` | Final application-specific human operating surface. | end users | MATLAB distribution |
 
 **Promotion gates**:
 
@@ -443,22 +450,22 @@ a durable role:
 - **C:\temp → docs/**: the result teaches a method or workflow to humans; the
   notebook must be executed, output-bearing, Markdown-integrated, and paired
   with synchronized JSON.
-- **C:\temp → src/**: the code is reusable by more than one notebook,
-  validation path, panel, or MCP topic.
-- **docs/ → `src/radia/panels/`**: once a result-bearing docs
-  notebook/workbench has become an engineering operating surface, promote it to
-  the packaged panel path with a validated CLI/workbench path and panel golden.
-  Do not promote directly from scratch.
+- **C:\temp → src/**: the code is reusable by more than one documentation,
+  validation, application-block, or MCP path.
+- **Mature docs/headless contract → Simulink**: publish a masked block only
+  after the headless command and golden are stable. The block delegates to that
+  contract and adds no numerical implementation.
 
 Same geometry may exist in multiple lanes only when the artifacts have distinct
 roles: e.g. a minimal fixture in `tests/`, a heavy truth run in
 `validation_test/`, a human-facing result notebook in `docs/`, and a packaged
-panel sample in `src/radia/panels/`.  No lane points back to `examples/`.
+headless sample in `src/radia/panels/`. No lane points back to `examples/`.
 
-### Panel Design Workflow Policy (2026-04-23, updated 2026-06-26)
+### Application Interface Promotion Policy (2026-07-20)
 
-**POLICY**: Panels are built in **three strict stages**, each gated by
-validation of the previous stage.  Do NOT jump straight to a custom GUI.
+**POLICY**: Application interfaces are built in **four gated stages**. The
+production human surface is a Simulink block; a documentation notebook is not
+promoted into a notebook GUI.
 
 **Stage 1 — Enumerate the app-specific variables.**
 Write down every knob the user of this specific application might want
@@ -471,11 +478,10 @@ to change.  This is a list, not code.  Pin the solver-specific variables
 Turn the Stage-1 list into an argparse-driven Python script.
 Computation only, no GUI.  JSON on stdout.  The solver switch **must**
 also be a CLI flag so the same script can drive any supported backend.
-The CLI arguments are the canonical settings surface; the notebook panel
-should map those arguments into a small `DesignSpec` dataclass instead
-of inventing a second configuration language.
+Map those arguments into a small UI-neutral `DesignSpec` dataclass so Python,
+MCP, MATLAB, and Simulink share one settings-to-command contract.
 
-Stage 2 is validated by running the panel mode end-to-end against its
+Stage 2 is validated by running the application mode end-to-end against its
 *sample* input (see "Panel Samples Quality Policy") and comparing the
 resulting scalar against a golden band in
 `tests/panels/test_*_golden.py`.  Two or more solver choices must be
@@ -488,60 +494,49 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — notebook panel (`src/radia/panels/notebooks/*.ipynb`).**
-Wrap the **validated** Stage-2 script with a lightweight notebook
-workbench (`radia.<mode>_design` + `radia.<mode>_notebook`).  In this
-repo, a "panel" means the integrated `.ipynb` surface: CLI arguments
-become editable settings, `DesignSpec(...)` cells hold persistent
-initial values, and the workbench launches the CLI in the background
-with timeout, cancel, `run.log`, and `result.json` artifacts.  The
-`result.json` artifact must record the execution timestamp, Radia
-runtime version, Python/platform context, total wall time, and up to
-four heaviest detected timing stages from the solver's own output JSON.
-The notebook is allowed to include concise Markdown cautions because it
-is also the user-facing operating surface.
+**Stage 3 — result-bearing documentation notebook (`docs/<topic>/*.ipynb`).**
+Explain the validated method, inputs, outputs, equations, and representative
+result. Save outputs and synchronize the adjacent JSON. The notebook may call
+the Stage-2 contract but may not become an alternate production workbench.
 
-Notebook panels should also carry **small domain notes** that a generic
-dialog cannot.  For example, the IH workpiece note should say that the
-linear path uses a linear SIBC/Dowell-style `Z_s`, while the nonlinear
-ESIM path first solves a 1-D cell problem from the BH curve to update
-the effective surface impedance `Z_s`, optionally per panel/DOF.  When
-previous in-repo result artifacts exist, point to them and name the
-keys to inspect (`esim_converged`, `esim_iterations`, `Z_s_wp_*`,
-`P_wp_W`) instead of turning the notebook into a large static report.
+**Stage 4 — masked Simulink application block.**
+Publish the human interface in the single Radia library. The block exposes a
+stable mask contract, typed ports, explicit sample-time/trigger semantics,
+fail-fast dependency checks, and `run.log` / `result.json` artifacts. It
+delegates to the Stage-2 contract. The initial backend may launch the validated
+Python CLI once per explicit trigger; it must never launch Python every time
+step. A later MEX/ROM backend keeps the same block contract and is promoted only
+after independent parity and long-run tests.
 
-The Stage-3 notebook is forbidden from re-implementing computation; it
-only maps settings to the Stage-2 CLI and displays ecosystem-native
-outputs.  Use `netgen.webgui` for human-facing notebook visualization
-and durable GMSH `.msh v4.1` artifacts for LLM/headless validation.
+Stage 4 is considered **合格 (pass)** when:
+- the block is present in `matlab/radia_simulink_library.slx` with an
+  application-specific mask and documented typed ports
+- a MATLAB test loads, updates, and executes the block's supported path
+- the same sample produces the same golden-band quantities as Stage 2
+- success, timeout, dependency failure, and solver failure leave inspectable
+  result/log diagnostics
 
-Notebook workbenches intentionally live under the importable `radia`
-package so they ship in the wheel and stay next to the headless
-`calc_*.py` scripts and packaged samples.  Do not create a parallel
-repo-root `panels/` tree for the same operating surface.  PySide windows
-under `src/radia/radia_*.py` were retired; do not add new
-`ModePanel`/`AnalysisWindow` desktop surfaces.  New panel work lands in
-the notebook workbench and
-`src/radia/panels/notebooks/panel_notebook_manifest.json`; Stage-2-only
-modes remain CLI scripts until this promotion gate is met.  The Cubit
-Export Mesh toolbar is the separate, allowed PySide6 surface because it
-runs inside Coreform Cubit's embedded Python.
+EM, PCB, Motor, and Stream Function have no notebook-workbench stage. IH alone
+keeps its existing workbench during the comparison period; both IH surfaces
+must exercise the same `IHDesignSpec`/headless calculation and artifacts. The
+Cubit Export Mesh toolbar remains the separate allowed PySide6 surface inside
+Coreform Cubit's embedded Python.
 
 **Why**:
 - Forces the hard thinking about *what is changeable* before any widget
   code is written (Stage 1 is where over-scoping is cheapest to cut).
-- The solver switch being a Stage-2 argument means we catch
-  solver-specific bugs with the same sample + golden test; the panel
-  UI does not hide them.
-- Stage-3 promotion requires a passing golden and a notebook wrapper
-  that remains thin, readable, and cheap to maintain.
+- The solver switch being a Stage-2 argument keeps backend bugs visible to the
+  same sample and golden.
+- Stage 3 preserves readable theory and results without making Jupyter an
+  operational dependency.
+- Stage 4 gives human operation a stable Model-Based Design surface while
+  Python/MCP remains the first-class AI surface.
 
 Related:
 - "Panel Samples Quality Policy" above — Stage 2's validation relies
   on trustworthy samples.
-- "Cubit Panel Architecture" below (§ 4-Layer) — Stage 3 corresponds
-  to the notebook panel, while Stage 2 corresponds to Layer 4
-  (headless `calc_*.py`).
+- "Cubit Panel Architecture" below (§ 4-Layer) — Simulink and Cubit remain
+  separate interface processes over the same headless artifacts.
 
 ### Panel Visualization Routing Policy (2026-06-26)
 
@@ -1514,7 +1509,7 @@ for (int i = 0; i < n; i++) { ... }
 2. Update `CHANGELOG.md`
 3. `git commit` (do NOT push yet)
 4. `/deploy` — build wheel, deploy to 100号機 (WinRM) & mdx (SSH)
-5. Test on remote machines (Cubit toolbar, notebook workbenches, docs Mesh Evaluation, etc.)
+5. Test on remote machines (Cubit toolbar, Simulink application blocks, IH comparison workbench, docs Mesh Evaluation, etc.)
 6. If tests pass: `git push origin main`
 7. Wait for CI to pass: `python tools/check_ci.py --branch main --watch`
 8. Tag and push (triggers PyPI publish):
@@ -1611,7 +1606,7 @@ editable には反映される**。mdx / hibino の PyPI install には反映さ
 **リリース前の必須テスト**:
 1. CI: C++ ビルド + pytest（Cubit 不要テスト）
 2. ローカル: Cubit + system Python で `export_curved` テスト（球、トーラス）
-3. ローカル: Cubit toolbar と notebook workbench の動作確認
+3. ローカル: Cubit toolbar、Simulink application block、IH比較workbenchの動作確認
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
@@ -2557,7 +2552,9 @@ Executable reference scripts and sweep results live under
 
 ### 4-Layer Architecture
 
-**POLICY**: Cubit, Radia-NGSolve, and computation are **3 separate processes**. No layer imports another layer's libraries.
+**POLICY**: Cubit, Simulink, and Radia-NGSolve computation are separate
+processes. They exchange checked files and artifacts; no interface process
+imports another process's private runtime.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -2574,16 +2571,15 @@ Executable reference scripts and sweep results live under
 │  register_toolbar.py -> Solve menu management                   │
 │    Radia-NGSolve / Generate Coil / Kelvin / Reload / Verify     │
 │  import cubit OK (same process). import radia/ngsolve FORBIDDEN │
-│  Launches Layer 3 via subprocess.Popen (detached)               │
+│  Exports checked .vol/.sol assets for Layers 3 and 4            │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 3: Radia notebook panel (Python 3.12 + Jupyter/ipywidgets)│
+│  Layer 3: Radia Simulink application blocks (MATLAB/Simulink)   │
 │  ─────────────────────────────────────────────────────────────  │
-│  src/radia/panels/notebooks/*.ipynb + *_design.py/*_notebook.py │
-│  Separate process/kernel from Cubit. import cubit FORBIDDEN.    │
-│  Receives .vol/.sol paths as notebook/CLI settings.             │
-│  Launches Layer 4 in background with timeout/cancel/logs.       │
-│  No desktop PySide6 analysis windows in normal Radia Python.     │
+│  matlab/radia_simulink_library.slx + radia.simulink adapters    │
+│  Explicit trigger launches Layer 4 and reads result/log files.  │
+│  Native MEX/ROM is optional and admitted only after parity tests.│
+│  IH notebook is a temporary comparison peer, not the default.   │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
@@ -2594,7 +2590,8 @@ Executable reference scripts and sweep results live under
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Interface between layers**: `.vol` file (text format, no ABI dependency)
+**Interfaces between layers**: self-contained `.vol` / `.sol` inputs plus
+versioned configuration, `run.log`, solver JSON, and `result.json` artifacts.
 
 **Filename convention**: `ensure_jou_path()` (Layer 1, C++) saves `.jou` first. All output files derive basename from `.jou`: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, `{base}_q.sol`, etc.
 
@@ -2604,20 +2601,22 @@ Executable reference scripts and sweep results live under
 |------|-----------|
 | Layer 4 must NOT `import cubit` | Cubit is expensive commercial software. Computation must work without it. |
 | Layer 4 must NOT import PySide6/PyQt5 | Headless computation. JSON stdout only. |
-| Layer 3 must NOT `import cubit` | Separate process. Cubit embeds Python 3.10; Layer 3 is Python 3.12. |
+| Layer 3 must NOT load Cubit's Python runtime | Simulink is a separate MATLAB process; it uses files and the validated headless runner. |
 | Layer 2 must NOT `import radia` or `import ngsolve` | DLL conflicts (Cubit bundles its own numpy/scipy). |
 | Layer 1 (C++) has no Python/Qt dependency | `.ccm` links the Cubit C++ API directly. The Qt5 `.ccl` GUI was removed in radia 4.80.0. |
 
-### Panel Files
+### Application Interface Files
 
 | File | Layer | Purpose |
 |------|-------|---------|
 | `src/radia/panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs inside Cubit |
-| `src/radia/panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
-| `src/radia/panels/notebooks/radia_ih.ipynb` | 3 (notebook panel) | IH analysis workbench (PEEC/BEM/FEM/thermal) |
-| `ih_design.py`, `ih_notebook.py` | 3 (notebook adapter) | UI-neutral IH settings and ipywidgets command workbench |
-| `src/radia/panels/notebooks/radia_*.ipynb` | 3 (notebook panel) | Application workbench operating surfaces |
-| `*_design.py`, `*_notebook.py` | 3 (notebook adapter) | UI-neutral settings and command workbench wiring |
+| `src/radia/panels/register_toolbar.py` | 2 (Cubit Python) | Solve/export menu integration; no non-IH notebook launcher |
+| `matlab/radia_simulink_library.slx` | 3 (Simulink) | Final EM, PCB, Motor, Stream Function, and IH blocks |
+| `matlab/+radia/+simulink/` | 3 (MATLAB) | Block builders, explicit runner, masks, and runtime adapters |
+| `src/radia/simulink/application.py` | 3→4 bridge | Python-backed explicit-trigger artifact runner |
+| `src/radia/panels/notebooks/radia_ih.ipynb` | 3 comparison | Temporary IH notebook workbench only |
+| `ih_design.py`, `ih_notebook.py` | 3 comparison | Shared IH settings plus temporary notebook adapter |
+| `*_design.py` | 4 contract | UI-neutral settings-to-command mapping shared by blocks and AI |
 | `src/radia/panels/calc_*.py` | 4 (no GUI) | Headless application computations |
 | `src/radia/panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA, called from docs/notebooks |
 

@@ -1126,6 +1126,77 @@ void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3], double ou
 {
     TetPotentialMomentsUpTo(V, r, 6, out);
 }
+
+void TetReferencePotentialMomentsDirectional(
+    const double V[4][3], const double dV[4][3],
+    const double r[3], const double dr[3],
+    const std::vector<std::array<int,3>>& exps,
+    double* value, double* direction)
+{
+    if (!value || !direction)
+        throw std::invalid_argument("TetReferencePotentialMomentsDirectional: null output");
+    int degree = 0;
+    for (const auto& e : exps) {
+        if (e[0] < 0 || e[1] < 0 || e[2] < 0)
+            throw std::invalid_argument("TetReferencePotentialMomentsDirectional: negative exponent");
+        degree = std::max(degree, e[0] + e[1] + e[2]);
+    }
+    if (degree > POLY_MAX_DEG)
+        throw std::invalid_argument("TetReferencePotentialMomentsDirectional: degree exceeds 18");
+
+    ValueDirectional J[3][3];
+    for (int row=0; row<3; ++row) for (int col=0; col<3; ++col)
+        J[row][col] = {V[col+1][row]-V[0][row],
+                       dV[col+1][row]-dV[0][row]};
+    const ValueDirectional det =
+        J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])
+      - J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])
+      + J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
+    if (std::fabs(det.value) < 1e-300) {
+        std::fill(value, value+exps.size(), 0.0);
+        std::fill(direction, direction+exps.size(), 0.0);
+        return;
+    }
+    ValueDirectional inv[3][3];
+    inv[0][0]=(J[1][1]*J[2][2]-J[1][2]*J[2][1])/det;
+    inv[0][1]=-(J[0][1]*J[2][2]-J[0][2]*J[2][1])/det;
+    inv[0][2]=(J[0][1]*J[1][2]-J[0][2]*J[1][1])/det;
+    inv[1][0]=-(J[1][0]*J[2][2]-J[1][2]*J[2][0])/det;
+    inv[1][1]=(J[0][0]*J[2][2]-J[0][2]*J[2][0])/det;
+    inv[1][2]=-(J[0][0]*J[1][2]-J[0][2]*J[1][0])/det;
+    inv[2][0]=(J[1][0]*J[2][1]-J[1][1]*J[2][0])/det;
+    inv[2][1]=-(J[0][0]*J[2][1]-J[0][1]*J[2][0])/det;
+    inv[2][2]=(J[0][0]*J[1][1]-J[0][1]*J[1][0])/det;
+
+    ValueDirectional rd[3], v0[3], xiR[3];
+    for (int k=0;k<3;++k) { rd[k]={r[k],dr[k]}; v0[k]={V[0][k],dV[0][k]}; }
+    for (int i=0;i<3;++i) for (int k=0;k<3;++k) xiR[i]=xiR[i]+inv[i][k]*(rd[k]-v0[k]);
+
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    ValueDirectional face[4][POLY_MAX_MOMENTS]{}, h[4]{}, cen[3]{}, phi;
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]=cen[k]+ValueDirectional(V[i][k],dV[i][k])/4.0;
+    for(int fi=0;fi<4;++fi){
+        ValueDirectional P[3][3],e1[3],e2[3],n[3],fc[3],rmf[3];
+        for(int a=0;a<3;++a)for(int k=0;k<3;++k){int vi=FACES[fi][a];P[a][k]={V[vi][k],dV[vi][k]};fc[k]=fc[k]+P[a][k]/3.0;}
+        for(int k=0;k<3;++k){e1[k]=P[1][k]-P[0][k];e2[k]=P[2][k]-P[0][k];rmf[k]=rd[k]-P[0][k];}
+        vd_cross(e1,e2,n);auto nl=vd_norm(n);if(nl.value<1e-300)continue;for(auto&x:n)x=x/nl;
+        ValueDirectional outward[3];for(int k=0;k<3;++k)outward[k]=fc[k]-cen[k];if(vd_dot(outward,n).value<0)for(auto&x:n)x=-x;
+        h[fi]=vd_dot(rmf,n);
+        ValueDirectional A[POLY_MAX_DEG+1][POLY_MAX_DEG+1];TriPolySetupDirectional g;
+        triangle_inplane_A_moments_directional(P,rd,degree,A,g);
+        ValueDirectional rpmv0[3];for(int k=0;k<3;++k)rpmv0[k]=g.rp[k]-v0[k];
+        int idx=0;
+        for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){
+            const int alpha[3]={ax,ay,total-ax-ay};ValueDirectional poly[POLY_MAX_DEG+1][POLY_MAX_DEG+1]{};int pd=0;poly[0][0]={1,0};
+            for(int coord=0;coord<3;++coord){ValueDirectional c0,c1,c2;for(int k=0;k<3;++k){c0=c0+inv[coord][k]*rpmv0[k];c1=c1+inv[coord][k]*g.e1[k];c2=c2+inv[coord][k]*g.e2[k];}for(int q=0;q<alpha[coord];++q)poly2_mul_linear_directional(poly,pd,c0,c1,c2);}
+            ValueDirectional s;for(int a=0;a<=pd;++a)for(int b=0;b<=pd-a;++b)s=s+poly[a][b]*A[a][b];face[fi][idx++]=s;
+        }
+        phi=phi+0.5*(-h[fi])*face[fi][0];
+    }
+    ValueDirectional out[POLY_MAX_MOMENTS]{};out[0]=phi;
+    for(int total=1;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){int az=total-ax-ay,idx=PotentialMomentIndex(ax,ay,az);ValueDirectional s;for(int fi=0;fi<4;++fi)s=s-h[fi]*face[fi][idx];const int alpha[3]={ax,ay,az};for(int k=0;k<3;++k)if(alpha[k]){int lo[3]={ax,ay,az};--lo[k];s=s+xiR[k]*double(alpha[k])*out[PotentialMomentIndex(lo[0],lo[1],lo[2])];}out[idx]=s/(total+2.0);}
+    for(size_t i=0;i<exps.size();++i){const auto&e=exps[i];const auto&x=out[PotentialMomentIndex(e[0],e[1],e[2])];value[i]=x.value;direction[i]=x.direction;}
+}
 void TetPotentialMomentsDirectionalUpTo3(const double V[4][3],const double dV[4][3],
     const double r[3],const double dr[3],double value[20],double direction[20])
 { TetPotentialMomentsUpToDirectional(V,dV,r,dr,3,value,direction); }

@@ -93,10 +93,11 @@ PATTERNS: list[dict] = [
                       "150 more lines to _output that never made it "
                       "to the .log.",
         "detection": "Code review of any legacy AnalysisWindow._on_finished "
-                     "override; current notebook workbenches are covered by "
-                     "validation_test/panels/test_notebook_workbench.py.",
-        "prevention": "Prefer the notebook CommandWorkbench artifact "
-                      "contract.  Any temporary legacy adapter that appends "
+                     "override; current application blocks are covered by "
+                     "tests/test_simulink_application.py and the IH exception "
+                     "by validation_test/panels/test_notebook_workbench.py.",
+        "prevention": "Prefer the Simulink application-runner artifact "
+                      "contract. Any temporary IH/legacy adapter that appends "
                       "output after a run must rewrite the final .log at the "
                       "end of the override.",
         "related": ["validation_test/panels/test_notebook_workbench.py",
@@ -866,10 +867,9 @@ PATTERNS: list[dict] = [
                       "makes a doubly-ruled non-planar quad.",
         "detection": "Real site: simple_problems/chamfered_pole_piece.py "
                      "(dropped). See memory reference_objmltextrtg_planar_faces.",
-        "prevention": "Taper only ONE in-plane dim per slice transition (or "
-                      "keep centers aligned + similar rectangles); for a "
-                      "both-dim chamfer use ObjPolyhdr with explicit planar "
-                      "faces.",
+        "prevention": "The public ObjMltExtRtg API is retired. Build tapered "
+                      "geometry with Netgen or Cubit and pass the mesh through "
+                      "the NGSolve-native path.",
         "related": ["packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/radia.py"],
     },
     {

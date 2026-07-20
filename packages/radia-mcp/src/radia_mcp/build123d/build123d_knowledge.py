@@ -2993,7 +2993,7 @@ library OR copy-paste into an `execute_build123d` subprocess.
 `slotted_stator` + `spm_rotor` compose a full PMSM cross-section in build123d that drops straight into
 the AGE rotating-machine solver (`radia_ngsolve.airgap_motor_workflow`), including the hysteresis-coupled
 sweep -- so the geometry, magnetization labels, and field/torque solve share one parametric source.
-Verified end-to-end in `tests/test_build123d_pmsm_field.py`: a `spm_rotor` -> `magnetization_map` ->
+Verified end-to-end in `validation_test/radia_mcp/test_build123d_pmsm_field.py`: a `spm_rotor` -> `magnetization_map` ->
 AGE solve makes an air-gap field whose ring-harmonic spectrum peaks at the pole-pair number `n_poles/2`
 (with the 3rd space harmonic next), i.e. the rotor archetype produces the correct multipole field.
 
@@ -3003,7 +3003,7 @@ field -- test_build123d_pmsm_field), and **coil / induction heating** (helmholtz
 field = (4/5)^1.5 mu0 NI/R, read back from the geometry -- test_build123d_coil_field).
 
 The magnetization convention is verified end-to-end against physics in
-`tests/test_build123d_halbach_field.py`: a `halbach_ring` -> `magnetization_map` -> 2D A_z PM solve
+`validation_test/radia_mcp/test_build123d_halbach_field.py`: a `halbach_ring` -> `magnetization_map` -> 2D A_z PM solve
 gives a UNIFORM transverse bore field of `Br*ln(r_out/r_in)` (dipole), and a quadrupole Halbach
 (`pole_pairs=2`) a field that grows from a null centre.  (A swept saddle coil is future work -- the
 closed-path sweep is fragile in the OCCT kernel; use `cos_theta_dipole` for transverse-field windings.)
@@ -3025,7 +3025,7 @@ machine = assembly(*hb.children, yoke, tube(10, 18, 40, "coil"), label="device")
 mags = {seg.label: parse_magnetization(seg.label) for seg in hb.children}
 ```
 
-Validated: tests/test_build123d_modeling.py, tests/test_build123d_archetypes.py (analytic volumes,
+Validated: validation_test/radia_mcp/test_build123d_modeling.py, validation_test/radia_mcp/test_build123d_archetypes.py (analytic volumes,
 OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).  The reusable Netgen/GMSH bridge
 lives in `radia_mcp.build123d.pipeline`; the executable validation corpus lives in
 `validation_test/build123d_netgen_gmsh_flow/`, with result-saved notebooks and JSON archives under

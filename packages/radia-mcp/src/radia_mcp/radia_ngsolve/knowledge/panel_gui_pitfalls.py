@@ -675,25 +675,28 @@ editing).
 cast), this commit (restored ``.nr`` access + added rule).
 
 ============================================================
-## panel_qt_testing — retired; notebook tests are the active gate
+## panel_qt_testing — retired; Simulink tests are the active gate
 ============================================================
 
-This topic is historical.  The PySide6 desktop panel route has been retired in
-favor of Jupyter notebook workbenches.  Current panel behavior is checked by:
+This topic is historical. The PySide6 desktop and non-IH notebook routes are
+retired in favor of Simulink application blocks. Current behavior is checked by:
 
 ```
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
+python -m pytest tests/test_simulink_application.py -q
+matlab -batch "addpath('matlab'); r=runtests('tests/matlab/test_simulink_workflow.m'); assert(all([r.Passed]))"
 ```
 
 The active invariants are:
 
-- notebooks do not import PySide6 / PyQt
-- `DesignSpec(...)` cells are the canonical initial-value store
-- JSON files are run artifacts, not presets
-- `CommandWorkbench.run_local()` writes `radia_result.v2`
-- `Workbench.build_command()` stays aligned with the target `calc_*.py`
+- non-IH workbench adapters/notebooks remain absent
+- `DesignSpec` stays aligned with the target `calc_*.py`
+- masks and typed ports remain stable
+- Python runs only on an explicit trigger
+- the application runner writes versioned result/log artifacts
+- MEX is not promoted without parity/lifecycle/long-run evidence
 
-Normal Radia Python should not install PySide6.  Coreform Cubit's embedded
+IH keeps a separate notebook comparison test until its migration decision.
+Normal Radia Python should not install PySide6. Coreform Cubit's embedded
 PySide6 is protected and must not be removed.
 
 ============================================================

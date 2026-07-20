@@ -829,12 +829,12 @@ def test_acoustic_fembem_cross_learnings_covers_method_and_validation():
 
 
 def test_matlab_acoustic_fembem_agent_guide_is_exposed_to_mcp():
-    from radia_mcp.matlab_acoustic_fembem import matlab_acoustic_fembem_agent_guide
+    from radia_mcp.acoustic_fembem import acoustic_fembem_agent_guide
     from radia_mcp.radia_ngsolve.server import (
         matlab_acoustic_fembem_agent_guide as mcp_agent_guide,
     )
 
-    text = matlab_acoustic_fembem_agent_guide()
+    text = acoustic_fembem_agent_guide()
     assert mcp_agent_guide() == text
     assert len(text) > 1000
     assert "official MATLAB MCP Server" in text

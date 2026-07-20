@@ -1,22 +1,15 @@
-# Stream-Function coil-design panel (`calc_streamfunction.py`)
+# Stream-Function coil-design application (`calc_streamfunction.py`)
 
-The FE-direct stream-function designer is exposed as a Layer-3 notebook
-workbench (`src/radia/panels/notebooks/radia_streamfunction.ipynb`) over a
-headless Layer-4 calc (`src/radia/panels/calc_streamfunction.py`).  ONE
-`argparse` / `StreamFunctionDesignSpec` surface drives both; the workbench
-maps notebook settings to the CLI and writes the standard `result.json` /
-`run.log` artifacts.
+The FE-direct stream-function designer is exposed through the masked
+`radia_simulink_library/Applications/Stream Function` block over the headless
+`src/radia/panels/calc_streamfunction.py` calculation. One
+`argparse`/`StreamFunctionDesignSpec` surface drives Python, MCP, and Simulink;
+the block launches that contract on an explicit rising trigger and writes the
+standard `run.log`, `solver_result.json`, and `result.json` artifacts.
 
-Notebook launch:
-
-```bash
-python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
-```
-
-The Cubit `Solve -> Radia-NGSolve` launcher exports the `.vol` artifacts and
-opens the same notebook/workbench route.  Notebook settings hold the
-coil/conductor `.vol` path, while each mode keeps its own additional browse
-fields such as `--eval-vol`.
+Cubit exports the `.vol` inputs as a separate process. The block configuration
+holds the coil/conductor `.vol` path and mode-specific inputs such as
+`--eval-vol`. There is no Stream Function notebook workbench.
 
 This file documents the panel/calc workflow and the boundary-condition /
 contour / flux features.  The math core (the `(ACA+)+TSVD` least-norm solver,
@@ -295,8 +288,9 @@ cost is the Biot-Savart design-matrix assembly, itself linear in N).  Locked by
 
 ## Validation
 
-- `validation_test/panels/test_notebook_workbench.py` — the current notebook
-  workbench contract (DesignSpec, Workbench, result artifact, no-PySide gate).
+- `tests/test_simulink_application.py` and
+  `tests/matlab/test_simulink_workflow.m` — the block runner, mask, and artifact
+  contract.
 - The stream-function golden validation lane locks the calc behavior (design /
   pareto levers / manufacture / field-aware chain / confine / order-p contour +
   bubble flux / cross-codebase), run via subprocess.

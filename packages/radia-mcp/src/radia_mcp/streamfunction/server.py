@@ -20,8 +20,7 @@ The detailed knowledge lives in this server's own
 tool adds a dedicated SF overview + topic map over that knowledge.
 
 Usage:
-    python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
-                                                 # Open notebook workbench
+    Open Radia Library > Applications > Stream Function in Simulink.
     mcp-server-radia-streamfunction              # Start MCP server (stdio)
     mcp-server-radia-streamfunction --selftest   # Run self-test
 """

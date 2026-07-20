@@ -1,191 +1,176 @@
-# Adding a New Panel -- Bug-Resistant Recipe
+# Adding a Radia Simulink Application Block
 
-This is the current Radia pattern for promoting a calculation into a user-facing
-notebook workbench. The rule is simple: the computation is a headless argparse
-CLI, and the notebook/workbench is only a thin operating surface around that CLI.
+Radia's final human operating surface is a masked block in the single Radia
+Simulink library. Python and MCP remain the AI surface, and result-bearing
+notebooks under `docs/` explain and reproduce methods. A documentation notebook
+is not an application GUI.
 
-> TL;DR: decide the arguments, write one `calc_<topic>.py`, lock it with a
-> golden/validation test, then wrap it with a DesignSpec-backed notebook
-> workbench. Do not create a separate desktop-Qt implementation.
+IH is the temporary comparison exception: its notebook workbench and Simulink
+block remain supported over the same headless contract until the block passes
+the operational migration gates.
 
-Before writing code, use the `panel-arg-selection` skill. That Stage-1 pass
-decides which variables are user knobs, solver switches, derived internals,
-output paths, or geometry inputs.
-
-## The Current Shape
+## Four Stages
 
 ```text
-src/radia/panels/calc_<topic>.py                 # Stage 2: argparse CLI, headless
-src/radia/<topic>_design.py                      # DesignSpec defaults for the notebook
-src/radia/<topic>_notebook.py                    # CommandWorkbench wrapper
-src/radia/panels/notebooks/radia_<topic>.ipynb   # Stage 3: user-facing notebook
-tests/panels/test_<topic>_golden.py              # fast gate when practical
-validation_test/panels/test_<topic>_*.py         # heavier gate when needed
+Stage 1  application variable inventory
+Stage 2  src/radia/panels/calc_<topic>.py + src/radia/<topic>_design.py
+Stage 3  docs/<topic>/*.ipynb + synchronized result JSON
+Stage 4  matlab/+radia/+simulink/* + matlab/radia_simulink_library.slx
 ```
 
-Notebook workbenches intentionally live under `src/radia/panels/notebooks/`
-so they ship with the `radia` wheel and stay next to the packaged
-`calc_*.py` scripts and samples. Do not create a parallel repo-root
-`panels/` tree for the same panel; keep one live copy of each implementation.
+Do not jump from a scratch script to a block. Use the
+`panel-arg-selection` skill for Stage 1 even though the final surface is now
+Simulink; it classifies user knobs, solver switches, derived values, geometry
+inputs, and output paths.
 
-## Stage 2: `calc_<topic>.py`
+## Stage 2: Headless Contract
 
-```python
-"""Headless CLI for the radia-<topic> workbench."""
-
-from __future__ import annotations
-
-import argparse
-
-from radia.panels.calc_common import calc_main
-
-
-def build_argparser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="One-line description shown by the workbench.")
-    parser.add_argument("--vol", required=True, help="Input .vol mesh.")
-    parser.add_argument("--frequency", type=float, default=50.0,
-                        help="Driving frequency in Hz.")
-    parser.add_argument("--current", type=float, default=100.0,
-                        help="Source current in A.")
-    parser.add_argument("--solver", choices=["hdiv", "bem", "peec"],
-                        default="hdiv",
-                        help="Application solver backend.")
-    parser.add_argument("--fes-order", type=int, default=1,
-                        help="Finite-element polynomial order.")
-    parser.add_argument("--n-threads", type=int, default=4,
-                        help="NGSolve TaskManager thread count.")
-    parser.add_argument("--msh-output", default=None,
-                        help="Gmsh .msh v4.1 artifact written by the CLI.")
-    parser.add_argument("--output", default=None,
-                        help="Result JSON written by calc_main().")
-    return parser
-
-
-def run(args) -> dict:
-    import time
-    from ngsolve import Mesh, TaskManager
-
-    t0 = time.perf_counter()
-    with TaskManager(numthreads=args.n_threads):
-        mesh = Mesh(args.vol)
-        # ... solve ...
-
-    return {
-        "ne": mesh.ne,
-        "ndof": 0,
-        "t_total_s": round(time.perf_counter() - t0, 3),
-        "gmsh_file": args.msh_output or "",
-    }
-
-
-def main() -> None:
-    calc_main(run, build_argparser())
-
-
-if __name__ == "__main__":
-    main()
-```
-
-### CLI Musts
-
-- `build_argparser()` must be importable without side effects.
-- Heavy imports (`ngsolve`, `radia`, `cubit`) happen inside `run()`, not at
-  module import time.
-- `TaskManager` is imported before the `with TaskManager(...):` statement in
-  the same function.
-- The solver switch is a real CLI argument when the application exposes more
-  than one supported backend.
-- Unknown values raise errors. Do not silently substitute defaults.
-- Result dictionaries include `ne` or `wp_ne`, `ndof` or `wp_ndof`, `t_*_s`
-  timing keys, headline physical quantities, and the generated artifact path
-  (`gmsh_file`, `field_gmsh_file`, `msh_file`, or `msh_output`) when present.
-
-## Stage 3: Notebook Workbench
-
-Notebook panels use a small `DesignSpec` dataclass plus a `CommandWorkbench`.
-They persist initial values in code cells, launch the Stage-2 CLI, and collect
-`run.log`, `result.json`, timing summaries, and mesh/field artifacts.
-
-The notebook must not re-implement the computation. It maps editable settings to
-CLI flags and displays ecosystem-native outputs such as `netgen.webgui` scenes
-or durable Gmsh files.
-
-### Notebook Musts
-
-- Store persistent defaults in `DesignSpec`, not ad hoc JSON presets.
-- Build the subprocess command from the same CLI flags accepted by
-  `calc_<topic>.py`.
-- Record Radia version, Python/platform context, total wall time, and the main
-  timing stages in `result.json`.
-- Keep small domain notes in the notebook when they prevent misuse.
-- Use `netgen.webgui` for human-facing notebook visualization.
-- Use `.msh v4.1` / `.json` artifacts for automation and LLM validation.
-
-## Golden And Validation Tests
-
-Fast panel checks belong in `tests/panels/` when they are deterministic and
-small. Solver-heavy sweeps, convergence studies, and timing claims belong in
-`validation_test/panels/` and are mdx-first when they are too large for CI.
+The calculation remains an argparse CLI with an import-safe parser and a
+`run(args) -> dict` implementation. A UI-neutral `DesignSpec` maps settings to
+that exact CLI. The block must not build a second solver or configuration
+language.
 
 ```python
-import json
-import subprocess
+from dataclasses import dataclass
 import sys
-from pathlib import Path
+
+from radia.panel_design import calc_script, json_output
 
 
-ROOT = Path(__file__).resolve().parents[2]
-CALC = ROOT / "src" / "radia" / "panels" / "calc_<topic>.py"
+@dataclass
+class TopicDesignSpec:
+    vol: str = ""
+    frequency: str = "50"
+    solver: str = "hdiv"
 
+    def missing_required_inputs(self) -> list[str]:
+        return [] if self.vol else ["Mesh .vol"]
 
-def test_golden_band(tmp_path):
-    out_json = tmp_path / "result.json"
-    out_msh = tmp_path / "result.msh"
-    cmd = [
-        sys.executable, str(CALC),
-        "--vol", str(ROOT / "tests" / "panels" / "fixtures" / "<topic>.vol"),
-        "--output", str(out_json),
-        "--msh-output", str(out_msh),
-    ]
-    subprocess.run(cmd, check=True, timeout=600)
-    got = json.loads(out_json.read_text(encoding="utf-8"))
-
-    assert "t_total_s" in got
-    assert "gmsh_file" in got
+    def build_command(self, *, python: str | None = None) -> list[str]:
+        if not self.vol:
+            raise ValueError("Mesh .vol is required.")
+        return [
+            python or sys.executable,
+            calc_script("calc_topic.py"),
+            "--vol", self.vol,
+            "--frequency", self.frequency,
+            "--solver", self.solver,
+            "--output", json_output(self.vol, "_topic"),
+        ]
 ```
 
-## Automated Audits
+The CLI result includes element count, DoF, `t_*_s` timings, headline physical
+quantities, and artifact paths. Unknown solver modes and missing dependencies
+fail loudly. Heavy solver imports stay inside the execution function.
 
-| Audit | What it catches |
-|---|---|
-| `panel-arg-selection` skill | Stage-1 variable classification before widgets exist |
-| `panel-cli-diff` skill | CLI/workbench flag drift |
-| `ipynb-gui-health` skill | DesignSpec, notebook artifact, and no desktop-Qt regression |
-| `tests/panels/test_taskmanager_scoping.py` | late-import `TaskManager` errors |
-| `tests/panels/test_panel_output_health.py` | output JSON/log/summary contract |
-| `validation_test/panels/test_notebook_workbench.py` | notebook workbench contract |
+## Stage 3: Documentation
 
-## Reference Implementations
+Create a result-bearing notebook only when it helps readers understand the
+method, equations, inputs, and representative output. Execute it before commit
+and synchronize its adjacent JSON, including runtime/version metadata and the
+notebook hash. Do not add widgets or a `CommandWorkbench` adapter.
 
-- `src/radia/panels/calc_accel_hdiv.py` -- HDiv-VIM electromagnet CLI.
-- `src/radia/em_design.py` and `src/radia/em_notebook.py` -- notebook
-  workbench pattern for electromagnet operation.
-- `src/radia/panels/notebooks/radia_em.ipynb` -- user-facing notebook surface.
-- `src/radia/panels/calc_volume.py` -- small one-shot CLI example.
+## Stage 4: Simulink Block
+
+Add the block to `radia.simulink.buildLibrary`. The standard batch-analysis
+block uses:
+
+- `radia_application_sfun` as the Level-2 MATLAB S-function entry point;
+- a fixed application id and an evaluated mask for configuration JSON, run
+  root, timeout, and Python executable;
+- a boolean trigger input; execution occurs only on a rising edge;
+- `int32 status`, `double primary`, and `double elapsed_s` outputs;
+- `radia.simulink.runApplication` and `radia.simulink.application` for the
+  versioned artifact contract.
+
+Status values are `0` idle, `2` passed, and `-1` failed. Full results are in the
+artifact directory rather than squeezed into a fixed-width signal.
+
+The configuration file is versioned and maps directly to the application's
+`DesignSpec`:
+
+```json
+{
+  "schema": "radia.simulink.application_config.v1",
+  "application": "em",
+  "settings": {
+    "coil_script": "C:/models/coil.py",
+    "vol": "C:/models/magnet.vol",
+    "method": "Omega Reduced"
+  },
+  "primary_key": "B_origin_mag_T",
+  "working_directory": "C:/models"
+}
+```
+
+Create it from MATLAB rather than hand-editing JSON:
+
+```matlab
+settings = struct("coil_script", "C:/models/coil.py", ...
+    "vol", "C:/models/magnet.vol", "method", "Omega Reduced");
+radia.simulink.writeApplicationConfig("em", settings, ...
+    "C:/models/em_config.json", PrimaryKey="B_origin_mag_T");
+```
+
+The Simulink/MATLAB launch path writes:
+
+```text
+<run-root>/<application>/<UTC stamp>/
+  launcher_command.txt
+  command.txt          # after DesignSpec command construction
+  run.log
+  solver_result.json   # after solver output generation
+  result.json
+```
+
+`result.json` is always required, including launcher failure. It uses
+`radia.simulink.application_run.v1` and records the backend, status, command,
+versions, platform, elapsed time, config hash, and selected primary scalar.
+
+## Backend Policy
+
+The validated Python/headless CLI is the initial application-block backend.
+This is deliberate: a Simulink interface does not require an unproven MEX
+implementation. Python is launched once on an explicit trigger, never once per
+time step.
+
+A MEX/ROM backend may later replace the internals without changing mask or port
+contracts. Promotion requires independent numerical parity, checked error
+propagation, handle/lifecycle tests, and long-run stability. Do not advertise a
+MEX path merely because it compiles.
+
+## Required Gates
+
+- `python calc_<topic>.py --help` exits successfully and lists every user knob.
+- Every supported solver switch passes its headless sample/golden.
+- `python -m pytest tests/test_simulink_application.py -q` passes.
+- `tests/matlab/test_simulink_workflow.m` finds the masked block, updates a
+  model containing it, and covers success and failure artifacts.
+- The block and headless paths agree within the same documented golden band.
+- Timeout, missing dependency, invalid config, and solver failure remain
+  inspectable in `run.log` and `result.json`.
+
+Long solver validation runs on an idle mdx or hibino host. LAB and 100号機 are
+for build, import, mask, and fast numerical checks.
+
+## Current References
+
+- `src/radia/simulink/application.py`: shared Python artifact runner.
+- `matlab/+radia/+simulink/runApplication.m`: MATLAB process adapter.
+- `matlab/+radia/+simulink/applicationSFunction.m`: rising-edge block runtime.
+- `matlab/+radia/+simulink/buildLibrary.m`: single-library builder.
+- `src/radia/panels/application_interface_manifest.json`: production states.
+- `src/radia/ih_notebook.py`: temporary IH-only comparison adapter.
 
 ## Anti-Patterns
 
-| Anti-pattern | Correct pattern |
+| Anti-pattern | Required pattern |
 |---|---|
-| Hand-assembled argv that drifts from argparse | Generate command arguments from the CLI surface |
-| Heavy top-level imports in a calc module | Import heavy solver packages inside `run()` |
-| A notebook cell that re-solves with local logic | Notebook launches the CLI and displays artifacts |
-| A solver option that falls back silently | Raise on unknown or unsupported values |
-| Timing keys such as `t_solve` | Use `t_solve_s`, `t_total_s`, etc. |
-| Artifact keys such as `output_msh` | Use recognized keys such as `gmsh_file` |
+| New notebook workbench for an application | Masked block over `DesignSpec` and the headless CLI |
+| Solver code inside a mask callback or S-function | Delegate to tested Radia API/CLI/MEX backend |
+| Python subprocess on every simulation step | Explicit update/rising trigger or prebuilt MEX/ROM state |
+| MEX promoted because it builds | Promote only after parity, lifecycle, failure, and long-run tests |
+| Silent fallback to another solver | Fail with a recorded diagnostic artifact |
+| Results only in block labels or the MATLAB console | Versioned JSON plus verbatim `run.log` |
 
----
-
-Last updated: 2026-07-06. Maintained alongside the Panel Design Workflow Policy
-in `AGENTS.md` / `CLAUDE.md`.
+Last updated: 2026-07-20.

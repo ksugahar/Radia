@@ -1,0 +1,23 @@
+{
+  "schema": "radia.acoustics.double-layer-bem.v1",
+  "generated_at_utc": "2026-07-19T09:49:52Z",
+  "validation_host": "mdx",
+  "formulation": "pure_double_layer",
+  "boundary_equation": "(1/2 I + K) mu = -u_inc",
+  "field_representation": "u_scat = D mu",
+  "wavenumber": 2.0,
+  "radius": 1.0,
+  "order": 3,
+  "maxh": 0.3,
+  "ndof_sphere": 3080,
+  "n_probes": 15,
+  "relative_error_vs_soft_sphere_analytic": 2.570348611410308e-05,
+  "tolerance": 0.005,
+  "passed": true,
+  "versions": {
+    "radia": "4.95.19",
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  }
+}

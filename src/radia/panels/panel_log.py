@@ -1,7 +1,7 @@
 """Shared panel debug log writer.
 
-All Radia GUI components — Cubit-side ``register_toolbar.py``,
-notebook workbenches, and the ``calc_*.py`` subprocess scripts — write
+Radia interface components — Cubit-side ``register_toolbar.py``, the temporary
+IH notebook workbench, and ``calc_*.py`` subprocess scripts — write
 to the same file:
 
     Windows: C:/temp/radia_panel_log_<user>.txt
@@ -13,9 +13,9 @@ instead of fighting over a single ACL-restricted file that the
 first-to-open user (usually Administrator) effectively monopolises.
 
 This gives the user (and agents) **one place** to look when something
-goes wrong in the Cubit toolbar, notebook workbench, or calc subprocess:
+goes wrong in the Cubit toolbar, IH workbench, or calc subprocess:
 
-  - Did the Cubit toolbar or notebook workbench open?
+  - Did the Cubit toolbar or IH comparison workbench open?
   - Did the model labels validate?
   - Was the subprocess command line correct?
   - Did calc_inductance.py print an error?

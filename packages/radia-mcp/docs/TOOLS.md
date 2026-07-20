@@ -2,15 +2,17 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **796 tools** across 42 MCP servers.
+Total: **870 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 82 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 140 |
-| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 14 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
+| [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
+| [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -38,15 +40,19 @@ Total: **796 tools** across 42 MCP servers.
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
-| [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
+| [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 18 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 20 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
-| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 9 |
+| [`mcp-server-pdf`](#mcp-server-pdf) | `radia_mcp.pdf` | 16 |
+| [`mcp-server-doc-convert`](#mcp-server-doc-convert) | `radia_mcp.doc_convert` | 21 |
+| [`mcp-server-bibliography`](#mcp-server-bibliography) | `radia_mcp.bibliography` | 14 |
+| [`mcp-server-research-project`](#mcp-server-research-project) | `radia_mcp.research_project` | 5 |
+| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 10 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
 
 ## `mcp-server-cubit`
@@ -330,6 +336,8 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `manual_auto_mixed_mesh_preservation_gate` | Gate exact manual-region preservation and bounded automatic remeshing. |
 | `material_contrast_force_gate` | Gate null, attraction, and increasing-repulsion material-force cases. |
 | `matlab_acoustic_fembem_agent_guide` | Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows. |
+| `matlab_acoustic_fembem_extension_contract` | Inspect Radia's custom-tool contract for the official MATLAB MCP server. |
+| `matlab_acoustic_fembem_server_config` | Build official MATLAB MCP Server arguments for acoustic FEM-BEM. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
 | `motion_coupled_eddy_levitation_transient_gate` | Gate motion-coupled lift while detecting aliased force output times. |
 | `moving_conductor_eddy_brake_gate` | Gate motion, Lorentz-force, and Joule-loss table identities. |
@@ -373,7 +381,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `source_free_static_null_solution_gate` | Gate a source-free static Maxwell solve against the exact zero solution. |
 | `source_off_linear_relaxation_gate` | Gate a linear source-off RL relaxation using total current and field decay. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
-| `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
+| `standalone_panels` | Retired standalone PySide panel topic. The canonical Radia human surface is |
 | `static_field_shim_family_gate` | Gate static-field scale, ROI uniformity, shim sensitivity, and map quality. |
 | `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
 | `symmetric_complex_field_curve_gate` | Gate an even- or odd-sampled complex field curve by mirror symmetry. |
@@ -395,7 +403,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 ## `mcp-server-radia-matlab`
 
-_Official MATLAB MCP composition and generic ML/RL gates_
+_Official MATLAB MCP composition, Radia/NGSolve MEX capability contract, table-backed Optuna-like optimization, and 43 generic ML/RL gates_
 
 Module: `radia_mcp.matlab.server`
 
@@ -403,6 +411,7 @@ Module: `radia_mcp.matlab.server`
 |---|---|
 | `matlab_agent_guide` | (no description) |
 | `matlab_agentic_ml_guide` | (no description) |
+| `matlab_aicia_catalog_gate` | Validate full-channel metadata scope and solver-gated CAE promotion. |
 | `matlab_cad_topology_build` | Build a Cubit + Radia-VIM linearization + LP topology workflow. |
 | `matlab_extension_contract` | (no description) |
 | `matlab_ml_rl_artifact_gate` | (no description) |
@@ -413,8 +422,35 @@ Module: `radia_mcp.matlab.server`
 | `matlab_radia_acoustic_interface_contract` | (no description) |
 | `matlab_radia_mex_contract` | Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract. |
 | `matlab_sheet_metal_topology_build` | Build a Radia-VIM + LP + adaptive NGSolve/Cubit sheet-metal workflow. |
-| `matlab_simulink_library_contract` | Describe Radia Library Browser registration and LTspice compatibility. |
+| `matlab_simulink_library_contract` | Describe Radia application blocks, Library Browser registration, and LTspice compatibility. |
 | `radia_matlab_status` | (no description) |
+
+## `mcp-server-acoustic-fembem`
+
+_Readable MATLAB P1 acoustic FEM/BEM education solver, convolution quadrature, and validation gates_
+
+Module: `radia_mcp.acoustic_fembem.server`
+
+| Tool | Description |
+|---|---|
+| `acoustic_fembem_agent_guide` | Guide for the readable P1 MATLAB acoustic FEM-BEM education solver. |
+| `acoustic_fembem_extension_contract` | Inspect the official MATLAB MCP extension shipped by Radia. |
+| `acoustic_fembem_server_config` | Compose official MATLAB MCP arguments for the education solver. |
+| `acoustic_fembem_status` | (no description) |
+
+## `mcp-server-radia-acoustic`
+
+_Production NGSolve/ngsolve.bem acoustics, FSI, and CQ_
+
+Module: `radia_mcp.radia_acoustic.server`
+
+| Tool | Description |
+|---|---|
+| `radia_acoustic_capabilities` | List production APIs and numerical-backend ownership. |
+| `radia_acoustic_cq_grid` | Build and validate Lubich CQ Laplace/complex-wavenumber grids. |
+| `radia_acoustic_fsi_preflight` | Validate FSI/DtN inputs before an expensive NGSolve solve. |
+| `radia_acoustic_status` | (no description) |
+| `radia_acoustic_usage` | Get NGSolve BEM, FSI, CQ, or validation guidance. |
 
 ## `mcp-server-radia-streamfunction`
 
@@ -843,10 +879,12 @@ Module: `radia_mcp.mathematica.server`
 
 | Tool | Description |
 |---|---|
+| `mathematica_check_identities` | Verify several named identities in one Mathematica kernel. |
 | `mathematica_check_identity` | 式 LHS == RHS が常に成り立つかを FullSimplify で判定。 |
 | `mathematica_differentiate` | 微分。 |
 | `mathematica_evaluate` | Evaluate Wolfram Language code via wolframscript and return result. |
 | `mathematica_integrate` | 積分 (定積分 / 不定積分)。 |
+| `mathematica_run_script` | Run a local Wolfram Language script and return structured results. |
 | `mathematica_server_status` | (no description) |
 | `mathematica_simplify` | Wolfram FullSimplify[expression, assumptions] を実行。 |
 | `mathematica_solve` | 方程式 (系) を Solve で解く。 |
@@ -854,6 +892,7 @@ Module: `radia_mcp.mathematica.server`
 | `mathematica_to_tex` | Wolfram の TeXForm を文字列で取得 (paper / 数式 DB 登録用)。 |
 | `mathematica_unit_convert` | 物理単位変換 (Wolfram Quantity / UnitConvert)。 |
 | `mathematica_vector_calc` | ベクトル解析: Curl / Div / Grad / Laplacian / Cross / Dot。 |
+| `mathematica_verification_guide` | Return the recommended Mathematica verification workflow. |
 
 ## `mcp-server-md2html`
 
@@ -1089,7 +1128,7 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, recommendation-letter template, and KDDI Digital Innovation social-implementation checks._
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
@@ -1105,6 +1144,8 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
 | `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
 | `grant_writing_health_report` | Integrated grant-writing health report. |
+| `grant_writing_internal_evidence_to_external_scale_check` | Check whether an internal success is evidence for external transfer. |
+| `grant_writing_kaken_oss_platform_check` | Check KAKENHI framing for an AI-era OSS research platform proposal. |
 | `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
 | `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
 | `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
@@ -1193,6 +1234,98 @@ Module: `radia_mcp.document_meta.server`
 | `document_meta_write_docs_notebook_result_jsons` | Batch-write synchronized result JSON sidecars for executed docs notebooks. |
 | `document_meta_write_notebook_result_json` | Write a durable JSON sidecar summarising a saved-result notebook. |
 
+## `mcp-server-pdf`
+
+_PDF inspection, text extraction, compression, cropping, metadata, and font-embedding checks._
+
+Module: `radia_mcp.pdf.server`
+
+| Tool | Description |
+|---|---|
+| `pdf_compress` | Recompress a PDF. |
+| `pdf_crop_whitespace` | Auto-crop whitespace from each page. |
+| `pdf_extract_pages` | Extract a page range to a new PDF. |
+| `pdf_extract_text` | Extract text from a PDF. |
+| `pdf_font_embed_check` | Verify all fonts are embedded in the PDF. |
+| `pdf_get_metadata` | Print the PDF's metadata dictionary. |
+| `pdf_health_report` | Submission-readiness audit for journal / conference PDF upload. |
+| `pdf_inspect` | Inspect a PDF and report dimensions / structure per page. |
+| `pdf_lint_image_detection_dpi` | Scan a file or directory for the DPI-not-invariant anti-pattern. |
+| `pdf_list_bookmarks` | List existing bookmarks (outline) in a PDF. |
+| `pdf_merge` | Merge multiple PDFs into one. |
+| `pdf_set_bookmarks` | Replace the PDF's outline with the given list. |
+| `pdf_set_metadata` | Set PDF document metadata fields. |
+| `pdf_split` | Split a PDF into one file per page. |
+| `pdf_status` | (no description) |
+| `pdf_watermark_add` | Add a diagonal text watermark to every page. |
+
+## `mcp-server-doc-convert`
+
+_Document conversion and extraction helpers for slides, speaker notes, title images, and OCR workflows._
+
+Module: `radia_mcp.doc_convert.server`
+
+| Tool | Description |
+|---|---|
+| `doc_convert_business_card_ocr_dir` | Run EasyOCR on every business-card file in ``directory``. |
+| `doc_convert_classify` | Classify a pptx as 'figure', 'presentation', or 'ambiguous'. |
+| `doc_convert_extract_pdf_title_by_cover` | Render page 1 of a PDF and ask Claude Code to read its title. |
+| `doc_convert_extract_slide` | Write a single slide of ``src_pptx`` as its own .pptx file. |
+| `doc_convert_extract_slides` | Bulk variant: write multiple single-slide files in one call. |
+| `doc_convert_extract_speaker_notes` | Extract presenter notes per slide. |
+| `doc_convert_extract_title_from_image` | Ask Claude Code to read a cover image and return the book title. |
+| `doc_convert_figure_readability_check` | Verify the slide's source font survives a target print width. |
+| `doc_convert_health_report` | Composite readiness score with kind dispatch. |
+| `doc_convert_hidden_audit` | Audit hidden slides and presenter notes for accidental leak risk. |
+| `doc_convert_inventory` | Return a per-slide inventory of a .pptx. |
+| `doc_convert_pdf_to_jpg` | Convert a single PDF to JPG via Adobe Acrobat COM. |
+| `doc_convert_pdf_to_jpg_dir` | Convert every .pdf in ``directory`` to JPG via Adobe Acrobat COM. |
+| `doc_convert_pptx_to_pdf` | Convert a single .ppt/.pptx to .pdf via PowerPoint COM. |
+| `doc_convert_pptx_to_pdf_dir` | Convert every .ppt/.pptx in ``directory`` to PDF. |
+| `doc_convert_rename_business_card` | Rename a scanned-business-card file to ``<company>_<name><ext>``. |
+| `doc_convert_rename_pdf_by_title` | Rename a PDF to ``<sanitized-title>.pdf`` (collision-safe). |
+| `doc_convert_resize_for_print` | Shrink a pptx to ``target_width_cm`` and set ALL fonts to ``target_font_pt``. |
+| `doc_convert_slide_lint` | Run accessibility + density lints on every slide. |
+| `doc_convert_slide_to_image` | Export one slide as an image file via PowerPoint COM. |
+| `doc_convert_status` | (no description) |
+
+## `mcp-server-bibliography`
+
+_Bibliography conversion, normalization, deduplication, lint, and citation validation._
+
+Module: `radia_mcp.bibliography.server`
+
+| Tool | Description |
+|---|---|
+| `bibliography_arxiv_to_bibtex` | Query arXiv for a paper id and return a BibTeX entry. |
+| `bibliography_canonicalize_keys` | Rewrite cite-keys to the lab style, preserving hand-picked words. |
+| `bibliography_check_surname_braces` | Check (and optionally fix) Rule 1: surname must be brace-protected. |
+| `bibliography_cite_validation` | Cross-check ``\cite{}`` keys in .tex against entries in .bib. |
+| `bibliography_dedupe` | Find duplicate entries in a .bib file. |
+| `bibliography_doi_to_bibtex` | Look up a DOI via Crossref and return a BibTeX entry as text. |
+| `bibliography_health_report` | Composite health score for a .bib file. |
+| `bibliography_lint` | Lint a .bib for missing required fields, key shape, year sanity. |
+| `bibliography_normalize_journal_names` | Rewrite journal/booktitle fields to a target style. |
+| `bibliography_parse` | Parse a .bib file and return per-entry inventory. |
+| `bibliography_search_crossref` | Search Crossref for the top ``limit`` matches. |
+| `bibliography_self_citation_ratio` | Compute the fraction of bib entries authored by ``author_lastname``. |
+| `bibliography_status` | (no description) |
+| `bibliography_year_distribution` | Print a year histogram of citation entries. |
+
+## `mcp-server-research-project`
+
+_Research-project scanning, consistency checks, deadline planning, and health dashboards._
+
+Module: `radia_mcp.research_project.server`
+
+| Tool | Description |
+|---|---|
+| `research_project_consistency_check` | Cross-artifact numerical consistency. |
+| `research_project_deadline_gantt` | Render an ASCII Gantt-ish chart of upcoming deadlines. |
+| `research_project_health_dashboard` | Run each artifact's health report in one pass. |
+| `research_project_scan` | Classify every file in ``directory`` by artifact kind. |
+| `research_project_status` | (no description) |
+
 ## `mcp-server-radia-meta`
 
 _★ RECOMMENDED FIRST CALL. Cross-server catalog of all radia_mcp.* servers — answers "which tool covers concept X?" without trial-and-error._
@@ -1207,18 +1340,19 @@ Module: `radia_mcp.meta.server`
 | `radia_mcp_get` | Look up one server by short name (e.g. 'bayesian-opt', 'ih', 'kelvin'). |
 | `radia_mcp_golden_gate` | Machine-readable golden-quality gate for the radia-mcp server fleet. |
 | `radia_mcp_health` | Probe importability of every radia_mcp.* subpackage. |
+| `radia_mcp_naming_conventions` | Return the canonical naming contract used by every bundled MCP server. |
 | `radia_mcp_overview` | Authoritative catalog of all radia_mcp.* servers. |
 | `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('bayesian-opt') |
 | `radia_meta_status` | (no description) |
 
 ## `mcp-server-panel-review`
 
-_Radia notebook panel review and construction contract (DesignSpec / Workbench / result artifacts / validation_test / no-PySide gate), including the cubit_panels migration route._
+_Radia Simulink application-block review and construction contract (DesignSpec / masks / typed ports / result artifacts / validation / no-PySide gate), including the cubit_panels migration route._
 
 Module: `radia_mcp.panel_review.server`
 
 | Tool | Description |
 |---|---|
-| `panel_review` | Get Radia notebook panel review / construction documentation. |
+| `panel_review` | Get Radia Simulink application-block review / construction documentation. |
 | `panel_review_status` | (no description) |
 | `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |

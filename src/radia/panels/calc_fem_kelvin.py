@@ -1002,7 +1002,7 @@ def solve_fem(vol_file="", fes_order=1,
     # is the NEGATED surface integral.  The 0.5/0.25 factors (vs the static
     # 1/0.5) are the cos^2 time-average; the identity is validated by
     # reduction to the static Maxwell force in
-    # packages/radia-mcp/tests/test_maxwell_surface_harmonic.py.
+    # validation_test/radia_mcp/test_maxwell_surface_harmonic.py.
     F_sibc = None
     if has_wp and use_complex:
         try:

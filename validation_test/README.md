@@ -9,6 +9,8 @@ for the default CI/debug loop.
 - Cubit 2025.12 export and curved-mesh checks.
 - Panel GUI, notebook, and golden-output checks.
 - FEM/BEM/FEEC p-convergence and cross-validation studies.
+- Solver-backed `radia-mcp` FEM/BEM and application validation under
+  `validation_test/radia_mcp/`.
 - Benchmarks and long solver regressions.
 - Tests requiring special optional dependencies, licenses, or long wall time.
 
