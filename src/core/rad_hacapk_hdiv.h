@@ -16,6 +16,11 @@
 #include "rad_planar_charges.h"
 #include <unordered_map>
 #include <memory>
+#include <mutex>
+
+enum class ChargeDerivativeFamily { Hex, Tet, Wedge };
+class RadHACApKChargeGramDerivative;
+#include <memory>
 #include <string>
 #include <utility>
 #include <atomic>
@@ -330,6 +335,62 @@ public:
 
     double GetInteractionMatrixElement(int a, int b) const override;
 
+    // Analytic directional derivative of one HEX volume-charge self host block.
+    // node_velocity is the Q2 lattice velocity [27][3].  The returned row-major
+    // block follows the host's production charge ordering and includes 1/(4*pi).
+    // This differentiates the fixed-reference Piola radial-Duffy rule directly;
+    // no finite differencing or Python-side FE reconstruction is involved.
+    std::vector<double> HexVolumeSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    std::vector<double> HexFaceSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    std::vector<double> HexChargeGramDirectionalDerivative(
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity) const;
+    std::unique_ptr<RadHACApKChargeGramDerivative> BuildDirectionalDerivativeOperator(
+        ChargeDerivativeFamily family,const std::vector<double>& cell_velocity,
+        const std::vector<double>& face_velocity,const RadHACApKParams& params) const;
+    std::vector<double> TetVolumeSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& vertex_velocity) const;
+    std::vector<double> TetFaceSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& vertex_velocity) const;
+    // Dense row-major derivative of the complete flat affine TET ChargeGram.
+    // Velocities use the constructor host ordering: [ncell,4,3] and
+    // [nface,3,3].  The production 0.5*(AB+BA) symmetrization is
+    // differentiated exactly; self blocks reuse the analytic APIs above.
+    std::vector<double> TetChargeGramDirectionalDerivative(
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
+    // Per-charge-row logarithmic derivative of the flat TET Piola density
+    // map B.  The monomial rows are in each host's fixed reference frame, so
+    // dB[row,:] = rate[row] * B[row,:] (orientation remains caller-owned).
+    std::vector<double> TetChargeMapRowDirectionalRates(
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
+    std::vector<double> WedgeVolumeSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    std::vector<double> WedgeFaceSelfBlockDirectionalDerivative(
+        int host, const std::vector<double>& node_velocity) const;
+    // Dense row-major derivative of the complete production WEDGE ChargeGram.
+    // Face velocities are padded to the constructor's nine-node slots (tri
+    // hosts consume the first six nodes).
+    std::vector<double> WedgeChargeGramDirectionalDerivative(
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity) const;
+    // Scalar oracle for ACA/H-matrix construction of one WEDGE directional
+    // derivative without materialising dense dG.  cache_token identifies an
+    // immutable velocity mode and must change when either velocity array does.
+    double WedgeChargeGramDirectionalDerivativeElement(
+        int row, int col,
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity,
+        unsigned long long cache_token) const;
+    double TetChargeGramDirectionalDerivativeElement(
+        int row, int col,
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity,
+        unsigned long long cache_token) const;
+
     // SYMMETRIC-FILL build (2026-07-03): the charge Gram is symmetric BY CONSTRUCTION (every entry is the
     // 0.5*(AB+BA)-symmetrized kernel), and every apply of it goes through the symmetric H-matvec, so the
     // strictly-lower H-matrix leaves are never read -- matvec_sym mirrors the upper triangle.  This shadow
@@ -463,6 +524,7 @@ protected:
     int  GetUniformNFFC() const override { return 1; }
 
 private:
+    friend class RadHACApKChargeGramDerivative;
     void ApplyConfiguredDemagImpl(
         const double* x, double* y, double scale, bool add, bool symmetric);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
@@ -651,6 +713,18 @@ private:
     // not cacheable here (x0 = xiT varies per outer point).
     void PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
                               const std::vector<int>& srcG, double* inn) const;
+    void DPhiInnerHexRadialCellVec(int hS, int subB, const double p[3], const double dp[3],
+                                  const double* xiT, const double* node_velocity,
+                                  const std::vector<int>& srcG, double* dinn,
+                                  const std::vector<double>* radial_points = nullptr,
+                                  const std::vector<double>* radial_weights = nullptr) const;
+    void DPhiInnerHexRadialFaceVec(int hS, int subB, const double p[3], const double dp[3],
+                                   const double* xiT, const double* node_velocity,
+                                   const std::vector<int>& srcG, double* dinn) const;
+    void DPhiInnerHexSubVec(int kindS,int hS,int subB,const double p[3],const double dp[3],
+                            const double* node_velocity,const std::vector<int>& srcG,double* dinn) const;
+    std::vector<double> QuadBlockHexDirectionalDerivative(int kindT,int hT,int kindS,int hS,
+        const double* velocityT,const double* velocityS,int mask=0) const;
     // NON-SELF near inner (touch/shell, 2026-07-03): the SAME radial signed decomposition but anchored at
     // the nearest of a FIXED set of ref-space SITES (tet: 4 corners + 6 edge mids + 4 face centers +
     // centroid = 15; tri: 3+3+1 = 7).  The radial cone tiling is EXACT from ANY anchor -- the site only
@@ -767,6 +841,25 @@ private:
                              const std::vector<int>& srcG, double* inn) const;    // far cloud / -> site radial
     void PhiInnerWedgeRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
                                 const std::vector<int>& srcG, double* inn) const; // SELF exact-anchor radial
+    void DPhiInnerWedgeRadialVec(int kindS, int hS, int subB,
+                                 const double p[3], const double dp[3], const double* xiT,
+                                 const double* node_velocity,
+                                 const std::vector<int>& srcG, double* dinn) const;
+    void DPhiInnerWedgeSubVec(int kindS,int hS,int subB,const double p[3],const double dp[3],
+                              const double* node_velocity,const std::vector<int>& srcG,double* dinn) const;
+    std::vector<double> QuadBlockWedgeDirectionalDerivative(
+        int kindT, int hT, int kindS, int hS,
+        const double* target_velocity, const double* source_velocity,
+        int mask = 0) const;
+    const std::vector<double>& GetWedgeDirectionalSymBlock(
+        int kindA,int hostA,int kindB,int hostB,
+        const std::vector<double>& cell_node_velocity,
+        const std::vector<double>& face_node_velocity,
+        unsigned long long cache_token) const;
+    std::vector<double> TetChargeGramDirectionalDerivativeImpl(
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity,
+        int selected_host_a,int selected_host_b) const;
     std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int mask = 0) const;
 
     // HIGH-ORDER (polynomial-charge) mode
@@ -812,6 +905,29 @@ private:
     double PhiAtHO_Curved(int src, const double p[3]) const;   // CURVED isoparametric Duffy (rad_hdiv::CurvedTet/TriPotential at the host's P2 nodes)
     double PhiInner(int src, const double p[3]) const;        // dispatch: curved Duffy (m_curved) else analytic moments (charge deg<=2) else flat Duffy
     double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
+};
+
+class RadHACApKChargeGramDerivative final : public RadHACApKBase {
+public:
+    RadHACApKChargeGramDerivative(const RadHACApKChargeGram& parent,
+        ChargeDerivativeFamily family,std::vector<double> cell_velocity,
+        std::vector<double> face_velocity);
+    ~RadHACApKChargeGramDerivative() override = default;
+    double GetInteractionMatrixElement(int i,int j) const override;
+    void ClearEntryCache();
+protected:
+    void ExtractCoordinates() override;
+    void OnBeforeBuild() override {}
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof,0.0); }
+    bool IsVariableDOF() const override { return false; }
+    int GetUniformNFFC() const override { return 1; }
+private:
+    const RadHACApKChargeGram& m_parent;
+    ChargeDerivativeFamily m_family;
+    std::vector<double> m_cell_velocity,m_face_velocity;
+    mutable std::mutex m_cache_mutex;
+    mutable std::unordered_map<long long,std::vector<double>> m_block_cache;
+    unsigned long long m_cache_token;
 };
 
 #endif // __RAD_HACAPK_HDIV_H

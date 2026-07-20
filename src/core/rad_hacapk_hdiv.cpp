@@ -1708,6 +1708,148 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     return block;
 }
 
+namespace {
+static void Inverse3Directional(const double A[9],const double dA[9],double I[9],double dI[9])
+{
+    rad_inv3x3(A,I);
+    for(int i=0;i<3;++i)for(int j=0;j<3;++j){double s=0;for(int k=0;k<3;++k)for(int l=0;l<3;++l)s+=I[3*i+k]*dA[3*k+l]*I[3*l+j];dI[3*i+j]=-s;}
+}
+static double Det3Rate(const double A[9],const double dA[9])
+{
+    const double det=A[0]*(A[4]*A[8]-A[5]*A[7])-A[1]*(A[3]*A[8]-A[5]*A[6])+A[2]*(A[3]*A[7]-A[4]*A[6]);
+    const double ddet=
+        dA[0]*(A[4]*A[8]-A[5]*A[7])+A[0]*(dA[4]*A[8]+A[4]*dA[8]-dA[5]*A[7]-A[5]*dA[7])
+       -dA[1]*(A[3]*A[8]-A[5]*A[6])-A[1]*(dA[3]*A[8]+A[3]*dA[8]-dA[5]*A[6]-A[5]*dA[6])
+       +dA[2]*(A[3]*A[7]-A[4]*A[6])+A[2]*(dA[3]*A[7]+A[3]*dA[7]-dA[4]*A[6]-A[4]*dA[6]);
+    return ddet/det;
+}
+static int MomentIndex3(int ax,int ay,int az)
+{const int d=ax+ay+az;int n=0;for(int q=0;q<d;++q)n+=(q+1)*(q+2)/2;for(int x=0;x<ax;++x)n+=d-x+1;return n+ay;}
+static void MulLinear3(double* p,double* dp,int& degree,const double f[4],const double df[4])
+{
+    double q[10]={},dq[10]={};
+    for(int ax=0;ax<=degree;++ax)for(int ay=0;ay<=degree-ax;++ay){int az=degree-ax-ay; (void)az;}
+    for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){int az=total-ax-ay,idx=MomentIndex3(ax,ay,az);for(int k=0;k<4;++k){int bx=ax+(k==1),by=ay+(k==2),bz=az+(k==3),j=MomentIndex3(bx,by,bz);q[j]+=p[idx]*f[k];dq[j]+=dp[idx]*f[k]+p[idx]*df[k];}}
+    ++degree;std::copy(q,q+10,p);std::copy(dq,dq+10,dp);
+}
+}
+
+std::vector<double> RadHACApKChargeGram::TetVolumeSelfBlockDirectionalDerivative(
+    int host,const std::vector<double>& velocity) const
+{
+    if(!m_highorder||m_curved||m_hexmode||m_polyCombo)throw std::logic_error("TET volume derivative requires a flat polynomial TET charge Gram");
+    if(host<0||host>=(int)m_hoCellCharges.size())throw std::out_of_range("TET host out of range");
+    if(velocity.size()!=12)throw std::invalid_argument("vertex_velocity must have shape (4,3)");
+    const auto& g=m_hoCellCharges[host];const int n=(int)g.size();std::vector<double> out((size_t)n*n),inner(n),innerv(n);
+    const double* V0=&m_cellV[(size_t)host*12];double V[4][3],dV[4][3],E[9],dE[9],I[9],dI[9];
+    for(int a=0;a<4;++a)for(int k=0;k<3;++k){V[a][k]=V0[3*a+k];dV[a][k]=velocity[3*a+k];}
+    for(int k=0;k<3;++k)for(int j=0;j<3;++j){E[3*k+j]=V[j+1][k]-V[0][k];dE[3*k+j]=dV[j+1][k]-dV[0][k];}
+    Inverse3Directional(E,dE,I,dI);const double rate=Det3Rate(E,dE);
+    for(size_t q=0;q<m_qp[g[0]].size();++q){const auto& pp=m_qp[g[0]][q];double p[3]={pp[0],pp[1],pp[2]},xi[3]={};for(int i=0;i<3;++i)for(int k=0;k<3;++k)xi[i]+=I[3*i+k]*(p[k]-V[0][k]);double dpnt[3];for(int k=0;k<3;++k)dpnt[k]=dV[0][k]+xi[0]*(dV[1][k]-dV[0][k])+xi[1]*(dV[2][k]-dV[0][k])+xi[2]*(dV[3][k]-dV[0][k]);
+        double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dpnt,mv,dm);
+        // Convert the outward physical moment ladder to the signed PhiTet
+        // convention used together with m_qw by the flat production Gram.
+        // This conversion is global, not a function of vertex orientation.
+        for(int k=0;k<4;++k){mv[k]=-mv[k];dm[k]=-dm[k];}
+        for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");double val=mv[0],der=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double beta[3],dbeta[3],alpha=0,dalpha=0;for(int k=0;k<3;++k){beta[k]=I[3*c+k];dbeta[k]=dI[3*c+k];alpha-=beta[k]*V[0][k];dalpha-=dbeta[k]*V[0][k]+beta[k]*dV[0][k];}val=alpha*mv[0];der=dalpha*mv[0]+alpha*dm[0];for(int k=0;k<3;++k){val+=beta[k]*mv[k+1];der+=dbeta[k]*mv[k+1]+beta[k]*dm[k+1];}}innerv[ls]=val;inner[ls]=der;}
+        for(int i=0;i<n;++i){const double w=m_qw[g[i]][q];for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*(inner[j]+rate*innerv[j]);}
+    }
+    for(int i=0;i<n;++i)for(int j=i+1;j<n;++j){double x=.5*(out[(size_t)i*n+j]+out[(size_t)j*n+i]);out[(size_t)i*n+j]=out[(size_t)j*n+i]=x;}
+    for(double& x:out)x*=RAD_INV_FOUR_PI;return out;
+}
+
+std::vector<double> RadHACApKChargeGram::TetFaceSelfBlockDirectionalDerivative(
+    int host,const std::vector<double>& velocity) const
+{
+    if(!m_highorder||m_curved||m_hexmode||m_polyCombo)throw std::logic_error("TET face derivative requires a flat polynomial TET charge Gram");
+    if(host<0||host>=(int)m_hoFaceCharges.size())throw std::out_of_range("TET face host out of range");
+    if(velocity.size()!=9)throw std::invalid_argument("vertex_velocity must have shape (3,3)");
+    const auto& g=m_hoFaceCharges[host];const int n=(int)g.size();std::vector<double> out((size_t)n*n),inner(n),innerv(n);
+    const double* s=&m_faceV[(size_t)host*9];double V[3][3],dV[3][3],a[2][3],da[2][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k){V[i][k]=s[3*i+k];dV[i][k]=velocity[3*i+k];}for(int c=0;c<2;++c)for(int k=0;k<3;++k){a[c][k]=V[c+1][k]-V[0][k];da[c][k]=dV[c+1][k]-dV[0][k];}
+    double G[4],dG[4];for(int i=0;i<2;++i)for(int j=0;j<2;++j){G[2*i+j]=dG[2*i+j]=0;for(int k=0;k<3;++k){G[2*i+j]+=a[i][k]*a[j][k];dG[2*i+j]+=da[i][k]*a[j][k]+a[i][k]*da[j][k];}}
+    const double det=G[0]*G[3]-G[1]*G[2];double GI[4]={G[3]/det,-G[1]/det,-G[2]/det,G[0]/det},dGI[4];for(int i=0;i<2;++i)for(int j=0;j<2;++j){double z=0;for(int k=0;k<2;++k)for(int l=0;l<2;++l)z+=GI[2*i+k]*dG[2*k+l]*GI[2*l+j];dGI[2*i+j]=-z;}
+    double form[2][4]={},dform[2][4]={};for(int c=0;c<2;++c){for(int k=0;k<3;++k){form[c][k+1]=GI[2*c]*a[0][k]+GI[2*c+1]*a[1][k];dform[c][k+1]=dGI[2*c]*a[0][k]+GI[2*c]*da[0][k]+dGI[2*c+1]*a[1][k]+GI[2*c+1]*da[1][k];form[c][0]-=form[c][k+1]*V[0][k];dform[c][0]-=dform[c][k+1]*V[0][k]+form[c][k+1]*dV[0][k];}}
+    double cr[3]={a[0][1]*a[1][2]-a[0][2]*a[1][1],a[0][2]*a[1][0]-a[0][0]*a[1][2],a[0][0]*a[1][1]-a[0][1]*a[1][0]},dcr[3]={da[0][1]*a[1][2]+a[0][1]*da[1][2]-da[0][2]*a[1][1]-a[0][2]*da[1][1],da[0][2]*a[1][0]+a[0][2]*da[1][0]-da[0][0]*a[1][2]-a[0][0]*da[1][2],da[0][0]*a[1][1]+a[0][0]*da[1][1]-da[0][1]*a[1][0]-a[0][1]*da[1][0]};double nn=0,cn=0;for(int k=0;k<3;++k){nn+=cr[k]*cr[k];cn+=cr[k]*dcr[k];}const double rate=cn/nn;
+    for(size_t q=0;q<m_qp[g[0]].size();++q){const auto& pp=m_qp[g[0]][q];double p[3]={pp[0],pp[1],pp[2]},uv[2]={};for(int c=0;c<2;++c){uv[c]=form[c][0];for(int k=0;k<3;++k)uv[c]+=form[c][k+1]*p[k];}double dpnt[3];for(int k=0;k<3;++k)dpnt[k]=dV[0][k]+uv[0]*da[0][k]+uv[1]*da[1][k];double mv[10],dm[10];rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dpnt,mv,dm);
+        for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];if(e[0]+e[1]>2||e[2])throw std::logic_error("analytic TET face derivative supports charge degree <= 2");double poly[10]={1},dpoly[10]={};int degree=0;for(int z=0;z<e[0];++z)MulLinear3(poly,dpoly,degree,form[0],dform[0]);for(int z=0;z<e[1];++z)MulLinear3(poly,dpoly,degree,form[1],dform[1]);double val=0,der=0;for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){int az=total-ax-ay,id=MomentIndex3(ax,ay,az);val+=poly[id]*mv[id];der+=dpoly[id]*mv[id]+poly[id]*dm[id];}innerv[ls]=val;inner[ls]=der;}
+        for(int i=0;i<n;++i){double w=m_qw[g[i]][q];for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*(inner[j]+rate*innerv[j]);}}
+    for(int i=0;i<n;++i)for(int j=i+1;j<n;++j){double x=.5*(out[(size_t)i*n+j]+out[(size_t)j*n+i]);out[(size_t)i*n+j]=out[(size_t)j*n+i]=x;}for(double& x:out)x*=RAD_INV_FOUR_PI;return out;
+}
+
+std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivative(
+    const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity) const
+{
+    return TetChargeGramDirectionalDerivativeImpl(cell_velocity,face_velocity,-1,-1);
+}
+
+std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
+    const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
+    int selected_host_a,int selected_host_b) const
+{
+    if(!m_highorder||m_curved||m_hexmode||m_wedgemode||m_polyCombo)
+        throw std::logic_error("TET ChargeGram derivative requires a flat polynomial TET charge Gram");
+    const int nc=(int)m_hoCellCharges.size(),nf=(int)m_hoFaceCharges.size();
+    if(cell_velocity.size()!=(size_t)nc*12)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");
+    if(face_velocity.size()!=(size_t)nf*9)throw std::invalid_argument("face_vertex_velocity must have shape (nface,3,3)");
+    std::vector<double> out;
+
+    // Target affine kinematics at a production outer point.  m_qw already
+    // contains its physical measure, hence dw = rate*w.
+    auto target_kinematics=[&](int kind,int host,const double p[3],double dp[3],double& rate){
+        if(kind==0){
+            const double*s=&m_cellV[(size_t)host*12],*ds=&cell_velocity[(size_t)host*12];double E[9],dE[9],I[9],dI[9];
+            for(int k=0;k<3;++k)for(int j=0;j<3;++j){E[3*k+j]=s[3*(j+1)+k]-s[k];dE[3*k+j]=ds[3*(j+1)+k]-ds[k];}
+            Inverse3Directional(E,dE,I,dI);double xi[3]={};for(int i=0;i<3;++i)for(int k=0;k<3;++k)xi[i]+=I[3*i+k]*(p[k]-s[k]);
+            for(int k=0;k<3;++k)dp[k]=ds[k]+xi[0]*(ds[3+k]-ds[k])+xi[1]*(ds[6+k]-ds[k])+xi[2]*(ds[9+k]-ds[k]);
+            rate=Det3Rate(E,dE);return;
+        }
+        const double*s=&m_faceV[(size_t)host*9],*ds=&face_velocity[(size_t)host*9];double a[2][3],da[2][3];
+        for(int c=0;c<2;++c)for(int k=0;k<3;++k){a[c][k]=s[3*(c+1)+k]-s[k];da[c][k]=ds[3*(c+1)+k]-ds[k];}
+        double G[4]={},dG[4]={};for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<3;++k){G[2*i+j]+=a[i][k]*a[j][k];dG[2*i+j]+=da[i][k]*a[j][k]+a[i][k]*da[j][k];}
+        const double det=G[0]*G[3]-G[1]*G[2];double GI[4]={G[3]/det,-G[1]/det,-G[2]/det,G[0]/det};double uv[2]={};
+        for(int c=0;c<2;++c)for(int k=0;k<3;++k)uv[c]+= (GI[2*c]*a[0][k]+GI[2*c+1]*a[1][k])*(p[k]-s[k]);
+        for(int k=0;k<3;++k)dp[k]=ds[k]+uv[0]*da[0][k]+uv[1]*da[1][k];
+        double cr[3]={a[0][1]*a[1][2]-a[0][2]*a[1][1],a[0][2]*a[1][0]-a[0][0]*a[1][2],a[0][0]*a[1][1]-a[0][1]*a[1][0]},dcr[3]={da[0][1]*a[1][2]+a[0][1]*da[1][2]-da[0][2]*a[1][1]-a[0][2]*da[1][1],da[0][2]*a[1][0]+a[0][2]*da[1][0]-da[0][0]*a[1][2]-a[0][0]*da[1][2],da[0][0]*a[1][1]+a[0][0]*da[1][1]-da[0][1]*a[1][0]-a[0][1]*da[1][0]};double nn=0,cn=0;for(int k=0;k<3;++k){nn+=cr[k]*cr[k];cn+=cr[k]*dcr[k];}rate=cn/nn;
+    };
+
+    // Analytic source-host potential and its directional derivative at a
+    // moving target point.  This is the exact moment path used by
+    // PhiInnerHOHostVec, augmented by forward directional algebra.
+    auto source_inner=[&](int kind,int host,const double p[3],const double dp[3],std::vector<double>& val,std::vector<double>& der){
+        const auto& g=kind==0?m_hoCellCharges[host]:m_hoFaceCharges[host];val.resize(g.size());der.resize(g.size());
+        if(kind==0){
+            const double*s=&m_cellV[(size_t)host*12],*ds=&cell_velocity[(size_t)host*12];double V[4][3],dV[4][3],E[9],dE[9],I[9],dI[9];for(int a=0;a<4;++a)for(int k=0;k<3;++k){V[a][k]=s[3*a+k];dV[a][k]=ds[3*a+k];}for(int k=0;k<3;++k)for(int j=0;j<3;++j){E[3*k+j]=V[j+1][k]-V[0][k];dE[3*k+j]=dV[j+1][k]-dV[0][k];}Inverse3Directional(E,dE,I,dI);
+            double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dp,mv,dm);for(int k=0;k<4;++k){mv[k]=-mv[k];dm[k]=-dm[k];}
+            for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");val[l]=mv[0];der[l]=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double alpha=0,dalpha=0;for(int k=0;k<3;++k){const double beta=I[3*c+k],dbeta=dI[3*c+k];alpha-=beta*V[0][k];dalpha-=dbeta*V[0][k]+beta*dV[0][k];val[l]+=beta*mv[k+1];der[l]+=dbeta*mv[k+1]+beta*dm[k+1];}val[l]+=(alpha-1.0)*mv[0];der[l]+=(dalpha)*mv[0]+(alpha-1.0)*dm[0];}}
+            return;
+        }
+        const double*s=&m_faceV[(size_t)host*9],*ds=&face_velocity[(size_t)host*9];double V[3][3],dV[3][3],a[2][3],da[2][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k){V[i][k]=s[3*i+k];dV[i][k]=ds[3*i+k];}for(int c=0;c<2;++c)for(int k=0;k<3;++k){a[c][k]=V[c+1][k]-V[0][k];da[c][k]=dV[c+1][k]-dV[0][k];}
+        double G[4]={},dG[4]={};for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<3;++k){G[2*i+j]+=a[i][k]*a[j][k];dG[2*i+j]+=da[i][k]*a[j][k]+a[i][k]*da[j][k];}const double det=G[0]*G[3]-G[1]*G[2];double GI[4]={G[3]/det,-G[1]/det,-G[2]/det,G[0]/det},dGI[4];for(int i=0;i<2;++i)for(int j=0;j<2;++j){double z=0;for(int k=0;k<2;++k)for(int l=0;l<2;++l)z+=GI[2*i+k]*dG[2*k+l]*GI[2*l+j];dGI[2*i+j]=-z;}double form[2][4]={},dform[2][4]={};for(int c=0;c<2;++c)for(int k=0;k<3;++k){form[c][k+1]=GI[2*c]*a[0][k]+GI[2*c+1]*a[1][k];dform[c][k+1]=dGI[2*c]*a[0][k]+GI[2*c]*da[0][k]+dGI[2*c+1]*a[1][k]+GI[2*c+1]*da[1][k];form[c][0]-=form[c][k+1]*V[0][k];dform[c][0]-=dform[c][k+1]*V[0][k]+form[c][k+1]*dV[0][k];}
+        double mv[10],dm[10];rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];if(e[0]+e[1]>2||e[2])throw std::logic_error("analytic TET face derivative supports charge degree <= 2");double poly[10]={1},dpoly[10]={};int degree=0;for(int z=0;z<e[0];++z)MulLinear3(poly,dpoly,degree,form[0],dform[0]);for(int z=0;z<e[1];++z)MulLinear3(poly,dpoly,degree,form[1],dform[1]);val[l]=der[l]=0;for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){const int id=MomentIndex3(ax,ay,total-ax-ay);val[l]+=poly[id]*mv[id];der[l]+=dpoly[id]*mv[id]+poly[id]*dm[id];}}
+    };
+    auto directed=[&](int kt,int ht,int ks,int hs){const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];std::vector<double>b((size_t)gt.size()*gs.size()),v,d;for(size_t q=0;q<m_qp[gt[0]].size();++q){const auto&pp=m_qp[gt[0]][q];double p[3]={pp[0],pp[1],pp[2]},dp[3],rate;target_kinematics(kt,ht,p,dp,rate);source_inner(ks,hs,p,dp,v,d);for(size_t i=0;i<gt.size();++i){const double w=m_qw[gt[i]][q];for(size_t j=0;j<gs.size();++j)b[i*gs.size()+j]+=w*(d[j]+rate*v[j]);}}for(double&x:b)x*=RAD_INV_FOUR_PI;return b;};
+    const int nh=nc+nf;
+    auto pair_block=[&](int ga,int gb){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc,kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];std::vector<double> block;if(ga==gb)block=ka==0?TetVolumeSelfBlockDirectionalDerivative(ha,std::vector<double>(cell_velocity.begin()+(size_t)ha*12,cell_velocity.begin()+(size_t)(ha+1)*12)):TetFaceSelfBlockDirectionalDerivative(ha,std::vector<double>(face_velocity.begin()+(size_t)ha*9,face_velocity.begin()+(size_t)(ha+1)*9));else{auto ab=directed(ka,ha,kb,hb),ba=directed(kb,hb,ka,ha);block.resize((size_t)A.size()*B.size());for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)block[i*B.size()+j]=.5*(ab[i*B.size()+j]+ba[j*A.size()+i]);}return block;};
+    if(selected_host_a>=0){if(selected_host_a>selected_host_b)std::swap(selected_host_a,selected_host_b);if(selected_host_b>=nh)throw std::out_of_range("TET derivative host out of range");return pair_block(selected_host_a,selected_host_b);}
+    out.assign((size_t)m_n*m_n,0.0);
+    for(int ga=0;ga<nh;++ga){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];for(int gb=ga;gb<nh;++gb){const int kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];const auto block=pair_block(ga,gb);for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j){const double x=block[i*B.size()+j];out[(size_t)A[i]*m_n+B[j]]=x;out[(size_t)B[j]*m_n+A[i]]=x;}}}
+    return out;
+}
+
+std::vector<double> RadHACApKChargeGram::TetChargeMapRowDirectionalRates(
+    const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity) const
+{
+    if(!m_highorder||m_curved||m_hexmode||m_wedgemode||m_polyCombo)
+        throw std::logic_error("TET charge-map derivative requires a flat polynomial TET charge Gram");
+    const int nc=(int)m_hoCellCharges.size(),nf=(int)m_hoFaceCharges.size();
+    if(cell_velocity.size()!=(size_t)nc*12)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");
+    if(face_velocity.size()!=(size_t)nf*9)throw std::invalid_argument("face_vertex_velocity must have shape (nface,3,3)");
+    std::vector<double> rates(m_n,0.0);
+    for(int h=0;h<nc;++h){const double*s=&m_cellV[(size_t)h*12],*ds=&cell_velocity[(size_t)h*12];double E[9],dE[9];for(int k=0;k<3;++k)for(int j=0;j<3;++j){E[3*k+j]=s[3*(j+1)+k]-s[k];dE[3*k+j]=ds[3*(j+1)+k]-ds[k];}const double r=-Det3Rate(E,dE);for(int q:m_hoCellCharges[h])rates[q]=r;}
+    for(int h=0;h<nf;++h){const double*s=&m_faceV[(size_t)h*9],*ds=&face_velocity[(size_t)h*9];double a[2][3],da[2][3];for(int c=0;c<2;++c)for(int k=0;k<3;++k){a[c][k]=s[3*(c+1)+k]-s[k];da[c][k]=ds[3*(c+1)+k]-ds[k];}double cr[3]={a[0][1]*a[1][2]-a[0][2]*a[1][1],a[0][2]*a[1][0]-a[0][0]*a[1][2],a[0][0]*a[1][1]-a[0][1]*a[1][0]},dcr[3]={da[0][1]*a[1][2]+a[0][1]*da[1][2]-da[0][2]*a[1][1]-a[0][2]*da[1][1],da[0][2]*a[1][0]+a[0][2]*da[1][0]-da[0][0]*a[1][2]-a[0][0]*da[1][2],da[0][0]*a[1][1]+a[0][0]*da[1][1]-da[0][1]*a[1][0]-a[0][1]*da[1][0]};double nn=0,cn=0;for(int k=0;k<3;++k){nn+=cr[k]*cr[k];cn+=cr[k]*dcr[k];}const double r=-cn/nn;for(int q:m_hoFaceCharges[h])rates[q]=r;}
+    return rates;
+}
+
 // Duffy singular-quadrature inner potential INT_host(src) m_src(y)/|p-y| dy for the order>=3 / curved path
 // (where the analytic moment kernels run out: a tet volume charge of degree>=2 needs TetMoment2; a surface
 // charge of degree>=3 needs degree-3 moments).  6-pt Gauss-Legendre on signed radial sub-tets (cell) / signed
@@ -2250,6 +2392,18 @@ static void HexPolyMulLinear(double* poly, int& deg, const double lin[4], int nc
     for (int i = 0; i < ncoeff; ++i) poly[i] = tmp[i];
 }
 
+static void HexPolyMulLinearDirectional(double* poly,double* dpoly,int& deg,
+                                        const double lin[4],const double dlin[4],int ncoeff)
+{
+    double tmp[HEX_AFFINE_POLY_N]={},dtmp[HEX_AFFINE_POLY_N]={};
+    for(int total=0;total<=deg;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){
+        const int az=total-ax-ay,idx=HexPolyIdx(ax,ay,az);const double c=poly[idx],dc=dpoly[idx];
+        const int ids[4]={HexPolyIdx(ax,ay,az),HexPolyIdx(ax+1,ay,az),HexPolyIdx(ax,ay+1,az),HexPolyIdx(ax,ay,az+1)};
+        for(int q=0;q<4;++q){tmp[ids[q]]+=c*lin[q];dtmp[ids[q]]+=dc*lin[q]+c*dlin[q];}
+    }
+    ++deg;for(int i=0;i<ncoeff;++i){poly[i]=tmp[i];dpoly[i]=dtmp[i];}
+}
+
 static bool HexAffineInverseForms(const double* nd27, double lin[3][4], double& inv_abs_det)
 {
     const double* o = &nd27[0];
@@ -2335,6 +2489,22 @@ static bool QuadAffineInverseForms(const double* nd9, double lin[2][4], double& 
     lin[0][0] = -(lin[0][1]*o[0] + lin[0][2]*o[1] + lin[0][3]*o[2]);
     lin[1][0] = -(lin[1][1]*o[0] + lin[1][2]*o[1] + lin[1][3]*o[2]);
     inv_surface_jac = 1.0/std::sqrt(det);
+    return true;
+}
+
+
+static bool QuadAffineInverseFormsDirectional(const double* nd9,const double* dnd9,
+    double lin[2][4],double dlin[2][4],double& inv_surface_jac,double& dinv_surface_jac)
+{
+    if(!QuadAffineInverseForms(nd9,lin,inv_surface_jac))return false;
+    double a[3],b[3],da[3],db[3];for(int k=0;k<3;++k){a[k]=nd9[6+k]-nd9[k];b[k]=nd9[18+k]-nd9[k];da[k]=dnd9[6+k]-dnd9[k];db[k]=dnd9[18+k]-dnd9[k];}
+    double aa=0,ab=0,bb=0,daa=0,dab=0,dbb=0;for(int k=0;k<3;++k){aa+=a[k]*a[k];ab+=a[k]*b[k];bb+=b[k]*b[k];daa+=2*a[k]*da[k];dab+=da[k]*b[k]+a[k]*db[k];dbb+=2*b[k]*db[k];}
+    const double det=aa*bb-ab*ab,ddet=daa*bb+aa*dbb-2*ab*dab;
+    dinv_surface_jac=-0.5*inv_surface_jac*ddet/det;
+    const double Gi[2][2]={{bb/det,-ab/det},{-ab/det,aa/det}},dG[2][2]={{daa,dab},{dab,dbb}};
+    double L[2][3],dC[2][3];for(int k=0;k<3;++k){L[0][k]=lin[0][k+1];L[1][k]=lin[1][k+1];dC[0][k]=da[k];dC[1][k]=db[k];}
+    for(int q=0;q<2;++q)for(int k=0;k<3;++k){double v=0;for(int i=0;i<2;++i){v+=Gi[q][i]*dC[i][k];for(int j=0;j<2;++j)v-=Gi[q][i]*dG[i][j]*L[j][k];}dlin[q][k+1]=v;}
+    for(int q=0;q<2;++q){dlin[q][0]=0;for(int k=0;k<3;++k)dlin[q][0]-=dlin[q][k+1]*nd9[k]+lin[q][k+1]*dnd9[k];}
     return true;
 }
 
@@ -3802,6 +3972,199 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
     }
 }
 
+void RadHACApKChargeGram::DPhiInnerHexRadialCellVec(
+    int hS, int subB, const double p[3], const double dp[3], const double* xiT,
+    const double* node_velocity, const std::vector<int>& srcG, double* dinn,
+    const std::vector<double>* radial_points,
+    const std::vector<double>* radial_weights) const
+{
+    if (!xiT) throw std::logic_error("DPhiInnerHexRadialCellVec: xiT required");
+    if ((radial_points == nullptr) != (radial_weights == nullptr))
+        throw std::invalid_argument("radial points and weights must be provided together");
+    const std::vector<double>& gl = radial_points ? *radial_points : m_glIn;
+    const std::vector<double>& gw = radial_weights ? *radial_weights : m_gwIn;
+    if (gl.empty() || gl.size() != gw.size())
+        throw std::invalid_argument("radial points and weights must have equal nonzero length");
+    const double* nd = &m_hexNodes[(size_t)hS*81];
+    const int* tv = HEXREF_TETS[subB];
+    double V[4][3];
+    for (int i=0;i<4;++i) for(int k=0;k<3;++k) V[i][k]=HEXREF_V[tv[i]][k];
+    double x0[3]; rad_hdiv::ClosestPointTet(V, xiT, x0);
+    double E0[3],E1[3],E2[3];
+    for(int k=0;k<3;++k){E0[k]=V[1][k]-V[0][k];E1[k]=V[2][k]-V[0][k];E2[k]=V[3][k]-V[0][k];}
+    const double hv=E0[0]*(E1[1]*E2[2]-E1[2]*E2[1])-E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])+E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
+    const double sgnT=hv>=0.0?1.0:-1.0;
+    const int nS=(int)srcG.size(), nR=(int)gl.size();
+    std::vector<double> acc((size_t)nS,0.0);
+    for(int f=0;f<4;++f){
+        const double* b1=V[HEXTET_FC[f][0]], *b2=V[HEXTET_FC[f][1]], *b3=V[HEXTET_FC[f][2]];
+        double d1[3],d2[3],d3[3],e21[3],e32[3];
+        for(int k=0;k<3;++k){d1[k]=b1[k]-x0[k];d2[k]=b2[k]-x0[k];d3[k]=b3[k]-x0[k];e21[k]=b2[k]-b1[k];e32[k]=b3[k]-b2[k];}
+        const double cr[3]={d2[1]*d3[2]-d2[2]*d3[1],d2[2]*d3[0]-d2[0]*d3[2],d2[0]*d3[1]-d2[1]*d3[0]};
+        const double D=d1[0]*cr[0]+d1[1]*cr[1]+d1[2]*cr[2];
+        if(std::fabs(D)<1e-300) continue;
+        for(int a=0;a<nR;++a){const double u=gl[a];for(int b=0;b<nR;++b){const double v=gl[b];for(int c=0;c<nR;++c){const double w=gl[c];
+            double y[3];for(int k=0;k<3;++k)y[k]=x0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
+            double X[3],dX[3]; HexQ2MapX(nd,y,X); HexQ2MapX(node_velocity,y,dX);
+            const double R[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]};
+            const double dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};
+            const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2]; if(r2<1e-300)continue;
+            const double dk=-(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));
+            const double wq=gw[a]*gw[b]*gw[c]*(u*u*v*D)*dk;
+            for(int ls=0;ls<nS;++ls)acc[ls]+=wq*HexMonoEval(srcG[ls],y);
+        }}}
+    }
+    for(int ls=0;ls<nS;++ls)dinn[ls]+=sgnT*acc[ls];
+}
+
+void RadHACApKChargeGram::DPhiInnerHexRadialFaceVec(
+    int hS, int subB, const double p[3], const double dp[3], const double* xiT,
+    const double* node_velocity, const std::vector<int>& srcG, double* dinn) const
+{
+    if (!xiT) throw std::logic_error("DPhiInnerHexRadialFaceVec: xiT required");
+    const double* nd=&m_quadNodes[(size_t)hS*27];
+    const int* tv=QUADREF_TRIS[subB]; double V[3][2];
+    for(int i=0;i<3;++i)for(int k=0;k<2;++k)V[i][k]=QUADREF_V[tv[i]][k];
+    const double ur[2]={xiT[0],xiT[1]}; double x0[2]; ClosestPointTri2D(V,ur,x0);
+    const int n=(int)srcG.size(),nr=(int)m_glIn.size(); std::vector<double> acc((size_t)n,0.0);
+    for(int f=0;f<3;++f){
+        const double* A=V[f],*B=V[(f+1)%3];
+        const double ea[2]={A[0]-x0[0],A[1]-x0[1]},eb[2]={B[0]-x0[0],B[1]-x0[1]};
+        const double s2=ea[0]*eb[1]-ea[1]*eb[0]; if(std::fabs(s2)<1e-300)continue;
+        for(int a=0;a<nr;++a){const double u=m_glIn[a];for(int b=0;b<nr;++b){const double v=m_glIn[b];
+            const double y[2]={x0[0]+u*(ea[0]+v*(eb[0]-ea[0])),x0[1]+u*(ea[1]+v*(eb[1]-ea[1]))};
+            double X[3],dX[3]; QuadQ2MapX(nd,y,X); QuadQ2MapX(node_velocity,y,dX);
+            const double R[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};
+            const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2]; if(r2<1e-300)continue;
+            const double dk=-(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));
+            const double wq=m_gwIn[a]*m_gwIn[b]*(u*s2)*dk; const double y3[3]={y[0],y[1],0.0};
+            for(int j=0;j<n;++j)acc[j]+=wq*HexMonoEval(srcG[j],y3);
+        }}
+    }
+    for(int j=0;j<n;++j)dinn[j]+=acc[j];
+}
+
+void RadHACApKChargeGram::DPhiInnerHexSubVec(int kindS,int hS,int subB,
+    const double p[3],const double dp[3],const double* velocity,
+    const std::vector<int>& srcG,double* dinn) const
+{
+    const bool cell=kindS==0;const size_t sid=cell?((size_t)hS*6+subB):((size_t)hS*2+subB);
+    if(!cell&&hS<(int)m_quadAffineFace.size()&&m_quadAffineFace[hS]){
+        const double* nd=&m_quadNodes[(size_t)hS*27];double lin[2][4],dlin[2][4],invj=0,dinvj=0;
+        if(!QuadAffineInverseFormsDirectional(nd,velocity,lin,dlin,invj,dinvj))throw std::logic_error("affine HEX face derivative has a singular geometry map");
+        const int np=m_quadAffinePolyCount,axis=m_hexAffineOrder+1;const int* tv=QUADREF_TRIS[subB];double V[3][3],dV[3][3];
+        for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,uv,V[a]);QuadQ2MapX(velocity,uv,dV[a]);}
+        double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(m_hexAffineOrder==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);
+        for(int ls=0;ls<(int)srcG.size();++ls){const int* e=&m_expo[(size_t)3*srcG[ls]];double poly[HEX_AFFINE_POLY_N]={},dpoly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<e[0];++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[0],dlin[0],np);for(int q=0;q<e[1];++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[1],dlin[1],np);const int mono=e[0]+axis*e[1];const double* coeff=&m_quadAffineCoeff[((size_t)hS*m_quadAffineMonoCount+mono)*np];for(int k=0;k<np;++k){const double dc=dinvj*poly[k]+invj*dpoly[k];dinn[ls]+=dc*mv[k]+coeff[k]*dm[k];}}
+        return;
+    }
+    const double* cs=cell?&m_cellSubC[sid*3]:&m_faceSubC[sid*3];const double sz=cell?m_cellSubS[sid]:m_faceSubS[sid];
+    const double dx=p[0]-cs[0],dy=p[1]-cs[1],dz=p[2]-cs[2];const bool far=std::sqrt(dx*dx+dy*dy+dz*dz)>m_far_inner_factor*sz;
+    const double* nd=cell?&m_hexNodes[(size_t)hS*81]:&m_quadNodes[(size_t)hS*27];const int n=(int)srcG.size();
+    if(far){const auto cl=HexGetCloud(m_build_id,HexCloudKey(cell?0:1,false,false,hS,subB,3),[&](HexQuadCloud& c){if(cell)HexBuildCloud(nd,true,subB,m_farTetP.data(),m_farTetW.data(),(int)m_farTetW.size(),false,c);else HexBuildCloud(nd,false,subB,m_farTriP.data(),m_farTriW.data(),(int)m_farTriW.size(),false,c);});
+        for(int q=0;q<(int)cl->wgeo.size();++q){const double* xi=&cl->xi[3*q];double dX[3];if(cell)HexQ2MapX(velocity,xi,dX);else{const double uv[2]={xi[0],xi[1]};QuadQ2MapX(velocity,uv,dX);}const double R[3]={p[0]-cl->pts[3*q],p[1]-cl->pts[3*q+1],p[2]-cl->pts[3*q+2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)continue;const double w=-cl->wgeo[q]*(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));for(int j=0;j<n;++j)dinn[j]+=w*HexMonoEval(srcG[j],xi);}return;}
+    const int nsite=cell?15:7;const double* sx=cell?&m_cellSiteX[(((size_t)hS*6+subB)*15)*3]:&m_faceSiteX[(((size_t)hS*2+subB)*7)*3];int best=0;double bd=1e300;for(int k=0;k<nsite;++k){const double x=p[0]-sx[3*k],y=p[1]-sx[3*k+1],z=p[2]-sx[3*k+2],d=x*x+y*y+z*z;if(d<bd){bd=d;best=k;}}
+    const HexSiteRad& Q=cell?m_cellSiteRad[(size_t)subB*15+best]:m_faceSiteRad[(size_t)subB*7+best];const int nn=cell?27:9,nm=cell?27:9;std::vector<int> col(n);for(int j=0;j<n;++j){const int* e=&m_expo[(size_t)3*srcG[j]];col[j]=e[0]+3*e[1]+(cell?9*e[2]:0);}for(int q=0;q<Q.nq;++q){const double* S=&Q.S[(size_t)q*nn];double X[3]={},dX[3]={};for(int a=0;a<nn;++a)for(int k=0;k<3;++k){X[k]+=S[a]*nd[3*a+k];dX[k]+=S[a]*velocity[3*a+k];}const double R[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)continue;const double w=-Q.w[q]*(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));const double* M=&Q.M[(size_t)q*nm];for(int j=0;j<n;++j)dinn[j]+=w*M[col[j]];}
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
+    int kindT,int hT,int kindS,int hS,const double* velocityT,const double* velocityS,int mask) const
+{
+    if(mask!=0)throw std::invalid_argument("shape derivative currently requires direct mask 0");
+    const auto& tg=kindT==0?m_cellCharges[hT]:m_faceCharges[hT];const auto& sg=kindS==0?m_cellCharges[hS]:m_faceCharges[hS];const int nt=(int)tg.size(),ns=(int)sg.size();std::vector<double> out((size_t)nt*ns,0),inn(ns);
+    if(kindT==kindS&&hT==hS)return kindT==0?HexVolumeSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+81)):HexFaceSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+27));
+    if(kindT==1&&kindS==1&&m_quadAffineFace[hT]&&m_quadAffineFace[hS]){
+        const double* nd=&m_quadNodes[(size_t)hT*27];const int nq=(int)m_glOut.size();double xi[3]={0,0,0};
+        for(int iy=0;iy<nq;++iy){xi[1]=m_glOut[iy];for(int ix=0;ix<nq;++ix){xi[0]=m_glOut[ix];const double uv[2]={xi[0],xi[1]};double p[3],dp[3];QuadQ2MapX(nd,uv,p);QuadQ2MapX(velocityT,uv,dp);std::fill(inn.begin(),inn.end(),0.0);for(int sub=0;sub<2;++sub)DPhiInnerHexSubVec(1,hS,sub,p,dp,velocityS,sg,inn.data());const double wg=m_gwOut[ix]*m_gwOut[iy];for(int i=0;i<nt;++i){const double w=wg*HexMonoEval(tg[i],xi);for(int j=0;j<ns;++j)out[(size_t)i*ns+j]+=w*inn[j];}}}
+        for(double& x:out)x*=RAD_INV_FOUR_PI;return out;
+    }
+    const bool ct=kindT==0,cs=kindS==0;const int nst=ct?6:2,nss=cs?6:2,nv=ct?4:3;const double* ndT=ct?&m_hexNodes[(size_t)hT*81]:&m_quadNodes[(size_t)hT*27];const int rt=tg[0],rs=sg[0];const double dh[3]={m_cent[3*rt]-m_cent[3*rs],m_cent[3*rt+1]-m_cent[3*rs+1],m_cent[3*rt+2]-m_cent[3*rs+2]};const bool nearHosts=std::sqrt(dh[0]*dh[0]+dh[1]*dh[1]+dh[2]*dh[2])<=m_near_grade*(m_size[rt]+m_size[rs]);
+    for(int a=0;a<nst;++a){const size_t ia=ct?(size_t)hT*6+a:(size_t)hT*2+a;const double* va=ct?&m_cellSubV[ia*12]:&m_faceSubV[ia*9];const double* ca=ct?&m_cellSubC[ia*3]:&m_faceSubC[ia*3];const double sa=ct?m_cellSubS[ia]:m_faceSubS[ia];for(int b=0;b<nss;++b){const size_t ib=cs?(size_t)hS*6+b:(size_t)hS*2+b;const double* cb=cs?&m_cellSubC[ib*3]:&m_faceSubC[ib*3];const double sb=cs?m_cellSubS[ib]:m_faceSubS[ib];const double dx=ca[0]-cb[0],dy=ca[1]-cb[1],dz=ca[2]-cb[2];const bool near=nearHosts&&std::sqrt(dx*dx+dy*dy+dz*dz)<=m_near_grade*(sa+sb);std::shared_ptr<const HexQuadCloud> oc;
+        if(!near)oc=HexGetCloud(m_build_id,HexCloudKey(ct?0:1,true,false,hT,a,3),[&](HexQuadCloud& c){if(ct)HexBuildCloud(ndT,true,a,m_symTetP.data(),m_symTetW.data(),(int)m_symTetW.size(),false,c);else HexBuildCloud(ndT,false,a,m_symTriP.data(),m_symTriW.data(),(int)m_symTriW.size(),false,c);});else{int corner=0;double best=1e300;for(int i=0;i<nv;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best){best=d;corner=i;}}oc=HexGetCloud(m_build_id,HexCloudKey(ct?0:1,true,true,hT,a,corner),[&](HexQuadCloud& c){std::vector<double> gb,gw;HexDuffyBary(ct?3:2,corner,m_glOut,m_gwOut,gb,gw);HexBuildCloud(ndT,ct,a,gb.data(),gw.data(),(int)gw.size(),true,c);});}
+        for(int q=0;q<(int)oc->wgeo.size();++q){const double* xi=&oc->xi[3*q];double dp[3];if(ct)HexQ2MapX(velocityT,xi,dp);else{const double uv[2]={xi[0],xi[1]};QuadQ2MapX(velocityT,uv,dp);}std::fill(inn.begin(),inn.end(),0);const double p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]};DPhiInnerHexSubVec(kindS,hS,b,p,dp,velocityS,sg,inn.data());for(int i=0;i<nt;++i){const double w=oc->wgeo[q]*HexMonoEval(tg[i],xi);for(int j=0;j<ns;++j)out[(size_t)i*ns+j]+=w*inn[j];}}
+    }}for(double& x:out)x*=RAD_INV_FOUR_PI;return out;
+}
+
+std::vector<double> RadHACApKChargeGram::HexChargeGramDirectionalDerivative(
+    const std::vector<double>& cellVelocity,const std::vector<double>& faceVelocity) const
+{
+    if(!m_hexmode||m_wedgemode||m_d2)throw std::logic_error("HEX ChargeGram derivative requires a 3D HEX Gram");
+    if(cellVelocity.size()!=m_cellCharges.size()*81)throw std::invalid_argument("cell_node_velocity must have shape (ncell,27,3)");
+    if(faceVelocity.size()!=m_faceCharges.size()*27)throw std::invalid_argument("face_node_velocity must have shape (nface,9,3)");
+    std::vector<double> dense((size_t)m_n*m_n,0.0);const int nh=(int)m_cellCharges.size()+(int)m_faceCharges.size();
+    auto kind=[&](int h){return h<(int)m_cellCharges.size()?0:1;};auto host=[&](int h){return kind(h)==0?h:h-(int)m_cellCharges.size();};auto vel=[&](int k,int h){return k==0?&cellVelocity[(size_t)h*81]:&faceVelocity[(size_t)h*27];};auto grp=[&](int k,int h)->const std::vector<int>&{return k==0?m_cellCharges[h]:m_faceCharges[h];};
+    for(int A=0;A<nh;++A){const int ka=kind(A),ha=host(A);for(int B=A;B<nh;++B){const int kb=kind(B),hb=host(B);const auto ab=QuadBlockHexDirectionalDerivative(ka,ha,kb,hb,vel(ka,ha),vel(kb,hb));const auto& ga=grp(ka,ha);const auto& gb=grp(kb,hb);if(A==B){for(int i=0;i<(int)ga.size();++i)for(int j=0;j<(int)ga.size();++j)dense[(size_t)ga[i]*m_n+ga[j]]=ab[(size_t)i*ga.size()+j];continue;}const auto ba=QuadBlockHexDirectionalDerivative(kb,hb,ka,ha,vel(kb,hb),vel(ka,ha));for(int i=0;i<(int)ga.size();++i)for(int j=0;j<(int)gb.size();++j){const double x=.5*(ab[(size_t)i*gb.size()+j]+ba[(size_t)j*ga.size()+i]);dense[(size_t)ga[i]*m_n+gb[j]]=x;dense[(size_t)gb[j]*m_n+ga[i]]=x;}}}
+    return dense;
+}
+
+RadHACApKChargeGramDerivative::RadHACApKChargeGramDerivative(
+    const RadHACApKChargeGram& parent,ChargeDerivativeFamily family,
+    std::vector<double> cellVelocity,std::vector<double> faceVelocity)
+    :m_parent(parent),m_family(family),m_cell_velocity(std::move(cellVelocity)),
+     m_face_velocity(std::move(faceVelocity))
+{
+    if(m_family==ChargeDerivativeFamily::Hex){
+        if(m_cell_velocity.size()!=m_parent.m_cellCharges.size()*81||m_face_velocity.size()!=m_parent.m_faceCharges.size()*27)
+            throw std::invalid_argument("HEX derivative velocities have wrong host dimensions");
+    }else if(m_family==ChargeDerivativeFamily::Tet){
+        if(m_cell_velocity.size()!=m_parent.m_hoCellCharges.size()*12||m_face_velocity.size()!=m_parent.m_hoFaceCharges.size()*9)
+            throw std::invalid_argument("TET derivative velocities have wrong host dimensions");
+    }else if(m_cell_velocity.size()!=m_parent.m_cellCharges.size()*54||m_face_velocity.size()!=m_parent.m_faceCharges.size()*27)
+        throw std::invalid_argument("WEDGE derivative velocities have wrong host dimensions");
+    static std::atomic<unsigned long long> next{1};m_cache_token=next.fetch_add(1,std::memory_order_relaxed);
+}
+
+void RadHACApKChargeGramDerivative::ExtractCoordinates()
+{
+    m_n_elem=m_parent.m_n;m_ndof=m_parent.m_n;m_coordinates=m_parent.m_cent;
+}
+
+double RadHACApKChargeGramDerivative::GetInteractionMatrixElement(int i,int j) const
+{
+    if(i<0||j<0||i>=m_parent.m_n||j>=m_parent.m_n)throw std::out_of_range("ChargeGram derivative index out of range");
+    if(m_family==ChargeDerivativeFamily::Wedge)return m_parent.WedgeChargeGramDirectionalDerivativeElement(i,j,m_cell_velocity,m_face_velocity,m_cache_token);
+    if(m_family==ChargeDerivativeFamily::Tet)return m_parent.TetChargeGramDirectionalDerivativeElement(i,j,m_cell_velocity,m_face_velocity,m_cache_token);
+    const int ki=m_parent.m_kind[i],kj=m_parent.m_kind[j],hi=m_parent.m_host[i],hj=m_parent.m_host[j];
+    int ga=ki==0?hi:(int)m_parent.m_cellCharges.size()+hi,gb=kj==0?hj:(int)m_parent.m_cellCharges.size()+hj;
+    const bool transpose=ga>gb;if(transpose){std::swap(ga,gb);}
+    const int ka=ga<(int)m_parent.m_cellCharges.size()?0:1,ha=ka==0?ga:ga-(int)m_parent.m_cellCharges.size();
+    const int kb=gb<(int)m_parent.m_cellCharges.size()?0:1,hb=kb==0?gb:gb-(int)m_parent.m_cellCharges.size();
+    const long long key=((long long)ga<<32)|(unsigned)gb;
+    {std::lock_guard<std::mutex> lock(m_cache_mutex);auto it=m_block_cache.find(key);if(it!=m_block_cache.end()){
+        const auto& B=kb==0?m_parent.m_cellCharges[hb]:m_parent.m_faceCharges[hb];const int li=m_parent.m_hexLocalOf[i],lj=m_parent.m_hexLocalOf[j];return transpose?it->second[(size_t)lj*B.size()+li]:it->second[(size_t)li*B.size()+lj];}}
+    std::vector<double> computed;
+    {
+        const double* va=ka==0?&m_cell_velocity[(size_t)ha*81]:&m_face_velocity[(size_t)ha*27];
+        const double* vb=kb==0?&m_cell_velocity[(size_t)hb*81]:&m_face_velocity[(size_t)hb*27];
+        auto ab=m_parent.QuadBlockHexDirectionalDerivative(ka,ha,kb,hb,va,vb);
+        if(ga!=gb){auto ba=m_parent.QuadBlockHexDirectionalDerivative(kb,hb,ka,ha,vb,va);const auto& A=ka==0?m_parent.m_cellCharges[ha]:m_parent.m_faceCharges[ha];const auto& B=kb==0?m_parent.m_cellCharges[hb]:m_parent.m_faceCharges[hb];for(int a=0;a<(int)A.size();++a)for(int b=0;b<(int)B.size();++b)ab[(size_t)a*B.size()+b]=.5*(ab[(size_t)a*B.size()+b]+ba[(size_t)b*A.size()+a]);}
+        computed=std::move(ab);
+    }
+    std::lock_guard<std::mutex> lock(m_cache_mutex);auto it=m_block_cache.emplace(key,std::move(computed)).first;
+    const auto& A=ka==0?m_parent.m_cellCharges[ha]:m_parent.m_faceCharges[ha];const auto& B=kb==0?m_parent.m_cellCharges[hb]:m_parent.m_faceCharges[hb];
+    const int li=m_parent.m_hexLocalOf[i],lj=m_parent.m_hexLocalOf[j];return transpose?it->second[(size_t)lj*B.size()+li]:it->second[(size_t)li*B.size()+lj];
+}
+
+void RadHACApKChargeGramDerivative::ClearEntryCache()
+{
+    std::lock_guard<std::mutex> lock(m_cache_mutex);
+    m_block_cache.clear();
+    m_block_cache.rehash(0);
+}
+
+std::unique_ptr<RadHACApKChargeGramDerivative> RadHACApKChargeGram::BuildDirectionalDerivativeOperator(
+    ChargeDerivativeFamily family,const std::vector<double>& cellVelocity,
+    const std::vector<double>& faceVelocity,const RadHACApKParams& params) const
+{
+    auto result=std::make_unique<RadHACApKChargeGramDerivative>(*this,family,cellVelocity,faceVelocity);
+    if(!result->BuildHMatrix(params))throw std::runtime_error("failed to build ChargeGram derivative H-matrix");
+    // ACA fill may visit many host pairs.  Their exact blocks are only a
+    // construction cache; retaining them would silently recreate dense-like
+    // storage beside the completed H-matrix.
+    result->ClearEntryCache();
+    return result;
+}
+
 // The whole DIRECTED host-pair block (target host (kindT,hT) outer x source host (kindS,hS) inner) for every
 // local charge pair, computed in ONE pass.  All near/far/grading decisions are host+sub geometric (identical
 // across the block), so the per-entry value is served from ONE block computation -- the expensive kernel
@@ -3949,6 +4312,216 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     }
     for (double& v : blk) v *= RAD_INV_FOUR_PI;
     return blk;
+}
+
+std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative(
+    int host, const std::vector<double>& node_velocity) const
+{
+    if (!m_hexmode || m_wedgemode) throw std::logic_error(
+        "HexVolumeSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
+    if (host < 0 || host >= (int)m_cellCharges.size()) throw std::out_of_range("HEX host out of range");
+    if (node_velocity.size() != 81) throw std::invalid_argument("node_velocity must have shape (27,3)");
+    const std::vector<int>& g=m_cellCharges[host]; const int n=(int)g.size();
+    std::vector<double> out((size_t)n*n,0.0), dinn(n), owt(n);
+    if(n==0)return out;
+    const double* nd=&m_hexNodes[(size_t)host*81];
+    const bool affine = host < (int)m_hexAffineCell.size() && m_hexAffineCell[host];
+    if (affine) {
+        // Match QuadBlockHexAffineProduct's complete-cube outer rule.  Pure
+        // dilation follows exactly from the degree -1 Laplace homogeneity;
+        // other velocities differentiate the radial source integral directly.
+        double origin[3], geometry_gradient[3][3], geometry_det;
+        double inverse_gradient[3][3];
+        if (!HexAffineBasisChecked(nd, origin, geometry_gradient, geometry_det)
+                || !HexInv3(geometry_gradient, inverse_gradient))
+            throw std::logic_error("affine HEX derivative has a singular geometry map");
+        double velocity_gradient[3][3];
+        const int axis_node[3] = {2, 6, 18};
+        for (int physical = 0; physical < 3; ++physical)
+            for (int reference = 0; reference < 3; ++reference)
+                velocity_gradient[physical][reference] =
+                    node_velocity[3*axis_node[reference] + physical]
+                    - node_velocity[physical];
+        double trace = 0.0;
+        for (int physical = 0; physical < 3; ++physical)
+            for (int reference = 0; reference < 3; ++reference)
+                trace += velocity_gradient[physical][reference]
+                       * inverse_gradient[reference][physical];
+        const double isotropic_rate = trace/3.0;
+        std::vector<double> residual_velocity(81);
+        for (int i = 0; i < 81; ++i)
+            residual_velocity[i] = node_velocity[i] - isotropic_rate*nd[i];
+        double velocity_scale = 1.0;
+        for (double value : node_velocity)
+            velocity_scale = std::max(velocity_scale, std::abs(value));
+        const double rigid_tolerance = 64.0*std::numeric_limits<double>::epsilon()
+                                     * velocity_scale;
+        bool isotropic_plus_translation = true;
+        for (int node = 1; node < 27 && isotropic_plus_translation; ++node)
+            for (int physical = 0; physical < 3; ++physical)
+                if (std::abs(residual_velocity[3*node + physical]
+                           - residual_velocity[physical]) > rigid_tolerance) {
+                    isotropic_plus_translation = false;
+                    break;
+                }
+        if (isotropic_plus_translation) {
+            const auto exact_block = QuadBlockHexAffineProduct(0, host, 0, host, 0);
+            for (std::size_t i = 0; i < out.size(); ++i)
+                out[i] = -isotropic_rate*exact_block[i];
+            return out;
+        }
+
+        struct GaussRule {
+            std::vector<double> points;
+            std::vector<double> weights;
+        };
+        static const GaussRule radial = [] {
+            // This derivative is an offline shape operation.  A fixed rule
+            // keeps its accuracy independent of the solve-time inner rule.
+            constexpr int order = 24;
+            GaussRule rule;
+            rule.points.resize(order);
+            rule.weights.resize(order);
+            const double pi = std::acos(-1.0);
+            for (int i = 0; i < (order + 1)/2; ++i) {
+                double z = std::cos(pi*(i + 0.75)/(order + 0.5));
+                double derivative = 0.0;
+                for (;;) {
+                    double p1 = 1.0, p2 = 0.0;
+                    for (int degree = 1; degree <= order; ++degree) {
+                        const double p3 = p2;
+                        p2 = p1;
+                        p1 = ((2.0*degree - 1.0)*z*p2 - (degree - 1.0)*p3)/degree;
+                    }
+                    derivative = order*(z*p1 - p2)/(z*z - 1.0);
+                    const double next = z - p1/derivative;
+                    if (std::abs(next - z) <= 4.0*std::numeric_limits<double>::epsilon()) {
+                        z = next;
+                        break;
+                    }
+                    z = next;
+                }
+                const double weight = 1.0/((1.0 - z*z)*derivative*derivative);
+                rule.points[i] = 0.5*(1.0 - z);
+                rule.points[order - 1 - i] = 0.5*(1.0 + z);
+                rule.weights[i] = weight;
+                rule.weights[order - 1 - i] = weight;
+            }
+            return rule;
+        }();
+        const int nq = (int)m_glOut.size();
+        double xi[3];
+        for (int iz = 0; iz < nq; ++iz) {
+            xi[2] = m_glOut[iz];
+            for (int iy = 0; iy < nq; ++iy) {
+                xi[1] = m_glOut[iy];
+                for (int ix = 0; ix < nq; ++ix) {
+                    xi[0] = m_glOut[ix];
+                    double p[3], dp[3];
+                    HexQ2MapX(nd, xi, p);
+                    HexQ2MapX(node_velocity.data(), xi, dp);
+                    std::fill(dinn.begin(), dinn.end(), 0.0);
+                    for (int subB = 0; subB < 6; ++subB)
+                        DPhiInnerHexRadialCellVec(
+                            host, subB, p, dp, xi, node_velocity.data(),
+                            g, dinn.data(), &radial.points, &radial.weights);
+                    const double wg = m_gwOut[ix]*m_gwOut[iy]*m_gwOut[iz];
+                    for (int lt = 0; lt < n; ++lt)
+                        owt[lt] = wg*HexMonoEval(g[lt], xi);
+                    for (int lt = 0; lt < n; ++lt)
+                        for (int ls = 0; ls < n; ++ls)
+                            out[(size_t)lt*n+ls] += owt[lt]*dinn[ls];
+                }
+            }
+        }
+    } else {
+    for(int sA=0;sA<6;++sA){
+        const size_t sidA=(size_t)host*6+sA; const double* subVA=&m_cellSubV[sidA*12]; const double* cA=&m_cellSubC[sidA*3];
+        for(int sB=0;sB<6;++sB){
+            const size_t sidB=(size_t)host*6+sB; const double* cB=&m_cellSubC[sidB*3];
+            const double dcx=cA[0]-cB[0],dcy=cA[1]-cB[1],dcz=cA[2]-cB[2];
+            const bool near_sub=std::sqrt(dcx*dcx+dcy*dcy+dcz*dcz)<=m_near_grade*(m_cellSubS[sidA]+m_cellSubS[sidB]);
+            int corner=0; double best=1e300;
+            for(int i=0;i<4;++i){const double dx=subVA[3*i]-cB[0],dy=subVA[3*i+1]-cB[1],dz=subVA[3*i+2]-cB[2];const double d=dx*dx+dy*dy+dz*dz;if(d<best){best=d;corner=i;}}
+            std::shared_ptr<const HexQuadCloud> oc;
+            if(near_sub) oc=HexGetCloud(m_build_id,HexCloudKey(0,true,true,host,sA,corner),[&](HexQuadCloud& c){std::vector<double> gb,gw;HexDuffyBary(3,corner,m_glOut,m_gwOut,gb,gw);HexBuildCloud(nd,true,sA,gb.data(),gw.data(),(int)gw.size(),true,c);});
+            else oc=HexGetCloud(m_build_id,HexCloudKey(0,true,false,host,sA,3),[&](HexQuadCloud& c){HexBuildCloud(nd,true,sA,m_symTetP.data(),m_symTetW.data(),(int)m_symTetW.size(),false,c);});
+            for(int q=0;q<(int)oc->wgeo.size();++q){
+                const double* xi=&oc->xi[3*q]; const double p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]};
+                double dp[3]; HexQ2MapX(node_velocity.data(),xi,dp);
+                std::fill(dinn.begin(),dinn.end(),0.0);
+                DPhiInnerHexRadialCellVec(host,sB,p,dp,xi,node_velocity.data(),g,dinn.data());
+                for(int lt=0;lt<n;++lt)owt[lt]=oc->wgeo[q]*HexMonoEval(g[lt],xi);
+                for(int lt=0;lt<n;++lt)for(int ls=0;ls<n;++ls)out[(size_t)lt*n+ls]+=owt[lt]*dinn[ls];
+            }
+        }
+    }
+    }
+    for(int i=0;i<n;++i) for(int j=i+1;j<n;++j) {
+        const double value=0.5*(out[(size_t)i*n+j]+out[(size_t)j*n+i]);
+        out[(size_t)i*n+j]=value; out[(size_t)j*n+i]=value;
+    }
+    for(double& v:out)v*=RAD_INV_FOUR_PI;
+    return out;
+}
+
+std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
+    int host, const std::vector<double>& node_velocity) const
+{
+    if (!m_hexmode || m_wedgemode) throw std::logic_error(
+        "HexFaceSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
+    if(host<0||host>=(int)m_faceCharges.size())throw std::out_of_range("HEX face host out of range");
+    if(node_velocity.size()!=27)throw std::invalid_argument("node_velocity must have shape (9,3)");
+    const std::vector<int>& g=m_faceCharges[host]; const int n=(int)g.size();
+    std::vector<double> out((size_t)n*n,0.0),dinn(n); if(n==0)return out;
+    const double* nd=&m_quadNodes[(size_t)host*27];
+    const bool affine=host<(int)m_quadAffineFace.size()&&m_quadAffineFace[host];
+    if(affine){
+        double lin[2][4],dlin[2][4],invj=0,dinvj=0;
+        if(!QuadAffineInverseFormsDirectional(nd,node_velocity.data(),lin,dlin,invj,dinvj))
+            throw std::logic_error("affine HEX face derivative has a singular geometry map");
+        const int axisCount=m_hexAffineOrder+1,np=m_quadAffinePolyCount;
+        std::vector<double> dcoeff((size_t)n*np,0.0);
+        for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];double poly[HEX_AFFINE_POLY_N]={},dp[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;
+            for(int q=0;q<e[0];++q)HexPolyMulLinearDirectional(poly,dp,deg,lin[0],dlin[0],np);
+            for(int q=0;q<e[1];++q)HexPolyMulLinearDirectional(poly,dp,deg,lin[1],dlin[1],np);
+            for(int k=0;k<np;++k)dcoeff[(size_t)ls*np+k]=dinvj*poly[k]+invj*dp[k];
+        }
+        const int nq=(int)m_glOut.size();double xi[3]={0,0,0};
+        for(int iy=0;iy<nq;++iy){xi[1]=m_glOut[iy];for(int ix=0;ix<nq;++ix){xi[0]=m_glOut[ix];
+            const double uv[2]={xi[0],xi[1]};double p[3],dpnt[3];QuadQ2MapX(nd,uv,p);QuadQ2MapX(node_velocity.data(),uv,dpnt);
+            std::fill(dinn.begin(),dinn.end(),0.0);
+            for(int sub=0;sub<2;++sub){const int* tv=QUADREF_TRIS[sub];double V[3][3],dV[3][3];
+                for(int a=0;a<3;++a){const double ruv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,ruv,V[a]);QuadQ2MapX(node_velocity.data(),ruv,dV[a]);}
+                double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};
+                if(m_hexAffineOrder==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dpnt,mv,dm);
+                else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dpnt,mv,dm);
+                for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];const int mono=e[0]+axisCount*e[1];const double* c=&m_quadAffineCoeff[((size_t)host*m_quadAffineMonoCount+mono)*np];
+                    for(int k=0;k<np;++k)dinn[ls]+=dcoeff[(size_t)ls*np+k]*mv[k]+c[k]*dm[k];}
+            }
+            const double wg=m_gwOut[ix]*m_gwOut[iy];for(int i=0;i<n;++i){const double w=wg*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*dinn[j];}
+        }}
+    } else {
+    for(int sA=0;sA<2;++sA){
+        const size_t sidA=(size_t)host*2+sA; const double* subVA=&m_faceSubV[sidA*9],*cA=&m_faceSubC[sidA*3];
+        for(int sB=0;sB<2;++sB){
+            const size_t sidB=(size_t)host*2+sB; const double* cB=&m_faceSubC[sidB*3];
+            const double dx=cA[0]-cB[0],dy=cA[1]-cB[1],dz=cA[2]-cB[2];
+            const bool near=std::sqrt(dx*dx+dy*dy+dz*dz)<=m_near_grade*(m_faceSubS[sidA]+m_faceSubS[sidB]);
+            int corner=0;double best=1e300;for(int i=0;i<3;++i){const double x=subVA[3*i]-cB[0],y=subVA[3*i+1]-cB[1],z=subVA[3*i+2]-cB[2],d=x*x+y*y+z*z;if(d<best){best=d;corner=i;}}
+            std::shared_ptr<const HexQuadCloud> oc;
+            if(near)oc=HexGetCloud(m_build_id,HexCloudKey(1,true,true,host,sA,corner),[&](HexQuadCloud& c){std::vector<double> gb,gw;HexDuffyBary(2,corner,m_glOut,m_gwOut,gb,gw);HexBuildCloud(nd,false,sA,gb.data(),gw.data(),(int)gw.size(),true,c);});
+            else oc=HexGetCloud(m_build_id,HexCloudKey(1,true,false,host,sA,3),[&](HexQuadCloud& c){HexBuildCloud(nd,false,sA,m_symTriP.data(),m_symTriW.data(),(int)m_symTriW.size(),false,c);});
+            for(int q=0;q<(int)oc->wgeo.size();++q){const double* xi=&oc->xi[3*q];const double p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]};
+                const double uv[2]={xi[0],xi[1]};double dp[3];QuadQ2MapX(node_velocity.data(),uv,dp);std::fill(dinn.begin(),dinn.end(),0.0);
+                DPhiInnerHexRadialFaceVec(host,sB,p,dp,xi,node_velocity.data(),g,dinn.data());
+                for(int i=0;i<n;++i){const double w=oc->wgeo[q]*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*dinn[j];}
+            }
+        }
+    }
+    }
+    for(int i=0;i<n;++i)for(int j=i+1;j<n;++j){const double v=.5*(out[(size_t)i*n+j]+out[(size_t)j*n+i]);out[(size_t)i*n+j]=out[(size_t)j*n+i]=v;}
+    for(double& v:out)v*=RAD_INV_FOUR_PI; return out;
 }
 
 // thread_local block cache (build_id-guarded, same discipline as the cloud cache).  Keyed by the directed
@@ -4923,12 +5496,32 @@ void RadHACApKChargeGram::PhiInnerWedgeSiteVec(int kindS, int hS, int subB, cons
     }
 }
 
+static bool WedgeQuadAffineCoefficients(const double* nodes,const double* velocity,
+                                        int eu,int ev,int order,double* coeff,double* derivative);
+
 // Far field point -> cheap cached far cloud; else -> the static-site radial.  Mirror of PhiInnerHexSubVec.
 void RadHACApKChargeGram::PhiInnerWedgeSubVec(int kindS, int hS, int subB, const double p[3],
                                               const std::vector<int>& srcG, double* inn) const
 {
     const bool cell = (kindS == 0);
     const int ft = cell ? -1 : m_wFaceType[hS];
+    // An affine quad has an exact physical-polynomial source potential.  Use
+    // the same moment path for non-self pairs as for the self radial entry;
+    // this removes an otherwise artificial site/radial accuracy boundary.
+    if (!cell && ft == 1) {
+        const double* qnd=&m_wFaceNodes[(size_t)hS*27];
+        double probe[QUAD_AFFINE_POLY_N]={};
+        if (WedgeQuadAffineCoefficients(qnd,nullptr,0,0,1,probe,nullptr)) {
+            int order=1;for(int charge:srcG){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}
+            const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
+            const int*tv=QUADREF_TRIS[subB];double V[3][3];
+            for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);}
+            double moments[QUAD_AFFINE_POLY_N]={};
+            if(order==1)rad_hdiv::TriPotentialMomentsUpTo2(V,p,moments);else rad_hdiv::TriPotentialMomentsUpTo4(V,p,moments);
+            for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];double coeff[QUAD_AFFINE_POLY_N]={};WedgeQuadAffineCoefficients(qnd,nullptr,e[0],e[1],order,coeff,nullptr);for(int k=0;k<np;++k)inn[j]+=coeff[k]*moments[k];}
+            return;
+        }
+    }
     const size_t sid = cell ? ((size_t)hS*3 + subB) : ((size_t)hS*2 + subB);
     const double* cs = cell ? &m_wCellSubC[sid*3] : &m_wFaceSubC[sid*3];
     const double  sz = cell ? m_wCellSubS[sid] : m_wFaceSubS[sid];
@@ -4954,6 +5547,34 @@ void RadHACApKChargeGram::PhiInnerWedgeSubVec(int kindS, int hS, int subB, const
     }
 }
 
+static bool WedgeQuadAffineCoefficients(const double* nodes,const double* velocity,
+                                        int eu,int ev,int order,double* coeff,double* derivative)
+{
+    double lin[2][4],invj=0;const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
+    if(!velocity){if(!QuadAffineInverseForms(nodes,lin,invj))return false;double poly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<eu;++q)HexPolyMulLinear(poly,deg,lin[0],np);for(int q=0;q<ev;++q)HexPolyMulLinear(poly,deg,lin[1],np);for(int k=0;k<np;++k)coeff[k]=invj*poly[k];return true;}
+    double dlin[2][4],dinvj=0;if(!QuadAffineInverseFormsDirectional(nodes,velocity,lin,dlin,invj,dinvj))return false;double poly[HEX_AFFINE_POLY_N]={},dpoly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<eu;++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[0],dlin[0],np);for(int q=0;q<ev;++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[1],dlin[1],np);for(int k=0;k<np;++k){coeff[k]=invj*poly[k];derivative[k]=dinvj*poly[k]+invj*dpoly[k];}return true;
+}
+
+void RadHACApKChargeGram::DPhiInnerWedgeSubVec(int kindS,int hS,int subB,const double p[3],const double dp[3],
+                                               const double* velocity,const std::vector<int>& srcG,double* dinn) const
+{
+    const bool cell=kindS==0;const int ft=cell?-1:m_wFaceType[hS];const size_t sid=cell?((size_t)hS*3+subB):((size_t)hS*2+subB);
+    if(!cell&&ft==1){
+        const double*qnd=&m_wFaceNodes[(size_t)hS*27];double probe[QUAD_AFFINE_POLY_N]={};
+        if(WedgeQuadAffineCoefficients(qnd,nullptr,0,0,1,probe,nullptr)){
+            int order=1;for(int charge:srcG){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
+            const int*tv=QUADREF_TRIS[subB];double V[3][3],dV[3][3];for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);QuadQ2MapX(velocity,uv,dV[a]);}
+            double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);
+            for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];double c[QUAD_AFFINE_POLY_N]={},dc[QUAD_AFFINE_POLY_N]={};WedgeQuadAffineCoefficients(qnd,velocity,e[0],e[1],order,c,dc);for(int k=0;k<np;++k)dinn[j]+=dc[k]*mv[k]+c[k]*dm[k];}return;
+        }
+    }
+    const double*cs=cell?&m_wCellSubC[sid*3]:&m_wFaceSubC[sid*3];const double sz=cell?m_wCellSubS[sid]:m_wFaceSubS[sid];const double dx=p[0]-cs[0],dy=p[1]-cs[1],dz=p[2]-cs[2];
+    const bool far=std::sqrt(dx*dx+dy*dy+dz*dz)>m_far_inner_factor*sz;const double*nd=cell?&m_wCellNodes[(size_t)hS*54]:&m_wFaceNodes[(size_t)hS*27];
+    if(far){HexQuadCloud c;if(cell)WedgeBuildCloud(nd,0,-1,subB,m_farTetP.data(),m_farTetW.data(),(int)m_farTetW.size(),false,c);else WedgeBuildCloud(nd,1,ft,subB,m_farTriP.data(),m_farTriW.data(),(int)m_farTriW.size(),false,c);for(int q=0;q<(int)c.wgeo.size();++q){const double*xi=&c.xi[3*q];double dX[3];if(cell)WedgeQ2MapX(velocity,xi,dX);else{const double uv[2]={xi[0],xi[1]};if(ft==0)TriSurfMap(velocity,uv,dX);else QuadQ2MapX(velocity,uv,dX);}const double R[3]={p[0]-c.pts[3*q],p[1]-c.pts[3*q+1],p[2]-c.pts[3*q+2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]},r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)continue;const double dk=-(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));for(int j=0;j<(int)srcG.size();++j)dinn[j]+=c.wgeo[q]*dk*HexMonoEval(srcG[j],xi);}return;}
+    const double*sx=cell?&m_wCellSiteX[(((size_t)hS*3+subB)*15)*3]:&m_wFaceSiteX[(((size_t)hS*2+subB)*7)*3];const int nsite=cell?15:7;int best=0;double bd=1e300;for(int k=0;k<nsite;++k){const double x=p[0]-sx[3*k],y=p[1]-sx[3*k+1],z=p[2]-sx[3*k+2],d=x*x+y*y+z*z;if(d<bd){bd=d;best=k;}}
+    const HexSiteRad&R=cell?m_wCellSiteRad[(size_t)subB*15+best]:(ft==0?m_wFaceSiteRadTri[(size_t)best]:m_wFaceSiteRadQuad[(size_t)subB*7+best]);const int nn=cell?18:(ft==0?6:9),nm=cell?27:9;std::vector<int>col(srcG.size());for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];col[j]=e[0]+3*e[1]+(cell?9*e[2]:0);}for(int q=0;q<R.nq;++q){const double*S=&R.S[(size_t)q*nn];double X[3]={},dX[3]={};for(int i=0;i<nn;++i)for(int k=0;k<3;++k){X[k]+=S[i]*nd[3*i+k];dX[k]+=S[i]*velocity[3*i+k];}const double rv[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},dv[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]},r2=rv[0]*rv[0]+rv[1]*rv[1]+rv[2]*rv[2];if(r2<1e-300)continue;const double dk=-(rv[0]*dv[0]+rv[1]*dv[1]+rv[2]*dv[2])/(r2*std::sqrt(r2));const double*M=&R.M[(size_t)q*nm];for(int j=0;j<(int)srcG.size();++j)dinn[j]+=R.w[q]*dk*M[col[j]];}
+}
+
 // SELF inner: the exact-anchor (xiT) REF-frame radial decomposition.  Mirror of PhiInnerHexRadialVec.
 void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, const double p[3],
                                                  const double* xiT, const std::vector<int>& srcG,
@@ -4962,6 +5583,17 @@ void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, co
     if (!xiT) throw std::logic_error("PhiInnerWedgeRadialVec: xiT required (SELF-only)");
     const bool cell = (kindS == 0);
     const int ft = cell ? -1 : m_wFaceType[hS];
+    if(!cell && ft==1){
+        const double* qnd=&m_wFaceNodes[(size_t)hS*27];double probe[QUAD_AFFINE_POLY_N]={};
+        if(WedgeQuadAffineCoefficients(qnd,nullptr,0,0,1,probe,nullptr)){
+            int order=1;for(int charge:srcG){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}
+            const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
+            const int*tv=QUADREF_TRIS[subB];double V[3][3];for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);}
+            double moments[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsUpTo2(V,p,moments);else rad_hdiv::TriPotentialMomentsUpTo4(V,p,moments);
+            for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];double coeff[QUAD_AFFINE_POLY_N]={};WedgeQuadAffineCoefficients(qnd,nullptr,e[0],e[1],order,coeff,nullptr);for(int k=0;k<np;++k)inn[j]+=coeff[k]*moments[k];}
+            return;
+        }
+    }
     const double* nd = cell ? &m_wCellNodes[(size_t)hS*54] : &m_wFaceNodes[(size_t)hS*27];
     const int nR = (int)m_glIn.size();
     const double* GL = m_glIn.data();
@@ -5028,6 +5660,30 @@ void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, co
         }
         for (int ls = 0; ls < nS; ++ls) inn[ls] += acc[ls];
     }
+}
+
+void RadHACApKChargeGram::DPhiInnerWedgeRadialVec(
+    int kind, int host, int sub, const double p[3], const double dp[3], const double* xiT,
+    const double* velocity, const std::vector<int>& srcG, double* dinn) const
+{
+    if(!xiT) throw std::logic_error("DPhiInnerWedgeRadialVec: xiT required");
+    const bool cell=kind==0; const int ft=cell?-1:m_wFaceType[host];
+    const double* nd=cell?&m_wCellNodes[(size_t)host*54]:&m_wFaceNodes[(size_t)host*27];
+    const int nr=(int)m_glIn.size(),ns=(int)srcG.size(); std::vector<double> acc(ns);
+    auto add=[&](const double X[3],const double dX[3],double w,const double y[3]){
+        const double R[3]={p[0]-X[0],p[1]-X[1],p[2]-X[2]},dR[3]={dp[0]-dX[0],dp[1]-dX[1],dp[2]-dX[2]};
+        const double r2=R[0]*R[0]+R[1]*R[1]+R[2]*R[2];if(r2<1e-300)return;
+        const double dk=-(R[0]*dR[0]+R[1]*dR[1]+R[2]*dR[2])/(r2*std::sqrt(r2));
+        for(int j=0;j<ns;++j)acc[j]+=w*dk*HexMonoEval(srcG[j],y);
+    };
+    if(cell){const int*tv=WEDGEREF_TETS[sub];double V[4][3];for(int i=0;i<4;++i)for(int k=0;k<3;++k)V[i][k]=WEDGEREF_V[tv[i]][k];double x0[3];rad_hdiv::ClosestPointTet(V,xiT,x0);
+        double E0[3],E1[3],E2[3];for(int k=0;k<3;++k){E0[k]=V[1][k]-V[0][k];E1[k]=V[2][k]-V[0][k];E2[k]=V[3][k]-V[0][k];}
+        const double hv=E0[0]*(E1[1]*E2[2]-E1[2]*E2[1])-E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])+E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]),sgn=hv>=0?1.0:-1.0;
+        for(int f=0;f<4;++f){const double*b1=V[HEXTET_FC[f][0]],*b2=V[HEXTET_FC[f][1]],*b3=V[HEXTET_FC[f][2]];double d1[3],d2[3],d3[3],e21[3],e32[3];for(int k=0;k<3;++k){d1[k]=b1[k]-x0[k];d2[k]=b2[k]-x0[k];d3[k]=b3[k]-x0[k];e21[k]=b2[k]-b1[k];e32[k]=b3[k]-b2[k];}const double cr[3]={d2[1]*d3[2]-d2[2]*d3[1],d2[2]*d3[0]-d2[0]*d3[2],d2[0]*d3[1]-d2[1]*d3[0]},D=d1[0]*cr[0]+d1[1]*cr[1]+d1[2]*cr[2];if(std::abs(D)<1e-300)continue;
+            for(int a=0;a<nr;++a){const double u=m_glIn[a];for(int b=0;b<nr;++b){const double v=m_glIn[b];for(int c=0;c<nr;++c){const double w=m_glIn[c];double y[3];for(int k=0;k<3;++k)y[k]=x0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));double X[3],dX[3];WedgeQ2MapX(nd,y,X);WedgeQ2MapX(velocity,y,dX);add(X,dX,sgn*m_gwIn[a]*m_gwIn[b]*m_gwIn[c]*u*u*v*D,y);}}}
+        }
+    }else{double V[3][2];WFaceSubTriRef(ft,sub,V);const double ur[2]={xiT[0],xiT[1]};double x0[2];ClosestPointTri2D(V,ur,x0);for(int f=0;f<3;++f){const double*A=V[f],*B=V[(f+1)%3],ea[2]={A[0]-x0[0],A[1]-x0[1]},eb[2]={B[0]-x0[0],B[1]-x0[1]},s2=ea[0]*eb[1]-ea[1]*eb[0];if(std::abs(s2)<1e-300)continue;for(int a=0;a<nr;++a){const double u=m_glIn[a];for(int b=0;b<nr;++b){const double v=m_glIn[b],y2[2]={x0[0]+u*(ea[0]+v*(eb[0]-ea[0])),x0[1]+u*(ea[1]+v*(eb[1]-ea[1]))};double X[3],dX[3];if(ft==0){TriSurfMap(nd,y2,X);TriSurfMap(velocity,y2,dX);}else{QuadQ2MapX(nd,y2,X);QuadQ2MapX(velocity,y2,dX);}const double y[3]={y2[0],y2[1],0};add(X,dX,m_gwIn[a]*m_gwIn[b]*u*s2,y);}}}}
+    for(int j=0;j<ns;++j)dinn[j]+=acc[j];
 }
 
 // Directed host-pair block (mirror of QuadBlockHex) with mixed-face sub counts / node strides.
@@ -5125,6 +5781,201 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
     }
     for (double& v : blk) v *= RAD_INV_FOUR_PI;
     return blk;
+}
+
+static void FinishWedgeSelfDerivative(std::vector<double>& a,int n){for(int i=0;i<n;++i)for(int j=i+1;j<n;++j){const double v=.5*(a[(size_t)i*n+j]+a[(size_t)j*n+i]);a[(size_t)i*n+j]=a[(size_t)j*n+i]=v;}for(double&v:a)v*=RAD_INV_FOUR_PI;}
+
+std::vector<double> RadHACApKChargeGram::WedgeVolumeSelfBlockDirectionalDerivative(int host,const std::vector<double>& vel) const
+{
+    if(!m_wedgemode)throw std::logic_error("WedgeVolumeSelfBlockDirectionalDerivative requires a WEDGE charge Gram");if(host<0||host>=(int)m_cellCharges.size())throw std::out_of_range("WEDGE host out of range");if(vel.size()!=54)throw std::invalid_argument("node_velocity must have shape (18,3)");
+    const auto&g=m_cellCharges[host];const int n=(int)g.size();std::vector<double>out((size_t)n*n),di(n);const double*nd=&m_wCellNodes[(size_t)host*54];
+    for(int sa=0;sa<3;++sa){const size_t ia=(size_t)host*3+sa;const double*va=&m_wCellSubV[ia*12],*ca=&m_wCellSubC[ia*3];for(int sb=0;sb<3;++sb){const size_t ib=(size_t)host*3+sb;const double*cb=&m_wCellSubC[ib*3];int corner=0;double best=1e300;for(int i=0;i<4;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best){best=d;corner=i;}}const double x=ca[0]-cb[0],y=ca[1]-cb[1],z=ca[2]-cb[2];const bool near=std::sqrt(x*x+y*y+z*z)<=m_near_grade*(m_wCellSubS[ia]+m_wCellSubS[ib]);std::shared_ptr<const HexQuadCloud>oc;
+        if(near)oc=HexGetCloud(m_build_id,HexCloudKey(0,true,true,host,sa,corner),[&](HexQuadCloud&c){std::vector<double>b,w;HexDuffyBary(3,corner,m_glOut,m_gwOut,b,w);WedgeBuildCloud(nd,0,-1,sa,b.data(),w.data(),(int)w.size(),true,c);});else oc=HexGetCloud(m_build_id,HexCloudKey(0,true,false,host,sa,3),[&](HexQuadCloud&c){WedgeBuildCloud(nd,0,-1,sa,m_symTetP.data(),m_symTetW.data(),(int)m_symTetW.size(),false,c);});
+        for(int q=0;q<(int)oc->wgeo.size();++q){const double*xi=&oc->xi[3*q],p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]};double dp[3];WedgeQ2MapX(vel.data(),xi,dp);std::fill(di.begin(),di.end(),0);DPhiInnerWedgeRadialVec(0,host,sb,p,dp,xi,vel.data(),g,di.data());for(int i=0;i<n;++i){const double w=oc->wgeo[q]*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*di[j];}}
+    }}FinishWedgeSelfDerivative(out,n);return out;
+}
+
+std::vector<double> RadHACApKChargeGram::WedgeFaceSelfBlockDirectionalDerivative(int host,const std::vector<double>&vel) const
+{
+    if(!m_wedgemode)throw std::logic_error("WedgeFaceSelfBlockDirectionalDerivative requires a WEDGE charge Gram");if(host<0||host>=(int)m_faceCharges.size())throw std::out_of_range("WEDGE face host out of range");const int ft=m_wFaceType[host],nn=ft==0?6:9;if(vel.size()!=(size_t)3*nn)throw std::invalid_argument(ft==0?"node_velocity must have shape (6,3)":"node_velocity must have shape (9,3)");
+    const auto&g=m_faceCharges[host];const int n=(int)g.size(),ns=ft==0?1:2;std::vector<double>out((size_t)n*n),di(n);const double*nd=&m_wFaceNodes[(size_t)host*27];
+    double affine_probe[QUAD_AFFINE_POLY_N]={};
+    const bool affine_quad=ft==1&&WedgeQuadAffineCoefficients(nd,nullptr,0,0,1,affine_probe,nullptr);
+    if(affine_quad){
+        int order=1;for(int charge:g){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;std::vector<double>coeff((size_t)n*np),dc((size_t)n*np),inner(n);
+        for(int j=0;j<n;++j){const int*e=&m_expo[(size_t)3*g[j]];if(!WedgeQuadAffineCoefficients(nd,vel.data(),e[0],e[1],order,&coeff[(size_t)j*np],&dc[(size_t)j*np]))throw std::logic_error("affine WEDGE quad face derivative has a singular geometry map");}
+        for(int sa=0;sa<2;++sa){const size_t ia=(size_t)host*2+sa;const double*va=&m_wFaceSubV[ia*9],*ca=&m_wFaceSubC[ia*3];for(int sb=0;sb<2;++sb){const size_t ib=(size_t)host*2+sb;const double*cb=&m_wFaceSubC[ib*3];const double tie=1e-13*(m_wFaceSubS[ia]+m_wFaceSubS[ib]+1.0)*(m_wFaceSubS[ia]+m_wFaceSubS[ib]+1.0);int corner=0;double best=1e300;for(int i=0;i<3;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best-tie){best=d;corner=i;}}const double x=ca[0]-cb[0],y=ca[1]-cb[1],z=ca[2]-cb[2];const bool near=std::sqrt(x*x+y*y+z*z)<=m_near_grade*(m_wFaceSubS[ia]+m_wFaceSubS[ib]);std::shared_ptr<const HexQuadCloud>oc;
+            if(near)oc=HexGetCloud(m_build_id,HexCloudKey(1,true,true,host,sa,corner),[&](HexQuadCloud&c){std::vector<double>b,w;HexDuffyBary(2,corner,m_glOut,m_gwOut,b,w);WedgeBuildCloud(nd,1,1,sa,b.data(),w.data(),(int)w.size(),true,c);});else oc=HexGetCloud(m_build_id,HexCloudKey(1,true,false,host,sa,3),[&](HexQuadCloud&c){WedgeBuildCloud(nd,1,1,sa,m_symTriP.data(),m_symTriW.data(),(int)m_symTriW.size(),false,c);});
+            const int*tv=QUADREF_TRIS[sb];double V[3][3],dV[3][3];for(int a=0;a<3;++a){const double r[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,r,V[a]);QuadQ2MapX(vel.data(),r,dV[a]);}
+            for(int q=0;q<(int)oc->wgeo.size();++q){const double*xi=&oc->xi[3*q],p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]},uv[2]={xi[0],xi[1]};double dp[3];QuadQ2MapX(vel.data(),uv,dp);double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);std::fill(inner.begin(),inner.end(),0);for(int j=0;j<n;++j)for(int k=0;k<np;++k)inner[j]+=dc[(size_t)j*np+k]*mv[k]+coeff[(size_t)j*np+k]*dm[k];for(int i=0;i<n;++i){const double w=oc->wgeo[q]*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*inner[j];}}
+        }}FinishWedgeSelfDerivative(out,n);return out;
+    }
+    for(int sa=0;sa<ns;++sa){const size_t ia=(size_t)host*2+sa;const double*va=&m_wFaceSubV[ia*9],*ca=&m_wFaceSubC[ia*3];for(int sb=0;sb<ns;++sb){const size_t ib=(size_t)host*2+sb;const double*cb=&m_wFaceSubC[ib*3];int corner=0;double best=1e300;for(int i=0;i<3;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best){best=d;corner=i;}}const double x=ca[0]-cb[0],y=ca[1]-cb[1],z=ca[2]-cb[2];const bool near=std::sqrt(x*x+y*y+z*z)<=m_near_grade*(m_wFaceSubS[ia]+m_wFaceSubS[ib]);std::shared_ptr<const HexQuadCloud>oc;
+        if(near)oc=HexGetCloud(m_build_id,HexCloudKey(1,true,true,host,sa,corner),[&](HexQuadCloud&c){std::vector<double>b,w;HexDuffyBary(2,corner,m_glOut,m_gwOut,b,w);WedgeBuildCloud(nd,1,ft,sa,b.data(),w.data(),(int)w.size(),true,c);});else oc=HexGetCloud(m_build_id,HexCloudKey(1,true,false,host,sa,3),[&](HexQuadCloud&c){WedgeBuildCloud(nd,1,ft,sa,m_symTriP.data(),m_symTriW.data(),(int)m_symTriW.size(),false,c);});
+        for(int q=0;q<(int)oc->wgeo.size();++q){const double*xi=&oc->xi[3*q],p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]},uv[2]={xi[0],xi[1]};double dp[3];if(ft==0)TriSurfMap(vel.data(),uv,dp);else QuadQ2MapX(vel.data(),uv,dp);std::fill(di.begin(),di.end(),0);DPhiInnerWedgeRadialVec(1,host,sb,p,dp,xi,vel.data(),g,di.data());for(int i=0;i<n;++i){const double w=oc->wgeo[q]*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*di[j];}}
+    }}FinishWedgeSelfDerivative(out,n);return out;
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockWedgeDirectionalDerivative(
+    int kindT,int hT,int kindS,int hS,const double* velocityT,const double* velocityS,int mask) const
+{
+    if(mask!=0)throw std::invalid_argument("WEDGE shape derivative currently requires direct mask 0");
+    const auto&tg=kindT==0?m_cellCharges[hT]:m_faceCharges[hT];
+    const auto&sg=kindS==0?m_cellCharges[hS]:m_faceCharges[hS];
+    const int nt=(int)tg.size(),ns=(int)sg.size();
+    if(kindT==kindS&&hT==hS){
+        if(kindT==0)return WedgeVolumeSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+54));
+        const int nn=m_wFaceType[hT]==0?18:27;
+        return WedgeFaceSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+nn));
+    }
+    std::vector<double>out((size_t)nt*ns,0.0),inn((size_t)ns);
+    const bool cellT=kindT==0,cellS=kindS==0;
+    const int ftT=cellT?-1:m_wFaceType[hT],ftS=cellS?-1:m_wFaceType[hS];
+    const int nsubT=cellT?3:(ftT==0?1:2),nsubS=cellS?3:(ftS==0?1:2);
+    const double*ndT=cellT?&m_wCellNodes[(size_t)hT*54]:&m_wFaceNodes[(size_t)hT*27];
+    const int nvT=cellT?4:3;
+    const int rt=tg[0],rs=sg[0];
+    const double dh[3]={m_cent[3*rt]-m_cent[3*rs],m_cent[3*rt+1]-m_cent[3*rs+1],m_cent[3*rt+2]-m_cent[3*rs+2]};
+    const bool nearHosts=std::sqrt(dh[0]*dh[0]+dh[1]*dh[1]+dh[2]*dh[2])<=m_near_grade*(m_size[rt]+m_size[rs]);
+    for(int sa=0;sa<nsubT;++sa){
+        const size_t ia=cellT?(size_t)hT*3+sa:(size_t)hT*2+sa;
+        const double*va=cellT?&m_wCellSubV[ia*12]:&m_wFaceSubV[ia*9];
+        const double*ca=cellT?&m_wCellSubC[ia*3]:&m_wFaceSubC[ia*3];
+        const double sza=cellT?m_wCellSubS[ia]:m_wFaceSubS[ia];
+        for(int sb=0;sb<nsubS;++sb){
+            const size_t ib=cellS?(size_t)hS*3+sb:(size_t)hS*2+sb;
+            const double*cb=cellS?&m_wCellSubC[ib*3]:&m_wFaceSubC[ib*3];
+            const double szb=cellS?m_wCellSubS[ib]:m_wFaceSubS[ib];
+            const double dx=ca[0]-cb[0],dy=ca[1]-cb[1],dz=ca[2]-cb[2];
+            const bool near=nearHosts&&std::sqrt(dx*dx+dy*dy+dz*dz)<=m_near_grade*(sza+szb);
+            std::shared_ptr<const HexQuadCloud>oc;
+            if(!near){
+                oc=HexGetCloud(m_build_id,HexCloudKey(cellT?0:1,true,false,hT,sa,3),[&](HexQuadCloud&c){
+                    if(cellT)WedgeBuildCloud(ndT,0,-1,sa,m_symTetP.data(),m_symTetW.data(),(int)m_symTetW.size(),false,c);
+                    else WedgeBuildCloud(ndT,1,ftT,sa,m_symTriP.data(),m_symTriW.data(),(int)m_symTriW.size(),false,c);
+                });
+            }else{
+                int corner=0;double best=1e300;
+                const double tie=1e-13*(sza+szb+1.0)*(sza+szb+1.0);
+                for(int i=0;i<nvT;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best-tie){best=d;corner=i;}}
+                oc=HexGetCloud(m_build_id,HexCloudKey(cellT?0:1,true,true,hT,sa,corner),[&](HexQuadCloud&c){
+                    std::vector<double>b,w;HexDuffyBary(cellT?3:2,corner,m_glOut,m_gwOut,b,w);
+                    WedgeBuildCloud(ndT,cellT?0:1,ftT,sa,b.data(),w.data(),(int)w.size(),true,c);
+                });
+            }
+            for(int q=0;q<(int)oc->wgeo.size();++q){
+                const double*xi=&oc->xi[3*q];double dp[3];
+                if(cellT)WedgeQ2MapX(velocityT,xi,dp);else{const double uv[2]={xi[0],xi[1]};if(ftT==0)TriSurfMap(velocityT,uv,dp);else QuadQ2MapX(velocityT,uv,dp);}
+                std::fill(inn.begin(),inn.end(),0.0);
+                const double p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]};
+                DPhiInnerWedgeSubVec(kindS,hS,sb,p,dp,velocityS,sg,inn.data());
+                for(int i=0;i<nt;++i){const double w=oc->wgeo[q]*HexMonoEval(tg[i],xi);for(int j=0;j<ns;++j)out[(size_t)i*ns+j]+=w*inn[j];}
+            }
+        }
+    }
+    for(double&x:out)x*=RAD_INV_FOUR_PI;
+    return out;
+}
+
+std::vector<double> RadHACApKChargeGram::WedgeChargeGramDirectionalDerivative(
+    const std::vector<double>&cellVelocity,const std::vector<double>&faceVelocity) const
+{
+    if(!m_wedgemode||m_d2)throw std::logic_error("WEDGE ChargeGram derivative requires a 3D WEDGE Gram");
+    if(cellVelocity.size()!=m_cellCharges.size()*54)throw std::invalid_argument("cell_node_velocity must have shape (ncell,18,3)");
+    if(faceVelocity.size()!=m_faceCharges.size()*27)throw std::invalid_argument("face_node_velocity must have shape (nface,9,3), with triangular faces padded to nine nodes");
+    std::vector<double>dense((size_t)m_n*m_n,0.0);
+    const int nc=(int)m_cellCharges.size(),nf=(int)m_faceCharges.size(),nh=nc+nf;
+    auto kind=[&](int h){return h<nc?0:1;};auto host=[&](int h){return h<nc?h:h-nc;};
+    auto vel=[&](int k,int h){return k==0?&cellVelocity[(size_t)h*54]:&faceVelocity[(size_t)h*27];};
+    auto grp=[&](int k,int h)->const std::vector<int>&{return k==0?m_cellCharges[h]:m_faceCharges[h];};
+    for(int A=0;A<nh;++A){const int ka=kind(A),ha=host(A);for(int B=A;B<nh;++B){const int kb=kind(B),hb=host(B);const auto&ga=grp(ka,ha);const auto&gb=grp(kb,hb);
+        const auto ab=QuadBlockWedgeDirectionalDerivative(ka,ha,kb,hb,vel(ka,ha),vel(kb,hb));
+        if(A==B){for(int i=0;i<(int)ga.size();++i)for(int j=0;j<(int)ga.size();++j)dense[(size_t)ga[i]*m_n+ga[j]]=ab[(size_t)i*ga.size()+j];continue;}
+        const auto ba=QuadBlockWedgeDirectionalDerivative(kb,hb,ka,ha,vel(kb,hb),vel(ka,ha));
+        for(int i=0;i<(int)ga.size();++i)for(int j=0;j<(int)gb.size();++j){const double x=.5*(ab[(size_t)i*gb.size()+j]+ba[(size_t)j*ga.size()+i]);dense[(size_t)ga[i]*m_n+gb[j]]=x;dense[(size_t)gb[j]*m_n+ga[i]]=x;}
+    }}
+    return dense;
+}
+
+namespace {
+struct WedgeDerivativeCacheOwner {
+    long long build=-1;
+    unsigned long long token=0;
+    const double* cells=nullptr;
+    const double* faces=nullptr;
+    bool operator==(const WedgeDerivativeCacheOwner&o)const{return build==o.build&&token==o.token&&cells==o.cells&&faces==o.faces;}
+};
+static thread_local WedgeDerivativeCacheOwner s_wedge_derivative_owner;
+static thread_local std::unordered_map<HexBlockKey,std::vector<double>,HexBlockKeyHash> s_wedge_derivative_blocks;
+static thread_local WedgeDerivativeCacheOwner s_tet_derivative_owner;
+static thread_local std::unordered_map<HexBlockKey,std::vector<double>,HexBlockKeyHash> s_tet_derivative_blocks;
+}
+
+const std::vector<double>& RadHACApKChargeGram::GetWedgeDirectionalSymBlock(
+    int kindA,int hostA,int kindB,int hostB,
+    const std::vector<double>&cellVelocity,const std::vector<double>&faceVelocity,
+    unsigned long long cacheToken) const
+{
+    const WedgeDerivativeCacheOwner owner{m_build_id,cacheToken,cellVelocity.data(),faceVelocity.data()};
+    if(!(s_wedge_derivative_owner==owner)){s_wedge_derivative_blocks.clear();s_wedge_derivative_owner=owner;}
+    const HexBlockKey key{kindA,hostA,kindB,hostB,0};
+    auto it=s_wedge_derivative_blocks.find(key);
+    if(it!=s_wedge_derivative_blocks.end())return it->second;
+    if(s_wedge_derivative_blocks.size()>HexBlockCacheLimit())s_wedge_derivative_blocks.clear();
+    const auto&ga=kindA==0?m_cellCharges[hostA]:m_faceCharges[hostA];
+    const auto&gb=kindB==0?m_cellCharges[hostB]:m_faceCharges[hostB];
+    auto vel=[&](int kind,int host){return kind==0?&cellVelocity[(size_t)host*54]:&faceVelocity[(size_t)host*27];};
+    auto ab=QuadBlockWedgeDirectionalDerivative(kindA,hostA,kindB,hostB,vel(kindA,hostA),vel(kindB,hostB));
+    std::vector<double>sym((size_t)ga.size()*gb.size());
+    if(kindA==kindB&&hostA==hostB) sym=std::move(ab);
+    else{
+        auto ba=QuadBlockWedgeDirectionalDerivative(kindB,hostB,kindA,hostA,vel(kindB,hostB),vel(kindA,hostA));
+        for(size_t i=0;i<ga.size();++i)for(size_t j=0;j<gb.size();++j)sym[i*gb.size()+j]=.5*(ab[i*gb.size()+j]+ba[j*ga.size()+i]);
+    }
+    return s_wedge_derivative_blocks.emplace(key,std::move(sym)).first->second;
+}
+
+double RadHACApKChargeGram::WedgeChargeGramDirectionalDerivativeElement(
+    int row,int col,const std::vector<double>&cellVelocity,const std::vector<double>&faceVelocity,
+    unsigned long long cacheToken) const
+{
+    if(!m_wedgemode||m_d2)throw std::logic_error("WEDGE derivative entry requires a 3D WEDGE Gram");
+    if(row<0||row>=m_n||col<0||col>=m_n)throw std::out_of_range("WEDGE derivative entry index out of range");
+    if(cellVelocity.size()!=m_cellCharges.size()*54)throw std::invalid_argument("cell_node_velocity must have shape (ncell,18,3)");
+    if(faceVelocity.size()!=m_faceCharges.size()*27)throw std::invalid_argument("face_node_velocity must have shape (nface,9,3)");
+    int ka=m_kind[row],ha=m_host[row],kb=m_kind[col],hb=m_host[col];
+    int la=m_hexLocalOf[row],lb=m_hexLocalOf[col];
+    const int oa=ka==0?ha:(int)m_cellCharges.size()+ha;
+    const int ob=kb==0?hb:(int)m_cellCharges.size()+hb;
+    if(oa>ob){std::swap(ka,kb);std::swap(ha,hb);std::swap(la,lb);}
+    const int nb=kb==0?(int)m_cellCharges[hb].size():(int)m_faceCharges[hb].size();
+    const auto&block=GetWedgeDirectionalSymBlock(ka,ha,kb,hb,cellVelocity,faceVelocity,cacheToken);
+    return block[(size_t)la*nb+lb];
+}
+
+double RadHACApKChargeGram::TetChargeGramDirectionalDerivativeElement(
+    int row,int col,const std::vector<double>&cellVelocity,const std::vector<double>&faceVelocity,
+    unsigned long long cacheToken) const
+{
+    if(!m_highorder||m_curved||m_hexmode||m_wedgemode||m_polyCombo)
+        throw std::logic_error("TET derivative entry requires a flat polynomial TET Gram");
+    if(row<0||row>=m_n||col<0||col>=m_n)throw std::out_of_range("TET derivative entry index out of range");
+    if(cellVelocity.size()!=m_hoCellCharges.size()*12)throw std::invalid_argument("cell_vertex_velocity must have shape (ncell,4,3)");
+    if(faceVelocity.size()!=m_hoFaceCharges.size()*9)throw std::invalid_argument("face_vertex_velocity must have shape (nface,3,3)");
+    const int nc=(int)m_hoCellCharges.size();
+    int oa=m_kind[row]==0?m_host[row]:nc+m_host[row],ob=m_kind[col]==0?m_host[col]:nc+m_host[col];
+    int la=m_hoLocalOf[row],lb=m_hoLocalOf[col];
+    if(oa>ob){std::swap(oa,ob);std::swap(la,lb);}
+    const WedgeDerivativeCacheOwner owner{m_build_id,cacheToken,cellVelocity.data(),faceVelocity.data()};
+    if(!(s_tet_derivative_owner==owner)){s_tet_derivative_blocks.clear();s_tet_derivative_owner=owner;}
+    const HexBlockKey key{0,oa,0,ob,0};auto it=s_tet_derivative_blocks.find(key);
+    if(it==s_tet_derivative_blocks.end()){
+        if(s_tet_derivative_blocks.size()>HexBlockCacheLimit())s_tet_derivative_blocks.clear();
+        it=s_tet_derivative_blocks.emplace(key,TetChargeGramDirectionalDerivativeImpl(cellVelocity,faceVelocity,oa,ob)).first;
+    }
+    const int kb=ob<nc?0:1,hb=ob<nc?ob:ob-nc;
+    const int nb=kb==0?(int)m_hoCellCharges[hb].size():(int)m_hoFaceCharges[hb].size();
+    return it->second[(size_t)la*nb+lb];
 }
 
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
@@ -5770,6 +6621,8 @@ void RadHACApKChargeGram::ConfigureMassMatrix(
         m_operatorMassData[(size_t)dst] = m_operatorMassV[k];
     }
     m_operatorNFace = n_face;
+    if (m_operatorConstrained.size() != (size_t)n_face)
+        m_operatorConstrained.assign((size_t)n_face, 0);
     m_operatorMassConfigured = true;
     m_operatorMassIsGeometry = false;
 }
@@ -5805,6 +6658,8 @@ void RadHACApKChargeGram::ConfigureGeometryMassMatrix(
         m_operatorGeometryMassData[(size_t)dst] = m_operatorGeometryMassV[k];
     }
     m_operatorNFace = n_face;
+    if (m_operatorConstrained.size() != (size_t)n_face)
+        m_operatorConstrained.assign((size_t)n_face, 0);
     m_operatorGeometryMassConfigured = true;
     m_operatorMassIsGeometry = (
         m_operatorMassConfigured &&
