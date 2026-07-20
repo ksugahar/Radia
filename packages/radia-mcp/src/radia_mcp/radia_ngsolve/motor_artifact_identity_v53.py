@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .motor_artifact_identity_v54 import validate_public_identity as validate_public_v54_identity
+
 
 SKEW = "skew_slice_weight_angle_harmonic_torque_rotor_owner_identity"
 DEMAG = "magnet_demag_operatingpoint_temperature_recoil_irreversible_owner_identity"
@@ -101,7 +103,7 @@ def _demag_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v54_identity(identity)
     skew = identity.get(SKEW)
     demag = identity.get(DEMAG)
     if skew is not None:
