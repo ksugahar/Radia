@@ -265,10 +265,14 @@ def _kill_cubit_local():
 def _kill_mcp_local():
     info("force-kill local mcp-server-*.exe and Radia panel launchers")
     run(["pwsh", "-NoProfile", "-Command",
-         "Get-Process -ErrorAction SilentlyContinue | Where-Object { "
+         "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
+         "Where-Object { $_.ProcessId -ne $PID -and ("
          "$_.Name -like 'mcp-server*' -or $_.Name -like 'radia-*' -or "
-         "$_.Name -like 'radia_*' "
-         "} | ForEach-Object { Stop-Process -Id $_.Id -Force }; "
+         "$_.Name -like 'radia_*' -or "
+         "$_.CommandLine -like '*mcp-server-*.exe*' -or "
+         "$_.CommandLine -like '*radia-*.exe*' -or "
+         "$_.CommandLine -like '*radia_*.exe*' "
+         ") } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; "
          "Start-Sleep -Seconds 2"], check=False)
 
 
@@ -297,13 +301,18 @@ def _deploy_editable_remote(ssh_host, label, repo):
     step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
-Get-Process -ErrorAction SilentlyContinue | Where-Object {{
-  $_.ProcessName -eq 'coreform_cubit' -or $_.ProcessName -eq 'cubit' -or
-  $_.Name -like 'mcp-server*' -or
-  $_.Name -like 'radia-*' -or $_.Name -like 'radia_*'
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
+  $_.ProcessId -ne $PID -and (
+    $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
+    $_.Name -like 'mcp-server*' -or
+    $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
+    $_.CommandLine -like '*mcp-server-*.exe*' -or
+    $_.CommandLine -like '*radia-*.exe*' -or
+    $_.CommandLine -like '*radia_*.exe*'
+  )
 }} | ForEach-Object {{
-  Write-Host "Stopping $($_.ProcessName) pid=$($_.Id)"
-  Stop-Process -Id $_.Id -Force
+  Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
+  Stop-Process -Id $_.ProcessId -Force
 }}
 Start-Sleep -Seconds 2
 pip install -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export" -e "{repo}\\packages\\radia-mcp" --no-deps --no-cache-dir
@@ -390,13 +399,18 @@ def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubi
 
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
-Get-Process -ErrorAction SilentlyContinue | Where-Object {{
-  $_.ProcessName -eq 'coreform_cubit' -or $_.ProcessName -eq 'cubit' -or
-  $_.Name -like 'mcp-server*' -or
-  $_.Name -like 'radia-*' -or $_.Name -like 'radia_*'
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
+  $_.ProcessId -ne $PID -and (
+    $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
+    $_.Name -like 'mcp-server*' -or
+    $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
+    $_.CommandLine -like '*mcp-server-*.exe*' -or
+    $_.CommandLine -like '*radia-*.exe*' -or
+    $_.CommandLine -like '*radia_*.exe*'
+  )
 }} | ForEach-Object {{
-  Write-Host "Stopping $($_.ProcessName) pid=$($_.Id)"
-  Stop-Process -Id $_.Id -Force
+  Write-Host "Stopping $($_.Name) pid=$($_.ProcessId)"
+  Stop-Process -Id $_.ProcessId -Force
 }}
 Start-Sleep -Seconds 2
 {mcp_uninstall_ps}        # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
