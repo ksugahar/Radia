@@ -350,6 +350,10 @@ public:
     std::unique_ptr<RadHACApKChargeGramDerivative> BuildDirectionalDerivativeOperator(
         ChargeDerivativeFamily family,const std::vector<double>& cell_velocity,
         const std::vector<double>& face_velocity,const RadHACApKParams& params) const;
+    std::vector<double> DirectionalDerivativeContractions(
+        ChargeDerivativeFamily family,int n_directions,
+        const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
+        const std::vector<double>& left,const std::vector<double>& right) const;
     std::vector<double> TetVolumeSelfBlockDirectionalDerivative(
         int host, const std::vector<double>& vertex_velocity) const;
     std::vector<double> TetFaceSelfBlockDirectionalDerivative(

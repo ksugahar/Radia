@@ -3434,6 +3434,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  const double* cp=static_cast<const double*>(c.ptr),*qp=static_cast<const double*>(q.ptr);std::vector<double>cv(cp,cp+c.size),fv(qp,qp+q.size);RadHACApKParams p;p.aca_eps=eps;p.leaf_size=leaf;p.eta=eta;py::gil_scoped_release release;return s.BuildDirectionalDerivativeOperator(f,std::move(cv),std::move(fv),p);
              },py::arg("family"),py::arg("cell_velocity"),py::arg("face_velocity"),py::arg("eps")=1e-8,py::arg("leaf")=32,py::arg("eta")=2.0,py::keep_alive<0,1>(),
              "Build an analytic HACApK directional-derivative operator without materialising dense dG.")
+        .def("directional_derivative_contractions",
+             [](RadHACApKChargeGram& s,const std::string& family,F64Array ca,F64Array fa,F64Array left_a,F64Array right_a){
+                 ChargeDerivativeFamily f;if(family=="hex")f=ChargeDerivativeFamily::Hex;else if(family=="tet")f=ChargeDerivativeFamily::Tet;else if(family=="wedge")f=ChargeDerivativeFamily::Wedge;else throw std::invalid_argument("family must be 'hex', 'tet', or 'wedge'");
+                 auto c=ca.request(),q=fa.request();if(c.ndim!=4||c.shape[3]!=3||q.ndim!=4||q.shape[3]!=3||c.shape[0]!=q.shape[0])throw std::invalid_argument("batched velocity arrays must have shape (nmode,nhost,nnode,3)");
+                 const double*cp=static_cast<const double*>(c.ptr),*qp=static_cast<const double*>(q.ptr);std::vector<double>cv(cp,cp+c.size),fv(qp,qp+q.size);auto left=to_1d_vector<double>(left_a,"left"),right=to_1d_vector<double>(right_a,"right");std::vector<double>out;{py::gil_scoped_release release;out=s.DirectionalDerivativeContractions(f,(int)c.shape[0],cv,fv,left,right);}return to_numpy_1d(out);
+             },py::arg("family"),py::arg("cell_velocity"),py::arg("face_velocity"),py::arg("left"),py::arg("right"),
+             "Analytic support-pruned batched left.T*dG[k]*right contractions without dense dG or derivative H-matrices.")
         .def("tet_volume_self_block_directional_derivative",
              [](RadHACApKChargeGram& s,int host,F64Array a){auto b=a.request();if(b.ndim!=2||b.shape[0]!=4||b.shape[1]!=3)throw std::invalid_argument("vertex_velocity must have shape (4,3)");const double*p=static_cast<const double*>(b.ptr);std::vector<double>v(p,p+12),d;{py::gil_scoped_release release;d=s.TetVolumeSelfBlockDirectionalDerivative(host,v);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
              py::arg("host"),py::arg("vertex_velocity"),

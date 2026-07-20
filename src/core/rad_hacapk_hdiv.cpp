@@ -4165,6 +4165,46 @@ std::unique_ptr<RadHACApKChargeGramDerivative> RadHACApKChargeGram::BuildDirecti
     return result;
 }
 
+std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
+    ChargeDerivativeFamily family,int nDirections,
+    const std::vector<double>& cellVelocity,const std::vector<double>& faceVelocity,
+    const std::vector<double>& left,const std::vector<double>& right) const
+{
+    if(nDirections<1)throw std::invalid_argument("n_directions must be positive");
+    if(left.size()!=(size_t)m_n||right.size()!=(size_t)m_n)
+        throw std::invalid_argument("left/right vectors must match ChargeGram ndof");
+    size_t cellStride=0,faceStride=0,cellNodeStride=0,faceNodeStride=0;
+    if(family==ChargeDerivativeFamily::Hex){cellNodeStride=81;faceNodeStride=27;cellStride=m_cellCharges.size()*81;faceStride=m_faceCharges.size()*27;}
+    else if(family==ChargeDerivativeFamily::Tet){cellNodeStride=12;faceNodeStride=9;cellStride=m_hoCellCharges.size()*12;faceStride=m_hoFaceCharges.size()*9;}
+    else {cellNodeStride=54;faceNodeStride=27;cellStride=m_cellCharges.size()*54;faceStride=m_faceCharges.size()*27;}
+    if(cellVelocity.size()!=(size_t)nDirections*cellStride||faceVelocity.size()!=(size_t)nDirections*faceStride)
+        throw std::invalid_argument("batched derivative velocity shape mismatch");
+    std::vector<double> result((size_t)nDirections,0.0);
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    ngcore::ParallelFor(ngcore::IntRange(nDirections),[&](size_t kk){
+        std::vector<double> cv(cellVelocity.begin()+kk*cellStride,cellVelocity.begin()+(kk+1)*cellStride);
+        std::vector<double> fv(faceVelocity.begin()+kk*faceStride,faceVelocity.begin()+(kk+1)*faceStride);
+        auto hostActive=[](const std::vector<double>& velocity,size_t offset,size_t count){
+            for(size_t p=offset;p<offset+count;++p)if(velocity[p]!=0.0)return true;return false;};
+        std::vector<int> moving,fixed;moving.reserve(m_n);fixed.reserve(m_n);
+        for(int charge=0;charge<m_n;++charge){
+            const int kind=m_kind[charge],host=m_host[charge];
+            const bool active=kind==0?hostActive(cv,(size_t)host*cellNodeStride,cellNodeStride)
+                                     :hostActive(fv,(size_t)host*faceNodeStride,faceNodeStride);
+            (active?moving:fixed).push_back(charge);
+        }
+        RadHACApKChargeGramDerivative derivative(*this,family,std::move(cv),std::move(fv));
+        long double sum=0.0L;
+        for(size_t ii=0;ii<moving.size();++ii){
+            const int i=moving[ii];sum+=(long double)left[i]*derivative.GetInteractionMatrixElement(i,i)*right[i];
+            for(size_t jj=ii+1;jj<moving.size();++jj){const int j=moving[jj];const double value=derivative.GetInteractionMatrixElement(i,j);sum+=(long double)value*((long double)left[i]*right[j]+(long double)left[j]*right[i]);}
+            for(int j:fixed){const double value=derivative.GetInteractionMatrixElement(i,j);sum+=(long double)value*((long double)left[i]*right[j]+(long double)left[j]*right[i]);}
+        }
+        result[kk]=(double)sum;
+    });
+    return result;
+}
+
 // The whole DIRECTED host-pair block (target host (kindT,hT) outer x source host (kindS,hS) inner) for every
 // local charge pair, computed in ONE pass.  All near/far/grading decisions are host+sub geometric (identical
 // across the block), so the per-entry value is served from ONE block computation -- the expensive kernel

@@ -109,5 +109,5 @@ def test_real_production_hex_gettrafo_to_shield_lp_closure():
     assert result.update.delta.shape==(3,)
     np.testing.assert_allclose(streaming.adjoint.gradient,result.rms_gradient,
         rtol=2e-7,atol=2e-9)
-    assert streaming.adjoint.peak_directional_operators==1
+    assert streaming.adjoint.peak_directional_operators==0
     assert streaming.update.delta.shape==(3,)

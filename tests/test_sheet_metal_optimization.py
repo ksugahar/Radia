@@ -41,6 +41,39 @@ def test_hex_topology_driver_prefers_deformation_then_uses_cubit(monkeypatch,tmp
     np.testing.assert_allclose(result.state.activation,[.2])
 
 
+def test_hex_topology_driver_batches_sparse_cubit_changes(monkeypatch,tmp_path):
+    import radia.sheet_metal_optimization as sm
+    n=10
+    state=sm.HexSheetTopologyState(SimpleNamespace(name="initial"),{},np.zeros(n),
+        np.full(n,.002),np.ones(n),10.)
+    calls={"iteration":0,"cubit":0}
+    def linearize(current):
+        calls["iteration"]+=1
+        rho=np.ones(n);rho[0]=.2
+        return SimpleNamespace(update=sm.SheetMetalUpdate(
+            np.zeros(n),np.full(n,.002),rho,np.zeros(3),"ok"))
+    def accept(mesh,factory,current,target,relative,**kwargs):
+        route="cubit_rebuild" if kwargs["topology_changed"] else "ngsolve_deform"
+        return sm.DeformationAcceptance(True,1.,sm.MeshUpdateDecision(
+            route,np.empty(0,dtype=int),("test",),.8,2.,0.),1),object()
+    monkeypatch.setattr(sm,"backtrack_ngsolve_target_deformation",accept)
+    class Backend:
+        def rebuild(self,request):
+            calls["cubit"]+=1
+            return SimpleNamespace(name="cubit")
+    result=sm.optimize_hex_sheet_topology(state,linearize_step=linearize,
+        deformation_factory=lambda mesh,u:object(),cubit_backend=Backend(),
+        cubit_work_directory=tmp_path,element_sizes=np.ones(n),max_iterations=3,
+        cubit_batch_interval=3,cubit_batch_fraction=.5,
+        rebuild_model=lambda mesh,u,t,r,route:{"route":route},
+        evaluate_objective=lambda model:10.-calls["iteration"],
+        design_tolerance=0.,objective_tolerance=0.)
+    assert [item.route for item in result.history]==[
+        "ngsolve_deform","ngsolve_deform","cubit_rebuild"]
+    assert [item.pending_topology_changes for item in result.history]==[1,1,1]
+    assert calls["cubit"]==1
+
+
 def test_sheet_metal_lp_obeys_moves_thickness_curvature_and_volume():
     n=3; u=np.zeros(n); t=np.ones(n); rho=np.ones(n); area=np.ones(n)
     L=np.array([[1.,-2.,1.]])
