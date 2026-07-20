@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .femm_artifact_identity_v55 import validate_public_identity as validate_public_v55_identity
+
 
 POWER = "harmonic_complexpower_active_reactive_loss_frequency_circuit_owner_identity"
 FORCE = "axisymmetric_weightedstress_force_radius_measure_selection_owner_identity"
@@ -98,7 +100,7 @@ def _force_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks: dict[str, bool] = validate_public_v55_identity(identity)
     power = identity.get(POWER)
     force = identity.get(FORCE)
     if power is not None:
