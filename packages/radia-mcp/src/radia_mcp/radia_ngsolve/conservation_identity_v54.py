@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .dissipation_reaction_identity_v55 import validate_public_v55_identity
+
 
 PIEZO = "piezoelectric_energy_reciprocity_voltage_charge_work_phase_owner_identity"
 SPECIES = "reactingflow_species_massfraction_rate_flux_time_solution_owner_identity"
@@ -92,6 +94,9 @@ def validate_public_v54_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v55 = validate_public_v55_identity(payload)
+    if v55:
+        checks.update(v55["checks"])
     piezo = payload.get(PIEZO)
     species = payload.get(SPECIES)
     if piezo is not None:
