@@ -13,6 +13,7 @@ from .v50_identity import validate_matlab_ml_rl_v50_identity
 from .v51_identity import validate_matlab_ml_rl_v51_identity
 from .v52_identity import validate_matlab_ml_rl_v52_identity
 from .v53_identity import validate_matlab_ml_rl_v53_identity
+from .v54_identity import validate_matlab_ml_rl_v54_identity
 
 
 def matlab_agentic_ml_guide() -> str:
@@ -35,4 +36,5 @@ __all__ = [
     "validate_matlab_ml_rl_v51_identity",
     "validate_matlab_ml_rl_v52_identity",
     "validate_matlab_ml_rl_v53_identity",
+    "validate_matlab_ml_rl_v54_identity",
 ]

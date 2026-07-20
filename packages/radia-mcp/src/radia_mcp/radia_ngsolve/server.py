@@ -170,6 +170,7 @@ from ..matlab_agentic_ml import validate_matlab_ml_rl_v50_identity as _validate_
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v51_identity as _validate_matlab_ml_rl_v51_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v52_identity as _validate_matlab_ml_rl_v52_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v53_identity as _validate_matlab_ml_rl_v53_identity
+from ..matlab_agentic_ml import validate_matlab_ml_rl_v54_identity as _validate_matlab_ml_rl_v54_identity
 from .sphere_mesh_convergence_gate import (
     linear_sphere_geometry_convergence_gate as _linear_sphere_geometry_convergence_gate,
 )
@@ -3728,6 +3729,12 @@ def regularized_trace_inverse_path_gate(summary_json: str) -> str:
             result.setdefault("checks", {}).update(v53_checks["checks"])
             result["matlab_ml_rl_v53_identity"] = v53_checks
             if v53_checks["status"] != "ok":
+                result["status"] = "needs_attention"
+        v54_checks = _validate_matlab_ml_rl_v54_identity(payload)
+        if v54_checks:
+            result.setdefault("checks", {}).update(v54_checks["checks"])
+            result["matlab_ml_rl_v54_identity"] = v54_checks
+            if v54_checks["status"] != "ok":
                 result["status"] = "needs_attention"
     return json.dumps(result, indent=2, sort_keys=True)
 
