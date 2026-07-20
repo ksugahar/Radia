@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .wave_energy_identity_v52 import validate_public_v52_identity
+
 
 S_PARAMETER = "sparameter_renormalization_complex_zref_modal_impedance_wavebasis_port_owner_identity"
 GROUP_DELAY = "group_delay_unwrap_frequency_derivative_smoothing_window_trace_owner_identity"
@@ -102,7 +104,7 @@ def validate_public_v51_identity(payload: object) -> dict[str, bool]:
     if not isinstance(payload, Mapping):
         return {}
     rows = [row for row in (payload.get("runs") or []) if isinstance(row, Mapping)]
-    checks: dict[str, bool] = {}
+    checks = validate_public_v52_identity(payload)
     s_parameters = [row[S_PARAMETER] for row in rows if S_PARAMETER in row]
     delays = [row[GROUP_DELAY] for row in rows if GROUP_DELAY in row]
     if s_parameters:
