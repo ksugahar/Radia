@@ -83,6 +83,10 @@ def test_optuna_simulink_contract_is_table_backed():
     ]
     assert "existing hex mesh" in topology["boundary"]
     assert topology["sheet_metal"]["two_level_loop"]["inner"].startswith("5-20")
+    hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
+    assert hcurl["status"] == "native-mex-ready"
+    assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
+    assert "hcurl.topopt.multifrequency_joule" in hcurl["mex_commands"]
 
 
 def test_server_registers_bridge_tools():

@@ -176,6 +176,18 @@ surface/bridge eddy-bubble classification, and frequency-dependent SIBC DtN
 rationalization remain separate explicit stages; they are not inferred from
 the local mass and curl-curl matrices.
 
+HCurl Eddy-Bubble topology optimization also has a direct MEX path. Construct
+`radia.topopt.HCurlTopologyOperator` from the HACApK scalar Gram, reduced charge
+maps, affine sub-tetrahedra, and their parent-cell map. Then use
+`assembleHCurlResistanceShapeTangents` for NGSolve-owned Piola `R,dR`, or cache
+`assembleHCurlCellCurlGrams` for activation optimization. The
+`linearizeHCurlMultifrequencyJoule` and
+`linearizeHCurlActivationMultifrequencyJoule` entry points solve all weighted
+complex load cases and contract `dL` inside C++ without materializing a dense
+directional inductance matrix. Their LP adapters feed the existing
+`optimizeHexSheetTopology` GetTrafo/Cubit two-level loop; no Python call occurs
+inside the MATLAB optimization iteration.
+
 The regression suite is run with:
 
 ```powershell
