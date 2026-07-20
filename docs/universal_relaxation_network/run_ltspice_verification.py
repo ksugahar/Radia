@@ -11,7 +11,7 @@ Requirements:
 
 Usage:
     python run_ltspice_verification.py
-    python run_ltspice_verification.py --ltspice-path "C:/Program Files/LTC/LTspiceXVII/XVIIx64.exe"
+    python run_ltspice_verification.py --ltspice-path "C:/Program Files/ADI/LTspice/LTspice.exe"
 
 Output:
     - ACTUAL LTspice simulation results (not Python approximations)
@@ -50,9 +50,7 @@ except ImportError:
 def find_ltspice() -> Optional[str]:
     """Find LTspice executable on the system."""
     common_paths = [
-        r"C:\Program Files\LTC\LTspiceXVII\XVIIx64.exe",
         r"C:\Program Files\ADI\LTspice\LTspice.exe",
-        r"C:\Program Files (x86)\LTC\LTspiceIV\scad3.exe",
         os.path.expanduser("~") + r"\AppData\Local\Programs\ADI\LTspice\LTspice.exe",
     ]
 

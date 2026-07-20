@@ -269,6 +269,8 @@ file_format_documents/
 # .m for package files; the MCP-shipped basis-function reference under
 # packages/radia-mcp/src/radia_mcp/mathematica/ must be tracked.
 *.m
+!matlab/**/*.m
+!tests/matlab/**/*.m
 !packages/radia-mcp/src/radia_mcp/mathematica/**/*.m
 
 # Reference repositories (local only)

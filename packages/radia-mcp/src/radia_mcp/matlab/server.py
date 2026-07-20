@@ -6,7 +6,15 @@ from radia_mcp.matlab_agentic_ml import (
     validate_matlab_ml_rl_artifact as _validate_ml_rl_artifact,
 )
 from . import matlab_agent_guide as _guide
-from .runtime import matlab_extension_contract as _contract,matlab_official_server_config as _config,matlab_radia_acoustic_interface_contract as _boundary
+from .optimize import matlab_cad_topology_build as _cad_topology_build, matlab_optimize_build as _optimize_build, matlab_optimize_resume as _optimize_resume, matlab_sheet_metal_topology_build as _sheet_metal_topology_build
+from .runtime import (
+    matlab_extension_contract as _contract,
+    matlab_official_server_config as _config,
+    matlab_radia_acoustic_interface_contract as _boundary,
+    matlab_radia_mex_contract as _mex_contract,
+    matlab_optuna_simulink_contract as _optuna_contract,
+    matlab_simulink_library_contract as _simulink_library_contract,
+)
 mcp=FastMCP("mcp-server-radia-matlab")
 @mcp.tool()
 def matlab_agent_guide()->str: return _guide()
@@ -22,7 +30,35 @@ def matlab_extension_contract()->str: return json.dumps(_contract(),ensure_ascii
 def matlab_official_server_config(profile:str="existing",include_generic_extension:bool=False)->str: return json.dumps(_config(profile,include_generic_extension=include_generic_extension),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_radia_acoustic_interface_contract()->str: return json.dumps(_boundary(),ensure_ascii=False,indent=2)
-register_status_tool(mcp,server_name="mcp-server-radia-matlab",description="Official MATLAB MCP composition and generic ML/RL gates",subpackage="radia_mcp.matlab",related_servers=["radia-ngsolve"])
+@mcp.tool()
+def matlab_radia_mex_contract(topic:str="all")->str:
+    """Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract."""
+    return json.dumps(_mex_contract(topic),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_simulink_contract()->str:
+    """Describe the table-backed MATLAB Optuna-like and Simulink workflow."""
+    return json.dumps(_optuna_contract(),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_simulink_library_contract()->str:
+    """Describe Radia Library Browser registration and LTspice compatibility."""
+    return json.dumps(_simulink_library_contract(),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optimize_build(spec_json:str)->str:
+    """Build validated MATLAB code for objective, Simulink, or LTspice optimization."""
+    return json.dumps(_optimize_build(spec_json),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optimize_resume(storage_path:str,n_trials:int,parallel:bool=False)->str:
+    """Build official-MATLAB-MCP-ready code to resume a persisted Study."""
+    return json.dumps(_optimize_resume(storage_path,n_trials,parallel=parallel),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_cad_topology_build(spec_json:str)->str:
+    """Build a Cubit + Radia-VIM linearization + LP topology workflow."""
+    return json.dumps(_cad_topology_build(spec_json),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_sheet_metal_topology_build(spec_json:str)->str:
+    """Build a Radia-VIM + LP + adaptive NGSolve/Cubit sheet-metal workflow."""
+    return json.dumps(_sheet_metal_topology_build(spec_json),ensure_ascii=False,indent=2)
+register_status_tool(mcp,server_name="mcp-server-radia-matlab",description="Official MATLAB MCP composition, Radia/NGSolve MEX bridge, table-backed optimization, Simulink, and generic ML/RL gates",subpackage="radia_mcp.matlab",related_servers=["radia-ngsolve"])
 def main():
     if "--selftest" in sys.argv: c=_contract(); assert c["ok"] and c["tool_count"]==43; print("Radia MATLAB MCP server self-test: OK"); return
     mcp.run()

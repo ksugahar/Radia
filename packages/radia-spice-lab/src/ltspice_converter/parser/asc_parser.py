@@ -28,14 +28,14 @@ def _find_ltspice_exe() -> Optional[str]:
 
     Order:
     1. env LTSPICE_EXE (explicit override)
-    2. PATH (LTspice.exe / XVIIx64.exe / scad3.exe)
-    3. Standard install locations on Windows.
+    2. PATH (LTspice.exe)
+    3. Current ADI LTspice install locations on Windows.
     """
     env = os.environ.get("LTSPICE_EXE")
     if env and Path(env).is_file():
         return env
 
-    for cand in ("LTspice.exe", "XVIIx64.exe", "scad3.exe"):
+    for cand in ("LTspice.exe",):
         found = shutil.which(cand)
         if found:
             return found
@@ -43,7 +43,6 @@ def _find_ltspice_exe() -> Optional[str]:
     candidates = [
         Path(os.environ.get("PROGRAMFILES", "")) / "ADI" / "LTspice" / "LTspice.exe",
         Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "ADI" / "LTspice" / "LTspice.exe",
-        Path(os.environ.get("PROGRAMFILES", "")) / "LTC" / "LTspiceXVII" / "XVIIx64.exe",
     ]
     for p in candidates:
         try:
