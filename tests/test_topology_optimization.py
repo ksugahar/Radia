@@ -620,6 +620,29 @@ def test_native_complete_hex_charge_gram_directional_derivative():
     np.testing.assert_allclose(derivative,(value_plus-value_minus)/(2*epsilon),rtol=3e-7,atol=2e-10)
 
 
+def test_native_hex_cluster_leaf_contraction_matches_analytic_dense_derivative():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis_hex,build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=2,nz=1,
+        mapping=lambda x,y,z:(x+.031*y*z,y+.019*x*z,z+.027*x*y))
+    fes=ng.HDiv(mesh,order=1)
+    with ng.TaskManager():
+        cb=_charge_basis_hex(fes,cob_quad=3)
+        _,gram,_=build_charge_gram(fes,eps=1e-8,leafsize=8,eta=1.0)
+    assert gram.stats()["n_lowrank"]>0
+    cells=np.asarray(cb["cell_nodes"]).reshape(-1,27,3)
+    faces=np.asarray(cb["face_nodes"]).reshape(-1,9,3)
+    def velocity(x):
+        weight=np.maximum(0.,1.-2.*np.abs(x[...,0]-.5))
+        return weight[...,None]*np.array([.021,-.017,.013])
+    vc,vf=velocity(cells),velocity(faces)
+    dense=np.asarray(gram.hex_charge_gram_directional_derivative(vc,vf))
+    left=np.linspace(-.4,.7,dense.shape[0]);right=np.cos(np.arange(dense.shape[0]))
+    observed=gram.directional_derivative_contractions("hex",vc[None],vf[None],left,right)[0]
+    np.testing.assert_allclose(observed,left@dense@right,rtol=2e-6,atol=2e-9)
+
+
 def test_vim_linearization_matches_analytic_two_cell_system():
     A=np.array([[3.0,-1.0],[-1.0,2.0]])
     b=np.array([1.0,0.5]); C=np.array([[1.0,2.0]])
