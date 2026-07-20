@@ -14,7 +14,9 @@ _UNIT_SCALE = {"m": 1.0, "mm": 1.0e-3, "cm": 1.0e-2, "inch": 0.0254}
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
@@ -166,6 +168,7 @@ def _rigid_transform(value: object) -> bool:
 def _step_ok(row: Mapping[str, object]) -> bool:
     occurrence = row.get("product_occurrence")
     frame = row.get("assembly_frame")
+    unit = row.get("length_unit")
     semantic_ok = (
         isinstance(occurrence, Mapping)
         and set(occurrence) == {"id", "product"}
@@ -194,7 +197,8 @@ def _step_ok(row: Mapping[str, object]) -> bool:
             "result_generation",
         )
         and _rigid_transform(row.get("occurrence_transform_4x4"))
-        and row.get("length_unit") in _UNIT_SCALE
+        and isinstance(unit, str)
+        and unit in _UNIT_SCALE
         and semantic_ok
         and str(row.get("document_owner") or "").startswith("document:")
         and all(row.get("replayed_" + name) == row.get(name) for name in names)
@@ -204,6 +208,7 @@ def _step_ok(row: Mapping[str, object]) -> bool:
 
 def _mesh_ok(row: Mapping[str, object]) -> bool:
     unit = row.get("length_unit")
+    mesh_format = row.get("mesh_format")
     names = (
         "mesh_format",
         "watertight",
@@ -224,11 +229,13 @@ def _mesh_ok(row: Mapping[str, object]) -> bool:
             "owner_generation",
             "result_generation",
         )
-        and row.get("mesh_format") in {"stl", "3mf"}
+        and isinstance(mesh_format, str)
+        and mesh_format in {"stl", "3mf"}
         and row.get("watertight") is True
         and row.get("manifold") is True
+        and isinstance(unit, str)
         and unit in _UNIT_SCALE
-        and _close(row.get("unit_scale_to_m"), _UNIT_SCALE.get(str(unit), math.nan))
+        and _close(row.get("unit_scale_to_m"), _UNIT_SCALE[unit])
         and _number(row.get("signed_volume_m3"), positive=True)
         and str(row.get("mesh_owner") or "").startswith("mesh:")
         and all(row.get("replayed_" + name) == row.get(name) for name in names)
@@ -236,16 +243,27 @@ def _mesh_ok(row: Mapping[str, object]) -> bool:
     )
 
 
-def _public_rows(payload: Mapping[str, object]) -> list[Mapping[str, object]]:
+def _public_rows(payload: Mapping[str, object]) -> list[Mapping[str, object]] | None:
     rows: list[Mapping[str, object]] = []
     reference = payload.get("reference")
-    if isinstance(reference, Sequence) and not isinstance(reference, (str, bytes)):
-        rows.extend(item for item in reference if isinstance(item, Mapping))
+    if reference is not None:
+        if not isinstance(reference, Sequence) or isinstance(reference, (str, bytes)):
+            return None
+        for item in reference:
+            if not isinstance(item, Mapping):
+                return None
+            rows.append(item)
     measured = payload.get("measured")
-    if isinstance(measured, Mapping):
+    if measured is not None:
+        if not isinstance(measured, Mapping):
+            return None
         for family in measured.values():
-            if isinstance(family, Sequence) and not isinstance(family, (str, bytes)):
-                rows.extend(item for item in family if isinstance(item, Mapping))
+            if not isinstance(family, Sequence) or isinstance(family, (str, bytes)):
+                return None
+            for item in family:
+                if not isinstance(item, Mapping):
+                    return None
+                rows.append(item)
     return rows
 
 
@@ -262,6 +280,8 @@ def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     rows = _public_rows(payload)
+    if rows is None:
+        return _report("build123d_v56_public_identity_v1", {"v56_public_payload_rows_are_mappings": False})
     checks: dict[str, bool] = {}
     gears = [row.get(GEAR) for row in rows if GEAR in row]
     pipes = [row.get(PIPE) for row in rows if PIPE in row]

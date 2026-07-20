@@ -60,3 +60,39 @@ def test_v56_malformed_values_reject_without_raising() -> None:
     records[EXODUS]["coordinate_transform_4x4"] = [[1.0]]
     assert validate_public_identity(records)["status"] == "needs_attention"
     assert validate_source_identity(records)["status"] == "needs_attention"
+
+
+def test_v56_numeric_digests_are_rejected() -> None:
+    records = deepcopy(_records())
+    numeric_digest = int("1" * 64)
+    for identity in (VOLUME, CURVED, BATCH, EXODUS):
+        records[identity]["result_sha256"] = numeric_digest
+        records[identity]["accepted_result_sha256"] = numeric_digest
+    records[CURVED]["geometry_revision_sha256"] = numeric_digest
+    records[CURVED]["result_geometry_revision_sha256"] = numeric_digest
+    assert validate_public_identity(records)["status"] == "needs_attention"
+    assert validate_source_identity(records)["status"] == "needs_attention"
+
+
+def test_v56_curved_face_node_order_is_checked() -> None:
+    records = deepcopy(_records())
+    malformed = [1, 3, 2, 4, 9, 10, 11, 12, 21]
+    records[CURVED]["shared_face_nodes"][0]["side_b_nodes"] = malformed
+    records[CURVED]["result_shared_face_nodes"][0]["side_b_nodes"] = malformed
+    assert validate_public_identity(records)["status"] == "needs_attention"
+
+
+def test_v56_reflected_frame_is_rejected() -> None:
+    records = deepcopy(_records())
+    reflected = [[-1.0, 0.0, 0.0, 0.1], [0.0, 1.0, 0.0, 0.2], [0.0, 0.0, 1.0, 0.3], [0.0, 0.0, 0.0, 1.0]]
+    records[EXODUS]["coordinate_transform_4x4"] = reflected
+    records[EXODUS]["replayed_coordinate_transform_4x4"] = reflected
+    assert validate_source_identity(records)["status"] == "needs_attention"
+
+
+def test_v56_boolean_step_indices_are_rejected() -> None:
+    records = deepcopy(_records())
+    records[EXODUS]["time_steps"] = records[EXODUS]["replayed_time_steps"] = [
+        {"index": False, "time_s": 0.0}, {"index": True, "time_s": 1.0}
+    ]
+    assert validate_source_identity(records)["status"] == "needs_attention"
