@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .motor_map_induction_identity_v56 import validate_public_identity as validate_public_v56_identity
+
 
 DQ = "dq_fluxlinkage_current_angle_saliency_torque_owner_identity"
 IRON = "ironloss_hysteresis_eddy_excess_frequency_fluxdensity_owner_identity"
@@ -130,7 +132,7 @@ def _iron_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks: dict[str, bool] = validate_public_v56_identity(identity)
     dq = identity.get(DQ)
     iron = identity.get(IRON)
     if dq is not None:
