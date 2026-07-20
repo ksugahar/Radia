@@ -68,7 +68,6 @@ def test_v49_public_topology_mutations_are_rejected() -> None:
     assert result["status"] == "needs_attention"
     assert len(result["issues"]) == 2
 
-
 def test_v49_source_replay_mutations_are_rejected() -> None:
     records = deepcopy(_records())
     records["journal_undo_checkpoint_entity_allocator_replay_cursor_revision_owner_identity"]["result_replay_cursor"] = 177
@@ -76,4 +75,24 @@ def test_v49_source_replay_mutations_are_rejected() -> None:
     result = validate_source_identity(records)
     assert result["status"] == "needs_attention"
     assert len(result["issues"]) == 2
+
+
+def test_v49_boolean_block_and_allocator_ids_are_rejected() -> None:
+    records = _records()
+    public = records[
+        "pyramid_transition_apex_orientation_jacobian_boundary_block_owner_identity"
+    ]
+    public["boundary_blocks"] = public["result_boundary_blocks"] = {
+        "hex_side": True,
+        "tet_side": 22,
+    }
+    source = records[
+        "journal_undo_checkpoint_entity_allocator_replay_cursor_revision_owner_identity"
+    ]
+    source["entity_id_allocator"] = source["result_entity_id_allocator"] = {
+        "next_vertex": True,
+        "next_surface": 41,
+    }
+    assert validate_public_identity(records)["status"] == "needs_attention"
+    assert validate_source_identity(records)["status"] == "needs_attention"
 

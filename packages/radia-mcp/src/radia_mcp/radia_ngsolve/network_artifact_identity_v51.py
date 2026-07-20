@@ -13,7 +13,9 @@ GROUP_DELAY = "group_delay_unwrap_frequency_derivative_smoothing_window_trace_ow
 
 
 def _sha(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 

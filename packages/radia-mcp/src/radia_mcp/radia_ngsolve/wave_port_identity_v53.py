@@ -14,7 +14,10 @@ _C0 = 299792458.0
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower(); return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
+    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
 def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:

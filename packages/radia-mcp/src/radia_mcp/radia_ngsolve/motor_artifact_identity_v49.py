@@ -11,7 +11,9 @@ IRON = "iron_loss_harmonic_time_frequency_hysteresis_eddy_excess_coefficient_own
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 

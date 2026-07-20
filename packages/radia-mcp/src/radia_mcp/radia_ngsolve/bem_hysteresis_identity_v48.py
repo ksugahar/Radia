@@ -11,7 +11,9 @@ HYSTERESIS = "hysteresis_minor_loop_return_point_state_temperature_frequency_own
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -48,7 +50,7 @@ def _bem_ok(row: Mapping[str, object]) -> bool:
         and isinstance(near, list)
         and isinstance(far, list)
         and len(near) == len(far) == count
-        and all(isinstance(n, int) and isinstance(f, int) and n >= f > 0 for n, f in zip(near, far, strict=True))
+        and all(isinstance(n, int) and not isinstance(n, bool) and isinstance(f, int) and not isinstance(f, bool) and n >= f > 0 for n, f in zip(near, far, strict=True))
         and isinstance(normals, list)
         and len(normals) == count
         and all(_finite_vector(normal, 3) and math.isclose(sum(float(value) ** 2 for value in normal), 1.0, rel_tol=1.0e-12, abs_tol=1.0e-12) for normal in normals)

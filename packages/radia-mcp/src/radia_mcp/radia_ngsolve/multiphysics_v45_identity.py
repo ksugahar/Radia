@@ -11,7 +11,9 @@ def _same(identity: Mapping[str, object], *names: str) -> bool:
 
 
 def _sha(value: object) -> bool:
-    text = str(value or "")
+    if not isinstance(value, str):
+        return False
+    text = value
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text.lower())
 
 

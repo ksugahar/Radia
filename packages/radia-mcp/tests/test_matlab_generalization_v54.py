@@ -82,3 +82,14 @@ def test_v54_malformed_values_reject_without_raising() -> None:
     summary["matlab_ml_rl_v54_identity"]["feature_preprocess"]["feature_std"] = [[2.0], 0.5]
     result = validate_matlab_ml_rl_v54_identity(summary)
     assert result and result["status"] == "needs_attention"
+
+
+def test_v54_numeric_sha256_values_are_rejected() -> None:
+    summary = _summary()
+    numeric_digest = int("9" * 64)
+    for row in summary["matlab_ml_rl_v54_identity"].values():
+        for name in tuple(row):
+            if name.endswith("_sha256"):
+                row[name] = numeric_digest
+    result = validate_matlab_ml_rl_v54_identity(summary)
+    assert result and result["status"] == "needs_attention"

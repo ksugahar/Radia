@@ -156,3 +156,12 @@ def test_v50_self_consistent_group_overlap_and_restore_id_drift_are_rejected() -
     restore["blocks"] = restore["result_blocks"] = {"block:steel": [99]}
     assert validate_public_identity(records)["status"] == "needs_attention"
     assert validate_source_identity(records)["status"] == "needs_attention"
+
+
+def test_v50_boolean_overlap_ids_are_rejected() -> None:
+    records = _records()
+    group = records[
+        "block_sideset_entity_dimension_overlap_duplicate_membership_owner_identity"
+    ]
+    group["allowed_overlaps"] = group["result_allowed_overlaps"] = [True]
+    assert validate_public_identity(records)["status"] == "needs_attention"

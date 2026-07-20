@@ -11,7 +11,9 @@ _SLIDING = "moving_mesh_sliding_interface_frame_time_remesh_solution_owner_ident
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -112,4 +114,3 @@ def validate_public_v49_identity(payload: object) -> dict[str, object]:
         "checks": checks,
         "issues": [name for name, ok in checks.items() if not ok],
     }
-

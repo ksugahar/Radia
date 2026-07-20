@@ -16,7 +16,9 @@ _FIELD = "unit_scale_coordinate_frame_complex_field_vector_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -37,10 +39,11 @@ def _time_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_generation") == generation
         and isinstance(restart_window, list)
         and len(restart_window) == 2
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in restart_window)
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in restart_window)
         and 0.0 <= float(restart_window[0]) < float(restart_window[1])
         and row.get("result_restart_window_s") == restart_window
         and isinstance(accepted_steps, int)
+        and not isinstance(accepted_steps, bool)
         and accepted_steps > 0
         and result_steps == accepted_steps
         and row.get("adaptive_step_policy") in {"accepted_only", "bdf_adaptive_accepted_only"}

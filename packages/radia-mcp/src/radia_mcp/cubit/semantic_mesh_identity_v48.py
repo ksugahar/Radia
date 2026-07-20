@@ -7,7 +7,9 @@ from collections.abc import Mapping, Sequence
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -49,7 +51,7 @@ def _periodic_ok(row: Mapping[str, object]) -> bool:
         and all(
             isinstance(pair, list)
             and len(pair) == 2
-            and all(isinstance(node, int) and node > 0 for node in pair)
+            and all(isinstance(node, int) and not isinstance(node, bool) and node > 0 for node in pair)
             and pair[0] != pair[1]
             for pair in pairs
         )
@@ -96,7 +98,7 @@ def _control_points(value: object) -> bool:
     for entity, points in value.items():
         if not str(entity).strip() or not isinstance(points, list) or not points:
             return False
-        if not all(isinstance(point, int) and point > 0 for point in points):
+        if not all(isinstance(point, int) and not isinstance(point, bool) and point > 0 for point in points):
             return False
         identifiers.extend(points)
     return len(set(identifiers)) == len(identifiers)
@@ -120,6 +122,7 @@ def _curved_ok(row: Mapping[str, object]) -> bool:
             ),
         )
         and isinstance(order, int)
+        and not isinstance(order, bool)
         and order >= 2
         and row.get("result_element_order") == order
         and _control_points(edges)
@@ -177,6 +180,7 @@ def _scheme_ok(row: Mapping[str, object]) -> bool:
         and valid_map
         and row.get("result_sweep_source_target_map") == sweep_map
         and isinstance(count, int)
+        and not isinstance(count, bool)
         and count == 1
         and row.get("result_fallback_count") == count
         and _result_ok(row)

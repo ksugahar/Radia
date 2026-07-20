@@ -14,7 +14,9 @@ _RESTORE = "save_restore_session_entity_id_block_sideset_mesh_revision_owner_ide
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
@@ -123,7 +125,10 @@ def _group_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_entity_dimensions") == dimensions
         and row.get("result_group_memberships") == memberships
         and isinstance(overlaps, list)
-        and all(isinstance(value, int) and value > 0 for value in overlaps)
+        and all(
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
+            for value in overlaps
+        )
         and len(overlaps) == len(overlap_set)
         and observed_overlap <= overlap_set
         and row.get("result_allowed_overlaps") == overlaps
@@ -214,7 +219,7 @@ def _restore_ok(row: Mapping[str, object]) -> bool:
     if not (
         isinstance(entity_ids, Mapping)
         and bool(entity_ids)
-        and all(isinstance(name, str) and name and isinstance(identifier, int) and identifier > 0 for name, identifier in entity_ids.items())
+        and all(isinstance(name, str) and name and isinstance(identifier, int) and not isinstance(identifier, bool) and identifier > 0 for name, identifier in entity_ids.items())
         and len(set(entity_ids.values())) == len(entity_ids)
     ):
         return False

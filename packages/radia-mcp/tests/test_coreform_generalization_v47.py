@@ -67,3 +67,14 @@ def test_v47_journal_and_export_mutations_are_rejected() -> None:
     records["headless_journal_dependency_order_entity_generation_identity"]["result_stale_entity_reference_count"] = 1
     records["export_manifest_part_order_physical_group_mapping_identity"]["result_part_order"] = ["airgap", "rotor", "stator"]
     assert validate_source_identity(records)["status"] == "needs_attention"
+
+
+def test_v47_boolean_physical_group_ids_are_rejected() -> None:
+    records = _records()
+    row = records["export_manifest_part_order_physical_group_mapping_identity"]
+    row["physical_group_map"] = row["result_physical_group_map"] = {
+        "rotor": True,
+        "stator": 102,
+        "airgap": 103,
+    }
+    assert validate_source_identity(records)["status"] == "needs_attention"

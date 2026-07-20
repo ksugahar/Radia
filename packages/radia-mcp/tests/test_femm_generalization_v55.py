@@ -51,3 +51,12 @@ def test_v55_self_consistent_nonsymmetric_capacitance_or_bad_charge_is_rejected(
     payload[CAPACITANCE]["capacitance_matrix_f"] = payload[CAPACITANCE]["result_capacitance_matrix_f"] = bad_matrix
     payload[CAPACITANCE]["charge_c"] = payload[CAPACITANCE]["result_charge_c"] = [9.0, 9.0]
     assert not all(validate_public_identity(payload).values())
+
+
+def test_v55_numeric_sha256_values_are_rejected():
+    payload = _payload()
+    numeric_digest = int("9" * 64)
+    for row in payload.values():
+        row["result_sha256"] = numeric_digest
+        row["accepted_result_sha256"] = numeric_digest
+    assert not all(validate_public_identity(payload).values())

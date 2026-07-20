@@ -13,7 +13,9 @@ EXTERNAL = "sketch_external_reference_dependency_cycle_revision_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -41,7 +43,7 @@ def _compound_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_child_ids") == children
         and isinstance(masses, list)
         and len(masses) == len(children)
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) >= 0.0 for value in masses)
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0.0 for value in masses)
         and row.get("result_child_masses_kg") == masses
         and isinstance(aggregate, (int, float))
         and math.isclose(float(aggregate), sum(float(value) for value in masses), rel_tol=1.0e-12, abs_tol=1.0e-12)

@@ -13,7 +13,9 @@ BOOLEAN = "boolean_deleted_subshape_selector_adjacency_mass_cache_owner_identity
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -50,7 +52,7 @@ def _assembly_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_material_by_occurrence") == materials
         and isinstance(densities, Mapping)
         and set(densities) == occurrences
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) > 0.0 for value in densities.values())
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) > 0.0 for value in densities.values())
         and row.get("result_density_kg_m3_by_occurrence") == densities
         and isinstance(transforms, Mapping)
         and set(transforms) == occurrences
@@ -82,6 +84,7 @@ def _sketch_ok(row: Mapping[str, object]) -> bool:
         and all(isinstance(value, str) and value for value in constraints)
         and row.get("result_constraints") == constraints
         and isinstance(dof, int)
+        and not isinstance(dof, bool)
         and dof >= 0
         and row.get("result_remaining_dof") == dof
         and row.get("work_plane") in {"Plane.XY", "Plane.XZ", "Plane.YZ"}
@@ -206,4 +209,3 @@ def validate_source_identity(payload: object) -> dict[str, object]:
     if boolean is not None:
         checks["v49_boolean_deleted_selector_adjacency_mass_cache_owner"] = isinstance(boolean, Mapping) and _boolean_ok(boolean)
     return _report("build123d_v49_source_identity_v1", checks) if checks else {}
-
