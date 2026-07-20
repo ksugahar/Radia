@@ -265,7 +265,7 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
         #   b = (d_iron/2) sqrt(j w mu0 mu_r sigma).
         # This is the canonical radia_mcp.radia_ngsolve.solve.laminated_mu_eff
         # (validated < 2.2 % vs 1D FE from |b|=0.5 to ~10 --
-        # tests/test_laminated_mu_eff_freqsweep.py).  It is INLINED here rather
+        # validation_test/radia_mcp/test_laminated_mu_eff_freqsweep.py).  It is INLINED here rather
         # than imported, because the GUI panel runs against the deployed radia_mcp
         # which may predate that helper.  It replaces the old volume-average, which
         # ignored the high-frequency skin reduction of the REAL part (mu' drops as

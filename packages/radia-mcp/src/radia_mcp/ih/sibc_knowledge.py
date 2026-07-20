@@ -785,7 +785,7 @@ length will equal `esim_iterations` (one entry per outer Karl iter).
 - **Don't use linear SIBC at low frequency** for steel (< 10 kHz) — the
   field penetrates several mm and BH curve dominates. Use ESIM from the
   start; the converged solution differs by an order of magnitude in P_wp.
-- **BH file required for ESIM**: notebook workbench + calc scripts raise if
+- **BH file required for ESIM**: Simulink block / temporary IH notebook + calc scripts raise if
   `--bh-file` is empty when `--impedance-model esim` is selected
   (pre-validation in `IHDesignSpec.build_command`).
 - **Karl iteration diverges with very high relax**: lower the relax flag

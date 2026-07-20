@@ -1,4 +1,18 @@
-# Radia MATLAB MEX
+# Radia MATLAB and Simulink
+
+Radia's final human-facing application interface is the single **Radia**
+Simulink library. Its Electromagnet, PCB PEEC, Motor, Stream Function, and
+Induction Heating blocks initially launch the validated Python/headless CLI
+once on an explicit rising trigger. This is the supported production path; it
+does not call Python at every simulation step.
+
+The native MEX interfaces documented below are optional acceleration and
+persistent-state paths. They are not a prerequisite for using the Simulink
+application blocks. Promote an application backend to MEX/ROM only after
+numerical parity, error propagation, object lifecycle, repeated-run, and
+long-run stability tests pass.
+
+## Optional MEX Interface
 
 `radia_mex` exposes Radia C++ kernels directly to MATLAB without routing
 solver calls through a Python process. NGSolve still owns TaskManager, mesh loading,
@@ -10,7 +24,7 @@ pip NGSolve `libngsolve.dll` transitively requires `python312.dll`. Full
 Python-DLL independence requires rebuilding NGSolve/Netgen without Python
 support; it is not claimed by this MEX target.
 
-## Build
+## Build the MEX Target
 
 Configure the normal MSVC build with MATLAB enabled, then build the target:
 
@@ -479,7 +493,17 @@ Use `runNoise`, `analyzeFFT`, and `runIntervals` for noise spectra, transient
 FFT, and explicit capacitor-voltage/inductor-current handoff between long
 windows. Run `radia.simulink.buildLibrary` once after installation and
 `sl_refresh_customizations` to expose the single **Radia** entry in Simulink
-Library Browser. The library blocks delegate to the same tested MATLAB APIs.
+Library Browser. Its `Applications` subsystem contains Electromagnet, PCB PEEC,
+Motor, Stream Function, and Induction Heating blocks. These batch-analysis
+blocks delegate to the same `DesignSpec` and validated headless Python CLI used
+by MCP; a boolean rising trigger runs once and always leaves `run.log` and
+`result.json`, with solver artifacts when execution reaches that stage. Create the versioned settings file with
+`radia.simulink.writeApplicationConfig`. The Python backend is intentional
+while the MEX routes mature; promote a MEX/ROM backend only after parity,
+failure, lifecycle, and long-run tests. IH temporarily also keeps its notebook
+comparison workbench.
+
+The remaining library blocks delegate to the same tested MATLAB APIs.
 The `LTspice Circuit` block accepts vector `InputNames` and `OutputTraces`.
 Each sample advances one reset-time LTspice interval and hands saved node
 voltages and inductor currents to the next interval. Block state is isolated

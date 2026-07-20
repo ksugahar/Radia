@@ -67,7 +67,7 @@ def _lane_artifact(lane: str, observable: str) -> dict:
     else:
         artifact["metrics"] = {"torque_relative_error": 1.0e-3}
         artifact["age_gate_ids"] = ["age_rotation_torque"]
-        artifact["pytest_targets"] = ["tests/test_airgap_machine_rotation.py"]
+        artifact["pytest_targets"] = ["validation_test/radia_mcp/test_airgap_machine_rotation.py"]
     return artifact
 
 

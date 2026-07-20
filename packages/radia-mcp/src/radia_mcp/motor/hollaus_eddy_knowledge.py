@@ -336,7 +336,7 @@ in-plane lamination as `radia_mcp.radia_ngsolve.solve.laminated_mu_eff`:
 Use it as the analytic ground truth for `solve_cell_problem`'s effective
 permeability in the linear regime.  An independent 1D FE (symmetric cell, iron
 centered between insulation halves) reproduces it to < 2.2 % from |b| = 0.5 to
-|b| ~ 10 (packages/radia-mcp/tests/test_laminated_mu_eff_freqsweep.py).
+|b| ~ 10 (validation_test/radia_mcp/test_laminated_mu_eff_freqsweep.py).
 
 PITFALL (verified the hard way during 横展開): the eddy LOSS is NOT
 `0.5*w*B^2*Im(1/mu_eff)`.  `mu_eff = <B>/H_s` is the FLUX-AVERAGING permeability

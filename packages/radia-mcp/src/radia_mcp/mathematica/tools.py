@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -73,6 +75,63 @@ def _wolframscript_path() -> str:
             "WOLFRAMSCRIPT_PATH env var."
         )
     return _WOLFRAMSCRIPT_PATH
+
+
+def _read_process_text(path: str) -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+
+
+def _run_wolframscript(arguments: list[str], timeout: int) -> dict:
+    """Run wolframscript without inheriting the MCP stdio transport."""
+    started = time.perf_counter()
+    timed_out = False
+    with tempfile.TemporaryDirectory(prefix="mma_ws_") as temp_dir:
+        stdout_path = os.path.join(temp_dir, "out.txt")
+        stderr_path = os.path.join(temp_dir, "err.txt")
+        try:
+            with open(stdout_path, "wb") as stdout_file, open(stderr_path, "wb") as stderr_file:
+                result = subprocess.run(
+                    arguments,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    timeout=timeout,
+                )
+            exit_code = result.returncode
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            exit_code = -2
+        stdout = _read_process_text(stdout_path)
+        stderr = _read_process_text(stderr_path)
+    return {
+        "result": stdout,
+        "stderr": stderr,
+        "exit_code": exit_code,
+        "timed_out": timed_out,
+        "duration_seconds": round(time.perf_counter() - started, 6),
+    }
+
+
+def _parse_json_output(text: str) -> tuple[object | None, str]:
+    """Parse a JSON result, tolerating informational lines before it."""
+    candidates = [text.strip()]
+    candidates.extend(
+        line.strip()
+        for line in reversed(text.splitlines())
+        if line.lstrip().startswith(("{", "["))
+    )
+    errors: list[str] = []
+    for candidate in dict.fromkeys(candidates):
+        if not candidate:
+            continue
+        try:
+            return json.loads(candidate), ""
+        except json.JSONDecodeError as exc:
+            errors.append(str(exc))
+    return None, errors[-1] if errors else "empty output"
 
 
 # ============================================================
@@ -211,42 +270,100 @@ def mathematica_evaluate(code: str, timeout: int = 60) -> dict:
     # wolframscript PROCESS to exit (prompt) and then read the files; a lingering grandchild
     # holding a file handle does not block us.  Also pin stdin=DEVNULL so the kernel can never
     # touch the server's JSON-RPC stdin.
-    timed_out = False
-    with tempfile.TemporaryDirectory(prefix="mma_ws_") as _td:
-        _outp = os.path.join(_td, "out.txt")
-        _errp = os.path.join(_td, "err.txt")
-
-        def _read(p: str) -> str:
-            try:
-                return Path(p).read_text(encoding="utf-8", errors="replace").strip()
-            except OSError:
-                return ""
-
-        try:
-            with open(_outp, "wb") as _fo, open(_errp, "wb") as _fe:
-                r = subprocess.run(
-                    [ws, "-code", code],
-                    stdin=subprocess.DEVNULL,
-                    stdout=_fo,
-                    stderr=_fe,
-                    timeout=timeout,
-                )
-            exit_code = r.returncode
-            stdout = _read(_outp)
-            stderr = _read(_errp)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            stdout = _read(_outp)
-            stderr = _read(_errp)
-            exit_code = -2
-
+    execution = _run_wolframscript([ws, "-code", code], timeout)
     return {
-        "result": stdout,
-        "stderr": stderr,
-        "exit_code": exit_code,
+        **execution,
         "wolframscript_path": ws,
-        "timed_out": timed_out,
         "code": code,
+    }
+
+
+def mathematica_run_script(
+    script_path: str,
+    timeout: int = 300,
+    result_format: str = "auto",
+    require_ok: bool = False,
+) -> dict:
+    """Run a local Wolfram Language script and return structured results.
+
+    This is the verification-oriented companion to ``mathematica_evaluate``.
+    It runs a tracked ``.wls``, ``.wl``, or ``.m`` file with
+    ``wolframscript -file`` so a large batch of identities shares one kernel
+    startup.  Scripts may print a final JSON object such as
+    ``{"ok": true, "checks": {...}, "failures": []}``.
+
+    Args:
+        script_path: Local path to a Wolfram Language script.
+        timeout: Wall-clock timeout in seconds.
+        result_format: ``"text"``, ``"json"``, or ``"auto"``.  Auto parses
+            JSON when possible and otherwise preserves text output.
+        require_ok: If true, the parsed JSON must contain boolean ``ok: true``.
+
+    Returns:
+        Process status, stdout/stderr, elapsed time, parsed JSON (when
+        available), and ``verification_ok``.  ``ok`` is false on process,
+        JSON, or requested verification failure.
+    """
+    if timeout < 1:
+        return {"ok": False, "error": "timeout must be >= 1 second", "script_path": script_path}
+    format_name = result_format.lower().strip()
+    if format_name not in {"auto", "json", "text"}:
+        return {
+            "ok": False,
+            "error": "result_format must be 'auto', 'json', or 'text'",
+            "script_path": script_path,
+        }
+    script = Path(script_path).expanduser().resolve()
+    if not script.is_file():
+        return {"ok": False, "error": "script file not found", "script_path": str(script)}
+    if script.suffix.lower() not in {".wls", ".wl", ".m"}:
+        return {
+            "ok": False,
+            "error": "script must use .wls, .wl, or .m",
+            "script_path": str(script),
+        }
+    try:
+        ws = _wolframscript_path()
+    except FileNotFoundError as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "script_path": str(script),
+            "wolframscript_path": "",
+        }
+
+    execution = _run_wolframscript([ws, "-file", str(script)], timeout)
+    process_ok = execution["exit_code"] == 0 and not execution["timed_out"]
+    parsed = None
+    json_error = ""
+    if format_name != "text":
+        parsed, json_error = _parse_json_output(execution["result"])
+    verification_ok = parsed.get("ok") if isinstance(parsed, dict) and isinstance(parsed.get("ok"), bool) else None
+    ok = process_ok
+    if format_name == "json" and parsed is None:
+        ok = False
+    if require_ok and verification_ok is not True:
+        ok = False
+    error = ""
+    if not process_ok:
+        error = execution["stderr"] or "wolframscript failed"
+    elif format_name == "json" and parsed is None:
+        error = f"script output is not valid JSON: {json_error}"
+    elif require_ok and verification_ok is None:
+        error = "parsed JSON does not contain boolean key 'ok'"
+    elif require_ok and verification_ok is False:
+        failures = parsed.get("failures", []) if isinstance(parsed, dict) else []
+        error = f"verification failed: {failures}"
+    return {
+        "ok": ok,
+        "process_ok": process_ok,
+        "verification_ok": verification_ok,
+        "parsed": parsed,
+        "json_error": json_error if parsed is None and format_name != "text" else "",
+        "script_path": str(script),
+        "wolframscript_path": ws,
+        "error": error,
+        **execution,
     }
 
 
@@ -320,6 +437,8 @@ from .helpers import (  # noqa: E402, F401
     mathematica_simplify,
     mathematica_to_tex,
     mathematica_check_identity,
+    mathematica_check_identities,
+    mathematica_verification_guide,
     mathematica_vector_calc,
     mathematica_unit_convert,
     mathematica_solve,

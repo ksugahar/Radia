@@ -4934,7 +4934,7 @@ def eggshell_force_2d(B, mesh, center, r_inner, r_outer, air_region="air"):
 
     The radial band ``r_inner < |r-center| < r_outer`` must lie in the air
     surrounding the body and enclose it. Validated on the two-parallel-wire
-    benchmark F/L = mu0 I1 I2 / (2 pi d) to ~1 % (see tests/test_planar_force.py).
+    benchmark F/L = mu0 I1 I2 / (2 pi d) to ~1 % (see validation_test/radia_mcp/test_planar_force.py).
     Returns (Fx, Fy) in N/m.
     """
     cx, cy = center
@@ -4994,7 +4994,7 @@ def eggshell_force_axi(B, mesh, center, r_inner, r_outer, air_region="air"):
 
     g = 1 at r_inner, 0 at r_outer.  Validated on two coaxial loops against the
     exact mutual-inductance force I1 I2 dM/dz (M via elliptic integrals)
-    (tests/test_axi_force.py)."""
+    (validation_test/radia_mcp/test_axi_force.py)."""
     rc, zc = center
     rho = sqrt((x - rc)**2 + (y - zc)**2)
     band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
@@ -5044,7 +5044,7 @@ def maxwell_surface_force_harmonic(B, mesh, surface):
     ``calc_fem_kelvin`` (the workpiece is a HOLE, so the only force handle is the
     Maxwell stress over its surface; ``B = curl(gfu)`` from the SIBC A-solve).
     Returns (Fx, Fy, Fz) in newtons.  Validated by reduction to the
-    static :func:`maxwell_surface_force` reference (tests/test_maxwell_surface_harmonic.py).
+    static :func:`maxwell_surface_force` reference (validation_test/radia_mcp/test_maxwell_surface_harmonic.py).
     """
     n = specialcf.normal(mesh.dim)
     Bn = sum(B[k] * n[k] for k in range(3))                  # B . n  (n real)
@@ -5063,7 +5063,7 @@ def ohmic_loss_2d(Ez, mesh, sigma, region=None):
 
     With a current-driven conductor (net current I), the AC resistance per length
     is ``Rac = 2 P / |I|^2``. Validated on the round-wire skin effect (Rac/Rdc vs
-    Kelvin functions, 0.07 %; see tests/test_planar_eddy.py)."""
+    Kelvin functions, 0.07 %; see validation_test/radia_mcp/test_planar_eddy.py)."""
     integrand = 0.5 * sigma * (Ez * Conj(Ez)).real
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     return Integrate(integrand * dom, mesh)
@@ -5108,7 +5108,7 @@ def inductance_2d(B, mesh, nu, current, region=None):
     ``region=None`` integrates the whole domain (total L); pass a material name
     for a partial energy (e.g. a conductor's internal inductance). Validated:
     round-wire internal inductance L_int = mu0/(8 pi) = 5.0e-8 H/m, radius-
-    independent, to 0.06 % (tests/test_planar_inductance.py)."""
+    independent, to 0.06 % (validation_test/radia_mcp/test_planar_inductance.py)."""
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     W = 0.5 * Integrate(nu * InnerProduct(B, B) * dom, mesh)
     return 2.0 * W / (current * current)

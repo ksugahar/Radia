@@ -1126,7 +1126,7 @@ def main():
         assert "not a full" in motor_deck_bridge("jmag_coverage_reality")
         assert "NGSolve AGE" in motor_deck_bridge("age_vs_field_strategy")
         assert "gold_age_invariant" in motor_age_quality("publication_policy")
-        assert "tests/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
+        assert "validation_test/radia_mcp/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
         assert "HDiv-MMM + HCurl eddy-bubble" in motor_validation_lanes("lane_matrix")
         assert "NGSolve+AGE" in motor_validation_lanes("overview")
         assert "product_local_reference" in motor_validation_lanes("source_policy")
@@ -1207,7 +1207,7 @@ def main():
                 "public_lesson": "AGE torque lane selftest artifact is complete.",
             },
             "age_gate_ids": ["age_rotation_torque"],
-            "pytest_targets": ["tests/test_airgap_machine_rotation.py"],
+            "pytest_targets": ["validation_test/radia_mcp/test_airgap_machine_rotation.py"],
             "shared_mesh_material_identity": {
                 "geometry_sha256": "1" * 64,
                 "material_sha256": "2" * 64,
@@ -1257,11 +1257,11 @@ def main():
         age_plan = motor_age_validation_plan("IPM hairpin MTPA field weakening")
         print(f"  motor_age_validation_plan('IPM ...'): {len(age_plan)} chars")
         assert "dq_control_layer" in age_plan
-        assert "tests/test_field_weakening.py" in age_plan
+        assert "validation_test/radia_mcp/test_field_weakening.py" in age_plan
         im_plan = motor_age_validation_plan("induction cage slip loss")
         print(f"  motor_age_validation_plan('induction ...'): {len(im_plan)} chars")
         assert "age_eddy_machine" in im_plan
-        assert "tests/test_motor_induction_coupling.py" in im_plan
+        assert "validation_test/radia_mcp/test_motor_induction_coupling.py" in im_plan
         field_check = motor_field_quick_check(motor_type="ipm", electrical_angle_deg=25)
         print(f"  motor_field_quick_check('ipm'): {len(field_check)} chars")
         assert "2D magnetic-circuit/BEM-like motor quick check" in field_check

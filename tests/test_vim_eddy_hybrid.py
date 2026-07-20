@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 
@@ -287,6 +289,78 @@ def test_hcurl_eddy_cln_model_requires_sibc_rationalization_for_state_space():
     assert model.has_sibc_termination is True
     with pytest.raises(ValueError, match="rationalized"):
         model.derivative_input_state_space()
+
+
+def test_hcurl_eddy_cln_matlab_exchange_preserves_row_major_matrices(tmp_path):
+    model = vim.HCurlEddyCLNModel(
+        resistance=np.array([[2.0, 0.1], [0.1, 1.0]]),
+        inductance=np.array([[3.0, 0.2], [0.2, 2.0]]),
+        surface_mass=np.zeros((2, 2)),
+        port_rhs=np.array([[1.0], [0.5]]),
+        basis_names=("eddy0", "eddy1"),
+        blocks={"volume": (0, 2)},
+    )
+    force_operator = np.arange(6.0).reshape(3, 2, 1)
+    destination = vim.ExportHCurlEddyCLNJSON(
+        model,
+        tmp_path / "hcurl_exchange.json",
+        force_operator=force_operator,
+        metadata={"frequency_hz": 50.0},
+    )
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+
+    assert payload["schema"] == "radia.hcurl.eddy_cln.exchange.v1"
+    assert payload["arrays"]["resistance"]["shape"] == [2, 2]
+    np.testing.assert_allclose(
+        np.asarray(payload["arrays"]["resistance"]["values"]).reshape(2, 2),
+        model.resistance,
+    )
+    assert payload["arrays"]["force_operator"]["shape"] == [3, 2, 1]
+    np.testing.assert_allclose(
+        payload["arrays"]["force_operator"]["values"],
+        force_operator.ravel(order="C"),
+    )
+    assert payload["metadata"]["frequency_hz"] == 50.0
+
+    sibc_model = vim.HCurlEddyCLNModel(
+        resistance=np.eye(1),
+        inductance=np.eye(1),
+        surface_mass=np.ones((1, 1)),
+        port_rhs=np.ones((1, 1)),
+    )
+    with pytest.raises(ValueError, match="rationalized"):
+        vim.ExportHCurlEddyCLNJSON(sibc_model, tmp_path / "sibc.json")
+
+
+def test_hcurl_eddy_cln_family_exchange_requires_common_sorted_state_basis(tmp_path):
+    def make_model(scale):
+        return vim.HCurlEddyCLNModel(
+            resistance=scale * np.eye(1),
+            inductance=np.eye(1),
+            surface_mass=np.zeros((1, 1)),
+            port_rhs=np.ones((1, 1)),
+        )
+
+    destination = vim.ExportHCurlEddyCLNFamilyJSON(
+        [
+            {"height_m": 1.0, "model": make_model(2.0)},
+            {"height_m": -1.0, "model": make_model(1.0)},
+        ],
+        tmp_path / "hcurl_family.json",
+    )
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    assert payload["schema"] == "radia.hcurl.eddy_cln.family.v1"
+    assert [item["height_m"] for item in payload["snapshots"]] == [-1.0, 1.0]
+    assert payload["shared_state_basis"] is True
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        vim.ExportHCurlEddyCLNFamilyJSON(
+            [
+                {"height_m": 0.0, "model": make_model(1.0)},
+                {"height_m": 0.0, "model": make_model(2.0)},
+            ],
+            tmp_path / "duplicate.json",
+        )
 
 
 def test_surface_omega_basis_builds_tangential_current():

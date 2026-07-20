@@ -25,8 +25,8 @@ The production reduced reluctance-motor API is `radia.motor_hdiv.HDivReducedMoto
 It keeps the rotor mesh in a local frame, builds the symmetric BDM1 charge Gram
 once, and reuses it over a mechanical-angle sweep.  The public torque contract
 compares the air-gap Maxwell stress, the magnetization-volume coupling, and the
-fixed-current coenergy derivative.  The notebook panel exposes the same path as
-the **HDiv Reduced** study through
+fixed-current coenergy derivative. The Motor Simulink block exposes the same
+path as the **HDiv Reduced** study through
 `src/radia/panels/calc_motor_hdiv_reduced.py`; its input mesh is a rotor-only 2D
 `.vol`, not the full-motor mesh used by the transient A-formulation.
 
@@ -37,7 +37,18 @@ coenergy, skew, end-winding corrections, temperature-dependent resistance,
 thermal state, and an implicit electromechanical step.  The model bundle writer
 `radia.motor_rom_export.SaveMotorROMBundle` emits NPZ, MAT, JSON, a MATLAB
 loader, and an FMI model-variable fragment; `src/core/rad_motor_rom_c.h`
-provides the deterministic C ABI used by external motion solvers.
+provides the deterministic C ABI used by external motion solvers.  The
+Simulink boundary in `src/radia/simulink/` builds a fixed-step C-MEX
+`radia_motor_rom_sfun` block from that same C ABI.  Its input is the phase
+voltage/load/ambient-temperature vector and its output is the phase current,
+eddy-current, flux, electromechanical torque, loss, temperature, and energy
+diagnostic vector described in the adapter README.
+
+The production block policy is deliberately layered: MagLev reduced models
+export MATLAB `ss` state-space objects for the native Simulink State-Space
+block, while dynamic machine ROMs use the C-MEX adapter or FMI Co-Simulation.
+The HCurl eddy-bubble and HDiv-MMM transient adapters will use the same
+physical-port contract after their time-domain state interfaces are finalized.
 
 The curved 2D qualification uses 33 training and 33 interlaced holdout angles.
 Its saved run reports a maximum holdout flux error of `1.67e-15`, a

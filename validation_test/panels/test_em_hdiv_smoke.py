@@ -1,4 +1,4 @@
-"""Static smoke tests for the EM notebook panel's HDiv-VIM method.
+"""Static smoke tests for the Electromagnet block's HDiv-VIM method.
 
 These checks verify the DesignSpec-to-CLI contract without running the
 numerical solver.  The command generated for the HDiv-VIM method must call

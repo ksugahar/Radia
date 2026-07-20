@@ -258,7 +258,7 @@ Fz = eggshell_force_axi(B, mesh, center=(rc, zc), r_inner=.., r_outer=..)
 
 ## Open-boundary cross-check (independent open-region reference)
 
-``tests/test_femm_xcheck_kelvin_magnet.py`` loads a stored Kelvin-transform
+``validation_test/radia_mcp/test_femm_xcheck_kelvin_magnet.py`` loads a stored Kelvin-transform
 (open-boundary) axisymmetric-magnet regression reference (B_z at r=7 mm) and
 reproduces it with ``solve_axi_magnetostatic`` on a large truncated domain --
 agreement 0.78 % of peak. A permanent magnet's field (mu_r=1) is scale-invariant,

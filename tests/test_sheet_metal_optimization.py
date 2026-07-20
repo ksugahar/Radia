@@ -74,6 +74,35 @@ def test_hex_topology_driver_batches_sparse_cubit_changes(monkeypatch,tmp_path):
     assert calls["cubit"]==1
 
 
+def test_cubit_pending_change_cancels_inside_hysteresis_band(monkeypatch,tmp_path):
+    import radia.sheet_metal_optimization as sm
+    calls={"iteration":0,"cubit":0}
+    state=sm.HexSheetTopologyState(SimpleNamespace(),{},np.zeros(2),
+        np.full(2,.002),np.ones(2),1.)
+    def linearize(current):
+        rho=np.ones(2); rho[0]=.2 if calls["iteration"]==0 else .5
+        calls["iteration"]+=1
+        return SimpleNamespace(update=sm.SheetMetalUpdate(
+            np.zeros(2),np.full(2,.002),rho,np.zeros(6),"ok"))
+    def accept(mesh,factory,current,target,relative,**kwargs):
+        decision=sm.MeshUpdateDecision("ngsolve_deform",np.empty(0,int),
+            ("test",),1.,1.,0.)
+        return sm.DeformationAcceptance(True,1.,decision,1),object()
+    monkeypatch.setattr(sm,"backtrack_ngsolve_target_deformation",accept)
+    class Backend:
+        def rebuild(self,request):
+            calls["cubit"]+=1
+            return SimpleNamespace()
+    result=sm.optimize_hex_sheet_topology(state,linearize_step=linearize,
+        deformation_factory=lambda mesh,u:object(),rebuild_model=lambda *args:{},
+        evaluate_objective=lambda model:1.,element_sizes=np.ones(2),
+        cubit_backend=Backend(),cubit_work_directory=tmp_path,max_iterations=2,
+        cubit_batch_fraction=1.,cubit_batch_interval=5,
+        design_tolerance=0.,objective_tolerance=0.)
+    assert [item.pending_topology_changes for item in result.history]==[1,0]
+    assert calls["cubit"]==0
+
+
 def test_sheet_metal_lp_obeys_moves_thickness_curvature_and_volume():
     n=3; u=np.zeros(n); t=np.ones(n); rho=np.ones(n); area=np.ones(n)
     L=np.array([[1.,-2.,1.]])

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.19"
+version = "4.95.20"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -118,9 +118,9 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 # use the gui-script (radia-vol-viewer-gui.exe) for the Windows file
 # association so no console window flashes on double-click.
 radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
-# radia-ih / radia-em / radia-pcb / radia-streamfunction desktop PySide
-# entry points were retired in 2026-06.  Use the notebook workbenches under
-# src/radia/panels/notebooks/ and the headless calc_*.py scripts.
+# Desktop PySide entry points are retired. Human production operation uses the
+# Radia Simulink library; IH temporarily also keeps its notebook comparison
+# workbench. Python/MCP use the headless calc_*.py and DesignSpec contracts.
 # Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
 # MCP servers: radia-mcp package (pip install radia-mcp)
 
@@ -134,7 +134,8 @@ radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 [tool.setuptools.package-data]
 # Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit
 # embedded Export Mesh toolbar remains package data; normal Radia Python uses
-# notebook/headless workflows and does not depend on PySide6.
+# headless workflows (plus the temporary IH notebook) and does not depend on
+# PySide6.
 # Note (Tier-2, 2026-06-01): the Cubit plugin binaries (cubit_mesh_export.ccm,
 # cubit_mesh_curver.pyd) are NO LONGER bundled in the radia wheel.  They are
 # shipped + deployed SOLELY by the cubit-mesh-export package, so radia and

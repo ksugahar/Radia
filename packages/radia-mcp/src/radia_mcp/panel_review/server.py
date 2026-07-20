@@ -1,10 +1,9 @@
 """
 Panel Review MCP Server (radia_mcp.panel_review)
 
-Surfaces the current Radia notebook panel review contract.  The old PySide6
-panel review chain is retired; this server keeps the historical topic names as
-compatibility redirects to the Jupyter notebook workbench route.  It also
-serves the construction recipe for new Jupyter notebook GUIs.
+Surfaces the current Radia Simulink application-block review contract. The old
+PySide6 and non-IH notebook review chains are retired; historical topic names
+remain compatibility aliases to the block recipe.
 
 Why an MCP server (rather than just SKILL.md files):
 
@@ -43,17 +42,17 @@ mcp = FastMCP("mcp-server-panel-review")
 @mcp.tool()
 def panel_review(topic: str = "overview") -> str:
     """
-    Get Radia notebook panel review / construction documentation.
+    Get Radia Simulink application-block review / construction documentation.
 
     Historical topic names remain accepted, but all topics now point at the
-    notebook workbench contract: DesignSpec, *_notebook Workbench wiring,
-    result artifacts, validation_test, and no-PySide regression checks.
+    Simulink block contract: DesignSpec/headless wiring, masks, typed ports,
+    result artifacts, validation, and no-PySide regression checks.
 
     Args:
         topic: Documentation topic.  Options:
-            "overview"            - Notebook panel review contract
-            "build_notebook_gui"  - Construction recipe for new notebook GUIs
-            "presentation_template" - RADIA-IH presentation shell pattern
+            "overview"            - Simulink application-block review contract
+            "build_notebook_gui"  - Historical alias for the block recipe
+            "presentation_template" - Historical alias for the block recipe
             "cubit_panels_migration" - Routing plan for examples/cubit_panels
             "5_skills_chain"      - Compatibility alias to notebook contract
             "13_checks"           - Compatibility alias to notebook contract
@@ -74,20 +73,20 @@ def panel_review(topic: str = "overview") -> str:
 # ============================================================
 
 @mcp.prompt()
-def review_a_panel(panel_path: str = "src/radia/panels/notebooks/radia_ih.ipynb") -> str:
-    """Run a thorough review of a Radia notebook panel."""
+def review_a_panel(panel_path: str = "matlab/radia_simulink_library.slx") -> str:
+    """Run a thorough review of a Radia application block."""
     return (
-        f"Please run a thorough notebook panel review for: {panel_path}\n\n"
+        f"Please run a thorough Simulink application-block review for: {panel_path}\n\n"
         "Steps (use the panel_review MCP tool for reference text):\n"
-        "1. panel_review(topic='overview') for the notebook contract.\n"
-        "2. Inspect DesignSpec, Workbench.build_command(), and calc argparse.\n"
-        "3. Run `python -m pytest validation_test/panels/test_notebook_workbench.py -q`.\n"
-        "4. Confirm result-bearing notebook + sidecar JSON policy where docs are involved.\n"
+        "1. panel_review(topic='overview') for the block contract.\n"
+        "2. Inspect DesignSpec, calc argparse, mask, ports, and artifact runner.\n"
+        "3. Run Python and MATLAB Simulink workflow tests.\n"
+        "4. Confirm the block matches the headless golden and failure provenance.\n"
         "5. Report BUG / RISK / NIT / OK with file/line references.\n\n"
         "Common gotchas:\n"
-        " - JSON used as preset storage instead of run artifact\n"
-        " - notebook imports PySide6/PyQt\n"
-        " - Workbench argv drifts from calc_*.py argparse\n"
+        " - solver logic duplicated in a mask callback\n"
+        " - Python launched on every time step\n"
+        " - MEX promoted without parity/lifecycle/long-run evidence\n"
     )
 
 
@@ -96,9 +95,9 @@ def build_notebook_gui(
     app_name: str = "ih",
     source_examples: str = "validation_test/induction_heating/cubit_panels_legacy",
 ) -> str:
-    """Plan and implement a Radia Jupyter notebook GUI workbench."""
+    """Compatibility prompt that now builds a Radia Simulink block."""
     return (
-        f"Please build or upgrade the Radia notebook GUI for app={app_name!r} "
+        f"Please build or upgrade the Radia Simulink application block for app={app_name!r} "
         f"from source material under {source_examples}.\n\n"
         "Use `panel_review(topic='build_notebook_gui')` first.  If the source "
         "is `examples/cubit_panels`, also use "
@@ -106,16 +105,14 @@ def build_notebook_gui(
         "Required shape:\n"
         "1. Move reusable computation into `src/` or a headless `calc_*.py`.\n"
         "2. Keep heavy checks in `validation_test/`.\n"
-        "3. Create/update `<App>DesignSpec`, `<App>Workbench`, and the "
-        "`panels/notebooks/radia_<app>.ipynb` surface.  Keep the legacy "
-        "`src/radia/panels/notebooks` copy synchronized until the staged "
-        "migration is complete.\n"
-        "4. Save runs as `command.txt`, `run.log`, and `result.json` with "
-        "`radia_result.v2` metadata.\n"
-        "5. Run `python -m pytest validation_test/panels/"
-        "test_notebook_workbench.py -q`.\n"
+        "3. Create/update `<App>DesignSpec` and a masked block in the single "
+        "Radia Simulink library.\n"
+        "4. Save `command.txt`, `run.log`, `solver_result.json`, and versioned "
+        "`result.json`.\n"
+        "5. Run the Python application runner and MATLAB Simulink tests.\n"
         "6. Do not add PySide6/PyQt to normal Radia Python; Cubit's own "
-        "toolbar runtime is the only PySide exception.\n"
+        "toolbar runtime is the only PySide exception. Do not add a new "
+        "notebook workbench.\n"
     )
 
 
@@ -130,8 +127,8 @@ def build_notebook_gui(
 register_status_tool(
     mcp,
     server_name="mcp-server-panel-review",
-    description="Radia notebook panel review/construction contract "
-                "(DesignSpec, Workbench, result artifacts, no-PySide gate)",
+    description="Radia Simulink application-block review/construction contract "
+                "(DesignSpec, masks, ports, result artifacts, no-PySide gate)",
     subpackage="radia_mcp.panel_review",
     related_servers=["meta"],
     optional_deps=[],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""audit_new_panel_contract.py -- enforce the panel calc contract.
+"""audit_new_panel_contract.py -- enforce the application calc contract.
 
 Pure static AST analysis -- runs in <1 s, no NGSolve/Cubit needed.
 Suitable as a CI gate.
@@ -14,18 +14,19 @@ For every ``src/radia/panels/calc_*.py``:
   C3. ``__main__`` block calls ``calc_main(build_argparser, calc)``.
   C4. Heavy imports (ngsolve, radia, cubit, netgen) are NOT at module top.
   C5. ``build_argparser()`` body has NO heavy imports either (must be
-      cheap so panels can introspect it without paying the NGSolve cost).
+      cheap so DesignSpecs can inspect it without paying the NGSolve cost).
   C6. No function uses ``TaskManager`` BEFORE importing it (the late-
       import UnboundLocalError trap -- keiko 100号機 2026-05-30).
       Already covered by validation_test/panels/test_taskmanager_scoping.py; we
       re-run it here so this script is a complete one-stop audit.
 
-For desktop panel modules:
+For retired interface modules:
 
   P0. New ``src/radia/radia_*.py`` desktop panel modules are forbidden.
-      Analysis panels now live as notebook workbenches; the active GUI gate is
-      ``validation_test/panels/test_notebook_workbench.py``.  The only
+      Human application interfaces now live as Simulink blocks. The only
       allowed ``radia_*.py`` non-panel shim is ``radia_ngsolve.py``.
+  P1. EM, PCB, Motor, and Stream Function notebook adapters/workbenches are
+      forbidden. IH is the temporary comparison exception.
 
 Exit code 0 = clean; non-zero = violations printed and counted.
 
@@ -48,6 +49,18 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CALC_DIR = ROOT / "src" / "radia" / "panels"
 PANEL_DIR = ROOT / "src" / "radia"
 ALLOWED_RADIA_SHIMS = {"radia_ngsolve.py"}
+FORBIDDEN_WORKBENCH_MODULES = {
+    "em_notebook.py",
+    "pcb_notebook.py",
+    "motor_notebook.py",
+    "streamfunction_notebook.py",
+}
+FORBIDDEN_WORKBENCH_NOTEBOOKS = {
+    "radia_em.ipynb",
+    "radia_pcb.ipynb",
+    "radia_motor.ipynb",
+    "radia_streamfunction.ipynb",
+}
 
 # Modules that are NEVER allowed at top-of-file in either calc_*.py or
 # radia_*.py panel modules.  Either they trigger long imports
@@ -257,18 +270,27 @@ def main() -> int:
             rel = f.relative_to(ROOT).as_posix()
             viols.append(
                 f"{rel}: P0 retired desktop panel module present -- "
-                "promote analysis UI through DesignSpec + notebook workbench")
+                "promote analysis UI through DesignSpec + Simulink block")
+    for name in sorted(FORBIDDEN_WORKBENCH_MODULES):
+        path = PANEL_DIR / name
+        if path.exists():
+            viols.append(f"{path.relative_to(ROOT).as_posix()}: P1 retired non-IH workbench adapter present")
+    notebook_dir = CALC_DIR / "notebooks"
+    for name in sorted(FORBIDDEN_WORKBENCH_NOTEBOOKS):
+        path = notebook_dir / name
+        if path.exists():
+            viols.append(f"{path.relative_to(ROOT).as_posix()}: P1 retired non-IH workbench present")
 
     if viols:
-        print(f"Panel contract: {len(viols)} VIOLATION(S)")
+        print(f"Application contract: {len(viols)} VIOLATION(S)")
         for v in viols:
             print(f"  {v}")
         print()
         print(f"Audited {len(calcs)} calc_*.py + "
               f"{len(panels)} radia_*.py guard file(s).")
-        print("See src/radia/CONVENTIONS.md for the notebook panel pattern.")
+        print("See src/radia/CONVENTIONS.md for the Simulink application pattern.")
         return 1
-    print(f"Panel contract: CLEAN "
+    print(f"Application contract: CLEAN "
           f"({len(calcs)} calc_*.py + {len(panels)} radia_*.py guard file(s))")
     return 0
 

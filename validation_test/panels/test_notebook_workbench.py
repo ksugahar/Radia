@@ -1,7 +1,6 @@
-"""Notebook panel workbench contracts.
+"""IH notebook comparison and application-interface manifest contracts.
 
-These tests keep the promoted ipynb panels usable from Jupyter without
-requiring PySide6 or a live notebook server.
+Only IH keeps a Jupyter workbench while its Simulink operation is evaluated.
 """
 
 from __future__ import annotations
@@ -11,17 +10,9 @@ from pathlib import Path
 import sys
 import time
 
-from radia.em_notebook import EMWorkbench
-from radia.em_design import EMDesignSpec
 from radia.ih_design import IHDesignSpec, METHOD_PEEC_IND
 from radia.ih_notebook import IHWorkbench
-from radia.motor_design import ANALYSIS_LAMINATION, MotorDesignSpec
-from radia.motor_notebook import MotorWorkbench
 from radia.notebook_workbench import CommandWorkbench
-from radia.pcb_design import PCBDesignSpec
-from radia.pcb_notebook import PCBWorkbench
-from radia.streamfunction_design import StreamFunctionDesignSpec
-from radia.streamfunction_notebook import StreamFunctionWorkbench
 
 
 class EchoSpec:
@@ -139,76 +130,54 @@ def test_background_run_can_be_cancelled(tmp_path: Path):
     assert payload["radia_result"]["status"] == "cancelled"
 
 
-def test_promoted_workbenches_have_app_specific_run_roots():
+def test_ih_comparison_workbench_has_app_specific_run_root():
     assert str(IHWorkbench().run_root).endswith("radia_ih")
-    assert str(EMWorkbench().run_root).endswith("radia_em")
-    assert str(PCBWorkbench().run_root).endswith("radia_pcb")
-    assert str(MotorWorkbench().run_root).endswith("radia_motor")
-    assert str(StreamFunctionWorkbench().run_root).endswith("radia_streamfunction")
 
 
-def test_promoted_workbenches_build_headless_commands():
-    cases = [
-        (EMWorkbench(EMDesignSpec(coil_script="coil.py")), "calc_accel_magnet.py"),
-        (
-            IHWorkbench(IHDesignSpec(method=METHOD_PEEC_IND, peec_step="coil.step")),
-            "calc_inductance.py",
-        ),
-        (PCBWorkbench(PCBDesignSpec(inp="board.inp")), "calc_pcb_peec.py"),
-        (
-            MotorWorkbench(MotorDesignSpec(analysis=ANALYSIS_LAMINATION)),
-            "calc_motor_lamination.py",
-        ),
-        (
-            StreamFunctionWorkbench(
-                StreamFunctionDesignSpec(coil_vol="coil.vol", eval_vol="eval.vol")
-            ),
-            "calc_streamfunction.py",
-        ),
-    ]
-
-    for workbench, script_name in cases:
-        command = workbench.build_command()
-        assert any(script_name in part for part in command), command
+def test_ih_comparison_workbench_builds_headless_command():
+    workbench = IHWorkbench(
+        IHDesignSpec(method=METHOD_PEEC_IND, peec_step="coil.step")
+    )
+    command = workbench.build_command()
+    assert any("calc_inductance.py" in part for part in command), command
 
 
 def test_spec_cell_source_makes_notebook_initial_values_canonical():
-    workbench = EMWorkbench(EMDesignSpec(coil_script="coil.py", n_steps=3))
+    workbench = IHWorkbench(
+        IHDesignSpec(method=METHOD_PEEC_IND, peec_step="coil.step")
+    )
 
     source = workbench.spec_cell_source()
 
-    assert "from radia.em_design import EMDesignSpec" in source
-    assert "from radia.em_notebook import EMWorkbench" in source
-    assert "EMDesignSpec(**" in source
-    assert "'coil_script': 'coil.py'" in source
-    assert "'n_steps': 3" in source
+    assert "from radia.ih_design import IHDesignSpec" in source
+    assert "from radia.ih_notebook import IHWorkbench" in source
+    assert "IHDesignSpec(**" in source
+    assert "'peec_step': 'coil.step'" in source
     assert "json" not in source.lower()
 
 
-def test_panel_notebooks_are_marked_as_local_runner():
+def test_application_manifest_records_simulink_first_and_ih_dual_state():
     manifest_path = (
         Path(__file__).resolve().parents[2]
         / "src"
         / "radia"
         / "panels"
-        / "notebooks"
-        / "panel_notebook_manifest.json"
+        / "application_interface_manifest.json"
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    states = {panel["id"]: panel["state"] for panel in manifest["panels"]}
+    states = {item["id"]: item["state"] for item in manifest["applications"]}
 
-    for panel_id in (
-        "radia-ih",
+    for application_id in (
         "radia-em",
         "radia-pcb",
         "radia-motor",
         "radia-streamfunction",
     ):
-        assert states[panel_id] == "active-local-runner"
+        assert states[application_id] == "active-simulink-block"
+    assert states["radia-ih"] == "active-dual-comparison"
     assert states["radia-export-menu"] == "active-cubit-toolbar"
-    assert "calc_*.py CLI arguments" in manifest["policy"]
-    assert "DesignSpec settings" in manifest["policy"]
-    assert "previous in-repo result artifacts" in manifest["policy"]
+    assert manifest["library"]["artifact"] == "matlab/radia_simulink_library.slx"
+    assert manifest["library"]["backend"] == "python-headless-cli"
 
 
 def test_panel_notebooks_do_not_import_pyside():
@@ -226,7 +195,7 @@ def test_panel_notebooks_do_not_import_pyside():
         assert "PyQt" not in text
 
 
-def test_active_panel_notebooks_use_designspec_cells_for_initial_values():
+def test_only_ih_analysis_notebook_remains():
     notebook_dir = (
         Path(__file__).resolve().parents[2]
         / "src"
@@ -234,23 +203,18 @@ def test_active_panel_notebooks_use_designspec_cells_for_initial_values():
         / "panels"
         / "notebooks"
     )
-    active = {
-        "radia_em.ipynb": "EMDesignSpec",
-        "radia_ih.ipynb": "IHDesignSpec",
-        "radia_pcb.ipynb": "PCBDesignSpec",
-        "radia_motor.ipynb": "MotorDesignSpec",
-        "radia_streamfunction.ipynb": "StreamFunctionDesignSpec",
+    analysis_notebooks = {
+        path.name for path in notebook_dir.glob("radia_*.ipynb")
+        if path.name != "radia_export_menu.ipynb"
     }
-
-    for notebook_name, spec_name in active.items():
-        text = (notebook_dir / notebook_name).read_text(encoding="utf-8")
-        assert f"from radia." in text
-        assert f"import {spec_name}" in text
-        assert f"spec = {spec_name}()" in text
-        assert "JSON files are run artifacts, not preset storage" in text
+    assert analysis_notebooks == {"radia_ih.ipynb"}
+    text = (notebook_dir / "radia_ih.ipynb").read_text(encoding="utf-8")
+    assert "from radia.ih_design import IHDesignSpec" in text
+    assert "spec = IHDesignSpec()" in text
+    assert "JSON files are run artifacts, not preset storage" in text
 
 
-def test_active_panel_notebooks_include_panel_notes():
+def test_ih_notebook_includes_comparison_workbench_notes():
     notebook_dir = (
         Path(__file__).resolve().parents[2]
         / "src"
@@ -258,23 +222,15 @@ def test_active_panel_notebooks_include_panel_notes():
         / "panels"
         / "notebooks"
     )
-    active_names = (
-        "radia_em.ipynb",
-        "radia_ih.ipynb",
-        "radia_pcb.ipynb",
-        "radia_motor.ipynb",
-        "radia_streamfunction.ipynb",
-    )
-
-    for notebook_name in active_names:
-        text = (notebook_dir / notebook_name).read_text(encoding="utf-8")
-        assert "## Notebook Panel Notes" in text
-        assert "This notebook is the panel" in text
-        assert "app-specific `calc_*.py` CLI" in text
-        assert "DesignSpec" in text
-        assert "Run local" in text
-        assert "netgen.webgui" in text
-        assert "GMSH `.msh v4.1`" in text
+    text = (notebook_dir / "radia_ih.ipynb").read_text(encoding="utf-8")
+    assert "## Notebook Panel Notes" in text
+    assert "IH comparison workbench" in text
+    assert "Simulink block" in text
+    assert "app-specific `calc_*.py` CLI" in text
+    assert "DesignSpec" in text
+    assert "Run local" in text
+    assert "netgen.webgui" in text
+    assert "GMSH `.msh v4.1`" in text
 
 
 def test_ih_notebook_carries_esim_and_previous_result_notes():

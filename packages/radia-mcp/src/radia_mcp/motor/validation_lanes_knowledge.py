@@ -106,11 +106,11 @@ LANES: dict[str, MotorValidationLane] = {
         ),
         public_evidence=(
             "tests/test_airgap_element.py",
-            "tests/test_airgap_ngsolve_coupling.py",
-            "tests/test_airgap_two_region.py",
-            "tests/test_airgap_machine_rotation.py",
-            "tests/test_airgap_eddy_machine.py",
-            "tests/test_build123d_ipm_age_torque.py",
+            "validation_test/radia_mcp/test_airgap_ngsolve_coupling.py",
+            "validation_test/radia_mcp/test_airgap_two_region.py",
+            "validation_test/radia_mcp/test_airgap_machine_rotation.py",
+            "validation_test/radia_mcp/test_airgap_eddy_machine.py",
+            "validation_test/radia_mcp/test_build123d_ipm_age_torque.py",
         ),
         private_reference_sources=(
             "product local reference",
@@ -305,9 +305,10 @@ and the shared mesh/material registry.  Attach the comparison with
 For an NGSolve+AGE slot:
 
 ```powershell
-python -m pytest tests\\test_airgap_element.py tests\\test_airgap_ngsolve_coupling.py `
-  tests\\test_airgap_two_region.py tests\\test_airgap_machine_rotation.py `
-  tests\\test_airgap_eddy_machine.py
+python -m pytest packages\\radia-mcp\\tests\\test_airgap_element.py `
+  validation_test\\radia_mcp\\test_airgap_ngsolve_coupling.py `
+  validation_test\\radia_mcp\\test_airgap_two_region.py validation_test\\radia_mcp\\test_airgap_machine_rotation.py `
+  validation_test\\radia_mcp\\test_airgap_eddy_machine.py
 ```
 
 Then attach the private/local solver comparison as an artifact with

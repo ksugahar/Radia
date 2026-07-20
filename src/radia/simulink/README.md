@@ -4,6 +4,21 @@ This directory contains the Simulink boundary for production Radia reduced
 models.  The numerical kernels remain in the Radia C++ API; the Simulink
 files only define the block contract and marshal MATLAB arrays.
 
+## Application blocks
+
+The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
+Function, and Induction Heating are built by
+`matlab/+radia/+simulink/buildLibrary.m`. Their initial backend is
+`radia.simulink.application`: a boolean rising trigger launches the validated
+`DesignSpec`/headless Python CLI once and records `command.txt`, `run.log`,
+`solver_result.json`, and versioned `result.json`. It is not a per-time-step
+Python bridge.
+
+MEX/ROM remains an optional backend promotion. Compilation alone is not a
+production gate; numerical parity, failure propagation, handle lifecycle, and
+long-run stability must pass while the block mask and port contract stay
+unchanged. IH temporarily keeps its notebook workbench for comparison.
+
 ## Motor ROM block
 
 `radia_motor_rom_sfun.cpp` is a fixed-step C-MEX S-function.  Build it from a
@@ -60,8 +75,12 @@ matrix kernels:
 
 * MagLev LTI models use the existing MATLAB `ss` / Simulink State-Space block.
 * Dynamic motor ROMs use `radia_motor_rom_sfun` or an FMI Co-Simulation FMU.
-* HCurl eddy-bubble and HDiv-MMM models will use the same C ABI pattern once
-  their time-domain state and port contracts are finalized.
+* Fixed reduced IH and HCurl Eddy Bubble/CLN models can use
+  `matlab/+radia/+simulink/stateSpaceMexSFunction.m`, backed by the native
+  `simulink.state_space.*` MEX handle commands. Their matrices are copied once
+  at `Start`; no Python process or per-step state-vector transfer is used.
+* Moving height-family models remain MATLAB S-functions because their reduced
+  operators are interpolated as the mechanical state changes.
 
 The C ABI remains the canonical implementation boundary so that Python,
 Simulink, FMI, and other hosts cannot silently acquire different numerical
@@ -117,8 +136,9 @@ ports in the waveform result so a mechanical solver can drive the same plant.
 When Simulink is installed, `radia.simulink.buildIHControlModel` creates a
 fixed-step model with the plant and named outputs. `IncludePID=true` adds a
 temperature-setpoint PID loop with power saturation. The external power
-provider can then be replaced by a Radia LUT, the motor-ROM S-function, or a
-future HCurl/HDiv time-domain block.
+provider can then be replaced by a Radia LUT, the motor-ROM S-function, or the
+native fixed reduced state-space block selected by
+`PlantBlock="radia-mex"`.
 
 For learning and design optimization, wrap a `sim` call or the fast waveform
 function in an objective and use:

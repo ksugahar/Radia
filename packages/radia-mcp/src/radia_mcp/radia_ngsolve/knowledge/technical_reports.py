@@ -459,13 +459,13 @@ Use the detailed topic tool named below after reading the report-level gate.
 | HDiv/VIM and NGSolve-native spaces | ``hdiv_vim`` and ``ngsolve_usage`` |
 | Force error and independent checks | ``force_validation`` |
 | Motor reduced workflows | ``airgap_motor_workflow`` and ``motor_usage`` |
-| Panels and result-bearing workflows | panel design and notebook-workbench knowledge |
+| Application interfaces and result-bearing workflows | Simulink block and DesignSpec/headless knowledge |
 | Release and deployment evidence | ``release_workflow`` and the repository release gate |
 
 When a report idea becomes production code, promote it through the repository's
 validation ladder: fast regression test, numerical validation artifact,
-result-bearing documentation, then a notebook panel only after the method is
-validated.
+result-bearing documentation, then a Simulink application block only after the
+headless method and golden are validated.
 """
 
 SOURCES = r"""

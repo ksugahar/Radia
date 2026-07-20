@@ -8,9 +8,9 @@
 **AI designs. Radia provides the engineering platform.**
 
 Radia is a programmable electromagnetic CAE platform built on
-[NGSolve](https://ngsolve.org/). It connects Python, MCP, Jupyter, CAD,
-meshing, electromagnetic analysis, optimization, and visualization into one
-engineering workflow.
+[NGSolve](https://ngsolve.org/). It connects Python, MCP, Simulink, CAD,
+meshing, electromagnetic analysis, optimization, result-bearing notebooks,
+and visualization into one engineering workflow.
 
 Radia is not another all-in-one solver and it is not a replacement for
 NGSolve. NGSolve remains the numerical foundation. Radia contributes the
@@ -48,6 +48,12 @@ practical design platform.
 - **Use the same engineering APIs from Python and MATLAB.** Radia keeps its C++
   numerical kernels and Python circuit parser as single sources of truth while
   exposing checked MATLAB and Simulink adapters.
+- **Use NGSolve from MATLAB through a native MEX bridge.** Persistent checked
+  handles expose selected NGSolve meshes, finite-element spaces, coefficient
+  and grid functions, forms, vectors, sparse matrices, and HCurl workflows to
+  MATLAB without launching Python for each operation. The bridge preserves
+  NGSolve's ownership of finite-element mathematics and is cross-checked
+  against the Python path.
 
 ```text
              position / velocity
@@ -82,8 +88,8 @@ sl_refresh_customizations
 ```
 
 The Simulink Library Browser then shows one **Radia** library containing the
-LTspice Circuit, Hysteretic LTspice Plant, and Optuna Optimization blocks. For
-the machine-readable setup and compatibility contract, ask the
+Electromagnet, PCB PEEC, Motor, Stream Function, Induction Heating, LTspice,
+and Optuna blocks. For the machine-readable setup and compatibility contract, ask the
 `mcp-server-radia-matlab` tool `matlab_simulink_library_contract`.
 
 ## The central idea
@@ -112,9 +118,10 @@ The platform is designed for a complete engineering loop:
             +--> Optimization, validation, and visualization
                     Python, Jupyter, Gmsh, Netgen, result artifacts
 
-An LLM can write and execute the Python workflow through MCP. A human can
-inspect the same workflow in a notebook or application panel. The interfaces
-are different; the engineering model and validation artifacts are shared.
+An LLM can write and execute the Python workflow through MCP. A human operates
+the application through Simulink and inspects durable results in docs notebooks
+or native visualization tools. IH temporarily keeps a comparison workbench.
+The interfaces differ; the engineering model and validation artifacts are shared.
 
 ## Architecture
 
@@ -123,7 +130,7 @@ Radia is organized as three layers.
 | Layer | Responsibility |
 | :--- | :--- |
 | **Application** | Magnet design, Hodograph, VIM, Eddy, Stream Function, induction heating, MagLev, motors, and other concrete workflows |
-| **Platform** | Python APIs, MCP servers, Jupyter workbenches, build123d, Cubit, Gmsh, Netgen, validation, and result artifacts |
+| **Platform** | Python APIs, MCP servers, Simulink application blocks, docs notebooks, build123d, Cubit, Gmsh, Netgen, validation, and result artifacts |
 | **Numerical** | NGSolve finite elements and ngsolve.bem for spaces, transformations, quadrature, weak forms, BEM operators, and linear algebra |
 
 The boundary between these layers matters. Radia should extend NGSolve at the
@@ -324,7 +331,8 @@ The intended workflow is:
    the result.
 5. Optimization varies the design while preserving the model and its
    provenance.
-6. Jupyter, Gmsh, or Netgen presents the durable result to a human engineer.
+6. Simulink provides the operating surface; docs notebooks, Gmsh, or Netgen
+   present the durable result to a human engineer.
 
 Humans remain in the loop for assumptions, physical interpretation, and
 release decisions. AI automation is valuable because the workflow is
@@ -335,7 +343,7 @@ executable and inspectable, not because it removes engineering judgment.
 The [radia-mcp package](packages/radia-mcp/) provides MCP servers and
 knowledge tools for the Radia ecosystem. It covers Radia and NGSolve
 workflows as well as Cubit, Gmsh, build123d, PEEC, optimization, analytical
-references, panel workbenches, and validation.
+references, Simulink application contracts, and validation.
 
 Install it separately when an MCP client is available:
 
@@ -435,16 +443,50 @@ Radia fields can be supplied to NGSolve as native coefficient functions:
 The NGSolve mesh, finite-element space, mapped evaluation, and assembly stay
 in NGSolve. Radia supplies the electromagnetic source term.
 
-## Jupyter workbenches
+### Native NGSolve MEX bridge for MATLAB
 
-The canonical human-facing panels are notebook workbenches. They wrap the
-same headless calculation scripts used by automation and produce durable
-run.log and result.json artifacts.
+Radia also makes selected NGSolve workflows directly usable from MATLAB. The
+native MEX gateway keeps checked `uint64` handles for `Mesh`, `FESpace`,
+`CoefficientFunction`, `GridFunction`, `BilinearForm`, `LinearForm`, `Vector`,
+and `Matrix` objects. MATLAB can assemble finite-element operators, inspect
+sparse matrices in NGSolve's global degree-of-freedom ordering, and run
+HCurl-based reduced and topology workflows without starting a Python process
+for each operation.
+
+This bridge is valuable in its own right: it lets MATLAB and Simulink users
+build on NGSolve's mature finite-element foundation while sharing Radia's C++
+electromagnetic kernels and artifact contracts. It is not a fork or a
+reimplementation of NGSolve, and it does not claim to duplicate the complete
+NGSolve Python API. NGSolve still owns spaces, orientation, transformations,
+Piola maps, curved geometry, quadrature, assembly, and field evaluation.
+
+The MEX contracts are tested against the corresponding Python/NGSolve results,
+including complex state/adjoint conventions, matrix layout, and HCurl
+multifrequency topology gradients. See the
+[MATLAB integration guide](matlab/README.md) for the supported surface, build
+instructions, and runtime requirements.
+
+## Simulink application blocks
+
+The canonical human-facing interfaces are masked blocks in the single Radia
+Simulink library: Electromagnet, PCB PEEC, Motor, Stream Function, and
+Induction Heating. Each block delegates to the same `DesignSpec` and headless
+calculation used by Python/MCP, always writes `run.log` and `result.json`, and
+adds solver artifacts when execution reaches that stage.
+
+    addpath("matlab")
+    radia.setup()
+    radia.simulink.buildLibrary()
+
+The initial application-block backend launches the validated Python CLI only
+on a rising trigger; it does not start Python every simulation step. Promoting
+an individual application block to a MEX/ROM backend remains optional and
+requires parity and long-run testing. The native NGSolve MEX bridge above is a
+separately supported platform capability, not merely a future block backend.
+
+IH temporarily keeps its notebook workbench for an operational comparison:
 
     python -m jupyter lab src/radia/panels/notebooks/radia_ih.ipynb
-    python -m jupyter lab src/radia/panels/notebooks/radia_em.ipynb
-    python -m jupyter lab src/radia/panels/notebooks/radia_pcb.ipynb
-    python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
 
 The Cubit toolbar is a separate, Cubit-embedded integration surface. Normal
 Radia Python workflows do not install or depend on Cubit's private PySide
@@ -461,7 +503,7 @@ runtime.
 - [Induction heating](docs/induction_heating/README.md)
 - [Electric machines](docs/electric_machine/README.md)
 - [API reference](docs/api/API_REFERENCE.md)
-- [Panel development](docs/panels/ADDING_NEW_PANEL.md)
+- [Simulink application-block development](docs/panels/ADDING_NEW_PANEL.md)
 - [Cubit mesh export](docs/cubit_mesh_export/README.md)
 - [Build from source](BUILD.md)
 - [MCP package and tool catalog](packages/radia-mcp/README.md)

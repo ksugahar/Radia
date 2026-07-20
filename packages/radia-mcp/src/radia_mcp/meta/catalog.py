@@ -74,7 +74,9 @@ CATALOG: dict[str, dict[str, Any]] = {
             "cubit",
             "fem",
             "gmsh",
+            "radia-acoustic",
             "radia-matlab",
+            "acoustic-fembem",
             "mathematica",
             "matrix-solvers",
             "mor",
@@ -86,10 +88,36 @@ CATALOG: dict[str, dict[str, Any]] = {
     "radia-matlab": {
         "subpackage": "radia_mcp.matlab",
         "entry_point": "mcp-server-radia-matlab",
-        "description": "Official MATLAB MCP composition and generic ML/RL gates",
-        "primary_tools": ["matlab_extension_contract", "matlab_official_server_config"],
-        "related": ["radia-ngsolve"],
+        "description": "Official MATLAB MCP composition, Radia/NGSolve MEX "
+                       "capability contract, table-backed Optuna-like "
+                       "optimization, and 43 generic ML/RL gates",
+        "primary_tools": ["matlab_agent_guide",
+                            "matlab_extension_contract",
+                            "matlab_official_server_config",
+                            "matlab_radia_mex_contract",
+                            "matlab_optuna_simulink_contract",
+                            "matlab_radia_acoustic_interface_contract"],
+        "related": ["acoustic-fembem", "radia-ngsolve"],
         "tags": ["ml", "solver"],
+    },
+    "acoustic-fembem": {
+        "subpackage": "radia_mcp.acoustic_fembem",
+        "entry_point": "mcp-server-acoustic-fembem",
+        "description": "Readable MATLAB P1 acoustic FEM/BEM education solver, "
+                       "convolution quadrature, and validation gates",
+        "primary_tools": ["acoustic_fembem_agent_guide",
+                            "acoustic_fembem_extension_contract",
+                            "acoustic_fembem_server_config"],
+        "related": ["radia-matlab", "radia-ngsolve", "bem", "fem"],
+        "tags": ["fem", "theory"],
+    },
+    "radia-acoustic": {
+        "subpackage": "radia_mcp.radia_acoustic",
+        "entry_point": "mcp-server-radia-acoustic",
+        "description": "Production NGSolve/ngsolve.bem acoustics, FSI, and CQ",
+        "primary_tools": ["radia_acoustic_usage", "radia_acoustic_fsi_preflight", "radia_acoustic_cq_grid"],
+        "related": ["radia-ngsolve", "bem"],
+        "tags": ["fem", "solver"],
     },
     "radia-streamfunction": {
         "subpackage": "radia_mcp.streamfunction",
@@ -122,6 +150,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "pinn",
             "radia-ngsolve",
             "team-benchmark",
+            "acoustic-fembem",
         ],
         "tags": ["fem", "theory"],
     },
@@ -136,6 +165,8 @@ CATALOG: dict[str, dict[str, Any]] = {
             "peec",
             "radia-ngsolve",
             "team-benchmark",
+            "acoustic-fembem",
+            "radia-acoustic",
         ],
         "tags": ["fem", "theory"],
     },
@@ -432,7 +463,12 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-mathematica",
         "description": "Mathematica recipes: vector calc, Kelvin transform, "
                        "symbolic Maxwell, evaluation pipeline",
-        "primary_tools": ["mathematica_recipes", "mathematica_status"],
+        "primary_tools": [
+            "mathematica_verification_guide",
+            "mathematica_check_identities",
+            "mathematica_run_script",
+            "mathematica_status",
+        ],
         "related": ["differential-forms", "radia-ngsolve", "md2html"],
         "tags": ["theory"],
     },
@@ -496,6 +532,9 @@ CATALOG: dict[str, dict[str, Any]] = {
             "poster",
             "document-meta",
             "chart2d",
+            "pdf",
+            "bibliography",
+            "research-project",
         ],
         "tags": ["meta"],
     },
@@ -504,11 +543,14 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-grant-writing",
         "description": "Grant proposal helpers: Japanese technical-prose "
                        "lint, section coverage, budget alignment, "
-                       "recommendation-letter template, and KDDI Digital "
-                       "Innovation social-implementation checks.",
+                       "internal-to-external scale, recommendation-letter "
+                       "template, and KDDI Digital Innovation and KAKENHI "
+                       "OSS-platform checks.",
         "primary_tools": ["grant_writing_usage",
                             "grant_writing_health_report",
                             "grant_writing_kddi_digital_check",
+                            "grant_writing_kaken_oss_platform_check",
+                            "grant_writing_internal_evidence_to_external_scale_check",
                             "grant_writing_recommendation_letter_template"],
         "related": ["paper-writing", "document-meta"],
         "tags": ["meta"],
@@ -539,7 +581,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
-        "related": ["meta", "md2html"],
+        "related": ["meta", "md2html", "bibliography"],
         "tags": ["meta"],
     },
     "document-meta": {
@@ -561,7 +603,42 @@ CATALOG: dict[str, dict[str, Any]] = {
             "paper-writing",
             "grant-writing",
             "poster",
+            "pdf",
+            "doc-convert",
+            "research-project",
         ],
+        "tags": ["meta"],
+    },
+    "pdf": {
+        "subpackage": "radia_mcp.pdf",
+        "entry_point": "mcp-server-pdf",
+        "description": "PDF inspection, text extraction, compression, cropping, metadata, and font-embedding checks.",
+        "primary_tools": ["pdf_inspect", "pdf_extract_text", "pdf_health_report"],
+        "related": ["document-meta", "paper-writing", "doc-convert"],
+        "tags": ["meta"],
+    },
+    "doc-convert": {
+        "subpackage": "radia_mcp.doc_convert",
+        "entry_point": "mcp-server-doc-convert",
+        "description": "Document conversion and extraction helpers for slides, speaker notes, title images, and OCR workflows.",
+        "primary_tools": ["doc_convert_classify", "doc_convert_extract_slides", "doc_convert_extract_speaker_notes"],
+        "related": ["document-meta", "pdf"],
+        "tags": ["meta"],
+    },
+    "bibliography": {
+        "subpackage": "radia_mcp.bibliography",
+        "entry_point": "mcp-server-bibliography",
+        "description": "Bibliography conversion, normalization, deduplication, lint, and citation validation.",
+        "primary_tools": ["bibliography_lint", "bibliography_dedupe", "bibliography_cite_validation"],
+        "related": ["paper-writing", "literature-index"],
+        "tags": ["meta"],
+    },
+    "research-project": {
+        "subpackage": "radia_mcp.research_project",
+        "entry_point": "mcp-server-research-project",
+        "description": "Research-project scanning, consistency checks, deadline planning, and health dashboards.",
+        "primary_tools": ["research_project_scan", "research_project_consistency_check", "research_project_health_dashboard"],
+        "related": ["document-meta", "paper-writing"],
         "tags": ["meta"],
     },
 
@@ -582,14 +659,14 @@ CATALOG: dict[str, dict[str, Any]] = {
     },
 
     # ============================================================
-    # Panel review (Radia notebook panel contract)
+    # Panel review (Radia Simulink application-block contract)
     # ============================================================
     "panel-review": {
         "subpackage": "radia_mcp.panel_review",
         "entry_point": "mcp-server-panel-review",
-        "description": "Radia notebook panel review and construction "
-                       "contract (DesignSpec / Workbench / result "
-                       "artifacts / validation_test / no-PySide gate), "
+        "description": "Radia Simulink application-block review and construction "
+                       "contract (DesignSpec / masks / typed ports / result "
+                       "artifacts / validation / no-PySide gate), "
                        "including the cubit_panels migration route.",
         "primary_tools": ["panel_review"],
         "related": ["electromagnet", "ih", "motor"],
@@ -685,10 +762,15 @@ _ALIASES = {
 # Auto-generate underscore variants for every hyphenated catalog key
 # (e.g. 'magnetic-materials' resolves from both 'magnetic-materials' and
 # 'magnetic_materials').  Done once at module import to keep `get()` O(1).
-for _k in list(CATALOG.keys()):
+for _k, _info in CATALOG.items():
     if "-" in _k:
         _ALIASES.setdefault(_k.replace("-", "_"), _k)
-del _k  # don't leak the loop variable
+    _command = _info["entry_point"]
+    _server_id = _command.removeprefix("mcp-server-")
+    _ALIASES.setdefault(_server_id, _k)
+    _ALIASES.setdefault(_server_id.replace("-", "_"), _k)
+    _ALIASES.setdefault(_command, _k)
+del _k, _info, _command, _server_id  # don't leak loop variables
 
 
 def _resolve(name: str) -> str | None:
@@ -728,6 +810,11 @@ def _entry(name: str, info: dict[str, Any]) -> dict[str, Any]:
     out = {"name": name, **info}
     entry_point = info.get("entry_point")
     if entry_point:
+        server_id = entry_point.removeprefix("mcp-server-")
+        out.setdefault("server_id", server_id)
+        out.setdefault("product_name", f"radia-mcp.{server_id}")
+        out.setdefault("python_name", info.get("subpackage"))
+        out.setdefault("command", entry_point)
         out.setdefault("selftest_command", f"{entry_point} --selftest")
     return out
 

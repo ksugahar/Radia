@@ -207,10 +207,15 @@ from ._hcurl_tet_interaction import (  # noqa: F401
     HCurlCellVolumeInteraction,
     NgsolveHCurlTetVolumeInteraction,
     NgsolveHCurlCellVolumeInteraction,
+    SampleNgsolveHCurlCellSubtetVelocities,
 )
 from ._hcurl_planar_interaction import (  # noqa: F401
     HCurlPlanarVolumeInteraction,
     NgsolveHCurlPlanarVolumeInteraction,
+)
+from ._matlab_bridge import (  # noqa: F401
+    ExportHCurlEddyCLNJSON,
+    ExportHCurlEddyCLNFamilyJSON,
 )
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
@@ -361,8 +366,10 @@ __all__ = [
     "NGSolveProjectedInteraction", "CoupledReducedOperator",
     "HCurlHMatrixOperator", "HCurlTetVolumeInteraction", "HCurlCellVolumeInteraction",
     "NgsolveHCurlTetVolumeInteraction", "NgsolveHCurlCellVolumeInteraction",
+    "SampleNgsolveHCurlCellSubtetVelocities",
     "HCurlPlanarVolumeInteraction", "NgsolveHCurlPlanarVolumeInteraction",
     "HCurlEddyCLNModel", "HCurlEddyCLNFromVIM",
+    "ExportHCurlEddyCLNJSON", "ExportHCurlEddyCLNFamilyJSON",
     "CurrentMagneticFluxDensitySamples", "MagnetizationCurrentCoupling",
     "EVRSTMethodAlgebra", "ReducedPortAdmittance", "ReducedPortImpedance",
     "SharedMeshMaterialModel", "HCurlVIMHDivMMMSolution",

@@ -24,8 +24,9 @@ _RADIA_MCP_ROOT = _SRC / "radia_mcp"
 # is not importable, including imports under tests/ subdirectories and missing
 # optional dependencies reached through a project module such as
 # `radia_mcp.radia_ngsolve.solve -> ngsolve`.
-# On LAB / the self-hosted runner (everything installed) nothing is skipped and
-# every test runs (no coverage lost: a present dependency is never "absent").
+# On LAB / a full-dependency runner, every remaining package test runs. Actual
+# Netgen/NGSolve solves, convergence studies, and solver comparisons live in
+# the repository-level `validation_test/radia_mcp/` suite instead.
 #
 # RADIA_MCP_FORCE_MINIMAL=1 reproduces the matrix's minimal env on a full-env
 # box (for tools/ci_preflight.py): treat everything OUTSIDE the minimal

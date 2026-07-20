@@ -482,6 +482,7 @@ def _project_cell_currents_to_subtets(
         dtype=float,
     )
     cell_verts = np.empty((subtet_count, 4, 3), dtype=float)
+    subtet_parent = np.empty(subtet_count, dtype=np.int32)
     coordinate = ng.CF((ng.x, ng.y, ng.z))
     residual_sq = 0.0
     field_sq = 0.0
@@ -490,7 +491,7 @@ def _project_cell_currents_to_subtets(
     family_subtet_counts: dict[str, int] = {}
     subtet = 0
 
-    for element, family in zip(elements, families):
+    for parent_cell, (element, family) in enumerate(zip(elements, families)):
         physical_vertices = np.asarray(
             [mesh[vertex].point for vertex in element.vertices],
             dtype=float,
@@ -521,6 +522,7 @@ def _project_cell_currents_to_subtets(
                 copy=True,
             ).reshape(4, 3)
             cell_verts[subtet] = physical_tet
+            subtet_parent[subtet] = parent_cell
             jacobian = np.column_stack(
                 (
                     physical_tet[1] - physical_tet[0],
@@ -621,6 +623,7 @@ def _project_cell_currents_to_subtets(
         "max_vandermonde_condition": condition,
         "cell_count": len(elements),
         "subtet_count": subtet_count,
+        "subtet_parent": subtet_parent,
         "mode_count": n_modes,
         "family_subtet_counts": family_subtet_counts,
         "subdivision_level": subdivision_level,
@@ -823,7 +826,8 @@ class HCurlHMatrixOperator:
     monomial Gram nor the final reduced inductance matrix is materialized.
     """
 
-    def __init__(self, gram, charge_maps, *, mu: float, metadata=None):
+    def __init__(self, gram, charge_maps, *, mu: float, metadata=None,
+                 cell_vertices=None, charge_hosts=None, host_parents=None):
         maps = np.asarray(charge_maps, dtype=float)
         if maps.ndim != 3 or maps.shape[0] != 3:
             raise ValueError("charge_maps must have shape (3, n_charge, n_mode)")
@@ -835,6 +839,16 @@ class HCurlHMatrixOperator:
         if not np.isfinite(mu) or mu <= 0.0:
             raise ValueError("mu must be positive")
         self._gram = gram
+        self._charge_maps = np.array(maps, copy=True)
+        self._cell_vertices = (
+            None if cell_vertices is None else np.asarray(cell_vertices, dtype=float)
+        )
+        self._charge_hosts = (
+            None if charge_hosts is None else np.asarray(charge_hosts, dtype=np.int32)
+        )
+        self._host_parents = (
+            None if host_parents is None else np.asarray(host_parents, dtype=np.int32)
+        )
         flat_map = sp.csr_matrix(maps.reshape(-1, maps.shape[2]))
         gram.configure_vector_charge_map(
             _i32_buffer(flat_map.indptr),
@@ -853,6 +867,79 @@ class HCurlHMatrixOperator:
         )
         self.shape = (int(maps.shape[2]), int(maps.shape[2]))
         self.dtype = np.dtype(float)
+
+    def directional_contractions(self, cell_vertex_velocities, left, right):
+        """Return batched ``left.H @ dL[q] @ right`` without forming ``dL``.
+
+        The scalar-kernel term is contracted on the HACApK cluster leaves.
+        The two HCurl contravariant-Piola map terms are applied matrix-free as
+        ``dB.T G B + B.T G dB``.  Velocities are physical affine-subtet
+        vertex values with shape ``(n_direction,n_subtet,4,3)``.
+        """
+        if self._cell_vertices is None or self._charge_hosts is None:
+            raise NotImplementedError(
+                "directional contraction requires the affine sub-tetrahedron backend"
+            )
+        velocity = np.asarray(cell_vertex_velocities, dtype=float)
+        if velocity.ndim == 3:
+            velocity = velocity[np.newaxis]
+        expected = (len(self._cell_vertices), 4, 3)
+        if velocity.ndim != 4 or velocity.shape[1:] != expected:
+            raise ValueError(
+                f"cell_vertex_velocities must have shape (n_direction,{expected[0]},4,3)"
+            )
+        left = np.asarray(left)
+        right = np.asarray(right)
+        if left.shape != (self.mode_count,) or right.shape != (self.mode_count,):
+            raise ValueError(f"left/right must have shape ({self.mode_count},)")
+        n_direction = velocity.shape[0]
+        empty_faces = np.empty((n_direction, 0, 3, 3), dtype=float)
+        total = np.zeros(n_direction, dtype=np.result_type(left, right, complex))
+
+        def real_kernel_contraction(charge_left, charge_right):
+            return np.asarray(self._gram.directional_derivative_contractions(
+                "tet", np.ascontiguousarray(velocity), empty_faces,
+                np.ascontiguousarray(charge_left, dtype=float),
+                np.ascontiguousarray(charge_right, dtype=float)))
+
+        charge_left = [self._charge_maps[c] @ left for c in range(3)]
+        charge_right = [self._charge_maps[c] @ right for c in range(3)]
+        for zl, zr in zip(charge_left, charge_right):
+            a, b = np.real(zl), np.imag(zl)
+            c, d = np.real(zr), np.imag(zr)
+            total += real_kernel_contraction(a, c) + real_kernel_contraction(b, d)
+            total += 1j * (real_kernel_contraction(a, d) - real_kernel_contraction(b, c))
+
+        vertices = self._cell_vertices
+        edge = np.transpose(vertices[:, 1:] - vertices[:, :1], (0, 2, 1))
+        inverse = np.linalg.inv(edge)
+        for q in range(n_direction):
+            dedge = np.transpose(
+                velocity[q, :, 1:] - velocity[q, :, :1], (0, 2, 1)
+            )
+            gradient = dedge @ inverse
+            trace = np.trace(gradient, axis1=1, axis2=2)
+            dmaps = np.empty_like(self._charge_maps)
+            for component in range(3):
+                dmaps[component].fill(0.0)
+                for source_component in range(3):
+                    coefficient = gradient[
+                        self._charge_hosts, component, source_component
+                    ]
+                    if component == source_component:
+                        coefficient = coefficient - trace[self._charge_hosts]
+                    dmaps[component] += (
+                        coefficient[:, None] * self._charge_maps[source_component]
+                    )
+            for component in range(3):
+                bx = charge_right[component]
+                bl = charge_left[component]
+                dbx = dmaps[component] @ right
+                dbl = dmaps[component] @ left
+                gbx = self._scalar_gram_matvec(bx)
+                gdbx = self._scalar_gram_matvec(dbx)
+                total[q] += np.vdot(dbl, gbx) + np.vdot(bl, gdbx)
+        return self._mu * np.real_if_close(total)
 
     @property
     def T(self):
@@ -889,11 +976,87 @@ class HCurlHMatrixOperator:
             self._gram.apply_configured_demag(np.asarray(vector, dtype=float), True)
         )
 
+    def _scalar_gram_matvec(self, vector: np.ndarray) -> np.ndarray:
+        if np.iscomplexobj(vector):
+            return np.asarray(self._gram.matvec_sym(
+                np.ascontiguousarray(vector.real, dtype=float)
+            )) + 1j*np.asarray(self._gram.matvec_sym(
+                np.ascontiguousarray(vector.imag, dtype=float)
+            ))
+        return np.asarray(self._gram.matvec_sym(
+            np.ascontiguousarray(vector, dtype=float)
+        ))
+
     def matvec(self, vector) -> np.ndarray:
         x = np.asarray(vector)
         if x.ndim != 1 or x.shape[0] != self.mode_count:
             raise ValueError(f"vector must have shape ({self.mode_count},)")
         return self._mu * self._gram_matvec(x)
+
+    def _activation_charge_scale(self, activation, power):
+        if self._charge_hosts is None or self._host_parents is None:
+            raise NotImplementedError(
+                "activation requires the affine sub-tetrahedron parent map"
+            )
+        rho = np.asarray(activation, dtype=float).reshape(-1)
+        parent_count = int(np.max(self._host_parents))+1
+        if rho.shape != (parent_count,):
+            raise ValueError(f"activation must have shape ({parent_count},)")
+        if np.any(~np.isfinite(rho)) or np.any((rho < 0) | (rho > 1)):
+            raise ValueError("activation must be finite and lie in [0,1]")
+        exponent = float(power)
+        if not np.isfinite(exponent) or exponent < 1:
+            raise ValueError("activation power must be finite and at least one")
+        charge_parent = self._host_parents[self._charge_hosts]
+        scale = rho[charge_parent]**exponent
+        derivative = np.zeros_like(rho)
+        if exponent == 1:
+            derivative.fill(1.0)
+        else:
+            derivative = exponent*rho**(exponent-1)
+        return rho, charge_parent, scale, derivative
+
+    def activation_matvec(self, activation, vector, *, power=1.0):
+        """Apply ``mu B(rho).T G B(rho)`` without forming the matrix."""
+        x = np.asarray(vector)
+        if x.shape != (self.mode_count,):
+            raise ValueError(f"vector must have shape ({self.mode_count},)")
+        _, _, scale, _ = self._activation_charge_scale(activation, power)
+        result = np.zeros(self.mode_count, dtype=np.result_type(x, complex))
+        for component in range(3):
+            charge = scale*(self._charge_maps[component]@x)
+            result += self._charge_maps[component].T@(
+                scale*self._scalar_gram_matvec(charge)
+            )
+        return self._mu*np.real_if_close(result)
+
+    def activation_to_dense(self, activation, *, power=1.0):
+        dense = np.column_stack([
+            self.activation_matvec(activation, column, power=power)
+            for column in np.eye(self.mode_count)
+        ])
+        return 0.5*(dense+dense.T)
+
+    def activation_contractions(self, activation, left, right, *, power=1.0):
+        """Return every ``left.H @ dL/drho[e] @ right`` matrix-free."""
+        left = np.asarray(left)
+        right = np.asarray(right)
+        if left.shape != (self.mode_count,) or right.shape != (self.mode_count,):
+            raise ValueError(f"left/right must have shape ({self.mode_count},)")
+        rho, charge_parent, scale, derivative = self._activation_charge_scale(
+            activation, power
+        )
+        result = np.zeros(len(rho), dtype=np.result_type(left, right, complex))
+        for component in range(3):
+            raw_left = self._charge_maps[component]@left
+            raw_right = self._charge_maps[component]@right
+            scaled_left = scale*raw_left
+            scaled_right = scale*raw_right
+            gram_right = self._scalar_gram_matvec(scaled_right)
+            gram_left = self._scalar_gram_matvec(scaled_left)
+            local = np.conj(raw_left)*gram_right + np.conj(gram_left)*raw_right
+            np.add.at(result, charge_parent, derivative[charge_parent]*local)
+        return self._mu*np.real_if_close(result)
 
     def matmat(self, matrix) -> np.ndarray:
         values = np.asarray(matrix)
@@ -1053,6 +1216,9 @@ def _affine_polynomial_hmatrix_operator(
         gram,
         compressed["charge_maps"],
         mu=mu,
+        cell_vertices=projected["cell_verts"],
+        charge_hosts=compressed["charge_host"],
+        host_parents=projected.get("subtet_parent"),
         metadata={
             "scalar_gram_backend": "hacapk-local-polynomial-degree18",
             "uncompressed_charge_count": compressed["uncompressed_charge_count"],
@@ -1346,6 +1512,54 @@ class HCurlCellVolumeInteraction:
             "kernel_epsilon_m": None,
             "geometry": self.geometry_backend,
         }
+
+
+def SampleNgsolveHCurlCellSubtetVelocities(
+    mesh, deformation_modes, interaction, *, materials=None
+) -> np.ndarray:
+    """Sample GetTrafo-compatible deformation fields at analytic sub-TET vertices."""
+    import ngsolve as ng
+
+    if not isinstance(interaction, (HCurlTetVolumeInteraction, HCurlCellVolumeInteraction)):
+        raise TypeError("interaction must be an HCurl volume interaction")
+    operator = interaction.matrix
+    if not isinstance(operator, HCurlHMatrixOperator) or operator._cell_vertices is None:
+        raise NotImplementedError(
+            "shape derivatives currently require the affine/sub-tetrahedron H-matrix backend"
+        )
+    selected = _labels(materials)
+    elements = [
+        element for element in mesh.Elements(ng.VOL)
+        if selected is None or str(element.mat) in selected
+    ]
+    subdivision_level = int(getattr(interaction, "subdivision_level", 0))
+    strategy = str(getattr(interaction, "subdivision_strategy", "uniform"))
+    if strategy not in {"uniform", "pyramid-apex"}:
+        raise NotImplementedError(f"shape derivative does not support {strategy!r}")
+    reference_tets = []
+    element_hosts = []
+    for element_index, element in enumerate(elements):
+        family = _ELEMENT_TYPE_TO_FAMILY.get(str(element.type))
+        if family not in {"tet", "hex", "wedge"}:
+            raise NotImplementedError(
+                "HCurl topology derivatives currently support TET/HEX/WEDGE"
+            )
+        for tet in _reference_subtets(family, subdivision_level, strategy):
+            reference_tets.append(tet)
+            element_hosts.append(element_index)
+    if len(reference_tets) != len(operator._cell_vertices):
+        raise RuntimeError("HCurl analytic sub-TET topology changed since interaction build")
+    modes = tuple(deformation_modes)
+    result = np.empty((len(modes), len(reference_tets), 4, 3), dtype=float)
+    for host, (element_index, points) in enumerate(zip(element_hosts, reference_tets)):
+        rule = ng.IntegrationRule(
+            [tuple(float(value) for value in point) for point in points],
+            [1.0]*4,
+        )
+        mapped = mesh.GetTrafo(elements[element_index])(rule)
+        for mode_index, mode in enumerate(modes):
+            result[mode_index, host] = np.asarray(mode(mapped), dtype=float).reshape(4,3)
+    return result
 
 
 def NgsolveHCurlTetVolumeInteraction(
@@ -1782,4 +1996,5 @@ __all__ = [
     "HCurlCellVolumeInteraction",
     "NgsolveHCurlTetVolumeInteraction",
     "NgsolveHCurlCellVolumeInteraction",
+    "SampleNgsolveHCurlCellSubtetVelocities",
 ]

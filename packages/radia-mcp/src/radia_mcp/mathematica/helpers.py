@@ -21,7 +21,21 @@ LAB / kubota / 学生がよく行う操作:
 
 from __future__ import annotations
 
-from .tools import mathematica_evaluate
+import json
+
+
+def mathematica_evaluate(code: str, timeout: int = 60) -> dict:
+    """Call the low-level bridge lazily to keep both import orders valid."""
+    from .tools import mathematica_evaluate as _evaluate
+
+    return _evaluate(code, timeout=timeout)
+
+
+def _parse_json_output(text: str) -> tuple[object | None, str]:
+    """Use the bridge JSON parser without creating an import cycle."""
+    from .tools import _parse_json_output as _parse
+
+    return _parse(text)
 
 
 # -------------------------------------------------------------------
@@ -134,6 +148,177 @@ def mathematica_check_identity(
     else:
         out["identical"] = None
     return out
+
+
+def mathematica_check_identities(
+    claims: list[dict],
+    timeout: int = 180,
+) -> dict:
+    """Verify several named identities in one Mathematica kernel.
+
+    Each claim is a mapping with ``name``, ``lhs``, ``rhs``, and optional
+    ``assumptions`` keys.  Batching avoids one Wolfram kernel cold start per
+    formula and returns a named pass/fail association suitable for course,
+    paper, and solver-regression checks.
+    """
+    if not claims:
+        return {"ok": False, "error": "claims must contain at least one identity", "claims": []}
+    if len(claims) > 200:
+        return {"ok": False, "error": "at most 200 identities may be checked at once", "claims": []}
+
+    entries: list[str] = []
+    names: list[str] = []
+    for index, claim in enumerate(claims, start=1):
+        if not isinstance(claim, dict):
+            return {"ok": False, "error": f"claim {index} must be an object", "claims": names}
+        name = str(claim.get("name", "")).strip()
+        lhs = str(claim.get("lhs", "")).strip()
+        rhs = str(claim.get("rhs", "")).strip()
+        assumptions = str(claim.get("assumptions", "True")).strip() or "True"
+        if not name or not lhs or not rhs:
+            return {
+                "ok": False,
+                "error": f"claim {index} requires non-empty name, lhs, and rhs",
+                "claims": names,
+            }
+        if name in names:
+            return {"ok": False, "error": f"duplicate claim name: {name}", "claims": names}
+        names.append(name)
+        wolfram_name = json.dumps(name, ensure_ascii=False)
+        entries.append(
+            f"{wolfram_name} -> TrueQ[FullSimplify[({lhs}) == ({rhs}), "
+            f"Assumptions -> ({assumptions})]]"
+        )
+
+    association = ",\n    ".join(entries)
+    code = (
+        "Module[{checks},\n"
+        "  checks = Association[\n    " + association + "\n  ];\n"
+        "  Print[ExportString[<|\"ok\" -> And @@ Values[checks], "
+        "\"checks\" -> checks, \"failures\" -> Keys[Select[checks, Not]]|>, "
+        "\"RawJSON\", \"Compact\" -> True]]\n"
+        "]"
+    )
+    raw = mathematica_evaluate(code, timeout=timeout)
+    process_ok = raw["exit_code"] == 0 and not raw["timed_out"]
+    parsed, parse_error = _parse_json_output(raw["result"]) if process_ok else (None, "")
+    if not process_ok:
+        return {
+            "ok": False,
+            "error": raw["stderr"] or raw["result"] or "wolframscript failed",
+            "claims": names,
+            "code": code,
+            "raw": raw,
+        }
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("ok"), bool):
+        return {
+            "ok": False,
+            "error": f"Mathematica did not return the expected JSON result: {parse_error}",
+            "claims": names,
+            "code": code,
+            "raw": raw,
+        }
+    return {
+        "ok": parsed["ok"],
+        "checks": parsed.get("checks", {}),
+        "failures": parsed.get("failures", []),
+        "claims": names,
+        "code": code,
+        "raw": raw,
+    }
+
+
+def mathematica_verification_guide(topic: str = "electromagnetics") -> dict:
+    """Return the recommended Mathematica verification workflow.
+
+    The guide keeps agents from launching one Wolfram kernel per equation and
+    records what symbolic checks can and cannot establish.  It is deliberately
+    executable-tool oriented: use ``mathematica_check_identities`` for a small
+    collection of independent claims and ``mathematica_run_script`` for a
+    tracked course, paper, or solver verification suite.
+    """
+    normalized = topic.strip().lower().replace("_", "-")
+    aliases = {
+        "em": "electromagnetics",
+        "electromagnetic": "electromagnetics",
+        "course": "electromagnetics",
+        "differential-forms": "differential-forms",
+        "differentialforms": "differential-forms",
+        "forms": "differential-forms",
+        "paper": "paper",
+        "publication": "paper",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"electromagnetics", "differential-forms", "paper"}:
+        return {
+            "ok": False,
+            "error": "topic must be electromagnetics, differential-forms, or paper",
+            "topic": topic,
+        }
+
+    common = {
+        "small_batch": "mathematica_check_identities",
+        "tracked_suite": "mathematica_run_script",
+        "single_exploration": "mathematica_evaluate",
+        "rules": [
+            "Batch named identities in one kernel instead of paying one cold start per formula.",
+            "State assumptions explicitly, including real-valued variables, positivity, and nonzero denominators.",
+            "Test governing equations, limiting cases, dimensions, and sign conventions separately.",
+            "Treat a symbolic pass as equation evidence, not as proof that a Canvas, caption, or physical interpretation is correct.",
+            "Keep reusable verification in a tracked .wls/.wl/.m file and require a final JSON object with ok, checks, and failures.",
+        ],
+        "json_contract": {
+            "ok": True,
+            "checks": {"namedCheck": True},
+            "failures": [],
+        },
+    }
+
+    topic_checks = {
+        "electromagnetics": {
+            "checks": [
+                "Coordinate handedness and basis-vector cross products.",
+                "Gradient, curl, divergence, and gauge-invariance identities.",
+                "Biot-Savart or finite-wire formulas against symmetry-axis and far-field limits.",
+                "Maxwell equations, constitutive substitutions, SI dimensions, and energy derivatives.",
+                "Parameter-dependent formulas at several representative and boundary values.",
+            ],
+            "starter_claims": [
+                {
+                    "name": "curlGradient",
+                    "lhs": "Curl[Grad[phi[x,y,z], {x,y,z}], {x,y,z}]",
+                    "rhs": "{0,0,0}",
+                    "assumptions": "Element[{x,y,z}, Reals]",
+                },
+                {
+                    "name": "divergenceCurl",
+                    "lhs": "With[{aa={a1[x,y,z],a2[x,y,z],a3[x,y,z]}}, Div[Curl[aa,{x,y,z}],{x,y,z}]]",
+                    "rhs": "0",
+                    "assumptions": "Element[{x,y,z}, Reals]",
+                },
+            ],
+        },
+        "differential-forms": {
+            "checks": [
+                "Exterior derivative nilpotency and pullback/exterior-derivative commutation.",
+                "Orientation-sensitive signs, especially straight versus twisted forms under Kelvin inversion.",
+                "Hodge-star scaling with metric, material law, form degree, and spatial dimension.",
+                "Stokes pairings, Whitney degrees of freedom, and weak-form integration by parts.",
+                "Energy-density top forms separately from integrated scalar energy.",
+            ],
+            "companion_server": "mcp-server-differential-forms",
+        },
+        "paper": {
+            "checks": [
+                "Every displayed equation used for a numerical claim.",
+                "Equivalent formulations under the exact assumptions stated in the manuscript.",
+                "Asymptotic limits, parameter domains, units, and sign conventions.",
+                "Numerical spot checks independent of the production implementation.",
+            ],
+            "reporting": "Publish the named checks and failures; keep runtime and raw output in the reproducibility record.",
+        },
+    }
+    return {"ok": True, "topic": normalized, **common, **topic_checks[normalized]}
 
 
 # -------------------------------------------------------------------

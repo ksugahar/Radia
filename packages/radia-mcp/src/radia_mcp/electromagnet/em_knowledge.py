@@ -96,10 +96,10 @@ The coordinate system follows accelerator convention:
 
 Cubit journal files use the SAME coordinate system. No rotation needed.
 
-## Electromagnet notebook workbench modes
+## Electromagnet Simulink block modes
 
-`src/radia/panels/notebooks/radia_em.ipynb` / `EMDesignSpec` exposes
-five Method choices:
+`radia_simulink_library/Applications/Electromagnet` / `EMDesignSpec` exposes
+five Method choices. The non-IH notebook workbench is retired:
 
 | Method | Layer-4 script | Purpose |
 |--------|----------------|---------|
@@ -109,7 +109,7 @@ five Method choices:
 | Kelvin Benchmark | `calc_kelvin_benchmark.py` | Analytical sphere-in-uniform-field check for the Kelvin pipeline |
 | Clebsch hodograph | `calc_clebsch_hodograph.py` | Self-meshed reduced-potential demonstration; forward field quality and Clebsch potentials |
 
-The Clebsch hodograph mode is the panel-facing, verified forward demo.  The
+The Clebsch hodograph mode is the block-facing, verified forward demo.  The
 broader accelerator pole-face inverse-design examples and saturation/end-pack
 studies live under `docs/clebsch_hodograph/`,
 `docs/clebsch_hodograph/demos/`, and the `mcp-server-accelerator`

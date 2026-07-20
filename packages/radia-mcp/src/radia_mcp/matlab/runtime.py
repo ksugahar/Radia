@@ -617,7 +617,7 @@ def matlab_optuna_simulink_contract():
 def matlab_simulink_library_contract():
     """Return the installation and compatibility contract for Radia blocks."""
     return {
-        "schema": "radia-mcp.matlab-simulink-library/v1",
+        "schema": "radia-mcp.matlab-simulink-library/v2",
         "status": "ready",
         "library": "radia_simulink_library",
         "browser_name": "Radia",
@@ -627,10 +627,33 @@ def matlab_simulink_library_contract():
         ],
         "registration_timing": "Run once after installation or after replacing the packaged library.",
         "blocks": [
+            "Applications/Electromagnet",
+            "Applications/PCB PEEC",
+            "Applications/Motor",
+            "Applications/Stream Function",
+            "Applications/Induction Heating",
             "LTspice/LTspice Circuit",
             "LTspice/Hysteretic LTspice Plant",
             "Optimization/Optuna Optimization",
         ],
+        "applications": {
+            "runner": "radia.simulink.application",
+            "matlab_entry_point": "radia.simulink.runApplication",
+            "config_writer": "radia.simulink.writeApplicationConfig",
+            "config_schema": "radia.simulink.application_config.v1",
+            "result_schema": "radia.simulink.application_run.v1",
+            "trigger": "one batch solve on a Boolean rising edge",
+            "initial_backend": "python-headless-cli",
+            "per_step_python": "forbidden",
+            "mex_policy": (
+                "optional only after numerical parity, error propagation, "
+                "state lifecycle, repeated-run, and long-run stability tests"
+            ),
+            "notebook_policy": (
+                "IH temporarily keeps a comparison notebook; EM, PCB, Motor, "
+                "and Stream Function notebook workbenches are retired"
+            ),
+        },
         "ltspice": {
             "supported_distribution": "Current Analog Devices LTspice only",
             "executable": "LTspice.exe",

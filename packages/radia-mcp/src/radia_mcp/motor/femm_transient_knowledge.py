@@ -586,9 +586,11 @@ work (2006/2013) and the Whitney/source-field machinery (1993/1997).
 - JSON stdout: i(t), θ(t), ω(t), T(t), losses
 - Golden test: antunes-equivalent 8-pole BLAC
 
-**Stage 3 — Notebook workbench**: `motor_design.py` /
-`motor_notebook.py` / `panels/notebooks/radia_motor.ipynb` wrapping
-the Stage-2 script.
+**Stage 3 — Simulink application block**:
+`radia_simulink_library/Applications/Motor` wraps `motor_design.py` and the
+Stage-2 script through the explicit-trigger application runner. The Motor
+notebook workbench is retired. Dynamic ROM/MEX paths may replace the backend
+only after parity, lifecycle, and long-run tests.
 
 This module is the **knowledge prerequisite** for Stage 2.
 """

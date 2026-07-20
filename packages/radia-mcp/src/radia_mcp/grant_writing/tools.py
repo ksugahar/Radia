@@ -49,6 +49,35 @@ def _read_text_if_path(text_or_path: str) -> str:
     return s
 
 
+def _prose_for_lint(text: str) -> str:
+    """Remove common LaTeX scaffolding before prose-oriented checks.
+
+    Section-presence and program checks still inspect the original source. This
+    normalization is only for sentence length, hedge, and Japanese prose lint;
+    otherwise template comments and commands are reported as applicant prose.
+    """
+    if "\\" not in text and not re.search(r"(?m)^\s*%", text):
+        return text
+
+    text = re.sub(r"(?m)^\s*%.*$", " ", text)
+    text = re.sub(r"\$[^$]*\$", " 数式 ", text)
+    text = re.sub(
+        r"\\(?:textbf|textit|emph|underline|section|subsection|subsubsection)"
+        r"\*?\{([^{}]*)\}",
+        r" \1 ",
+        text,
+    )
+    text = re.sub(
+        r"\\(?:begin|end|input|include|includegraphics|bibliography|bibliographystyle)"
+        r"\*?(?:\[[^\]]*\])?\{[^{}]*\}",
+        " ",
+        text,
+    )
+    text = re.sub(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?", " ", text)
+    text = text.replace("\\\\", " ").replace("{", " ").replace("}", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _contains_any(text_lower: str, keywords: list[str]) -> list[str]:
     return [kw for kw in keywords if kw.lower() in text_lower]
 
@@ -76,7 +105,7 @@ def grant_writing_analyze_sentences(text: str, max_len: int = 90) -> dict:
     Grant drafts can tolerate denser prose than slides, but application
     reviewers still need a clear one-claim-per-sentence rhythm.
     """
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     sentences = [s.strip() for s in re.split(r"[。．!?！？]", text) if s.strip()]
     if not sentences:
         return {"error": "no sentences found"}
@@ -100,7 +129,7 @@ def grant_writing_analyze_sentences(text: str, max_len: int = 90) -> dict:
 
 def grant_writing_count_weak_expressions(text: str) -> dict:
     """Count hedges and grant-specific non-commitment phrases."""
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     total, by_pattern = scan_hedges(text)
     patterns = dict(HEDGE_PATTERNS)
     patterns.update({
@@ -146,6 +175,118 @@ _KDDI_DIGITAL_AXES = {
     "schedule": ["年度", "1年目", "2年目", "3年目", "スケジュール", "マイルストーン"],
     "budget_alignment": ["予算", "Claude", "Codex", "Fable", "MDX", "計算資源"],
     "applicant_fit": ["三菱電機", "EMC", "IH", "Radia", "NGSolve", "LTspice", "実績"],
+}
+
+_KAKEN_OSS_PLATFORM_AXES = {
+    "academic_question": [
+        "学術的な問い",
+        "学術的問い",
+        "研究課題",
+        "問い",
+        "共同研究サイクル",
+    ],
+    "technical_reports_as_source": [
+        "技術報告",
+        "報告書",
+        "日本語",
+        "知識源",
+        "既存知",
+    ],
+    "lab_silo_and_ai_urgency": [
+        "属研究室化",
+        "研究室単位",
+        "重複実装",
+        "重複開発",
+        "AIが開発を加速",
+        "AIによる開発加速",
+    ],
+    "jpmars_github_governance": [
+        "JP-MARs",
+        "GitHub",
+        "issue",
+        "pull request",
+        "CI",
+        "ライセンス",
+    ],
+    "executable_public_outputs": [
+        "問題仕様",
+        "参照実装",
+        "ベンチマーク",
+        "教材",
+        "mcp-server",
+        "ワークショップ",
+    ],
+    "reuse_and_upstream_first": [
+        "既存OSS",
+        "再利用",
+        "上流貢献",
+        "上流で改良",
+        "meshio",
+        "機能重複",
+    ],
+    "scientific_quality_gate": [
+        "試験データ",
+        "期待値",
+        "許容誤差",
+        "既知制約",
+        "参照実装",
+        "別機関",
+        "CI",
+    ],
+    "ai_machine_reexecution": [
+        "AI",
+        "機械実行",
+        "再実行",
+        "Python/MCP",
+        "環境構築支援",
+        "依存関係",
+    ],
+    "tacit_knowledge_conversion": [
+        "暗黙知",
+        "解析条件",
+        "境界条件",
+        "メッシュ",
+        "収束",
+        "失敗例",
+    ],
+    "domestic_international_collaboration": [
+        "国内外",
+        "国際",
+        "共同実装",
+        "コードレビュー",
+        "TU Wien",
+        "TU Graz",
+        "IGTE",
+    ],
+    "education_and_capacity": [
+        "学生",
+        "若手",
+        "博士",
+        "教育",
+        "技術力",
+        "実装力",
+        "検証力",
+    ],
+    "environment_portability": [
+        "mdx",
+        "Windows",
+        "Linux",
+        "スパコン",
+        "GPU",
+        "ARM",
+        "アーキテクチャ",
+        "可搬",
+        "移植",
+    ],
+    "maintenance_governance": [
+        "運営",
+        "保守",
+        "CI",
+        "リリース",
+        "ドキュメント",
+        "再現性",
+        "貢献者",
+    ],
 }
 
 _BUDGET_POLICY = (
@@ -215,11 +356,19 @@ _POWER_ELECTRONICS_FOCUS_AXES = {
 }
 
 
+def _section_axes_for_program(program: str) -> dict[str, list[str]]:
+    if program == "kddi_digital":
+        return _KDDI_DIGITAL_AXES
+    if program in {"kaken_oss", "kaken_oss_platform"}:
+        return _KAKEN_OSS_PLATFORM_AXES
+    return _GENERIC_AXES
+
+
 def grant_writing_section_presence(text: str, program: str = "generic") -> dict:
     """Check whether a proposal draft contains the expected review axes."""
     text = _read_text_if_path(text)
     low = text.lower()
-    axes = _KDDI_DIGITAL_AXES if program == "kddi_digital" else _GENERIC_AXES
+    axes = _section_axes_for_program(program)
     axis_results = {}
     missing = []
     for axis, keywords in axes.items():
@@ -346,6 +495,377 @@ def grant_writing_kddi_power_electronics_focus_check(text: str) -> dict:
     }
 
 
+def grant_writing_kaken_oss_platform_check(text: str) -> dict:
+    """Check KAKENHI framing for an AI-era OSS research platform proposal."""
+    text = _read_text_if_path(text)
+    low = text.lower()
+    presence = grant_writing_section_presence(text, program="kaken_oss")
+    comments = [
+        f"KAKEN OSS platform axis missing or thin: {axis}"
+        for axis in presence["missing_axes"]
+    ]
+    score = presence["score"]
+
+    public_outputs = [
+        "公開リポジトリ",
+        "問題仕様",
+        "参照実装",
+        "ベンチマーク",
+        "software.html",
+        "elemag/index.php",
+        "geometry.php",
+        "mcp-server",
+    ]
+    output_hits = _contains_any(low, public_outputs)
+    if len(output_hits) < 4:
+        comments.append(
+            "Name at least four concrete public outputs: repository, problem specs, "
+            "reference implementations, benchmarks, teaching pages, or mcp-server."
+        )
+        score = max(0.0, score - 1.0)
+
+    if "技術報告" not in text and "報告書" not in text:
+        comments.append(
+            "Treat existing Japanese technical reports as a research knowledge source, "
+            "then connect them to executable assets and review history."
+        )
+        score = max(0.0, score - 0.5)
+
+    silo_hits = _contains_any(
+        low,
+        ["属研究室化", "研究室単位", "研究室内に閉じ", "重複実装", "重複開発"],
+    )
+    ai_urgency_hits = _contains_any(
+        low,
+        ["AIが開発を加速", "AIによる開発加速", "AI時代", "高速に再生産", "増幅"],
+    )
+    if not silo_hits or not ai_urgency_hits:
+        comments.append(
+            "Make the why-now explicit: AI can accelerate duplicated, lab-siloed "
+            "implementations unless shared specifications, tests, and review convert "
+            "them into collaborative assets."
+        )
+        score = max(0.0, score - 0.5)
+
+    reuse_hits = _contains_any(
+        low,
+        ["既存OSS", "再利用", "上流貢献", "上流で改良", "upstream", "meshio", "機能重複"],
+    )
+    if not reuse_hits:
+        comments.append(
+            "Add an upstream-first gate: survey existing OSS, reuse or contribute "
+            "upstream, and justify new code with a tested domain-specific gap."
+        )
+        score = max(0.0, score - 1.0)
+
+    quality_groups = {
+        "test_corpus": ["試験データ", "テストデータ", "検証データ"],
+        "expected_tolerance": ["期待値", "許容誤差", "参照値"],
+        "automated_validation": ["CI", "自動テスト", "再実行"],
+        "scope_and_provenance": ["既知制約", "適用範囲", "由来", "出典"],
+        "independent_reproduction": ["別機関", "第三者", "独立検証", "再現確認"],
+    }
+    quality_results = {
+        name: _contains_any(low, keywords)
+        for name, keywords in quality_groups.items()
+    }
+    if sum(bool(hits) for hits in quality_results.values()) < 4:
+        comments.append(
+            "Do not treat GitHub as a repository dump. Require test provenance, "
+            "expected values/tolerances, CI, documented limits, and independent re-execution."
+        )
+        score = max(0.0, score - 1.0)
+
+    responsibility_phrases = ["利用者の自己責任", "使う人の自己責任"]
+    responsibility_negations = [
+        "自己責任を品質保証の代替にしない",
+        "自己責任を理由にreleaseしない",
+        "利用者への責任転嫁ではなく",
+    ]
+    if (
+        _contains_any(low, responsibility_phrases)
+        and not _contains_any(low, responsibility_negations)
+    ):
+        comments.append(
+            "A no-warranty license does not replace scientific validation; do not "
+            "shift supported-scope verification responsibility to users."
+        )
+        score = max(0.0, score - 1.0)
+
+    domestic_evidence = ["伊田", "HACApK", "CEFC", "ADVENTURE", "国内共同"]
+    overseas_evidence = [
+        "Hollaus",
+        "TU Wien",
+        "TU Graz",
+        "IGTE",
+        "openCFS",
+        "NGSolve",
+    ]
+    domestic_hits = _contains_any(low, domestic_evidence)
+    overseas_hits = _contains_any(low, overseas_evidence)
+    if not domestic_hits:
+        comments.append(
+            "Add named domestic preliminary evidence such as the Ida/HACApK/CEFC "
+            "collaboration or an ADVENTURE connection."
+        )
+        score = max(0.0, score - 0.5)
+    if not overseas_hits:
+        comments.append(
+            "Add named overseas preliminary evidence such as Hollaus/TU Wien/IGTE, "
+            "TU Graz/openCFS, or the NGSolve community."
+        )
+        score = max(0.0, score - 0.5)
+
+    catch_up_negations = [
+        "追いつくことではない",
+        "追いつく計画ではない",
+        "追いつく計画ではなく",
+        "追いつくことを目的にしない",
+        "欧州を一方向の到達目標",
+    ]
+    if "追いつく" in text and not any(phrase in text for phrase in catch_up_negations):
+        comments.append(
+            "Avoid a catch-up frame; state reciprocal collaboration and "
+            "complementarity instead of Europe as a one-way benchmark."
+        )
+        score = max(0.0, score - 0.5)
+
+    environment_groups = {
+        "enterprise_os": ["Windows", "Linux", "企業"],
+        "shared_compute": ["mdx", "クラウド", "仮想環境"],
+        "hpc": ["スパコン", "スーパーコンピュータ", "HPC"],
+        "accelerator_generation": ["GPU", "A100", "H200", "ICCG"],
+        "architecture_change": ["ARM", "arm64", "アーキテクチャ", "可搬", "移植"],
+    }
+    environment_results = {
+        name: _contains_any(low, keywords)
+        for name, keywords in environment_groups.items()
+    }
+    if sum(bool(hits) for hits in environment_results.values()) < 3:
+        comments.append(
+            "Frame compute as a portable execution matrix spanning enterprise "
+            "Windows/Linux, mdx, HPC, GPU generations, and future CPU architectures."
+        )
+        score = max(0.0, score - 1.0)
+
+    hardware_purchase_terms = ["計算機を購入", "マシンを購入", "GPUを購入"]
+    portability_terms = ["可搬", "移植", "再実行", "複数環境", "アーキテクチャ"]
+    if _contains_any(low, hardware_purchase_terms) and not _contains_any(low, portability_terms):
+        comments.append(
+            "Do not make hardware acquisition the research objective; explain how "
+            "specifications, containers, CI, and AI-assisted setup survive platform change."
+        )
+        score = max(0.0, score - 1.0)
+
+    platform_mentions = len(re.findall(r"JP[-‐‑–—]?MARs", text, flags=re.IGNORECASE))
+    radia_mentions = len(
+        re.findall(r"(?<![A-Za-z])Radia(?:/radia-mcp|-mcp)?", text, flags=re.IGNORECASE)
+    )
+    platform_focus = {
+        "ok": platform_mentions >= max(1, radia_mentions),
+        "jpmars_mentions": platform_mentions,
+        "radia_mentions": radia_mentions,
+    }
+    if not platform_focus["ok"]:
+        comments.append(
+            "Keep JP-MARs as the governing research platform; position Radia and "
+            "other named software as preliminary evidence or demonstrators."
+        )
+        score = max(0.0, score - 1.0)
+
+    radia_integration = {
+        "mentioned": bool(radia_mentions),
+        "positioned_as_integration_evidence": bool(
+            radia_mentions
+            and _contains_any(low, ["統合", "融合", "接続", "先行実証", "インタフェース"])
+        ),
+    }
+    if radia_integration["mentioned"] and not radia_integration["positioned_as_integration_evidence"]:
+        comments.append(
+            "When Radia is named, use it as preliminary evidence that specialized "
+            "software and methods can be integrated, not as the proposal's main product."
+        )
+        score = max(0.0, score - 0.5)
+
+    recommendations = [
+        "Open with how technical reports become reviewable, executable research assets in the AI era.",
+        "Use GitHub/JP-MARs to preserve issue, implementation, validation, review, and contributor history.",
+        "Define lab-level siloing and explain why AI otherwise accelerates duplicated and unverified development.",
+        "Survey existing OSS first; reuse it or contribute upstream before authoring a new implementation.",
+        "Separate license disclaimers from scientific responsibility and require test data, tolerances, limits, CI, and independent re-execution.",
+        "Show both domestic and overseas preliminary collaborations with names and outputs.",
+        "Treat AI as an accelerator for search, translation, environment setup, and re-execution; researchers retain physical validation.",
+        "Define a portable execution matrix across Windows/Linux, mdx, HPC, GPU generations, and future architectures such as ARM.",
+        "Split platform adaptation into issues and CI jobs so institutions and companies can maintain different environments through pull requests.",
+        "Keep hardware acquisition subordinate to reproducible specifications, CI, containers, and long-term governance.",
+    ]
+    return {
+        "score": round(score, 1),
+        "missing_count": presence["missing_count"],
+        "missing_axes": presence["missing_axes"],
+        "axis_results": presence["axis_results"],
+        "public_output_hits": output_hits,
+        "domestic_evidence_hits": domestic_hits,
+        "overseas_evidence_hits": overseas_hits,
+        "environment_results": environment_results,
+        "silo_hits": silo_hits,
+        "ai_urgency_hits": ai_urgency_hits,
+        "reuse_hits": reuse_hits,
+        "quality_results": quality_results,
+        "platform_focus": platform_focus,
+        "radia_integration": radia_integration,
+        "comments": comments,
+        "recommendations": recommendations,
+        "target": "KAKENHI OSS platform: overcome lab-level siloing through upstream-first reuse, scientific quality gates, reciprocal collaboration, and AI-assisted portability",
+        "source": "KAKENHI AI-era OSS research-platform framing check",
+    }
+
+
+def grant_writing_internal_evidence_to_external_scale_check(text: str) -> dict:
+    """Check whether an internal success is evidence for external transfer.
+
+    The check is optional: it becomes applicable only when a draft claims an
+    existing pilot, operation, or preliminary result. It then asks what is
+    transferred, to whom, through which route, and how independent success is
+    verified. This keeps the rule useful across grant programs and domains.
+    """
+    text = _read_text_if_path(text)
+    low = text.lower()
+    axes = {
+        "internal_evidence": [
+            "予備成果",
+            "運用実績",
+            "実証済",
+            "試行済",
+            "既に実現",
+            "すでに実現",
+            "既に運用",
+            "すでに運用",
+            "機能している",
+            "利用している",
+            "活用している",
+            "導入済",
+        ],
+        "observed_users_or_context": [
+            "利用者",
+            "ユーザー",
+            "現場",
+            "研究室",
+            "学内",
+            "社内",
+            "組織内",
+            "教員",
+            "学生",
+            "担当者",
+            "企業",
+        ],
+        "transferable_unit": [
+            "問題仕様",
+            "参照実装",
+            "入力データ",
+            "試験データ",
+            "検証結果",
+            "実装",
+            "コード",
+            "手順",
+            "API",
+            "教材",
+            "ドキュメント",
+            "ベンチマーク",
+            "知識基盤",
+            "データセット",
+        ],
+        "external_route": [
+            "他機関",
+            "別機関",
+            "研究室間",
+            "複数機関",
+            "国内外",
+            "国際",
+            "共同研究",
+            "外部展開",
+            "公開",
+            "社会実装",
+            "技術移転",
+            "普及",
+            "上流貢献",
+        ],
+        "external_actor": [
+            "第三者",
+            "他機関",
+            "別機関",
+            "外部利用者",
+            "共同研究先",
+            "企業",
+            "海外研究者",
+        ],
+        "independent_validation": [
+            "再実行",
+            "再現",
+            "比較",
+            "評価",
+            "検証",
+            "レビュー",
+            "受入",
+            "フィードバック",
+        ],
+    }
+    axis_results = {}
+    for name, keywords in axes.items():
+        hits = _contains_any(low, keywords)
+        axis_results[name] = {
+            "ok": bool(hits),
+            "matches": hits[:8],
+            "keywords": keywords,
+        }
+
+    applicable = axis_results["internal_evidence"]["ok"]
+    if not applicable:
+        return {
+            "applicable": False,
+            "score": None,
+            "missing_count": 0,
+            "missing_axes": [],
+            "axis_results": axis_results,
+            "comments": [],
+            "target": (
+                "when internal evidence is claimed, connect it to a transferable "
+                "unit, external route and actor, and independent validation"
+            ),
+            "source": "generic internal-evidence-to-external-scale check",
+        }
+
+    missing = [name for name, result in axis_results.items() if not result["ok"]]
+    comments_by_axis = {
+        "observed_users_or_context": "内部実証を誰がどの環境で利用したかを示す。",
+        "transferable_unit": (
+            "外部へ渡す単位を、仕様、実装、データ、手順等として明示する。"
+        ),
+        "external_route": (
+            "内部実証を他機関・共同研究・社会実装へ接続する経路を示す。"
+        ),
+        "external_actor": "内部関係者ではない利用者・検証者を明示する。",
+        "independent_validation": (
+            "外部での再実行、比較、評価等により移転の成否を判定する。"
+        ),
+    }
+    comments = [comments_by_axis[name] for name in missing if name in comments_by_axis]
+    score = round(10.0 * (len(axes) - len(missing)) / len(axes), 1)
+    return {
+        "applicable": True,
+        "score": score,
+        "missing_count": len(missing),
+        "missing_axes": missing,
+        "axis_results": axis_results,
+        "comments": comments,
+        "target": (
+            "internal success is feasibility evidence, not external validity; state "
+            "what travels, to whom, by which route, and how success is verified"
+        ),
+        "source": "generic internal-evidence-to-external-scale check",
+    }
+
+
 def grant_writing_budget_alignment_check(text: str) -> dict:
     """Check that budget items are tied to verification and implementation."""
     text = _read_text_if_path(text)
@@ -445,7 +965,7 @@ def grant_writing_health_report(
 
     Args:
         text_or_path: Proposal text or an existing .md/.tex/.txt path.
-        program: ``generic`` or ``kddi_digital``.
+        program: ``generic``, ``kddi_digital``, or ``kaken_oss``.
         skip: comma-separated tool ids to skip, e.g. ``sentence,budget``.
     """
     text = _read_text_if_path(text_or_path)
@@ -498,6 +1018,33 @@ def grant_writing_health_report(
                 "comments": focus["comments"][:5],
             })
 
+    if program in {"kaken_oss", "kaken_oss_platform"} and "kaken" not in skip_set:
+        kaken = grant_writing_kaken_oss_platform_check(text)
+        detailed_results["kaken_oss_platform"] = kaken
+        detailed_scores["kaken_oss_platform"] = kaken["score"]
+        if kaken["comments"]:
+            priority_issues.append({
+                "tool": "kaken",
+                "name": "kaken_oss_platform_check",
+                "severity": _severity_from_score(kaken["score"]),
+                "score": kaken["score"],
+                "comments": kaken["comments"][:5],
+            })
+
+    if "scale" not in skip_set:
+        scale = grant_writing_internal_evidence_to_external_scale_check(text)
+        detailed_results["internal_to_external_scale"] = scale
+        if scale["applicable"]:
+            detailed_scores["internal_to_external_scale"] = scale["score"]
+            if scale["comments"]:
+                priority_issues.append({
+                    "tool": "scale",
+                    "name": "internal_evidence_to_external_scale_check",
+                    "severity": _severity_from_score(scale["score"]),
+                    "score": scale["score"],
+                    "comments": scale["comments"][:5],
+                })
+
     if "sentence" not in skip_set:
         sent = grant_writing_analyze_sentences(text)
         detailed_results["sentence"] = sent
@@ -529,7 +1076,7 @@ def grant_writing_health_report(
             })
 
     if "bedrock" not in skip_set:
-        bedrock = grant_writing_lint_bedrock(text)
+        bedrock = grant_writing_lint_bedrock(_prose_for_lint(text))
         detailed_results["bedrock"] = bedrock
         issue_count = bedrock.get("issue_count", 0)
         score = max(0.0, round(10.0 - issue_count * 1.5, 1))

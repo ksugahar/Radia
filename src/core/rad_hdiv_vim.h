@@ -56,6 +56,11 @@ double TetPotentialPolynomial(const double V[4][3], const double r[3],
 void TetReferencePotentialMoments(const double V[4][3], const double r[3],
                                   const std::vector<std::array<int,3>>& exps,
                                   double* out);
+void TetReferencePotentialMomentsDirectional(
+    const double V[4][3], const double dV[4][3],
+    const double r[3], const double dr[3],
+    const std::vector<std::array<int,3>>& exps,
+    double* value, double* direction);
 void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
 void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],

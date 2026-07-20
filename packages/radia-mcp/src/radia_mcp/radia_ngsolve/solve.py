@@ -74,7 +74,7 @@ def periodic_h1(mesh, order=2, dirichlet="", antiperiodic=False):
     (e.g. :func:`solve_planar_magnetostatic`): the identification ties A_z across
     the sector cut, reproducing the cyclic machine from one sector. Validated to
     machine precision against a closed-form periodic strip
-    (tests/test_planar_periodic.py: periodic 2e-7, anti-periodic 2e-8 rel L2).
+    (validation_test/radia_mcp/test_planar_periodic.py: periodic 2e-7, anti-periodic 2e-8 rel L2).
     """
     base = H1(mesh, order=order, dirichlet=dirichlet, complex=antiperiodic)
     return Periodic(base, phase=[-1]) if antiperiodic else Periodic(base)
@@ -271,7 +271,7 @@ def stranded_source(mesh, currents_by_region):
     preserved exactly: int Jz dA = I.
 
     Contrast with a SOLID conductor (driven_region/total_current and sigma>0),
-    whose current redistributes (skin effect) -- see tests/test_stranded.py.
+    whose current redistributes (skin effect) -- see validation_test/radia_mcp/test_stranded.py.
     """
     comp = []
     for m in mesh.GetMaterials():
@@ -1020,7 +1020,7 @@ def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
     T-maximising real root in [-1, 1] is selected, so this is robust to BOTH
     saliency signs (IPM Ld<Lq -> gamma>0; synchronous reluctance lambda_m=0,
     Ld>Lq -> gamma=-45 deg) and to the non-salient limit (Ld=Lq -> gamma=0, pure
-    q-axis). Validated against a numerical argmax (tests/test_motor_mtpa.py)."""
+    q-axis). Validated against a numerical argmax (validation_test/radia_mcp/test_motor_mtpa.py)."""
     if current == 0:
         return (0.0, 0.0, 0.0, 0.0)
     cands = [0.0]                                   # pure q-axis is always a candidate
@@ -1083,7 +1083,7 @@ def field_weakening_operating_point(lambda_m, Ld, Lq, Imax, Vmax, omega_e, pole_
     quadratic in cos(theta). Continues :func:`mtpa_operating_point` into the
     constant-power / high-speed regions (drive operating-region / efficiency-map
     foundation). Validated to 0.000 % against an independent numeric constrained
-    argmax across all three regions (tests/test_field_weakening.py)."""
+    argmax across all three regions (validation_test/radia_mcp/test_field_weakening.py)."""
     Vlim = Vmax / omega_e
 
     def _volt_ok(id_, iq):
@@ -2279,7 +2279,7 @@ def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
 
     Validated: transverse-magnetized linear cylinder (mu_r=2, Hc=3e5) ->
     interior B = mu0*mu_r*Hc/(mu_r+1) within 0.05 %; external 2D dipole
-    B_in*(a/r)^2 within ~1 % (see tests/test_planar_magnet.py).
+    B_in*(a/r)^2 within ~1 % (see validation_test/radia_mcp/test_planar_magnet.py).
 
     Returns the H1 GridFunction ``gfu`` (A_z); flux density ``B = CF((grad(gfu)[1], -grad(gfu)[0]))``.
     """
@@ -2889,7 +2889,7 @@ def skin_effect_resistance_ratio(q):
     (Kelvin ber/bei). q -> 0 : Rac/Rdc -> 1 (uniform DC current); q >> 1 :
     -> q/(2 sqrt(2)) + 1/4 + ... (current crowds into the ~delta-thick skin). The real part of
     the round-wire INTERNAL impedance.
-    Needs scipy. Validated vs the radia eddy solve (tests/test_planar_eddy.py)."""
+    Needs scipy. Validated vs the radia eddy solve (validation_test/radia_mcp/test_planar_eddy.py)."""
     from scipy.special import kelvin
     be, ke, bep, kep = kelvin(q)
     ber, bei, berp, beip = be.real, be.imag, bep.real, bep.imag
@@ -2985,7 +2985,7 @@ def skin_effect_slab_attenuation(sigma, frequency, half_thickness, mu_r=1.0):
     field penetrates); a >> delta -> ~2 exp(-a/delta) (expelled to the ~delta-thick skin).
     The slab counterpart of the round-wire Kelvin-function ratios
     (:func:`skin_effect_resistance_ratio`), relevant to lamination / sheet eddy loss.
-    Validated against the complex NGSolve eddy solve (tests/test_skin_effect_slab.py) and
+    Validated against the complex NGSolve eddy solve (validation_test/radia_mcp/test_skin_effect_slab.py) and
     an independent frequency-domain magnetics cross-check."""
     import cmath
     mu0 = 4e-7 * math.pi
@@ -3098,7 +3098,7 @@ def annular_radial_resistance(sigma, r_inner, r_outer, length=1.0):
     the closed form of -div(sigma grad V)=0 with V fixed on the two rings (V(r) ~ ln r).  The
     radial-conduction counterpart of the axial L/(sigma A) -- relevant to disc/annulus electrodes
     and radial busbars.  Validated against an NGSolve conduction solve and an independent
-    cross-check (tests/test_annular_resistance.py)."""
+    cross-check (validation_test/radia_mcp/test_annular_resistance.py)."""
     import math
     return math.log(r_outer / r_inner) / (2.0 * math.pi * sigma * length)
 
@@ -3275,7 +3275,7 @@ def solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=None, magnets=None,
     the problem. ``relax`` under-relaxes A <- (1-w)A + w A_new; keep w ~ 0.3-0.5
     for saturating curves (too large diverges). Validated by Ampere's law on a
     wire-in-iron-annulus: B(r)=BH(I/2 pi r) to <0.1 % away from the inner
-    interface (tests/test_planar_nonlinear.py).
+    interface (validation_test/radia_mcp/test_planar_nonlinear.py).
 
     Returns the converged H1 GridFunction ``A_z``.
     """
@@ -3339,7 +3339,7 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
 
     Validated: round-wire skin-effect Rac/Rdc vs the Kelvin-function (ber/bei)
     formula to 0.07 % (current-driven) and voltage-driven Z to 0.07 %
-    (tests/test_planar_eddy.py, test_planar_eddy_voltage.py) at q=4.
+    (validation_test/radia_mcp/test_planar_eddy.py, test_planar_eddy_voltage.py) at q=4.
     """
     if driven_region is not None and total_current is not None:
         fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet) \
@@ -3419,7 +3419,7 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
         * parallel : ``(A_z, Vc)`` -- shared Vc.
     The circuit AC resistance is ``Rac = 2*sum_k P_k / |I|^2``.
 
-    Validated (tests/test_planar_proximity.py): reduces to the single-wire
+    Validated (validation_test/radia_mcp/test_planar_proximity.py): reduces to the single-wire
     Kelvin Rac; two well-separated wires in series give 2x the isolated Rac; and
     bringing them together raises Rac (proximity), all against the exact ber/bei
     round-wire reference.
@@ -3496,7 +3496,7 @@ def solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=None, order=3,
 
     ``relax`` under-relaxes (0.3-0.5 for hard saturation). Reduces EXACTLY to
     :func:`solve_planar_eddy` (Jz mode) when nu_of_B is constant; saturation
-    makes |B| grow sub-linearly with drive (tests/test_planar_eddy_nonlinear.py).
+    makes |B| grow sub-linearly with drive (validation_test/radia_mcp/test_planar_eddy_nonlinear.py).
 
     Returns the converged complex H1 GridFunction ``A_z``.
     """
@@ -3554,7 +3554,7 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
 
     Returns the H1Henrotte GridFunction ``gfu`` (A_phi at DOFs). Validated:
     magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 % at order 2
-    (tests/test_axi_magnetostatic.py).  For order=1 the gfu is in the V-DOF basis;
+    (validation_test/radia_mcp/test_axi_magnetostatic.py).  For order=1 the gfu is in the V-DOF basis;
     the average flux density is :func:`axi_vdof_magnet_bz_average`.
     """
     if order < 2:
@@ -3816,12 +3816,12 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
         Its pointwise value/gradient eval is now RELIABLE: the AxiHenrotte
         FESpace is complex-capable (iscomplex from the ``complex`` flag) and the
         DiffOps implement the complex ``CalcMatrix`` overloads (src/ext/axifem),
-        validated to machine precision in tests/test_axi_henrotte_complex_eval.py
+        validated to machine precision in validation_test/radia_mcp/test_axi_henrotte_complex_eval.py
         -- so |A|/B post-processing of this complex solution works (this is what
         unblocks the nonlinear mu(|B|) Picard layer).  Requires the rebuilt
         axifem extension.  ``P_eddy`` remains the matrix-based reference.
 
-    Validated (tests/test_axi_eddy_harmonic.py): for a Cu disk in a uniform
+    Validated (validation_test/radia_mcp/test_axi_eddy_harmonic.py): for a Cu disk in a uniform
     applied B0, the eddy loss P_eddy(w) is positive, rises with w, and is
     w^2-suppressed at low frequency (the eddy onset) -- and the raw conductor-DOF
     solution shows flux expelled (|A| -> 0) as w rises past 1/(2 pi tau_1),

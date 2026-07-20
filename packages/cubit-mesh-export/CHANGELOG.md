@@ -6,6 +6,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.3 - Simulink application handoff documentation
+
+Released 2026-07-21.
+
+- Updated the Cubit export handoff to point users to Radia's production
+  Simulink application blocks, with the IH notebook retained only for its
+  temporary comparison period.
+
 ## 0.14.2 - Curved-mesh and conductor-face quality gates
 
 Released 2026-07-17.

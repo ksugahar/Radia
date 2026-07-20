@@ -1,10 +1,9 @@
-"""Shared pytest fixtures for the Radia panel validation layer.
+"""Shared pytest fixtures for the Radia application validation layer.
 
-Current Radia analysis panels are notebook workbenches backed by
-``DesignSpec`` and ``CommandWorkbench``.  The old desktop ``radia_*.py``
-PySide6 panels were removed, so tests that instantiate those windows are
-retired unconditionally.  Cubit's embedded PySide6 toolbar is a separate
-surface; its test is skipped only when this interpreter has no PySide6.
+Production human interfaces are Simulink blocks. IH alone temporarily keeps a
+``DesignSpec``/``CommandWorkbench`` comparison surface. The old desktop
+``radia_*.py`` PySide6 panels remain retired; Cubit's embedded toolbar is a
+separate surface.
 """
 
 from __future__ import annotations
@@ -71,13 +70,13 @@ def qapp():
 @pytest.fixture
 def ih_panel(qapp):
     """Retired desktop IH panel fixture."""
-    pytest.skip("retired desktop IH panel was removed; use IHWorkbench")
+    pytest.skip("retired desktop IH panel was removed; use the Simulink block or IHWorkbench")
 
 
 @pytest.fixture
 def sf_panel(qapp):
     """Retired desktop stream-function panel fixture."""
-    pytest.skip("retired desktop stream-function panel was removed; use StreamFunctionWorkbench")
+    pytest.skip("retired desktop stream-function panel was removed; use the Simulink block")
 
 
 @pytest.fixture

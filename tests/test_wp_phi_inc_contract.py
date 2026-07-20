@@ -4,7 +4,7 @@ The reconstruction math is locked by tests/test_phi_inc_poisson.py
 (icosphere goldens).  Here we pin the ROUTE contract after the
 2026-07-17 removal of the legacy selectable path: the P1 weak route is
 surface-Poisson ALWAYS (basis-determined, not a knob), the removed
-``--wp-phi-inc`` flag must not silently return, and the notebook-panel
+``--wp-phi-inc`` flag must not silently return, and the shared application
 IHDesignSpec emits exactly what calc_inductance's argparse accepts.
 """
 from __future__ import annotations
@@ -44,7 +44,7 @@ def test_loop_dof_off_is_gone():
 
 
 def test_ih_designspec_roundtrips_wp_flags():
-    """The notebook-panel IHDesignSpec emits only flags calc_inductance
+    """The shared IHDesignSpec emits only flags calc_inductance
     accepts (panel cannot silently drop or misspell a flag), and the
     removed phi_inc knob is gone from the spec too."""
     from radia.ih_design import IHDesignSpec, METHOD_BEMA_BEM

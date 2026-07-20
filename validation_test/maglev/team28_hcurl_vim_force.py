@@ -31,6 +31,7 @@ MU0 = 4.0e-7 * np.pi
 FREQUENCY_HZ = 50.0
 SIGMA_AL = 3.4e7
 TARGET_PHYSICAL_FORCE_N = 0.5 * 2.1925321151130186
+REFERENCE_COIL_CURRENT_A = 20.0
 
 
 def _circular_loop_fields(points, radius, z0, current):
@@ -118,20 +119,27 @@ def _rectangular_coil_fields(
     return vector_potential, magnetic_flux_density
 
 
-def _external_coil_fields(points):
+def _external_coil_fields(
+    points,
+    coil_current=REFERENCE_COIL_CURRENT_A,
+    height_offset_m=0.0,
+):
+    points = np.asarray(points, dtype=float).copy()
+    points[:, 2] += float(height_offset_m)
+    scale = float(coil_current) / REFERENCE_COIL_CURRENT_A
     a1, b1 = _rectangular_coil_fields(
         points,
         0.041,
         0.028,
         0.052,
-        960.0 * 20.0,
+        960.0 * REFERENCE_COIL_CURRENT_A * scale,
     )
     a2, b2 = _rectangular_coil_fields(
         points,
         0.0875,
         0.015,
         0.052,
-        -576.0 * 20.0,
+        -576.0 * REFERENCE_COIL_CURRENT_A * scale,
     )
     return a1 + a2, b1 + b2
 
@@ -181,7 +189,7 @@ def _build_eddy_basis(maxh_m):
     return ng, mesh, fes, basis
 
 
-def run_case(maxh_m, outer_quad):
+def run_case(maxh_m, outer_quad, export_model=None):
     started = time.perf_counter()
     ng, mesh, fes, basis = _build_eddy_basis(maxh_m)
     with ng.TaskManager():
@@ -195,20 +203,47 @@ def run_case(maxh_m, outer_quad):
             materials="Al",
         )
     external_a, external_b = _external_coil_fields(basis.current_basis.points)
+    unit_external_a = external_a / REFERENCE_COIL_CURRENT_A
+    unit_external_b = external_b / REFERENCE_COIL_CURRENT_A
     system = basis.assemble_vim(
         sigma=SIGMA_AL,
         interaction=interaction,
     )
-    rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, external_a)
+    rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, unit_external_a)
     cln_model = vim.HCurlEddyCLNFromVIM(system, rhs)
     s = 2.0j * np.pi * FREQUENCY_HZ
-    coefficients = cln_model.solve_vector_potential_drive(s, 1.0)
+    coefficients = cln_model.solve_vector_potential_drive(s, REFERENCE_COIL_CURRENT_A)
     current = np.einsum("a,aik->ik", coefficients, basis.current_basis.modes)
     force = 0.5 * np.sum(
         basis.current_basis.weights[:, None]
         * np.real(np.cross(current, np.conj(external_b))),
         axis=0,
     )
+    force_operator = np.transpose(
+        np.sum(
+            basis.current_basis.weights[None, :, None]
+            * np.cross(
+                basis.current_basis.modes,
+                np.conj(unit_external_b)[None, :, :],
+            ),
+            axis=1,
+        ),
+        (1, 0),
+    )[:, :, None]
+    if export_model is not None:
+        vim.ExportHCurlEddyCLNJSON(
+            cln_model,
+            export_model,
+            force_operator=force_operator,
+            metadata={
+                "frequency_hz": FREQUENCY_HZ,
+                "coil_current_reference_A": REFERENCE_COIL_CURRENT_A,
+                "conductivity_S_per_m": SIGMA_AL,
+                "force_operator_units": "N per reduced coefficient and ampere port current",
+                "parent_space": "HCurl",
+                "parent_order": 6,
+            },
+        )
     relative_error = abs(abs(force[2]) - TARGET_PHYSICAL_FORCE_N) / TARGET_PHYSICAL_FORCE_N
     transverse_ratio = float(np.linalg.norm(force[:2]) / max(abs(force[2]), np.finfo(float).tiny))
     return {
@@ -230,8 +265,139 @@ def run_case(maxh_m, outer_quad):
     }
 
 
-def run(maxh_values, outer_quad=4, outer_check=None):
-    cases = [run_case(value, outer_quad) for value in maxh_values]
+def _height_offsets_mm_from_reference():
+    sweep_file = (
+        HERE.parent.parent
+        / "docs"
+        / "maglev"
+        / "demos"
+        / "team28"
+        / "team28_cln_sweep_results.json"
+    )
+    with sweep_file.open("r", encoding="utf-8") as stream:
+        return [float(value) for value in json.load(stream)["dZ_mm"]]
+
+
+def run_height_sweep(
+    height_offsets_mm,
+    *,
+    maxh_m=0.025,
+    outer_quad=4,
+    export_family=None,
+):
+    """Build one p=6 basis and export a common-coordinate height family.
+
+    The disk mesh and reduced state coordinates stay fixed at the reference
+    position. Only the incident coil A/B fields and force operator vary with
+    height, so stateful moving coupling does not hide a basis transfer.
+    """
+
+    started = time.perf_counter()
+    ng, mesh, fes, basis = _build_eddy_basis(maxh_m)
+    with ng.TaskManager():
+        interaction = basis.tet_volume_interaction(
+            mesh,
+            fes,
+            degree=5,
+            projection_quad=7,
+            outer_quad=outer_quad,
+            projection_tolerance=1.0e-10,
+            materials="Al",
+        )
+    system = basis.assemble_vim(sigma=SIGMA_AL, interaction=interaction)
+    snapshots = []
+    physical_forces = []
+    for offset_mm in height_offsets_mm:
+        offset_m = float(offset_mm) * 1.0e-3
+        external_a, external_b = _external_coil_fields(
+            basis.current_basis.points,
+            coil_current=REFERENCE_COIL_CURRENT_A,
+            height_offset_m=offset_m,
+        )
+        unit_external_a = external_a / REFERENCE_COIL_CURRENT_A
+        unit_external_b = external_b / REFERENCE_COIL_CURRENT_A
+        rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, unit_external_a)
+        model = vim.HCurlEddyCLNFromVIM(system, rhs)
+        s = 2.0j * np.pi * FREQUENCY_HZ
+        coefficients = model.solve_vector_potential_drive(
+            s,
+            REFERENCE_COIL_CURRENT_A,
+        )
+        current = np.einsum("a,aik->ik", coefficients, basis.current_basis.modes)
+        force = 0.5 * np.sum(
+            basis.current_basis.weights[:, None]
+            * np.real(np.cross(current, np.conj(external_b))),
+            axis=0,
+        )
+        force_operator = np.transpose(
+            np.sum(
+                basis.current_basis.weights[None, :, None]
+                * np.cross(
+                    basis.current_basis.modes,
+                    np.conj(unit_external_b)[None, :, :],
+                ),
+                axis=1,
+            ),
+            (1, 0),
+        )[:, :, None]
+        snapshots.append(
+            {
+                "height_m": offset_m,
+                "model": model,
+                "force_operator": force_operator,
+                "metadata": {"height_offset_m": offset_m},
+            }
+        )
+        physical_forces.append(force.tolist())
+    if export_family is not None:
+        vim.ExportHCurlEddyCLNFamilyJSON(
+            snapshots,
+            export_family,
+            metadata={
+                "frequency_hz": FREQUENCY_HZ,
+                "coil_current_reference_A": REFERENCE_COIL_CURRENT_A,
+                "conductivity_S_per_m": SIGMA_AL,
+                "parent_space": "HCurl",
+                "parent_order": 6,
+                "reference_disk_bottom_m": 0.0108,
+                "height_coordinate": "offset from the reference disk position",
+                "state_basis": "common p=6 local disk basis",
+            },
+        )
+    return {
+        "schema": "radia.team28.hcurl-vim-family.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "runtime": {
+            "hostname": socket.gethostname(),
+            "python_version": platform.python_version(),
+            "platform": platform.platform(),
+            "radia_version": getattr(radia, "__version__", "unknown"),
+            "ngsolve_version": getattr(__import__("ngsolve"), "__version__", "unknown"),
+            "elapsed_seconds": time.perf_counter() - started,
+        },
+        "problem": {
+            "frequency_hz": FREQUENCY_HZ,
+            "conductivity_S_per_m": SIGMA_AL,
+            "parent_space": "HCurl",
+            "parent_order": 6,
+            "common_state_basis": True,
+        },
+        "height_offsets_mm": [float(value) for value in height_offsets_mm],
+        "physical_force_N": physical_forces,
+        "snapshot_count": len(snapshots),
+        "export_file": Path(export_family).name if export_family is not None else None,
+    }
+
+
+def run(maxh_values, outer_quad=4, outer_check=None, export_model=None):
+    cases = [
+        run_case(
+            value,
+            outer_quad,
+            export_model=export_model if index == 0 else None,
+        )
+        for index, value in enumerate(maxh_values)
+    ]
     outer_case = None
     if outer_check is not None:
         outer_case = run_case(maxh_values[0], outer_check)
@@ -308,13 +474,52 @@ def main():
     parser.add_argument("--maxh", type=float, nargs="+", default=[0.025, 0.020, 0.015])
     parser.add_argument("--outer-quad", type=int, default=4)
     parser.add_argument("--outer-check", type=int)
+    parser.add_argument(
+        "--export-model",
+        type=Path,
+        help="write the first p=6 HCurl-VIM case as a MATLAB exchange JSON",
+    )
+    parser.add_argument(
+        "--export-family",
+        type=Path,
+        help="write a common-basis height-indexed p=6 HCurl-VIM family JSON",
+    )
+    parser.add_argument(
+        "--height-offsets-mm",
+        type=str,
+        nargs="+",
+        help="height offsets for --export-family (space or comma separated; default is the 25-point TEAM 28 sweep)",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
-    result = run(args.maxh, outer_quad=args.outer_quad, outer_check=args.outer_check)
+    if args.export_family is not None:
+        offsets = (
+            [
+                float(part)
+                for token in args.height_offsets_mm
+                for part in token.split(",")
+                if part.strip()
+            ]
+            if args.height_offsets_mm is not None
+            else _height_offsets_mm_from_reference()
+        )
+        result = run_height_sweep(
+            offsets,
+            maxh_m=args.maxh[0],
+            outer_quad=args.outer_quad,
+            export_family=args.export_family,
+        )
+    else:
+        result = run(
+            args.maxh,
+            outer_quad=args.outer_quad,
+            outer_check=args.outer_check,
+            export_model=args.export_model,
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))
-    if not result["hcurl_vim_force_acceptance_complete"]:
+    if not result.get("hcurl_vim_force_acceptance_complete", True):
         raise SystemExit(1)
 
 

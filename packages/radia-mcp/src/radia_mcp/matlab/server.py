@@ -4,6 +4,7 @@ from radia_mcp.common import register_status_tool
 from radia_mcp.matlab_agentic_ml import (
     matlab_agentic_ml_guide as _ml_guide,
     validate_matlab_ml_rl_artifact as _validate_ml_rl_artifact,
+    validate_aicia_catalog as _validate_aicia_catalog,
 )
 from . import matlab_agent_guide as _guide
 from .optimize import matlab_cad_topology_build as _cad_topology_build, matlab_optimize_build as _optimize_build, matlab_optimize_resume as _optimize_resume, matlab_sheet_metal_topology_build as _sheet_metal_topology_build
@@ -25,6 +26,10 @@ def matlab_ml_rl_artifact_gate(artifact_json:str)->str:
     artifact=json.loads(artifact_json)
     return json.dumps(_validate_ml_rl_artifact(artifact),ensure_ascii=False,indent=2)
 @mcp.tool()
+def matlab_aicia_catalog_gate(catalog_json:str)->str:
+    """Validate full-channel metadata scope and solver-gated CAE promotion."""
+    return json.dumps(_validate_aicia_catalog(json.loads(catalog_json)),ensure_ascii=False,indent=2)
+@mcp.tool()
 def matlab_extension_contract()->str: return json.dumps(_contract(),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_official_server_config(profile:str="existing",include_generic_extension:bool=False)->str: return json.dumps(_config(profile,include_generic_extension=include_generic_extension),ensure_ascii=False,indent=2)
@@ -40,7 +45,7 @@ def matlab_optuna_simulink_contract()->str:
     return json.dumps(_optuna_contract(),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_simulink_library_contract()->str:
-    """Describe Radia Library Browser registration and LTspice compatibility."""
+    """Describe Radia application blocks, Library Browser registration, and LTspice compatibility."""
     return json.dumps(_simulink_library_contract(),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_optimize_build(spec_json:str)->str:

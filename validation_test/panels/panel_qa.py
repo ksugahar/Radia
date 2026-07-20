@@ -1,7 +1,7 @@
 """Retired desktop-panel quality-assurance checks.
 
-Current Radia analysis panels are notebook workbenches and are checked by
-``test_notebook_workbench.py``.  This module is ignored from normal pytest
+Current Radia analysis interfaces are Simulink blocks; IH alone retains a
+comparison workbench checked by ``test_notebook_workbench.py``. This module is ignored from normal pytest
 collection and remains only as historical reference for the removed PySide6
 ``radia_*.py`` windows.
 

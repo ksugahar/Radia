@@ -20,7 +20,7 @@ closed-form harmonic torque -- all validated against direct Maxwell-stress quadr
 in tests/test_airgap_element.py.  The reusable NGSolve assembly that couples a ROTOR and a
 STATOR FE region across the un-meshed gap -- real OR eddy-current (jw*mu*sigma), with rotor
 rotation as a pure phase and the mesh-free closed-form torque -- is :mod:`airgap_machine`,
-which builds on this core (validated to machine precision in tests/test_airgap_eddy_machine.py).
+which builds on this core (validated to machine precision in validation_test/radia_mcp/test_airgap_eddy_machine.py).
 
 Open method (Abdel-Razek/Konrad 1982; Davat 1985 air-gap macro-element); analytic,
 publishable.

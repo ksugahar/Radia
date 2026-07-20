@@ -100,10 +100,10 @@ where `ber, bei` are Kelvin functions (real and imaginary parts of
 > **radia-ngsolve FE cross-check.** This exact ber/bei ratio is the regression
 > reference for `radia_mcp.radia_ngsolve.solve.solve_planar_eddy` (complex A_z
 > with a current/voltage-driven NumberSpace), matched to **0.07 %** at q=4
-> (tests/test_planar_eddy.py).  For multi-strand / litz bundles where the
+> (validation_test/radia_mcp/test_planar_eddy.py).  For multi-strand / litz bundles where the
 > closed-form single-wire ratio breaks down, `solve_planar_eddy_multi` adds the
 > **proximity** effect (series/parallel conductors sharing one A field) -- the
-> +20 % Rac rise of two adjacent wires is in tests/test_planar_proximity.py.
+> +20 % Rac rise of two adjacent wires is in validation_test/radia_mcp/test_planar_proximity.py.
 > Use the analytic ratio for quick estimates; the FE solvers for real geometries.
 
 In `scipy` this evaluates to:

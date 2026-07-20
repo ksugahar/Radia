@@ -1,6 +1,6 @@
 ---
 name: verify-deploy
-description: Verify that local edits to src/radia/ are actually loaded by notebook workbenches, Cubit toolbar code, and external Python (Python 3.12). Catches stale .pyc, wrong site-packages, UNC vs S: drive confusion, and Cubit cached register_toolbar.py.
+description: "Verify that local edits to src/radia/ are actually loaded by Simulink application runs, the temporary IH notebook, Cubit toolbar code, and external Python 3.12. Catches stale bytecode, wrong site-packages, path mapping confusion, and Cubit toolbar caching."
 ---
 
 # verify-deploy
@@ -8,11 +8,11 @@ description: Verify that local edits to src/radia/ are actually loaded by notebo
 After editing `src/radia/**/*.py`, verify that the changes are
 **actually visible** to:
 
-1. The external Python 3.12 (run by notebook workbenches / headless calcs)
+1. The external Python 3.12 (run by Simulink application blocks and headless calcs)
 2. The Cubit-bundled Python 3.10 (which loads `register_toolbar.py`
    on startup or via Reload Toolbar)
-3. The `radia.<app>_notebook` modules and `src/radia/panels/calc_*.py`
-   scripts
+3. `radia.simulink.application`, the IH notebook adapter, and
+   `src/radia/panels/calc_*.py` scripts
 
 This skill exists because the LAB editable install has a confusing
 twist: `__editable__.radia-4.4.0.pth` points at the **UNC path**

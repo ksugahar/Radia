@@ -218,14 +218,13 @@ the common PyPI deploy helper. `tools/release_qud.py phase9` includes
 hibino in the version/hash drift table.
 
 ============================================================
-## gui_extra — retired after notebook panel migration
+## gui_extra — retired after Simulink application migration
 ============================================================
 
 The old `gui` extra was used by standalone PySide6 desktop panels.  It is no
-longer part of the production deploy recipe.  The canonical panel surface is
-now the Jupyter notebook workbench (`radia.<app>_notebook` +
-`src/radia/panels/notebooks/radia_<app>.ipynb`), and normal Radia Python on
-LAB / 100号機 / mdx / hibino should not install PySide6.
+longer part of the production deploy recipe. The canonical human surface is
+the Radia Simulink library; normal Radia Python on LAB / 100号機 / mdx / hibino
+should not install PySide6. IH temporarily keeps its notebook comparison path.
 
 Production install:
 
@@ -235,10 +234,11 @@ cubit-plugin-install --all-users
 cubit-plugin-install --verify-only --all-users
 ```
 
-Notebook health gate:
+Application interface health gates:
 
 ```powershell
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
+python -m pytest tests/test_simulink_application.py -q
+python -m pytest validation_test/panels/test_notebook_workbench.py -q  # IH only
 ```
 
 Boundary check:
@@ -277,7 +277,7 @@ $shadowPyc = "C:\\Program Files\\Python312\\Lib\\site-packages\\__pycache__\\cub
 if (Test-Path $shadow) { Remove-Item $shadow -Force }
 if (Test-Path $shadowPyc) { Remove-Item $shadowPyc -Force }
 
-# Install from PyPI.  The notebook panel route intentionally avoids PySide6 in
+# Install from PyPI. The Simulink/headless route intentionally avoids PySide6 in
 # normal Radia Python; see the gui_extra topic.
 pip install --no-cache-dir \\
     'radia[cubit]==<X.Y.Z>' \\
@@ -462,7 +462,7 @@ until this passes.
 
 | Symptom                                    | Root cause                                                                | Fix |
 |-------------------------------------------|---------------------------------------------------------------------------|-----|
-| Notebook panel does not produce `result.json` | notebook workbench / DesignSpec / calc argv drift | Run `ipynb-gui-health` / `pytest validation_test/panels/test_notebook_workbench.py -q`; fix the notebook workbench, not a PySide install |
+| Simulink application block does not produce `result.json` | config / DesignSpec / Python environment / calc argv drift | Run `pytest tests/test_simulink_application.py -q` and MATLAB Simulink tests; inspect `run.log`; do not install PySide |
 | `radia.__version__` says X.Y.Z but `pip list` says A.B.C | metadata_sync skipped on LAB (editable)                                | `pip install -e <path> --no-deps --no-cache-dir` |
 | `ImportError: cannot import name 'check' from 'cubit_mesh_export'` | legacy `cubit_mesh_export.py` shadow at site-packages                | Delete `Lib/site-packages/cubit_mesh_export.py` and `__pycache__/cubit_mesh_export.cpython-312.pyc`, then re-install |
 | `AttributeError: module 'cubit_mesh_export' has no attribute '__version__'` | same legacy shadow                                                     | same |

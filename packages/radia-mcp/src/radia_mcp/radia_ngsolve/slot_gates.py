@@ -1635,9 +1635,9 @@ def farfield_lobe_notebook_handoff_gate(
     lobe_id_key="lobe_id",
     tol=1.0e-9,
 ):
-    """Bundle far-field metadata and one lobe row before notebook use.
+    """Bundle far-field metadata and one lobe row before interface use.
 
-    A notebook panel should not receive a naked gain scalar.  The lobe row must
+    An application block or result notebook should not receive a naked gain scalar. The lobe row must
     carry a stable row identity, frequency, theta/phi location, polarization
     basis, accepted-power normalization, gain/directivity units, and the
     radiation-efficiency identity ``G = eta_rad * D``.
@@ -1785,7 +1785,7 @@ def farfield_lobe_notebook_handoff_gate(
         "checks": checks,
         "tol": tolerance,
         "notes": [
-            "Run this after the far-field export metadata gate and before a notebook panel plots or ranks lobes.",
+            "Run this after the far-field export metadata gate and before an application block or result notebook plots or ranks lobes.",
             "The row identity, angular location, accepted-power normalization, and G=eta_rad*D identity must travel together.",
         ],
         **values,

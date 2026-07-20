@@ -48,11 +48,11 @@ editable / 100号機 PyPI) を 2-tier (LAB editable / 100号機 + mdx PyPI)
 **Cubit plugin (100号機 + mdx)**: 両方とも PyPI wheel から regular-file
 deploy (`cubit-plugin-install --all-users`).  symlink 体制は使わない.
 
-**Notebook policy (2026-06-28)**: production deploy uses `radia[cubit]` and
-does not add the old GUI extra.  The canonical panel surface is the Jupyter
-notebook workbench (`ipynb-gui-health`), and normal Radia Python should not
-acquire PySide6.  Coreform Cubit's bundled PySide6 remains protected because
-Cubit owns that embedded runtime.
+**Application interface policy (2026-07-20)**: production deploy uses
+`radia[cubit]` and one Radia Simulink library. EM, PCB, Motor, and Stream
+Function are Simulink-only; IH temporarily keeps a notebook comparison.
+Normal Radia Python must not acquire PySide6. Coreform Cubit's bundled PySide6
+remains protected because Cubit owns that embedded runtime.
 
 **Retired** (2026-05-02): mdx editable + `tools/push_pyds_to_mdx.py`
 base64-over-ssh push は通常運用から除外.  `push_pyds_to_mdx.py` は
@@ -84,15 +84,15 @@ become mysterious.  All three stages run the full L0-L4 ladder.
 | **L0** | Wheel manifest | `pyproject.toml` package-data lists every `*.jou/*.step/*.png/*.sol/*.vol/*.msh` in src tree | Samples/assets missing from wheel (2026-04-12 calc_mesh_eval.py incident) |
 | **L1** | File layout | `import radia; os.path.isfile(...sample.jou)` | Samples / panel_registry.json missing after install |
 | **L1** | Hash integrity | SHA-256 (CRLF normalised) src vs installed | Content drift (NOT size — LF↔CRLF false-alarms) |
-| **L2** | Import smoke | import each `radia.<app>_notebook` workbench | ImportError / circular import in notebook workbench modules |
+| **L2** | Import smoke | import `radia.simulink.application`, all five DesignSpecs, and the IH notebook adapter | ImportError / circular import in application wiring |
 | **L2** | Subprocess smoke | `python panels/calc_*.py --help` for each | argparse rejects flags, missing helper imports |
 | **L2** | Signature probe | `inspect.getsource(f)` contains expected token | Edit silently reverted by linter / merge |
-| **L3** | Notebook QA | `pytest validation_test/panels/test_notebook_workbench.py` | Notebook contract drift (DesignSpec, result artifact, no-PySide rule) |
+| **L3** | Simulink QA | `simulink-app-health` plus focused MATLAB tests | Block/config/DesignSpec/result-artifact drift |
 | **L3** | Cubit toolbar | `cubit-plugin-install --verify-only` + toolbar source hash check | Old toolbar/plugin deployed; Cubit still loading stale files |
 | **L3** | Launcher widget matrix | Static source check: every mode-specific launcher widget has `setVisible(ms.needsVol)` | "Mesh order: 2" shown for STEP-only mode (2026-04-21 orderRow miss) |
 | **L4** | End-to-end | Cubit -batch .jou -> `export netgen` -> .vol | Full pipeline regresses (plugin missing, solver crash) |
-| **L4** | Notebook smoke | Run the notebook workbench/headless calc path with real inputs → JSON | notebook workbench + calc script actually solve |
-| **L4** | Panel mode matrix | For EACH active notebook mode, run its canonical sample E2E on 100号機 | New mode shipped without validation (2026-04-21 PEEC-inductance 4.78 nH regression) |
+| **L4** | Application smoke | Trigger each Simulink application through its headless batch path with real inputs -> JSON | block runner + calc script actually solve |
+| **L4** | Application mode matrix | For EACH active block mode, run its canonical sample E2E on 100号機 | New mode shipped without validation (2026-04-21 PEEC-inductance 4.78 nH regression) |
 | **L4** | Golden-range numeric | Assert `L_coil_nH` / `P_total_W` / ... falls in a known range (NOT just exit 0) | Silently-wrong fallback path (e.g. wrong cross-section area → L 100× off) |
 | **L4** | Multi-user ACL sanity | On 100号機 scan `C:\Users\*\AppData\Local\Coreform\Cubit\Coreform\licenses\renewals` and any `C:\temp\radia_*` file; owner MUST match the enclosing user.  Admin-owned files under a user AppData are the 2026-04-21 false-path (`debug-remote-user` SKILL) and block that user's Cubit entirely. | Broken-owner user-cache files from past Admin deploys that shipped but only affect non-admin users |
 
@@ -297,12 +297,13 @@ Radia の配布 wheel には bridge.py, cubit_netgen_bridge.py, cub5_to_vol.py �
 | **PySide6** | 通常 Radia Python には入れない | Cubit 同梱の PySide6 は保護対象 (削除禁止) |
 | **Cubit plugin** | (LAB Build.ps1 出力 = src/radia/ に直接) | `cubit-plugin-install --all-users` (regular-file copy from PyPI wheel) |
 
-### Notebook migration: `[gui]` is NOT part of production deploy
+### Simulink migration: `[gui]` is NOT part of production deploy
 
-Since the panel operating surfaces moved to Jupyter notebook workbenches,
-production installs should not add the old GUI extra just to get PySide6.
-Use `pip install radia[cubit]` for the Cubit/plugin path and verify notebooks
-via `ipynb-gui-health`.
+Since the application operating surfaces moved to Simulink blocks, production
+installs should not add the old GUI extra just to get PySide6. Use
+`pip install radia[cubit]` for the Cubit/plugin path, verify the five blocks via
+`simulink-app-health`, and use `ipynb-gui-health` only for IH's temporary
+comparison surface.
 
 Do **not** uninstall or delete Coreform Cubit's bundled PySide6 under
 `C:/Program Files/Coreform Cubit*/bin/python3/lib/site-packages`; Cubit owns
@@ -506,8 +507,8 @@ import radia
 print(f'  radia.__file__ = {radia.__file__}')
 
 # Phase 2: mtime sanity
-for name in ['radia.bem_coupled_solver', 'radia.notebook_workbench',
-             'radia.ih_notebook', 'radia.em_notebook', 'radia.bem_inductance']:
+for name in ['radia.bem_coupled_solver', 'radia.simulink.application',
+             'radia.ih_notebook', 'radia.bem_inductance']:
     m = importlib.import_module(name)
     st = os.stat(m.__file__)
     print(f'  {name:<32} mtime={int(st.st_mtime)} size={st.st_size}')
@@ -520,15 +521,12 @@ assert 'CoefficientFunction' in src and 'LinearForm' in src, \
     'BEM coupled per-DOF f_back not loaded'
 print('  OK: BEM coupled per-DOF f_back is active')
 
-# Phase 6: notebook workbench wiring
+# Phase 6: Simulink application and IH comparison wiring
+from radia.simulink.application import APPLICATIONS
 from radia.ih_notebook import IHWorkbench
-from radia.em_notebook import EMWorkbench
-from radia.pcb_notebook import PCBWorkbench
-from radia.motor_notebook import MotorWorkbench
-from radia.streamfunction_notebook import StreamFunctionWorkbench
-for cls in (IHWorkbench, EMWorkbench, PCBWorkbench, MotorWorkbench, StreamFunctionWorkbench):
-    assert hasattr(cls, 'build_command') or hasattr(cls, 'run_local'), cls.__name__
-print('  OK: notebook workbench modules import')
+assert set(APPLICATIONS) == {'em', 'pcb', 'motor', 'streamfunction', 'ih'}
+assert hasattr(IHWorkbench, 'build_command') or hasattr(IHWorkbench, 'run_local')
+print('  OK: five Simulink applications + IH notebook comparison import')
 "
 ```
 
@@ -695,7 +693,7 @@ for grp in cfg.get('project', {}).get('optional-dependencies', {}).values():
         deps.append(dep.split()[0].split('>')[0].split('=')[0].split('<')[0].strip())
 deps_top = {d.replace('-', '_').lower() for d in deps if d}
 # Common indirect imports we know are present. PySide6 is intentionally absent
-# from normal Radia Python after notebook panel migration.
+# from normal Radia Python after the Simulink interface migration.
 deps_top |= {'mcp', 'cubit_mesh_export', 'pyvista', 'matplotlib',
              'scipy', 'pytest'}
 deps_top_lower = {x.lower() for x in deps_top}
@@ -816,29 +814,32 @@ print('OK: all 3 packages have consistent pyproject.toml / __init__.py versions'
 - 7b-g の L0/L1/L2 チェックは **コードレビューより先**に走る (static → run-time の順)
 - 個別実行は禁止。必ず 1→2→3→4→5→5b→6→7→7b→7c→7d→7e→7f→7g→8 の順序
 
-### Step 8 — Notebook Panel QA (MANDATORY when notebook panel code changed)
+### Step 8 - Simulink Application QA (MANDATORY when interface code changed)
 
-**POLICY**: `src/radia/*_notebook.py`, `src/radia/*_design.py`,
-`src/radia/notebook_workbench.py`, `src/radia/panels/notebooks/*.ipynb`, or
-`panel_notebook_manifest.json` を編集したら、**`ipynb-gui-health`** を正の
-panel gate として使う。Jupyter notebook workbench が canonical surface であり、
-normal Radia Python に PySide6 を追加して旧 desktop panel を検証対象に戻して
-はいけない。
+**POLICY**: `src/radia/simulink/application.py`, `matlab/+radia/+simulink/`,
+`src/radia/*_design.py`, `src/radia/panels/calc_*.py`, or
+`application_interface_manifest.json` を編集したら、
+**`simulink-app-health`** を production gate として使う。IH notebook 関連を
+編集した場合だけ **`ipynb-gui-health`** も実行する。normal Radia Python に
+PySide6 を追加して旧 desktop panel を検証対象に戻してはいけない。
 
 **自動チェック**:
 
 ```powershell
 python -m pytest validation_test/panels/test_notebook_workbench.py -q
+python -m pytest tests/test_simulink_application.py -q
+python tools/audit_new_panel_contract.py
 ```
 
-このテストは次を同時に確認する:
-- active notebook が PySide6/PyQt に backslide していない
-- `DesignSpec(...)` cell が初期値の source of truth で、JSON は run artifact
-- `CommandWorkbench.run_local()` が `radia_result.v2` の `result.json` を残す
-- `calc_*.py` への argv と notebook manifest が一致している
+このゲートは次を同時に確認する:
+- 5つの application block と versioned config / DesignSpec が一致している
+- explicit trigger 1回につき headless solve が1回だけ走る
+- success / failure の双方で durable `result.json` が残る
+- EM / PCB / Motor / Stream Function notebook が復活していない
+- IH notebook comparison が同じ DesignSpec / calc path を使う
 
 旧PySide panel QA は legacy adapter を直接修正した時の補助チェックに限る。
-通常のリリース判定は notebook workbench と
+通常のリリース判定は Simulink application blocks と
 `cubit-plugin-install --verify-only` / `cubit-smoke-test` で行う。
 
 ### Panel Samples Quality Gate (Stage 1, MANDATORY)
@@ -911,8 +912,9 @@ C-heavy fixture L_coil = 138.159 nH.
 
 Run AFTER `pip index versions radia` confirms the new wheel is live.
 Both 100号機 and mdx use exactly this recipe.  Substitute the SSH
-target (`192.168.11.100` for 100号機, `mdx` for mdx).  Do not add the old
-GUI extra for PySide6; notebook workbenches are the canonical panel surface.
+target (`192.168.11.100` for 100号機, `mdx` for mdx). Do not add the old GUI
+extra for PySide6; Simulink blocks are the canonical application surface, with
+the IH notebook retained only for comparison.
 
 ```bash
 TARGET=192.168.11.100   # or 'mdx'
@@ -1422,17 +1424,19 @@ PY
 Any DRIFT line means `pip install -e` was silently overwritten or
 shadowed.  Do NOT proceed — fix per the table in Step (b).
 
-#### (d) End-to-end verify (same as before, check notebook QA works)
+#### (d) End-to-end verify (application runner and IH comparison)
 
 ```bash
 cat << 'PS' | ssh 100 'pwsh -Command -'
 $env:QT_QPA_PLATFORM = "offscreen"
 Set-Location 'W:\00_CAE\Radia\01_GitHub'
 python -m pytest validation_test/panels/test_notebook_workbench.py -q
+python -m pytest tests/test_simulink_application.py -q
+python tools/audit_new_panel_contract.py
 PS
 ```
 
-Expected: notebook workbench contract PASS on 100号機.
+Expected: Simulink application contract and IH comparison contract PASS on 100号機.
 
 #### (e) Post-deploy verification: "really deployed" HARD GATE
 
@@ -1585,10 +1589,10 @@ unhandleable native crash on his first STEP.
 | `radia_em` | `calc_em.py` | `em_sample.jou` → .vol | (add range here when first run) |
 | `radia_pcb` | `calc_pcb.py` | `pcb_sample.jou` → .vol | (add range here when first run) |
 
-**When a new notebook panel mode is added**, the deploy skill MUST be updated
-to add a new matrix row BEFORE declaring the feature shipped.
-`ipynb-gui-health` and the relevant `validation_test/` golden lane enforce
-this.
+**When a new Simulink application mode is added**, the deploy skill MUST be
+updated with a new matrix row BEFORE declaring the feature shipped.
+`simulink-app-health` and the relevant `validation_test/` golden lane enforce
+this. New notebook workbenches are forbidden; IH is the temporary exception.
 
 Every row must run on 100号機 (Stage 2) AND on mdx (Stage 3).
 Stage 1 (LAB) runs at least the rows for modes edited in this diff.

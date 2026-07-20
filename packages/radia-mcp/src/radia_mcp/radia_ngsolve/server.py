@@ -324,8 +324,10 @@ from .knowledge.urn import get_urn_documentation, urn_fit_from_csv
 from .acoustics import (
     acoustic_fembem_cross_learnings as _acoustic_fembem_cross_learnings,
 )
-from ..matlab_acoustic_fembem import (
-    matlab_acoustic_fembem_agent_guide as _matlab_acoustic_fembem_agent_guide,
+from ..acoustic_fembem import (
+    acoustic_fembem_agent_guide as _matlab_acoustic_fembem_agent_guide,
+    acoustic_fembem_extension_contract as _matlab_acoustic_fembem_extension_contract,
+    acoustic_fembem_server_config as _matlab_acoustic_fembem_server_config,
 )
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
@@ -1483,6 +1485,8 @@ def radia_usage(topic: str = "all") -> str:
             "best_practices" - lab best practices, incl. #11 storing
                                numerical-experiment results as JSON
                                (reproducible) + delete-by-folder cleanup
+            "matlab_mex"     - Python/NGSolve/MATLAB MEX boundary and
+                               table-backed MATLAB optimization contract
     """
     return get_radia_documentation(topic)
 
@@ -1600,6 +1604,44 @@ def matlab_acoustic_fembem_agent_guide() -> str:
     cross-validation.
     """
     return _matlab_acoustic_fembem_agent_guide()
+
+
+@mcp.tool()
+def matlab_acoustic_fembem_extension_contract() -> str:
+    """Inspect Radia's custom-tool contract for the official MATLAB MCP server.
+
+    Returns the installed extension path, digest, curated acoustic tool names,
+    and structural validation. The MathWorks server remains the runtime; this
+    tool reports the domain extension now owned and shipped by ``radia-mcp``.
+    """
+    return json.dumps(
+        _matlab_acoustic_fembem_extension_contract(),
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+@mcp.tool()
+def matlab_acoustic_fembem_server_config(
+    project_root: str = "",
+    profile: str = "existing",
+) -> str:
+    """Build official MATLAB MCP Server arguments for acoustic FEM-BEM.
+
+    ``project_root`` is an optional checkout containing ``+acoustic_fembem``
+    and ``matlab_api``. ``profile`` is ``existing``, ``auto_nodesktop``, or
+    ``new_nodesktop``. The result includes setup code, extension arguments,
+    and the shared-session preflight without launching another runtime.
+    """
+    try:
+        payload = _matlab_acoustic_fembem_server_config(project_root, profile)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        payload = {
+            "schema": "radia-mcp.acoustic-fembem-server-config/v1",
+            "status": "error",
+            "error": str(exc),
+        }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -2308,23 +2350,23 @@ def release_workflow(topic: str = "") -> str:
 @mcp.tool()
 def standalone_panels(topic: str = "") -> str:
     """
-    Retired standalone PySide panel topic.  The canonical Radia panel surface
-    is now the Jupyter notebook workbench (`radia_<app>.ipynb` +
-    `radia.<app>_notebook`).  This tool remains as a compatibility redirect.
+    Retired standalone PySide panel topic. The canonical Radia human surface is
+    now the single Simulink application-block library. This tool remains as a
+    compatibility redirect; IH alone has a temporary notebook comparison path.
 
     Read this when:
       * A user asks about the old standalone panel entry-points.
       * An MCP client still calls the historical `standalone_panels` topic.
-      * You need the post-migration notebook route and no-PySide boundary.
+      * You need the post-migration Simulink route and no-PySide boundary.
 
     Topics:
-      quick_start      -- current notebook route
-      four_panels      -- active notebook workbenches
-      build_notebook_gui -- construction recipe for new notebook GUIs
+      quick_start      -- current Simulink library route
+      four_panels      -- compatibility topic listing five application blocks
+      build_notebook_gui -- historical alias for the block construction recipe
       cubit_panels_migration -- examples/cubit_panels promotion route
       vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
-      vs_cubit         -- notebook route vs Cubit export/plugin boundary
-      ih_methods       -- IH through `radia_ih.ipynb`
+      vs_cubit         -- Simulink route vs Cubit export/plugin boundary
+      ih_methods       -- temporary IH block/notebook comparison
       troubleshooting  -- common post-migration issues
 
     Args:

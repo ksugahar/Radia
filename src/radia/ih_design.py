@@ -1,9 +1,8 @@
 """UI-neutral induction-heating design specification.
 
-This module is the first step toward a browser/Jupyter based IH design
-workbench.  It intentionally imports no Qt/PySide modules: desktop GUI
-panels, notebooks, Voila apps, and tests should all be able to share the
-same design state and command-building rules.
+The production Simulink block and temporary IH notebook comparison share this
+design state and the same command-building rules. The module intentionally has
+no Qt/PySide dependency.
 """
 
 from __future__ import annotations
@@ -338,9 +337,9 @@ class IHDesignSpec:
     ) -> list[str]:
         """Build the headless calc command for the current design.
 
-        All IH methods, including thermal modes, are represented here so
-        the browser/Jupyter workbench and the legacy PySide shell can share
-        a single command contract.
+        All IH methods, including thermal modes, are represented here so the
+        Simulink block and temporary Jupyter comparison workbench share one
+        command contract.
         """
 
         py = python or sys.executable

@@ -1,4 +1,4 @@
-"""Reusable ipywidgets command workbench for Radia notebook panels."""
+"""Reusable command workbench retained for the IH Simulink comparison."""
 
 from __future__ import annotations
 

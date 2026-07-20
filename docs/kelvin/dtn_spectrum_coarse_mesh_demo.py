@@ -61,7 +61,7 @@ Companion: bem_integral.{exterior_dtn_spectrum, dtn_spectrum_vs_mesh} (BEM side)
                              kelvin_vs_exact_open_bc_error,          (isolated error),
                              kelvin_openbc_error_vs_exterior_mesh}   (vs exterior mesh)
 Knowledge:  MCP tool  dtn_coarse_mesh  (overview / numerics / api / applications)
-Gate:       tests/test_dtn_spectrum_coarse.py
+Gate:       validation_test/radia_mcp/test_dtn_spectrum_coarse.py
 
 NB the dense BEM densification (Part A) is O(ndof^2); the default 2-mesh sweep
 (ndof 336 + 564) takes a few minutes. The Kelvin volume solves (Part B) are fast.

@@ -142,7 +142,7 @@ def solve_poisson_axi(mesh, coeff, dirichlet_values, source=None, order=2):
 def capacitance_axi(V, mesh, eps, v_applied):
     """Axisymmetric capacitance [F] (full 3D, not per length): C = 2W/V^2 with
     W = (1/2) int eps |grad V|^2 (2 pi r) dr dz. Validated: concentric-sphere
-    capacitor C = 4 pi eps ab/(b-a) to 0.15 % (tests/test_axi_scalar.py)."""
+    capacitor C = 4 pi eps ab/(b-a) to 0.15 % (validation_test/radia_mcp/test_axi_scalar.py)."""
     W = math.pi * Integrate(eps * grad(V) * grad(V) * _r * dx, mesh)
     return 2.0 * W / (v_applied * v_applied)
 
@@ -193,7 +193,7 @@ def solve_thermal(mesh, k, temperatures, heat_source=None, order=2,
 
     Validated: 1D slab Dirichlet + convection vs L/k + 1/h (+0.003%); Dirichlet
     + radiation vs the implicit conduction/radiation balance solved by brentq
-    (tests/test_scalar_fem2d_ext.py)."""
+    (validation_test/radia_mcp/test_scalar_fem2d_ext.py)."""
     if radiation is None:
         return solve_poisson_2d(mesh, k, temperatures, source=heat_source,
                                 order=order, robin=convection)
@@ -241,7 +241,7 @@ def thermal_conductance(T, mesh, k, delta_T):
     """Thermal conductance per length [W/m/K] from the conduction dissipation: G_th = 2P/dT^2,
     P = 1/2 int k |grad T|^2 dA -- the heat member of the Laplace-operator triad alongside electric
     :func:`conductance` and :func:`capacitance` (same -div(c grad u)=0, c = sigma / eps / k).
-    Validated on the coaxial annulus: G_th/L = 2 pi k / ln(b/a) (tests/test_scalar_fem2d.py)."""
+    Validated on the coaxial annulus: G_th/L = 2 pi k / ln(b/a) (validation_test/radia_mcp/test_scalar_fem2d.py)."""
     P = 0.5 * Integrate(k * grad(T) * grad(T) * dx, mesh)
     return 2.0 * P / (delta_T * delta_T)
 
@@ -262,7 +262,7 @@ def permeance(phi, mesh, mu, mmf):
     electric :func:`conductance`, :func:`capacitance` and :func:`thermal_conductance` (same
     -div(c grad u)=0, c = sigma / eps / k / mu). For a finite axial length L the magnetic-circuit
     reluctance is R_m = 1/(P' L).  Validated on the coaxial annulus: P'/L = 2 pi mu / ln(b/a)
-    (tests/test_scalar_fem2d.py) -- the radial-gap reluctance used in magnetic-equivalent-circuit models."""
+    (validation_test/radia_mcp/test_scalar_fem2d.py) -- the radial-gap reluctance used in magnetic-equivalent-circuit models."""
     W = 0.5 * Integrate(mu * grad(phi) * grad(phi) * dx, mesh)
     return 2.0 * W / (mmf * mmf)
 
@@ -283,7 +283,7 @@ def solve_magnetostatic_az(mesh, nu, currents, dirichlet_values, order=2):
 
     Returns the H1 GridFunction A_z; the inductance via :func:`inductance_2d`. Validated:
     solid-conductor coax L' = mu0/(2pi)(ln(b/a)+1/4) and the magnetic-fill variant
-    L' = mu0/(2pi)(mu_r ln(b/a)+1/4) (tests/test_inductance_2d.py)."""
+    L' = mu0/(2pi)(mu_r ln(b/a)+1/4) (validation_test/radia_mcp/test_inductance_2d.py)."""
     src = mesh.MaterialCF(dict(currents), default=0.0)
     return solve_poisson_2d(mesh, nu, dirichlet_values, source=src, order=order)
 
@@ -330,7 +330,7 @@ def inductance_2d(A, mesh, nu, total_current):
     field (the converged reluctivity of a saturated nonlinear solve, held fixed) makes this
     the frozen-permeability incremental inductance used for machine Ld/Lq; a constant mu_r is
     the linear limit. ``total_current`` = net conductor current I [A]. Validated against the
-    solid-coax closed form mu0/(2pi)(ln(b/a)+1/4) to 0.16% (tests/test_inductance_2d.py)."""
+    solid-coax closed form mu0/(2pi)(ln(b/a)+1/4) to 0.16% (validation_test/radia_mcp/test_inductance_2d.py)."""
     W = 0.5 * Integrate(nu * grad(A) * grad(A) * dx, mesh)
     return 2.0 * W / (total_current * total_current)
 
@@ -345,7 +345,7 @@ def solve_current_flow_ac(mesh, sigma, eps, omega, potentials, order=2):
     Terminal admittance via :func:`admittance_ac`.
 
     Validated: coaxial Y/L = 2 pi (sigma + j w eps) / ln(b/a) = G + j w C
-    (tests/test_scalar_fem2d_ext.py)."""
+    (validation_test/radia_mcp/test_scalar_fem2d_ext.py)."""
     c = CoefficientFunction(sigma + 1j * omega * eps)
     fes = H1(mesh, order=order, complex=True, dirichlet="|".join(potentials))
     u, v = fes.TnT()

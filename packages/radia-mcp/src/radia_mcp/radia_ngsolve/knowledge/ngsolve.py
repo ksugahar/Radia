@@ -6058,7 +6058,7 @@ That excess IS the physical content the lumped model misses. Tool-independent ga
 L bounded BELOW by L0 (and < ~1.8 L0), L falling with g, and L/L0 RISING with g; a radia
 self-regression pins the values and an independent 2D FE solver matches them to ~0.4 %
 (capability parity, recorded in the internal cross-val). Validated
-tests/test_gapped_core_inductance.py.
+validation_test/radia_mcp/test_gapped_core_inductance.py.
 
 PM LOAD LINE / operating point (#42) -- the PERMANENT-MAGNET-driven member, completing the
 magnetic-circuit trilogy (coil force #27, coil inductance #39, PM operating point now). A
@@ -6073,7 +6073,7 @@ B_gap is BELOW the leakage-free load line, ~0.86x (g=2 mm) -> ~0.68x (g=8 mm), t
 GROWING with the gap. Tool-independent gate: FE below the load line (upper bound), B_gap and
 B_gap/loadline both FALLING with the gap, + a radia self-regression; an independent 2D FE
 solver matches radia to ~0.3 % (capability parity, internal cross-val). Validated
-tests/test_pm_loadline.py.
+validation_test/radia_mcp/test_pm_loadline.py.
 
 For hot-magnet demagnetisation screening, keep the compact student-facing summary:
 ``pm_loadline_demag_risk_summary(rows)`` checks that safe load-line rows form a prefix,
@@ -6287,7 +6287,7 @@ stored regression reference (an independent weighted-stress-tensor solve):
     iron axis; zeros at 0/90/180, antisymmetric extrema at +-45/135).
 Two FULLY INDEPENDENT torque methods + independent meshes agreeing sub-percent also
 validates the unit conversion. Locked in:
-``tests/test_motor_cogging_torque.py::test_reluctance_torque_amplitude`` (the reference
+``validation_test/radia_mcp/test_motor_cogging_torque.py::test_reluctance_torque_amplitude`` (the reference
 number is stored -> CI-portable).
 
 EXTEND to true slotted cogging (multi-tooth stator x PM poles): same method, period
@@ -6445,7 +6445,7 @@ Behaviour: at low current the magnet term dominates (g ~ 0); as I rises the relu
 increasingly worth exploiting (|g| grows) and MTPA beats pure-q-axis by a widening margin.
 
 VALIDATION:
-  * tests/test_motor_mtpa.py -- closed form == independent NUMERICAL argmax over the current
+  * validation_test/radia_mcp/test_motor_mtpa.py -- closed form == independent NUMERICAL argmax over the current
     angle (0.000 %), the stationarity residual ~ 0, current magnitude honoured, MTPA >= pure-q,
     and the limits above. PURE dq theory -> tool-independent (no FE solve, no reference values).
   * An MTPA-locus demo FE-extracts (lambda_m, Ld, Lq) with radia then sweeps
@@ -6495,7 +6495,7 @@ closed-form candidates):
 ``characteristic_current`` (Ich), ``infinite_speed_possible`` (Ich <= Imax),
 ``finite_max_speed`` (Ich > Imax), ``mtpv_possible`` (Ich < Imax), and the current margin/ratio.
 
-VALIDATION (tests/test_field_weakening.py): the
+VALIDATION (validation_test/radia_mcp/test_field_weakening.py): the
 closed-form operating point == an INDEPENDENT brute-force numeric constrained argmax of T over
 the feasible (id,iq) to **0.000 %**, across a wide-CPSR IPM (Ich<Imax, exercises MTPV), a
 current-limited IPM (Ich>Imax, finite max speed -- helper-None == numeric-None), and a
@@ -6866,7 +6866,7 @@ ONE current-driven `solve_planar_eddy` on the WIRE ALONE with A_z=0 on its surfa
 the pure INTERNAL impedance, no external term to subtract): Rac=Re(Vc/I), L_int=Im(Vc/I)/omega.
 FE vs Kelvin **<0.06 %** L_int and **<1 %** Rac over q=0.5..8 (tests/test_ac_internal_inductance.py). The high-frequency complement
 to the DC internal inductance (#36); the AC resistance is the existing skin-effect test
-(tests/test_planar_eddy.py), also vs the Kelvin closed form.
+(validation_test/radia_mcp/test_planar_eddy.py), also vs the Kelvin closed form.
 """
 
 
@@ -7175,7 +7175,7 @@ term and a SAME-WIDTH current-free extension reproduce the closed form to **0.00
 opening (w_o<w_s) makes the FE sit a few % ABOVE the simple series form (tooth-shoulder fringing
 the lumped permeance omits), so the closed form is then a documented LOWER bound -- the same
 signed-leakage story as the gapped-core inductance (coil links extra window flux) and the PM
-load-line (magnet flux short-cuts the gap). tests/test_slot_leakage.py.
+load-line (magnet flux short-cuts the gap). validation_test/radia_mcp/test_slot_leakage.py.
 
 KEY GOTCHA: do NOT model the slot as an isolated current in a closed iron block -- a net slot
 current with no return path produces a global field (and a meaningless energy). The leakage flux
@@ -7264,7 +7264,7 @@ FE recipe: solve V with
 Kirchhoff potential ``solve_poisson_2d(mesh, 1.0, {"hi":psi0,"lo":psi0}, source=sigma*|grad V|^2)``
 with psi0 = L sigma T0^2/2, then T = sqrt(2 psi/(L sigma)). radia FE matches the closed form to
 **0.000 %** on BOTH a uniform bar AND a dog-bone constriction -- the SAME U gives the SAME T_max
-(the geometry independence) -- tests/test_phi_theta.py. The Wiedemann-Franz-exact generalisation
+(the geometry independence) -- validation_test/radia_mcp/test_phi_theta.py. The Wiedemann-Franz-exact generalisation
 of the constant-property Joule bar peak sigma V^2/8k (#19); the basis of contact-voltage limits
 (connectors, relays, fuses, motor terminals -- a metal softens/melts at a voltage set by the
 material alone).

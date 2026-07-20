@@ -12,7 +12,7 @@ method ``METHOD_BEMA_BEM_STRONG``.
 These tests lock:
   1. argparse accepts ``--coupling-mode strong`` + the coupling knobs.
   2. the fail-fast guards (strong needs bem-a + a workpiece --vol).
-  3. the notebook DesignSpec (IHDesignSpec) build_command for the strong
+  3. the shared application DesignSpec (IHDesignSpec) build_command for the strong
      method emits only flags the calc argparse accepts.
   4. the CLI path runs end-to-end and returns a self-consistent result
      (L_total = L_coil + dL, R_total = R_coil + dR, dR = 2 P_wp / I^2).
@@ -102,7 +102,7 @@ def test_strong_requires_workpiece_vol():
 
 
 # ----------------------------------------------------------------------
-# 3. notebook DesignSpec build_command <-> calc argparse
+# 3. shared application DesignSpec build_command <-> calc argparse
 # ----------------------------------------------------------------------
 def test_designspec_strong_build_command_parses():
     p = ci.build_argparser()

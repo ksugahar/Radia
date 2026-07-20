@@ -221,6 +221,12 @@ def test_native_production_wedge_full_gram_derivative_translation_scale_and_loca
         eps=1e-12,leaf=256,eta=2.0)
     probe=np.linspace(-.4,.7,n)
     np.testing.assert_allclose(dop.matvec_sym(probe),ds@probe,rtol=2e-12,atol=2e-12)
+    right=probe[::-1].copy()
+    contractions=g0.directional_derivative_contractions("wedge",
+        np.ascontiguousarray(np.stack([ones_c,cells])),
+        np.ascontiguousarray(np.stack([ones_f,faces])),probe,right)
+    np.testing.assert_allclose(contractions,[probe@dt@right,probe@ds@right],
+        rtol=3e-13,atol=3e-13)
     assert np.linalg.norm(dt)<3e-11
     assert np.linalg.norm(ds+G)/np.linalg.norm(G)<3e-10
     assert np.array_equal(dt,dt.T) and np.array_equal(ds,ds.T)
@@ -476,6 +482,11 @@ def test_native_production_tet_complete_gram_and_piola_product_derivative():
         eps=1e-12,leaf=256,eta=2.0)
     probe=np.linspace(-.6,.8,dG.shape[0])
     np.testing.assert_allclose(dop.matvec_sym(probe),dG@probe,rtol=2e-12,atol=2e-12)
+    right=probe[::-1].copy()
+    contraction=gram.directional_derivative_contractions("tet",
+        np.ascontiguousarray(cell_v[None,...]),np.ascontiguousarray(face_v[None,...]),
+        probe,right)
+    np.testing.assert_allclose(contraction,[probe@dG@right],rtol=3e-13,atol=3e-13)
     fdG=(Gp-Gm)/(2*epsilon)
     np.testing.assert_allclose(dG,dG.T,rtol=0,atol=0)
     np.testing.assert_allclose(dG,fdG,rtol=4e-7,atol=8e-11)
@@ -617,6 +628,12 @@ def test_native_complete_hex_charge_gram_directional_derivative():
     probe=np.linspace(-.7,.9,n)
     np.testing.assert_allclose(derivative_operator.matvec_sym(probe),derivative@probe,
         rtol=2e-12,atol=2e-13)
+    right=probe[::-1].copy()
+    contractions=gram.directional_derivative_contractions("hex",
+        np.ascontiguousarray(np.stack([cells@gradient.T+offset,cells])),
+        np.ascontiguousarray(np.stack([faces@gradient.T+offset,faces])),probe,right)
+    np.testing.assert_allclose(contractions,
+        [probe@derivative@right,probe@scaling@right],rtol=3e-13,atol=3e-13)
     np.testing.assert_allclose(derivative,(value_plus-value_minus)/(2*epsilon),rtol=3e-7,atol=2e-10)
 
 

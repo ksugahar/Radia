@@ -1,6 +1,6 @@
 ---
 name: api-inventory
-description: Take inventory (stock-take) of the radia package's PROPRIETARY Python+pybind API surface and categorize every API FAMILY per the "Reduce Proprietary API Surface" policy -- plumbing (delete/delegate to netgen/ngsolve/MKL/OCC/GMSH/Cubit) vs method (keep; maybe demote to internal) vs user-intent (keep/promote) vs deprecated (drop) -- producing a committed audit doc + a phased reduction plan. Use after adding/removing public APIs, before a deprecation / un-pybind pass, or periodically to drive the surface toward the 2-layer (intent / internal) target. READ-ONLY analysis: safe to run while another agent edits source; do the actual removals SEPARATELY, avoiding active-dev areas (e.g. HACApK).
+description: "Take inventory of the radia package's proprietary Python and pybind API surface, classify API families under the Reduce Proprietary API Surface policy, and produce a committed audit plus phased reduction plan. Use after public API changes, before deprecation work, or for periodic read-only surface audits."
 ---
 
 # api-inventory
@@ -91,4 +91,4 @@ active-dev area).
 ## Related
 - "Reduce Proprietary API Surface" + "No Development Cruft in SOURCE" policies (CLAUDE.md / AGENTS.md).
 - `inventory_workflow.js` -- the bundled, proven fan-out implementation.
-- `ipynb-gui-health`, `panel-cli-diff`, `panel-review` -- adjacent surface-health skills.
+- `simulink-app-health`, `panel-cli-diff`, `panel-review` -- adjacent surface-health skills.

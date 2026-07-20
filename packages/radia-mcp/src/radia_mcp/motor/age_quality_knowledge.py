@@ -45,7 +45,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_ngsolve_robin",
         level="gold_age_invariant",
         quantity="single-boundary AGE Robin coupling against analytic annulus field",
-        evidence=("tests/test_airgap_ngsolve_coupling.py",),
+        evidence=("validation_test/radia_mcp/test_airgap_ngsolve_coupling.py",),
         acceptance=("field relative error below 5e-3 against full-annulus analytic solution",),
         families=("spm", "ipm", "synrm", "srm"),
     ),
@@ -53,7 +53,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_two_region_coupling",
         level="gold_age_invariant",
         quantity="rotor FE region plus stator FE region coupled across an unmeshed gap",
-        evidence=("tests/test_airgap_two_region.py",),
+        evidence=("validation_test/radia_mcp/test_airgap_two_region.py",),
         acceptance=("two-region field relative error below 1e-3 against 3-region analytic solution",),
         families=("spm", "ipm", "synrm", "srm", "induction"),
     ),
@@ -61,7 +61,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_multiharmonic_gap",
         level="gold_age_invariant",
         quantity="multi-harmonic dense gap block for slotting and non-sinusoidal fields",
-        evidence=("tests/test_airgap_multiharmonic.py",),
+        evidence=("validation_test/radia_mcp/test_airgap_multiharmonic.py",),
         acceptance=("multi-harmonic field relative error below 1e-4 against superposed analytic modes",),
         families=("spm", "ipm", "synrm", "srm", "hysteresis"),
     ),
@@ -69,7 +69,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_rotation_torque",
         level="gold_age_invariant",
         quantity="rotor rotation as harmonic phase plus closed-form air-gap torque",
-        evidence=("tests/test_airgap_machine_rotation.py",),
+        evidence=("validation_test/radia_mcp/test_airgap_machine_rotation.py",),
         acceptance=(
             "torque relative error below 2e-3 against analytic rotating-field torque",
             "torque swings with rotor phase, proving this is not a static-only check",
@@ -80,7 +80,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_eddy_gap",
         level="gold_age_invariant",
         quantity="complex AGE gap with conducting region and eddy phase",
-        evidence=("tests/test_airgap_eddy_coupling.py",),
+        evidence=("validation_test/radia_mcp/test_airgap_eddy_coupling.py",),
         acceptance=(
             "complex field relative error below 1e-2 against fully meshed gap reference",
             "imaginary field component is non-trivial, so the eddy phase is actually tested",
@@ -91,7 +91,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_eddy_machine",
         level="gold_age_invariant",
         quantity="complete rotating eddy machine: rotor, stator conductor, gap, rotation, torque",
-        evidence=("tests/test_airgap_eddy_machine.py",),
+        evidence=("validation_test/radia_mcp/test_airgap_eddy_machine.py",),
         acceptance=(
             "conducting-stator field relative error below 1e-4 against fully meshed reference",
             "rotation torque relative error below 1e-2",
@@ -103,7 +103,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_spm_field",
         level="silver_age_field",
         quantity="SPM magnetization labels to AGE air-gap harmonic spectrum",
-        evidence=("tests/test_build123d_pmsm_field.py",),
+        evidence=("validation_test/radia_mcp/test_build123d_pmsm_field.py",),
         acceptance=("radial alternating N/S magnets create the requested pole harmonic in the AGE field",),
         families=("spm", "afpm"),
     ),
@@ -111,7 +111,7 @@ GATES: tuple[AgeGate, ...] = (
         gate_id="age_ipm_synchronous_torque",
         level="silver_age_torque",
         quantity="IPM/SPM synchronous torque and torque-angle law",
-        evidence=("tests/test_build123d_ipm_age_torque.py",),
+        evidence=("validation_test/radia_mcp/test_build123d_ipm_age_torque.py",),
         acceptance=(
             "phase-locked torque ripple below 1e-2",
             "torque-angle residual below 5e-3 against a single-sine law for the baseline case",
@@ -123,10 +123,10 @@ GATES: tuple[AgeGate, ...] = (
         level="gold_reduced_invariant",
         quantity="Ke/Kt, dq torque, Ld/Lq, MTPA, field-weakening operating regions",
         evidence=(
-            "tests/test_pm_emf_constants.py",
+            "validation_test/radia_mcp/test_pm_emf_constants.py",
             "tests/test_dq_torque.py",
-            "tests/test_motor_mtpa.py",
-            "tests/test_field_weakening.py",
+            "validation_test/radia_mcp/test_motor_mtpa.py",
+            "validation_test/radia_mcp/test_field_weakening.py",
             "tests/test_dq_operating_point.py",
         ),
         acceptance=(
@@ -144,7 +144,7 @@ GATES: tuple[AgeGate, ...] = (
             "tests/test_cogging_order.py",
             "tests/test_skew_factor.py",
             "tests/test_skew_average.py",
-            "tests/test_motor_cogging_torque.py",
+            "validation_test/radia_mcp/test_motor_cogging_torque.py",
             "tests/test_machine_scaling.py",
         ),
         acceptance=(
@@ -159,8 +159,8 @@ GATES: tuple[AgeGate, ...] = (
         level="silver_age_eddy",
         quantity="induction slip coupling, torque-slip curve, deep-bar AC factors",
         evidence=(
-            "tests/test_airgap_eddy_machine.py",
-            "tests/test_motor_induction_coupling.py",
+            "validation_test/radia_mcp/test_airgap_eddy_machine.py",
+            "validation_test/radia_mcp/test_motor_induction_coupling.py",
             "tests/test_induction_machine.py",
             "tests/test_deep_bar.py",
             "tests/test_dowell.py",
@@ -179,9 +179,9 @@ GATES: tuple[AgeGate, ...] = (
         quantity="stateful B-input Play hysteresis loss from an AGE rotor sweep",
         evidence=(
             "tests/test_hysteresis_play.py",
-            "tests/test_hysteresis_fe_coupled.py",
-            "tests/test_hysteresis_fe_variational.py",
-            "tests/test_hysteresis_motor_loss.py",
+            "validation_test/radia_mcp/test_hysteresis_fe_coupled.py",
+            "validation_test/radia_mcp/test_hysteresis_fe_variational.py",
+            "validation_test/radia_mcp/test_hysteresis_motor_loss.py",
         ),
         acceptance=(
             "per-point loop area is positive",
@@ -391,37 +391,47 @@ Suggested labels:
 RUNBOOK = """\
 # AGE quality runbook
 
+Run these commands from the Radia repository root.
+
 Fast algebra/control gates:
 
 ```powershell
-python -m pytest tests\\test_airgap_element.py tests\\test_age_winding_factor.py `
-  tests\\test_pm_emf_constants.py tests\\test_dq_torque.py tests\\test_motor_mtpa.py `
-  tests\\test_field_weakening.py tests\\test_induction_machine.py tests\\test_deep_bar.py `
-  tests\\test_cogging_order.py tests\\test_skew_factor.py tests\\test_skew_average.py
+python -m pytest packages\\radia-mcp\\tests\\test_airgap_element.py `
+  packages\\radia-mcp\\tests\\test_age_winding_factor.py packages\\radia-mcp\\tests\\test_dq_torque.py `
+  packages\\radia-mcp\\tests\\test_induction_machine.py packages\\radia-mcp\\tests\\test_deep_bar.py `
+  packages\\radia-mcp\\tests\\test_cogging_order.py packages\\radia-mcp\\tests\\test_skew_factor.py `
+  packages\\radia-mcp\\tests\\test_skew_average.py
+```
+
+Numerical method gates:
+
+```powershell
+python -m pytest validation_test\\radia_mcp\\test_pm_emf_constants.py `
+  validation_test\\radia_mcp\\test_motor_mtpa.py validation_test\\radia_mcp\\test_field_weakening.py
 ```
 
 AGE finite-element gates:
 
 ```powershell
-python -m pytest tests\\test_airgap_ngsolve_coupling.py tests\\test_airgap_two_region.py `
-  tests\\test_airgap_multiharmonic.py tests\\test_airgap_machine_rotation.py `
-  tests\\test_airgap_eddy_coupling.py tests\\test_airgap_eddy_machine.py
+python -m pytest validation_test\\radia_mcp\\test_airgap_ngsolve_coupling.py validation_test\\radia_mcp\\test_airgap_two_region.py `
+  validation_test\\radia_mcp\\test_airgap_multiharmonic.py validation_test\\radia_mcp\\test_airgap_machine_rotation.py `
+  validation_test\\radia_mcp\\test_airgap_eddy_coupling.py validation_test\\radia_mcp\\test_airgap_eddy_machine.py
 ```
 
 Motor archetype gates:
 
 ```powershell
-python -m pytest tests\\test_build123d_pmsm_field.py `
-  tests\\test_build123d_ipm_age_torque.py tests\\test_motor_cogging_torque.py `
-  tests\\test_motor_induction_coupling.py tests\\test_hysteresis_motor_loss.py
+python -m pytest validation_test\\radia_mcp\\test_build123d_pmsm_field.py `
+  validation_test\\radia_mcp\\test_build123d_ipm_age_torque.py validation_test\\radia_mcp\\test_motor_cogging_torque.py `
+  validation_test\\radia_mcp\\test_motor_induction_coupling.py validation_test\\radia_mcp\\test_hysteresis_motor_loss.py
 ```
 
 MCP gates:
 
 ```powershell
-$env:PYTHONPATH = ".\\src"
+$env:PYTHONPATH = ".\\packages\\radia-mcp\\src"
 python -m radia_mcp.motor.server --selftest
-python -m pytest tests\\test_each_server_selftest.py -k motor
+python -m pytest packages\\radia-mcp\\tests\\test_each_server_selftest.py -k motor
 ```
 
 Use the family plan first, then run only the relevant subset when iterating.
