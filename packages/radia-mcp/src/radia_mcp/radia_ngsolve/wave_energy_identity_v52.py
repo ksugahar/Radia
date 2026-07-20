@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .wave_port_identity_v53 import validate_public_v53_identity
+
 
 ENERGY_BALANCE = "energy_balance_incident_reflected_transmitted_absorbed_dissipated_run_owner_identity"
 EIGENMODE_Q = "eigenmode_q_stored_energy_boundary_loss_normalization_mode_owner_identity"
@@ -93,7 +95,7 @@ def validate_public_v52_identity(payload: object) -> dict[str, bool]:
     if not isinstance(payload, Mapping):
         return {}
     rows = [row for row in (payload.get("runs") or []) if isinstance(row, Mapping)]
-    checks: dict[str, bool] = {}
+    checks = validate_public_v53_identity(payload)
     balances = [row[ENERGY_BALANCE] for row in rows if ENERGY_BALANCE in row]
     q_factors = [row[EIGENMODE_Q] for row in rows if EIGENMODE_Q in row]
     if balances:
