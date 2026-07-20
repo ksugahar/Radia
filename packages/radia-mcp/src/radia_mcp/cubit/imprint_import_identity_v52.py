@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .sweep_export_identity_v53 import (
+    validate_public_identity as validate_public_v53_identity,
+    validate_source_identity as validate_source_v53_identity,
+)
+
 
 SHEET = "sheet_imprint_merge_tolerance_curvesplit_topology_owner_identity"
 SCHEME = "volume_scheme_autosmooth_curveinterval_seed_owner_identity"
@@ -164,6 +169,9 @@ def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v53 = validate_public_v53_identity(payload)
+    if v53:
+        checks.update(v53["checks"])
     if payload.get(SHEET) is not None:
         checks["v52_sheet_imprint_tolerance_split_topology_owner"] = isinstance(payload[SHEET], Mapping) and _sheet_ok(payload[SHEET])
     if payload.get(SCHEME) is not None:
@@ -175,6 +183,9 @@ def validate_source_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v53 = validate_source_v53_identity(payload)
+    if v53:
+        checks.update(v53["checks"])
     if payload.get(ACIS) is not None:
         checks["v52_acis_tolerance_healing_body_layer_owner"] = isinstance(payload[ACIS], Mapping) and _acis_ok(payload[ACIS])
     if payload.get(APREPRO) is not None:
