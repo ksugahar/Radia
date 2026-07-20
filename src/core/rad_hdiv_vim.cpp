@@ -4,11 +4,96 @@
 #include <array>
 #include <algorithm>
 #include <stdexcept>
+#include <map>
 #include <vector>
 
 #include "rad_parallel.h"
 
 namespace rad_hdiv {
+
+std::vector<double> AffineCellSelfEnergyShapeDerivative(
+    int cell_type, const std::vector<double>& nodes,
+    const std::vector<double>& node_velocities, int n_modes)
+{
+    const int nn = cell_type == 0 ? 4 : (cell_type == 1 ? 8 : (cell_type == 2 ? 6 : 0));
+    if (!nn) throw std::invalid_argument("cell_type must be 0 (TET), 1 (HEX), or 2 (WEDGE)");
+    if ((int)nodes.size() != 3*nn)
+        throw std::invalid_argument("nodes has the wrong size for cell_type");
+    if (n_modes < 0 || (int)node_velocities.size() != n_modes*3*nn)
+        throw std::invalid_argument("node_velocities must have shape (n_modes,nodes,3)");
+    for (double x : nodes) if (!std::isfinite(x))
+        throw std::invalid_argument("nodes must be finite");
+    for (double x : node_velocities) if (!std::isfinite(x))
+        throw std::invalid_argument("node_velocities must be finite");
+
+    std::vector<std::array<int,4>> tets;
+    if (cell_type == 0) tets = {{0,1,2,3}};
+    else if (cell_type == 1) tets = {
+        {0,1,2,6},{0,2,3,6},{0,3,7,6},{0,7,4,6},{0,4,5,6},{0,5,1,6}};
+    else tets = {{0,1,2,3},{1,2,4,3},{2,4,5,3}};
+
+    auto tet_vertices = [&](const std::array<int,4>& ti, double V[4][3]) {
+        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=nodes[3*ti[i]+k];
+    };
+    auto det6 = [](const double V[4][3]) {
+        const double ax=V[1][0]-V[0][0], ay=V[1][1]-V[0][1], az=V[1][2]-V[0][2];
+        const double bx=V[2][0]-V[0][0], by=V[2][1]-V[0][1], bz=V[2][2]-V[0][2];
+        const double cx=V[3][0]-V[0][0], cy=V[3][1]-V[0][1], cz=V[3][2]-V[0][2];
+        return ax*(by*cz-bz*cy)-ay*(bx*cz-bz*cx)+az*(bx*cy-by*cx);
+    };
+    for (const auto& ti:tets) { double V[4][3]; tet_vertices(ti,V); if (std::fabs(det6(V)) < 1e-18)
+        throw std::invalid_argument("degenerate affine cell decomposition"); }
+
+    // Same 4^3 smooth outer rule used by the production affine TET ChargeGram.
+    static const double gx[4]={0.06943184420297371,0.33000947820757187,0.66999052179242813,0.93056815579702629};
+    static const double gw[4]={0.17392742256872693,0.32607257743127307,0.32607257743127307,0.17392742256872693};
+    constexpr double inv4pi=0.07957747154594766788;
+    double energy=0.0;
+    for (const auto& tt:tets) {
+        double VT[4][3]; tet_vertices(tt,VT); const double jac=std::fabs(det6(VT));
+        for(int ia=0;ia<4;++ia) for(int ib=0;ib<4;++ib) for(int ic=0;ic<4;++ic) {
+            const double a=gx[ia], b=gx[ib], c=gx[ic];
+            const double l1=a, l2=b*(1-a), l3=c*(1-a)*(1-b);
+            double p[3]; for(int k=0;k<3;++k) p[k]=VT[0][k]+l1*(VT[1][k]-VT[0][k])+l2*(VT[2][k]-VT[0][k])+l3*(VT[3][k]-VT[0][k]);
+            double phi=0.0; for(const auto& ts:tets) { double VS[4][3]; tet_vertices(ts,VS); phi+=PhiTet(VS,p); }
+            energy += gw[ia]*gw[ib]*gw[ic]*(1-a)*(1-a)*(1-b)*jac*phi;
+        }
+    }
+
+    // Extract boundary triangles: a sorted face occurring once is on dD.
+    struct Face { std::array<int,3> oriented; int count=0; };
+    std::map<std::array<int,3>,Face> faces;
+    static const int lf[4][3]={{1,2,3},{0,3,2},{0,1,3},{0,2,1}};
+    for(const auto& t:tets) for(const auto& f:lf) {
+        std::array<int,3> o={t[f[0]],t[f[1]],t[f[2]]}, key=o;
+        std::sort(key.begin(),key.end()); auto& rec=faces[key]; if(rec.count++==0) rec.oriented=o;
+    }
+    double center[3]={0,0,0}; for(int i=0;i<nn;++i) for(int k=0;k<3;++k) center[k]+=nodes[3*i+k]/nn;
+    std::vector<double> out((size_t)n_modes+1,0.0); out[0]=energy*inv4pi;
+    std::vector<double> mean_velocity((size_t)n_modes*3,0.0);
+    for(int m=0;m<n_modes;++m) for(int i=0;i<nn;++i) for(int k=0;k<3;++k)
+        mean_velocity[3*m+k]+=node_velocities[(m*nn+i)*3+k]/nn;
+    static const double dun[7][4]={{1./3,1./3,1./3,.225},{.0597158717,.4701420641,.4701420641,.1323941527},{.4701420641,.0597158717,.4701420641,.1323941527},{.4701420641,.4701420641,.0597158717,.1323941527},{.7974269853,.1012865073,.1012865073,.1259391805},{.1012865073,.7974269853,.1012865073,.1259391805},{.1012865073,.1012865073,.7974269853,.1259391805}};
+    for(const auto& kv:faces) if(kv.second.count==1) {
+        auto f=kv.second.oriented; double A[3],B[3],C[3]; for(int k=0;k<3;++k){A[k]=nodes[3*f[0]+k];B[k]=nodes[3*f[1]+k];C[k]=nodes[3*f[2]+k];}
+        double e1[3]={B[0]-A[0],B[1]-A[1],B[2]-A[2]},e2[3]={C[0]-A[0],C[1]-A[1],C[2]-A[2]};
+        double av[3]={.5*(e1[1]*e2[2]-e1[2]*e2[1]),.5*(e1[2]*e2[0]-e1[0]*e2[2]),.5*(e1[0]*e2[1]-e1[1]*e2[0])};
+        double fc[3]={(A[0]+B[0]+C[0])/3,(A[1]+B[1]+C[1])/3,(A[2]+B[2]+C[2])/3};
+        if(av[0]*(fc[0]-center[0])+av[1]*(fc[1]-center[1])+av[2]*(fc[2]-center[2])<0) for(double& z:av) z=-z;
+        for(const auto& q:dun) {
+            double p[3]; for(int k=0;k<3;++k)p[k]=q[0]*A[k]+q[1]*B[k]+q[2]*C[k];
+            double phi=0; for(const auto& ts:tets){double V[4][3];tet_vertices(ts,V);phi+=PhiTet(V,p);}
+            for(int m=0;m<n_modes;++m){double vn=0;for(int k=0;k<3;++k){double v=q[0]*node_velocities[(m*nn+f[0])*3+k]+q[1]*node_velocities[(m*nn+f[1])*3+k]+q[2]*node_velocities[(m*nn+f[2])*3+k]-mean_velocity[3*m+k];vn+=v*av[k];}out[m+1]+=2*inv4pi*q[3]*vn*phi;}
+        }
+    }
+    for(int m=0;m<n_modes;++m) {
+        bool translation=true;
+        for(int i=1;i<nn&&translation;++i) for(int k=0;k<3;++k)
+            if(node_velocities[(m*nn+i)*3+k]!=node_velocities[(m*nn)*3+k]) { translation=false; break; }
+        if(translation) out[m+1]=0.0;
+    }
+    return out;
+}
 
 static const double PI = 3.14159265358979323846;
 static const double INV_FOUR_PI = 1.0 / (4.0 * PI);
@@ -287,6 +372,68 @@ void TetMoment1(const double V[4][3], const double r[3], double out[3])
 
 namespace {
 
+// Forward directional scalar used by the affine-face analytic moment path.
+// Branches are selected by value; away from degenerate triangles this gives the
+// exact directional derivative of the same closed-form expression as double.
+struct ValueDirectional {
+    double value = 0.0;
+    double direction = 0.0;
+    ValueDirectional() = default;
+    ValueDirectional(double v, double d=0.0) : value(v), direction(d) {}
+};
+static inline ValueDirectional operator+(ValueDirectional a,ValueDirectional b){return {a.value+b.value,a.direction+b.direction};}
+static inline ValueDirectional operator-(ValueDirectional a,ValueDirectional b){return {a.value-b.value,a.direction-b.direction};}
+static inline ValueDirectional operator-(ValueDirectional a){return {-a.value,-a.direction};}
+static inline ValueDirectional operator*(ValueDirectional a,ValueDirectional b){return {a.value*b.value,a.direction*b.value+a.value*b.direction};}
+static inline ValueDirectional operator/(ValueDirectional a,ValueDirectional b){return {a.value/b.value,(a.direction*b.value-a.value*b.direction)/(b.value*b.value)};}
+static inline ValueDirectional vd_sqrt(ValueDirectional a){
+    if(a.value<=1e-300)return {std::sqrt(std::max(0.0,a.value)),0.0};
+    const double s=std::sqrt(a.value);return {s,a.direction/(2.0*s)};
+}
+static inline ValueDirectional vd_asinh(ValueDirectional a){return {std::asinh(a.value),a.direction/std::sqrt(1.0+a.value*a.value)};}
+static inline ValueDirectional vd_abs(ValueDirectional a){return {std::fabs(a.value),(a.value<0.0?-1.0:1.0)*a.direction};}
+static inline ValueDirectional vd_log(ValueDirectional a){return {std::log(a.value),a.direction/a.value};}
+static inline ValueDirectional vd_atan2(ValueDirectional y, ValueDirectional x){
+    const double den=x.value*x.value+y.value*y.value;
+    if(den<=1e-300)return {std::atan2(y.value,x.value),0.0};
+    return {std::atan2(y.value,x.value),(x.value*y.direction-y.value*x.direction)/den};
+}
+static inline ValueDirectional vd_pow(ValueDirectional a,int n){if(n==0)return {1.0,0.0};const double p=std::pow(a.value,n);return {p,n*std::pow(a.value,n-1)*a.direction};}
+
+static inline ValueDirectional vd_dot(const ValueDirectional a[3],const ValueDirectional b[3])
+{ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+static inline void vd_cross(const ValueDirectional a[3],const ValueDirectional b[3],ValueDirectional o[3])
+{ o[0]=a[1]*b[2]-a[2]*b[1];o[1]=a[2]*b[0]-a[0]*b[2];o[2]=a[0]*b[1]-a[1]*b[0]; }
+static inline ValueDirectional vd_norm(const ValueDirectional a[3]) { return vd_sqrt(vd_dot(a,a)); }
+
+static ValueDirectional TriPotentialDirectionalValue(
+    const ValueDirectional V[3][3],const ValueDirectional r[3])
+{
+    ValueDirectional e1[3],e2[3],n[3];
+    for(int k=0;k<3;++k){e1[k]=V[1][k]-V[0][k];e2[k]=V[2][k]-V[0][k];}
+    vd_cross(e1,e2,n);const ValueDirectional nl=vd_norm(n);if(nl.value<1e-300)return {};
+    for(auto& x:n)x=x/nl;
+    ValueDirectional rmv0[3];for(int k=0;k<3;++k)rmv0[k]=r[k]-V[0][k];
+    const ValueDirectional d=vd_dot(rmv0,n);
+    ValueDirectional p[3];for(int k=0;k<3;++k)p[k]=r[k]-d*n[k];
+    const ValueDirectional ad=vd_abs(d);ValueDirectional I;
+    for(int i=0;i<3;++i){
+        const ValueDirectional* a=V[i];const ValueDirectional* b=V[(i+1)%3];
+        ValueDirectional lh[3];for(int k=0;k<3;++k)lh[k]=b[k]-a[k];
+        const ValueDirectional ll=vd_norm(lh);if(ll.value<1e-300)continue;for(auto& x:lh)x=x/ll;
+        ValueDirectional uh[3];vd_cross(lh,n,uh);
+        ValueDirectional ap[3],bp[3],ra[3],rb[3];
+        for(int k=0;k<3;++k){ap[k]=a[k]-p[k];bp[k]=b[k]-p[k];ra[k]=r[k]-a[k];rb[k]=r[k]-b[k];}
+        const ValueDirectional P0=vd_dot(ap,uh),sm=vd_dot(ap,lh),sp=vd_dot(bp,lh);
+        const ValueDirectional Rm=vd_norm(ra),Rp=vd_norm(rb),R0sq=P0*P0+d*d;
+        const ValueDirectional dm=Rm+sm,dp=Rp+sp;
+        const ValueDirectional f=(dp.value>1e-300&&dm.value>1e-300)?vd_log(dp/dm):ValueDirectional{};
+        const ValueDirectional beta=vd_atan2(P0*sp,R0sq+ad*Rp)-vd_atan2(P0*sm,R0sq+ad*Rm);
+        I=I+P0*f-ad*beta;
+    }
+    return I;
+}
+
 constexpr int POLY_MAX_DEG = 18;
 constexpr int POLY_MAX_MOMENTS =
     (POLY_MAX_DEG + 1)*(POLY_MAX_DEG + 2)*(POLY_MAX_DEG + 3)/6;
@@ -317,6 +464,82 @@ struct TriPolySetup {
     double e2[3];
     TriPolyEdge edges[3];
 };
+
+struct TriPolyEdgeDirectional { ValueDirectional xiA[2],t2[2],m2[2],L,l0,d2; };
+struct TriPolySetupDirectional {
+    ValueDirectional n[3],h,rp[3],e1[3],e2[3];
+    TriPolyEdgeDirectional edges[3];
+};
+
+static bool tri_poly_setup_directional(const ValueDirectional P[3][3],
+                                       const ValueDirectional r[3],TriPolySetupDirectional& g)
+{
+    ValueDirectional a1[3],a2[3];
+    for(int k=0;k<3;++k){a1[k]=P[1][k]-P[0][k];a2[k]=P[2][k]-P[0][k];}
+    vd_cross(a1,a2,g.n);const ValueDirectional nl=vd_norm(g.n);if(nl.value<1e-300)return false;
+    for(auto& x:g.n)x=x/nl;
+    ValueDirectional rv[3];for(int k=0;k<3;++k)rv[k]=r[k]-P[0][k];
+    g.h=vd_dot(rv,g.n);for(int k=0;k<3;++k)g.rp[k]=r[k]-g.h*g.n[k];
+    const ValueDirectional e1n=vd_norm(a1);if(e1n.value<1e-300)return false;
+    for(int k=0;k<3;++k)g.e1[k]=a1[k]/e1n;vd_cross(g.n,g.e1,g.e2);
+    ValueDirectional cen[3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)cen[k]=cen[k]+P[i][k]/3.0;
+    for(int i=0;i<3;++i){
+        const ValueDirectional* A=P[i];const ValueDirectional* B=P[(i+1)%3];auto& e=g.edges[i];
+        ValueDirectional t[3];for(int k=0;k<3;++k)t[k]=B[k]-A[k];e.L=vd_norm(t);if(e.L.value<1e-300)return false;
+        ValueDirectional th[3];for(int k=0;k<3;++k)th[k]=t[k]/e.L;
+        ValueDirectional m[3];vd_cross(th,g.n,m);
+        ValueDirectional mid[3];for(int k=0;k<3;++k)mid[k]=(A[k]+B[k])/2.0-cen[k];
+        if(vd_dot(m,mid).value<0.0)for(auto& x:m)x=-x;
+        e.m2[0]=vd_dot(m,g.e1);e.m2[1]=vd_dot(m,g.e2);
+        ValueDirectional Amrp[3];for(int k=0;k<3;++k)Amrp[k]=A[k]-g.rp[k];
+        e.xiA[0]=vd_dot(Amrp,g.e1);e.xiA[1]=vd_dot(Amrp,g.e2);
+        e.t2[0]=vd_dot(th,g.e1);e.t2[1]=vd_dot(th,g.e2);
+        ValueDirectional w[3];for(int k=0;k<3;++k)w[k]=r[k]-A[k];
+        e.l0=vd_dot(w,th);e.d2=vd_dot(w,w)-e.l0*e.l0;
+        if(e.d2.value<0.0)e.d2={0.0,0.0};
+    }
+    return true;
+}
+
+static ValueDirectional edge_R_for_poly_directional(const TriPolyEdgeDirectional& e)
+{
+    const ValueDirectional u1=-e.l0,u2=e.L-e.l0,d2=e.d2;
+    auto F=[&](ValueDirectional u){
+        if(d2.value<1e-300)return 0.5*u*vd_abs(u);
+        const ValueDirectional d=vd_sqrt(d2);
+        return 0.5*(u*vd_sqrt(u*u+d2)+d2*vd_asinh(u/d));
+    };
+    return F(u2)-F(u1);
+}
+
+static void edge_l_moments_poly_directional(const TriPolyEdgeDirectional& e,int nmax,
+                                             ValueDirectional Jl[POLY_MAX_DEG+3])
+{
+    nmax=std::min(nmax,POLY_MAX_DEG+2);const auto d2=e.d2,d=vd_sqrt(d2),u1=-e.l0,u2=e.L-e.l0;
+    ValueDirectional W[POLY_MAX_DEG+3]{};
+    auto asinh_safe=[&](ValueDirectional u){
+        if(d.value>1e-300)return vd_asinh(u/d);
+        if(std::fabs(u.value)==0.0)return ValueDirectional{};
+        return (u.value>0.0?1.0:-1.0)*vd_log(2.0*vd_abs(u));
+    };
+    W[0]=asinh_safe(u2)-asinh_safe(u1);
+    if(nmax>=1)W[1]=vd_sqrt(u2*u2+d2)-vd_sqrt(u1*u1+d2);
+    for(int n=2;n<=nmax;++n){
+        const auto term=(vd_pow(u2,n-1)*vd_sqrt(u2*u2+d2)-vd_pow(u1,n-1)*vd_sqrt(u1*u1+d2))/double(n);
+        W[n]=term-((n-1.0)/n)*d2*W[n-2];
+    }
+    for(int n=0;n<=nmax;++n){ValueDirectional s;for(int i=0;i<=n;++i)s=s+small_comb(n,i)*vd_pow(e.l0,n-i)*W[i];Jl[n]=s;}
+}
+
+static ValueDirectional edge_inplane_monomial_poly_directional(
+    const TriPolyEdgeDirectional& e,int a,int b,const ValueDirectional Jl[POLY_MAX_DEG+3])
+{
+    ValueDirectional poly[POLY_MAX_DEG+3]{},tmp[POLY_MAX_DEG+3]{};int deg=0;poly[0]={1.0,0.0};
+    auto mul=[&](ValueDirectional c0,ValueDirectional c1){std::fill(std::begin(tmp),std::end(tmp),ValueDirectional{});
+        for(int i=0;i<=deg;++i){tmp[i]=tmp[i]+poly[i]*c0;tmp[i+1]=tmp[i+1]+poly[i]*c1;}++deg;for(int i=0;i<=deg;++i)poly[i]=tmp[i];};
+    for(int i=0;i<a;++i)mul(e.xiA[0],e.t2[0]);for(int i=0;i<b;++i)mul(e.xiA[1],e.t2[1]);
+    ValueDirectional s;for(int i=0;i<=deg;++i)s=s+poly[i]*Jl[i];return s;
+}
 
 static bool tri_poly_setup(const double P[3][3], const double r[3], TriPolySetup& g)
 {
@@ -460,6 +683,97 @@ static void triangle_inplane_A_moments(const double P[3][3], const double r[3], 
             A[a][b] = (Eneg1(a, b) - h2B) / (k + 1.0);
         }
     }
+}
+
+static void triangle_inplane_A_moments_directional(
+    const ValueDirectional P[3][3],const ValueDirectional r[3],int degree,
+    ValueDirectional A[POLY_MAX_DEG+1][POLY_MAX_DEG+1],TriPolySetupDirectional& g)
+{
+    for(int i=0;i<=POLY_MAX_DEG;++i)for(int j=0;j<=POLY_MAX_DEG;++j)A[i][j]={};
+    degree=std::min(degree,POLY_MAX_DEG);if(!tri_poly_setup_directional(P,r,g))return;
+    ValueDirectional Jl[3][POLY_MAX_DEG+3]{};for(int i=0;i<3;++i)edge_l_moments_poly_directional(g.edges[i],degree+2,Jl[i]);
+    A[0][0]=TriPotentialDirectionalValue(P,r);
+    if(degree>=1){ValueDirectional A1[2]{};for(int i=0;i<3;++i){const auto er=edge_R_for_poly_directional(g.edges[i]);A1[0]=A1[0]+g.edges[i].m2[0]*er;A1[1]=A1[1]+g.edges[i].m2[1]*er;}A[1][0]=A1[0];A[0][1]=A1[1];}
+    auto Eedge=[&](int j,int p,int q){ValueDirectional s;for(int i=0;i<3;++i)s=s+g.edges[i].m2[j]*edge_inplane_monomial_poly_directional(g.edges[i],p,q,Jl[i]);return s;};
+    auto Eneg1=[&](int a,int b){return Eedge(0,a+1,b)+Eedge(1,a,b+1);};
+    for(int k=2;k<=degree;++k)for(int a=k;a>=0;--a){const int b=k-a;ValueDirectional h2B;
+        if(a>=1)h2B=g.h*g.h*((a-1.0)*(a>=2?A[a-2][b]:ValueDirectional{})-Eedge(0,a-1,b));
+        else h2B=g.h*g.h*((b-1.0)*(b>=2?A[a][b-2]:ValueDirectional{})-Eedge(1,a,b-1));
+        A[a][b]=(Eneg1(a,b)-h2B)/(k+1.0);
+    }
+}
+
+static void poly2_mul_linear_directional(
+    ValueDirectional poly[POLY_MAX_DEG+1][POLY_MAX_DEG+1],int& deg,
+    ValueDirectional c0,ValueDirectional c1,ValueDirectional c2)
+{
+    ValueDirectional tmp[POLY_MAX_DEG+1][POLY_MAX_DEG+1]{};
+    for(int a=0;a<=deg;++a)for(int b=0;b<=deg-a;++b){const auto v=poly[a][b];tmp[a][b]=tmp[a][b]+v*c0;tmp[a+1][b]=tmp[a+1][b]+v*c1;tmp[a][b+1]=tmp[a][b+1]+v*c2;}
+    ++deg;for(int a=0;a<=deg;++a)for(int b=0;b<=deg-a;++b)poly[a][b]=tmp[a][b];
+}
+
+static void SurfacePotentialMomentsUpToDirectional(
+    const double P[3][3],const double dP[3][3],const double r[3],const double dr[3],int degree,double* value,double* direction)
+{
+    ValueDirectional Pd[3][3],rd[3];for(int i=0;i<3;++i)for(int k=0;k<3;++k)Pd[i][k]={P[i][k],dP[i][k]};for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
+    ValueDirectional A[POLY_MAX_DEG+1][POLY_MAX_DEG+1];TriPolySetupDirectional g;
+    triangle_inplane_A_moments_directional(Pd,rd,degree,A,g);int idx=0;
+    for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){
+        const int alpha[3]={ax,ay,total-ax-ay};ValueDirectional poly[POLY_MAX_DEG+1][POLY_MAX_DEG+1]{};int pd=0;poly[0][0]={1.0,0.0};
+        for(int coord=0;coord<3;++coord)for(int q=0;q<alpha[coord];++q)poly2_mul_linear_directional(poly,pd,g.rp[coord],g.e1[coord],g.e2[coord]);
+        ValueDirectional s;for(int a=0;a<=pd;++a)for(int b=0;b<=pd-a;++b)s=s+poly[a][b]*A[a][b];value[idx]=s.value;direction[idx]=s.direction;++idx;
+    }
+}
+
+static int PotentialMomentIndex(int ax,int ay,int az);
+
+static void TetPotentialMomentsUpToDirectional(
+    const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
+    int degree,double* value,double* direction)
+{
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    ValueDirectional Vd[4][3],rd[3],cen[3];
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k){Vd[i][k]={V[i][k],dV[i][k]};cen[k]=cen[k]+Vd[i][k]/4.0;}
+    for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
+    ValueDirectional fm[4][POLY_MAX_MOMENTS]{},h[4]{},phi;
+    for(int fi=0;fi<4;++fi){double F[3][3],dF[3][3],fv[POLY_MAX_MOMENTS]{},fd[POLY_MAX_MOMENTS]{};ValueDirectional Fd[3][3];
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k){const int vi=FACES[fi][j];F[j][k]=V[vi][k];dF[j][k]=dV[vi][k];Fd[j][k]=Vd[vi][k];}
+        SurfacePotentialMomentsUpToDirectional(F,dF,r,dr,degree,fv,fd);const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int q=0;q<count;++q)fm[fi][q]={fv[q],fd[q]};
+        ValueDirectional e1[3],e2[3],n[3],fc[3],outward[3],rmf[3];for(int k=0;k<3;++k){e1[k]=Fd[1][k]-Fd[0][k];e2[k]=Fd[2][k]-Fd[0][k];fc[k]=(Fd[0][k]+Fd[1][k]+Fd[2][k])/3.0;outward[k]=fc[k]-cen[k];rmf[k]=rd[k]-Fd[0][k];}
+        vd_cross(e1,e2,n);const auto nl=vd_norm(n);if(nl.value<1e-300)continue;for(auto& x:n)x=x/nl;if(vd_dot(outward,n).value<0)for(auto& x:n)x=-x;
+        h[fi]=vd_dot(rmf,n);phi=phi+0.5*(-h[fi])*fm[fi][0];
+    }
+    ValueDirectional out[POLY_MAX_MOMENTS]{};out[0]=phi;
+    for(int total=1;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){const int az=total-ax-ay,idx=PotentialMomentIndex(ax,ay,az);ValueDirectional s;
+        for(int fi=0;fi<4;++fi)s=s-h[fi]*fm[fi][idx];const int alpha[3]={ax,ay,az};for(int k=0;k<3;++k)if(alpha[k]>0){int lo[3]={ax,ay,az};--lo[k];s=s+rd[k]*double(alpha[k])*out[PotentialMomentIndex(lo[0],lo[1],lo[2])];}out[idx]=s/(total+2.0);}
+    const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int i=0;i<count;++i){value[i]=out[i].value;direction[i]=out[i].direction;}
+}
+
+static void TetPotentialMomentsUpTo1DirectionalImpl(
+    const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
+    double value[4],double direction[4])
+{
+    static const int faces[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    ValueDirectional vd[4][3],rd[3],cen[3];
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k){vd[i][k]={V[i][k],dV[i][k]};cen[k]=cen[k]+vd[i][k]/4.0;}
+    for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
+    ValueDirectional phi,first[3];
+    for(int fi=0;fi<4;++fi){
+        ValueDirectional fv[3][3],e1[3],e2[3],n[3],fc[3];
+        double fp[3][3],dfp[3][3];
+        for(int a=0;a<3;++a)for(int k=0;k<3;++k){fv[a][k]=vd[faces[fi][a]][k];fp[a][k]=fv[a][k].value;dfp[a][k]=fv[a][k].direction;fc[k]=fc[k]+fv[a][k]/3.0;}
+        for(int k=0;k<3;++k){e1[k]=fv[1][k]-fv[0][k];e2[k]=fv[2][k]-fv[0][k];}
+        vd_cross(e1,e2,n);const auto nl=vd_norm(n);if(nl.value<1e-300)continue;for(auto& x:n)x=x/nl;
+        ValueDirectional outward[3];for(int k=0;k<3;++k)outward[k]=fc[k]-cen[k];
+        if(vd_dot(outward,n).value<0.0)for(auto& x:n)x=-x;
+        ValueDirectional rmf[3];for(int k=0;k<3;++k)rmf[k]=rd[k]-fv[0][k];const auto h=vd_dot(rmf,n);
+        double sv[4],sd[4];SurfacePotentialMomentsUpToDirectional(fp,dfp,r,dr,1,sv,sd);
+        const ValueDirectional s0{sv[0],sd[0]};phi=phi-h*s0;
+        for(int k=0;k<3;++k)first[k]=first[k]-h*ValueDirectional{sv[k+1],sd[k+1]};
+    }
+    phi=phi/(-2.0); // h=(r-face).n; Phi=-(1/2) sum h Phi_face
+    value[0]=phi.value;direction[0]=phi.direction;
+    for(int k=0;k<3;++k){first[k]=(first[k]+rd[k]*phi)/3.0;value[k+1]=first[k].value;direction[k+1]=first[k].direction;}
 }
 
 static void poly2_mul_linear(double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1], int& deg,
@@ -812,6 +1126,12 @@ void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3], double ou
 {
     TetPotentialMomentsUpTo(V, r, 6, out);
 }
+void TetPotentialMomentsDirectionalUpTo3(const double V[4][3],const double dV[4][3],
+    const double r[3],const double dr[3],double value[20],double direction[20])
+{ TetPotentialMomentsUpToDirectional(V,dV,r,dr,3,value,direction); }
+void TetPotentialMomentsDirectionalUpTo6(const double V[4][3],const double dV[4][3],
+    const double r[3],const double dr[3],double value[84],double direction[84])
+{ TetPotentialMomentsUpToDirectional(V,dV,r,dr,6,value,direction); }
 
 std::vector<double> TetHCurlReducedGram(
     const std::vector<double>& cell_verts,
@@ -967,6 +1287,27 @@ void TriPotentialMomentsUpTo4(const double V[3][3], const double r[3], double ou
 void TriPotentialMomentsUpTo2(const double V[3][3], const double r[3], double out[10])
 {
     SurfacePotentialMomentsUpTo(V, r, 2, out);
+}
+
+void TriPotentialMomentsDirectionalUpTo4(
+    const double V[3][3],const double dV[3][3],const double r[3],const double dr[3],
+    double value[35],double direction[35])
+{
+    SurfacePotentialMomentsUpToDirectional(V,dV,r,dr,4,value,direction);
+}
+
+void TriPotentialMomentsDirectionalUpTo2(
+    const double V[3][3],const double dV[3][3],const double r[3],const double dr[3],
+    double value[10],double direction[10])
+{
+    SurfacePotentialMomentsUpToDirectional(V,dV,r,dr,2,value,direction);
+}
+
+void TetPotentialMomentsDirectionalUpTo1(
+    const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
+    double value[4],double direction[4])
+{
+    TetPotentialMomentsUpTo1DirectionalImpl(V,dV,r,dr,value,direction);
 }
 
 // INT_V (rho0 + g.r')(r-r')/R^3 dV' (linear volume charge) = SUM_f n_f[rho0 I0_f + g.M1_f] - g PhiTet.
