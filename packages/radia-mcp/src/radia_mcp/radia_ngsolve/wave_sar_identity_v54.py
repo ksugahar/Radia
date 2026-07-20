@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .wave_energy_identity_v55 import validate_public_v55_identity
+
 
 CUTOFF = "waveguide_cutoff_mode_normalization_power_impedance_port_owner_identity"
 SAR = "sar_average_mass_density_voxel_frequency_field_owner_identity"
@@ -145,7 +147,7 @@ def validate_public_v54_identity(payload: object) -> dict[str, bool]:
     if not isinstance(payload, Mapping):
         return {}
     rows = [row for row in (payload.get("runs") or []) if isinstance(row, Mapping)]
-    checks: dict[str, bool] = {}
+    checks = validate_public_v55_identity(payload)
     cutoffs = [row[CUTOFF] for row in rows if CUTOFF in row]
     sar_rows = [row[SAR] for row in rows if SAR in row]
     if cutoffs:
