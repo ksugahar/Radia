@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .ltspice_v54_gates import validate_ltspice_v54_identity
+
 
 NOISE = "noise_spectraldensity_integrated_bandwidth_source_owner_identity"
 STEADY = "switchmode_sampled_steadystate_cycle_phase_ripple_waveform_owner_identity"
@@ -111,5 +113,5 @@ def validate_ltspice_v53_identity(positive: Mapping[str, object]) -> bool:
     noise = positive.get(NOISE)
     steady = positive.get(STEADY)
     if noise is None and steady is None:
-        return True
-    return isinstance(noise, Mapping) and isinstance(steady, Mapping) and _noise_ok(noise) and _steady_ok(steady)
+        return validate_ltspice_v54_identity(positive)
+    return isinstance(noise, Mapping) and isinstance(steady, Mapping) and _noise_ok(noise) and _steady_ok(steady) and validate_ltspice_v54_identity(positive)
