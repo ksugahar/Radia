@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .energy_derivative_identity_v53 import validate_public_identity as validate_public_v53_identity
+
 
 VIRTUAL_FORCE = "virtual_displacement_mesh_energy_sign_solution_owner_identity"
 MAGNET_TORQUE = "magnet_torque_angular_energy_periodic_unwrap_derivative_owner_identity"
@@ -119,7 +121,7 @@ def _magnet_torque_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v53_identity(identity)
     virtual_force = identity.get(VIRTUAL_FORCE)
     magnet_torque = identity.get(MAGNET_TORQUE)
     if virtual_force is not None:
