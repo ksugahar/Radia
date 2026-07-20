@@ -391,7 +391,7 @@ def matlab_radia_mex_contract(topic="all"):
     )
     radia_matlab_root = (repo_root / "matlab") if repo_root is not None else None
     radia_package = (radia_matlab_root / "+radia") if radia_matlab_root is not None else None
-    matlab_functions = sorted(path.stem for path in radia_package.glob("*.m")) if radia_package is not None and radia_package.is_dir() else []
+    matlab_functions = sorted(path.stem for path in radia_package.rglob("*.m")) if radia_package is not None and radia_package.is_dir() else []
     optuna_package = (radia_package / "+optuna") if radia_package is not None else None
     optuna_files = sorted(optuna_package.glob("*.m")) if optuna_package is not None and optuna_package.is_dir() else []
     optuna_classes = sorted(

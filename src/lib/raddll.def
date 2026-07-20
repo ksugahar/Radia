@@ -10,8 +10,6 @@ RadWarGetText
 RadObjRecMag
 RadObjThckPgn
 RadObjPolyhdr
-RadObjMltExtPgn
-RadObjMltExtRtg
 RadObjArcPgnMag
 RadObjCylMag
 RadObjRecCur

@@ -1,7 +1,12 @@
 
 #include "rad_string_long.h"
 #include "auxparse.h"
+#ifndef RADIA_MEX_NO_PYTHON
 #include <Python.h>
+#else
+struct _object;
+using PyObject = _object;
+#endif
 
 //#ifdef WIN32
 //#define WIN32_LEAN_AND_MEAN
@@ -22,9 +27,6 @@ void RecMag( double,double,double, double,double,double, double,double,double );
 void ExtrudedPolygonDLL( double, double, double*, int, char, double* );
 //void PolyhedronDLL( double*, int, int*, int*, int, double* );
 void PolyhedronDLL( double*, int, int*, int*, int, double*, double*, double*, double* );
-void MultGenExtrPolygonDLL( double*, int*, double*, int, double* );
-void MultGenExtrRectangleDLL( double*, double*, int, double* );
-
 void ArcMag( double,double,double, double,double, double,double, double, int, char*, double,double,double );
 void ArcPolygon();
 void ArcPolygonDLL( double,double, char, double*, int, double,double, int, char, double,double,double );
@@ -265,44 +267,6 @@ int CALL RadObjPolyhdr(int* n, double* pFlatVertices, int NumVertices, int* pFla
 	PolyhedronDLL(pFlatVertices, NumVertices, pFlatFaces, pFacesLengths, NumFaces, pM, pM_LinCoef, pJ, pJ_LinCoef);
 
 	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjMltExtPgn(int* n, double* pFlatVertices, int* pLayerLengths, double* pAttitudes, int NumLayers, double* pM)
-{// pFlatVertices - flat array of 2d points
-	MultGenExtrPolygonDLL(pFlatVertices, pLayerLengths, pAttitudes, NumLayers, pM);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjMltExtRtg(int* n, double* pFlatCenPts, double* pFlatRtgSizes, int NumLayers, double* pM)
-{
-	MultGenExtrRectangleDLL(pFlatCenPts, pFlatRtgSizes, NumLayers, pM);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjMltExtTri(int* n, double xc, double lx, double* pFlatVert, double* pFlatSubd, int nv, char a, double* pM, char* sOpt)
-{
-	(void)xc;
-	(void)lx;
-	(void)pFlatVert;
-	(void)pFlatSubd;
-	(void)nv;
-	(void)a;
-	(void)pM;
-	(void)sOpt;
-
-	if(n != 0) *n = 0;
-	ioBuffer.StoreErrorMessage("Radia::Error126");
 	return ioBuffer.OutErrorStatus();
 }
 
