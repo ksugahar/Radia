@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .assembly_exchange_identity_v53 import (
+    validate_public_identity as validate_public_v53_identity,
+    validate_source_identity as validate_source_v53_identity,
+)
+
 
 SELECTOR = "selector_query_order_topology_label_owner_identity"
 WORKPLANE = "workplane_local_coordinate_pending_edge_wire_owner_identity"
@@ -156,6 +161,9 @@ def validate_public_identity(payload: object) -> dict[str, object]:
         return {}
     rows = _public_rows(payload)
     checks: dict[str, bool] = {}
+    v53 = validate_public_v53_identity(payload)
+    if v53:
+        checks.update(v53["checks"])
     selectors = [row.get(SELECTOR) for row in rows if SELECTOR in row]
     workplanes = [row.get(WORKPLANE) for row in rows if WORKPLANE in row]
     if selectors:
@@ -170,6 +178,9 @@ def validate_source_identity(payload: object) -> dict[str, object]:
         return {}
     identity = payload["replay_identity"]
     checks: dict[str, bool] = {}
+    v53 = validate_source_v53_identity(payload)
+    if v53:
+        checks.update(v53["checks"])
     if identity.get(BREP) is not None:
         checks["v52_brep_version_location_tshape_serialization_owner"] = isinstance(identity[BREP], Mapping) and _brep_ok(identity[BREP])
     if identity.get(GLTF) is not None:
