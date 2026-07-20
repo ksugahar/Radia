@@ -13,8 +13,39 @@
 
 #include "rad_coefficient_field.h"
 #include "rad_exception.h"
-#include <Python.h>
+#include <stdexcept>
 #include <iostream>
+
+#ifdef RADIA_MEX_NO_PYTHON
+
+radTCoefficientFunctionFieldSource::radTCoefficientFunctionFieldSource(PyObject*)
+	: cf_callback(nullptr)
+{
+	throw std::runtime_error(
+		"Python coefficient-function callbacks are unavailable in the native MEX gateway");
+}
+
+radTCoefficientFunctionFieldSource::radTCoefficientFunctionFieldSource(
+	const radTCoefficientFunctionFieldSource& src)
+	: radTg3d(src), cf_callback(nullptr)
+{
+	(void)src;
+}
+
+radTCoefficientFunctionFieldSource::~radTCoefficientFunctionFieldSource() = default;
+
+void radTCoefficientFunctionFieldSource::B_comp(radTField*) {}
+void radTCoefficientFunctionFieldSource::B_intComp(radTField*) {}
+
+int radTCoefficientFunctionFieldSource::DuplicateItself(
+	radThg&, radTApplication*, char)
+{
+	return 0;
+}
+
+#else
+
+#include <Python.h>
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -255,5 +286,7 @@ int radTCoefficientFunctionFieldSource::DuplicateItself(
 {
 	return FinishDuplication(new radTCoefficientFunctionFieldSource(*this), hg);
 }
+
+#endif
 
 //-------------------------------------------------------------------------
