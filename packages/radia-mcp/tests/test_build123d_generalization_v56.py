@@ -112,3 +112,33 @@ def test_v56_self_consistent_exchange_contradictions_are_rejected() -> None:
     mesh = source["replay_identity"][MESH]
     mesh["unit_scale_to_m"] = mesh["replayed_unit_scale_to_m"] = 0.0254
     assert validate_source_identity(source)["status"] == "needs_attention"
+
+
+def test_v56_numeric_digests_are_rejected() -> None:
+    public, source = _payloads()
+    numeric_digest = int("1" * 64)
+    for identity in (GEAR, PIPE):
+        contract = public["reference"][0][identity]
+        contract["result_sha256"] = numeric_digest
+        contract["accepted_result_sha256"] = numeric_digest
+    for identity in (STEP, MESH):
+        contract = source["replay_identity"][identity]
+        contract["result_sha256"] = numeric_digest
+        contract["accepted_result_sha256"] = numeric_digest
+    assert validate_public_identity(public)["status"] == "needs_attention"
+    assert validate_source_identity(source)["status"] == "needs_attention"
+
+
+def test_v56_malformed_public_rows_are_not_silently_ignored() -> None:
+    public, _ = _payloads()
+    public["reference"].append(42)
+    assert validate_public_identity(public)["status"] == "needs_attention"
+
+
+def test_v56_unhashable_exchange_enums_reject_without_raising() -> None:
+    _, source = _payloads()
+    step = source["replay_identity"][STEP]
+    step["length_unit"] = step["replayed_length_unit"] = []
+    mesh = source["replay_identity"][MESH]
+    mesh["mesh_format"] = mesh["replayed_mesh_format"] = []
+    assert validate_source_identity(source)["status"] == "needs_attention"

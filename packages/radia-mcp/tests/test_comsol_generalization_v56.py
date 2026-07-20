@@ -63,3 +63,12 @@ def test_v56_malformed_values_reject_without_raising() -> None:
     value[MODAL]["modal_rows"] = [{"mode": ["mode:1"]}]
     value[INDUCTION]["time_s"] = [[0.0]]
     assert validate_public_v56_identity(value)["status"] == "needs_attention"
+
+
+def test_v56_numeric_digests_are_rejected() -> None:
+    value = deepcopy(_records())
+    numeric_digest = int("1" * 64)
+    for identity in (MODAL, INDUCTION):
+        value[identity]["result_sha256"] = numeric_digest
+        value[identity]["accepted_result_sha256"] = numeric_digest
+    assert validate_public_v56_identity(value)["status"] == "needs_attention"
