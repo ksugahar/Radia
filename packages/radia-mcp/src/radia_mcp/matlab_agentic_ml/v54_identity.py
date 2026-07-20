@@ -6,6 +6,8 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 
+from .v55_identity import validate_matlab_ml_rl_v55_identity
+
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _TOL = 1.0e-10
@@ -28,6 +30,9 @@ def validate_matlab_ml_rl_v54_identity(summary: Mapping[str, object]) -> dict[st
         checks.update(_prioritized_checks(replay))
     if isinstance(preprocess, Mapping):
         checks.update(_preprocess_checks(preprocess))
+    v55_result = validate_matlab_ml_rl_v55_identity(summary)
+    if v55_result is not None:
+        checks.update(v55_result["checks"])
     return {
         "policy": "matlab_ml_rl_artifact_gate_v54",
         "status": "ok" if all(checks.values()) else "needs_attention",
