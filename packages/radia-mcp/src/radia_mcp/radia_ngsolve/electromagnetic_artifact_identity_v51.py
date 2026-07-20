@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .electromagnetic_artifact_identity_v52 import validate_public_identity as validate_public_v52_identity
+
 
 INCREMENTAL = "incremental_frozen_bias_harmonic_tangent_branch_owner_identity"
 WEIGHTED_FORCE = "weighted_stress_mask_air_axisym_factor_force_frame_owner_identity"
@@ -122,7 +124,7 @@ def _weighted_force_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v52_identity(identity)
     incremental = identity.get(INCREMENTAL)
     weighted_force = identity.get(WEIGHTED_FORCE)
     if incremental is not None:
