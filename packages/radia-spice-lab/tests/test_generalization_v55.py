@@ -68,3 +68,12 @@ def test_v55_malformed_values_reject_without_raising() -> None:
     value[NOISE]["frequency_hz"] = [[100.0]]
     value[POWER]["measurement_window"] = {"start_s": [0.0], "stop_s": 1.0}
     assert validate_ltspice_v55_identity(value) is False
+
+
+def test_v55_numeric_digests_are_rejected() -> None:
+    value = deepcopy(_positive())
+    numeric_digest = int("1" * 64)
+    for identity in (NOISE, POWER):
+        value[identity]["result_sha256"] = numeric_digest
+        value[identity]["accepted_result_sha256"] = numeric_digest
+    assert validate_ltspice_v55_identity(value) is False
