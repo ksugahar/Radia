@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+from .ltspice_v52_gates import validate_ltspice_v52_identity
+
 
 AC_TRANSFER = "ac_transfer_source_phase_db_groupdelay_owner_identity"
 TRANSIENT_EVENT = "transient_event_interpolation_compression_edge_window_owner_identity"
@@ -160,10 +162,11 @@ def validate_ltspice_v51_identity(positive: Mapping[str, object]) -> bool:
     ac_transfer = positive.get(AC_TRANSFER)
     transient_event = positive.get(TRANSIENT_EVENT)
     if ac_transfer is None and transient_event is None:
-        return True
+        return validate_ltspice_v52_identity(positive)
     return (
         isinstance(ac_transfer, Mapping)
         and isinstance(transient_event, Mapping)
         and _ac_transfer_ok(ac_transfer)
         and _transient_event_ok(transient_event)
+        and validate_ltspice_v52_identity(positive)
     )
