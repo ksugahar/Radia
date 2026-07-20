@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .conservation_identity_v54 import validate_public_v54_identity
+
 
 ELECTROTHERMAL = "electrothermal_contact_resistance_power_heat_reciprocity_time_owner_identity"
 FLOQUET = "floquet_phase_wavevector_boundarypair_orientation_owner_identity"
@@ -90,6 +92,9 @@ def validate_public_v53_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v54 = validate_public_v54_identity(payload)
+    if v54:
+        checks.update(v54["checks"])
     electrothermal = payload.get(ELECTROTHERMAL)
     floquet = payload.get(FLOQUET)
     if electrothermal is not None:
