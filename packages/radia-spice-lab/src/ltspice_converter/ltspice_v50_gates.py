@@ -6,6 +6,8 @@ import itertools
 import math
 from collections.abc import Mapping
 
+from .ltspice_v51_gates import validate_ltspice_v51_identity
+
 
 STEP = "step_parameter_cartesian_nested_order_measure_row_owner_identity"
 NOISE = "noise_input_output_source_contribution_bandwidth_integration_owner_identity"
@@ -161,6 +163,8 @@ def _noise_ok(contract: Mapping[str, object]) -> bool:
 
 def validate_ltspice_v50_identity(positive: Mapping[str, object]) -> bool:
     if not isinstance(positive, Mapping):
+        return False
+    if not validate_ltspice_v51_identity(positive):
         return False
     step = positive.get(STEP)
     noise = positive.get(NOISE)
