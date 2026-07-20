@@ -13,7 +13,9 @@ EXODUS = "exodus_coordinateframe_qarecord_timestep_owner_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
@@ -35,6 +37,34 @@ def _generation(row: Mapping[str, object], *fields: str) -> bool:
 
 def _result(row: Mapping[str, object]) -> bool:
     return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
+
+
+def _face_nodes_conform(side_a: object, side_b: object) -> bool:
+    sides = (side_a, side_b)
+    if not all(
+        isinstance(side, Sequence)
+        and not isinstance(side, (str, bytes))
+        and len(side) == 9
+        and all(isinstance(node, int) and not isinstance(node, bool) and node > 0 for node in side)
+        for side in sides
+    ):
+        return False
+    a = list(side_a)
+    b = list(side_b)
+    if len(set(a)) != 9 or len(set(b)) != 9:
+        return False
+    a_corners, b_corners = a[:4], b[:4]
+    a_edges, b_edges = a[4:8], b[4:8]
+    if set(a_corners) != set(b_corners) or set(a_edges) != set(b_edges) or a[8] != b[8]:
+        return False
+    edge_by_vertices = {
+        frozenset((a_corners[index], a_corners[(index + 1) % 4])): a_edges[index]
+        for index in range(4)
+    }
+    return len(edge_by_vertices) == 4 and all(
+        edge_by_vertices.get(frozenset((b_corners[index], b_corners[(index + 1) % 4]))) == b_edges[index]
+        for index in range(4)
+    )
 
 
 def _volume_ok(row: Mapping[str, object]) -> bool:
@@ -70,7 +100,7 @@ def _curved_ok(row: Mapping[str, object]) -> bool:
                 break
             side_a = face["side_a_nodes"]
             side_b = face["side_b_nodes"]
-            if not isinstance(face["face"], str) or not face["face"].startswith("face:") or not all(isinstance(side, Sequence) and not isinstance(side, (str, bytes)) and len(side) == 9 and all(isinstance(node, int) and not isinstance(node, bool) and node > 0 for node in side) for side in (side_a, side_b)) or len(set(side_a)) != 9 or set(side_a) != set(side_b):
+            if not isinstance(face["face"], str) or not face["face"].startswith("face:") or not _face_nodes_conform(side_a, side_b):
                 faces_ok = False
                 break
             names.append(face["face"])
@@ -112,7 +142,13 @@ def _frame_ok(matrix: list[list[float]] | None) -> bool:
     if matrix is None or matrix[3] != [0.0, 0.0, 0.0, 1.0]:
         return False
     rotation = [line[:3] for line in matrix[:3]]
-    return all(math.isclose(sum(rotation[row][index] * rotation[column][index] for index in range(3)), 1.0 if row == column else 0.0, abs_tol=1.0e-12) for row in range(3) for column in range(3))
+    orthonormal = all(math.isclose(sum(rotation[row][index] * rotation[column][index] for index in range(3)), 1.0 if row == column else 0.0, abs_tol=1.0e-12) for row in range(3) for column in range(3))
+    determinant = (
+        rotation[0][0] * (rotation[1][1] * rotation[2][2] - rotation[1][2] * rotation[2][1])
+        - rotation[0][1] * (rotation[1][0] * rotation[2][2] - rotation[1][2] * rotation[2][0])
+        + rotation[0][2] * (rotation[1][0] * rotation[2][1] - rotation[1][1] * rotation[2][0])
+    )
+    return orthonormal and math.isclose(determinant, 1.0, abs_tol=1.0e-12)
 
 
 def _exodus_ok(row: Mapping[str, object]) -> bool:
@@ -124,7 +160,8 @@ def _exodus_ok(row: Mapping[str, object]) -> bool:
     times: list[float] = []
     if steps_ok:
         for index, step in enumerate(steps):
-            if not isinstance(step, Mapping) or set(step) != {"index", "time_s"} or step.get("index") != index or not _number(step.get("time_s"), nonnegative=True):
+            step_index = step.get("index") if isinstance(step, Mapping) else None
+            if not isinstance(step, Mapping) or set(step) != {"index", "time_s"} or not isinstance(step_index, int) or isinstance(step_index, bool) or step_index != index or not _number(step.get("time_s"), nonnegative=True):
                 steps_ok = False
                 break
             times.append(float(step["time_s"]))

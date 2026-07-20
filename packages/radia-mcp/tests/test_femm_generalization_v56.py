@@ -44,3 +44,12 @@ def test_v56_malformed_samples_reject_without_raising() -> None:
     identity = deepcopy(_identity())
     identity[FORCE]["coenergy_samples"] = [[0.0]]
     assert not all(validate_public_identity(identity).values())
+
+
+def test_v56_numeric_digests_are_rejected() -> None:
+    identity = deepcopy(_identity())
+    numeric_digest = int("1" * 64)
+    for contract_name in (FORCE, HEAT):
+        identity[contract_name]["result_sha256"] = numeric_digest
+        identity[contract_name]["accepted_result_sha256"] = numeric_digest
+    assert not all(validate_public_identity(identity).values())
