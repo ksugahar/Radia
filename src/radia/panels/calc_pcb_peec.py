@@ -221,7 +221,7 @@ def build_argparser():
     """argparse factory shared by main() and notebook DesignSpec callers.
 
     Adding/removing/renaming an option here must be reflected by
-    PCBDesignSpec.build_command() and the notebook workbench tests.
+    PCBDesignSpec.build_command() and the Simulink application-runner tests.
     """
     parser = argparse.ArgumentParser(
         description="PCB impedance extraction via PEEC")

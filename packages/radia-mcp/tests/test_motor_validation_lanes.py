@@ -66,7 +66,7 @@ def _base_artifact(lane: str, observable: str) -> dict:
     else:
         data["metrics"] = {"torque_relative_error": 1.0e-3}
         data["age_gate_ids"] = ["age_rotation_torque"]
-        data["pytest_targets"] = ["tests/test_airgap_machine_rotation.py"]
+        data["pytest_targets"] = ["validation_test/radia_mcp/test_airgap_machine_rotation.py"]
     return data
 
 

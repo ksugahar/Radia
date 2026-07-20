@@ -20,7 +20,7 @@ arbitrary rotor phase; rotation is a phase of the rotor excitation, no remesh.
 
 This is the eddy x mesh-free-gap rotating-machine core that a magnetostatic air-gap element
 cannot give and that mainstream codes only reach with a meshed sliding band.  Validated to
-machine precision against a fully-meshed complex reference (tests/test_airgap_eddy_machine.py).
+machine precision against a fully-meshed complex reference (validation_test/radia_mcp/test_airgap_eddy_machine.py).
 
 Open method (Abdel-Razek/Konrad 1982; Davat 1985 air-gap macro-element).
 

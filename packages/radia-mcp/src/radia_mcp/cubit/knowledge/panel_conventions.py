@@ -1,154 +1,107 @@
-"""
-Radia-NGSolve notebook workbench conventions for the Cubit MCP server.
+"""Cubit-to-Radia Simulink application and mesh-label conventions."""
 
-Covers: notebook/DesignSpec conventions, label requirements, sample .jou,
-and the Cubit -> .vol -> notebook -> NGSolve pipeline as mediated by the
-Cubit plugin.
-"""
+PANEL_CONVENTIONS = r"""
+# Radia Simulink application conventions for Cubit users
 
-PANEL_CONVENTIONS = """
-# Radia-NGSolve Notebook Workbench Conventions
+## Process architecture
 
-## Architecture
-
-```
-Cubit Solve -> Radia-NGSolve...
-  +-- Launcher dialog (Cubit PySide6 / Qt6): mode + order + folder + label check
-  |     |
-  |     +-- export netgen "radia_model.vol" order N overwrite
-  |     +-- Launch/open: src/radia/panels/notebooks/radia_*.ipynb
-  |
-  +-- ih_design.py / ih_notebook.py / radia_ih.ipynb
-  +-- em_design.py / em_notebook.py / radia_em.ipynb
-  +-- pcb_design.py / pcb_notebook.py / radia_pcb.ipynb
-  +-- streamfunction_design.py / streamfunction_notebook.py / radia_streamfunction.ipynb
+```text
+Cubit 2025.12 embedded Python/PySide6
+  -> C++ export netgen
+  -> self-contained .vol/.sol files
+  -> Radia Simulink application block (separate MATLAB process)
+  -> DesignSpec + headless calc_*.py (separate Python 3.12 process)
+  -> run.log / solver_result.json / result.json
 ```
 
-Each analysis workbench runs in Python 3.12/Jupyter, NOT Cubit's Python 3.10.
-The .vol file is the SOLE interface between Cubit and NGSolve.
-Coreform Cubit 2025.12+ is the supported in-Cubit host.  The retired
-Qt5 `.ccl` launcher is not part of the current install; `cubit-plugin-install`
-registers the PySide6 toolbar through a generated startup shim and
-`--verify-only --all-users` checks that registration.
+Cubit is a mesh producer, not the application GUI host. The single Radia
+Simulink library owns EM, PCB, Motor, Stream Function, and IH human operation.
+IH temporarily also keeps `radia_ih.ipynb` for comparison; all other packaged
+analysis workbenches are removed.
 
-## Workbench Metadata
+The source of truth is
+`src/radia/panels/application_interface_manifest.json`, each application's
+`DesignSpec`, and its `calc_*.py` argparse contract. Simulink must not import
+Cubit's Python runtime, and Cubit must not import normal `radia`/NGSolve.
 
-The source of truth is the notebook manifest plus the domain DesignSpec:
+## Label conventions
 
-| Variable | Type | Purpose |
-|----------|------|---------|
-| notebook manifest entry | JSON | Launcher/workbench discovery |
-| `DesignSpec` dataclass | Python | User-editable settings and defaults |
-| `DesignSpec.build_command()` | Python | Maps settings to Layer-4 calc CLI |
-| `calc_*.py build_argparser()` | Python | CLI source of truth |
+### Induction Heating block / `IHDesignSpec`
 
-## Label Convention for .jou Files
+For BEM-A or full FEM coil paths:
+- `source` sideset: current injection terminal
+- `sink` sideset: current extraction terminal
 
-### Induction Heating (`radia_ih.ipynb` / `IHDesignSpec`)
-Required:
-- `source` (sideset): terminal face for current injection
-- `sink` (sideset): terminal face for current extraction
+Typical materials/boundaries include `workpiece`, `coil`, `air`, `sibc`,
+`kelvin_int`, and `kelvin_ext` according to the selected headless method.
 
-Optional:
-- `workpiece` (block): conductive workpiece for SIBC/ESIM
-- `air` (block): air domain for field calculation
+### Electromagnet block / `EMDesignSpec`
 
-### Electromagnet (`radia_em.ipynb` / `EMDesignSpec`)
-Required: (none)
-Optional:
-- `iron` (block): ferromagnetic material
-- `air` (block): air domain
-- `kelvin_int` (block): interior Kelvin sphere
-- `kelvin_ext` (block): exterior Kelvin sphere
+Typical labels are `iron`, `air`, `kelvin_int`, and `kelvin_ext`. Exact
+requirements belong to the selected method and its CLI/sample, not to Cubit's
+toolbar.
 
-### PCB (`radia_pcb.ipynb` / `PCBDesignSpec`)
-Required: (none)
-Optional: (none) -- uses FastHenry .inp, not .vol labels
+### PCB PEEC block / `PCBDesignSpec`
 
-## Sample .jou Files
+The application consumes a FastHenry `.inp`; it does not require `.vol` block
+labels.
 
-Each notebook workbench MUST have corresponding samples in `panels/samples/`
-or documented validation fixtures. Only samples that are locked by a golden
-test under `tests/panels/` or `validation_test/panels/` are
-shipped in the wheel. Non-canonical IH history that is still useful for
-debugging lives under `validation_test/induction_heating/demoted_samples_legacy/`
-(see AGENTS.md § "Sample Promotion Ladder").
+### Stream Function block / `StreamFunctionDesignSpec`
 
-Current layout (post-2026-04-23 demotion):
+The block consumes one or more checked surface/evaluation `.vol` files.
+Material-aware modes may additionally consume iron/shield meshes.
 
-```
-radia_ih.ipynb  -> panels/samples/ih_bem_sample.jou            (BEM: cubit-mesh-export smoke test)
-                   panels/samples/ih_peec_bem_coarse.jou        (peec_bem mode, golden)
-                   panels/samples/ih_fem_kelvin_skin_fine.jou   (fem_coilmesh mode, golden)
-                   panels/samples/ih_peec_inductance.jou        (peec_inductance mode, golden)
-radia_em.ipynb  -> panels/samples/em_sample.jou
-radia_pcb.ipynb -> panels/samples/pcb_sample.jou
+## Canonical samples
 
-Legacy validation fixtures:
-  ih_fem_sample.jou              (no-Kelvin FEM baseline, truncation demo)
-  ih_fem_kelvin_sample.jou/.py   (small-mesh FEM+Kelvin, misleading auto-Kelvin comment)
-  ih_fem_kelvin_skin.jou/.py     (coarse variant of skin_fine)
-  ih_closed_torus.jou/.py        (closed-torus research variant)
+Golden-locked assets live under `src/radia/panels/samples/`:
+
+```text
+IH block / comparison notebook -> ih_bem_sample.jou,
+                                  ih_peec_bem_coarse.jou,
+                                  ih_fem_kelvin_skin_fine.jou,
+                                  ih_peec_inductance.jou
+Electromagnet block            -> em_sample.jou
+PCB PEEC block                 -> pcb_sample.jou
 ```
 
-Naming: {stem}_sample.jou where stem is the application name.
-A single notebook workbench may ship multiple samples when distinct solver methods
-need different mesh strategies — radia_ih ships four (BEM smoke, peec_bem,
-fem_coilmesh, peec_inductance).
+Samples are owned by the headless application contract, not by a notebook.
+Research history belongs under `validation_test/`.
 
-Samples are packaged with pip install radia and serve as:
-- Default working folder for the launcher
-- Self-contained examples (geometry + mesh + labels, no dependencies)
+## Export boundary
 
-## Block/Sideset Registration in .jou
-
-```python
-# Material blocks (volume elements)
-block 1 add volume 1
-block 1 name "iron"
-
-# Boundary sidesets (surface elements, preferred for FEM BC)
-sideset 1 add surface 1
-sideset 1 name "source"
-
-# DO NOT mix volume and surface elements in the same block
-```
-
-## .vol Export (always done by launcher)
-
-The launcher always calls:
-```
-export netgen "radia_model.vol" order N overwrite
-```
-
-The notebook workbench receives .vol paths as settings. It does NOT export.
-Curve order is determined at export time in the Cubit toolbar/dialog.
+The Cubit toolbar exports; it does not launch a non-IH notebook or run the
+solver. Curve order and labels are fixed at export time. Application config
+then references the durable files and the Simulink block executes explicitly.
 """
 
-LABEL_GUIDE = """
+
+LABEL_GUIDE = r"""
 # Label Guide for Radia-NGSolve
 
-## How Labels Flow
+## How labels flow
 
-```
+```text
 Cubit blocks/sidesets -> export netgen -> .vol SetMaterial/SetBCName
-                                          -> NGSolve mesh.Materials() / mesh.Boundaries()
+                                          -> NGSolve Materials/Boundaries
 ```
 
-## Naming Rules
+## Rules
 
-- Use lowercase, descriptive names: "iron", "source", "air"
-- Block names become material labels (mesh.Materials("iron"))
-- Sideset names become boundary labels (mesh.Boundaries("source"))
-- Sideset takes priority over block for boundary labels
+- Use lowercase descriptive names such as `iron`, `source`, `sink`, and `air`.
+- Block names become material labels; sideset names become boundary labels.
+- Do not mix volume and surface entities in one block.
+- Validate labels against the selected application's headless sample/CLI.
+- A Simulink mask must not silently rename or substitute a missing label.
 
-## Checking Labels
+## Example
 
-The launcher dialog checks labels BEFORE export:
-- Required labels missing: red text, OK button disabled
-- Optional labels missing: gray text (informational)
-- All required present: green text, OK enabled
+```python
+block 1 add volume 1
+block 1 name "iron"
+sideset 1 add surface 1
+sideset 1 name "source"
+```
 
-This prevents the common mistake of forgetting to name blocks/sidesets
-before running a computation that requires them.
+Use `check-vol`/NGSolve inspection before a physics solve. Missing required
+labels fail and leave an application diagnostic artifact.
 """

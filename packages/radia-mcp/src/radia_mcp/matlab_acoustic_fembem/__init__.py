@@ -1,16 +1,16 @@
-"""MATLAB acoustic FEM-BEM agent guidance."""
+"""Compatibility imports for the former combined MATLAB/FEM-BEM namespace."""
 
-from __future__ import annotations
-
-from pathlib import Path
-
-
-_HERE = Path(__file__).resolve().parent
-
-
-def matlab_acoustic_fembem_agent_guide() -> str:
-    """Return the MATLAB acoustic FEM-BEM agent skill document."""
-    return (_HERE / "skill.md").read_text(encoding="utf-8")
+from ..acoustic_fembem import (
+    acoustic_fembem_agent_guide as matlab_acoustic_fembem_agent_guide,
+    acoustic_fembem_extension_contract as matlab_acoustic_fembem_extension_contract,
+    acoustic_fembem_extension_path as matlab_acoustic_fembem_extension_path,
+    acoustic_fembem_server_config as matlab_acoustic_fembem_server_config,
+)
 
 
-__all__ = ["matlab_acoustic_fembem_agent_guide"]
+__all__ = [
+    "matlab_acoustic_fembem_agent_guide",
+    "matlab_acoustic_fembem_extension_contract",
+    "matlab_acoustic_fembem_extension_path",
+    "matlab_acoustic_fembem_server_config",
+]

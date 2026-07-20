@@ -235,6 +235,67 @@ def test_affine_3d_cell_family_uses_epsilon_free_subtet_interaction(
     assert info["kernel_epsilon_m"] is None
 
 
+@pytest.mark.parametrize("family", ("tet", "hex", "wedge"))
+def test_hcurl_cell_cluster_derivative_closes_piola_scaling(family):
+    mesh = _single_cell_mesh(family)
+    fes = ng.HCurl(mesh, order=2, nograds=True)
+    field = ng.GridFunction(fes)
+    field.Set(ng.CF((-ng.y, ng.x, 0.0)))
+    vectors = field.vec.FV().NumPy().copy()
+    basis = vim.NgsolveHCurlCurlBasis(
+        mesh, fes, vectors, intorder=4, materials="cond"
+    )
+    interaction = vim.NgsolveHCurlCellVolumeInteraction(
+        mesh, fes, vectors, basis, degree=0, projection_quad=4,
+        outer_quad=4, materials="cond", projection_tolerance=1.0e-10,
+    )
+    deformation_space = ng.VectorH1(mesh, order=1)
+    scaling = ng.GridFunction(deformation_space)
+    scaling.Set(ng.CF((ng.x, ng.y, ng.z)))
+    with ng.TaskManager():
+        velocities = vim.SampleNgsolveHCurlCellSubtetVelocities(
+            mesh, [scaling], interaction, materials="cond"
+        )
+    left = np.array([0.3+0.2j])
+    right = np.array([-0.4+0.1j])
+    observed = interaction.matrix.directional_contractions(
+        velocities, left, right
+    )[0]
+    expected = np.vdot(left, interaction.matrix.to_dense() @ right)
+    np.testing.assert_allclose(observed, expected, rtol=2.0e-10, atol=2.0e-13)
+
+
+@pytest.mark.parametrize("family", ("tet", "hex", "wedge"))
+def test_hcurl_cell_activation_derivative_groups_subtets_by_parent(family):
+    mesh = _single_cell_mesh(family)
+    fes = ng.HCurl(mesh, order=2, nograds=True)
+    field = ng.GridFunction(fes)
+    field.Set(ng.CF((-ng.y, ng.x, 0.0)))
+    vectors = field.vec.FV().NumPy().copy()
+    basis = vim.NgsolveHCurlCurlBasis(
+        mesh, fes, vectors, intorder=4, materials="cond"
+    )
+    interaction = vim.NgsolveHCurlCellVolumeInteraction(
+        mesh, fes, vectors, basis, degree=0, projection_quad=4,
+        outer_quad=4, materials="cond", projection_tolerance=1.0e-10,
+    )
+    rho = np.array([0.63]); power = 1.7
+    left = np.array([0.3+0.2j]); right = np.array([-0.4+0.1j])
+    observed = interaction.matrix.activation_contractions(
+        rho, left, right, power=power
+    )[0]
+    base = np.vdot(left, interaction.matrix.to_dense()@right)
+    expected = 2*power*rho[0]**(2*power-1)*base
+    np.testing.assert_allclose(observed, expected, rtol=3e-12, atol=2e-14)
+    step = 2e-6
+    plus = np.vdot(left, interaction.matrix.activation_to_dense(
+        rho+step, power=power)@right)
+    minus = np.vdot(left, interaction.matrix.activation_to_dense(
+        rho-step, power=power)@right)
+    np.testing.assert_allclose(observed, (plus-minus)/(2*step),
+        rtol=2e-10, atol=2e-12)
+
+
 def test_warped_hex_uses_uniform_h_refinement_until_both_residuals_pass():
     mesh = _warped_hex_mesh()
     fes = ng.HCurl(mesh, order=2, nograds=True)

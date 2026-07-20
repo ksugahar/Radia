@@ -1,14 +1,14 @@
-# Radia panel samples
+# Radia application samples
 
 Canonical sample artifacts shipped with the `radia` wheel.  Each
-panel exposes one or more analysis modes; each mode requires a
+application exposes one or more analysis modes; each mode requires a
 specific combination of input artifacts (mesh `.vol`, coil `.py`
 or `.step`, BH curve `.txt`, hysteresis `.hys`, etc.).
 
 This README is the index.  See sub-directories for deeper
 documentation (`em/README.md` for the EM-specific corpus).
 
-## IH notebook workbench (`radia_ih.ipynb`) — Induction Heating
+## Induction Heating block + IH comparison notebook
 
 | Method (UI label) | Calc script (Layer 4) | .jou recipe | Canonical .vol | Coil source |
 |---|---|---|---|---|
@@ -47,7 +47,7 @@ built wheels (CI starts from a clean checkout and regenerates only
 the canonical .vol files via Cubit batch).  Local LAB checkouts
 may retain them for research convenience.
 
-## EM notebook workbench (`radia_em.ipynb`) — Accelerator electromagnet
+## Electromagnet Simulink block
 
 See `em/README.md` for the full C-yoke corpus (1/1 / 1/2 / 1/4
 / 1/8 reductions, ELF reference, Kelvin Benchmark mode).
@@ -60,20 +60,20 @@ Top-level canonical trio (all shipped):
 | Mesh | `em_sample.jou` -> `em_sample.vol` | `--vol` |
 | BH | `em_sample_bh.txt` (or built-in `STEEL_BH`) | `--bh-file` |
 
-Kelvin Benchmark mode (`radia_em.ipynb` / `EMDesignSpec` formulation = "Kelvin
+Kelvin Benchmark mode (`Electromagnet` block / `EMDesignSpec` formulation = "Kelvin
 Benchmark"): bundled `kelvin_benchmark_sphere_1_2.vol` (1/2
 model) + `kelvin_benchmark_sphere_1_4.vol` (1/4 model).  See
 `tests/panels/test_kelvin_benchmark_golden.py` for the golden
 band (±1.5% at p=2).
 
-## PCB notebook workbench (`radia_pcb.ipynb`) — PCB inductance
+## PCB PEEC Simulink block
 
 | Sample | Role |
 |---|---|
 | `pcb_sample.jou` | Cubit recipe for the canonical PCB geometry |
 
 Calc script: `calc_pcb_peec.py`.  Currently a single sample; the
-panel mostly targets user-supplied `.jou` files.
+application mostly targets user-supplied `.jou` files.
 
 ## Conventions
 
@@ -89,6 +89,6 @@ panel mostly targets user-supplied `.jou` files.
 ## Deploy verification
 
 The `deploy` skill's golden-range matrix exercises one canonical
-sample per panel mode end-to-end (see `tests/panels/golden/*.json`)
+sample per application mode end-to-end (see `validation_test/panels/golden/*.json`)
 to lock numerical regressions.  Add a sample to `panels/samples/`
 only when its golden test passes consistently.

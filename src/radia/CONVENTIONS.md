@@ -1,163 +1,94 @@
-# Radia Panel Conventions
+# Radia Application Interface Conventions
 
-The canonical Radia panel surface is now a lightweight Jupyter notebook
-under `src/radia/panels/notebooks/`.  A panel wraps an app-specific
-headless `calc_*.py` script: argparse options become `DesignSpec`
-settings, the notebook workbench launches the script, and run artifacts
-are saved as `run.log` plus `result.json`.
+The canonical human-facing Radia applications are masked blocks in
+`matlab/radia_simulink_library.slx`. EM, PCB, Motor, and Stream Function have
+no notebook workbench. IH temporarily keeps
+`src/radia/panels/notebooks/radia_ih.ipynb` beside its Simulink block so the two
+operating styles can be compared over the same `IHDesignSpec` and headless CLI.
 
-Legacy standalone PySide6 windows under `src/radia/radia_*.py` are removed.
-The Cubit mesh-export toolbar remains active as a Cubit-embedded surface and is
-not a normal Radia Python dependency. New user-facing analysis panel work,
-release QA, and deploy documents must treat the notebook workbench as
-canonical. Normal Radia Python environments should not install PySide6.
+Python and MCP are the first-class AI interfaces. Result-bearing notebooks
+under `docs/` explain and reproduce methods; they are not production GUIs.
 
-## Notebook Panel Policy
+## Application Contract
 
-- Keep computation in headless CLI/function modules.  Notebook panels
-  map settings to CLI arguments; they do not re-implement solvers.
-- Persistent defaults live in the notebook `DesignSpec(...)` cell.
-  JSON files are run artifacts, not preset storage.
-- Use concise Markdown where it teaches the application.  For IH, that
-  includes the linear SIBC vs nonlinear ESIM choice: ESIM solves a 1-D
-  cell problem from a BH curve to update the effective surface
-  impedance `Z_s`, and the previous ESIM benchmark JSONs show
-  convergence and per-panel/scalar behavior.
-- Use `netgen.webgui` for human-facing notebook visualization and
-  durable GMSH `.msh v4.1` artifacts for LLM/headless validation.
+- Computation lives in tested Radia APIs and headless
+  `src/radia/panels/calc_*.py` modules.
+- UI-neutral `*_design.py` dataclasses map application settings to the exact
+  argparse contract.
+- Simulink blocks delegate to that contract and do not reimplement solvers.
+- The initial application backend may launch Python once on an explicit rising
+  trigger. It must not launch Python every simulation step.
+- MEX/ROM is an optional later backend after numerical parity, lifecycle,
+  failure propagation, and long-run tests.
+- Every run leaves `launcher_command.txt`, `run.log`, and versioned
+  `result.json` provenance. Solver command/output artifacts are added once the
+  run reaches those stages.
 
-## Retired PySide Module-Level Metadata
+## Simulink Library
 
-The old `radia_*.py` modules no longer exist.  If an archived branch must be
-read, those modules used to define these module-level variables:
+The single Radia Library Browser entry contains these application blocks:
 
-```python
-TITLE = "Induction Heating"                    # Display name in launcher combo
-REQUIRED_LABELS = ["source", "sink"]            # Block/sideset names that must exist
-OPTIONAL_LABELS = ["workpiece", "air"]          # Block/sideset names shown but not required
-OPTIONAL_FILES = {"Coil script": "Python (*.py)"}  # Optional input file browse fields
+```text
+Applications/Electromagnet
+Applications/PCB PEEC
+Applications/Motor
+Applications/Stream Function
+Applications/Induction Heating
 ```
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `TITLE` | `str` | Shown in the launcher Analysis combo box |
-| `REQUIRED_LABELS` | `list[str]` | Block/sideset names required in .vol. Missing = red text + OK disabled |
-| `OPTIONAL_LABELS` | `list[str]` | Block/sideset names used if present. Missing = gray, present = green |
-| `OPTIONAL_FILES` | `dict[str, str]` | Key = display name, value = file dialog filter. Input files only (no output) |
+The standard batch block has one boolean rising-trigger input and three
+outputs: `int32 status`, `double primary`, and `double elapsed_s`. Status is
+`0` idle, `2` passed, or `-1` failed. Full results stay in the configured run
+artifact root.
 
-## Sample Journal Files (required)
+## Samples
 
-Each notebook workbench must have corresponding sample `.jou` files in
-`src/radia/panels/samples/`.
-Only golden-test-locked samples (`tests/panels/test_*_golden.py`) are shipped in the wheel.
+Canonical `.jou`, `.vol`, `.step`, BH, and related assets live under
+`src/radia/panels/samples/` and are owned by the headless application contract,
+not by a GUI implementation.
 
-Current layout (post-2026-04-23 demotion):
+```text
+Induction Heating block / IH comparison notebook
+  -> ih_bem_sample.jou
+  -> ih_peec_bem_coarse.jou
+  -> ih_fem_kelvin_skin_fine.jou
+  -> ih_peec_inductance.jou
 
-```
-radia_ih.ipynb   ->  samples/ih_bem_sample.jou            (BEM: cubit-mesh-export smoke test)
-                     samples/ih_peec_bem_coarse.jou       (peec_bem mode, golden-locked)
-                     samples/ih_fem_kelvin_skin_fine.jou  (fem_coilmesh mode, golden-locked)
-                     samples/ih_peec_inductance.jou       (peec_inductance mode, golden-locked)
-radia_em.ipynb   ->  samples/em_sample.jou
-radia_pcb.ipynb  ->  samples/pcb_sample.jou
+Electromagnet block -> em_sample.jou + em_sample_coil.py + em_sample_bh.txt
+PCB PEEC block      -> pcb_sample.jou
 ```
 
-Non-canonical / research-stage IH samples that are still useful for
-archaeology live under
-`validation_test/induction_heating/demoted_samples_legacy/` (see that
-directory's README for the demotion history — e.g., the old
-`ih_fem_sample.jou` no-Kelvin baseline and the small-mesh
-`ih_fem_kelvin_sample.jou` with its misleading "auto-Kelvin" comment).
+Only golden-locked samples ship as canonical production inputs. Research and
+superseded formulations stay in `validation_test/` or local `C:\temp`, not as
+alternate interface implementations.
 
-Naming convention: `{stem}_sample.jou` where `{stem}` is the application name
-(e.g., `radia_em.ipynb` -> `em`). Multiple samples per stem are allowed when
-distinct solver methods need different mesh strategies — the IH workbench ships
-four samples (one per panel mode).
+## Cubit Boundary
 
-These samples are:
-- Packaged with `pip install radia` (included in wheel)
-- Used as the default working folder in the launcher
-- Self-contained (geometry + mesh + blocks/sidesets, no external dependencies)
+The Cubit Export Mesh toolbar remains a Cubit-owned PySide6 surface. Normal
+Radia Python and Simulink must not load Cubit's private Python runtime. Cubit
+exports self-contained `.vol`/`.sol` assets; applications consume those files
+in separate processes.
 
-## .vol is Always Required
+## Mesh Evaluation
 
-The launcher always exports `.vol` before opening the analysis workbench.
-Every notebook workbench receives `.vol` as a setting.
-There is no `REQUIRES_VOL` flag -- it is always true.
+Mesh p-convergence is a documentation/validation workflow, not a Cubit toolbar
+action or application block. Cubit batch export produces the files and
+`src/radia/panels/calc_mesh_eval.py` evaluates them.
 
-## Working Folder Memory
+- GMSH/BDF/VTK format QA checks Jacobians, volume, and area.
+- NGSolve `.vol` p-convergence checks order 1-5 geometry integrals.
+- Cubit export owns file correctness; NGSolve owns interpretation of `.vol`.
 
-The launcher remembers the user's last working folder per machine:
+## Visualization
 
-- Stored in: `~/.cubit/radia_launcher.json`
-- Key: `"last_jou_dir"`
-- Fallback chain: last folder -> parent folder -> package samples folder
+- Human documentation notebooks use `netgen.webgui` when an interactive scene
+  teaches the method.
+- Simulink/headless/AI workflows use durable GMSH `.msh v4.1` and JSON
+  artifacts.
+- Application operation must not depend on a transient desktop viewer state.
 
-## Entry Point
+## Qt Boundary
 
-Each `radia_*.py` must define a `main()` function for console_scripts:
-
-```python
-def main():
-    run_app(MyWindow)
-
-if __name__ == "__main__":
-    main()
-```
-
-## Mesh Evaluation Policy
-
-Mesh p-convergence evaluation is a documentation / validation surface, not a
-Cubit Export Mesh menu action and not an engineering design panel.  The Cubit
-toolbar stays export-only; docs demos should call Cubit APREPRO export commands
-through explicit `cubit.cmd(...)` in a clean Cubit batch subprocess, then run
-`src/radia/panels/calc_mesh_eval.py` on the exported files.
-
-**Format QA (our quality guarantee)**:
-- .msh, .bdf, .vtk at order 1-2 verified via GMSH API `getJacobians()`
-- Volume and area compared against ACIS CAD values
-- Negative Jacobian determinant = inverted element (node ordering bug)
-- This is the Cubit plugin's responsibility
-
-**p-Convergence (curving accuracy)**:
-- .vol at order 1-5 read by NGSolve `Integrate(CF(1), mesh)`
-- Volume, area, length compared against CAD
-- Monotonic convergence expected (each order gains ~2-3 digits)
-- NGSolve reading .vol correctly is NGSolve's responsibility
-
-**Responsibility boundary**:
-- We guarantee: export files (.msh/.bdf/.vtk) contain correct geometry
-- NGSolve guarantees: .vol is read correctly by `Mesh("model.vol")`
-
-## Visualization Routing
-
-Panel visualization should ride existing viewer ecosystems.
-
-- GUI / notebook route for humans: use `netgen.webgui` (`Draw(...)`,
-  browser/Jupyter scene widgets).
-- LLM / headless route for automation: use `.msh v4.1` plus `gmsh`
-  / `GmshPostExport` so screenshots, field views, and validation
-  artifacts are durable files.
-- `.vol` and `.sol` are notebook input/output files. Their
-  double-click viewer should be plain Netgen (`netgen.exe "%1"`), not
-  GMSH and not the Radia-specific viewer by default.
-
-Do not make a panel depend on a GMSH desktop window for ordinary
-interactive viewing, and do not make an LLM workflow depend on a
-transient `netgen.webgui` browser state.
-
-Implementation note: pip Netgen's command-line dispatch lives in
-`netgen.__main__`; package startup/DLL setup lives in `netgen.__init__`.
-If `.vol` double-click does not launch, add a `.vol` handler to
-`netgen.__main__` using Netgen's native `Ng_LoadMesh` sequence and keep
-the Windows association pointed at `netgen.exe "%1"`. The
-`radia-vol-viewer` association is a legacy/helper path for custom `.sol`
-companion-mesh inference, not the default notebook IO route.
-
-## Qt / Notebook Compatibility
-
-Notebook panels do not use PySide6 and are the canonical analysis surface.
-Normal Radia Python on LAB / 100号機 / mdx / hibino should not depend on
-PySide6.  The Cubit Export Mesh toolbar may use Coreform CUBIT's embedded
-PySide6, but that runtime is Cubit-owned and is not a Radia package
-dependency.
+Normal Radia Python does not depend on PySide6. Coreform Cubit's embedded
+PySide6 is allowed only for its export toolbar. Do not add desktop PySide6
+analysis windows or new notebook workbenches.

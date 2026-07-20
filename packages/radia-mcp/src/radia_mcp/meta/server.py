@@ -65,6 +65,20 @@ def radia_mcp_overview() -> dict:
 
 
 @mcp.tool()
+def radia_mcp_naming_conventions() -> dict:
+    """Return the canonical naming contract used by every bundled MCP server."""
+    return {
+        "product": "radia-mcp.<server-id>",
+        "python": "radia_mcp.<python_module>",
+        "command": "mcp-server-<server-id>",
+        "catalog_key": "<server-id>",
+        "tool_prefix": "<server_id>_ (underscores)",
+        "compatibility": "Existing public commands and tool names remain aliases; do not break clients.",
+        "servers": catalog.list_all(),
+    }
+
+
+@mcp.tool()
 def radia_mcp_get(name: str) -> dict:
     """Look up one server by short name (e.g. 'bayesian-opt', 'ih', 'kelvin')."""
     info = catalog.get(name)

@@ -7,6 +7,27 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.16] - 2026-07-21
+
+- Added the Radia Simulink application-library contract and synchronized MCP
+  guidance with the Simulink-first production policy and temporary IH dual
+  operation.
+- Documented the native NGSolve MATLAB MEX surface, HCurl topology workflow,
+  Python/MEX parity gates, and official MATLAB MCP Server execution boundary.
+- Added Radia acoustic and acoustic FEM-BEM server contracts, strengthened
+  grant-writing and catalog validation, and removed machine-local test-data
+  dependencies from the public package checks.
+- Moved 68 solver-backed FEM/BEM, geometry, convergence, and application
+  checks to `validation_test/radia_mcp/`; the package test lane now enforces
+  fast API/MCP contracts without direct Netgen/NGSolve imports.
+
+- Strengthened `mcp-server-mathematica` for reusable validation workflows:
+  tracked `.wls` / `.wl` / `.m` files can now run as one-kernel batches with
+  elapsed time and parsed JSON failure reports, and named identities can be
+  checked together without paying one Wolfram kernel cold start per formula.
+  The server now also exposes an electromagnetics, differential-forms, and
+  paper verification guide, and the meta catalog points to the real tools.
+
 ## [1.4.15] - 2026-07-17
 
 - Added motor guidance for the angle-periodic ROM, reduced HCurl/HDiv basis

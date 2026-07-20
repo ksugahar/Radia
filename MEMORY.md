@@ -1,1 +1,3 @@
 - [HCurl-SIBC HACApK cross composition](memory/hcurl_sibc_hacapk_cross.md): use a stable full current Gram plus reduced diagonal correction; keep HDiv-HCurl coupling separate.
+- [MATLAB NGSolve GridFunction projection](memory/matlab_ngsolve_gridfunction_setvalues.md): match Python gf.Set with ngcomp::SetValues; direct FE Interpolate fails for high-order HDiv.
+- [Unsafe extruded constructors retired](memory/retired_unsafe_extruded_constructors.md): delete Python, MATLAB, and C ABI surfaces; never reintroduce ObjMltExtPgn/Rtg/Tri.

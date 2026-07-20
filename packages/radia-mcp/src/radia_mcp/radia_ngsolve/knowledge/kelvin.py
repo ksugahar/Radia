@@ -2160,10 +2160,10 @@ B_phys = eval_B_physical_from_gf(gf_B, mesh, r_phys=[0, 0, 1.0],
 
 
 KELVIN_BENCHMARK_PANEL = """
-# Kelvin Benchmark Notebook Mode (radia_em.ipynb / EMDesignSpec "Kelvin Benchmark")
+# Kelvin Benchmark block mode (Electromagnet / EMDesignSpec "Kelvin Benchmark")
 
 End-user verification path for the Cubit-meshed Kelvin pipeline.
-The EM panel ships with a 4th formulation -- "Kelvin Benchmark" --
+The Electromagnet Simulink block ships with a 4th formulation -- "Kelvin Benchmark" --
 that runs `calc_kelvin_benchmark.py` on a `.vol` with a magnetic
 sphere in uniform external Hz and compares the interior field to
 the analytical solution `Hz_inside = 3 / (mu_r + 2) * H0`.
@@ -2177,7 +2177,7 @@ The `.vol` must declare:
 
 ## Bundled samples (verified 2026-04-26)
 
-Two `.vol` samples ship with the wheel for the panel's Browse dialog:
+Two `.vol` samples ship with the wheel for block configuration:
 
   | sample (frac) | reduction                                | offset_dir | error @ p=2 |
   |---------------|------------------------------------------|------------|------------:|

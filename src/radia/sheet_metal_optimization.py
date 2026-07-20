@@ -393,6 +393,8 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
         desired_topology=committed_topology.copy()
         desired_topology[committed_topology & (new_r<=activation_remove_threshold)]=False
         desired_topology[(~committed_topology) & (new_r>=activation_restore_threshold)]=True
+        # Cancel a queued change if the continuous design returns through the
+        # hysteresis band before the batch is committed.
         pending_topology=(desired_topology!=committed_topology)
         pending_count=int(np.count_nonzero(pending_topology))
         topology_changed=bool(pending_count>0 and (pending_count/max(1,pending_topology.size)>=cubit_batch_fraction or iteration-last_cubit_iteration+1>=int(cubit_batch_interval)))

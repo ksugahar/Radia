@@ -8,6 +8,15 @@ description: Use the official MATLAB MCP execution layer for machine-learning an
 Use the official MATLAB MCP server as the execution substrate. This package
 adds small, solver-neutral artifact gates; it is not a second MATLAB runtime.
 
+## Public video learning catalogs
+
+For AIcia Solid Project, inventory all public channel tabs rather than only the
+Videos tab. The 2026-07-20 snapshot contains 397 distinct IDs: 245 videos, two
+Shorts, and 150 streams. Public titles and metadata may nominate a CAE lesson,
+but transcripts and media are not copied. A candidate is not numerical ground
+truth and cannot be promoted without deterministic seeds, units/schema,
+provenance, and an independent forward-solver verification.
+
 ## Workflow
 
 1. Pin MATLAB release, toolbox availability, session owner, and random seed.

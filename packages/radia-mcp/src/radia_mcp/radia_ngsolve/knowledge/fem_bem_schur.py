@@ -161,7 +161,7 @@ assembly.  **Returns** dict: ``{ndof, R_inner, R_outer, l2_err, l2_ref, rel_err}
    reaches L2 rel_err 5.5e-2 at order=2 on the shell dipole, matching the analytic
    `sphere_shell_analytic_dtn` (0.054) to 3 sig figs (FEM interior error dominates)
    -- deterministic over repeated runs, gated by
-   `tests/test_fem_bem_coupling.py::test_full_bem_schur_dense_path`.
+   `validation_test/radia_mcp/test_fem_bem_coupling.py::test_full_bem_schur_dense_path`.
 
 6. **The crash (fixed) -- definedon SurfaceL2 as a mixed-form TEST space**: the
    earlier nondeterministic NGSolve crash (exit 127/139) was NOT the BEM densify

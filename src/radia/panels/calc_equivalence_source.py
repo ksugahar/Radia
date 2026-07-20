@@ -51,7 +51,7 @@ Stage promotion:
         validation_test/equivalence_source/.
 
     Stage 3 (PySide panel -- planned):
-        Wrap as a notebook mode in radia_em.ipynb or a future NFS workbench.  Cubit
+        Wrap as an Electromagnet block mode or a future NFS block.  Cubit
         Browse for the .vol, sideset picker for --surface, edit
         boxes for --omega + obs grid, Run button launches this CLI.
 """

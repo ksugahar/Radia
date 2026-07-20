@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "1.4.15"
+version = "1.4.16"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
@@ -100,7 +100,10 @@ mcp-server-gmsh = "radia_mcp.gmsh.server:main"
 # mcp-server-elf moved to standalone package: pip install mcp-server-elf
 # (https://github.com/ksugahar/mcp-server-elf, https://pypi.org/project/mcp-server-elf/)
 mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
+mcp-server-radia-acoustic = "radia_mcp.radia_acoustic.server:main"
 mcp-server-radia-matlab = "radia_mcp.matlab.server:main"
+mcp-server-acoustic-fembem = "radia_mcp.acoustic_fembem.server:main"
+radia-acoustic-fembem-mcp-config = "radia_mcp.acoustic_fembem.integration:main"
 mcp-server-radia-streamfunction = "radia_mcp.streamfunction.server:main"
 mcp-server-ih = "radia_mcp.ih.server:main"
 mcp-server-peec = "radia_mcp.peec.server:main"
@@ -192,9 +195,14 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"radia_mcp.matlab" = ["skill.md", "extensions/*.json", "matlab/+radia_mcp_matlab/*.m"]
-"radia_mcp.matlab_acoustic_fembem" = [
+"radia_mcp.matlab" = [
     "skill.md",
+    "extensions/*.json",
+    "matlab/+radia_mcp_matlab/*.m",
+]
+"radia_mcp.acoustic_fembem" = [
+    "skill.md",
+    "extensions/*.json",
 ]
 "radia_mcp.matlab_agentic_ml" = [
     "skill.md",

@@ -1,9 +1,9 @@
 """
 argumentize_extract.py -- retired helper for old desktop panel migration.
 
-Current Radia panels are notebook workbenches backed by DesignSpec classes;
-use `validation_test/panels/test_notebook_workbench.py` for the active
-contract.  This script remains only for archaeology of removed `radia_*.py`
+Current Radia human interfaces are Simulink blocks backed by DesignSpec classes;
+use `tests/test_simulink_application.py` and the MATLAB Simulink tests for the
+active contract. This script remains only for archaeology of removed `radia_*.py`
 desktop panels.  It walks a `calc_*.py` and / or an archived `radia_*.py`
 panel and reports candidates that would have needed promotion to argparse
 arguments before the old ModePanel migration.

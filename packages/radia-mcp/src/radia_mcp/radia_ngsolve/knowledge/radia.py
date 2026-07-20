@@ -722,6 +722,17 @@ Cubit or Netgen; Radia consumes the resulting `.vol` via `netgen_mesh_to_radia`.
 |-------------------------|--------------------------------------------------------|
 | `rad.FldVTS(...)` | Use `rad.Fld(obj, field_type, points)` for point evaluation, then export to `.msh v4.1` via `GmshPostExport` for visualization. |
 
+## Unsafe legacy extrusions (removed 2026-07-20)
+
+| Removed | Replacement |
+|---------|-------------|
+| `rad.ObjMltExtPgn(...)` | Build the extruded geometry with Netgen or Cubit, then use the NGSolve-native mesh path. |
+| `rad.ObjMltExtRtg(...)` | Same; the legacy side-face construction can also become non-planar. |
+| `rad.ObjMltExtTri(...)` | Same; the Triangle-backed implementation is no longer bundled. |
+
+The C ABI declarations, definitions, and exports were deleted together with
+the pybind11 and MATLAB MEX entries. No compatibility shim remains.
+
 ## Policy
 
 When adding a new API or breaking an existing one, the committer MUST update
@@ -4032,6 +4043,76 @@ with high-Z_s materials. Use FEM-SIBC (Level 3) for these cases.
 - `validation_test/induction_heating/cubit_panels_legacy/fem_esim_3d.py` -- FEM-SIBC reference
 """
 
+RADIA_MATLAB_MEX = """
+# MATLAB / Python / NGSolve bridge
+
+The production MATLAB boundary is `radia_mex`, backed by the same C++ Radia
+and NGSolve-facing implementation used by the Python stack.  The live command
+inventory is exposed by the `matlab_radia_mex_contract` MCP tool and by
+`radia.quickCheck()` in MATLAB.
+
+The bridge is intentionally contract-based:
+
+* Python keeps pybind11 objects and NumPy arrays.
+* MATLAB uses MEX handles plus numeric matrices, vectors, and diagnostic
+  structs.
+* NGSolve remains the owner of meshes, finite-element spaces, Piola maps,
+  curved-element transformations, and orientation.  MATLAB may dump assembled
+  matrices and metadata, but it does not reimplement those transformations.
+* `radia.ngsolve.CoefficientFunction` keeps native NGSolve coefficient
+  expression trees behind checked MEX handles.  Constants, arithmetic,
+  scaling, metadata, and mapped physical-point evaluation are available
+  without a Python process.
+* `radia.ngsolve.GridFunction` keeps native NGSolve GridFunctions behind
+  checked MEX handles.  MATLAB can create real or complex H1/HCurl/HDiv
+  spaces, exchange DoF vectors, interpolate a native coefficient function,
+  and obtain a GridFunction-backed CoefficientFunction view.
+* `radia.ngsolve.Vector` keeps a GridFunction component or an independent
+  native `BaseVector` work copy behind a checked MEX handle.  `setZero`,
+  `scale`, `axpy`, `dot`, and `norm` stay in C++; `values()` and `setValues()`
+  are explicit MATLAB observation/control boundaries.
+* `radia.ngsolve.Mesh`, `FESpace`, `BilinearForm`, and `Matrix` keep the
+  NGSolve object graph alive behind checked MEX handles.  A form assembles a
+  built-in real integrator once; the resulting matrix can export 1-based sparse
+  triplets, create native vectors, apply matvecs, and construct a free-DoF
+  inverse without rebuilding the mesh.
+* The persistent matrix boundary is intentionally explicit rather than a
+  claim of full NGSolve Python parity: arbitrary Python callbacks, tensor-valued
+  bilinear forms, general preconditioners, and solver objects
+  remain outside the current MEX slice. Scalar CoefficientFunction weighting
+  is available for the built-in real/complex volume integrators, and real or
+  complex volume and boundary CoefficientFunction right-hand sides are
+  assembled natively for H1, HCurl, and HDiv spaces.
+* `radia.ngsolve.GridFunction.fromFESpace` shares an existing native space
+  without reloading the mesh.  `radia.ngsolve.LinearForm` exposes real or
+  complex constant-source and native CoefficientFunction volume or boundary
+  RHS assembly for H1, HCurl, and HDiv spaces as native vector views, including
+  lifetime retention after the form wrapper is released.
+* The native MEX gateway links the NGSolve C++ libraries directly and does not
+  link or start Python.  The legacy `radentry.cpp` compatibility layer is
+  compiled with Python callback support disabled for MEX; numeric Radia calls
+  remain available and callback objects fail explicitly at the boundary.
+* Fixed reduced IH and HCurl Eddy Bubble/CLN models use
+  `simulink.state_space.create/info/step/reset/destroy`.  Matrices and the
+  initial state cross MATLAB/MEX once at block start, while each Simulink step
+  transfers only the input and output.  Moving height-family interpolation
+  remains a MATLAB S-function because its operator changes with position.
+* `radia.optuna.Study` stores trial, parameter, intermediate-value, and user
+  attribute tables in a MAT-file.  `bestValue`, `bestParams`, and
+  `bestSolution` expose the persisted single-objective best after restart;
+  `paretoFront` is the multi-objective route.  `radia.optuna.SimulinkRunner`
+  uses `SimulationInput -> sim -> score -> Study.tell`.
+
+This is a shared numerical interface, not shared Python/MATLAB object identity.
+The MATLAB MEX path does not launch `python.exe`, but the current pip-provided
+Windows `libngsolve.dll` has a transitive `python312.dll` dependency. A truly
+Python-DLL-free deployment requires rebuilding NGSolve/Netgen without Python
+support.
+The MCP contract audits retired unsafe constructors and fails if
+`ObjMltExtPgn`, `ObjMltExtRtg`, or `ObjMltExtTri` reappears in pybind11, MEX, or
+the legacy C ABI source and export table.
+"""
+
 
 def get_radia_documentation(topic: str = "all") -> str:
     """Return Radia usage documentation by topic."""
@@ -4061,6 +4142,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "multilevel": RADIA_MULTILEVEL_SIMULATOR,
         "ngsbem_mqs_limits": RADIA_NGSBEM_MQS_LIMITS,
         "fem_kelvin_cubit": RADIA_FEM_KELVIN_CUBIT,
+        "matlab_mex": RADIA_MATLAB_MEX,
     }
 
     topic = topic.lower().strip()

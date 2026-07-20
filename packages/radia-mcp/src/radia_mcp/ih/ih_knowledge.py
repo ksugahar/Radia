@@ -496,10 +496,10 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 INDUCTION_HEATING_THERMAL = """
 # Transient Thermal Analysis for Induction Heating
 
-## Production path (radia 4.59.0+): integrated in the IH notebook workbench
+## Production path: IH Simulink block plus temporary notebook comparison
 
-Heat analysis is a **Method choice** in
-`src/radia/panels/notebooks/radia_ih.ipynb` / `IHDesignSpec`,
+Heat analysis is a **Method choice** in the Radia Simulink Induction Heating
+block and `IHDesignSpec`; the temporary comparison notebook exposes the same contract,
 alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
 FEM-coilmesh methods.  Pick one of three Thermal Method choices
 (v4.63.0+):
@@ -1724,7 +1724,7 @@ implemented reconstruction.
 the extension when its prerequisites hold and records
 ``wp_loop_dof_skip_reason`` otherwise; ``on`` keeps fail-fast
 prerequisite checks.  The known-invalid ``off`` route is not selectable.
-The notebook workbench exposes this control in its Workpiece section.
+The Simulink configuration and temporary notebook workbench expose this control.
 
 **Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
 The hole extractor's per-triangle "centroid-outward" flip is wrong on a
@@ -1838,8 +1838,9 @@ Sugahara: a known-buggy path must not stay selectable).**
 With ``--wp-bem-backend intree-dense`` the defaults enable the complete
 genus-1 correction.  With the HACApK backend the projected incident
 potential still applies, while the loop-DoF skip reason and caveat are
-emitted so the limitation is explicit.  The notebook panel has one
-``auto``-defaulted loop-DoF control and no incident-potential knob.
+emitted so the limitation is explicit. The Simulink block and comparison
+notebook share one ``auto``-defaulted loop-DoF setting and no
+incident-potential knob.
 
 Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
 + ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
@@ -2032,9 +2033,10 @@ in examples/.
 - 'kelvin' material (+ Periodic identification) for open boundary.
 - Canonical .jou: `src/radia/panels/samples/ih_fem_kelvin_skin_fine.jou`.
 
-### Panel UX (2026-04-19 refactored)
+### Application interface
 
-`IHDesignSpec` and the IH notebook workbench present the above through
+`IHDesignSpec`, the Induction Heating Simulink block, and the temporary IH
+notebook comparison present the above through
 settings sections (Method / Drive / Coil material / Coil geometry /
 Workpiece material / Workpiece impedance / Linear solver / Advanced).
 

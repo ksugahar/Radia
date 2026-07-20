@@ -1,8 +1,9 @@
 """radia_mcp.mathematica — Wolfram Mathematica subprocess bridge for MCP.
 
-Exposes `mathematica_evaluate` and 8 high-level wrappers (simplify, to_tex,
-check_identity, vector_calc, unit_convert, solve, integrate, differentiate,
-status) as MCP tools.  The intent is "AI as Mathematica copilot": Claude
+Exposes `mathematica_evaluate`, tracked-script execution, and high-level
+wrappers (simplify, to_tex, single/batch identity checks, verification guide,
+vector_calc, unit_convert, solve, integrate, differentiate, status) as MCP tools.  The intent is
+"AI as Mathematica copilot": Claude
 generates Wolfram Language code from natural-language intent, runs it via
 this tool, interprets the result, and explains it back to the user.
 

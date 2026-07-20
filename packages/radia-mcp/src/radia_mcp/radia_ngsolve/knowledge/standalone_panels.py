@@ -1,154 +1,121 @@
-"""
-Retired standalone PySide panel knowledge.
+"""Historical standalone-panel topic redirected to Simulink application blocks."""
 
-The old radia-ih / radia-em / radia-pcb / radia-streamfunction desktop
-launchers were superseded by Jupyter notebook workbenches.  Keep the MCP topic
-for compatibility, but make every answer point to the notebook route.
-"""
+STANDALONE_PANELS = r"""
+# Radia application interfaces after the Simulink migration
 
-STANDALONE_PANELS = """\
-# Radia panel launch after notebook migration
+Standalone PySide analysis windows are retired. EM, PCB, Motor, and Stream
+Function notebook workbenches are also retired. The final human operating
+surface is a masked block in the single Radia Simulink library. Python/MCP is
+the AI surface; `docs/**/*.ipynb` is result-bearing documentation.
 
-The PySide6 standalone panel route is retired.  The canonical panel surface is
-now a result-bearing Jupyter notebook workbench:
-
-```
-panels/notebooks/radia_<app>.ipynb          # target layout
-src/radia/panels/notebooks/radia_<app>.ipynb # legacy during migration
-radia.<app>_design.<App>DesignSpec
-radia.<app>_notebook.<App>Workbench
-```
-
-Normal Radia Python on LAB / 100号機 / mdx / hibino should not install PySide6.
-The only protected PySide6 runtime is Coreform Cubit's embedded Python runtime;
-do not uninstall or delete that Cubit-owned copy.
+IH is the temporary comparison exception: keep both the Induction Heating
+block and `radia_ih.ipynb` over the same `IHDesignSpec` and headless scripts.
+If the block passes numerical, artifact/recovery, and operational gates, an
+explicit policy decision may retire the IH notebook too.
 
 Topics: quick_start, four_panels, build_notebook_gui, cubit_panels_migration,
         vol_sources, vs_cubit, ih_methods, troubleshooting
 
 ============================================================
-## quick_start -- notebook panel route
+## quick_start -- Radia Simulink library
 ============================================================
 
-Install the production packages without the old GUI extra:
+From MATLAB:
+
+```matlab
+addpath("matlab")
+radia.setup()
+radia.simulink.buildLibrary()
+```
+
+The Library Browser entry contains:
+
+```text
+Applications/Electromagnet
+Applications/PCB PEEC
+Applications/Motor
+Applications/Stream Function
+Applications/Induction Heating
+```
+
+Each standard application block consumes a versioned configuration JSON and
+runs only on a boolean rising trigger. Outputs are `int32 status` (`0` idle,
+`2` passed, `-1` failed), the selected primary scalar, and elapsed seconds.
+Full data remains in `command.txt`, `run.log`, `solver_result.json`, and
+`result.json` under the configured run root.
+
+Fast contract checks:
 
 ```powershell
-pip install --upgrade "radia[cubit]" radia-mcp cubit-mesh-export
-```
-
-Open or execute the notebook workbench for the application:
-
-```
-src/radia/panels/notebooks/radia_ih.ipynb
-src/radia/panels/notebooks/radia_em.ipynb
-src/radia/panels/notebooks/radia_pcb.ipynb
-src/radia/panels/notebooks/radia_motor.ipynb
-src/radia/panels/notebooks/radia_streamfunction.ipynb
-```
-
-For automated checks from a source checkout:
-
-```powershell
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
-```
-
-The notebook saves a `radia_result.v2` JSON artifact beside the run, and result
-notebooks are committed with outputs plus synchronized sidecar JSON.
-
-============================================================
-## four_panels -- active notebook workbenches
-============================================================
-
-Active notebook workbenches:
-
-| Notebook | Workbench | DesignSpec |
-|----------|-----------|------------|
-| `radia_ih.ipynb` | `radia.ih_notebook.IHWorkbench` | `radia.ih_design.IHDesignSpec` |
-| `radia_em.ipynb` | `radia.em_notebook.EMWorkbench` | `radia.em_design.EMDesignSpec` |
-| `radia_pcb.ipynb` | `radia.pcb_notebook.PCBWorkbench` | `radia.pcb_design.PCBDesignSpec` |
-| `radia_motor.ipynb` | `radia.motor_notebook.MotorWorkbench` | `radia.motor_design.MotorDesignSpec` |
-| `radia_streamfunction.ipynb` | `radia.streamfunction_notebook.StreamFunctionWorkbench` | `radia.streamfunction_design.StreamFunctionDesignSpec` |
-
-The old `radia_*.py` PySide modules were removed; do not restore them as a
-compatibility alias.
-
-============================================================
-## build_notebook_gui -- construction recipe
-============================================================
-
-For the full construction checklist, call the dedicated panel-review MCP topic:
-
-```
-panel_review(topic="build_notebook_gui")
-```
-
-Short version:
-
-- Move reusable kernels to `src/`; keep heavy numerical gates in
-  `validation_test/`.
-- Create `<App>DesignSpec` and `<App>Workbench` around a headless
-  `panels/calc_*.py` command.  Existing `src/radia/panels/calc_*.py` scripts
-  are legacy-compatible during the staged migration.
-- The notebook cell imports `DesignSpec` + `Workbench`, creates `spec`, and
-  calls `workbench.display()`.
-- `CommandWorkbench` runs locally and saves `command.txt`, `run.log`, and
-  `result.json` with `radia.notebook_panel_run.v2` metadata.
-- Do not store presets in JSON; persistent defaults live in the notebook
-  `DesignSpec(...)` cell.
-- Presentation CSS may restyle the page but must not put a Jupyter
-  cell-selection layer over run buttons.
-
-The NGSolve User Meeting `RADIA-IH.ipynb` draft is a presentation shell for
-the IH workbench: title Markdown, optional dark CSS, `IHDesignSpec` +
-`IHWorkbench`, and short tips.  Keep the repository notebook and validation
-tests as the canonical contract.
-
-============================================================
-## cubit_panels_migration -- examples/cubit_panels route
-============================================================
-
-`examples/cubit_panels` is not a permanent destination.  The IH inductance
-scripts have moved to `validation_test/induction_heating/cubit_panels_legacy`,
-and the remaining accel-magnet examples were pruned after rescuing panel
-fixtures to `src/radia/panels/samples/em/c_type_dipole`.  Any future legacy copy should
-move into one of these lanes:
-
-- reusable accel magnet geometry / coil builders -> `src/radia` EM APIs
-- panel-only samples, notebooks, and calc wrappers -> repo-root `panels/`
-- IH validation scripts (`verify_*`, `compare_*`, `test_*`) ->
-  `validation_test/induction_heating` or a specific validation subtree
-- IH demonstrations (`scalar_bie_sibc.py`, `bem_sibc_workpiece.py`,
-  `efie_sibc.py`, `fem_esim_*.py`, `impedance_esim.py`) -> src kernels plus
-  result-saved docs notebooks
-- Cubit journals, `.geo`, and BH tables -> protected assets until all
-  references point at the new owner
-
-For the detailed original 35-script routing plan, call:
-
-```
-panel_review(topic="cubit_panels_migration")
+python -m pytest tests/test_simulink_application.py -q
+matlab -batch "addpath('matlab'); r=runtests('tests/matlab/test_simulink_workflow.m'); assert(all([r.Passed]))"
 ```
 
 ============================================================
-## vol_sources -- mesh inputs still matter
+## four_panels -- compatibility topic; five active blocks
 ============================================================
 
-Notebook workbenches still consume durable mesh/input files such as `.vol`,
-`.sol`, `.step`, and `.msh`.  Cubit is one producer via
-`cubit-plugin-install` + `export netgen`, but notebook workflows should not
-depend on a transient desktop viewer state.
+The historical topic name is retained for MCP clients. Current surfaces:
 
-Human-facing visualization uses `netgen.webgui`.  Headless/LLM validation uses
-durable GMSH `.msh v4.1`, JSON, and saved notebook outputs.
+| Application | Simulink block | Shared DesignSpec | Notebook |
+|---|---|---|---|
+| Electromagnet | `Applications/Electromagnet` | `radia.em_design.EMDesignSpec` | none |
+| PCB/PEEC | `Applications/PCB PEEC` | `radia.pcb_design.PCBDesignSpec` | none |
+| Motor | `Applications/Motor` | `radia.motor_design.MotorDesignSpec` | none |
+| Stream Function | `Applications/Stream Function` | `radia.streamfunction_design.StreamFunctionDesignSpec` | none |
+| Induction Heating | `Applications/Induction Heating` | `radia.ih_design.IHDesignSpec` | temporary comparison only |
+
+Do not restore the deleted non-IH `*_notebook.py` adapters or packaged
+notebooks as compatibility aliases.
 
 ============================================================
-## vs_cubit -- Cubit boundary
+## build_notebook_gui -- retired alias; build an application block
 ============================================================
 
-The in-Cubit export toolbar is a Cubit plugin surface and may use Coreform
-CUBIT's embedded PySide6.  That is separate from normal Radia Python.
+This historical topic now redirects to the block recipe in
+`docs/panels/ADDING_NEW_PANEL.md`.
 
-Production deploy checks:
+1. Enumerate all application variables and solver switches.
+2. Implement and golden-lock `calc_<topic>.py` plus `<Topic>DesignSpec`.
+3. Add a result-bearing `docs/<topic>/*.ipynb` only for explanation.
+4. Add a masked block to `radia.simulink.buildLibrary`.
+5. Delegate to `radia.simulink.application`; do not implement solver logic in
+   mask callbacks or launch Python every time step.
+6. Lock the mask, ports, success/failure artifacts, and headless numerical
+   parity in Python and MATLAB tests.
+
+The initial backend may be the validated Python/headless CLI. MEX/ROM is a
+later optional backend and requires independent parity, error propagation,
+handle lifecycle, and long-run stability tests before promotion.
+
+============================================================
+## cubit_panels_migration -- Cubit boundary
+============================================================
+
+Cubit owns geometry/mesh export through its embedded PySide6 toolbar and C++
+export plugin. It exports self-contained `.vol`/`.sol` files. Simulink and
+headless Python consume those files in separate processes; neither imports
+Cubit's Python runtime.
+
+Historical `examples/cubit_panels` code is not a destination. Reusable methods
+go to `src/`, heavy truth runs to `validation_test/`, explanatory results to
+`docs/`, samples to `src/radia/panels/samples/`, and final human operation to
+the Radia Simulink library.
+
+============================================================
+## vol_sources -- durable inputs
+============================================================
+
+Application blocks consume durable `.vol`, `.sol`, `.step`, `.msh`, `.inp`,
+and material/config files. Cubit is one producer, but operation must not depend
+on a transient viewer state. Human documentation may use `netgen.webgui`;
+automation and block runs use durable GMSH/JSON artifacts.
+
+============================================================
+## vs_cubit -- deploy boundary
+============================================================
+
+Cubit export checks remain:
 
 ```powershell
 cubit-plugin-install --all-users
@@ -156,30 +123,34 @@ cubit-plugin-install --verify-only --all-users
 cubit-smoke-test
 ```
 
-Notebook panel health checks:
-
-```powershell
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
-```
+These checks do not validate the Radia Simulink library. Use the Python/MATLAB
+application tests for that surface. Never delete or replace Cubit's bundled
+PySide6 because normal Radia does not depend on it.
 
 ============================================================
-## ih_methods -- IH through the notebook workbench
+## ih_methods -- temporary dual operation
 ============================================================
 
-Use `radia_ih.ipynb` with `IHDesignSpec` and `IHWorkbench`.  The notebook is a
-thin UI over the validated `calc_*.py` scripts; it does not re-implement the
-solver.  JSON files are run artifacts, not preset storage.
+IH uses both `Applications/Induction Heating` and
+`src/radia/panels/notebooks/radia_ih.ipynb` during the comparison. Both map to
+`IHDesignSpec` and the same PEEC/BEM/FEM/thermal `calc_*.py` commands. Compare
+setup effort, failure recovery, result inspection, automation, and throughput
+on identical inputs. The intended direction is Simulink, but the notebook is
+retired only after the explicit acceptance gate.
 
 ============================================================
-## troubleshooting -- common post-migration issues
+## troubleshooting -- common interface issues
 ============================================================
 
 | Symptom | Correct response |
-|---------|------------------|
-| `ModuleNotFoundError: No module named 'PySide6'` in normal Python | Expected after migration. Use the notebook workbench; do not install PySide6 for production. |
-| Notebook produces no `result.json` | Run `ipynb-gui-health` / `pytest validation_test/panels/test_notebook_workbench.py -q` and fix DesignSpec or workbench wiring. |
-| Cubit export toolbar fails | Check `cubit-plugin-install --verify-only --all-users` and `cubit-smoke-test`; do not delete Cubit's bundled PySide6. |
-| Old `radia-ih` executable is missing | Use `src/radia/panels/notebooks/radia_ih.ipynb`; the executable route is not the canonical surface. |
+|---|---|
+| Normal Python lacks PySide6 | Expected; use Simulink/Python/MCP, not a desktop panel. |
+| Application block reports `-1` | Inspect its `UserData`, `run.log`, and `result.json`; fix config/dependency/solver failure. |
+| No `result.json` | Run `tests/test_simulink_application.py`; verify the selected Python can import the same Radia checkout. |
+| Block attempts Python each step | Use the rising-edge application runner or a tested prebuilt MEX/ROM state. |
+| MEX compiles but behavior is uncertain | Keep the Python backend; do not promote MEX until parity/lifecycle/long-run gates pass. |
+| Cubit toolbar fails | Run Cubit plugin verification; do not alter Cubit's private PySide6 runtime. |
+| Old non-IH notebook path is missing | Expected after migration; use the corresponding Radia library block. |
 """
 
 
@@ -191,13 +162,12 @@ _TOPICS = (
 
 
 def get_standalone_panels_documentation(topic: str = "") -> str:
-    """Return retired standalone-panel knowledge, redirected to notebooks."""
+    """Return legacy topic knowledge redirected to Simulink blocks."""
     topic = (topic or "").strip()
     if not topic:
         return STANDALONE_PANELS
     if topic not in _TOPICS:
-        return (f"Unknown topic {topic!r}.  Valid topics: "
-                + ", ".join(_TOPICS))
+        return f"Unknown topic {topic!r}.  Valid topics: " + ", ".join(_TOPICS)
 
     headers = []
     pos = 0
@@ -207,31 +177,28 @@ def get_standalone_panels_documentation(topic: str = "") -> str:
             break
         line_end = STANDALONE_PANELS.find("\n", nxt + 1)
         line = STANDALONE_PANELS[nxt + 1:line_end]
-        for t in _TOPICS:
-            if line.startswith(f"## {t} "):
-                headers.append((t, nxt + 1))
+        for candidate in _TOPICS:
+            if line.startswith(f"## {candidate} "):
+                headers.append((candidate, nxt + 1))
                 break
         pos = nxt + 1
 
-    req_starts = [off for kw, off in headers if kw == topic]
-    if not req_starts:
+    starts = [offset for name, offset in headers if name == topic]
+    if not starts:
         return f"Topic {topic!r} declared but not found in document."
+    section_start = starts[0]
+    separator = STANDALONE_PANELS.rfind(
+        "============================================================", 0, section_start
+    )
+    if separator >= 0 and separator > section_start - 80:
+        section_start = separator
 
-    section_start = req_starts[0]
-    sep_above = STANDALONE_PANELS.rfind(
-        "============================================================",
-        0, section_start)
-    if sep_above >= 0 and sep_above > section_start - 80:
-        section_start = sep_above
-
-    last_req = req_starts[-1]
     section_end = len(STANDALONE_PANELS)
-    for kw, off in headers:
-        if kw != topic and off > last_req:
-            sep = STANDALONE_PANELS.rfind(
-                "============================================================",
-                0, off)
-            section_end = sep if sep > 0 else off
+    for name, offset in headers:
+        if name != topic and offset > starts[-1]:
+            separator = STANDALONE_PANELS.rfind(
+                "============================================================", 0, offset
+            )
+            section_end = separator if separator > 0 else offset
             break
-
     return STANDALONE_PANELS[section_start:section_end].rstrip() + "\n"

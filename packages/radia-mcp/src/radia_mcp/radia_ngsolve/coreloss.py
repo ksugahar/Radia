@@ -26,7 +26,7 @@ classical and excess terms add per harmonic (they depend on dB/dt):
 The classical term reduces to the textbook lamination eddy loss
     P_class = pi^2 sigma d^2 f^2 Bpk^2 / 6
 when k_c = pi^2 sigma d^2 / 6 -- the exact closed form used for validation
-(tests/test_core_loss.py).
+(validation_test/radia_mcp/test_core_loss.py).
 """
 from __future__ import annotations
 

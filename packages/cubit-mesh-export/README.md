@@ -82,13 +82,12 @@ options (see below). The other formats do not consume Kelvin.
    └────────────┘                                └──────────┘
                                                       │
                                                       ▼
-                       user opens the domain notebook/headless workflow:
-                            radia_ih.ipynb / radia_em.ipynb /
-                            radia_pcb.ipynb / ...
+                       user opens a Radia Simulink application block;
+                       IH may also use its temporary comparison notebook
 ```
 
 `cubit-mesh-export` produces the `.vol` and the label conventions; the
-domain tool reads the `.vol` and applies the physics. There is no
+domain block/headless tool reads the `.vol` and applies the physics. There is no
 "pick your analysis" launcher in this plugin -- end-user tools split by
 analysis target (IH designer / electromagnet designer / ...), not by
 solver type.

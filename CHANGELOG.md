@@ -5,6 +5,24 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.20 - Simulink applications and native NGSolve MATLAB parity
+
+Released 2026-07-21.
+
+- Made masked Simulink blocks the production human interface for
+  Electromagnet, PCB PEEC, Motor, Stream Function, and Induction Heating,
+  while retaining the IH notebook as the temporary comparison surface.
+- Expanded the native MATLAB MEX surface for NGSolve meshes, spaces, fields,
+  forms, matrices, reduced models, and HCurl topology optimization without
+  reimplementing NGSolve-owned finite-element transformations.
+- Added direct Python/MEX equivalence coverage for complex HCurl operators,
+  directional and activation contractions, multifrequency adjoints, nonzero
+  right-hand-side Jacobians, and topology gradients.
+- Separated fast API/MCP contract tests from 68 Netgen/NGSolve-backed
+  numerical checks, which now run from `validation_test/radia_mcp/`.
+- Added Simulink CLN/state-space application paths, MATLAB reinforcement-
+  learning adapters, and durable application result/log contracts.
+
 ## 4.95.19 - Production motor ROM and native C ABI
 
 Released 2026-07-17.

@@ -1,4 +1,4 @@
-"""Small UI-neutral helpers shared by notebook panel design specs."""
+"""Small UI-neutral helpers shared by application DesignSpec contracts."""
 
 from __future__ import annotations
 

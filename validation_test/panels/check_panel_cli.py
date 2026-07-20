@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Retired static cross-checker for desktop Radia GUI panels.
 
-The production panel surface is now the notebook workbench
-(`*_design.py` + `*_notebook.py` + `radia_*.ipynb`). Use
-`validation_test/panels/test_notebook_workbench.py` for the active contract.
+The production human surface is now the Simulink application block. Use
+`tests/test_simulink_application.py` and the MATLAB Simulink suite for the
+active contract; the notebook-workbench test now covers IH only.
 This script is kept only for archaeology of the removed `radia_*.py`
 desktop panels and should not be used as a release gate.
 

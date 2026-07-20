@@ -10,10 +10,13 @@ Usage:
 
 Tools:
     mathematica_evaluate(code, timeout)   — low-level Wolfram eval bridge
+    mathematica_run_script(path, timeout) — run a .wls/.wl/.m verification batch
     mathematica_status()                   — diagnostic: is wolframscript OK?
     mathematica_simplify(expr, assumptions)
     mathematica_to_tex(expr)               — TeXForm for paper writing
     mathematica_check_identity(lhs, rhs)   — verify LHS == RHS
+    mathematica_check_identities(claims)   — batch named identities in one kernel
+    mathematica_verification_guide(topic)  — choose checks and execution mode
     mathematica_vector_calc(expr, op)      — curl / div / grad / laplacian / ...
     mathematica_unit_convert(quantity, target)
     mathematica_solve(equations, unknowns)
