@@ -18,6 +18,74 @@ electromagnetic methods, open-boundary models, application workflows, and
 AI-facing interfaces that are needed to turn a numerical backend into a
 practical design platform.
 
+> **Use Radia through its MCP servers.** This README is the entry point, not a
+> duplicate operating manual. Ask the relevant `radia-mcp` server for the
+> current workflow, supported contract, machine-specific prerequisites, and
+> validation steps before running a domain operation. The MCP response is
+> designed to be executable by an agent and routes MATLAB execution through
+> MathWorks' official MATLAB MCP Server. Start with the
+> [radia-mcp tool catalog](packages/radia-mcp/README.md).
+
+## Highlights
+
+- **Couple motion, control, circuits, and electromagnetic force in Simulink.**
+  Simulink owns the time-domain motion and controller model, while Radia
+  supplies electromagnetic force/field models and LTspice supplies the drive
+  circuit. Vector signals and interval state handoff close the loop between
+  position, velocity, current, voltage, and force.
+- **Use existing LTspice circuits as the electrical subsystem.** Run real
+  device models as a sampled-data circuit plant without Simscape Electrical,
+  with hidden execution and capacitor-voltage/inductor-current handoff between
+  intervals. The hysteretic plant block iterates LTspice current and Radia
+  magnetic flux within each interval, returning hysteretic back EMF to the
+  power-electronic circuit before committing either state.
+- **Optimize the coupled machine, circuit, and controller together.** Run
+  parallel Simulink/LTspice trials with MATLAB-native Optuna-style studies,
+  multiple objectives, and live Pareto monitoring.
+- **Turn a SPICE netlist into an editable LTspice schematic.** Convert `.cir`
+  or `.net` files to automatically laid-out `.asc` schematics from Python or
+  MATLAB, then verify connectivity by converting back with LTspice.
+- **Use the same engineering APIs from Python and MATLAB.** Radia keeps its C++
+  numerical kernels and Python circuit parser as single sources of truth while
+  exposing checked MATLAB and Simulink adapters.
+
+```text
+             position / velocity
+        +------------------------------+
+        |                              v
+Simulink motion <--- force --- Radia / NGSolve electromagnetic model
+        ^                              ^
+        |                              | current
+        +--- controller ---> LTspice drive circuit
+                    gate / voltage command
+```
+
+```matlab
+% Netlist -> editable LTspice schematic, with round-trip connectivity check
+radia.ltspice.netlistToSchematic("converter.cir", ...
+    OutputFile="converter.asc", ValidateRoundTrip=true);
+
+% Use the LTspice drive circuit inside a Simulink motion/control model
+radia.simulink.buildLTspiceBlock("current_controller", ...
+    Netlist="converter.cir", ...
+    InputNames=["gate"; "reference"], ...
+    OutputTraces=["I(L1)"; "V(out)"], ...
+    SampleTime_s=1e-4);
+```
+
+Register the packaged blocks once after adding Radia's `matlab` directory to
+the MATLAB path:
+
+```matlab
+radia.simulink.buildLibrary
+sl_refresh_customizations
+```
+
+The Simulink Library Browser then shows one **Radia** library containing the
+LTspice Circuit, Hysteretic LTspice Plant, and Optuna Optimization blocks. For
+the machine-readable setup and compatibility contract, ask the
+`mcp-server-radia-matlab` tool `matlab_simulink_library_contract`.
+
 ## The central idea
 
 > NGSolve owns the numerical foundation.
@@ -33,6 +101,10 @@ The platform is designed for a complete engineering loop:
             |
             +--> CAD and mesh generation
             |       build123d, Cubit, Netgen, Gmsh
+            |
+            +--> Electromechanical co-simulation
+            |       Simulink motion/control + LTspice circuits
+            |       + Radia/NGSolve electromagnetic force
             |
             +--> Electromagnetic design and analysis
             |       Radia methods + NGSolve / ngsolve.bem
@@ -93,6 +165,55 @@ focused on electromagnetic methods rather than duplicating mature numerical
 infrastructure.
 
 ## Core technologies
+
+### Electromechanical co-simulation with LTspice and Simulink
+
+Radia uses Simulink as the dynamic-system orchestrator: mechanical position and
+velocity update the electromagnetic model, electromagnetic force updates the
+motion model, and the LTspice drive circuit exchanges current, voltage, and
+control signals with both. This motion-circuit-field loop does not require
+Simscape or Simscape Electrical. LTspice support is part of that coupled
+workflow rather than the top-level purpose by itself:
+
+- bidirectional LTspice conversion between SPICE netlists (`.cir`, `.net`)
+  and editable LTspice schematics (`.asc`);
+- a Python-native converter in `radia-spice-lab`, exposed to MATLAB through a
+  thin wrapper so parsing, symbol dictionaries, and automatic layout have one
+  implementation;
+- hidden LTspice execution on Windows, including SSH-driven runs on the LAB
+  and 100号機 development hosts;
+- real and complex RAW import, stepped analyses, `.noise`, and transient FFT
+  APIs;
+- a distributable **Radia / LTspice Circuit** block in the Simulink Library
+  Browser with vector inputs and outputs;
+- sampled-data co-simulation that advances LTspice one interval at a time and
+  hands saved node voltages and inductor currents to the next interval;
+- a transactional **Hysteretic LTspice Plant** block that waveform-iterates
+  circuit current, vector Play/Energy hysteresis, flux linkage, and back EMF;
+  failed iterations roll back both circuit and material state, while converged
+  steps output current, flux density, flux linkage, back EMF, Maxwell force,
+  and hysteresis energy;
+- MATLAB-native Optuna-style single- and multi-objective studies, parallel
+  Simulink/LTspice trials, and live Pareto monitoring.
+
+```matlab
+% Convert a netlist to an editable schematic and verify connectivity by
+% converting it back with LTspice.
+schematic = radia.ltspice.netlistToSchematic("plant.cir", ...
+    OutputFile="plant.asc", ValidateRoundTrip=true);
+
+% Add a state-handoff LTspice plant with two control inputs and two outputs.
+radia.simulink.buildLTspiceBlock("controller_model", ...
+    Netlist="plant.cir", ...
+    InputNames=["gate"; "reference"], ...
+    OutputTraces=["V(out)"; "I(L1)"], ...
+    SampleTime_s=1e-4);
+```
+
+The Python circuit converter remains the source of truth; MATLAB and Simulink
+delegate to it and to the same LTspice execution/RAW contracts. See the
+[MATLAB integration guide](matlab/README.md) and
+[radia-spice-lab documentation](packages/radia-spice-lab/README.md).
 
 ### Hodograph
 

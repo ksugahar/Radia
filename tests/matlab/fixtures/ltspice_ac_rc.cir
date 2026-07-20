@@ -1,0 +1,7 @@
+* Radia complex AC RAW fixture
+V1 in 0 AC 1
+R1 in out 1k
+C1 out 0 1u
+.ac dec 10 10 100k
+.save V(in) V(out) I(V1)
+.end

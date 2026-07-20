@@ -1,0 +1,8 @@
+* Power-electronic drive with externally coupled hysteretic back EMF
+Vcmd vin 0 PWL FILE="${command_PWL}"
+Vhys vin winding PWL FILE="${back_emf_PWL}"
+R1 winding coil 1
+L1 coil 0 1m
+.tran 0 1m 0 5u
+.save V(vin) V(winding) V(coil) I(L1)
+.end

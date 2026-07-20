@@ -1,0 +1,10 @@
+* Two-channel stateful Simulink coupling fixture
+V1 in1 0 PWL FILE="${drive1_PWL}"
+R1 in1 out1 1k
+C1 out1 0 1u
+V2 in2 0 PWL FILE="${drive2_PWL}"
+R2 in2 out2 2k
+C2 out2 0 0.5u
+.tran 0 1m 0 10u
+.save V(in1) V(out1) V(in2) V(out2)
+.end

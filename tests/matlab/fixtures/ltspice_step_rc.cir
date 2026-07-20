@@ -1,0 +1,9 @@
+* Radia stepped RAW fixture
+.param Rval=1000
+V1 in 0 PULSE(0 1 0 1u 1u 5m 10m)
+R1 in out {Rval}
+C1 out 0 1u
+.step param Rval list 1000 2000
+.tran 0 5m 0 10u
+.save V(out)
+.end
