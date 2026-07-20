@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .volume_frame_identity_v56 import (
+    validate_public_identity as validate_public_v56_identity,
+    validate_source_identity as validate_source_v56_identity,
+)
+
 
 PERIODIC = (
     "periodic_hex_nodeequivalence_transform_highorderjacobian_block_owner_identity"
@@ -328,7 +333,8 @@ def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
 def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    v56 = validate_public_v56_identity(payload)
+    checks: dict[str, bool] = dict(v56.get("checks", {}))
     if payload.get(PERIODIC) is not None:
         checks["v55_periodic_hex_equivalence_transform_jacobian_owner"] = (
             isinstance(payload[PERIODIC], Mapping) and _periodic_ok(payload[PERIODIC])
@@ -344,7 +350,8 @@ def validate_public_identity(payload: object) -> dict[str, object]:
 def validate_source_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    v56 = validate_source_v56_identity(payload)
+    checks: dict[str, bool] = dict(v56.get("checks", {}))
     if payload.get(MERGE) is not None:
         checks["v55_merge_tolerance_provenance_remap_group_owner"] = (
             isinstance(payload[MERGE], Mapping) and _merge_ok(payload[MERGE])
