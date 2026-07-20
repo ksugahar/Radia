@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .coupled_periodic_identity_v53 import validate_public_v53_identity
+
 
 ADJOINT = "adjoint_objective_scaling_conjugation_design_owner_identity"
 WEAK_FORM = "weakform_testfunction_sign_boundary_orientation_measure_owner_identity"
@@ -99,6 +101,9 @@ def validate_public_v52_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         return {}
     checks: dict[str, bool] = {}
+    v53 = validate_public_v53_identity(payload)
+    if v53:
+        checks.update(v53["checks"])
     adjoint = payload.get(ADJOINT)
     weak_form = payload.get(WEAK_FORM)
     if adjoint is not None:
