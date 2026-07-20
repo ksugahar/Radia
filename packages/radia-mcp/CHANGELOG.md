@@ -20,6 +20,9 @@ crystallized as its own package.
 - Moved 68 solver-backed FEM/BEM, geometry, convergence, and application
   checks to `validation_test/radia_mcp/`; the package test lane now enforces
   fast API/MCP contracts without direct Netgen/NGSolve imports.
+- Kept the Radia acoustic MCP import and selftest usable in the minimal MCP
+  environment by evaluating its BDF1/BDF2 CQ grid gate with the Python
+  standard library instead of importing NumPy or Radia at startup.
 
 - Strengthened `mcp-server-mathematica` for reusable validation workflows:
   tracked `.wls` / `.wl` / `.m` files can now run as one-kernel batches with

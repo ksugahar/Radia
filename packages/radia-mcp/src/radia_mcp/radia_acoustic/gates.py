@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
+import cmath
+import math
+import sys
 
 
 def fsi_preflight_gate(*, wavenumber: float, c_longitudinal: float = 2.0,
@@ -29,26 +31,36 @@ def fsi_preflight_gate(*, wavenumber: float, c_longitudinal: float = 2.0,
 
 def cq_grid_gate(*, num_time: int, time_step: float, sound_speed: float = 1.0,
                  method: str = "BDF2") -> dict:
-    from radia.acoustics.cq import bdf_delta
     method = method.upper()
     basic = isinstance(num_time, int) and num_time >= 4 and time_step > 0 and sound_speed > 0 and method in {"BDF1", "BDF2"}
     if not basic:
         return {"schema": "radia-mcp.radia-acoustic-cq-grid/v1", "ok": False,
                 "errors": ["require num_time>=4, time_step>0, sound_speed>0, method BDF1/BDF2"]}
-    n = np.arange(num_time)
-    rho = (np.finfo(float).eps ** 0.5) ** (1.0 / num_time)
-    zeta = rho * np.exp(-2j * np.pi * n / num_time)
-    s = bdf_delta(zeta, method) / time_step
-    kappa = 1j * s / sound_speed
+    rho = (sys.float_info.epsilon ** 0.5) ** (1.0 / num_time)
+    zeta = [rho * cmath.exp(-2j * math.pi * n / num_time) for n in range(num_time)]
+    if method == "BDF1":
+        delta = [1.0 - value for value in zeta]
+    else:
+        delta = [1.5 - 2.0 * value + 0.5 * value * value for value in zeta]
+    s = [value / time_step for value in delta]
+    kappa = [1j * value / sound_speed for value in s]
+
+    def _finite(value: complex) -> bool:
+        return math.isfinite(value.real) and math.isfinite(value.imag)
+
     checks = {
-        "laplace_nodes_right_half_plane": bool(np.all(s.real > 0)),
-        "finite_nodes": bool(np.all(np.isfinite(s)) and np.all(np.isfinite(kappa))),
-        "conjugate_pair_symmetry": bool(np.max(np.abs(s[1:] - np.conj(s[:0:-1]))) < 1e-10),
+        "laplace_nodes_right_half_plane": all(value.real > 0 for value in s),
+        "finite_nodes": all(_finite(value) for value in (*s, *kappa)),
+        "conjugate_pair_symmetry": max(
+            abs(s[index] - s[-index].conjugate())
+            for index in range(1, num_time)
+        ) < 1e-10,
     }
     return {
         "schema": "radia-mcp.radia-acoustic-cq-grid/v1", "ok": all(checks.values()),
         "checks": checks, "method": method, "num_time": num_time,
         "time_step": time_step, "sound_speed": sound_speed, "cq_radius": float(rho),
-        "min_real_s": float(np.min(s.real)), "max_abs_kappa": float(np.max(np.abs(kappa))),
+        "min_real_s": min(value.real for value in s),
+        "max_abs_kappa": max(abs(value) for value in kappa),
         "convention": "s=delta(zeta)/dt; kappa=i*s/c",
     }
