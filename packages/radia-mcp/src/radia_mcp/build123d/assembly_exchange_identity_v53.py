@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .assembly_tessellation_identity_v54 import (
+    validate_public_identity as validate_public_v54_identity,
+    validate_source_identity as validate_source_v54_identity,
+)
+
 
 MATE = "assembly_mate_frame_handedness_axis_offset_component_owner_identity"
 STEP = "step_import_unit_tolerance_color_hierarchy_owner_identity"
@@ -216,6 +221,9 @@ def validate_public_identity(payload: object) -> dict[str, object]:
         return {}
     rows = _public_rows(payload)
     checks: dict[str, bool] = {}
+    v54 = validate_public_v54_identity(payload)
+    if v54:
+        checks.update(v54["checks"])
     mates = [row.get(MATE) for row in rows if MATE in row]
     steps = [row.get(STEP) for row in rows if STEP in row]
     if mates:
@@ -230,6 +238,9 @@ def validate_source_identity(payload: object) -> dict[str, object]:
         return {}
     identity = payload["replay_identity"]
     checks: dict[str, bool] = {}
+    v54 = validate_source_v54_identity(payload)
+    if v54:
+        checks.update(v54["checks"])
     if identity.get(HISTORY) is not None:
         checks["v53_boolean_face_ancestry_fillet_chamfer_owner"] = isinstance(identity[HISTORY], Mapping) and _history_ok(identity[HISTORY])
     if identity.get(MASS) is not None:
