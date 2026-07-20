@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .electromagnetic_artifact_identity_v53 import validate_public_identity as validate_public_v53_identity
+
 
 MAGNETIC_PRESSURE = "magnetic_pressure_fieldjump_normal_traction_owner_identity"
 FROZEN_INDUCTANCE = "frozen_permeability_incremental_inductance_bias_perturbation_owner_identity"
@@ -121,7 +123,7 @@ def _frozen_inductance_ok(row: Mapping[str, object]) -> bool:
 def validate_public_identity(identity: object) -> dict[str, bool]:
     if not isinstance(identity, Mapping):
         return {}
-    checks: dict[str, bool] = {}
+    checks = validate_public_v53_identity(identity)
     magnetic_pressure = identity.get(MAGNETIC_PRESSURE)
     frozen_inductance = identity.get(FROZEN_INDUCTANCE)
     if magnetic_pressure is not None:
