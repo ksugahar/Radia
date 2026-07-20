@@ -37,3 +37,12 @@ def test_v56_self_consistent_power_and_slip_errors_are_rejected() -> None:
 def test_v56_malformed_losses_reject_without_raising() -> None:
     identity = deepcopy(_identity()); identity[MAP]["loss_components_w"] = []
     assert not all(validate_public_identity(identity).values())
+
+
+def test_v56_numeric_digests_are_rejected() -> None:
+    identity = deepcopy(_identity())
+    numeric_digest = int("1" * 64)
+    for contract_name in (MAP, INDUCTION):
+        identity[contract_name]["result_sha256"] = numeric_digest
+        identity[contract_name]["accepted_result_sha256"] = numeric_digest
+    assert not all(validate_public_identity(identity).values())
