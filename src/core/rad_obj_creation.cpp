@@ -24,7 +24,9 @@
 #include "rad_polyhedron.h"
 #include "rad_convergence.h"
 #include "rad_operation_names.h"
+#ifndef RADIA_MEX_NO_PYTHON
 #include <Python.h>
+#endif
 
 #include <math.h>
 #include <string.h>
@@ -2308,6 +2310,11 @@ int radTApplication::ProcMPI(const char* sCommand, double* arData, long* pnData,
 
 int radTApplication::SetCoefficientFunctionFieldSource(PyObject* callback)
 {
+	#ifdef RADIA_MEX_NO_PYTHON
+	(void)callback;
+	Send.ErrorMessage("Radia::Error: Python coefficient-function callbacks are unavailable in the native MEX gateway");
+	return 0;
+	#else
 	if(!callback) return 0;
 	if(!PyCallable_Check(callback)) {
 		Send.ErrorMessage("Radia::Error: Callback must be callable");
@@ -2326,4 +2333,5 @@ int radTApplication::SetCoefficientFunctionFieldSource(PyObject* callback)
 		Initialize();
 		return 0;
 	}
+	#endif
 }

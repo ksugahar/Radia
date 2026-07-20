@@ -179,50 +179,6 @@ Creates a uniformly magnetized volume obtained by rotation of a planar convex po
 */ 
 //EXP int CALL RadObjCircPgnMag(int* n, double* P, double* FlatVert, int nv, int nseg, char sym_no, char a, double* M);
 
-/** Attempts to create one uniformly magnetized convex polyhedron or a set of convex polyhedrons based on slices.
-The slices are assumed to be convex planar polygons parallel to the XY plane.
-@param n [out] reference number of the object created
-@param FlatVert [in] flat array of x and y coordinates (x11, y11, x12, y12,..., x21, y21, x22, y22,...) of vertex points of the slices (planar polygons)
-@param SlicesLen [in] array of integer numbers specifying numbers of vertex points in each slice; the order of the slices is the same as in the FlatVert array (the length of the FlatVert array is twice the sum of elements of the SlicesLen array) 
-@param Attitudes [in] array of vertical coordinates (or attitudes) of the slices, in the ascending order (which is the same as for the SlicesLen array)
-@param ns [in] number of slices (or the length of the Attitudes and SlicesLen arrays)
-@param M [in] array of 3 cartesian coordinates of the magnetization vector inside the whole block
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/ 
-EXP int CALL RadObjMltExtPgn(int* n, double* FlatVert, int* SlicesLen, double* Attitudes, int ns, double* M);
-
-/** Attempts to create one uniformly magnetized convex polyhedron or a set of convex polyhedrons based on rectangular slices.
-The rectangular slices are assumed to be parallel to the XY plane.
-@param n [out] reference number of the object created
-@param FlatCenPts [in] flat array of x, y and z coordinates (x1, y1, z1, x2, y2, z2,...) of the slices center points
-@param FlatRtgSizes [in] flat array of sizes of the slice rectangles along x and y (wx1, wy1, wx2, wy2,...)
-@param ns [in] number of slices (the length of the FlatCenPts array is 3*ns, the length of the FlatRtgSizes array is 2*ns)
-@param M [in] array of 3 cartesian coordinates of the magnetization vector inside the whole block
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjMltExtRtg(int* n, double* FlatCenPts, double* FlatRtgSizes, int ns, double* M);
-
-/** Disabled legacy triangulated extruded polygon API.
-
-This function is kept for C API compatibility only. Radia no longer bundles
-the Triangle triangulation library; use the Netgen/Cubit mesh workflow instead.
-
-@param n [out] reference number of the object created
-@param xc [in] the horizontal coordinate of the block center of gravity
-@param lx [in] the thickness (extrusion size)
-@param FlatVert [in] flat array of y and z coordinates (y1, z1, y2, z2,...) of vertex points describing the polygon in 2D
-@param FlatSubd [in] flat array of subdivision parameters for base polygon segments, two numbers for each segment: the first defining number of sub-segments, the second - "gradient" of the segmentation
-@param nv [in] number of vertex points of the 2D polygon (the length of the FlatVert and FlatSubd arrays is 2*nv)
-@param a [in] character identifying extrusion direction (can be 'x', 'y' or 'z')
-@param M [in] array of 3 cartesian coordinates of the magnetization vector inside the block
-@param opt [in] pointer to options string, which can be e.g. "ki->...,TriAngMin->...,TriAreaMax->...,ExtOpt->..." or each of these tokens separately, or 0; default values are "ki->Numb" (rather than "ki->Size"), "TriAngMin->20"
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjMltExtTri(int* n, double xc, double lx, double* FlatVert, double* FlatSubd, int nv, char a, double* M, char* opt);
-
 /** Creates a finite-length arc magnet of rectangular cross-section.
 @param n [out] reference number of the object created
 @param P [in] array of 3 cartesian coordinates of the arc center point
@@ -303,21 +259,6 @@ The line conductor is defined by sequence of points in 3D space.
 @author O.C.
 */ 
 EXP int CALL RadObjFlmCur(int* n, double* FlatPts, int np, double i);
-
-/** Attempts to create a set of current-carrying convex polyhedron objects by applying a generalized extrusion to the initial planar convex polygon.
-@param n [out] reference number of the object created
-@param FlatVert [in] flat array of x and y coordinates (x1, y1, x2, y2,...) of vertex points of the base planar polygon
-@param nv [in] number of vertex points of the 2D polygon (the length of the FlatVert array is 2*nv)
-
-@param SlicesLen [in] array of integer numbers equal to the numbers of vertex points in each slice; the order of the slices is the same as in the FlatVert array (the length of the FlatVert array is twice the sum of elements of the SlicesLen array)
-@param Attitudes [in] array of vertical coordinates (or attitudes) of the slices, in the ascending order (which is the same as for the SlicesLen array)
-@param ns [in] number of slices (or the length of the Attitudes and SlicesLen arrays)
-@param M [in] array of 3 cartesian coordinates of the magnetization vector inside the whole block
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-//EXP int CALL RadObjMltExtPgnCur(int* n, double* FlatVert, int nv, 
-//	double* FlatVert, int* SlicesLen, double* Attitudes, int ns, double* M,      double z, char a, double i, char* opt);
 
 /** Scales current (density) in a 3D object by multiplying it by a constant.
 @param n [out] reference number of the object with current (density) to be scaled

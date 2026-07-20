@@ -16,7 +16,9 @@
 
 #include <string.h>
 #include <array>
+#ifndef RADIA_MEX_NO_PYTHON
 #include <Python.h>
+#endif
 
 #include "rad_application.h"
 #include "rad_interaction.h"
@@ -39,12 +41,10 @@ void PolyhedronDLL( double*, int, int*, int*, int, double*, double*, double*, do
 void Polyhedron2();
 void MultGenExtrPolygon();
 void MultGenExtrPolygonOpt( double**, double*, int*, int, double* );
-void MultGenExtrPolygonDLL( double*, int*, double*, int, double* );
 void MultGenExtrPolygonCur();
 void MultGenExtrPolygonMag();
 void MultGenExtrRectangle();
 void MultGenExtrRectangleOpt( double**, int, double* );
-void MultGenExtrRectangleDLL( double*, double*, int, double* );
 
 //void ArcMag( double,double,double, double,double, double,double, double, int, double,double,double, char* );
 void ArcMag( double,double,double, double,double, double,double, double, int, char*, double,double,double );
@@ -585,42 +585,6 @@ void MultGenExtrPolygonOpt(double** Layers, double* Heights, int* AmOfPointsInLa
 
 //-------------------------------------------------------------------------
 
-void MultGenExtrPolygonDLL(double* Layers, int* AmOfPointsInLayers, double* Heights, int AmOfLayers, double* M)
-{
-	// RAII: Use std::vector for all allocations
-	std::vector<TVector2d*> vLayerPolygons(AmOfLayers);
-	std::vector<std::vector<TVector2d>> vLayerStorage(AmOfLayers);
-	TVector2d** LayerPolygons = vLayerPolygons.data();
-	TVector2d** tLayerPolygons = LayerPolygons;
-
-	double* tLayer = Layers;
-	for(int i=0; i<AmOfLayers; i++)
-	{
-		int AmOfPointsInTheLayer = AmOfPointsInLayers[i];
-		vLayerStorage[i].resize(AmOfPointsInTheLayer);
-		*tLayerPolygons = vLayerStorage[i].data();
-
-		TVector2d* tPoints = *(tLayerPolygons++);
-		for(int k=0; k<AmOfPointsInTheLayer; k++)
-		{
-			tPoints->x = *(tLayer++); (tPoints++)->y = *(tLayer++);
-		}
-		Heights[i] = radCR.Double(Heights[i]);
-	}
-
-	rad.SetMultGenExtrPolygon(LayerPolygons, AmOfPointsInLayers, Heights, AmOfLayers, M, 3);
-
-	// RAII: vLayerPolygons and vLayerStorage cleaned up automatically
-}
-
-//-------------------------------------------------------------------------
-
-
-
-//-------------------------------------------------------------------------
-
-
-
 //-------------------------------------------------------------------------
 
 void MultGenExtrPolygonCurOrMag(char cur_or_mag)
@@ -670,29 +634,6 @@ void MultGenExtrRectangleOpt(double** Layers, int AmOfLayers, double* M)
 		tRectDims->x = *(tCoord++); (tRectDims++)->y = *(tCoord++);
 	}
 	rad.SetMultGenExtrRectangle(RectCenPoints, RectDims, AmOfLayers, M, 3);
-	// RAII: automatic cleanup
-}
-
-//-------------------------------------------------------------------------
-
-void MultGenExtrRectangleDLL(double* pFlatCenPts, double* pFlatRtgSizes, int AmOfLayers, double* pM)
-{
-	std::vector<TVector3d> vRectCenPoints(AmOfLayers);
-	std::vector<TVector2d> vRectDims(AmOfLayers);
-	TVector3d* RectCenPoints = vRectCenPoints.data();
-	TVector2d* RectDims = vRectDims.data();
-
-	TVector3d* tRectCenPoints = RectCenPoints;
-	TVector2d* tRectDims = RectDims;
-
-	double* tCenPts = pFlatCenPts;
-	double* tRtgSizes = pFlatRtgSizes;
-	for(int i=0; i<AmOfLayers; i++)
-	{
-		tRectCenPoints->x = *(tCenPts++); tRectCenPoints->y = *(tCenPts++); (tRectCenPoints++)->z = *(tCenPts++); 
-		tRectDims->x = *(tRtgSizes++); (tRectDims++)->y = *(tRtgSizes++);
-	}
-	rad.SetMultGenExtrRectangle(RectCenPoints, RectDims, AmOfLayers, pM, 3);
 	// RAII: automatic cleanup
 }
 
@@ -854,7 +795,12 @@ void BackgroundFieldSource(double Bx, double By, double Bz)
 
 void CoefficientFunctionFieldSource(PyObject* callback)
 {
+	#ifndef RADIA_MEX_NO_PYTHON
 	rad.SetCoefficientFunctionFieldSource(callback);
+	#else
+	(void)callback;
+	rad.Send.ErrorMessage("Radia::Error: Python coefficient-function callbacks are unavailable in the native MEX gateway");
+	#endif
 }
 
 //-------------------------------------------------------------------------
