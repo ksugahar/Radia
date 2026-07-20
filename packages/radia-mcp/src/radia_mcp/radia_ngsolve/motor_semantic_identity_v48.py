@@ -11,7 +11,9 @@ PWM = "pwm_carrier_control_sample_switch_state_current_voltage_loss_owner_identi
 
 
 def _sha(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 

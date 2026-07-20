@@ -9,7 +9,9 @@ _DEMAG = "v46_public_demagnetization_curve_branch_restart_temperature_window_mis
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 

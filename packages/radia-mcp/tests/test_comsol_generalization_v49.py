@@ -84,4 +84,3 @@ def test_v49_public_mixed_sliding_mesh_state_is_rejected() -> None:
     row["result_remesh_revision"] = "remesh-v49-r2"
     row["result_solution_owner"] = "solution:old"
     assert validate_public_v49_identity(records)["status"] == "needs_attention"
-

@@ -13,7 +13,9 @@ WEAK_FORM = "weakform_testfunction_sign_boundary_orientation_measure_owner_ident
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 

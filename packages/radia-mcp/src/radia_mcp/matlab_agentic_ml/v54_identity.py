@@ -145,7 +145,7 @@ def _result_digest_bound(value: Mapping[str, object]) -> bool:
 
 
 def _valid_digest(value: object) -> bool:
-    return bool(_DIGEST.fullmatch(str(value)))
+    return isinstance(value, str) and bool(_DIGEST.fullmatch(value))
 
 
 def _finite(value: object) -> bool:

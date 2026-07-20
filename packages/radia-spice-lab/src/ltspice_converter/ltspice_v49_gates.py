@@ -11,7 +11,9 @@ SWITCH = "switch_hysteresis_state_timestep_breakpoint_raw_trace_owner_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -51,7 +53,7 @@ def _switch_ok(contract: Mapping[str, object]) -> bool:
     trace = contract.get("raw_trace_rows")
     count = len(times) if isinstance(times, list) else 0
     transitions = [times[index] for index in range(1, count) if states[index] != states[index - 1]] if isinstance(states, list) and len(states) == count else []
-    trace_ok = isinstance(trace, list) and len(trace) == count and all(isinstance(row, list) and len(row) == 2 and row[0] == time and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in row) for row, time in zip(trace, times or []))
+    trace_ok = isinstance(trace, list) and len(trace) == count and all(isinstance(row, list) and len(row) == 2 and row[0] == time and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in row) for row, time in zip(trace, times or []))
     return (
         _generation(contract, "hysteresis_generation_id", "state_generation_id", "timestep_generation_id", "breakpoint_generation_id", "raw_generation_id", "trace_generation_id", "owner_generation_id", "result_generation_id")
         and isinstance(states, list) and len(states) >= 3 and set(states) == {"off", "on"} and contract.get("result_hysteresis_state") == states

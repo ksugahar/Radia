@@ -11,7 +11,9 @@ ELECTROSTATIC = "electrostatic_capacitance_charge_energy_voltage_sweep_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 

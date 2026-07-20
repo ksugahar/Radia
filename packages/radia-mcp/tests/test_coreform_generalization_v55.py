@@ -134,3 +134,13 @@ def test_v55_self_consistent_dangling_group_or_truth_table_is_rejected() -> None
     value[MERGE]["group_membership"] = value[MERGE]["replayed_group_membership"] = {"group:interface": ["surface:2"]}
     value[EXODUS]["variable_truth_table"] = value[EXODUS]["replayed_variable_truth_table"] = {"stress": [1, 0, 1]}
     assert validate_source_identity(value)["status"] == "needs_attention"
+
+
+def test_v55_numeric_sha256_values_are_rejected() -> None:
+    value = _records()
+    numeric_digest = int("9" * 64)
+    for row in value.values():
+        row["result_sha256"] = numeric_digest
+        row["accepted_result_sha256"] = numeric_digest
+    assert validate_public_identity(value)["status"] == "needs_attention"
+    assert validate_source_identity(value)["status"] == "needs_attention"

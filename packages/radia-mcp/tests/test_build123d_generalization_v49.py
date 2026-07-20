@@ -70,7 +70,6 @@ def test_v49_public_assembly_and_sketch_mutations_are_rejected() -> None:
     assert result["status"] == "needs_attention"
     assert len(result["issues"]) == 2
 
-
 def test_v49_source_step_and_boolean_mutations_are_rejected() -> None:
     _, source = _payloads()
     source["replay_identity"][STEP]["result_ap_schema"] = "AP203"

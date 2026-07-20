@@ -125,7 +125,7 @@ def _prefixed_equal(value: Mapping[str, object], left: str, right: str, prefix: 
 
 
 def _valid_digest(value: object) -> bool:
-    return bool(_DIGEST.fullmatch(str(value)))
+    return isinstance(value, str) and bool(_DIGEST.fullmatch(value))
 
 
 def _digest_bound(value: Mapping[str, object]) -> bool:

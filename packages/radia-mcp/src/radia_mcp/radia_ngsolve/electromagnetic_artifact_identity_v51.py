@@ -13,7 +13,9 @@ WEIGHTED_FORCE = "weighted_stress_mask_air_axisym_factor_force_frame_owner_ident
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 

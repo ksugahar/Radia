@@ -6,7 +6,9 @@ from collections.abc import Mapping
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -78,7 +80,7 @@ def _journal_ok(row: Mapping[str, object]) -> bool:
         isinstance(commands, list)
         and isinstance(dependencies, list)
         and len(commands) == len(dependencies)
-        and all(isinstance(deps, list) and all(isinstance(index, int) and 0 <= index < step for index in deps) for step, deps in enumerate(dependencies))
+        and all(isinstance(deps, list) and all(isinstance(index, int) and not isinstance(index, bool) and 0 <= index < step for index in deps) for step, deps in enumerate(dependencies))
     )
     return (
         bool(generation)
@@ -111,7 +113,10 @@ def _export_ok(row: Mapping[str, object]) -> bool:
         and len(set(parts)) == len(parts)
         and isinstance(groups, Mapping)
         and set(groups) == set(parts)
-        and all(isinstance(value, int) and value > 0 for value in groups.values())
+        and all(
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
+            for value in groups.values()
+        )
         and len(set(groups.values())) == len(groups)
         and row.get("result_part_order") == parts
         and row.get("result_physical_group_map") == groups

@@ -18,7 +18,9 @@ _EXODUS = "exodus_int64_idmap_names_qa_time_global_order_owner_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 

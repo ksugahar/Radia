@@ -133,3 +133,12 @@ def test_v55_self_consistent_charge_or_flux_imbalance_is_rejected() -> None:
         "result_boundary_species_flux_mol_s"
     ] = {"Li_plus": 1.0e-6}
     assert validate_public_v55_identity(value)["status"] == "needs_attention"
+
+
+def test_v55_numeric_sha256_values_are_rejected() -> None:
+    value = _records()
+    numeric_digest = int("9" * 64)
+    for row in value.values():
+        row["result_sha256"] = numeric_digest
+        row["accepted_result_sha256"] = numeric_digest
+    assert validate_public_v55_identity(value)["status"] == "needs_attention"

@@ -11,7 +11,9 @@ FIELD = "v47_public_field_energy_loss_q_monitor_frequency_row_key_mismatch"
 
 
 def _sha(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
@@ -48,7 +50,7 @@ def _smatrix_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_port_order") == ports
         and isinstance(planes, Mapping)
         and set(planes) == set(ports)
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in planes.values())
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) for value in planes.values())
         and row.get("result_reference_plane_m") == planes
         and isinstance(normalization, (int, float))
         and math.isfinite(float(normalization))

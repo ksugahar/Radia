@@ -62,3 +62,12 @@ def test_v54_malformed_values_reject_without_raising() -> None:
     value[MONTE]["sampled_values"] = [{"sample_id": [0]}]
     value[LOOP]["loop_gain_rows"] = [{"frequency_hz": [1.0e3]}]
     assert validate_ltspice_v54_identity(value) is False
+
+
+def test_v54_numeric_sha256_values_are_rejected() -> None:
+    value = _positive()
+    numeric_digest = int("9" * 64)
+    for row in value.values():
+        row["result_sha256"] = numeric_digest
+        row["accepted_result_sha256"] = numeric_digest
+    assert validate_ltspice_v54_identity(value) is False

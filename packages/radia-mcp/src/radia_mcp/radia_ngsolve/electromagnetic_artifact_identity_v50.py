@@ -11,7 +11,9 @@ IRON = "iron_loss_steinmetz_frequency_flux_waveform_component_owner_identity"
 
 
 def _digest(value: object) -> bool:
-    text = str(value or "").lower()
+    if not isinstance(value, str):
+        return False
+    text = value.lower()
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
@@ -80,13 +82,13 @@ def _iron_ok(row: Mapping[str, object]) -> bool:
     coefficient_ok = (
         isinstance(coefficients, Mapping)
         and set(coefficients) == {"kh", "ke", "alpha"}
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) > 0.0 for value in coefficients.values())
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) > 0.0 for value in coefficients.values())
         and float(coefficients["alpha"]) > 1.0
     )
     component_ok = (
         isinstance(components, Mapping)
         and set(components) == {"hysteresis_w", "eddy_w", "excess_w", "total_w"}
-        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) >= 0.0 for value in components.values())
+        and all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) >= 0.0 for value in components.values())
         and math.isclose(
             float(components["total_w"]),
             float(components["hysteresis_w"]) + float(components["eddy_w"]) + float(components["excess_w"]),
