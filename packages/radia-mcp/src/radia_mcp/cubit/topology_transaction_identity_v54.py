@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
+from .periodic_boundary_identity_v55 import (
+    validate_public_identity as validate_public_v55_identity,
+    validate_source_identity as validate_source_v55_identity,
+)
+
 
 HEX = "hex_sweep_edgecorrespondence_highorder_jacobian_block_owner_identity"
 TRANSITION = "tethex_pyramid_transition_facediagonal_orientation_quality_owner_identity"
@@ -162,6 +167,8 @@ def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
 def validate_public_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping): return {}
     checks: dict[str, bool] = {}
+    v55 = validate_public_v55_identity(payload)
+    if v55: checks.update(v55["checks"])
     if payload.get(HEX) is not None: checks["v54_hex_edge_jacobian_block_owner"] = isinstance(payload[HEX], Mapping) and _hex_ok(payload[HEX])
     if payload.get(TRANSITION) is not None: checks["v54_pyramid_diagonal_orientation_quality_owner"] = isinstance(payload[TRANSITION], Mapping) and _transition_ok(payload[TRANSITION])
     return _report("cubit_v54_public_identity_v1", checks) if checks else {}
@@ -170,6 +177,8 @@ def validate_public_identity(payload: object) -> dict[str, object]:
 def validate_source_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, Mapping): return {}
     checks: dict[str, bool] = {}
+    v55 = validate_source_v55_identity(payload)
+    if v55: checks.update(v55["checks"])
     if payload.get(JOURNAL) is not None: checks["v54_journal_undo_allocator_checkpoint_owner"] = isinstance(payload[JOURNAL], Mapping) and _journal_ok(payload[JOURNAL])
     if payload.get(EXODUS) is not None: checks["v54_exodus_factor_topology_qa_owner"] = isinstance(payload[EXODUS], Mapping) and _exodus_ok(payload[EXODUS])
     return _report("cubit_v54_source_identity_v1", checks) if checks else {}
