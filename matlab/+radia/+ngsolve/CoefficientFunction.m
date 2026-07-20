@@ -23,6 +23,15 @@ classdef CoefficientFunction < handle
                 'ngsolve.coefficient_function.constant_create', values));
         end
 
+        function obj = coordinates(dimension)
+            arguments
+                dimension (1,1) double {mustBeMember(dimension,[2,3])}
+            end
+            obj = radia.ngsolve.CoefficientFunction( ...
+                radia.internal.callMex( ...
+                'ngsolve.coefficient_function.coordinates_create', dimension));
+        end
+
         function obj = fromNativeHandle(nativeHandle)
             obj = radia.ngsolve.CoefficientFunction(nativeHandle);
         end
