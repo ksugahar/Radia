@@ -593,6 +593,13 @@ def test_native_complete_hex_charge_gram_directional_derivative():
         zeros_c+np.array([.2,-.1,.3]),zeros_f+np.array([.2,-.1,.3]))
     scaling=gram.hex_charge_gram_directional_derivative(cells,faces)
     derivative=gram.hex_charge_gram_directional_derivative(cells@gradient.T+offset,faces@gradient.T+offset)
+    left=np.linspace(-.3,.8,derivative.shape[0])
+    right=np.linspace(.7,-.2,derivative.shape[0])
+    contractions=gram.directional_derivative_contractions(
+        "hex",
+        np.ascontiguousarray(np.stack([cells, cells@gradient.T+offset])),
+        np.ascontiguousarray(np.stack([faces, faces@gradient.T+offset])),
+        np.ascontiguousarray(left),np.ascontiguousarray(right))
     derivative_operator=gram.directional_derivative_operator(
         "hex",cells@gradient.T+offset,faces@gradient.T+offset,
         eps=1e-12,leaf=256,eta=2.0)
@@ -603,6 +610,8 @@ def test_native_complete_hex_charge_gram_directional_derivative():
     np.testing.assert_allclose(translation,0,atol=2e-15)
     np.testing.assert_allclose(scaling,-value,rtol=3e-10,atol=3e-13)
     np.testing.assert_allclose(derivative,derivative.T,rtol=0,atol=0)
+    np.testing.assert_allclose(contractions,
+        [left@scaling@right,left@derivative@right],rtol=3e-12,atol=3e-13)
     operator_dense=np.array([[derivative_operator.entry(i,j) for j in range(n)] for i in range(n)])
     np.testing.assert_allclose(operator_dense,derivative,rtol=2e-13,atol=2e-15)
     probe=np.linspace(-.7,.9,n)

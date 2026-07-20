@@ -70,6 +70,7 @@ class HexSheetTopologyIteration:
     minimum_jacobian: float
     maximum_condition: float
     topology_changed: bool
+    pending_topology_changes: int
 
 
 @dataclass(frozen=True)
@@ -362,6 +363,8 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
         element_sizes, cubit_backend: CubitHexRemeshBackend,
         cubit_work_directory, max_iterations=20, objective_tolerance=1e-4,
         design_tolerance=1e-3, activation_threshold=0.5,
+        activation_remove_threshold=0.35, activation_restore_threshold=0.65,
+        cubit_batch_interval=5, cubit_batch_fraction=0.05,
         minimum_scale=1/64, contraction=0.5, minimum_jacobian_ratio=0.2,
         maximum_condition=20.0, refine_threshold=0.25,
         rebuild_threshold=0.5, integration_order=2,
@@ -373,8 +376,12 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
     returns the next model.  This keeps solver plumbing outside the driver and
     makes the remesher backend replaceable without changing optimization.
     """
+    if not 0<=activation_remove_threshold<activation_restore_threshold<=1: raise ValueError("activation hysteresis thresholds must satisfy 0 <= remove < restore <= 1")
+    if int(cubit_batch_interval)<1 or not 0<cubit_batch_fraction<=1: raise ValueError("invalid Cubit batching controls")
     state=initial_state; history=[]; converged=False
     sizes=np.asarray(element_sizes,dtype=float).reshape(-1)
+    committed_topology=np.asarray(state.activation)>=float(activation_threshold)
+    pending_topology=np.zeros_like(committed_topology,dtype=bool);last_cubit_iteration=0
     work=Path(cubit_work_directory); work.mkdir(parents=True,exist_ok=True)
     for iteration in range(int(max_iterations)):
         step=linearize_step(state); update=step.update
@@ -383,7 +390,12 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
         if not (old_u.shape==old_t.shape==old_r.shape==new_u.shape==new_t.shape==new_r.shape==sizes.shape):
             raise ValueError("HEX sheet design/element-size shape mismatch")
         relative=np.abs(new_u-old_u)/sizes
-        topology_changed=bool(np.any((old_r>=activation_threshold)!=(new_r>=activation_threshold)))
+        desired_topology=committed_topology.copy()
+        desired_topology[committed_topology & (new_r<=activation_remove_threshold)]=False
+        desired_topology[(~committed_topology) & (new_r>=activation_restore_threshold)]=True
+        pending_topology=(desired_topology!=committed_topology)
+        pending_count=int(np.count_nonzero(pending_topology))
+        topology_changed=bool(pending_count>0 and (pending_count/max(1,pending_topology.size)>=cubit_batch_fraction or iteration-last_cubit_iteration+1>=int(cubit_batch_interval)))
         acceptance,_=backtrack_ngsolve_target_deformation(state.mesh,deformation_factory,
             old_u,new_u,relative,minimum_scale=minimum_scale,contraction=contraction,
             minimum_jacobian_ratio=minimum_jacobian_ratio,
@@ -400,6 +412,7 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
             request=CubitHexRemeshRequest(iteration,u,t,r,
                 work/f"hex_topopt_{iteration:04d}.jou",work/f"hex_topopt_{iteration:04d}.vol")
             mesh=cubit_backend.rebuild(request); route="cubit_rebuild"
+            committed_topology=desired_topology.copy();pending_topology[:]=False;last_cubit_iteration=iteration+1
         else:
             u=old_u+scale*(new_u-old_u); t=old_t+scale*(new_t-old_t); r=old_r+scale*(new_r-old_r)
             route=decision.route; mesh=state.mesh
@@ -410,7 +423,7 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
         if not np.isfinite(objective): raise RuntimeError("non-finite topology objective")
         change=float(max(np.max(np.abs(u-old_u)),np.max(np.abs(t-old_t)),np.max(np.abs(r-old_r))))
         history.append(HexSheetTopologyIteration(iteration,float(state.objective),objective,
-            float(scale),route,decision.minimum_jacobian,decision.maximum_condition,topology_changed))
+            float(scale),route,decision.minimum_jacobian,decision.maximum_condition,topology_changed,pending_count))
         previous=float(state.objective)
         state=HexSheetTopologyState(mesh,model,u,t,r,objective)
         relative_objective=abs(objective-previous)/max(1.0,abs(previous))

@@ -330,7 +330,6 @@ def production_vim_rms_adjoint_gradient_streaming(*, fes, deformation_modes,
     Neither dense ``dG``/``dA`` nor a tuple of directional H-matrices exists.
     The caller owns ``ngsolve.TaskManager``.
     """
-    import gc
     import scipy.sparse as sp
     from scipy.sparse.linalg import cg
     modes=tuple(deformation_modes); q=len(modes)
@@ -363,32 +362,34 @@ def production_vim_rms_adjoint_gradient_streaming(*, fes, deformation_modes,
                             atol=0.0,maxiter=solve_max_iterations)
     if adjoint_info!=0: raise RuntimeError(f"matrix-free VIM adjoint solve failed (info={adjoint_info})")
 
+    geometry=sample_production_gettrafo_displacements(fes,modes,charge_basis,family=family)
+    cells=np.stack(geometry.cell,axis=1)
+    if geometry.family=="wedge":
+        faces=np.zeros((q,len(geometry.face),9,3))
+        for host,values in enumerate(geometry.face): faces[:,host,:values.shape[1]]=values
+    else: faces=np.stack(geometry.face,axis=1)
+    bx=np.asarray(B@state).reshape(-1); badjoint=np.asarray(B@adjoint).reshape(-1)
+    gram_terms=np.asarray(charge_gram.directional_derivative_contractions(
+        geometry.family,np.ascontiguousarray(cells),np.ascontiguousarray(faces),
+        np.ascontiguousarray(badjoint),np.ascontiguousarray(bx)))
+    Gbx=np.asarray(charge_gram.matvec_sym(bx)).reshape(-1)
     gradient=np.empty(q)
     for k,mode in enumerate(modes):
-        geometry=sample_production_gettrafo_displacements(
-            fes,(mode,),charge_basis,family=family)
         _,dmass,dcharge=assemble_ngsolve_hdiv_shape_tangents(fes,(mode,),B)
         dM=sp.csr_matrix(dmass[0])
         if geometry.family=="tet":
-            cv=np.stack(geometry.cell,axis=1)[0]; fv=np.stack(geometry.face,axis=1)[0]
             rates=np.asarray(charge_gram.tet_charge_map_row_directional_rates(
-                np.ascontiguousarray(cv),np.ascontiguousarray(fv)))
+                np.ascontiguousarray(cells[k]),np.ascontiguousarray(faces[k])))
             dB=sp.diags(rates)@B
         else:
             dB=sp.csr_matrix(dcharge[0])
-        directional=linearize_production_charge_gram_matrix_free(
-            charge_gram,geometry,eps=eps,leaf=leaf,eta=eta).jacobian[0]
-        bx=np.asarray(B@state).reshape(-1); dbx=np.asarray(dB@state).reshape(-1)
-        dA_state=(float(inv_chi)*np.asarray(dM@state).reshape(-1)
-            +np.asarray(dB.T@charge_gram.matvec_sym(bx)).reshape(-1)
-            +np.asarray(B.T@directional.matvec_sym(bx)).reshape(-1)
-            +np.asarray(B.T@charge_gram.matvec_sym(dbx)).reshape(-1))
+        dbx=np.asarray(dB@state).reshape(-1);dbadjoint=np.asarray(dB@adjoint).reshape(-1)
         db=np.asarray(dM@h+M@dh[k]).reshape(-1)
-        gradient[k]=float(adjoint@(db-dA_state)+response_weight@(dC[k]@state))
-        del directional,geometry,dM,dB
-        gc.collect()
+        gradient[k]=float(adjoint@db-float(inv_chi)*adjoint@np.asarray(dM@state).reshape(-1)
+            -dbadjoint@Gbx-badjoint@np.asarray(charge_gram.matvec_sym(dbx)).reshape(-1)
+            -gram_terms[k]+response_weight@(dC[k]@state))
     return VIMAdjointGradient(state,response,objective,gradient,
-                              int(state_info),int(adjoint_info),1)
+                              int(state_info),int(adjoint_info),0)
 
 
 def linearize_laplace_pair_gram(points, weights, displacement_modes,
