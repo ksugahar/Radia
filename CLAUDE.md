@@ -194,6 +194,63 @@ production interface for Radia applications is a masked block in the single
 - Long or solver-heavy MATLAB validation runs execute on mdx or hibino; LAB and
   100号機 remain development and fast-test hosts.
 
+### Python-to-MATLAB Capability Parity and Fallback Policy (2026-07-21)
+
+**POLICY**: Every user-facing capability available through Radia's Python API,
+including pybind11-backed kernels, Python numerical modules, and NGSolve
+integrations, MUST have a named MATLAB entry point. Native C++/MEX is the
+preferred implementation and MUST be attempted on a best-effort basis. When a
+complete native port is not practical, the MATLAB entry point MUST remain
+available through an explicit Python fallback; unsupported behavior must never
+be silently omitted or replaced by a numerically different MATLAB algorithm.
+
+**Rules**:
+- Keep C++ as the single numerical source of truth wherever a capability can be
+  expressed with numeric arrays, sparse matrices, files, or checked native
+  handles. Expose that source through thin pybind11 and MEX adapters. Do not
+  maintain independent Python and MATLAB copies of the same numerical kernel.
+- Every production `.py` module under `src/radia/` that exposes user-facing
+  behavior MUST be represented by a corresponding `.m` entry point under
+  `matlab/+radia/`, or by an explicit entry in the checked parity manifest. The
+  manifest classifies each module as `native-mex`, `matlab-native`,
+  `python-fallback`, or `private/not-applicable` and names the owning `.m` file.
+  A generic command runner by itself is not a module-level MATLAB counterpart.
+- Prefer MEX for pybind11-backed methods, repeated numerical kernels, large
+  array operations, and Simulink step-time code. Translate Python objects into
+  MATLAB-friendly numeric arrays, structs, sparse matrices, file/path-based
+  meshes, and checked `uint64` handles rather than trying to share Python object
+  identity.
+- Use an explicit Python fallback when the capability fundamentally depends on
+  Python callbacks, Python-only ecosystem objects, or an NGSolve operation that
+  has no stable native C++ boundary. The owning `.m` function may use MATLAB's
+  `py.*` / `pyrun*` interface and therefore depend on the configured
+  `python312.dll`. It MUST check `pyenv`, fail fast with installation guidance,
+  convert inputs and outputs through documented numeric/struct/file contracts,
+  and expose which backend actually ran.
+- A Python fallback is allowed for initialization, explicit update, artifact
+  generation, and batch solves. It MUST NOT be invoked once per Simulink time
+  step. Per-step execution requires a checked MEX/ROM/state-space path.
+- A new public Python feature is not production-complete until its `.m` entry
+  point, parity-manifest entry, documentation, and focused MATLAB regression
+  test exist. Intentional limitations must be recorded in the manifest and
+  exercised by a fail-loud test.
+- Backend promotion requires an accuracy check and a reproducible performance
+  comparison on identical inputs. Measure cold startup separately from warmed
+  steady-state execution, report repeated median timings and data-transfer
+  costs, and record the machine/runtime versions. Neither pybind11 nor MEX is
+  assumed faster a priori; select the production backend from measured end-to-
+  end latency, throughput, memory behavior, and operational reliability.
+- Keep the official MATLAB MCP Server as the execution foundation; this policy
+  governs Radia's domain API and fallback behavior above that execution layer.
+- Treat these weak MATLAB families as the active native-promotion backlog, in
+  the checked order recorded by `matlab/python_api_parity_manifest.json`:
+  axifem; high-level VIM / ESIM / IH; high-level BEM / PEEC / SIBC;
+  Kelvin / DtN; acoustic CQ-BEM / FSI; Motor / MagLev; and coil CAD.
+  Each family entry MUST name its current native surface, next stable numeric or
+  artifact boundary, deliberately retained Python/ecosystem boundary, and test
+  gates. Landing one focused MEX command advances the family but does not mark
+  the whole family complete.
+
 ---
 
 ## Critical Policies

@@ -26,7 +26,14 @@ support; it is not claimed by this MEX target.
 
 ## Build the MEX Target
 
-Configure the normal MSVC build with MATLAB enabled, then build the target:
+Use the checked MSVC environment wrapper for the focused MEX build:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Build.ps1 -MatlabMexOnly -Verbose
+```
+
+The equivalent manual CMake route, from an initialized Visual Studio x64
+developer environment, is:
 
 ```powershell
 cmake -S . -B build-msvc `
@@ -61,6 +68,51 @@ thread count. The MEX gateway uses 1-based row/column triplets so no MATLAB
 index conversion is needed by callers.
 The previous `radia.spaceInfo` and `radia.ngsolveMatrix` spellings remain
 available as compatibility aliases.
+
+### Acoustic analytic kernels
+
+The sphere-scattering references and convolution-quadrature primitives share
+one C++ implementation between pybind11 and MEX. MATLAB wrappers live under
+`+radia/+acoustic`:
+
+```matlab
+points = [0, 0, 1.4; 1.3, 0, -0.2];
+scattering = radia.acoustic.softSphereScattering(2.3, 0.9, points, Terms=28);
+grid = radia.acoustic.cqGrid(256, 1e-4, Method="BDF2");
+```
+
+The native commands cover soft, rigid, fluid, and elastic spheres, complex
+wavenumbers, BDF delta, and CQ grid construction. Full CQ-BEM and acoustic FSI
+still require NGSolve's Python API and therefore use the explicit in-process
+fallback:
+
+```matlab
+result = radia.python.acoustic("cq", "cq_soft_sphere_scattering", ...
+    {points}, Keywords=struct("radius", 0.9, "order", 2));
+```
+
+The fallback reports `backend="python-fallback"` and the loaded Python
+executable and library. It requires Python 3.12 in `pyenv` InProcess mode and
+is allowed for initialization, explicit update, artifact generation, and batch
+solves only. It must not execute once per Simulink time step.
+
+### Axisymmetric Henrotte element matrices
+
+The first native `axifem` slice exposes Q1 axis-aligned magnetic element
+matrices without reproducing NGSolve's finite-element object model:
+
+```matlab
+mu0 = 4*pi*1e-7;
+element = radia.axifem.q1MagneticElementMatrices( ...
+    1e-3, 2e-3, -0.5e-3, 0.5e-3, mu0, 5.8e7);
+K = element.stiffness;
+M = element.sigma_mass;
+```
+
+The node order is `(ra,za),(rb,za),(rb,zb),(ra,zb)` and the DOFs are nodal
+`A_phi` values. The MEX command, pybind11 array API, and NGSolve Q1 BFI use one
+C++ source. Q2/heat arrays are the next native target; mesh, FESpace,
+CoefficientFunction, BilinearForm, and global assembly remain NGSolve-owned.
 
 ### NGSolve CoefficientFunction and GridFunction handles
 
@@ -621,9 +673,9 @@ materialized in the optimization loop.
 ## Binding policy
 
 The executable parity audit compares three pybind11 surfaces with the
-`radia_mex` command table: 94 public top-level names, 20 underscore-prefixed
-numerical kernels, and 110 stateful class members. All 224 entries are covered
-by the current 288-command gateway. Three internal mesh/test helpers are
+`radia_mex` command table: 94 public top-level names, 27 underscore-prefixed
+numerical kernels, and 111 stateful class members. All 232 entries are covered
+by the current 311-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:
@@ -638,6 +690,15 @@ deleted rather than retained. These families are represented as follows:
 | Python callbacks and interactive adapters | Keep in Python; expose numeric or handle-based equivalents |
 | Underscore numerical kernels required by production methods | Direct MEX commands, covered by the parity audit |
 | Mesh-plumbing and Python-only regression helpers | Explicit audited exclusions; use native NGSolve handles or tests |
+
+Module-level parity is checked separately by
+`tools/check_matlab_python_parity.py` against
+`matlab/python_api_parity_manifest.json`. Every production `.py` module is
+classified as `native-mex`, `matlab-native`, `python-fallback`, or
+`private/not-applicable`; a complete low-level MEX inventory does not imply
+that every high-level Python composition API has already become native MATLAB.
+The current gaps and measured backend comparison are recorded in the
+[MATLAB/Python API parity audit](../docs/api/MATLAB_PYTHON_API_PARITY.md).
 
 This is deliberately not a mechanical one-MEX-file-per-`.def` translation.
 One gateway avoids duplicating the Radia/NGSolve runtime and gives every

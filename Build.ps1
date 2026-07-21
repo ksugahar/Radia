@@ -8,11 +8,13 @@
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
+#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
 # Options:
 #   -Rebuild    Clean build directory before building
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
+#   -MatlabMexOnly  Configure and build only radia_mex
 #   -Test       Run source-tree import test + pytest after build
 #   -Verbose    Show detailed build output
 #
@@ -29,10 +31,15 @@ param(
     [switch]$Verbose,
     [switch]$RadiaOnly,
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
+    [switch]$MatlabMexOnly,        # configure + build ONLY radia_mex
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
 
 $ErrorActionPreference = "Stop"
+
+if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly).Where({ $_ }).Count -gt 1) {
+    throw "-RadiaOnly, -AxiFemOnly, and -MatlabMexOnly are mutually exclusive"
+}
 
 # ============================================================================
 # Paths
@@ -86,6 +93,11 @@ $NGSolveCMakeArgs = ""
 if ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
     $NGSolveCMakeArgs = " ^`n    -DNGSolve_DIR=`"$env:NGSOLVE_DIR`" ^`n    -DNetgen_DIR=`"$env:NGSOLVE_DIR`""
     Write-Host "NGSolve: $env:NGSOLVE_DIR (from env)" -ForegroundColor Gray
+}
+$MatlabMexCMakeArgs = if ($MatlabMexOnly) {
+    " ^`n    -DRADIA_BUILD_MATLAB_MEX=ON"
+} else {
+    ""
 }
 
 # Visual Studio (any version) via vswhere
@@ -156,7 +168,7 @@ if (-not (Test-Path $BUILD_DIR)) {
 
 if ($AxiFemOnly) {
 # ---- Fast path: DIRECT compile+link of axifem only (no CMake, no MKL) ----
-# axifem links ONLY NGSolve/Netgen + Python (no MKL), so we compile its 4
+# axifem links ONLY NGSolve/Netgen + Python (no MKL), so we compile its 5
 # .cpp and link directly against the installed packages.  This works on any
 # machine with VS + ngsolve installed -- even without the full MKL/CMake build
 # environment -- and sidesteps a stale build-msvc CMake cache (e.g. 8.3 short
@@ -180,13 +192,13 @@ if errorlevel 1 (
     exit /b 1
 )
 cd /d "$objDir"
-for %%F in (axifem axi_henrotte_fe axi_henrotte_fespace axi_henrotte_integrators) do (
+for %%F in (axifem axi_henrotte_fe axi_henrotte_fespace axi_henrotte_integrators axi_henrotte_numeric) do (
     echo === COMPILE %%F.cpp ===
     cl $axiCFlags -I"$axiSrc" -external:I"$netgenPkg\include" -external:I"$pyInc" -external:I"$netgenPkg\include\include" -external:W0 /Fo"$objDir\%%F.obj" /c "$axiSrc\%%F.cpp"
     if errorlevel 1 ( echo COMPILE_FAILED %%F & exit /b 1 )
 )
 echo === LINK axifem.pyd ===
-link /nologo "$objDir\axifem.obj" "$objDir\axi_henrotte_fe.obj" "$objDir\axi_henrotte_fespace.obj" "$objDir\axi_henrotte_integrators.obj" /out:"$BUILD_DIR\axifem.pyd" /implib:"$objDir\axifem.lib" /dll /machine:x64 /INCREMENTAL:NO /ignore:4273 /ignore:4217 /ignore:4049 "$pyPrefix\libs\$pyLib" "$netgenPkg\lib\libngsolve.lib" "$netgenPkg\lib\nglib.lib" "$netgenPkg\lib\ngcore.lib" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
+link /nologo "$objDir\axifem.obj" "$objDir\axi_henrotte_fe.obj" "$objDir\axi_henrotte_fespace.obj" "$objDir\axi_henrotte_integrators.obj" "$objDir\axi_henrotte_numeric.obj" /out:"$BUILD_DIR\axifem.pyd" /implib:"$objDir\axifem.lib" /dll /machine:x64 /INCREMENTAL:NO /ignore:4273 /ignore:4217 /ignore:4049 "$pyPrefix\libs\$pyLib" "$netgenPkg\lib\libngsolve.lib" "$netgenPkg\lib\nglib.lib" "$netgenPkg\lib\ngcore.lib" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
 if errorlevel 1 ( echo LINK_FAILED & exit /b 2 )
 copy /Y "$BUILD_DIR\axifem.pyd" "$PROJECT_DIR\src\radia\axifem.pyd" >nul
 echo Build completed.
@@ -215,6 +227,7 @@ set LIB=$INTEL_MKL\lib;%LIB%
 set INCLUDE=$INTEL_MKL\include;%INCLUDE%
 set MKLROOT=$INTEL_MKL
 set RADIA_ONLY=$RadiaOnly
+set MATLAB_MEX_ONLY=$MatlabMexOnly
 
 cd /d "$BUILD_DIR"
 
@@ -227,11 +240,26 @@ echo ========================================
     -DCMAKE_MAKE_PROGRAM="$NINJA_EXE" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
-    -DCMAKE_BUILD_TYPE=Release$NGSolveCMakeArgs
+    -DCMAKE_BUILD_TYPE=Release$NGSolveCMakeArgs$MatlabMexCMakeArgs
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
     exit /b 1
+)
+
+if /I "%MATLAB_MEX_ONLY%"=="True" (
+    echo.
+    echo ========================================
+    echo   Building radia_mex
+    echo ========================================
+    "$CMAKE_EXE" --build . --config Release --target radia_mex -j
+    if errorlevel 1 (
+        echo ERROR: radia_mex build failed
+        exit /b 1
+    )
+    echo.
+    echo Build completed -MatlabMexOnly.
+    exit /b 0
 )
 
 echo.
@@ -366,7 +394,7 @@ try {
 
     # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
     # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
-    if (-not $AxiFemOnly) {
+    if (-not $AxiFemOnly -and -not $MatlabMexOnly) {
     # ========================================================================
     # Copy .pyd files to src/radia/
     # ========================================================================
@@ -562,7 +590,7 @@ print(f"radia {radia.__version__} OK from {radia_file}")
     $ImportCheck | python -
     if ($LASTEXITCODE -ne 0) { Write-Host "Import failed!" -ForegroundColor Red; exit 1 }
 
-    if ($RadiaOnly -or $AxiFemOnly) {
+    if ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly) {
         Write-Host "Skipping full pytest because only a focused build was requested." -ForegroundColor Yellow
     } else {
         Push-Location $PROJECT_DIR

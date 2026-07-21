@@ -16,43 +16,31 @@ Observation points must lie in the x-z plane (y=0): the potential is evaluated o
 flat y=0 screen (the exterior of a general point cloud is not an ngsolve.bem target).
 """
 import numpy as np
-from scipy.special import jv, hankel1, eval_legendre
+
+from radia import _radia_pybind as _native
 
 
 def bdf_delta(zeta, method="BDF2"):
     """BDF generating function delta(zeta) for the CQ Laplace nodes s = delta/dt."""
-    if method == "BDF1":
-        return 1.0 - zeta
-    if method == "BDF2":
-        return 1.5 - 2.0 * zeta + 0.5 * zeta**2
-    raise ValueError("method must be 'BDF1' or 'BDF2'")
-
-
-def _sjn(l, z):
-    return np.sqrt(np.pi / (2 * z)) * jv(l + 0.5, z)
-
-
-def _sh1(l, z):
-    return np.sqrt(np.pi / (2 * z)) * hankel1(l + 0.5, z)
+    source = np.asarray(zeta, dtype=complex)
+    scalar = source.ndim == 0
+    values = np.ascontiguousarray(source.reshape(-1) if scalar else source)
+    result = _native._AcousticBDFDelta(values, str(method))
+    return result.item() if scalar else result
 
 
 def soft_sphere_scattering_complex_k(k, radius, points, terms=28):
     """Sound-soft sphere partial-wave scattered field at a (possibly COMPLEX) k.
 
-    Same series as radia.acoustics.soft_sphere_scattering but with complex-argument
-    spherical Bessel/Hankel (scipy jv / hankel1), so it can serve as the analytic
-    reference at the CQ Laplace nodes kappa = i s / c.  Returns the scattered
-    pressure (length N) at ``points`` (exterior).
+    Same series as radia.acoustics.soft_sphere_scattering but evaluated by the
+    shared native complex-argument spherical Bessel/Hankel kernel.  It serves as
+    the analytic reference at the CQ Laplace nodes kappa = i s / c.  Returns the
+    scattered pressure (length N) at ``points`` (exterior).
     """
-    pts = np.asarray(points, float).reshape(-1, 3)
-    r = np.sqrt((pts**2).sum(1))
-    costh = pts[:, 2] / r
-    scat = np.zeros(len(pts), complex)
-    for l in range(terms + 1):
-        Pl = eval_legendre(l, costh)
-        a = -(1j**l) * (2 * l + 1) * _sjn(l, k * radius) / _sh1(l, k * radius)
-        scat += a * _sh1(l, k * r) * Pl
-    return scat
+    pts = np.ascontiguousarray(np.asarray(points, dtype=float).reshape(-1, 3))
+    return _native._AcousticSoftSphereComplexK(
+        complex(k), float(radius), pts, int(terms)
+    )
 
 
 def _build_sphere_screen(radius, maxh, order, screen_extent):
@@ -107,10 +95,10 @@ def cq_soft_sphere_scattering(obs, radius=1.0, num_time=24, time_step=0.28,
 
     n = np.arange(N)
     t = n * dt
-    rho = (np.finfo(float).eps ** 0.5) ** (1.0 / N)
-    zeta = rho * np.exp(-2j * np.pi * n / N)
-    s = bdf_delta(zeta, method) / dt
-    kappa = 1j * s / c
+    grid = _native._AcousticCQGrid(N, dt, c, str(method))
+    rho = float(grid["cq_radius"])
+    s = np.asarray(grid["cq_nodes"])
+    kappa = np.asarray(grid["cq_wavenumbers"])
 
     finc = (1 - 2 * ((t - t0) / w) ** 2) * np.exp(-((t - t0) / w) ** 2)   # pulse at z=0
     A = np.fft.fft(rho**n * finc)                                        # CQ transform of the pulse

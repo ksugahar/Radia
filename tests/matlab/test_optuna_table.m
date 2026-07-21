@@ -2,6 +2,17 @@ function tests = test_optuna_table
 tests = functiontests(localfunctions);
 end
 
+function setupOnce(testCase)
+repositoryRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+matlabDirectory = fullfile(repositoryRoot, "matlab");
+addpath(matlabDirectory);
+testCase.TestData.MatlabDirectory = matlabDirectory;
+end
+
+function teardownOnce(testCase)
+rmpath(testCase.TestData.MatlabDirectory);
+end
+
 function testDefineByRunAndPersistence(testCase)
 path = string(tempname("C:\temp")) + ".mat";
 cleanup = onCleanup(@() deleteIfPresent(path));
@@ -67,7 +78,7 @@ function testSimulinkRunnerContract(testCase)
 verifyError(testCase, @() radia.optuna.SimulinkRunner("model", ScoreFcn=[]), ...
     "radia:optuna:SimulinkScore");
 runner = radia.optuna.SimulinkRunner("model", ...
-    ScoreFcn=@(simOut, trial) 0, StopTime="1.0"); %#ok<NASGU>
+    ScoreFcn=@(simOut, trial) 0, StopTime="1.0");
 verifyTrue(testCase, isa(runner, "radia.optuna.SimulinkRunner"));
 end
 

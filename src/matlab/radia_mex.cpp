@@ -1,6 +1,8 @@
 #include "mex.h"
 
 #include "rad_evrs_tmethod.h"
+#include "rad_acoustic_analytic.h"
+#include "axi_henrotte_numeric.hpp"
 #include "rad_biot_savart_filaments.h"
 #include "rad_biot_savart_surface.h"
 #include "rad_bem_galerkin.h"
@@ -1412,6 +1414,11 @@ mxArray* Commands() {
         "hcurl.tet_reduced_gram",
         "hdiv.affine_cell_self_energy_shape_derivative",
         "stream.aca_tsvd",
+        "acoustic.soft_sphere", "acoustic.rigid_sphere",
+        "acoustic.fluid_sphere", "acoustic.elastic_sphere",
+        "acoustic.soft_sphere_complex_k", "acoustic.bdf_delta",
+        "acoustic.cq_grid",
+        "axifem.q1_magnetic_element_matrices",
         "biot_savart.h_segments_complex", "biot_savart.a_segments_complex",
         "biot_savart.a_triangles_complex", "biot_savart.b_triangles_complex",
         "bem.assemble_sldl", "bem.assemble_sldl_p2",
@@ -8860,6 +8867,184 @@ void RadiaVersion(int nlhs, mxArray* plhs[], int nrhs) {
     plhs[0] = mxCreateDoubleScalar(version);
 }
 
+std::vector<double> AcousticPoints(const mxArray* value) {
+    std::size_t rows = 0;
+    std::size_t cols = 0;
+    auto points = RealMatrix(value, rows, cols, "points");
+    if (rows == 0 || cols != 3)
+        BadArgument("points must be a nonempty N-by-3 matrix");
+    return points;
+}
+
+mxArray* LogicalColumn(const std::vector<std::uint8_t>& values) {
+    mxArray* result = mxCreateLogicalMatrix(values.size(), 1);
+    mxLogical* data = mxGetLogicals(result);
+    for (std::size_t index = 0; index < values.size(); ++index)
+        data[index] = values[index] != 0;
+    return result;
+}
+
+mxArray* AcousticExteriorOutput(
+    const radia::acoustics::ScatteringResult& result, bool elastic) {
+    static const char* simple_fields[] = {
+        "kind", "wavenumber", "radius", "terms", "truncation_tail",
+        "scattered", "incident", "total"};
+    static const char* elastic_fields[] = {
+        "kind", "wavenumber", "radius", "longitudinal_speed", "shear_speed",
+        "density_ratio", "terms", "truncation_tail", "scattered", "incident",
+        "total"};
+    mxArray* output = mxCreateStructMatrix(
+        1, 1, elastic ? 11 : 8, elastic ? elastic_fields : simple_fields);
+    mxSetField(output, 0, "kind", TextOutput(result.kind.c_str()));
+    mxSetField(output, 0, "wavenumber", mxCreateDoubleScalar(result.wavenumber));
+    mxSetField(output, 0, "radius", mxCreateDoubleScalar(result.radius));
+    if (elastic) {
+        mxSetField(output, 0, "longitudinal_speed",
+                   mxCreateDoubleScalar(result.longitudinal_speed));
+        mxSetField(output, 0, "shear_speed",
+                   mxCreateDoubleScalar(result.shear_speed));
+        mxSetField(output, 0, "density_ratio",
+                   mxCreateDoubleScalar(result.density_ratio));
+    }
+    mxSetField(output, 0, "terms", mxCreateDoubleScalar(result.terms));
+    mxSetField(output, 0, "truncation_tail",
+               mxCreateDoubleScalar(result.truncation_tail));
+    mxSetField(output, 0, "scattered",
+               ComplexMatrixOutput(result.scattered, result.scattered.size(), 1));
+    mxSetField(output, 0, "incident",
+               ComplexMatrixOutput(result.incident, result.incident.size(), 1));
+    mxSetField(output, 0, "total",
+               ComplexMatrixOutput(result.total, result.total.size(), 1));
+    return output;
+}
+
+void AxiFEMQ1MagneticElementMatrices(int nlhs, mxArray* plhs[], int nrhs,
+                                     const mxArray* prhs[]) {
+    CheckArity(
+        nrhs, 7, nlhs, 1,
+        "result = radia_mex('axifem.q1_magnetic_element_matrices', ra, rb, za, zb, mu, sigma)");
+    const auto matrices = axifem::numeric::ComputeQ1MagneticElementMatrices(
+        Scalar(prhs[1], "ra"), Scalar(prhs[2], "rb"),
+        Scalar(prhs[3], "za"), Scalar(prhs[4], "zb"),
+        Scalar(prhs[5], "mu"), Scalar(prhs[6], "sigma"));
+    static const char* fields[] = {
+        "stiffness", "sigma_mass", "backend", "dof_convention", "node_order"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(plhs[0], 0, "stiffness", RealMatrixOutput(
+        std::vector<double>(matrices.stiffness.begin(), matrices.stiffness.end()),
+        4, 4));
+    mxSetField(plhs[0], 0, "sigma_mass", RealMatrixOutput(
+        std::vector<double>(matrices.sigma_mass.begin(), matrices.sigma_mass.end()),
+        4, 4));
+    mxSetField(plhs[0], 0, "backend", TextOutput("native-mex"));
+    mxSetField(plhs[0], 0, "dof_convention",
+               TextOutput("nodal A_phi (V-DOF)"));
+    mxSetField(plhs[0], 0, "node_order",
+               TextOutput("(ra,za),(rb,za),(rb,zb),(ra,zb)"));
+}
+
+mxArray* AcousticFluidOutput(const radia::acoustics::ScatteringResult& result) {
+    static const char* fields[] = {
+        "kind", "wavenumber", "interior_wavenumber", "density_ratio",
+        "radius", "terms", "truncation_tail", "incident", "total",
+        "inside_mask"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 10, fields);
+    mxSetField(output, 0, "kind", TextOutput(result.kind.c_str()));
+    mxSetField(output, 0, "wavenumber", mxCreateDoubleScalar(result.wavenumber));
+    mxSetField(output, 0, "interior_wavenumber",
+               mxCreateDoubleScalar(result.interior_wavenumber));
+    mxSetField(output, 0, "density_ratio",
+               mxCreateDoubleScalar(result.density_ratio));
+    mxSetField(output, 0, "radius", mxCreateDoubleScalar(result.radius));
+    mxSetField(output, 0, "terms", mxCreateDoubleScalar(result.terms));
+    mxSetField(output, 0, "truncation_tail",
+               mxCreateDoubleScalar(result.truncation_tail));
+    mxSetField(output, 0, "incident",
+               ComplexMatrixOutput(result.incident, result.incident.size(), 1));
+    mxSetField(output, 0, "total",
+               ComplexMatrixOutput(result.total, result.total.size(), 1));
+    mxSetField(output, 0, "inside_mask", LogicalColumn(result.inside_mask));
+    return output;
+}
+
+void AcousticScattering(const std::string& command, int nlhs, mxArray* plhs[],
+                        int nrhs, const mxArray* prhs[]) {
+    if (command == "acoustic.soft_sphere") {
+        CheckArity(nrhs, 5, nlhs, 1,
+                   "result = radia_mex('acoustic.soft_sphere', k, R, points, terms)");
+        plhs[0] = AcousticExteriorOutput(radia::acoustics::SoftSphereScattering(
+            Scalar(prhs[1], "wavenumber"), Scalar(prhs[2], "radius"),
+            AcousticPoints(prhs[3]), IntegerScalar(prhs[4], "terms")), false);
+        return;
+    }
+    if (command == "acoustic.rigid_sphere") {
+        CheckArity(nrhs, 5, nlhs, 1,
+                   "result = radia_mex('acoustic.rigid_sphere', k, R, points, terms)");
+        plhs[0] = AcousticExteriorOutput(radia::acoustics::RigidSphereScattering(
+            Scalar(prhs[1], "wavenumber"), Scalar(prhs[2], "radius"),
+            AcousticPoints(prhs[3]), IntegerScalar(prhs[4], "terms")), false);
+        return;
+    }
+    if (command == "acoustic.fluid_sphere") {
+        CheckArity(nrhs, 7, nlhs, 1,
+                   "result = radia_mex('acoustic.fluid_sphere', k, R, points, k1, density, terms)");
+        plhs[0] = AcousticFluidOutput(radia::acoustics::FluidSphereScattering(
+            Scalar(prhs[1], "wavenumber"), Scalar(prhs[2], "radius"),
+            AcousticPoints(prhs[3]), Scalar(prhs[4], "interior_wavenumber"),
+            Scalar(prhs[5], "density_ratio"), IntegerScalar(prhs[6], "terms")));
+        return;
+    }
+    if (command == "acoustic.elastic_sphere") {
+        CheckArity(nrhs, 8, nlhs, 1,
+                   "result = radia_mex('acoustic.elastic_sphere', k, R, points, cL, cT, density, terms)");
+        plhs[0] = AcousticExteriorOutput(radia::acoustics::ElasticSphereScattering(
+            Scalar(prhs[1], "wavenumber"), Scalar(prhs[2], "radius"),
+            AcousticPoints(prhs[3]), Scalar(prhs[4], "longitudinal_speed"),
+            Scalar(prhs[5], "shear_speed"), Scalar(prhs[6], "density_ratio"),
+            IntegerScalar(prhs[7], "terms")), true);
+        return;
+    }
+    BadArgument("unknown acoustic scattering command: " + command);
+}
+
+void AcousticSoftSphereComplex(int nlhs, mxArray* plhs[], int nrhs,
+                               const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+               "p = radia_mex('acoustic.soft_sphere_complex_k', k, R, points, terms)");
+    auto values = radia::acoustics::SoftSphereScatteringComplexK(
+        ComplexScalar(prhs[1], "wavenumber"), Scalar(prhs[2], "radius"),
+        AcousticPoints(prhs[3]), IntegerScalar(prhs[4], "terms"));
+    plhs[0] = ComplexMatrixOutput(values, values.size(), 1);
+}
+
+void AcousticBDF(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 1,
+               "delta = radia_mex('acoustic.bdf_delta', zeta, method)");
+    std::size_t rows = 0;
+    std::size_t cols = 0;
+    auto values = ComplexMatrix(prhs[1], rows, cols, "zeta");
+    const std::string method = Text(prhs[2], "method");
+    for (Complex& value : values)
+        value = radia::acoustics::BDFDelta(value, method);
+    plhs[0] = ComplexMatrixOutput(values, rows, cols);
+}
+
+void AcousticCQGrid(int nlhs, mxArray* plhs[], int nrhs,
+                    const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+               "grid = radia_mex('acoustic.cq_grid', N, dt, c, method)");
+    const auto result = radia::acoustics::BuildCQGrid(
+        PositiveInteger(prhs[1], "sample_count"), Scalar(prhs[2], "time_step"),
+        Scalar(prhs[3], "sound_speed"), Text(prhs[4], "method"));
+    static const char* fields[] = {
+        "cq_radius", "zeta", "cq_nodes", "cq_wavenumbers"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 4, fields);
+    mxSetField(plhs[0], 0, "cq_radius", mxCreateDoubleScalar(result.radius));
+    mxSetField(plhs[0], 0, "zeta", ComplexRow(result.zeta));
+    mxSetField(plhs[0], 0, "cq_nodes", ComplexRow(result.nodes));
+    mxSetField(plhs[0], 0, "cq_wavenumbers", ComplexRow(result.wavenumbers));
+}
+
 bool DispatchChargeGramCreate(const std::string& command, int nlhs,
                               mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     if (command == "hacapk.charge_gram.create_monopole") {
@@ -8912,6 +9097,29 @@ bool DispatchChargeGramCreate(const std::string& command, int nlhs,
 
 void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
               const mxArray* prhs[]) {
+    if (command == "axifem.q1_magnetic_element_matrices") {
+        AxiFEMQ1MagneticElementMatrices(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "acoustic.soft_sphere" ||
+        command == "acoustic.rigid_sphere" ||
+        command == "acoustic.fluid_sphere" ||
+        command == "acoustic.elastic_sphere") {
+        AcousticScattering(command, nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "acoustic.soft_sphere_complex_k") {
+        AcousticSoftSphereComplex(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "acoustic.bdf_delta") {
+        AcousticBDF(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "acoustic.cq_grid") {
+        AcousticCQGrid(nlhs, plhs, nrhs, prhs);
+        return;
+    }
     if (command == "ngsolve.mesh.create") {
         NGSolveMeshCreate(nlhs, plhs, nrhs, prhs);
         return;

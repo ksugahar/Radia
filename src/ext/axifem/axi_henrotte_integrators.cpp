@@ -24,10 +24,12 @@
 
 #include <comp.hpp>
 #include <python_comp.hpp>
+#include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <cmath>
 #include "axi_henrotte_integrators.hpp"
 #include "axi_henrotte_fe.hpp"
+#include "axi_henrotte_numeric.hpp"
 #include "q2_henrotte_generated.hpp"
 #include "q_heat_henrotte_generated.hpp"
 
@@ -58,184 +60,21 @@ double SampleAtCentroid(const CoefficientFunction & cf,
     return cf.Evaluate(mip);
 }
 
-// ---------------------------------------------------------------------------
-// Build inverse Vandermonde for Q1 axis-aligned rectangle.
-//   V[j, k] = (basis_k)(s_j, z_j) where basis_k in {1, s, z, s*z}
-//   inv_V converts (phi_0, phi_1, phi_2, phi_3) to (a, b, c, d) coefficients.
-// Vertex order: (sa, za), (sb, za), (sb, zb), (sa, zb)
-// ---------------------------------------------------------------------------
-void Q1InverseVandermonde(double ra, double rb, double za, double zb,
-                          Mat<4,4> & inv_V)
+void CopyMatrix4(const numeric::Matrix4 & source, FlatMatrix<double> target)
 {
-    double sa = ra * ra;
-    double sb = rb * rb;
-    Mat<4,4> V;
-    V(0,0) = 1; V(0,1) = sa; V(0,2) = za; V(0,3) = sa * za;
-    V(1,0) = 1; V(1,1) = sb; V(1,2) = za; V(1,3) = sb * za;
-    V(2,0) = 1; V(2,1) = sb; V(2,2) = zb; V(2,3) = sb * zb;
-    V(3,0) = 1; V(3,1) = sa; V(3,2) = zb; V(3,3) = sa * zb;
-    CalcInverse(V, inv_V);
-}
-
-// ---------------------------------------------------------------------------
-// Q1 stiffness in (a, b, c, d) coefficient coords. Returns the 4x4 M_coef
-// such that the energy quadratic form W = (1/2) coef^T M_coef coef.
-// Inputs: sa = ra^2, sb = rb^2 (sa < sb), za < zb, mu = absolute permeability.
-// ---------------------------------------------------------------------------
-Mat<4,4> Q1StiffnessCoef(double sa, double sb, double za, double zb, double mu)
-{
-    Mat<4,4> M;
-    M = 0.0;
-
-    // W_z (only b, d coefficients contribute):
-    //   M_coef[b,b] = (sb-sa)(zb-za) / (pi mu)
-    //   M_coef[b,d] = (sb-sa)(zb^2-za^2) / (2 pi mu)
-    //   M_coef[d,d] = (sb-sa)(zb^3-za^3) / (3 pi mu)
-    double inv_pi_mu = 1.0 / (PI * mu);
-    double Hz_bb = (sb - sa) * (zb - za) * inv_pi_mu;
-    double Hz_bd = (sb - sa) * (zb*zb - za*za) * 0.5 * inv_pi_mu;
-    double Hz_dd = (sb - sa) * (zb*zb*zb - za*za*za) / 3.0 * inv_pi_mu;
-    M(1,1) += Hz_bb;
-    M(1,3) += Hz_bd;
-    M(3,1) += Hz_bd;
-    M(3,3) += Hz_dd;
-
-    // W_r (only c, d coefficients contribute):
-    //   if sa > 0: log(sb/sa) term
-    //   if sa = 0: shortcut — set Hr_cc, Hr_cd = 0 (axis Dirichlet handles it)
-    double Hr_cc, Hr_cd, Hr_dd;
-    if (sa < EPS_AXIS) {
-        Hr_cc = 0.0;
-        Hr_cd = 0.0;
-        Hr_dd = (zb - za) * sb * sb / (8.0 * PI * mu);
-    } else {
-        double inv_4pi_mu = 1.0 / (4.0 * PI * mu);
-        Hr_cc = (zb - za) * log(sb/sa) * inv_4pi_mu;
-        Hr_cd = (zb - za) * (sb - sa) * inv_4pi_mu;
-        Hr_dd = (zb - za) * (sb*sb - sa*sa) * 0.5 * inv_4pi_mu;
-    }
-    M(2,2) += Hr_cc;
-    M(2,3) += Hr_cd;
-    M(3,2) += Hr_cd;
-    M(3,3) += Hr_dd;
-
-    return M;
-}
-
-// ---------------------------------------------------------------------------
-// Q1 sigma-mass in (a, b, c, d) coefficient coords.
-//   M_coef[k, l] = (sigma / (4 pi)) * Integrate(basis_k basis_l / s, ds dz)
-// Inputs: sa, sb, za, zb, sigma.
-// ---------------------------------------------------------------------------
-Mat<4,4> Q1SigmaMassCoef(double sa, double sb, double za, double zb, double sigma)
-{
-    double Sb_Sa_1 = sb - sa;
-    double Sb_Sa_2 = 0.5 * (sb*sb - sa*sa);
-    double Iz0 = zb - za;
-    double Iz1 = 0.5 * (zb*zb - za*za);
-    double Iz2 = (zb*zb*zb - za*za*za) / 3.0;
-
-    Mat<4,4> I;
-    I = 0.0;
-
-    if (sa < EPS_AXIS) {
-        // Axis-touching: only b, d couplings survive (axis vertices Dirichlet).
-        I(1,1) = Iz0 * 0.5 * sb * sb;
-        I(1,3) = Iz1 * 0.5 * sb * sb;
-        I(3,1) = I(1,3);
-        I(3,3) = Iz2 * 0.5 * sb * sb;
-    } else {
-        double log_sbsa = log(sb / sa);
-        // basis indices: 0=(1), 1=(s), 2=(z), 3=(s*z)
-        I(0,0) = Iz0 * log_sbsa;
-        I(0,1) = Iz0 * Sb_Sa_1;             I(1,0) = I(0,1);
-        I(0,2) = Iz1 * log_sbsa;             I(2,0) = I(0,2);
-        I(0,3) = Iz1 * Sb_Sa_1;              I(3,0) = I(0,3);
-        I(1,1) = Iz0 * Sb_Sa_2;
-        I(1,2) = Iz1 * Sb_Sa_1;              I(2,1) = I(1,2);
-        I(1,3) = Iz1 * Sb_Sa_2;              I(3,1) = I(1,3);
-        I(2,2) = Iz2 * log_sbsa;
-        I(2,3) = Iz2 * Sb_Sa_1;              I(3,2) = I(2,3);
-        I(3,3) = Iz2 * Sb_Sa_2;
-    }
-
-    Mat<4,4> M = (sigma / (4.0 * PI)) * I;
-    return M;
-}
-
-// ---------------------------------------------------------------------------
-// Compute Q1 element matrix in V-DOF: elmat = T (inv_V^T M_coef inv_V) T,
-// where T_jj = 2 pi r_j. This puts the matrix in the same DOF basis as the
-// FEMM-style P1 triangle below, so the assembled global system is consistent.
-// Axis-touching elements get zero rows/cols on axis vertices, eliminated by
-// Dirichlet BC.
-// ---------------------------------------------------------------------------
-template <typename CoefBuilder>
-void Q1ElementMatrix(double ra, double rb, double za, double zb,
-                     CoefBuilder build_coef,
-                     FlatMatrix<double> elmat)
-{
-    Mat<4,4> inv_V;
-    Q1InverseVandermonde(ra, rb, za, zb, inv_V);
-
-    Mat<4,4> M_coef = build_coef(ra*ra, rb*rb, za, zb);
-
-    Mat<4,4> M_phi = Trans(inv_V) * M_coef * inv_V;
-
-    // T = diag(2 pi r_0, 2 pi r_1, 2 pi r_2, 2 pi r_3) with r = (ra, rb, rb, ra).
-    double r_nodes[4] = { ra, rb, rb, ra };
-    double T[4];
-    for (int j = 0; j < 4; ++j) T[j] = 2.0 * PI * r_nodes[j];
-
-    for (int i = 0; i < 4; ++i)
-        for (int j = 0; j < 4; ++j) {
-            double v = T[i] * M_phi(i, j) * T[j];
-            elmat(i, j) = 0.5 * (v + T[j] * M_phi(j, i) * T[i]);
-        }
-}
-
-// ---------------------------------------------------------------------------
-// Q1 axis-aligned quad stiffness in TRUE V-DOF form (matches P1TriangleStiffness
-// / Q2): K_ij = (2 pi / mu) r_i r_j INT_quad grad(psi_i).grad(psi_j)/r dr dz,
-// psi in {1, s, z, s z} with s = r^2 (dpsi/dr = 2 r (b + d z), dpsi/dz = c + d s).
-// A uniform axial B_z (V_i = B0 r_i/2) lies in its kernel, so order-1 quad
-// magnetostatics converges -- unlike Q1StiffnessCoef, which is the A=psi energy
-// form (does NOT annihilate the uniform field).  16-point Gauss is exact for the
-// rational-polynomial integrand on the rectangle.
-// ---------------------------------------------------------------------------
-void Q1StiffnessVDof(double ra, double rb, double za, double zb, double mu,
-                     FlatMatrix<double> elmat)
-{
-    Mat<4,4> inv_V;
-    Q1InverseVandermonde(ra, rb, za, zb, inv_V);   // column i = (a,b,c,d) of psi_i
-    double r_nodes[4] = { ra, rb, rb, ra };
-    static const double gp[4] = { -0.8611363115940526, -0.3399810435848563,
-                                   0.3399810435848563,  0.8611363115940526 };
-    static const double gw[4] = { 0.3478548451374538, 0.6521451548625461,
-                                  0.6521451548625461, 0.3478548451374538 };
-    Mat<4,4> Ke; Ke = 0.0;
-    for (int ir = 0; ir < 4; ++ir)
-        for (int iz = 0; iz < 4; ++iz) {
-            double rq = 0.5*(ra+rb) + 0.5*(rb-ra)*gp[ir];
-            double zq = 0.5*(za+zb) + 0.5*(zb-za)*gp[iz];
-            if (rq <= EPS_AXIS) continue;
-            double w = gw[ir]*gw[iz] * 0.25*(rb-ra)*(zb-za);
-            double s = rq*rq;
-            double dpr[4], dpz[4];
-            for (int i = 0; i < 4; ++i) {
-                double b = inv_V(1,i), c = inv_V(2,i), d = inv_V(3,i);
-                dpr[i] = 2.0*rq*(b + d*zq);
-                dpz[i] = c + d*s;
-            }
-            double fac = w / rq;
-            for (int i = 0; i < 4; ++i)
-                for (int j = 0; j < 4; ++j)
-                    Ke(i,j) += fac*(dpr[i]*dpr[j] + dpz[i]*dpz[j]);
-        }
-    double inv_mu = 1.0 / mu;
     for (int i = 0; i < 4; ++i)
         for (int j = 0; j < 4; ++j)
-            elmat(i,j) = 2.0*PI*inv_mu*r_nodes[i]*r_nodes[j]*Ke(i,j);
+            target(i, j) = source[4 * i + j];
+}
+
+void Q1InverseVandermonde(double ra, double rb, double za, double zb,
+                          Mat<4,4> & inverse)
+{
+    const auto values =
+        numeric::ComputeQ1InverseVandermonde(ra, rb, za, zb);
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            inverse(i, j) = values[4 * i + j];
 }
 
 // ---------------------------------------------------------------------------
@@ -850,7 +689,9 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
     double mu = SampleAtCentroid(*mu_cf, eltrans, et, lh);
 
     if (auto * q1 = dynamic_cast<const AxiHenrotteFE_Q1_AxisAligned*>(&fel)) {
-        Q1StiffnessVDof(q1->r_a, q1->r_b, q1->z_a, q1->z_b, mu, elmat);
+        CopyMatrix4(numeric::ComputeQ1MagneticStiffness(
+                        q1->r_a, q1->r_b, q1->z_a, q1->z_b, mu),
+                    elmat);
         return;
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
@@ -894,11 +735,9 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
     if (sigma == 0.0) return;  // air / non-conductor: zero contribution
 
     if (auto * q1 = dynamic_cast<const AxiHenrotteFE_Q1_AxisAligned*>(&fel)) {
-        Q1ElementMatrix(q1->r_a, q1->r_b, q1->z_a, q1->z_b,
-                        [sigma](double sa, double sb, double za, double zb) {
-                            return Q1SigmaMassCoef(sa, sb, za, zb, sigma);
-                        },
-                        elmat);
+        CopyMatrix4(numeric::ComputeQ1SigmaMass(
+                        q1->r_a, q1->r_b, q1->z_a, q1->z_b, sigma),
+                    elmat);
         return;
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
@@ -1103,6 +942,34 @@ void AxiHenrotteHeatMassBFI::CalcElementMatrix(
 void ExportAxiHenrotteIntegrators(pybind11::module & m)
 {
     namespace py = pybind11;
+
+    m.def(
+        "q1_magnetic_element_matrices",
+        [](double ra, double rb, double za, double zb,
+           double mu, double sigma) {
+            const auto matrices = numeric::ComputeQ1MagneticElementMatrices(
+                ra, rb, za, zb, mu, sigma);
+            auto as_numpy = [](const numeric::Matrix4 & values) {
+                py::array_t<double> result({
+                    static_cast<py::ssize_t>(4), static_cast<py::ssize_t>(4)});
+                auto view = result.mutable_unchecked<2>();
+                for (py::ssize_t i = 0; i < 4; ++i)
+                    for (py::ssize_t j = 0; j < 4; ++j)
+                        view(i, j) = values[4 * i + j];
+                return result;
+            };
+            py::dict result;
+            result["stiffness"] = as_numpy(matrices.stiffness);
+            result["sigma_mass"] = as_numpy(matrices.sigma_mass);
+            result["backend"] = "native-pybind";
+            result["dof_convention"] = "nodal A_phi (V-DOF)";
+            result["node_order"] =
+                "(ra,za),(rb,za),(rb,zb),(ra,zb)";
+            return result;
+        },
+        py::arg("ra"), py::arg("rb"), py::arg("za"), py::arg("zb"),
+        py::arg("mu"), py::arg("sigma"),
+        "Return shared-native Q1 Henrotte stiffness and sigma-mass matrices.");
 
     py::class_<AxiHenrotteStiffnessBFI, BilinearFormIntegrator,
                shared_ptr<AxiHenrotteStiffnessBFI>>(

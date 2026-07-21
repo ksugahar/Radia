@@ -1,0 +1,259 @@
+{
+  "schema": "radia.matlab-python-parity/v1",
+  "source_root": "src/radia",
+  "classifications": [
+    "native-mex",
+    "matlab-native",
+    "python-fallback",
+    "private/not-applicable"
+  ],
+  "rules": [
+    {
+      "id": "core-pybind-api",
+      "patterns": ["__init__.py"],
+      "classification": "native-mex",
+      "matlab": ["matlab/+radia/commands.m", "matlab/+radia/apiInfo.m"],
+      "notes": "The public top-level pybind surface is checked against the radia_mex command table."
+    },
+    {
+      "id": "acoustic-native",
+      "patterns": ["acoustics/__init__.py", "acoustics/scattering.py"],
+      "classification": "native-mex",
+      "matlab": ["matlab/+radia/+acoustic/softSphereScattering.m"],
+      "notes": "Four real-wavenumber sphere references share one C++ kernel."
+    },
+    {
+      "id": "acoustic-python",
+      "patterns": ["acoustics/cq.py", "acoustics/fsi.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/acoustic.m"],
+      "notes": "BDF, CQ grid, and analytic complex-k sphere are native MEX; full NGSolve BEM CQ and FSI remain Python fallback."
+    },
+    {
+      "id": "analytical-formulas",
+      "patterns": ["analytical_formulas/*.py", "analytical_magnet.py", "cylindrical_magnet.py", "round_bodies.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/analytical.m"],
+      "notes": "Pure Python/SciPy formula collection; prioritize array-heavy formulas for later MEX promotion."
+    },
+    {
+      "id": "analysis-reduction",
+      "patterns": ["analysis.py", "lanczos_reduction.py", "prima_hacapk.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/analysis.m"],
+      "notes": "MATLAB has focused CLN primitives, but the complete Python orchestration surface is not one-to-one."
+    },
+    {
+      "id": "bem-peec",
+      "patterns": ["bem/*.py", "bem_*.py", "ngsbem_*.py", "peec_*.py", "dielectric_solver.py", "fasthenry_parser.py", "scalar_bie_sibc.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/bemPeec.m"],
+      "notes": "Many low-level matrices and HACApK handles are native MEX; high-level coupled solver composition remains Python-owned."
+    },
+    {
+      "id": "coil-design",
+      "patterns": ["coil*.py", "coils.py", "filament_bundle.py", "workpiece_surface.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/coil.m"],
+      "notes": "CoilBuilder and CAD-backed coil topology still depend on Python/build123d/OCC objects."
+    },
+    {
+      "id": "esim-ih",
+      "patterns": ["esim_*.py", "ih_design.py", "ih_optimize.py", "ih_pipeline.py", "em_design.py", "em_material.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/inductionHeating.m"],
+      "notes": "The IH Simulink application invokes the validated headless Python contract only on explicit triggers."
+    },
+    {
+      "id": "open-boundary",
+      "patterns": ["open_boundary/*.py", "kelvin_*.py", "cohomology*.py", "ima_field.py", "infinite_element.py", "scalar_potential_solver.py", "vector_potential_solver.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/openBoundary.m"],
+      "notes": "Kelvin/DtN and potential assembly remain NGSolve/Python composition above native matrix kernels."
+    },
+    {
+      "id": "machines-applications",
+      "patterns": ["maglev/**/*.py", "maglev/*.py", "magnet.py", "motor_*.py", "pcb_design.py", "stream_function.py", "streamfunction_*.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/machines.m"],
+      "notes": "Production human applications have Simulink blocks; reusable Python design/model APIs are not yet all native MATLAB APIs."
+    },
+    {
+      "id": "optimization-matlab",
+      "patterns": ["hcurl_topology_optimization.py", "magnetic_shield_optimization.py", "sheet_metal_optimization.py", "topology_optimization.py"],
+      "classification": "matlab-native",
+      "matlab": ["matlab/+radia/+topopt/optimizeHCurlEddyBubbleHexSheet.m", "matlab/+radia/+topopt/optimizeVIMLP.m"],
+      "notes": "MATLAB owns the production optimization loops and uses the same MEX operators."
+    },
+    {
+      "id": "mesh-cad-io",
+      "patterns": ["cubit_bem_extractor.py", "gmsh_post_export.py", "netgen_mesh_import.py", "peec_mesh_import.py", "setup_cubit.py", "step_mesh_builder.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/mesh.m"],
+      "notes": "MATLAB exchanges file/path contracts while Python retains CAD and mesh ecosystem objects."
+    },
+    {
+      "id": "urn",
+      "patterns": ["urn/*.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/urn.m"],
+      "notes": "Universal Relaxation Network construction is currently Python-owned."
+    },
+    {
+      "id": "vim-public",
+      "patterns": ["vim/__init__.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/electromagnetics.m"],
+      "notes": "Most numerical kernels and handles are MEX-ready; NGSolve space/form orchestration and Python callbacks remain a fallback."
+    },
+    {
+      "id": "native-specialized-modules",
+      "patterns": ["energy_play_model.py", "equivalence_source.py"],
+      "classification": "native-mex",
+      "matlab": ["matlab/+radia/EnergyStopMaterial.m", "matlab/+radia/equivalenceSourceStaticH.m"],
+      "notes": "These Python modules are represented by dedicated native MEX classes/functions."
+    },
+    {
+      "id": "other-electromagnetic-methods",
+      "patterns": ["biot_savart.py", "clebsch_potential.py", "hysteresis_io.py", "planar_*.py", "radia_ngsolve.py", "soft_iron.py", "veriloga_generator.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/electromagnetics.m"],
+      "notes": "Native subsets exist, but the full Python module contracts are wider than their current MATLAB wrappers."
+    },
+    {
+      "id": "simulink-headless-backend",
+      "patterns": ["simulink/application.py", "panels/calc_*.py", "panels/check_vol_consistency.py", "panels/em_table.py", "panels/generate_coil.py"],
+      "classification": "python-fallback",
+      "backend_contract": "process-python",
+      "matlab": ["matlab/+radia/+simulink/runApplication.m"],
+      "notes": "Allowed only on explicit trigger/update; never once per Simulink time step."
+    },
+    {
+      "id": "retired-or-operator-ui",
+      "patterns": ["ih_claude_proposer.py", "ih_notebook.py", "install_panels.py", "notebook_workbench.py", "panel_design_common.py", "simulink/__init__.py", "tools/**/*.py", "tools/*.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "Internal tooling, temporary IH notebook support, or retired UI plumbing; not a Python user numerical API."
+    },
+    {
+      "id": "panel-internals",
+      "patterns": ["panels/**/*.py", "panels/*.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "Cubit toolbar, samples, logging, and internal adapters are not reusable MATLAB numerical APIs."
+    },
+    {
+      "id": "vim-internals",
+      "patterns": ["vim/_*.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "Private implementation modules are represented by the public radia.vim package contract."
+    },
+    {
+      "id": "private-root",
+      "patterns": ["_*.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "Private compatibility implementation."
+    }
+  ],
+  "native_promotion_backlog": [
+    {
+      "priority": 1,
+      "family": "axifem",
+      "current": "Q1 axis-aligned magnetic stiffness and sigma-mass matrices share one C++ kernel across NGSolve BFI, pybind11, and MEX.",
+      "next_native_boundary": "Q2 axis-aligned magnetic and heat element matrices, followed by checked sparse assembly from numeric mesh arrays.",
+      "retained_python_boundary": "NGSolve mesh, FESpace, CoefficientFunction, and BilinearForm ownership.",
+      "gate": ["tests/axifem/test_python_reference_consistency.py", "tests/matlab/test_axifem_mex.m"]
+    },
+    {
+      "priority": 2,
+      "family": "vim-esim-ih",
+      "current": "Focused VIM, Schur, SIBC, CLN, state-space, and IH Simulink kernels are native; high-level setup remains explicit Python fallback.",
+      "next_native_boundary": "Artifact-to-handle initialization and reusable ROM/state contracts for repeated solves and IH control.",
+      "retained_python_boundary": "NGSolve space/form construction, CAD/mesh preparation, and explicit batch artifact generation.",
+      "gate": ["tests/matlab/test_radia_mex.m", "tests/matlab/test_simulink_workflow.m"]
+    },
+    {
+      "priority": 3,
+      "family": "bem-peec-sibc",
+      "current": "Galerkin assembly, HACApK BEM/PEEC handles, charge Gram operators, and SIBC primitives are native.",
+      "next_native_boundary": "High-level numeric-array factories and durable artifact loaders that compose existing handles without Python in repeated operations.",
+      "retained_python_boundary": "NGSolve BEM object construction and Python-only mesh/CAD ecosystem adapters.",
+      "gate": ["tests/matlab/test_radia_mex.m", "packages/radia-mcp/tests/test_matlab_radia_mex_contract.py"]
+    },
+    {
+      "priority": 4,
+      "family": "kelvin-dtn",
+      "current": "Open-boundary workflows use explicit Python fallback above native NGSolve matrix and coefficient handles.",
+      "next_native_boundary": "Kelvin factor arrays, checked DtN matrix/operator handles, and artifact-based boundary application.",
+      "retained_python_boundary": "Geometry transformation and NGSolve-owned finite-element assembly where no stable array boundary exists.",
+      "gate": ["tests/matlab/test_radia_ngsolve_parity.m"]
+    },
+    {
+      "priority": 5,
+      "family": "acoustic-cq-bem-fsi",
+      "current": "Analytic sphere models, complex-wavenumber evaluation, BDF delta, and CQ grids share one native C++ kernel.",
+      "next_native_boundary": "Batched CQ transfer evaluation and numeric interface-coupling kernels used repeatedly by BEM/FSI solves.",
+      "retained_python_boundary": "NGSolve FEM/BEM spaces, forms, and coupled object orchestration.",
+      "gate": ["tests/acoustics/test_native_parity.py", "tests/matlab/test_acoustic_mex.m"]
+    },
+    {
+      "priority": 6,
+      "family": "motor-maglev",
+      "current": "Motor ROM, TEAM 28 CLN artifacts, native state-space stepping, and production Simulink applications exist.",
+      "next_native_boundary": "Stable operating-point/model artifact loaders and native model initialization for Motor and MagLev blocks.",
+      "retained_python_boundary": "One-time design sweeps, NGSolve model generation, and research validation.",
+      "gate": ["tests/matlab/test_simulink_workflow.m", "tests/test_team28_cln_golden.py"]
+    },
+    {
+      "priority": 7,
+      "family": "coil-cad",
+      "current": "Current-filament primitives are native, while CoilBuilder and CAD topology use explicit Python fallback.",
+      "next_native_boundary": "MATLAB structs for centerlines, cross-sections, turns, terminals, and STEP/journal artifact exchange.",
+      "retained_python_boundary": "build123d/OCC object identity and CAD topology operations that add no value when duplicated in MEX.",
+      "gate": ["tests/matlab/test_radia_mex.m"]
+    }
+  ],
+  "binary_extensions": [
+    {
+      "python": "_radia_pybind.pyd",
+      "classification": "native-mex",
+      "matlab": "radia_mex.mexw64",
+      "status": "complete-for-declared-pybind-numerics"
+    },
+    {
+      "python": "axifem.pyd",
+      "classification": "native-mex",
+      "matlab": "matlab/+radia/+axifem/q1MagneticElementMatrices.m",
+      "status": "focused-native-commands",
+      "native_commands": ["axifem.q1_magnetic_element_matrices"],
+      "python_entry": "radia.axifem.q1_magnetic_element_matrices",
+      "fallback": "matlab/+radia/+python/electromagnetics.m"
+    },
+    {
+      "python": "cln_core.pyd",
+      "classification": "native-mex",
+      "matlab": "radia_mex.mexw64",
+      "status": "focused-native-commands"
+    },
+    {
+      "python": "peec_matrices.pyd",
+      "classification": "native-mex",
+      "matlab": "radia_mex.mexw64",
+      "status": "focused-native-commands"
+    }
+  ]
+}

@@ -7,12 +7,12 @@ if ~isfolder(options.OutputDirectory),mkdir(options.OutputDirectory);end
 name="radia_simulink_library"; libraryPath=fullfile(options.OutputDirectory,name+".slx");
 if bdIsLoaded(name),close_system(name,0);end
 new_system(name,"Library");
-applications=addEmptySubsystem(name,"Applications",[70 40 310 265]);
-addApplicationBlock(applications,"Electromagnet","em",[45 30 230 75]);
-addApplicationBlock(applications,"PCB PEEC","pcb",[45 90 230 135]);
-addApplicationBlock(applications,"Motor","motor",[45 150 230 195]);
-addApplicationBlock(applications,"Stream Function","streamfunction",[45 210 230 255]);
-addApplicationBlock(applications,"Induction Heating","ih",[45 270 230 315]);
+applications=addEmptySubsystem(name,"Applications",[70 40 410 285]);
+addApplicationBlock(applications,"Electromagnet","em",[45 30 345 80]);
+addApplicationBlock(applications,"PCB PEEC","pcb",[45 100 345 150]);
+addApplicationBlock(applications,"Motor","motor",[45 170 345 220]);
+addApplicationBlock(applications,"Stream Function","streamfunction",[45 240 345 290]);
+addApplicationBlock(applications,"Induction Heating","ih",[45 310 345 360]);
 
 addEmptySubsystem(name,"LTspice",[70 305 310 405]);
 add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",name+"/LTspice/LTspice Circuit", ...
@@ -39,7 +39,7 @@ parameters="'"+application+"', config_file, run_root, timeout_s, python_executab
 add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",path, ...
     FunctionName="radia_application_sfun", ...
     Parameters="'"+application+"', '', 'C:\temp\radia_simulink', 3600, 'python'", ...
-    Position=position);
+    Position=position,ShowName="off");
 mask=Simulink.Mask.create(path);
 mask.Description=label+" batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the validated Radia headless CLI once.";
 mask.addParameter(Type="edit",Name="config_file", ...

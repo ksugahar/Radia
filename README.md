@@ -462,7 +462,14 @@ Piola maps, curved geometry, quadrature, assembly, and field evaluation.
 
 The MEX contracts are tested against the corresponding Python/NGSolve results,
 including complex state/adjoint conventions, matrix layout, and HCurl
-multifrequency topology gradients. See the
+multifrequency topology gradients. Acoustic soft, rigid, fluid, and elastic
+sphere references plus convolution-quadrature primitives also share one C++
+implementation through pybind11 and MEX. Full acoustic CQ-BEM and FSI retain
+NGSolve's Python object model and use an explicit Python-DLL fallback from
+MATLAB rather than duplicating finite-element plumbing. Axisymmetric Henrotte
+FEM has begun the same promotion: Q1 stiffness and conductivity-mass element
+matrices share one C++ implementation across the NGSolve BFI, pybind11, and
+MEX, while NGSolve continues to own spaces and global assembly. See the
 [MATLAB integration guide](matlab/README.md) for the supported surface, build
 instructions, and runtime requirements.
 

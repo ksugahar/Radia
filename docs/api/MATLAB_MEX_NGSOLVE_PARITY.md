@@ -19,11 +19,22 @@ silently dropped from the count.
 |---|---:|
 | Public top-level pybind11 names | 94 |
 | Covered mapped MEX names | 94 |
-| Underscore numerical kernels | 20 / 20 covered |
-| Stateful pybind11 class surface | 110 / 110 covered |
-| MEX gateway commands | 287 |
+| Underscore numerical kernels | 27 / 27 covered |
+| Stateful pybind11 class surface | 111 / 111 covered |
+| MEX gateway commands | 311 |
 | MATLAB Optuna classes | 11 |
 | MATLAB Optuna factory functions | 2 |
+
+Seven acoustic commands share their implementation with the pybind11
+scattering/CQ bindings: four real-wavenumber sphere models, complex-wavenumber
+soft-sphere scattering, BDF delta, and CQ grid construction. Full acoustic
+CQ-BEM and FSI remain NGSolve/Python workflows and use the declared MATLAB
+Python fallback rather than a second numerical implementation.
+
+The `axifem.q1_magnetic_element_matrices` command shares the Q1 Henrotte
+stiffness and sigma-mass implementation with `radia.axifem` and the production
+NGSolve bilinear-form integrators. MATLAB receives numeric 4-by-4 element
+matrices; NGSolve retains ownership of finite-element spaces and assembly.
 
 The 22 HLU names use the MATLAB MEX snake-case namespace. Three legacy object
 constructors have been removed from both public Python and MATLAB APIs because

@@ -11,6 +11,7 @@ arguments
 end
 
 persistent cachedInfo cachedPython
+radia.internal.pythonProcessPath("capture");
 if ~options.Force && ~isempty(cachedInfo) && ...
         cachedPython == options.PythonExecutable && ...
         (~options.RequireMex || cachedInfo.mex_available) && ...
@@ -63,7 +64,7 @@ end
  mexAvailable = exist("radia_mex", "file") == 3;
 if options.RequireMex && ~mexAvailable
     error("radia:setup:MissingMex", ...
-        "radia_mex is not built. Configure CMake with RADIA_BUILD_MATLAB_MEX=ON.");
+        "radia_mex is not built. Run Build.ps1 -MatlabMexOnly or configure CMake with RADIA_BUILD_MATLAB_MEX=ON.");
 end
 
 info = struct( ...
