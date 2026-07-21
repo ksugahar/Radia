@@ -2,6 +2,12 @@ function tests = test_simulink_workflow
 tests = functiontests(localfunctions);
 end
 
+function setupOnce(~)
+testDir = fileparts(mfilename("fullpath"));
+repoRoot = fileparts(fileparts(testDir));
+addpath(fullfile(repoRoot, "matlab"));
+end
+
 function testIHPlantMatchesEnergyAndCoolingContract(testCase)
 plant = radia.simulink.makeIHPlant( ...
     HeatCapacity_J_per_K=10, ...
@@ -85,6 +91,13 @@ for includePID = [false, true]
         IncludePID=includePID, Save=false, Open=false);
     set_param(modelName, "SimulationCommand", "update");
     verifyTrue(testCase, bdIsLoaded(modelName));
+    if includePID
+        delayPath = modelName + "/TemperatureFeedbackDelay";
+        verifyEqual(testCase, string(get_param(delayPath, "BlockType")), ...
+            "UnitDelay");
+        verifyEqual(testCase, str2double(get_param(delayPath, "InitialCondition")), ...
+            plant.x0(1), "AbsTol", eps(plant.x0(1)));
+    end
     clear cleanup
     closeIfLoaded(modelName);
 end

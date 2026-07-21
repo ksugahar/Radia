@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 
 from radia_mcp.matlab import (
     matlab_cad_topology_build,
@@ -15,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] >= 183
+    assert contract["command_count"] == 311
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 11
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -31,10 +32,14 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["pybind_public_count"] == 94
     assert contract["pybind_covered_count"] == 94
     assert contract["pybind_missing"] == []
-    assert contract["pybind_internal_numerical_count"] == 20
+    assert contract["pybind_internal_numerical_count"] == 27
     assert contract["pybind_internal_missing"] == []
     assert contract["pybind_internal_unclassified"] == []
-    assert contract["pybind_class_surface_count"] >= 100
+    assert contract["command_groups"]["acoustic"] == 7
+    assert "acoustic.elastic_sphere" in contract["command_names"]
+    assert contract["command_groups"]["axifem"] == 1
+    assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
+    assert contract["pybind_class_surface_count"] == 111
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
     assert contract["pybind_class_missing_commands"] == []
     assert contract["pybind_class_unmapped"] == []
@@ -48,6 +53,15 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "radia.ngsolve.matrix_dump" in contract["ngsolve_boundary"]["canonical_matlab_names"]
     assert contract["verified_contract"]["python_numerical_parity_gate"] == (
         "runtests('tests/matlab/test_radia_ngsolve_parity.m')"
+    )
+    assert contract["verified_contract"]["acoustic_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_acoustic_mex.m')"
+    )
+    assert contract["verified_contract"]["axifem_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_axifem_mex.m')"
+    )
+    assert contract["verified_contract"]["hcurl_topology_python_mex_parity_gate"] == (
+        "runtests('tests/matlab/test_hcurl_topology_optimization.m')"
     )
     assert contract["verified_contract"]["topology_two_level_gate"] == (
         "runtests('tests/matlab/test_topology_optimization.m')"
@@ -86,7 +100,32 @@ def test_optuna_simulink_contract_is_table_backed():
     hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
     assert hcurl["status"] == "native-mex-ready"
     assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
-    assert "hcurl.topopt.multifrequency_joule" in hcurl["mex_commands"]
+    assert {
+        "hcurl.topopt.operator.*",
+        "hcurl.topopt.resistance_shape_tangents",
+        "hcurl.topopt.cell_curl_grams",
+        "hcurl.topopt.multifrequency_joule",
+        "hcurl.topopt.activation_multifrequency_joule",
+    }.issubset(hcurl["mex_commands"])
+
+
+def test_root_readme_publishes_native_topology_mex_parity():
+    root = Path(__file__).resolve().parents[3]
+    readme = " ".join((root / "README.md").read_text(encoding="utf-8").split())
+    assert "HCurl-based reduced and topology workflows" in readme
+    assert "HCurl multifrequency topology gradients" in readme
+
+    matlab_readme = " ".join(
+        (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
+    )
+    assert "111 stateful class members" in matlab_readme
+    assert "All 232 entries are covered by the current 311-command gateway" in matlab_readme
+
+    parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
+        encoding="utf-8"
+    )
+    assert "| Stateful pybind11 class surface | 111 / 111 covered |" in parity_doc
+    assert "| MEX gateway commands | 311 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():

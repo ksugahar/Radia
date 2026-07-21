@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import gc
+import os
 from pathlib import Path
 import sys
+
+# This helper is a deterministic reference generator, not a throughput test.
+# Keep tiny HACApK/MKL work single-threaded so native cleanup is complete before
+# the short-lived Python process exits under MATLAB's system() environment.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 import numpy as np
 from scipy.io import savemat
@@ -210,6 +218,8 @@ def build_reference():
                       for key, value in _case_arrays(shape_result).items()})
     reference.update({f"python_activation_{key}": value
                       for key, value in _case_arrays(activation_result).items()})
+    del activation_result, shape_result, operator, gram
+    gc.collect()
     return reference
 
 
@@ -218,7 +228,10 @@ def main():
         raise SystemExit("usage: hcurl_topology_python_reference.py OUTPUT.mat")
     output = Path(sys.argv[1]).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    savemat(output, build_reference(), do_compression=False, oned_as="column")
+    reference = build_reference()
+    savemat(output, reference, do_compression=False, oned_as="column")
+    del reference
+    gc.collect()
 
 
 if __name__ == "__main__":
