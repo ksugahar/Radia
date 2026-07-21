@@ -39,7 +39,7 @@ launcherCommandPath = fullfile(runDirectory, "launcher_command.txt");
 writeTextFile(launcherCommandPath, command + newline);
 startedAt = utcTimestamp();
 timer = tic;
-[processStatus, processOutput] = system(command);
+[processStatus, processOutput] = radia.internal.runPythonProcess(command);
 elapsed_s = toc(timer);
 
 resultPath = fullfile(runDirectory, "result.json");

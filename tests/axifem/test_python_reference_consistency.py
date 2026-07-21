@@ -177,6 +177,41 @@ def test_q1_quad_cpp_vs_python(ra, rb, za, zb, label):
         err_msg=f"M spectrum mismatch ({label})")
 
 
+@pytest.mark.parametrize(
+    "ra,rb,za,zb",
+    [
+        (1.0e-3, 2.0e-3, -0.5e-3, 0.5e-3),
+        (0.0, 1.0e-3, 0.0, 1.0e-3),
+    ],
+)
+def test_q1_native_array_api_matches_independent_python_reference(
+        ra, rb, za, zb):
+    """The adapter-free array API preserves the validated Q1 formulas."""
+    axifem = pytest.importorskip("radia.axifem")
+    mu0 = 4 * pi * 1e-7
+    sigma = 5.8e7
+    actual = axifem.q1_magnetic_element_matrices(
+        ra, rb, za, zb, mu0, sigma)
+    expected_k, expected_m = _python_q1_quad_matrices(
+        ra, rb, za, zb, mu0, sigma)
+
+    np.testing.assert_allclose(
+        np.asarray(actual["stiffness"]), expected_k,
+        rtol=2e-12, atol=max(1e-12, 2e-12 * np.max(np.abs(expected_k))))
+    np.testing.assert_allclose(
+        np.asarray(actual["sigma_mass"]), expected_m,
+        rtol=2e-12, atol=max(1e-15, 2e-12 * np.max(np.abs(expected_m))))
+    assert actual["backend"] == "native-pybind"
+    assert actual["node_order"] == "(ra,za),(rb,za),(rb,zb),(ra,zb)"
+
+
+def test_q1_native_array_api_rejects_invalid_geometry():
+    axifem = pytest.importorskip("radia.axifem")
+    with pytest.raises(ValueError, match="0 <= ra < rb"):
+        axifem.q1_magnetic_element_matrices(
+            2.0e-3, 1.0e-3, 0.0, 1.0e-3, 4 * pi * 1e-7, 5.8e7)
+
+
 def test_python_ref_self_consistency_p1_triangle():
     """The pure-Python P1 triangle prototype is loaded from
     _reference_python/axifem_core.py and its element_matrices()

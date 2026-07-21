@@ -125,6 +125,7 @@ endif()
 set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/lib")
 set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
+set(ACOUSTIC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/acoustic")
 set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 # FFTW directory removed - using MKL DFTI via fftw.h compatibility layer
 
@@ -239,6 +240,12 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_evrs_tmethod.cpp          # EVRS/T-method algebra kernel (T --curl--> J, reduced VIM/CLN projection)
 	${CORE_DIR}/rad_hybrid_vim_schur.cpp      # Complex Schur/SIBC helper kernels for hybrid VIM / mixed Galerkin reduction
 	${CORE_DIR}/rad_motor_rom_c.cpp           # Angle-periodic motor ROM C ABI
+)
+
+# Acoustic application kernels are deliberately separate from Radia's
+# Laplace-only MQS core. The same source is linked into pybind11 and MEX.
+set(RADIA_ACOUSTIC_SOURCES
+	${ACOUSTIC_DIR}/rad_acoustic_analytic.cpp
 )
 
 # Platform-neutral C ABI for Simulink S-functions, Modelica, and FMI wrappers.
@@ -567,6 +574,7 @@ set(RADIA_PYBIND_SOURCES
 
 pybind11_add_module(_radia_pybind
 	${RADIA_CORE_SOURCES}
+	${RADIA_ACOUSTIC_SOURCES}
 
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
@@ -580,6 +588,7 @@ pybind11_add_module(_radia_pybind
 target_include_directories(_radia_pybind PRIVATE
 	${CORE_DIR}
 	${LIB_DIR}
+	${ACOUSTIC_DIR}
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/HACApK
@@ -679,6 +688,8 @@ if(RADIA_BUILD_MATLAB_MEX)
 			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
 			${CORE_DIR}/rad_cln.cpp
 			${RADIA_CORE_SOURCES}
+			${RADIA_ACOUSTIC_SOURCES}
+			${EXT_DIR}/axifem/axi_henrotte_numeric.cpp
 			${EXT_DIR}/auxparse/auxparse.cpp
 			${EXT_DIR}/genmath/gmfft.cpp
 			${EXT_DIR}/genmath/gmtrans.cpp
@@ -691,6 +702,8 @@ if(RADIA_BUILD_MATLAB_MEX)
 	target_include_directories(radia_mex PRIVATE
 		${CORE_DIR}
 		${LIB_DIR}
+		${ACOUSTIC_DIR}
+		${EXT_DIR}/axifem
 		${EXT_DIR}/auxparse
 		${EXT_DIR}/genmath
 		${EXT_DIR}/HACApK
@@ -855,6 +868,7 @@ add_ngsolve_python_module(axifem
 	${AXIFEM_DIR}/axi_henrotte_fe.cpp
 	${AXIFEM_DIR}/axi_henrotte_fespace.cpp
 	${AXIFEM_DIR}/axi_henrotte_integrators.cpp
+	${AXIFEM_DIR}/axi_henrotte_numeric.cpp
 )
 
 target_include_directories(axifem PRIVATE

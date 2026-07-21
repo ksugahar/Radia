@@ -12,9 +12,16 @@ testCase.TestData.MeshPath=writeUnitTetra();
 end
 
 function teardownOnce(testCase)
-rmpath(fullfile(testCase.TestData.Root,"matlab"));
-if isfile(testCase.TestData.MeshPath), delete(testCase.TestData.MeshPath); end
-if isfile(testCase.TestData.ReferencePath), delete(testCase.TestData.ReferencePath); end
+if isfield(testCase.TestData,"Root")
+    rmpath(fullfile(testCase.TestData.Root,"matlab"));
+end
+if isfield(testCase.TestData,"MeshPath") && isfile(testCase.TestData.MeshPath)
+    delete(testCase.TestData.MeshPath);
+end
+if isfield(testCase.TestData,"ReferencePath") && ...
+        isfile(testCase.TestData.ReferencePath)
+    delete(testCase.TestData.ReferencePath);
+end
 end
 
 function testNativeOperatorMatchesPythonReference(testCase)
@@ -272,7 +279,7 @@ helper=fullfile(root,"tests","matlab", ...
     "hcurl_topology_python_reference.py");
 command=quoteCommandArgument(pythonExecutable)+" "+ ...
     quoteCommandArgument(helper)+" "+quoteCommandArgument(path);
-[status,output]=system(command);
+[status,output]=radia.internal.runPythonProcess(command);
 if status~=0
     error("radia:test:PythonReference", ...
         "Python HCurl topology reference failed (%d): %s",status,output);

@@ -119,6 +119,13 @@ def _pybind_class_surface():
 
 
 _PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
+    "_AcousticSoftSphere": ("acoustic.soft_sphere",),
+    "_AcousticRigidSphere": ("acoustic.rigid_sphere",),
+    "_AcousticFluidSphere": ("acoustic.fluid_sphere",),
+    "_AcousticElasticSphere": ("acoustic.elastic_sphere",),
+    "_AcousticSoftSphereComplexK": ("acoustic.soft_sphere_complex_k",),
+    "_AcousticBDFDelta": ("acoustic.bdf_delta",),
+    "_AcousticCQGrid": ("acoustic.cq_grid",),
     "_EVRSTMethodAlgebra": ("evrs.tmethod",),
     "_HybridVIMSchurComplement": ("hybrid_vim.schur",),
     "_HybridVIMSolve": ("hybrid_vim.solve",),
@@ -449,15 +456,18 @@ def matlab_radia_mex_contract(topic="all"):
         "verified_contract": {
             "matlab_gate": "runtests('tests/matlab')",
             "python_numerical_parity_gate": "runtests('tests/matlab/test_radia_ngsolve_parity.m')",
+            "acoustic_python_mex_parity_gate": "runtests('tests/matlab/test_acoustic_mex.m')",
+            "axifem_python_mex_parity_gate": "runtests('tests/matlab/test_axifem_mex.m')",
+            "hcurl_topology_python_mex_parity_gate": "runtests('tests/matlab/test_hcurl_topology_optimization.m')",
             "topology_two_level_gate": "runtests('tests/matlab/test_topology_optimization.m')",
             "runtime_probe": "radia.quickCheck()",
-            "native_build": "cmake --build build-msvc --target radia_mex --config Release",
+            "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
         },
         "limitations": [
             "Python object identity is not shared with MATLAB; handles and numeric/struct snapshots are the boundary.",
             "ObjMltExtPgn, ObjMltExtRtg, and ObjMltExtTri were deleted from Python, MATLAB, and the legacy C ABI; no compatibility shims remain.",
             "Mesh-backed high-order NGSolve spaces remain NGSolve-owned; MATLAB receives assembled data or diagnostics. The native HCurl CLN builder now projects M, curl-curl, and ports in C++ and returns a local diffusion model, but it does not replace topology-aware VIM/BEM/SIBC assembly.",
-            "The command list is not a claim that every Python convenience module has a one-to-one MATLAB class.",
+            "Python convenience modules are tracked separately by matlab/python_api_parity_manifest.json; native MEX coverage alone is not module-level parity.",
             "MATLAB Optuna compatibility follows the ask/tell and define-by-run workflow; sampler streams and optimizer internals are not bit-for-bit Python Optuna reproductions.",
             "The native MEX target does not embed or launch Python; Python callback objects are rejected at the MEX boundary and numeric/handle equivalents are used instead. Full Python-DLL independence requires an NGSolve/Netgen build without Python support.",
         ],
