@@ -5,6 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.21 - Acoustic/axifem MEX parity and MATLAB fallback hardening
+
+Released 2026-07-21.
+
+- Moved acoustic sphere references and CQ primitives onto one C++ kernel shared
+  by pybind11 and MEX, with BDF1/BDF2 and Python/MATLAB equivalence gates.
+- Added the first native axisymmetric Henrotte slice: shared Q1 stiffness and
+  conductivity-mass element matrices for NGSolve BFI, pybind11, and MEX.
+- Added a checked module-level Python-to-MATLAB parity manifest and explicit
+  Python fallbacks for high-level capabilities that do not yet have a stable
+  native array or handle boundary.
+- Isolated child Python processes from MATLAB/MEX DLL-path mutation, preventing
+  repeated topology and application runs from inheriting an unsafe DLL order.
+- Hardened the IH Simulink block layout and feedback delay while preserving the
+  temporary notebook comparison surface.
+
 ## 4.95.20 - Simulink applications and native NGSolve MATLAB parity
 
 Released 2026-07-21.
