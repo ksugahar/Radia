@@ -7,6 +7,16 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.17] - 2026-07-21
+
+- Published the acoustic, axifem, and HCurl-topology Python/MEX equivalence
+  gates in the MATLAB executable contract and locked the documented MEX
+  inventory to 311 commands and 232 covered pybind entries.
+- Strengthened the minimal-dependency acoustic server test across BDF1 and
+  BDF2 while explicitly proving that neither NumPy nor Radia is imported.
+- Added the checked Python-to-MATLAB capability manifest and native-promotion
+  backlog to the MCP-visible MATLAB workflow guidance.
+
 ## [1.4.16] - 2026-07-21
 
 - Added the Radia Simulink application-library contract and synchronized MCP
