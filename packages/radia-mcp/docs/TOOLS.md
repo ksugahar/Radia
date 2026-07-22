@@ -1216,7 +1216,7 @@ Module: `radia_mcp.literature_index.server`
 
 ## `mcp-server-document-meta`
 
-_Cross-cutting document/repo helpers: deadline, version diff, templates, lint-all, result-saving notebook audits, examples->docs/validation_test promotion audits, and root-level panels migration impact checks._
+_Cross-cutting document/repo helpers: deadline, version diff, templates, lint-all, result-saving notebook/WebGUI audits, examples->docs/validation_test promotion audits, and root-level panels migration impact checks._
 
 Module: `radia_mcp.document_meta.server`
 
