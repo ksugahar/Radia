@@ -4,9 +4,8 @@ APPLICATION_BLOCK_REVIEW = r"""
 # Radia application interface review
 
 Production human interfaces are masked blocks in
-`matlab/radia_simulink_library.slx`. EM, PCB, Motor, and Stream Function
-notebook workbenches are removed. IH alone temporarily keeps its notebook for
-the Simulink comparison. Desktop PySide analysis windows remain retired.
+`matlab/radia_simulink_library.slx`. Notebook workbenches are removed for every
+application, including IH. Desktop PySide analysis windows remain retired.
 
 Review these files together:
 
@@ -30,20 +29,25 @@ Checks:
    explicit sample-time semantics.
 4. Python is launched only on an explicit rising edge, never every time step.
 5. The block delegates to the tested API/CLI and contains no solver duplicate.
-6. `command.txt`, `run.log`, `solver_result.json`, and versioned `result.json`
+6. Every solver-bound `.vol` passes `check-vol` after export and before solver
+   initialization. Production modes use a strict versioned label contract and
+   retain the `cubit-mesh-export.vol-check.v1` report. Material constants stay
+   in DesignSpec/configuration; no checker guesses them from region names.
+7. `command.txt`, `run.log`, `solver_result.json`, and versioned `result.json`
    survive success, timeout, invalid config, dependency failure, and solver
-   failure.
-7. The block sample matches the same headless golden band.
-8. MEX/ROM is not promoted merely because it compiles: require parity, error
+   failure. A spatial solve also leaves a checked GMSH `.msh v4.1` artifact in
+   the run directory and indexes it from `result.json`.
+8. The block sample matches the same headless golden band.
+9. MEX/ROM is not promoted merely because it compiles: require parity, error
    propagation, handle lifecycle, and long-run stability.
-9. No non-IH `*_notebook.py` or packaged workbench is reintroduced.
-10. Cubit's embedded PySide6 remains isolated and protected.
+10. No `*_notebook.py` adapter or packaged workbench is reintroduced.
+11. Cubit's embedded PySide6 remains isolated and protected.
 
 Run:
 
 ```powershell
 python -m pytest tests/test_simulink_application.py -q
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
+python -m pytest tests/test_application_interface_manifest.py -q
 matlab -batch "addpath('matlab'); r=runtests('tests/matlab/test_simulink_workflow.m'); assert(all([r.Passed]))"
 ```
 """
@@ -61,11 +65,14 @@ but the construction target is now a masked Simulink block.
 3. Implement `calc_<app>.py` and `<App>DesignSpec`; golden-lock every supported
    backend.
 4. Add a result-bearing `docs/<topic>/*.ipynb` only for explanation and saved
-   results. Do not add widgets or `CommandWorkbench`.
+   results. Published CAE examples include saved WebGUI scenes. Field scenes
+   use `Draw(field, mesh, name=..., ...)` with explicit display arguments; do
+   not add control widgets or `CommandWorkbench`.
 5. Add the application to `radia.simulink.buildLibrary` with a masked
    `radia_application_sfun` block.
 6. Use `radia.simulink.application` for the initial explicit-trigger Python
-   backend and standard artifacts.
+   backend and standard artifacts. Spatial modes expose `--msh-output`; the
+   runner redirects it to a checked GMSH `.msh v4.1` run artifact.
 7. Add Python and MATLAB tests for mask wiring, port types, model update,
    execution, timeout, missing dependency, and failure provenance.
 8. Regenerate `matlab/radia_simulink_library.slx` from the builder.
@@ -79,9 +86,7 @@ MEX is optional. Keep the Python backend until independent tests establish
 numerical parity, correct errors, native-handle lifecycle, and long-run
 stability. The block mask and ports remain unchanged when a backend is promoted.
 
-IH presentation notebooks may continue during the comparison, but they are not
-a template for new application GUIs. The intended IH direction is Simulink
-after its operational acceptance gate.
+IH uses the same Simulink production contract as every other application.
 """
 
 

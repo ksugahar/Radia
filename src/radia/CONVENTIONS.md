@@ -1,10 +1,8 @@
 # Radia Application Interface Conventions
 
 The canonical human-facing Radia applications are masked blocks in
-`matlab/radia_simulink_library.slx`. EM, PCB, Motor, and Stream Function have
-no notebook workbench. IH temporarily keeps
-`src/radia/panels/notebooks/radia_ih.ipynb` beside its Simulink block so the two
-operating styles can be compared over the same `IHDesignSpec` and headless CLI.
+`matlab/radia_simulink_library.slx`. No application, including IH, has a
+notebook workbench.
 
 Python and MCP are the first-class AI interfaces. Result-bearing notebooks
 under `docs/` explain and reproduce methods; they are not production GUIs.
@@ -23,6 +21,15 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
 - Every run leaves `launcher_command.txt`, `run.log`, and versioned
   `result.json` provenance. Solver command/output artifacts are added once the
   run reaches those stages.
+- Every solver-bound `.vol` is checked after export and before application
+  initialization. Production application/mode meshes use a versioned strict
+  label contract, and the `cubit-mesh-export.vol-check.v1` report stays in the
+  run artifact directory. Mesh labels identify regions; material constants are
+  validated by the DesignSpec/configuration and are never guessed from names.
+- A run that computes a spatial field writes a runner-owned GMSH `.msh v4.1`
+  post-processing artifact in its run directory and records it in
+  `result.json`. A scalar/circuit-only mode records GMSH as not applicable; it
+  does not create a dummy field.
 
 ## Simulink Library
 
@@ -48,7 +55,7 @@ Canonical `.jou`, `.vol`, `.step`, BH, and related assets live under
 not by a GUI implementation.
 
 ```text
-Induction Heating block / IH comparison notebook
+Induction Heating block
   -> ih_bem_sample.jou
   -> ih_peec_bem_coarse.jou
   -> ih_fem_kelvin_skin_fine.jou
@@ -67,7 +74,9 @@ alternate interface implementations.
 The Cubit Export Mesh toolbar remains a Cubit-owned PySide6 surface. Normal
 Radia Python and Simulink must not load Cubit's private Python runtime. Cubit
 exports self-contained `.vol`/`.sol` assets; applications consume those files
-in separate processes.
+in separate processes. `check-vol` is the boundary gate: it checks NGSolve
+loading, curved-map Jacobians, labels and label relations, then adds CAD
+volume/area/total-edge and mesh-metadata comparisons when `.vol.json` exists.
 
 ## Mesh Evaluation
 
@@ -81,10 +90,15 @@ action or application block. Cubit batch export produces the files and
 
 ## Visualization
 
-- Human documentation notebooks use `netgen.webgui` when an interactive scene
-  teaches the method.
-- Simulink/headless/AI workflows use durable GMSH `.msh v4.1` and JSON
-  artifacts.
+- Every repository-published CAE example is an executed `docs/**/*.ipynb` with
+  saved WebGUI output. Use `ngsolve.webgui.Draw` for meshes and computed fields,
+  and `netgen.webgui.Draw` for pre-mesh CAD geometry. A field view uses an
+  explicit call such as `Draw(field, mesh, name="B_magnitude", ...)`, including
+  the relevant display arguments. A static image or source excerpt does not
+  replace the interactive scene.
+- Simulink field-producing workflows use durable, checked GMSH `.msh v4.1`
+  and JSON artifacts. GMSH is the post-processing target, not the mesh
+  generator or the NGSolve interchange format.
 - Application operation must not depend on a transient desktop viewer state.
 
 ## Qt Boundary

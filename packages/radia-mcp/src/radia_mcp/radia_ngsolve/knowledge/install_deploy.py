@@ -224,7 +224,7 @@ hibino in the version/hash drift table.
 The old `gui` extra was used by standalone PySide6 desktop panels.  It is no
 longer part of the production deploy recipe. The canonical human surface is
 the Radia Simulink library; normal Radia Python on LAB / 100号機 / mdx / hibino
-should not install PySide6. IH temporarily keeps its notebook comparison path.
+should not install PySide6. Notebook workbenches are retired for all applications.
 
 Production install:
 
@@ -238,7 +238,7 @@ Application interface health gates:
 
 ```powershell
 python -m pytest tests/test_simulink_application.py -q
-python -m pytest validation_test/panels/test_notebook_workbench.py -q  # IH only
+python -m pytest tests/test_application_interface_manifest.py -q
 ```
 
 Boundary check:

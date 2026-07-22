@@ -22,9 +22,20 @@ class EchoDesignSpec:
         code = (
             "import json,sys; "
             "p=sys.argv[sys.argv.index('--output')+1]; "
-            f"open(p,'w',encoding='utf-8').write(json.dumps({{'metric': {self.value}}}))"
+            "m=sys.argv[sys.argv.index('--msh-output')+1]; "
+            f"open(p,'w',encoding='utf-8').write(json.dumps({{'metric': {self.value}}})); "
+            "open(m,'w',encoding='ascii',newline='\\n').write("
+            "'$MeshFormat\\n4.1 0 8\\n$EndMeshFormat\\n')"
         )
-        return [python or sys.executable, "-c", code, "--output", "ignored.json"]
+        return [
+            python or sys.executable,
+            "-c",
+            code,
+            "--msh-output",
+            "ignored.msh",
+            "--output",
+            "ignored.json",
+        ]
 
 
 @pytest.fixture
@@ -56,6 +67,16 @@ def test_application_runner_writes_stable_artifacts(tmp_path: Path, echo_applica
     assert (tmp_path / "run" / "run.log").is_file()
     assert (tmp_path / "run" / "command.txt").is_file()
     assert (tmp_path / "run" / "solver_result.json").is_file()
+    gmsh_path = (tmp_path / "run" / "echo_fields.msh").resolve()
+    assert gmsh_path.is_file()
+    assert result["artifacts"] == {
+        "gmsh_policy": "required",
+        "gmsh_format": "msh-v4.1",
+        "gmsh_primary": str(gmsh_path),
+        "gmsh": [str(gmsh_path)],
+    }
+    command = (tmp_path / "run" / "command.txt").read_text(encoding="utf-8")
+    assert str(gmsh_path) in command
     on_disk = json.loads((tmp_path / "run" / "result.json").read_text(encoding="utf-8"))
     assert on_disk == payload
 
@@ -63,13 +84,30 @@ def test_application_runner_writes_stable_artifacts(tmp_path: Path, echo_applica
 def test_application_runner_records_missing_inputs(tmp_path: Path, echo_application):
     config = tmp_path / "config.json"
     config.write_text("{}", encoding="utf-8")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "command.txt").write_text("stale command\n", encoding="utf-8")
+    (run_dir / "solver_result.json").write_text(
+        '{"metric": 99}\n', encoding="utf-8"
+    )
+    (run_dir / "echo_fields.msh").write_text(
+        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n", encoding="ascii"
+    )
+    (run_dir / "old_auxiliary.msh").write_text(
+        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n", encoding="ascii"
+    )
 
-    payload = app.run_application("echo", config, tmp_path / "run", timeout_s=5)
+    payload = app.run_application("echo", config, run_dir, timeout_s=5)
 
     result = payload["radia_result"]
     assert result["status"] == "failed"
     assert "Missing required inputs: Input file" in result["error"]
-    assert json.loads((tmp_path / "run" / "result.json").read_text())["radia_result"][
+    assert result["artifacts"]["gmsh"] == []
+    assert not (run_dir / "command.txt").exists()
+    assert not (run_dir / "solver_result.json").exists()
+    assert not (run_dir / "echo_fields.msh").exists()
+    assert not (run_dir / "old_auxiliary.msh").exists()
+    assert json.loads((run_dir / "result.json").read_text())["radia_result"][
         "status"
     ] == "failed"
 

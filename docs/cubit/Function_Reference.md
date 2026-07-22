@@ -167,13 +167,22 @@ linear mesh arrays and geometry callbacks.
 ### check_consistency (cubit-mesh-export package)
 
 ```bash
-check-vol model.vol                         # CLI
-check-vol model.vol --json model.vol.json   # With companion JSON
+check-vol model.vol                         # Full .vol gate; sidecar optional
+check-vol model.vol --strict-labels         # Enforce canonical label names
+check-vol model.vol --contract labels.json  # Application/mode label contract
+check-vol model.vol --report-json run/vol_check.json
 ```
 
 ```python
-from cubit_mesh_export.check import check_consistency  # API
+from cubit_mesh_export.check import check_consistency, check_label_contract
 ```
+
+The checker runs after export and before solver/Simulink initialization. It
+always validates mesh loading, label relations, and the curved NGSolve mapping.
+When `model.vol.json` exists it is auto-discovered for CAD volume/area/length
+and mesh metadata comparison; `--json` makes an explicit sidecar mandatory.
+Material constants remain part of the application DesignSpec/configuration and
+are not inferred from `.vol` label strings.
 
 ---
 

@@ -1,9 +1,8 @@
 """Shared pytest fixtures for the Radia application validation layer.
 
-Production human interfaces are Simulink blocks. IH alone temporarily keeps a
-``DesignSpec``/``CommandWorkbench`` comparison surface. The old desktop
-``radia_*.py`` PySide6 panels remain retired; Cubit's embedded toolbar is a
-separate surface.
+Production human interfaces are Simulink blocks. Notebook workbenches and the
+old desktop ``radia_*.py`` PySide6 panels remain retired; Cubit's embedded
+toolbar is a separate surface.
 """
 
 from __future__ import annotations
@@ -70,7 +69,7 @@ def qapp():
 @pytest.fixture
 def ih_panel(qapp):
     """Retired desktop IH panel fixture."""
-    pytest.skip("retired desktop IH panel was removed; use the Simulink block or IHWorkbench")
+    pytest.skip("retired desktop IH panel was removed; use the Simulink block")
 
 
 @pytest.fixture
@@ -82,4 +81,4 @@ def sf_panel(qapp):
 @pytest.fixture
 def ih_window(qapp, tmp_path):
     """Retired desktop IH window fixture."""
-    pytest.skip("retired desktop IH window was removed; use IHWorkbench")
+    pytest.skip("retired desktop IH window was removed; use the Simulink block")

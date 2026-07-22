@@ -6,6 +6,25 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.4 - Production `.vol` preflight
+
+Released 2026-07-22.
+
+- Finish the standalone `check-vol` gate: a `.vol` now works without a CAD
+  sidecar, while an available `.vol.json` is auto-discovered for volume, area,
+  total edge-length, element-count, point-count, and curve-order comparisons.
+- Add versioned application label contracts, strict canonical-name checks,
+  generated-label and case-collision detection, Kelvin/source/symmetry relation
+  checks, JSON reports, and stable CLI exit codes.
+- Align the CLI and Python API aliases documented by the package (`--quality`,
+  `--tet-only`, `conductors=`, and `tet_only=`).
+- Treat a consistently negative NGSolve element orientation as valid and use
+  `abs(det(J))` for scaled quality; fail only singular maps or sign changes
+  within an element. This removes false inversion reports on Cubit `.vol`
+  tetrahedra while retaining folded high-order-map detection.
+- Sample affine order-1 mappings once per element (their Jacobian is constant)
+  while retaining the high-order integration rule for curved elements.
+
 ## 0.14.3 - Simulink application handoff documentation
 
 Released 2026-07-21.

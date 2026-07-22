@@ -3,15 +3,11 @@
 STANDALONE_PANELS = r"""
 # Radia application interfaces after the Simulink migration
 
-Standalone PySide analysis windows are retired. EM, PCB, Motor, and Stream
-Function notebook workbenches are also retired. The final human operating
+Standalone PySide analysis windows and all notebook workbenches are retired,
+including IH. The final human operating
 surface is a masked block in the single Radia Simulink library. Python/MCP is
-the AI surface; `docs/**/*.ipynb` is result-bearing documentation.
-
-IH is the temporary comparison exception: keep both the Induction Heating
-block and `radia_ih.ipynb` over the same `IHDesignSpec` and headless scripts.
-If the block passes numerical, artifact/recovery, and operational gates, an
-explicit policy decision may retire the IH notebook too.
+the AI surface; `docs/**/*.ipynb` is result-bearing documentation and the
+repository's example layer, with saved WebGUI scenes for published CAE examples.
 
 Topics: quick_start, four_panels, build_notebook_gui, cubit_panels_migration,
         vol_sources, vs_cubit, ih_methods, troubleshooting
@@ -57,15 +53,15 @@ matlab -batch "addpath('matlab'); r=runtests('tests/matlab/test_simulink_workflo
 
 The historical topic name is retained for MCP clients. Current surfaces:
 
-| Application | Simulink block | Shared DesignSpec | Notebook |
+| Application | Simulink block | Shared DesignSpec | Production notebook |
 |---|---|---|---|
 | Electromagnet | `Applications/Electromagnet` | `radia.em_design.EMDesignSpec` | none |
 | PCB/PEEC | `Applications/PCB PEEC` | `radia.pcb_design.PCBDesignSpec` | none |
 | Motor | `Applications/Motor` | `radia.motor_design.MotorDesignSpec` | none |
 | Stream Function | `Applications/Stream Function` | `radia.streamfunction_design.StreamFunctionDesignSpec` | none |
-| Induction Heating | `Applications/Induction Heating` | `radia.ih_design.IHDesignSpec` | temporary comparison only |
+| Induction Heating | `Applications/Induction Heating` | `radia.ih_design.IHDesignSpec` | none |
 
-Do not restore the deleted non-IH `*_notebook.py` adapters or packaged
+Do not restore deleted `*_notebook.py` adapters or packaged
 notebooks as compatibility aliases.
 
 ============================================================
@@ -109,7 +105,8 @@ the Radia Simulink library.
 Application blocks consume durable `.vol`, `.sol`, `.step`, `.msh`, `.inp`,
 and material/config files. Cubit is one producer, but operation must not depend
 on a transient viewer state. Human documentation may use `netgen.webgui`;
-automation and block runs use durable GMSH/JSON artifacts.
+published CAE examples use saved `ngsolve.webgui.Draw`/`netgen.webgui.Draw`
+scenes; automation and block runs use durable GMSH/JSON artifacts.
 
 ============================================================
 ## vs_cubit -- deploy boundary
@@ -128,15 +125,13 @@ application tests for that surface. Never delete or replace Cubit's bundled
 PySide6 because normal Radia does not depend on it.
 
 ============================================================
-## ih_methods -- temporary dual operation
+## ih_methods -- Induction Heating block
 ============================================================
 
-IH uses both `Applications/Induction Heating` and
-`src/radia/panels/notebooks/radia_ih.ipynb` during the comparison. Both map to
-`IHDesignSpec` and the same PEEC/BEM/FEM/thermal `calc_*.py` commands. Compare
-setup effort, failure recovery, result inspection, automation, and throughput
-on identical inputs. The intended direction is Simulink, but the notebook is
-retired only after the explicit acceptance gate.
+IH uses `Applications/Induction Heating`, mapped through `IHDesignSpec` to the
+same PEEC/BEM/FEM/thermal `calc_*.py` commands used by Python/MCP. Keep setup,
+failure recovery, result inspection, automation, and throughput evidence in
+the normal Simulink application tests and durable run artifacts.
 
 ============================================================
 ## troubleshooting -- common interface issues
@@ -150,7 +145,7 @@ retired only after the explicit acceptance gate.
 | Block attempts Python each step | Use the rising-edge application runner or a tested prebuilt MEX/ROM state. |
 | MEX compiles but behavior is uncertain | Keep the Python backend; do not promote MEX until parity/lifecycle/long-run gates pass. |
 | Cubit toolbar fails | Run Cubit plugin verification; do not alter Cubit's private PySide6 runtime. |
-| Old non-IH notebook path is missing | Expected after migration; use the corresponding Radia library block. |
+| Old notebook path is missing | Expected after migration; use the corresponding Radia library block. |
 """
 
 

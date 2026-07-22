@@ -1,13 +1,30 @@
 {
   "schema": "radia.application_interface_manifest.v2",
-  "generated_at_utc": "2026-07-20T00:00:00Z",
-  "policy": "The final human production interface is a masked block in the single Radia Simulink library. EM, PCB, Motor, and Stream Function notebook workbenches are retired. IH alone keeps its notebook workbench beside the Simulink block during an operational comparison; both delegate to the same IHDesignSpec and headless calc contract. Python and MCP remain the AI interface, docs notebooks remain result-bearing documentation, and the Cubit Export Mesh toolbar remains a Cubit-embedded surface.",
+  "generated_at_utc": "2026-07-22T00:00:00Z",
+  "policy": "The final human production interface is a masked block in the single Radia Simulink library. Notebook workbenches are retired for every application, including IH. Python and MCP remain the AI interface, executed docs notebooks with parameterized saved WebGUI scenes are the repository example and documentation layer, field-producing Simulink runs emit GMSH .msh v4.1 post-processing artifacts, and the Cubit Export Mesh toolbar remains a Cubit-embedded surface.",
   "library": {
     "artifact": "matlab/radia_simulink_library.slx",
     "builder": "radia.simulink.buildLibrary",
     "runner": "radia.simulink.application",
     "backend": "python-headless-cli",
-    "backend_policy": "MEX or ROM may replace a block backend only after numerical parity, error propagation, lifecycle, and long-run stability tests."
+    "backend_policy": "MEX or ROM may replace a block backend only after numerical parity, error propagation, lifecycle, and long-run stability tests.",
+    "spatial_artifact": {
+      "format": "GMSH .msh v4.1",
+      "location": "application run directory",
+      "required_when": "the selected mode computes a spatial field",
+      "scalar_only": "not-applicable",
+      "purpose": "visualization and post-processing only"
+    },
+    "mesh_preflight": {
+      "input_format": "Netgen .vol",
+      "checker": "check-vol",
+      "timing": "after mesh export and before solver initialization",
+      "label_contract_schema": "radia.vol-label-contract.v1",
+      "report_schema": "cubit-mesh-export.vol-check.v1",
+      "report_location": "application run directory",
+      "required_when": "the selected mode consumes one or more .vol meshes",
+      "material_constants": "validated by DesignSpec/configuration, never inferred from labels"
+    }
   },
   "applications": [
     {
@@ -60,11 +77,10 @@
     {
       "id": "radia-ih",
       "title": "Induction Heating",
-      "state": "active-dual-comparison",
+      "state": "active-simulink-block",
       "block": "radia_simulink_library/Applications/Induction Heating",
       "design": "radia.ih_design.IHDesignSpec",
-      "notebook": "src/radia/panels/notebooks/radia_ih.ipynb",
-      "adapter": "radia.ih_notebook.IHWorkbench",
+      "notebook": null,
       "headless": [
         "src/radia/panels/calc_inductance.py",
         "src/radia/panels/calc_fem_kelvin.py",
@@ -78,7 +94,7 @@
       "title": "Cubit Export Mesh",
       "state": "active-cubit-toolbar",
       "block": null,
-      "notebook": "src/radia/panels/notebooks/radia_export_menu.ipynb",
+      "notebook": null,
       "adapter": null,
       "headless": ["src/radia/panels/check_vol_consistency.py"]
     }

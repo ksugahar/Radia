@@ -496,11 +496,10 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 INDUCTION_HEATING_THERMAL = """
 # Transient Thermal Analysis for Induction Heating
 
-## Production path: IH Simulink block plus temporary notebook comparison
+## Production path: IH Simulink block
 
 Heat analysis is a **Method choice** in the Radia Simulink Induction Heating
-block and `IHDesignSpec`; the temporary comparison notebook exposes the same contract,
-alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
+block and `IHDesignSpec`, alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
 FEM-coilmesh methods.  Pick one of three Thermal Method choices
 (v4.63.0+):
 
@@ -1724,7 +1723,7 @@ implemented reconstruction.
 the extension when its prerequisites hold and records
 ``wp_loop_dof_skip_reason`` otherwise; ``on`` keeps fail-fast
 prerequisite checks.  The known-invalid ``off`` route is not selectable.
-The Simulink configuration and temporary notebook workbench expose this control.
+The Simulink configuration exposes this control.
 
 **Part 1 (DOMINANT, FIXED 2026-07-17): inconsistent surface winding.**
 The hole extractor's per-triangle "centroid-outward" flip is wrong on a
@@ -2035,8 +2034,7 @@ in examples/.
 
 ### Application interface
 
-`IHDesignSpec`, the Induction Heating Simulink block, and the temporary IH
-notebook comparison present the above through
+`IHDesignSpec` and the Induction Heating Simulink block present the above through
 settings sections (Method / Drive / Coil material / Coil geometry /
 Workpiece material / Workpiece impedance / Linear solver / Advanced).
 

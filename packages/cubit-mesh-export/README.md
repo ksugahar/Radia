@@ -251,18 +251,34 @@ to set anything by hand.
 ## Mesh consistency check (does NOT require Cubit)
 
 ```bash
-check-vol model.vol                          # basic check
-check-vol model.vol --json model.vol.json    # compare vs CAD values
-check-vol model.vol --quality                 # curved-map Jacobian gate
-check-vol model.vol --quality --tet-only --min-scaled-jacobian 0.05
-check-vol model.vol --quality --conductors copper,magnet \
+check-vol model.vol                          # labels + curved-map quality
+check-vol model.vol --strict-labels          # enforce canonical label names
+check-vol model.vol --contract ih_labels.json --strict-labels
+check-vol model.vol --json model.vol.json    # require this CAD reference
+check-vol model.vol --tet-only --min-scaled-jacobian 0.05
+check-vol model.vol --conductors copper,magnet \
   --sibc-boundaries conductor_air,conductor_exterior
+check-vol model.vol --format json --report-json run/vol_check.json
 ```
 
-```python
-from cubit_mesh_export.check import check_consistency, check_mesh_quality
+The sibling `model.vol.json` written by `export netgen` is auto-discovered when
+present. It is optional for a standalone `.vol`: mesh loading, label checks,
+and the curved NGSolve mapping gate still run without Cubit or CAD data. Passing
+`--json` makes that specific sidecar mandatory. Curved-map sampling is enabled
+by default; `--no-quality` is available only for a quick label/CAD inspection.
 
-results = check_consistency("model.vol", quality=True)
+```python
+from cubit_mesh_export.check import (
+    check_consistency,
+    check_label_contract,
+    check_mesh_quality,
+)
+
+results = check_consistency(
+    "model.vol",
+    contract="ih_labels.json",
+    strict_labels=True,
+)
 quality = check_mesh_quality(
     "model.vol",
     conductors=("copper", "magnet"),
@@ -271,13 +287,53 @@ quality = check_mesh_quality(
 )
 ```
 
+An application label contract is a versioned JSON object. `required` catches
+missing solver labels; optional `allowed` lists reject labels that do not belong
+to the selected application/mode.
+
+```json
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "radia-ih/fem-kelvin",
+  "strict_labels": true,
+  "required": {
+    "materials": ["coil", "air", "kelvin"],
+    "boundaries": ["source", "sink", "sibc", "kelvin_int", "kelvin_ext"],
+    "bbboundaries": ["GND"]
+  },
+  "allowed": {
+    "materials": ["coil", "air", "kelvin"],
+    "boundaries": [
+      "source", "sink", "sibc", "coil_surface", "air_seam",
+      "kelvin_int", "kelvin_ext"
+    ]
+  }
+}
+```
+
+Strict mode requires descriptive lower snake-case material/boundary names,
+while preserving Radia's `sym_bn=0_x` / `sym_ht=0_x` convention and the reserved
+`GND` point label. It rejects generated fallbacks such as `volume_1` and
+`Surface_7`, case-insensitive collisions, incomplete `source`/`sink` or
+`kelvin_int`/`kelvin_ext` pairs, invalid Kelvin anchors, and contradictory
+symmetry labels.
+
 The quality gate samples the actual curved NGSolve element mapping; it does not
-infer quality from straight corner nodes.  It checks physical and scaled
-Jacobians, geometry order, tetrahedron-only contracts, required labels, and
-material-aware face roles.  Only conductor-air or conductor-exterior faces may
+infer quality from straight corner nodes. A consistently positive or negative
+element orientation is valid, while a sign change inside one element fails;
+scaled quality uses `abs(det(J))`. It checks mapping magnitude, geometry order,
+tetrahedron-only contracts, required labels, and material-aware face roles.
+Only conductor-air or conductor-exterior faces may
 be classified as SIBC.  Conductor-insulator faces retain a trace role, while
 conductor-conductor faces retain the interface/loop-bridge role needed by the
 reduced HCurl cycle space.
+
+`check-vol` returns 0 for pass, 1 for a validation finding, and 2 for an input or
+configuration error. JSON reports use schema
+`cubit-mesh-export.vol-check.v1`. Run the checker after `.vol` export and before
+solver or Simulink initialization. Material constants are not inferred from
+mesh labels; the application's checked DesignSpec/configuration owns those
+values and validates them separately.
 
 ## Part of the Radia project
 

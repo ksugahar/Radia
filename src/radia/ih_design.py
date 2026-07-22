@@ -1,6 +1,6 @@
 """UI-neutral induction-heating design specification.
 
-The production Simulink block and temporary IH notebook comparison share this
+The production Simulink block, Python/MCP entry points, and validation use this
 design state and the same command-building rules. The module intentionally has
 no Qt/PySide dependency.
 """
@@ -338,7 +338,7 @@ class IHDesignSpec:
         """Build the headless calc command for the current design.
 
         All IH methods, including thermal modes, are represented here so the
-        Simulink block and temporary Jupyter comparison workbench share one
+        Simulink block, Python/MCP entry points, and validation share one
         command contract.
         """
 
