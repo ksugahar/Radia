@@ -83,7 +83,8 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "parsim" in contract["parallel_trials"]["simulink"]
     assert "parfeval" in contract["parallel_trials"]["ltspice"]
     assert "complex" in contract["ltspice_integrated_workflow"]["raw"]
-    assert len(contract["simulink_blocks"]) == 7
+    assert len(contract["simulink_blocks"]) == 8
+    assert "heat-density contract" in contract["simulink_blocks"][0]
     assert contract["team28"]["frequency_hz"] == 50
     assert contract["hcurl_eddy_cln"]["mex_kernel"] == "hybrid_vim.solve"
     assert contract["hcurl_eddy_cln"]["moving_family"].startswith("ExportHCurlEddyCLNFamilyJSON")
