@@ -1,30 +1,26 @@
 ---
 name: ipynb-gui-health
-description: Verify the temporary Radia IH notebook workbench used alongside the IH Simulink block. Use after changes to ih_notebook.py, ih_design.py, radia_ih.ipynb, notebook_workbench.py, or the IH dual-interface manifest. This is not the production gate for EM, PCB, Motor, or Stream Function; use simulink-app-health for those applications.
+description: Compatibility note for auditing result-bearing Radia docs notebooks and their saved parameterized WebGUI scenes. Notebook workbenches, including IH, are retired; use simulink-app-health for production applications.
 ---
 
-# IH Notebook Comparison Health
+# Docs Notebook WebGUI Health
 
-Only IH retains a notebook workbench, temporarily, so its operating quality
-can be compared with the IH Simulink block. EM, PCB, Motor, and Stream Function
-must not regain notebook production surfaces.
+No Radia application has a notebook production workbench. `docs/**/*.ipynb`
+is the public example, reproduction, and field-inspection layer only.
 
 ## Gates
 
 ```powershell
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
-python -m pytest tests/test_simulink_application.py -q
-python tools/audit_new_panel_contract.py
+python -m pytest packages/radia-mcp/tests/test_document_meta_notebook_audit.py -q
 ```
 
 Verify that:
 
-- `radia_ih.ipynb` delegates to `IHDesignSpec` and `IHWorkbench`.
-- The notebook and Simulink block reach the same validated headless CLI.
-- Runs retain timeout, cancellation, `run.log`, and structured result artifacts.
-- The interface manifest marks IH `active-dual-comparison`.
-- No EM, PCB, Motor, or Stream Function notebook/adapter exists.
+- the notebook is executed and has no saved error output;
+- its adjacent JSON has date/version metadata and the current notebook SHA;
+- public examples save WebGUI rich output;
+- a primary field uses `Draw(field, mesh, name=..., ...)` with explicit display
+  arguments and sets `metadata.radia.webgui_field_required=true`;
+- no notebook contains application control widgets or a workbench adapter.
 
-Use `simulink-app-health` for the five production blocks. Retire this skill
-when IH has met its documented Simulink migration gates and its notebook is
-removed.
+Use `simulink-app-health` for all five production blocks.

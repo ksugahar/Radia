@@ -13,5 +13,5 @@ export toolbar may use it. Never remove or alter that private runtime as part
 of Radia cleanup.
 
 Use `simulink-app-health` for the five application blocks,
-`ipynb-gui-health` only for IH's temporary notebook comparison, and
+`ipynb-gui-health` for result-bearing docs notebooks only, and
 `cubit-plugin-install --verify-only` plus `cubit-smoke-test` for Cubit.

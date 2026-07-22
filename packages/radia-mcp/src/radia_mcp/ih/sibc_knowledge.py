@@ -474,8 +474,8 @@ any user input.
   Dowell loops use per-panel R
 - `src/radia/esim_cell_problem.py::ESIMFiniteSlabSolver` --
   ``set_radius(R)`` and ``solve(H0, R_local=...)`` for fast per-panel R
-- `src/radia/ih_design.py` + `src/radia/panels/notebooks/radia_ih.ipynb`
-  -- notebook setting "Per-panel curvature: on/off"
+- `src/radia/ih_design.py` + the Induction Heating Simulink block
+  -- mask setting "Per-panel curvature: on/off"
 
 ### Result keys (added)
 
@@ -785,7 +785,7 @@ length will equal `esim_iterations` (one entry per outer Karl iter).
 - **Don't use linear SIBC at low frequency** for steel (< 10 kHz) — the
   field penetrates several mm and BH curve dominates. Use ESIM from the
   start; the converged solution differs by an order of magnitude in P_wp.
-- **BH file required for ESIM**: Simulink block / temporary IH notebook + calc scripts raise if
+- **BH file required for ESIM**: Simulink block and calc scripts raise if
   `--bh-file` is empty when `--impedance-model esim` is selected
   (pre-validation in `IHDesignSpec.build_command`).
 - **Karl iteration diverges with very high relax**: lower the relax flag

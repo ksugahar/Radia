@@ -158,6 +158,9 @@ cubit.cmd('sideset 2 name "neumann"')
 ```
 
 Surfaces without an explicit sideset get auto-generated names (`surface_N`).
+These fallback names are useful diagnostics only. Production meshes must name
+solver-facing sidesets explicitly; `check-vol --strict-labels` rejects
+`surface_N` / `Surface_N` and similar generated material names.
 
 ### Kelvin Auto-Detection
 
@@ -184,11 +187,17 @@ The `.vol.json` file contains CAD reference values for mesh quality validation:
 }
 ```
 
-Use `check-vol` CLI to validate mesh against these values:
+Run `check-vol` after export and before handing the mesh to a solver or
+Simulink block. The sibling sidecar is auto-discovered:
 
 ```bash
-check-vol model.vol --json model.vol.json
+check-vol model.vol --strict-labels --report-json run/vol_check.json
 ```
+
+Use a versioned `radia.vol-label-contract.v1` file with `--contract` for an
+application/mode's required and allowed materials, boundaries, BBND labels,
+and BBBND labels. `--json model.vol.json` is available when the exact sidecar
+must be mandatory rather than auto-discovered.
 
 ## DomainIn/DomainOut
 

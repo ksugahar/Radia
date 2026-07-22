@@ -13,6 +13,9 @@ description: Historical deploy notes. Current Radia deploy/release uses release-
 > symlink recipes in this file are historical only. Do not copy `.pyd`
 > files by hand, do not revive `.ccl`, and do not install PySide6 into
 > normal Radia Python.
+> All notebook workbench commands later in this historical file are retired
+> and invalid. Current application QA is Simulink-only; docs notebooks use
+> the separate saved-WebGUI audit.
 
 For current work, read `.agents/skills/release-qud/SKILL.md`, run
 `tools/release_qud.py`, and verify Cubit with `cubit-plugin-install
@@ -508,7 +511,7 @@ print(f'  radia.__file__ = {radia.__file__}')
 
 # Phase 2: mtime sanity
 for name in ['radia.bem_coupled_solver', 'radia.simulink.application',
-             'radia.ih_notebook', 'radia.bem_inductance']:
+             'radia.bem_inductance']:
     m = importlib.import_module(name)
     st = os.stat(m.__file__)
     print(f'  {name:<32} mtime={int(st.st_mtime)} size={st.st_size}')
@@ -521,12 +524,10 @@ assert 'CoefficientFunction' in src and 'LinearForm' in src, \
     'BEM coupled per-DOF f_back not loaded'
 print('  OK: BEM coupled per-DOF f_back is active')
 
-# Phase 6: Simulink application and IH comparison wiring
+# Phase 6: Simulink application wiring
 from radia.simulink.application import APPLICATIONS
-from radia.ih_notebook import IHWorkbench
 assert set(APPLICATIONS) == {'em', 'pcb', 'motor', 'streamfunction', 'ih'}
-assert hasattr(IHWorkbench, 'build_command') or hasattr(IHWorkbench, 'run_local')
-print('  OK: five Simulink applications + IH notebook comparison import')
+print('  OK: five Simulink applications')
 "
 ```
 
@@ -819,15 +820,16 @@ print('OK: all 3 packages have consistent pyproject.toml / __init__.py versions'
 **POLICY**: `src/radia/simulink/application.py`, `matlab/+radia/+simulink/`,
 `src/radia/*_design.py`, `src/radia/panels/calc_*.py`, or
 `application_interface_manifest.json` を編集したら、
-**`simulink-app-health`** を production gate として使う。IH notebook 関連を
-編集した場合だけ **`ipynb-gui-health`** も実行する。normal Radia Python に
-PySide6 を追加して旧 desktop panel を検証対象に戻してはいけない。
+**`simulink-app-health`** を production gate として使う。公開docs notebookを
+編集した場合は **`ipynb-gui-health`** も実行する。normal Radia Python に
+PySide6 を追加して旧 desktop panel や notebook workbench を検証対象に戻してはいけない。
 
 **自動チェック**:
 
 ```powershell
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
 python -m pytest tests/test_simulink_application.py -q
+python -m pytest tests/test_application_interface_manifest.py -q
+python -m pytest packages/radia-mcp/tests/test_document_meta_notebook_audit.py -q
 python tools/audit_new_panel_contract.py
 ```
 
@@ -835,8 +837,8 @@ python tools/audit_new_panel_contract.py
 - 5つの application block と versioned config / DesignSpec が一致している
 - explicit trigger 1回につき headless solve が1回だけ走る
 - success / failure の双方で durable `result.json` が残る
-- EM / PCB / Motor / Stream Function notebook が復活していない
-- IH notebook comparison が同じ DesignSpec / calc path を使う
+- application notebook workbench が復活していない
+- docs examples の保存済み WebGUI と JSON SHA が一致している
 
 旧PySide panel QA は legacy adapter を直接修正した時の補助チェックに限る。
 通常のリリース判定は Simulink application blocks と
@@ -959,19 +961,11 @@ End-to-end smoke (run on the same SSH target after install):
 
 ```bash
 ssh "$TARGET" 'cubit-smoke-test'      # Cubit batch + export netgen + .vol parse
-ssh "$TARGET" 'python -c "
-from radia.ih_notebook import IHWorkbench
-from radia.em_notebook import EMWorkbench
-from radia.pcb_notebook import PCBWorkbench
-from radia.motor_notebook import MotorWorkbench
-from radia.streamfunction_notebook import StreamFunctionWorkbench
-for cls in (IHWorkbench, EMWorkbench, PCBWorkbench, MotorWorkbench, StreamFunctionWorkbench):
-    print(cls.__name__, \"ok\")
-"'
+ssh "$TARGET" 'python -m pytest tests/test_simulink_application.py tests/test_application_interface_manifest.py -q'
 ```
 
-Both probes are mandatory before declaring the deploy complete.  On a source
-checkout, also run `python -m pytest validation_test/panels/test_notebook_workbench.py -q`.
+Both probes are mandatory before declaring the deploy complete. On a source
+checkout, also run the docs notebook audit when notebooks changed.
 See
 also `release-qud` Phase 8c (verify) and Phase 8d (smoke).
 
@@ -1424,19 +1418,19 @@ PY
 Any DRIFT line means `pip install -e` was silently overwritten or
 shadowed.  Do NOT proceed — fix per the table in Step (b).
 
-#### (d) End-to-end verify (application runner and IH comparison)
+#### (d) End-to-end verify (application runner and docs contract)
 
 ```bash
 cat << 'PS' | ssh 100 'pwsh -Command -'
-$env:QT_QPA_PLATFORM = "offscreen"
 Set-Location 'W:\00_CAE\Radia\01_GitHub'
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
 python -m pytest tests/test_simulink_application.py -q
+python -m pytest tests/test_application_interface_manifest.py -q
+python -m pytest packages/radia-mcp/tests/test_document_meta_notebook_audit.py -q
 python tools/audit_new_panel_contract.py
 PS
 ```
 
-Expected: Simulink application contract and IH comparison contract PASS on 100号機.
+Expected: Simulink application and docs notebook contracts PASS on 100号機.
 
 #### (e) Post-deploy verification: "really deployed" HARD GATE
 

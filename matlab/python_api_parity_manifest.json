@@ -145,7 +145,7 @@
       "patterns": ["ih_claude_proposer.py", "ih_notebook.py", "install_panels.py", "notebook_workbench.py", "panel_design_common.py", "simulink/__init__.py", "tools/**/*.py", "tools/*.py"],
       "classification": "private/not-applicable",
       "matlab": [],
-      "notes": "Internal tooling, temporary IH notebook support, or retired UI plumbing; not a Python user numerical API."
+      "notes": "Internal tooling or retired UI plumbing; not a Python user numerical API. Removed notebook-workbench names remain only as a fail-loud classification guard."
     },
     {
       "id": "panel-internals",

@@ -6,8 +6,7 @@ description: Verify Radia's production Simulink application blocks for EM, PCB, 
 # Simulink Application Health
 
 Radia's human production interface is one Simulink library. EM, PCB, Motor,
-and Stream Function are Simulink-only. IH temporarily keeps its notebook
-workbench as a comparison surface.
+Stream Function, and IH are Simulink-only. Notebook workbenches are retired.
 
 ## Backend Boundary
 
@@ -25,12 +24,9 @@ Run from the repository root:
 
 ```powershell
 python -m pytest tests/test_simulink_application.py -q
-python -m pytest validation_test/panels/test_notebook_workbench.py -q
+python -m pytest tests/test_application_interface_manifest.py -q
 python tools/audit_new_panel_contract.py
 ```
-
-The notebook test is an IH-only compatibility gate. It must also prove that
-the retired EM, PCB, Motor, and Stream Function workbenches are absent.
 
 Use the official MATLAB MCP Server for MATLAB checks:
 
@@ -52,10 +48,20 @@ command.txt        # when DesignSpec command construction succeeds
 run.log
 result.json
 solver_result.json  # when the solver reached output generation
+<application>_fields.msh  # required for a spatial-field mode
 ```
 
 `result.json` must identify the application, backend, status, timing,
-versions/platform, configuration hash, and primary scalar or error.
+versions/platform, configuration hash, primary scalar or error, and GMSH
+artifact list. A spatial-field mode must expose `--msh-output`; the runner
+redirects it into the run directory and rejects anything except `.msh v4.1`.
+Scalar/circuit-only modes record GMSH as not applicable.
+
+Verify every generated GMSH file before opening it:
+
+```powershell
+python tests/panels/verify_gmsh_output.py <run-dir>\<application>_fields.msh
+```
 
 After the gates pass, regenerate the tracked library:
 

@@ -331,7 +331,7 @@ def build_em_table(d_iron, d_ins, sigma, mu_r_iron,
 
 
 def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
-                            fes_order=2):
+                            fes_order=2, msh_output=""):
     """Online global FE using effective-material properties on
     'stator_iron' (or similar laminated) region.
 
@@ -412,6 +412,23 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
                                 definedon=mesh.Materials("stator_iron")) / iron_volume
     total_ECL = ECL_density_lookup * iron_volume
 
+    gmsh_file = ""
+    if msh_output:
+        from radia.gmsh_post_export import GmshPostExport
+
+        gmsh_file = os.path.abspath(msh_output)
+        os.makedirs(os.path.dirname(gmsh_file), exist_ok=True)
+        magnetic_flux_density = CoefficientFunction(
+            (gA[1], -gA[0], 0.0)
+        )
+        with TaskManager():
+            post = GmshPostExport(mesh)
+            post.add_scalar_field("A_z_Wb_per_m", A)
+            post.add_vector_field(
+                "B_T", magnetic_flux_density, cell_data=True
+            )
+            post.write(gmsh_file)
+
     return {
         "vol_file": vol_file,
         "fes_order": fes_order,
@@ -423,6 +440,7 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
         "iron_volume_m3": iron_volume,
         "B2_avg_T2": B2_avg,
         "total_ECL_W": total_ECL,
+        "gmsh_file": gmsh_file,
         "method_paper": "Hanser-Schöbinger-Hollaus, IEEE TMAG 60(10) 2024",
         "knowledge": "radia_mcp.motor.hollaus_eddy_knowledge.effective_material",
     }
@@ -474,6 +492,10 @@ def build_argparser():
                         help="FE direct solver. pardiso=MKL (fastest, default); "
                              "sparsecholesky=ngsolve built-in (no MKL) -- use on "
                              "machines with a conflicting MKL on PATH (e.g. CST).")
+    parser.add_argument(
+        "--msh-output", default="",
+        help="GMSH .msh v4.1 output for global/full FE modes",
+    )
     return parser
 
 
@@ -487,6 +509,10 @@ def main():
         freq_list = [float(x) for x in args.freq_list.split(",")]
 
         if args.mode == "cell":
+            if args.msh_output:
+                raise ValueError(
+                    "cell mode produces an effective-material table, not a spatial field"
+                )
             table = build_em_table(
                 args.d_iron, args.d_ins, args.sigma, args.mu_r_iron,
                 B_list, freq_list, args.cell_n_elements,
@@ -505,7 +531,7 @@ def main():
             table = table_data.get("em_table", [])
             res = solve_global_fe_with_em(
                 args.vol, table, args.H_amplitude, args.freq,
-                args.fes_order,
+                args.fes_order, args.msh_output,
             )
             res["mode"] = "global"
             return res
@@ -520,7 +546,7 @@ def main():
             _log("Step 2/2: solving global FE with effective material")
             res = solve_global_fe_with_em(
                 args.vol, table, args.H_amplitude, args.freq,
-                args.fes_order,
+                args.fes_order, args.msh_output,
             )
             res["mode"] = "full"
             res["em_table"] = table

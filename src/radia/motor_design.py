@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import sys
 
-from .panel_design_common import append_value, calc_script, json_output
+from .panel_design_common import append_value, calc_script, json_output, msh_output
 
 
 ANALYSIS_TRANSIENT = "Transient"
@@ -163,6 +163,7 @@ class MotorDesignSpec:
             "--dt-FE", str(self.dt_fe),
             "--dt-circ", str(self.dt_circ),
             "--n-steps-per-FE", str(self.n_steps_per_fe),
+            "--msh-output", msh_output(self.vol, "_motor_transient"),
             "--output", json_output(self.vol, "_motor_transient"),
         ]
 
@@ -195,6 +196,7 @@ class MotorDesignSpec:
                 "--H-amplitude", str(self.h_amplitude),
                 "--freq", str(self.freq),
                 "--fes-order", str(self.fes_order),
+                "--msh-output", msh_output(self.vol, "_motor_lamination"),
             ]
         return cmd
 
@@ -219,5 +221,6 @@ class MotorDesignSpec:
             "--center-y", str(self.center_y),
             "--eta", str(self.hdiv_eta),
             "--order", str(self.hdiv_order),
+            "--msh-output", msh_output(self.rotor_vol, "_motor_hdiv_reduced"),
             "--output", json_output(self.rotor_vol, "_motor_hdiv_reduced"),
         ]

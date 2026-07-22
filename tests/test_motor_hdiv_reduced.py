@@ -15,7 +15,12 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 from netgen.occ import OCCGeometry, WorkPlane  # noqa: E402
 
-from radia.motor_design import ANALYSIS_HDIV_REDUCED, MotorDesignSpec  # noqa: E402
+from radia.motor_design import (  # noqa: E402
+    ANALYSIS_HDIV_REDUCED,
+    ANALYSIS_LAMINATION,
+    ANALYSIS_TRANSIENT,
+    MotorDesignSpec,
+)
 from radia.motor_hdiv import HDivReducedMotor  # noqa: E402
 
 
@@ -34,6 +39,9 @@ def test_motor_design_builds_hdiv_reduced_cli_command():
     assert command[command.index("--mu-r") + 1] == "1200"
     assert command[command.index("--rotor-angle-steps") + 1] == "5"
     assert command[command.index("--order") + 1] == "2"
+    assert command[command.index("--msh-output") + 1].endswith(
+        "rotor_motor_hdiv_reduced.msh"
+    )
     assert spec.visible_fields() >= {
         "rotor_vol", "hdiv_h_amplitude", "r_airgap_mid", "energy_delta_deg"
     }
@@ -46,6 +54,31 @@ def test_motor_design_builds_hdiv_reduced_cli_command():
     assert defaults[defaults.index("--H-amplitude") + 1] == "80000.0"
     with pytest.raises(ValueError, match="Unknown motor analysis"):
         MotorDesignSpec(analysis="unknown").visible_fields()
+
+
+def test_motor_spatial_modes_declare_gmsh_output():
+    transient = MotorDesignSpec(
+        analysis=ANALYSIS_TRANSIENT, vol="motor.vol"
+    ).build_command(python="python", panels_dir="panels")
+    assert transient[transient.index("--msh-output") + 1].endswith(
+        "motor_motor_transient.msh"
+    )
+
+    global_lamination = MotorDesignSpec(
+        analysis=ANALYSIS_LAMINATION,
+        lamination_mode="global",
+        vol="motor.vol",
+        em_table="em.json",
+    ).build_command(python="python", panels_dir="panels")
+    assert global_lamination[
+        global_lamination.index("--msh-output") + 1
+    ].endswith("motor_motor_lamination.msh")
+
+    cell = MotorDesignSpec(
+        analysis=ANALYSIS_LAMINATION,
+        lamination_mode="cell",
+    ).build_command(python="python", panels_dir="panels")
+    assert "--msh-output" not in cell
 
 
 def test_native_planar_field_cf_matches_explicit_frame_transform():
@@ -81,6 +114,7 @@ def test_hdiv_reduced_cli_round_trip(tmp_path):
     root = Path(__file__).resolve().parents[1]
     vol = tmp_path / "rotor.vol"
     output = tmp_path / "result.json"
+    msh = tmp_path / "result.msh"
     ngmesh = OCCGeometry(
         WorkPlane().Ellipse(0.2, 0.1).Face(), dim=2
     ).GenerateMesh(maxh=0.08)
@@ -101,6 +135,7 @@ def test_hdiv_reduced_cli_round_trip(tmp_path):
             "--maxwell-radius", "0.28",
             "--energy-delta-deg", "0.1",
             "--circle-points", "360",
+            "--msh-output", str(msh),
             "--output", str(output),
         ],
         cwd=root,
@@ -116,4 +151,8 @@ def test_hdiv_reduced_cli_round_trip(tmp_path):
     assert result["gram_build_count"] == 1
     assert len(result["angles"]) == 3
     assert max(row["torque_spread_relative"] for row in result["angles"]) < 1e-4
+    assert result["gmsh_file"] == str(msh.resolve())
+    assert msh.read_text(encoding="utf-8").startswith(
+        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
+    )
     assert "Gram built once" in completed.stderr

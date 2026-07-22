@@ -15,6 +15,8 @@ otherwise show up as "Open GMSH doesn't work" or "GMSH is black".
   `gmsh_post_export.py`
 - After a BEM / FEM solve completes and you want to verify the
   output before clicking Open GMSH
+- After a field-producing Simulink application run; its run-directory
+  `<application>_fields.msh` is a required `.msh v4.1` artifact
 - As a pre-commit check when you touched `.geo` companion writers
 
 ## What it checks

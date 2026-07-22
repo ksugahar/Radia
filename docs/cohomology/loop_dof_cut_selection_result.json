@@ -1,27 +1,43 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-17T23:47:38Z",
-  "notebook": "docs/cohomology/loop_dof_cut_selection.ipynb",
-  "notebook_sha256": "44ad5bccc7201c1c1737f39cbfd9d7a15b1d0615da8516a2a0b146ce7d8bb677",
+  "generated_at_utc": "2026-07-22T07:19:38Z",
+  "notebook": "loop_dof_cut_selection.ipynb",
+  "notebook_sha256": "4093ab9a6e2ba2c9ce6905ce93d8ad254031a8a682cf87d1fc49cc59ae54a8d6",
   "versions": {
     "python_version": "3.12.10",
-    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.13",
-    "radia_version": "4.95.17"
+    "radia_mcp_version": "1.4.18",
+    "radia_version": "4.95.22"
   },
   "summary": {
-    "path": "docs/cohomology/loop_dof_cut_selection.ipynb",
-    "cells": 8,
-    "code_cells": 5,
-    "executed_code_cells": 5,
-    "code_cells_with_outputs": 5,
-    "output_count": 5,
+    "path": "loop_dof_cut_selection.ipynb",
+    "cells": 9,
+    "code_cells": 6,
+    "executed_code_cells": 6,
+    "code_cells_with_outputs": 6,
+    "output_count": 7,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": false,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 1,
+    "executed_webgui_draw_cell_count": 1,
+    "webgui_draw_cells_with_rich_outputs": 1,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
@@ -29,7 +45,7 @@
       "cell_index": 2,
       "execution_count": 1,
       "source_sha256": "6186bb876df50da90439ce0e9709c6e9d9331f95faa8d05d5ceabedbf09a73da",
-      "source_preview": "import math, os, json, platform\nfrom datetime import datetime, timezone\nos.environ.setdefault(\"OMP_NUM_THREADS\", \"1\")\nos.environ.setdefault(\"MKL_NUM_THREADS\", \"1\")\nimport numpy as np\nimport scipy.linalg as sla\nimport matplotlib.pyplot as plt\nfrom mpl_toolkits.mplot3d import Axes3D  # noqa: F401\n\nimport radia\nfrom radia.cohomology import surface_fundamental_cycles\n\n# --- an UNSTRUCTURED genus-1 wor",
+      "source_preview": "import math, os, json, platform\nfrom datetime import datetime, timezone\nos.environ.setdefault(\"OMP_NUM_THREADS\", \"1\")\nos.environ.setdefault(\"MKL_NUM_THREADS\", \"1\")\nimport numpy as np\nimport scipy.linalg as sla\nimport matplotlib.pyplot as plt\nfrom mpl_toolkits.mplot3d import Axes3D  # noqa: F401\n\nimport radia\nfrom radia.cohomology import surface_fundamental_cycles\n\n# --- an UNSTRUCTURED genus-1 workpiece surface (Netgen torus, revolve) ---\n# Unstructured on purpose: like the paper's Takahashi stepped-tube mesh,\n# the QR generator basis comes out class-mixed (see below).\nfrom netgen.occ import WorkPlane, Axes, OCCGeometry, Axis\nfrom ngsolve import Mesh, BND, TaskManager\nR, b, maxh = 0.030, 0.010, 0.006\nwith TaskManager():\n    wpl = WorkPlane(Axes(p=(R, 0, 0), n=(0, 1, 0), h=(1, 0, 0)))\n    solid = wpl.Circle(0, 0, b).Face().Revolve(Axis((0, 0, 0), (0, 0, 1)), 360)\n    mesh = Mesh(OCCGeometry(solid).GenerateMesh(maxh=maxh))\npts = np.array([[mesh.vertices[i].point[j] for j in range(3)]\n   ",
       "outputs": [
         {
           "output_type": "stream",
@@ -44,8 +60,37 @@
     {
       "cell_index": 3,
       "execution_count": 2,
+      "source_sha256": "43d7023867f8a561941135516ed05f6fe04bc6ec760deecececb7f1c8c2cdd10",
+      "source_preview": "from ngsolve.webgui import Draw\n\nmesh_scene = Draw(\n    mesh,\n    name=\"cohomology_torus_mesh\",\n    draw_vol=True,\n    draw_surf=True,\n    width=\"100%\",\n    height=\"480px\",\n)\nmesh_scene\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 111,
+          "text_plain_sha256": "13e9ea98ef527f8125ff143d33583759305b45f271c56af62d9ef6267a9f44d4",
+          "text_plain_preview": "WebGuiWidget(layout=Layout(height='480px', width='100%'), value={'gui_settings': {}, 'ngsolve_version': '6.2.2…",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 15,
+          "text_plain_sha256": "afb6eccc907512ad9e107ffffad3b07bc4fe745b1e7fa29c206f362e876ae3eb",
+          "text_plain_preview": "BaseWebGuiScene",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
       "source_sha256": "e34844d7bb3dacf30d1d6f9f691ad6436a4fe8751f393f90ca8e2f343f3da01e",
-      "source_preview": "# --- Steps (1)-(2): classify all fundamental cycles, pick the cut --------\nb1, Pi, expand, _cotree = surface_fundamental_cycles(tris, nv=nv)\nrho0 = float(np.sqrt(pts[:, 0]**2 + pts[:, 1]**2).mean())\nz0 = float(pts[:, 2].mean())\n\ndef windings(p):\n    q = pts[list(p) + [p[0]]]\n    th = np.unwrap(np.arctan2(q[:, 1], q[:, 0]))\n    rho = np.sqrt(q[:, 0]**2 + q[:, 1]**2)\n    ph = np.unwrap(np.arctan2(q",
+      "source_preview": "# --- Steps (1)-(2): classify all fundamental cycles, pick the cut --------\nb1, Pi, expand, _cotree = surface_fundamental_cycles(tris, nv=nv)\nrho0 = float(np.sqrt(pts[:, 0]**2 + pts[:, 1]**2).mean())\nz0 = float(pts[:, 2].mean())\n\ndef windings(p):\n    q = pts[list(p) + [p[0]]]\n    th = np.unwrap(np.arctan2(q[:, 1], q[:, 0]))\n    rho = np.sqrt(q[:, 0]**2 + q[:, 1]**2)\n    ph = np.unwrap(np.arctan2(q[:, 2] - z0, rho - rho0))\n    return np.array([(th[-1]-th[0])/(2*math.pi), (ph[-1]-ph[0])/(2*math.pi)])\n\ndef geo_len(p):\n    q = pts[list(p) + [p[0]]]\n    return float(np.sum(np.linalg.norm(np.diff(q, axis=0), axis=1)))\n\n# calibrate the linear class map on the QR-pivoted independent pair\n_, _, piv = sla.qr(Pi.T, pivoting=True, mode=\"economic\")\nsel = piv[:b1]\nW_sel = np.array([windings(expand(k)) for k in sel])\nWmap = W_sel.T @ np.linalg.inv(Pi[sel].T)\nW_all = Pi @ Wmap.T\nW_int = np.rint(W_all)\nlengths = np.array([geo_len(expand(int(k))) for k in range(Pi.shape[0])])\npure_tor = np.where((np.abs",
       "outputs": [
         {
           "output_type": "stream",
@@ -58,54 +103,68 @@
       ]
     },
     {
-      "cell_index": 5,
-      "execution_count": 3,
-      "source_sha256": "0378739e4acca8bbbfc5897e34993819f0f3ced6d249c62905f28f96b7e5e913",
-      "source_preview": "# --- Figure: winding-plane classification -------------------------------\nplt.rcParams.update({\"font.size\": 11, \"axes.linewidth\": 0.8})\nfig, ax = plt.subplots(figsize=(4.2, 3.6))\njit = W_int + 0.10*np.column_stack([np.sin(np.arange(len(W_int))),\n                                    np.cos(np.arange(len(W_int)))])\nax.scatter(jit[:, 0], jit[:, 1], s=6, c=\"0.7\", alpha=0.5,\n           label=f\"all fund",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "mime_types": [
-            "image/png",
-            "text/plain"
-          ],
-          "image_png_sha256": "2cdeb8494ad30415f4cf3c8c4bb57bf13265cbfc19cd2b7087ff4b7e57bbf60d",
-          "image_png_b64_chars": 26708,
-          "text_plain_preview": "<Figure size 420x360 with 1 Axes>"
-        }
-      ]
-    },
-    {
       "cell_index": 6,
       "execution_count": 4,
-      "source_sha256": "e2cb5919d7848f9a42177aaf45dcb318cbdc6f920a0fd2f9d7f8254ccc28a52c",
-      "source_preview": "# --- Figure: selected cut vs a mixed QR generator, on the mesh ----------\nmixed_k = int(sel[int(np.argmax([w[0] != 0 and w[1] != 0\n                                 for w in np.rint(W_sel)]))])\nmixed_loop = expand(mixed_k)\nfig = plt.figure(figsize=(4.6, 3.8))\nax = fig.add_subplot(111, projection=\"3d\")\nElist = list(E)\nfor a, c in Elist[::3]:\n    ax.plot(*zip(pts[a], pts[c]), color=\"0.85\", lw=0.3, z",
+      "source_sha256": "0378739e4acca8bbbfc5897e34993819f0f3ced6d249c62905f28f96b7e5e913",
+      "source_preview": "# --- Figure: winding-plane classification -------------------------------\nplt.rcParams.update({\"font.size\": 11, \"axes.linewidth\": 0.8})\nfig, ax = plt.subplots(figsize=(4.2, 3.6))\njit = W_int + 0.10*np.column_stack([np.sin(np.arange(len(W_int))),\n                                    np.cos(np.arange(len(W_int)))])\nax.scatter(jit[:, 0], jit[:, 1], s=6, c=\"0.7\", alpha=0.5,\n           label=f\"all fundamental cycles ({Pi.shape[0]})\", zorder=1)\nax.scatter(W_int[pure_tor, 0], W_int[pure_tor, 1], s=42, facecolors=\"none\",\n           edgecolors=\"tab:blue\", linewidths=1.4,\n           label=f\"pure toroidal $(\\\\pm1,0)$ ({len(pure_tor)})\", zorder=3)\nqrw = np.rint(W_sel).astype(int)\nax.scatter(qrw[:, 0], qrw[:, 1], s=90, marker=\"X\", c=\"tab:red\",\n           label=\"QR generator basis (mixed)\", zorder=4)\ncw = np.rint(windings(cut)).astype(int)\nax.scatter([cw[0]], [cw[1]], s=150, marker=\"*\", c=\"gold\", edgecolors=\"k\",\n           linewidths=0.8, label=\"selected cut (shortest)\", zorder=5)\nax.axhline(0, colo",
       "outputs": [
         {
           "output_type": "display_data",
-          "mime_types": [
+          "data_keys": [
             "image/png",
             "text/plain"
           ],
-          "image_png_sha256": "c6ec964e06b4c5e1d1e4e279ac2177defa4e2453e1ab188d8d82d11c187074b3",
-          "image_png_b64_chars": 40736,
-          "text_plain_preview": "<Figure size 460x380 with 1 Axes>"
+          "text_plain_chars": 33,
+          "text_plain_sha256": "f3b88de767576745b4fdac8299e08db2a979e9c72c525f5e3e53687594e4e817",
+          "text_plain_preview": "<Figure size 420x360 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 26708,
+              "sha256": "2cdeb8494ad30415f4cf3c8c4bb57bf13265cbfc19cd2b7087ff4b7e57bbf60d"
+            }
+          }
         }
       ]
     },
     {
       "cell_index": 7,
       "execution_count": 5,
+      "source_sha256": "e2cb5919d7848f9a42177aaf45dcb318cbdc6f920a0fd2f9d7f8254ccc28a52c",
+      "source_preview": "# --- Figure: selected cut vs a mixed QR generator, on the mesh ----------\nmixed_k = int(sel[int(np.argmax([w[0] != 0 and w[1] != 0\n                                 for w in np.rint(W_sel)]))])\nmixed_loop = expand(mixed_k)\nfig = plt.figure(figsize=(4.6, 3.8))\nax = fig.add_subplot(111, projection=\"3d\")\nElist = list(E)\nfor a, c in Elist[::3]:\n    ax.plot(*zip(pts[a], pts[c]), color=\"0.85\", lw=0.3, zorder=1)\ndef draw(loop, **kw):\n    q = pts[list(loop) + [loop[0]]]; ax.plot(q[:, 0], q[:, 1], q[:, 2], **kw)\ndraw(mixed_loop, color=\"tab:red\", lw=1.6, ls=\"--\", zorder=4,\n     label=\"mixed QR generator $(-1,-1)$\")\ndraw(cut, color=\"tab:blue\", lw=2.6, zorder=5,\n     label=\"selected pure-toroidal cut $(1,0)$\")\nax.set_box_aspect((1, 1, 0.45)); ax.set_axis_off(); ax.view_init(elev=38, azim=-60)\nax.legend(fontsize=7.4, loc=\"upper center\", bbox_to_anchor=(0.5, 0.06),\n          framealpha=0.9)\nfig.tight_layout()\nfig.savefig(\"fig_cut_on_mesh.pdf\")\nplt.show()\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "151b4a689b5ca809d968c11e8b50eec9d38f691fcec4048a92a5039676e977e1",
+          "text_plain_preview": "<Figure size 460x380 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 40736,
+              "sha256": "c6ec964e06b4c5e1d1e4e279ac2177defa4e2453e1ab188d8d82d11c187074b3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 6,
       "source_sha256": "5b4bb075e5bb116cbbc39cb97731ec2a3c485d2ff40abe5fc7b223f9e1a0f9de",
-      "source_preview": "# --- durable data sidecar (per Data Persistence Policy) -----------------\ndata = {\n    \"generated_at_utc\": datetime.now(timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\"),\n    \"radia_version\": radia.__version__,\n    \"python_version\": platform.python_version(),\n    \"platform\": platform.platform(),\n    \"mesh\": {\"kind\": \"unstructured Netgen torus (revolve)\",\n             \"R_m\": R, \"b_m\": b, \"maxh_m\": maxh",
+      "source_preview": "# --- durable data sidecar (per Data Persistence Policy) -----------------\ndata = {\n    \"generated_at_utc\": datetime.now(timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\"),\n    \"radia_version\": radia.__version__,\n    \"python_version\": platform.python_version(),\n    \"platform\": platform.platform(),\n    \"mesh\": {\"kind\": \"unstructured Netgen torus (revolve)\",\n             \"R_m\": R, \"b_m\": b, \"maxh_m\": maxh,\n             \"nv_surface\": int(nv_surf), \"ne\": int(len(E)), \"nt\": int(nt),\n             \"chi\": int(chi), \"genus\": int(genus),\n             \"mesh_nv_incl_interior\": int(nv)},\n    \"b1\": int(b1),\n    \"qr_generator_basis_windings\": qr_basis,\n    \"qr_basis_is_class_mixed\": bool(is_mixed),\n    \"n_fundamental_cycles\": int(Pi.shape[0]),\n    \"n_pure_toroidal_candidates\": int(len(pure_tor)),\n    \"selected_cut_winding\": np.rint(windings(cut)).astype(int).tolist(),\n    \"selected_cut_length_mm\": geo_len(cut) * 1e3,\n    \"selected_cut_n_vertices\": int(len(cut)),\n    \"note\": (\"Unstructured torus reproduces ",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 921,
-          "text_sha256": "515579e508849e384b01f6e484256fcb9619d4fc723b7b5973fca4f536ff0da4",
-          "text_preview": "{\n  \"generated_at_utc\": \"2026-07-17T23:47:38Z\",\n  \"radia_version\": \"4.95.17\",\n  \"python_version\": \"3.12.10\",\n  \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n  \"mesh\": {\n    \"kind\": \"unstructured Netgen torus (revolve)\",\n    \"R_m\": 0.03,\n    \"b_m\": 0.01,\n    \"maxh_m\": 0.006,\n    \"nv_surface\": 604,\n    \"ne\": 1812,\n    \"nt\": 1208,\n    \"chi\": 0,\n    \"genus\": 1,\n    \"mesh_nv_incl_interior\": 667\n  },\n  \"b1\": 2,\n  \"qr_generator_basis_windings\": [\n    [\n      -1,\n      -1\n    ],\n    [\n      0,\n      1\n    ]\n  ],\n  \"qr_basis_is_class_mixed\": true,\n  \"n_fundamental_cycles\": 1209,\n  \"n_pure_toroidal_c",
-          "text_truncated": true
+          "text_sha256": "f513868b7fe8863b0ac3fba8f09096de00aff0f46035e19f28d6a7d50aacdc47",
+          "text_preview": "{\n  \"generated_at_utc\": \"2026-07-22T06:02:47Z\",\n  \"radia_version\": \"4.95.22\",\n  \"python_version\": \"3.12.10\",\n  \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n  \"mesh\": {\n    \"kind\": \"unstructured Netgen torus (revolve)\",\n    \"R_m\": 0.03,\n    \"b_m\": 0.01,\n    \"maxh_m\": 0.006,\n    \"nv_surface\": 604,\n    \"ne\": 1812,\n    \"nt\": 1208,\n    \"chi\": 0,\n    \"genus\": 1,\n    \"mesh_nv_incl_interior\": 667\n  },\n  \"b1\": 2,\n  \"qr_generator_basis_windings\": [\n    [\n      -1,\n      -1\n    ],\n    [\n      0,\n      1\n    ]\n  ],\n  \"qr_basis_is_class_mixed\": true,\n  \"n_fundamental_cycles\": 1209,\n  \"n_pure_toroidal_candidates\": 16,\n  \"selected_cut_winding\": [\n    1,\n    0\n  ],\n  \"selected_cut_length_mm\": 176.81253192630746,\n  \"selected_cut_n_vertices\": 35,\n  \"note\": \"Unstructured torus reproduces the class-mixed QR basis recorded on the Takahashi stepped-tube workpiece; the pure-toroidal winding classification recovers the cut.\"\n}\n",
+          "text_truncated": false
         }
       ]
     }

@@ -19,21 +19,36 @@ def test_examples_migration_policy_marks_protected_refs_as_blockers():
     assert "docs/examples_classification/examples_classification.ipynb" in policy["source_of_truth"]
 
 
-def _write_notebook(path, *, executed=True, outputs=True):
+def _write_notebook(path, *, executed=True, outputs=True, source="print('ok')\n",
+                    metadata=None, rich_output=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     cell = {
         "cell_type": "code",
         "execution_count": 1 if executed else None,
         "metadata": {},
         "outputs": (
-            [{"output_type": "stream", "name": "stdout", "text": ["ok\n"]}]
-            if outputs else []
+            [{
+                "output_type": "display_data",
+                "metadata": {},
+                "data": {
+                    "application/vnd.jupyter.widget-view+json": {
+                        "model_id": "webgui-scene",
+                        "version_major": 2,
+                        "version_minor": 0,
+                    },
+                    "text/plain": ["WebGUI scene"],
+                },
+            }]
+            if outputs and rich_output
+            else [{"output_type": "stream", "name": "stdout", "text": ["ok\n"]}]
+            if outputs
+            else []
         ),
-        "source": ["print('ok')\n"],
+        "source": [source],
     }
     nb = {
         "cells": [cell],
-        "metadata": {},
+        "metadata": metadata or {},
         "nbformat": 4,
         "nbformat_minor": 5,
     }
@@ -74,6 +89,87 @@ def test_notebook_result_audit_flags_stale_json_sidecar(tmp_path):
 
     assert result["summary"]["result_json_not_synced_to_notebook"] == 1
     assert result["gaps"][0]["status"] == "result_json_not_synced_to_notebook"
+
+
+def test_notebook_result_audit_requires_saved_webgui_for_examples(tmp_path):
+    repo = tmp_path
+    (repo / "examples").mkdir()
+    docs = repo / "docs" / "demo"
+    docs.mkdir(parents=True)
+    nb = docs / "demo.ipynb"
+    example_metadata = {
+        "radia": {"notebook_role": "example", "webgui_required": True},
+    }
+    _write_notebook(
+        nb,
+        executed=True,
+        outputs=True,
+        metadata=example_metadata,
+    )
+    document_meta_write_notebook_result_json(str(nb))
+
+    missing = document_meta_notebook_result_audit(str(repo), "docs")
+    assert missing["summary"]["needs_webgui_draw"] == 1
+    assert missing["gaps"][0]["status"] == "needs_webgui_draw"
+
+    _write_notebook(
+        nb,
+        executed=True,
+        outputs=True,
+        source="from ngsolve.webgui import Draw\nDraw(mesh)\n",
+        metadata=example_metadata,
+        rich_output=True,
+    )
+    document_meta_write_notebook_result_json(str(nb), overwrite=True)
+
+    ready = document_meta_notebook_result_audit(str(repo), "docs")
+    assert ready["summary"]["webgui_required"] == 1
+    assert ready["summary"]["webgui_ready"] == 1
+    assert ready["summary"]["ok_result_saved"] == 1
+    assert ready["gaps"] == []
+
+
+def test_notebook_result_audit_requires_parameterized_webgui_field(tmp_path):
+    repo = tmp_path
+    (repo / "examples").mkdir()
+    docs = repo / "docs" / "demo"
+    docs.mkdir(parents=True)
+    nb = docs / "demo.ipynb"
+    metadata = {
+        "radia": {
+            "notebook_role": "example",
+            "webgui_required": True,
+            "webgui_field_required": True,
+        },
+    }
+    _write_notebook(
+        nb,
+        source="from ngsolve.webgui import Draw\nDraw(field, mesh)\n",
+        metadata=metadata,
+        rich_output=True,
+    )
+    document_meta_write_notebook_result_json(str(nb))
+
+    missing = document_meta_notebook_result_audit(str(repo), "docs")
+    assert missing["summary"]["needs_parameterized_webgui_field_draw"] == 1
+    assert missing["gaps"][0]["status"] == "needs_parameterized_webgui_field_draw"
+
+    _write_notebook(
+        nb,
+        source=(
+            "from ngsolve.webgui import Draw\n"
+            "Draw(field, mesh, name='B_magnitude', draw_vol=True)\n"
+        ),
+        metadata=metadata,
+        rich_output=True,
+    )
+    document_meta_write_notebook_result_json(str(nb), overwrite=True)
+
+    ready = document_meta_notebook_result_audit(str(repo), "docs")
+    assert ready["summary"]["webgui_field_required"] == 1
+    assert ready["summary"]["webgui_field_ready"] == 1
+    assert ready["summary"]["ok_result_saved"] == 1
+    assert ready["gaps"] == []
 
 
 def test_write_notebook_result_json_creates_versioned_sidecar(tmp_path):

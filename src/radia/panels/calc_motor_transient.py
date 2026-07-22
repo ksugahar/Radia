@@ -336,6 +336,7 @@ def solve_motor_transient(
     t_end=0.1, dt_FE=1e-4, dt_circ=1e-5,
     bh_iron="marrocco",            # placeholder; could load from EMMaterial
     n_steps_per_FE=10,             # circuit steps per FE refresh
+    msh_output="",
 ):
     """Transient motor solve -- Lange-Henrotte-Hameyer linearization."""
     setup_paths()
@@ -499,6 +500,25 @@ def solve_motor_transient(
 
     t_solver = time.perf_counter() - t_solver_start
 
+    gmsh_file = ""
+    if msh_output:
+        from ngsolve import CoefficientFunction, TaskManager, grad
+        from radia.gmsh_post_export import GmshPostExport
+
+        gmsh_file = os.path.abspath(msh_output)
+        os.makedirs(os.path.dirname(gmsh_file), exist_ok=True)
+        flux = grad(A)
+        magnetic_flux_density = CoefficientFunction(
+            (flux[1], -flux[0], 0.0)
+        )
+        with TaskManager():
+            post = GmshPostExport(mesh)
+            post.add_scalar_field("A_z_Wb_per_m", A)
+            post.add_vector_field(
+                "B_T", magnetic_flux_density, cell_data=True
+            )
+            post.write(gmsh_file)
+
     return {
         "method": method,
         "vol_file": vol_file,
@@ -515,6 +535,7 @@ def solve_motor_transient(
         "final_i": state[:nbr_phases].tolist(),
         "final_theta_rad": float(state[nbr_phases]),
         "final_omega_rad_s": float(state[nbr_phases + 1]),
+        "gmsh_file": gmsh_file,
         "method_paper": "Lange-Henrotte-Hameyer, IEEE TMAG 45(3) 2009",
         "e_bemf_history": history["e_bemf"],
         "notes": [
@@ -585,6 +606,10 @@ def build_argparser():
     parser.add_argument("--dt-circ", type=float, default=1e-5,
                         help="s, circuit ODE step (fine)")
     parser.add_argument("--n-steps-per-FE", type=int, default=10)
+    parser.add_argument(
+        "--msh-output", default="",
+        help="GMSH .msh v4.1 output for the final FE-refresh field",
+    )
     return parser
 
 
@@ -617,6 +642,7 @@ def main():
             dt_FE=args.dt_FE,
             dt_circ=args.dt_circ,
             n_steps_per_FE=args.n_steps_per_FE,
+            msh_output=args.msh_output,
         )
 
     calc_main(run, parser)

@@ -335,9 +335,9 @@ validation_test/stream_function/verify_coil_field_independent.py designs a coil
 field TWO ways: the numpy straight-segment Biot-Savart used in the designer AND
 Radia's C++ rad.ObjFlmCur + rad.Fld (a separate codebase).  They agree to
 8-11 digits (uniform 3.5e-11, Gx 1.1e-8); the abe-confined Gx coil reaches
-1.0 % nonlinearity on the short former, cross-validated.  Locked by
-validation_test/panels/test_notebook_workbench.py plus the streamfunction
-golden validation lane.
+1.0 % nonlinearity on the short former, cross-validated. Locked by
+`validation_test/stream_function/verify_coil_field_independent.py` and the
+stream-function golden validation lane.
 """
 
 

@@ -589,7 +589,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-document-meta",
         "description": "Cross-cutting document/repo helpers: deadline, "
                        "version diff, templates, lint-all, result-saving "
-                       "notebook audits, examples->docs/validation_test "
+                       "notebook/WebGUI audits, examples->docs/validation_test "
                        "promotion audits, and root-level panels migration "
                        "impact checks.",
         "primary_tools": [

@@ -2271,7 +2271,7 @@ def panel_gui_pitfalls(topic: str = "") -> str:
       regression_blast_radius -- run BOTH panels after touching shared
                                  helpers; opaque casts (PointId) bite
       panel_qt_testing        -- retired PySide note; current gate is
-                                 validation_test/panels/test_notebook_workbench.py
+                                 tests/test_application_interface_manifest.py
       learn_edition_cap       -- ignore the 50k warning, export bypasses it
 
     Args:
@@ -2352,7 +2352,7 @@ def standalone_panels(topic: str = "") -> str:
     """
     Retired standalone PySide panel topic. The canonical Radia human surface is
     now the single Simulink application-block library. This tool remains as a
-    compatibility redirect; IH alone has a temporary notebook comparison path.
+    compatibility redirect; notebook workbenches are retired for all applications.
 
     Read this when:
       * A user asks about the old standalone panel entry-points.
@@ -2366,7 +2366,7 @@ def standalone_panels(topic: str = "") -> str:
       cubit_panels_migration -- examples/cubit_panels promotion route
       vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
       vs_cubit         -- Simulink route vs Cubit export/plugin boundary
-      ih_methods       -- temporary IH block/notebook comparison
+      ih_methods       -- Induction Heating block and shared headless contract
       troubleshooting  -- common post-migration issues
 
     Args:

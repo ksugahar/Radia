@@ -4,143 +4,45 @@ Verify exported Netgen .vol mesh against CAD reference JSON.
 Called as subprocess from Cubit Export Mesh GUI (after C++ exports .vol + .json):
     python calc_verify_vol.py --vol model.vol
 
-Reads .vol (NGSolve), reads companion .vol.json (CAD values from C++),
-computes NGSolve Integrate per label, updates JSON with ng_* values and errors.
+Delegates all checks to ``cubit_mesh_export.check``, then preserves the Cubit
+toolbar's historical sidecar update with measured ``ng_*`` values.
 
-Outputs updated JSON to stdout (last line).
-Does NOT require Cubit — only NGSolve.
+Outputs the versioned check report to stdout (last line). Does not require
+Cubit; it requires cubit-mesh-export and NGSolve in the external Python.
 """
 
 import argparse
 import json
-import os
-import sys
 
 
 def verify_vol(vol_path):
-    """Read .vol + companion JSON, compute NGSolve values, return result dict."""
-    # IMPORTANT: TaskManager must be in the top-of-function import block
-    # (with Mesh / Integrate / CF / BND).  A late `from ngsolve import
-    # TaskManager` further down -- e.g. inside the BBND try-block -- makes
-    # Python treat TaskManager as a local for the WHOLE function, so the
-    # earlier `with TaskManager():` on the materials loop raises
-    # UnboundLocalError ("cannot access local variable 'TaskManager'
-    # where it is not associated with a value").  Reported by keiko
-    # on 100号機 / radia 4.85.1, 2026-05-30.
-    from ngsolve import Mesh, Integrate, CF, BND, TaskManager
-
-    json_path = vol_path + ".json"
-    if not os.path.exists(json_path):
-        return {"error": f"Companion JSON not found: {json_path}"}
-
-    with open(json_path, "r") as f:
-        cad_ref = json.load(f)
-
-    mesh = Mesh(vol_path)
-    warnings = []
-
-    # --- Per-material volume ---
-    cad_mats = cad_ref.get("materials", {})
-    materials = []
-    for mat in dict.fromkeys(mesh.GetMaterials()):
-        with TaskManager():
-            ng_vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
-            entry = {"name": mat, "ng_volume": ng_vol}
-            if mat in cad_mats:
-                cad_v = cad_mats[mat]
-                entry["cad_volume"] = cad_v
-                if cad_v > 0:
-                    err = (ng_vol - cad_v) / cad_v * 100
-                    entry["error_pct"] = err
-                    if abs(err) > 1.0:
-                        warnings.append(
-                            f"Material \"{mat}\": V error {err:+.2e}%")
-            materials.append(entry)
-
-    # --- Per-boundary area ---
-    cad_bnds = cad_ref.get("boundaries", {})
-    boundaries = []
+    """Run the canonical checker and preserve the toolbar sidecar update."""
     try:
-        bnd_names = list(dict.fromkeys(mesh.GetBoundaries()))
-    except Exception:
-        bnd_names = []
-        warnings.append("Could not read boundary names from .vol")
-    for bnd in bnd_names:
-        try:
-            ng_area = Integrate(CF(1), mesh, BND,
-                                definedon=mesh.Boundaries(bnd))
-        except Exception:
-            continue
-        entry = {"name": bnd, "ng_area": ng_area}
-        if bnd in cad_bnds:
-            cad_a = cad_bnds[bnd]
-            entry["cad_area"] = cad_a
-            if cad_a > 0:
-                err = (ng_area - cad_a) / cad_a * 100
-                entry["error_pct"] = err
-                if abs(err) > 1.0:
-                    warnings.append(
-                        f"Boundary \"{bnd}\": A error {err:+.2e}%")
-        boundaries.append(entry)
+        from cubit_mesh_export.check import check_consistency
 
-    # --- Per-edge length (BBND) ---
-    cad_edges = cad_ref.get("edges", {})
-    edges = []
-    try:
-        from ngsolve import BBND
-        try:
-            bb_names = list(dict.fromkeys(mesh.GetBBoundaries()))
-        except Exception:
-            bb_names = []
-        for ename in bb_names:
-            try:
-                ng_len = Integrate(CF(1), mesh, BBND,
-                                   definedon=mesh.BBoundaries(ename))
-            except Exception:
-                continue
-            entry = {"name": ename, "ng_length": ng_len}
-            if ename in cad_edges:
-                cad_l = cad_edges[ename]
-                entry["cad_length"] = cad_l
-                if cad_l > 0:
-                    err = (ng_len - cad_l) / cad_l * 100
-                    entry["error_pct"] = err
-            edges.append(entry)
+        json_path = vol_path + ".json"
+        result = check_consistency(vol_path, json_path=json_path)
+    except Exception as exc:
+        return {"error": str(exc)}
 
-        # Total length check
-        cad_length_total = sum(cad_edges.values())
-        if cad_length_total > 0:
-            ng_length_total = Integrate(CF(1), mesh, BBND)
-            total_err = (ng_length_total - cad_length_total) / cad_length_total * 100
-            if abs(total_err) > 1.0:
-                warnings.append(f"Total edge length: {total_err:+.2e}%")
-    except Exception:
-        pass
-
-    # Also include CAD-only edges (in JSON but not in mesh BBoundaries)
-    ng_edge_names = {e["name"] for e in edges}
-    for ename, cad_l in cad_edges.items():
-        if ename not in ng_edge_names:
-            edges.append({"name": ename, "cad_length": cad_l})
-
-    result = {
-        "vol_file": vol_path,
-        "order": cad_ref.get("order", 0),
-        "n_elements": mesh.ne,
-        "materials": materials,
-        "boundaries": boundaries,
-        "edges": edges,
-        "warnings": warnings,
+    # The Cubit export dialog historically augments the CAD sidecar with the
+    # measured NGSolve values. Keep that UI contract while all validation logic
+    # remains in cubit_mesh_export.check.
+    with open(json_path, "r", encoding="utf-8-sig") as stream:
+        cad_ref = json.load(stream)
+    cad_ref["ng_materials"] = {
+        row["name"]: row["ng_volume"] for row in result["materials"]
     }
-
-    # Update companion JSON with NGSolve values
-    cad_ref["ng_materials"] = {m["name"]: m["ng_volume"] for m in materials}
-    cad_ref["ng_boundaries"] = {b["name"]: b["ng_area"] for b in boundaries}
-    cad_ref["ng_edges"] = {e["name"]: e.get("ng_length", 0) for e in edges
-                           if "ng_length" in e}
-    cad_ref["warnings"] = warnings
-    with open(json_path, "w") as f:
-        json.dump(cad_ref, f, indent=2)
+    cad_ref["ng_boundaries"] = {
+        row["name"]: row["ng_area"] for row in result["boundaries"]
+    }
+    cad_ref["ng_edges"] = {
+        row["name"]: row["ng_length"]
+        for row in result["edges"] if "ng_length" in row
+    }
+    cad_ref["warnings"] = result["warnings"]
+    with open(json_path, "w", encoding="utf-8") as stream:
+        json.dump(cad_ref, stream, indent=2)
 
     return result
 

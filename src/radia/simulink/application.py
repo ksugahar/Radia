@@ -139,6 +139,34 @@ def _replace_output_path(command: Sequence[str], output_path: Path) -> list[str]
     return result
 
 
+def _replace_optional_output_path(
+    command: Sequence[str],
+    option: str,
+    output_path: Path,
+) -> tuple[list[str], bool]:
+    """Redirect an optional runner-owned artifact path into the run directory."""
+
+    result = [str(part) for part in command]
+    try:
+        index = result.index(option)
+    except ValueError:
+        return result, False
+    if index + 1 >= len(result):
+        raise ValueError(f"The application command has {option} without a path.")
+    result[index + 1] = str(output_path)
+    return result, True
+
+
+def _is_gmsh_v41(path: Path) -> bool:
+    """Return whether *path* begins with the repository's ASCII MSH v4.1 header."""
+
+    try:
+        header = path.read_bytes()[:256].replace(b"\r\n", b"\n")
+    except OSError:
+        return False
+    return header.startswith(b"$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+
+
 def _find_key(value: Any, key: str) -> Any:
     if isinstance(value, dict):
         if key in value:
@@ -210,6 +238,7 @@ def run_application(
     command_path = run_dir / "command.txt"
     solver_result_path = run_dir / "solver_result.json"
     result_path = run_dir / "result.json"
+    gmsh_output_path = run_dir / f"{application}_fields.msh"
 
     started_at = _utc_now()
     started = time.monotonic()
@@ -219,9 +248,14 @@ def run_application(
     error: str | None = None
     primary_key: str | None = None
     primary_value: float | None = None
+    gmsh_requested = False
 
     with log_path.open("w", encoding="utf-8") as log:
         try:
+            for stale_path in (command_path, solver_result_path, result_path):
+                stale_path.unlink(missing_ok=True)
+            for stale_gmsh in run_dir.rglob("*.msh"):
+                stale_gmsh.unlink()
             if not config_path.is_file():
                 raise FileNotFoundError(f"Configuration JSON not found: {config_path}")
             settings, requested_primary, cwd, declared_application = _load_config(config_path)
@@ -246,6 +280,11 @@ def run_application(
             command = _replace_output_path(
                 spec.build_command(python=sys.executable),
                 solver_result_path,
+            )
+            command, gmsh_requested = _replace_optional_output_path(
+                command,
+                "--msh-output",
+                gmsh_output_path,
             )
             command_text = _command_line(command)
             command_path.write_text(command_text + "\n", encoding="utf-8")
@@ -285,11 +324,30 @@ def run_application(
                 status = "failed"
                 error = "The application exited successfully without writing solver_result.json."
                 log.write("\n" + error + "\n")
+
+            if status == "passed" and gmsh_requested:
+                if not gmsh_output_path.is_file():
+                    status = "failed"
+                    error = (
+                        "The spatial application exited successfully without writing "
+                        f"the required GMSH artifact: {gmsh_output_path}"
+                    )
+                    log.write("\n" + error + "\n")
+                elif not _is_gmsh_v41(gmsh_output_path):
+                    status = "failed"
+                    error = (
+                        "The spatial application wrote a GMSH artifact that is not "
+                        f"ASCII .msh v4.1: {gmsh_output_path}"
+                    )
+                    log.write("\n" + error + "\n")
         except Exception as exc:
             error = str(exc)
             log.write(error + "\n")
 
     elapsed_s = time.monotonic() - started
+    gmsh_artifacts = sorted(
+        str(path.resolve()) for path in run_dir.rglob("*.msh") if path.is_file()
+    )
     payload: dict[str, Any] = {
         "radia_result": {
             "schema": RESULT_SCHEMA,
@@ -318,6 +376,14 @@ def run_application(
             "command": command,
             "command_line": _command_line(command) if command else "",
             "primary": {"key": primary_key, "value": primary_value},
+            "artifacts": {
+                "gmsh_policy": "required" if gmsh_requested else "not-applicable",
+                "gmsh_format": "msh-v4.1" if gmsh_requested else None,
+                "gmsh_primary": (
+                    str(gmsh_output_path) if gmsh_output_path.is_file() else None
+                ),
+                "gmsh": gmsh_artifacts,
+            },
         }
     }
     result_path.write_text(

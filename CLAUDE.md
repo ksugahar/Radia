@@ -21,7 +21,7 @@ S:\Radia\01_GitHub\
       radia/server.py     # mcp-server-radia
       ngsolve/server.py   # mcp-server-ngsolve
       cubit/server.py     # mcp-server-cubit
-    panels/               # Headless calc_*.py, samples, IH notebook comparison surface, Cubit toolbar
+    panels/               # Headless calc_*.py, samples, artifact contracts, Cubit toolbar
     *.py                  # Python modules
   src/core/               # C++ source
   src/ext/
@@ -117,7 +117,7 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 
 | Domain | Code | Knowledge | Notes |
 |--------|------|-----------|-------|
-| Induction heating | Radia Simulink `Induction Heating` block + temporary `ih_notebook.py` / `radia_ih.ipynb` comparison path + `ih_design.py` / `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
+| Induction heating | Radia Simulink `Induction Heating` block + `ih_design.py` / `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
 | Electromagnet | Radia Simulink `Electromagnet` block + `em_design.py` / `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_hdiv.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis, HDiv-VIM. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `docs/levitation/`, `validation_test/levitation/`, and the IGTE 2026 paper. radia-cln is NOT a separate package. |
 | Motor | Radia Simulink `Motor` block + `motor_design.py` / `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
@@ -161,19 +161,35 @@ production interface for Radia applications is a masked block in the single
   application grouping covers Electromagnet, PCB/PEEC, Motor, Stream Function,
   and Induction Heating. Additional validated MEX/ROM, LTspice, optimization,
   or application subsystems may coexist without changing this contract.
-- `radia-ih` is the only dual-production exception during the migration study:
-  keep both its Jupyter notebook workbench and its Simulink block supported,
-  exercise both on the same inputs, and compare setup effort, failure recovery,
-  result inspection, automation, and operator throughput.  The intended
-  direction is Simulink. Retire the IH notebook only after the block matches the
-  same headless goldens, preserves result/log diagnostics and recovery, succeeds
-  in an operational trial, and an explicit policy decision accepts the move.
-- For every other application, a Simulink block is the final production
-  interface. Remove the EM, PCB, Motor, and Stream Function notebook
-  workbenches and their adapters; do not retain them as alternate production
-  paths, add notebook-only production features, or create new notebook panels.
-- `docs/**/*.ipynb` remains the result-bearing documentation, derivation,
-  reproduction, and validation layer. A docs notebook is not a production GUI.
+- All Jupyter notebook panels and workbenches, including the former `radia-ih`
+  comparison workbench, are retired as production interfaces. Remove their
+  launchers and adapters; do not retain notebook-only production features or
+  create new notebook panels. Every Radia application uses its masked Simulink
+  block as the final human operating surface.
+- `docs/**/*.ipynb` is the canonical public example, derivation, reproduction,
+  and validation layer, not a production GUI. Every repository-published CAE
+  example MUST be an executed, result-bearing notebook with narrative, code,
+  synchronized JSON, and saved `ngsolve.webgui.Draw` scenes. Draw the geometry
+  or mesh and the primary computed field when one exists; use
+  `netgen.webgui.Draw` for pre-mesh CAD geometry. A source catalog, migration
+  archive, static PNG, or script excerpt alone does not qualify as an example.
+- A notebook field scene MUST pass the field and mesh explicitly and name the
+  view, for example `Draw(field, mesh, name="B_magnitude", ...)`. Keep useful
+  display choices such as volume/surface visibility, autoscaling, clipping,
+  vectors, and widget size as explicit arguments. A bare `Draw(field)` is not
+  the public field-visualization contract.
+- Public example notebooks set `metadata.radia.notebook_role="example"` and
+  `metadata.radia.webgui_required=true`. The document-meta notebook audit must
+  fail an example that lacks an executed `Draw` cell with saved rich output.
+  When a primary computed field exists, also set
+  `metadata.radia.webgui_field_required=true`; the audit then requires an
+  executed parameterized field scene with saved rich output.
+- A tracked `.slx` interface sample may accompany the library when it has a
+  canonical `.m` generator, a direct load/update regression test, and an
+  explicit backend declaration. It demonstrates block composition and signal
+  wiring; it does not replace the result-bearing docs notebook that owns the
+  numerical evidence. `matlab/radia_ih_sample.slx` is MATLAB-only and must not
+  acquire a hidden Python or S-function dependency.
 - Blocks must delegate to tested `radia.*` APIs, MEX/ROM handles, or validated
   headless application entry points. They must not reimplement solver logic.
 - The initial application-block backend may be the validated Python/headless
@@ -189,6 +205,21 @@ production interface for Radia applications is a masked block in the single
   documented ports, sample-time semantics, fail-fast dependency checks,
   `run.log` / `result.json` compatible provenance, a MATLAB test entry point,
   and a numerical cross-check against the corresponding headless golden.
+- Every solver-bound `.vol` MUST pass `check-vol` after mesh export and before
+  solver or Simulink initialization. A production application/mode owns a
+  versioned `radia.vol-label-contract.v1` file and enables strict labels; keep
+  the `cubit-mesh-export.vol-check.v1` JSON report in the run directory and
+  index it from `result.json`. A sibling `.vol.json` CAD reference is used when
+  present but is not required for the structural/label gate. The checker does
+  not infer material constants from labels; DesignSpec/configuration validates
+  conductivity, permeability, BH data, frequency, and other physical values.
+- Every Simulink application run that computes a spatial field MUST write a
+  checked GMSH `.msh v4.1` post-processing artifact inside its run directory
+  and list it in `result.json`. The runner owns the output path; this is not a
+  user mesh-generation setting. Scalar/circuit-only modes with no spatial
+  field must declare the artifact not applicable and must not fabricate one.
+  GMSH remains a visualization/post-processing target, never the solver mesh
+  generator or the NGSolve interchange format.
 - Treat `radia-mcp` as the canonical executable manual for Radia-specific
   MATLAB and Simulink workflows. Do not duplicate generic MathWorks guidance.
 - Long or solver-heavy MATLAB validation runs execute on mdx or hibino; LAB and
@@ -675,10 +706,16 @@ driver.
   must be synchronized in the same change: after rerunning or editing notebook
   outputs, refresh the JSON sidecar so its recorded `notebook_sha256` matches
   the committed result-bearing `.ipynb`.
+- Every public CAE example notebook must also save an interactive WebGUI scene:
+  use `ngsolve.webgui.Draw` for the generated mesh and primary
+  `CoefficientFunction`/`GridFunction`, or `netgen.webgui.Draw` for CAD geometry
+  before meshing. Execute the `Draw` cell and preserve its rich output. Mark the
+  notebook metadata with `radia.notebook_role="example"` and
+  `radia.webgui_required=true`; the notebook audit enforces this contract.
 - `src/radia/panels/` owns headless `calc_*.py` application entry points,
-  samples, artifact schemas, and the temporary IH notebook comparison surface.
-  It is not the final human UI location. Do not create a repo-root `panels/`
-  tree.
+  samples, and artifact schemas. It contains no application notebook
+  workbench and is not the final human UI location. Do not create a repo-root
+  `panels/` tree.
 - `matlab/+radia/+simulink/` owns Simulink builders and runtime adapters;
   `matlab/radia_simulink_library.slx` is the distributable human-facing block
   library. Native block kernels and build sources may live under
@@ -697,7 +734,7 @@ a durable role:
 | `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
 | `src/` | Reusable API, parser, formula, solver helper, and computation kernel. | package users / validation / MCP / blocks | Yes |
-| `src/radia/panels/` | Validated headless application CLI, `DesignSpec`, samples, and IH notebook comparison support. | blocks / AI / validation | Yes |
+| `src/radia/panels/` | Validated headless application CLI, `DesignSpec`, samples, and artifact contracts. | blocks / AI / validation | Yes |
 | `matlab/+radia/+simulink/` + `matlab/radia_simulink_library.slx` | Final application-specific human operating surface. | end users | MATLAB distribution |
 
 **Promotion gates**:
@@ -710,7 +747,8 @@ a durable role:
   validation host.
 - **C:\temp → docs/**: the result teaches a method or workflow to humans; the
   notebook must be executed, output-bearing, Markdown-integrated, and paired
-  with synchronized JSON.
+  with synchronized JSON. A public CAE example also includes saved WebGUI
+  `Draw` scenes for its geometry/mesh and primary field.
 - **C:\temp → src/**: the code is reusable by more than one documentation,
   validation, application-block, or MCP path.
 - **Mature docs/headless contract → Simulink**: publish a masked block only
@@ -757,8 +795,10 @@ Stage 2 is considered **合格 (pass)** when:
 
 **Stage 3 — result-bearing documentation notebook (`docs/<topic>/*.ipynb`).**
 Explain the validated method, inputs, outputs, equations, and representative
-result. Save outputs and synchronize the adjacent JSON. The notebook may call
-the Stage-2 contract but may not become an alternate production workbench.
+result. Save outputs and synchronize the adjacent JSON. For a CAE example,
+include executed `ngsolve.webgui.Draw` cells for the mesh and primary result
+field and save their rich output. The notebook may call the Stage-2 contract
+but may not become an alternate production workbench.
 
 **Stage 4 — masked Simulink application block.**
 Publish the human interface in the single Radia library. The block exposes a
@@ -777,11 +817,9 @@ Stage 4 is considered **合格 (pass)** when:
 - success, timeout, dependency failure, and solver failure leave inspectable
   result/log diagnostics
 
-EM, PCB, Motor, and Stream Function have no notebook-workbench stage. IH alone
-keeps its existing workbench during the comparison period; both IH surfaces
-must exercise the same `IHDesignSpec`/headless calculation and artifacts. The
-Cubit Export Mesh toolbar remains the separate allowed PySide6 surface inside
-Coreform Cubit's embedded Python.
+No Radia application has a notebook-workbench stage. The Cubit Export Mesh
+toolbar remains the separate allowed PySide6 surface inside Coreform Cubit's
+embedded Python.
 
 **Why**:
 - Forces the hard thinking about *what is changeable* before any widget
@@ -1448,15 +1486,32 @@ netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロ�
 
 ### Mesh Export Consistency Check Policy
 
-**POLICY**: Before exporting .vol, verify mesh correctness by comparing NGSolve integration values against Cubit ACIS CAD values, per label:
+**POLICY**: Run the canonical `check-vol` gate after every solver-bound `.vol`
+is exported/generated and before solver or Simulink initialization.
 
-| Check | NGSolve | Cubit CAD | Threshold |
-|-------|---------|-----------|-----------|
-| **Volume** (per material) | `Integrate(CF(1), mesh, definedon=mesh.Materials(mat))` | `cubit.volume(vid).volume()` | > 1% warning |
-| **Area** (per boundary) | `Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries(bnd))` | `cubit.surface(sid).area()` | > 1% warning |
-| **Length** (per BBND) | `Integrate(CF(1), mesh, BBND, definedon=mesh.BBoundaries(bnd))` | `cubit.curve(cid).length()` | > 1% warning |
+| Gate | Always available | Failure condition |
+|------|------------------|-------------------|
+| NGSolve structure | Yes | Cannot load, invalid counts/order, or malformed topology |
+| Label contract | Yes | Missing/unexpected/generated/case-colliding labels or invalid Kelvin/source/symmetry relations |
+| Curved mapping | Default | Non-positive Jacobian, scaled-Jacobian threshold, wrong curve order, or element-family mismatch |
+| CAD consistency | When `.vol.json` exists | Per-label volume/area or total edge-length error above threshold; count/order mismatch |
 
-All three checks (Volume, Area, Length) passing per label confirms the mesh is geometrically correct.
+Production application/mode meshes use
+`--contract <labels.json> --strict-labels`; strict naming permits lower snake case,
+`sym_bn=0_<axis>` / `sym_ht=0_<axis>`, and the reserved `GND` point label.
+The default CAD threshold is 1%, and errors are displayed in scientific
+notation. The sidecar is auto-discovered when present; explicitly passing
+`--json` makes it mandatory.
+
+```bash
+check-vol model.vol --contract labels.json --strict-labels \
+  --report-json run/vol_check.json
+```
+
+The checker validates mesh topology and semantic region names. Material
+constants remain in the selected DesignSpec/configuration and are checked
+there; never infer conductivity, permeability, BH data, or frequency from a
+`.vol` label.
 
 ### GMSH API Node Ordering Verification Policy
 
@@ -2270,7 +2325,7 @@ solution and pointwise `rad.Fld`).
 2. Update `CHANGELOG.md`
 3. `git commit` (do NOT push yet)
 4. `/deploy` — build wheel, deploy to 100号機 (WinRM) & mdx (SSH)
-5. Test on remote machines (Cubit toolbar, Simulink application blocks, IH comparison workbench, docs Mesh Evaluation, etc.)
+5. Test on remote machines (Cubit toolbar, Simulink application blocks, result-bearing docs notebooks, Mesh Evaluation, etc.)
 6. If tests pass: `git push origin main`
 7. **Confirm main CI is GREEN before tagging** (gh-free; `gh` is not on LAB):
    `python tools/release_qud.py ci-verify` — waits for the self-hosted
@@ -2727,11 +2782,12 @@ Mesh export is C++ only (`export netgen` APREPRO command in the Cubit plugin).
 
 **Consistency checking** (does NOT require Cubit):
 ```bash
-check-vol model.vol                         # CLI (installed with cubit-mesh-export)
-check-vol model.vol --json model.vol.json   # With companion JSON from export
+check-vol model.vol                         # Sidecar auto-discovered if present
+check-vol model.vol --contract labels.json --strict-labels \
+  --report-json run/vol_check.json
 ```
 ```python
-from cubit_mesh_export.check import check_consistency  # API
+from cubit_mesh_export.check import check_consistency, check_label_contract
 ```
 
 **Module names**:
@@ -3551,7 +3607,7 @@ without hiding headless flags in callback-only state. Ports use fixed types and
 stable dimensions, and the block icon remains compact and readable in a normal
 engineering model.
 
-The IH notebook is the temporary comparison exception. Cubit may use PySide6
+No Radia application has a notebook-workbench exception. Cubit may use PySide6
 for its toolbar/menu, but normal Radia applications must not add new
 `ModePanel`, `AnalysisWindow`, or notebook-workbench surfaces.
 
@@ -3566,7 +3622,7 @@ the thermal step, **temperature reported as mean (volume-averaged
 `∫T dV / ∫dV`), max, and min** -- not a single peak value.
 
 **How it is enforced**:
-- Simulink result adapters and the temporary IH workbench summarize ne / DoF /
+- Simulink result adapters summarize ne / DoF /
   all `t_*_s` timings / heat `P_*` / temperature mean-max-min from the JSON
   result artifact, keyed
   on the ACTUAL emitted names (`wp_ndof`/`ndof`,
@@ -3639,7 +3695,7 @@ of truth for Python, MCP, MATLAB, and Simulink:
 **Enforcement**: `python tools/audit_new_panel_contract.py` is the
 static gate for the calc/DesignSpec side, `tests/test_simulink_application.py`
 locks the Python-backed runner, and `tests/matlab/test_simulink_workflow.m`
-locks the library. Do not add desktop PySide6 or non-IH notebook panels.
+locks the library. Do not add desktop PySide6 or notebook panels.
 
 **Output convention**: GMSH `.msh` for visualization + the text `.log`
 file from Persistence Policy.  Do NOT add new bespoke output formats
@@ -3656,7 +3712,7 @@ run stores the pair in its configured run root:
 | File | Content | Producer |
 |---|---|---|
 | `<base><suffix>.json` | Structured result dict (per [Result Output Policy 2026-05-29](#result-output-policy-ne--dof--time--analysis-integral-quantities-2026-05-29)) | `calc_*.py --output` |
-| `<base><suffix>.log` or `<run>/run.log` | Verbatim command/stdout/stderr/failure record | Simulink application runner or temporary IH `CommandWorkbench` |
+| `<base><suffix>.log` or `<run>/run.log` | Verbatim command/stdout/stderr/failure record | Simulink application runner |
 
 - **Naming**: `<base>` from input path basename (`json_output()` /
   `msh_output()` convention), `<suffix>` from the panel-mode suffix
@@ -3670,7 +3726,7 @@ run stores the pair in its configured run root:
   also leaves a `.log` capturing the failure tail. This is required
   for triage of incident reports ("panel crashed" / "wrong number")
   without asking the user to copy-paste from the Output box.
-- **Scope**: All application blocks uniformly, plus the temporary IH notebook.
+- **Scope**: All application blocks uniformly.
   The Simulink contract writes `command.txt`, `solver_result.json`, `run.log`,
   and versioned `result.json` in one run directory. An application promoted to
   MEX/ROM must preserve equivalent provenance and diagnostics.
@@ -3678,8 +3734,6 @@ run stores the pair in its configured run root:
 **How it is enforced**:
 - Simulink blocks build commands from `DesignSpec.build_command()` through
   `radia.simulink.application` and persist `result.json` / `run.log` artifacts.
-- The IH notebook must write the same essential status, command, timing, and
-  runtime provenance while it remains in comparison service.
 - Python and MATLAB tests lock result creation, run-log capture, application
   identity, mask wiring, and failure behavior.
 
@@ -3723,7 +3777,6 @@ imports another process's private runtime.
 │  matlab/radia_simulink_library.slx + radia.simulink adapters    │
 │  Explicit trigger launches Layer 4 and reads result/log files.  │
 │  Native MEX/ROM is optional and admitted only after parity tests.│
-│  IH notebook is a temporary comparison peer, not the default.   │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
@@ -3754,12 +3807,11 @@ versioned configuration, `run.log`, solver JSON, and `result.json` artifacts.
 | File | Layer | Purpose |
 |------|-------|---------|
 | `src/radia/panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs inside Cubit |
-| `src/radia/panels/register_toolbar.py` | 2 (Cubit Python) | Solve/export menu integration; no non-IH notebook launcher |
+| `src/radia/panels/register_toolbar.py` | 2 (Cubit Python) | Solve/export menu integration; no notebook launcher |
 | `matlab/radia_simulink_library.slx` | 3 (Simulink) | Final EM, PCB, Motor, Stream Function, and IH blocks |
 | `matlab/+radia/+simulink/` | 3 (MATLAB) | Block builders, explicit runner, masks, and runtime adapters |
 | `src/radia/simulink/application.py` | 3→4 bridge | Python-backed explicit-trigger artifact runner |
-| `src/radia/panels/notebooks/radia_ih.ipynb` | 3 comparison | Temporary IH notebook workbench only |
-| `ih_design.py`, `ih_notebook.py` | 3 comparison | Shared IH settings plus temporary notebook adapter |
+| `ih_design.py` | 4 contract | Shared UI-neutral IH settings and command mapping |
 | `*_design.py` | 4 contract | UI-neutral settings-to-command mapping shared by blocks and AI |
 | `src/radia/panels/calc_*.py` | 4 (no GUI) | Headless application computations |
 | `src/radia/panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA called from docs/notebooks |

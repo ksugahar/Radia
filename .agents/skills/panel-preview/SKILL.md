@@ -1,6 +1,6 @@
 ---
 name: panel-preview
-description: Compatibility note for previewing Radia interfaces after the PySide era. Inspect the generated Simulink library and masked application blocks; use ipynb-gui-health only for the temporary IH notebook.
+description: Compatibility note for previewing Radia interfaces after the PySide era. Inspect the generated Simulink library, masked application blocks, and tracked MATLAB-only sample objects.
 ---
 
 # Interface Preview

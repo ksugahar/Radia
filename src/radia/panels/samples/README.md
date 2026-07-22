@@ -8,7 +8,7 @@ or `.step`, BH curve `.txt`, hysteresis `.hys`, etc.).
 This README is the index.  See sub-directories for deeper
 documentation (`em/README.md` for the EM-specific corpus).
 
-## Induction Heating block + IH comparison notebook
+## Induction Heating block
 
 | Method (UI label) | Calc script (Layer 4) | .jou recipe | Canonical .vol | Coil source |
 |---|---|---|---|---|

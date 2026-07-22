@@ -5,9 +5,8 @@ Simulink library. Python and MCP remain the AI surface, and result-bearing
 notebooks under `docs/` explain and reproduce methods. A documentation notebook
 is not an application GUI.
 
-IH is the temporary comparison exception: its notebook workbench and Simulink
-block remain supported over the same headless contract until the block passes
-the operational migration gates.
+There is no notebook-workbench exception. Every application, including IH,
+uses a masked Simulink block over the headless contract.
 
 ## Four Stages
 
@@ -160,7 +159,6 @@ for build, import, mask, and fast numerical checks.
 - `matlab/+radia/+simulink/applicationSFunction.m`: rising-edge block runtime.
 - `matlab/+radia/+simulink/buildLibrary.m`: single-library builder.
 - `src/radia/panels/application_interface_manifest.json`: production states.
-- `src/radia/ih_notebook.py`: temporary IH-only comparison adapter.
 
 ## Anti-Patterns
 

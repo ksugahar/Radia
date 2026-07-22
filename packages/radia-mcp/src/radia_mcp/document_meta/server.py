@@ -7,7 +7,7 @@ Cross-cutting document helpers that do not belong to one document type:
   * document_meta_lint_all           -- run every applicable radia-mcp lint over a file
   * document_meta_write_notebook_result_json -- write versioned JSON sidecar from saved outputs
   * document_meta_write_docs_notebook_result_jsons -- batch sidecars for docs notebooks
-  * document_meta_notebook_result_audit -- check ipynb saved outputs + JSON sidecars
+  * document_meta_notebook_result_audit -- check saved outputs, WebGUI scenes, and JSON sidecars
   * document_meta_examples_notebook_audit -- examples -> docs or validation_test audit
   * document_meta_panel_layout_audit -- root-level panels migration impact audit
 

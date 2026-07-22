@@ -94,10 +94,12 @@ modelName = "radia_optuna_runner_test";
 cleanup = onCleanup(@() closeIfLoaded(modelName));
 plant = radia.simulink.makeIHPlant( ...
     HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-radia.simulink.buildIHControlModel(modelName, plant, ...
+eddyLut = makeTestEddyLut();
+radia.simulink.buildIHControlModel(modelName, plant, eddyLut, ...
     StopTime_s=1, Save=false, Open=false);
 time_s = reshape(0:0.1:1, [], 1);
-inputData = [time_s, 100 * ones(size(time_s)), 293.15 * ones(size(time_s))];
+inputData = [time_s, 10 * ones(size(time_s)), zeros(size(time_s)), ...
+    293.15 * ones(size(time_s))];
 runner = radia.optuna.SimulinkRunner(modelName, ...
     ConfigureFcn=@(simInput, trial) simInput.setExternalInput(inputData), ...
     ScoreFcn=@(simOut, trial) simOut.get("yout").getElement(1).Values.Data(end));
@@ -151,9 +153,12 @@ name="radia_optuna_parallel_gate"; file="C:\temp\radia_optuna_parallel_gate.slx"
 cleanup=onCleanup(@()closeAndDelete(name,file));
 plant=radia.simulink.makeIHPlant(HeatCapacity_J_per_K=10, ...
     ThermalConductance_W_per_K=2,SampleTime_s=0.1);
-radia.simulink.buildIHControlModel(name,plant,StopTime_s=0.2,Save=false,Open=false);
+eddyLut=makeTestEddyLut();
+radia.simulink.buildIHControlModel(name,plant,eddyLut, ...
+    StopTime_s=0.2,Save=false,Open=false);
 save_system(name,file); close_system(name,0);
-time=(0:0.1:0.2)'; input=[time,100*ones(size(time)),293.15*ones(size(time))];
+time=(0:0.1:0.2)'; input=[time,10*ones(size(time)),zeros(size(time)), ...
+    293.15*ones(size(time))];
 runner=radia.optuna.SimulinkRunner(file, ...
     ConfigureFcn=@(simInput,trial)simInput.setExternalInput(input), ...
     ScoreFcn=@(simOut,trial)simOut.get("yout").getElement(1).Values.Data(end));
@@ -208,6 +213,13 @@ end
 function values=multiObjective(trial)
 x=trial.suggestFloat("x",-1,3);
 values=[x^2,(x-2)^2];
+end
+
+function lut=makeTestEddyLut()
+theta=[0;pi/2;pi;3*pi/2]; current=[0;5;10];
+heatDensity=1000*[1;1.5;2;1.5]*((current/10).^2).';
+lut=radia.simulink.makeIHEddyHeatDensityLUT(theta,current,heatDensity, ...
+    RegionVolumes_m3=0.1,CarrierFrequency_Hz=50e3,Source="test map");
 end
 
 function closeIfLoaded(modelName)

@@ -28,6 +28,7 @@ TEMP = "C:/temp"
 
 MESH_VOL = os.path.join(TEMP, "test_pmsm.vol")
 OUTPUT_JSON = os.path.join(TEMP, "test_pmsm_golden.json")
+OUTPUT_MSH = os.path.join(TEMP, "test_pmsm_golden.msh")
 
 
 @pytest.fixture(scope="module")
@@ -54,6 +55,7 @@ def _run(extra_args):
         # the spawned child inherits a broken MKL state ("Cannot load
         # mkl_intel_thread.dll").  Production keeps pardiso (MKL + TaskManager).
         "--linear-solver", "sparsecholesky",
+        "--msh-output", OUTPUT_MSH,
         "--output", OUTPUT_JSON,
     ] + extra_args
     env = os.environ.copy()
@@ -65,7 +67,11 @@ def _run(extra_args):
         f"STDERR:\n{r.stderr[-1500:]}"
     )
     with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
-        return json.load(f)
+        result = json.load(f)
+    assert result["gmsh_file"] == os.path.abspath(OUTPUT_MSH)
+    with open(OUTPUT_MSH, "r", encoding="utf-8") as f:
+        assert f.read(40).startswith("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+    return result
 
 
 def test_purely_inductive_no_pm(pmsm_mesh):

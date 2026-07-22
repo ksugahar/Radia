@@ -529,8 +529,6 @@ print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_m
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
 for r in ["panels/register_toolbar.py",
           "panels/radia_export_menu.py",
-          "notebook_workbench.py",
-          "ih_notebook.py",
           "simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
@@ -583,8 +581,6 @@ print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_m
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
 for r in ["panels/register_toolbar.py",
           "panels/radia_export_menu.py",
-          "notebook_workbench.py",
-          "ih_notebook.py",
           "simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",

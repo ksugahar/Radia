@@ -327,9 +327,8 @@ relaxation parameter less relevant.
   [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/)
 - Material loader (BH file parser):
   [`src/radia/em_material.py`](../../src/radia/em_material.py)
-- Radia IH Simulink block (production candidate) and temporary notebook comparison (both drive the same CLIs):
-  [`src/radia/panels/notebooks/radia_ih.ipynb`](../../src/radia/panels/notebooks/radia_ih.ipynb)
-  plus [`src/radia/ih_design.py`](../../src/radia/ih_design.py)
+- Radia IH Simulink block and its shared headless contract:
+  [`src/radia/ih_design.py`](../../src/radia/ih_design.py)
 
 ---
 

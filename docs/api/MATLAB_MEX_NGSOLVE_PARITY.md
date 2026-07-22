@@ -191,7 +191,7 @@ loop never rebuilds the H-matrix.
 For Simulink, `simulink.state_space.create` stores `A`, `B`, `C`, `D`, and the
 initial state in a checked native handle. `step` computes `y=C*x+D*u` and then
 updates `x=A*x+B*u`; `reset`, `info`, and `destroy` manage the handle lifecycle.
-`radia.simulink.buildIHControlModel(..., PlantBlock="radia-mex")` and
+`radia.simulink.buildIHControlModel(..., eddyLut, PlantBlock="radia-mex")` and
 `radia.simulink.buildHCurlEddyCLNModel(..., Block="radia-mex")` use this path.
 
 The handle layer is explicit: MATLAB does not alias a Python object. A

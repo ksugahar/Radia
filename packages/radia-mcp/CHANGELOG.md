@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.18] - 2026-07-22
+
+- Published the Simulink-only application policy, MATLAB-only IH sample-object
+  contract, checked GMSH result-artifact rules, and strict `.vol` preflight in
+  the executable MATLAB, Cubit, and panel-review guidance.
+- Extended document-meta auditing for public CAE examples to require executed
+  WebGUI scenes and explicit `Draw(field, mesh, name=..., ...)` field views.
+- Retired the remaining IH notebook-workbench guidance while preserving
+  result-bearing docs notebooks as the public reproduction and visualization
+  layer.
+
 ## [1.4.17] - 2026-07-21
 
 - Published the acoustic, axifem, and HCurl-topology Python/MEX equivalence

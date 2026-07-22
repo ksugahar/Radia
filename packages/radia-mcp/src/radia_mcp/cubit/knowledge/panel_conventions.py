@@ -16,8 +16,7 @@ Cubit 2025.12 embedded Python/PySide6
 
 Cubit is a mesh producer, not the application GUI host. The single Radia
 Simulink library owns EM, PCB, Motor, Stream Function, and IH human operation.
-IH temporarily also keeps `radia_ih.ipynb` for comparison; all other packaged
-analysis workbenches are removed.
+All packaged analysis workbenches are removed, including IH.
 
 The source of truth is
 `src/radia/panels/application_interface_manifest.json`, each application's
@@ -56,10 +55,10 @@ Material-aware modes may additionally consume iron/shield meshes.
 Golden-locked assets live under `src/radia/panels/samples/`:
 
 ```text
-IH block / comparison notebook -> ih_bem_sample.jou,
-                                  ih_peec_bem_coarse.jou,
-                                  ih_fem_kelvin_skin_fine.jou,
-                                  ih_peec_inductance.jou
+IH block -> ih_bem_sample.jou,
+            ih_peec_bem_coarse.jou,
+            ih_fem_kelvin_skin_fine.jou,
+            ih_peec_inductance.jou
 Electromagnet block            -> em_sample.jou
 PCB PEEC block                 -> pcb_sample.jou
 ```
@@ -72,6 +71,18 @@ Research history belongs under `validation_test/`.
 The Cubit toolbar exports; it does not launch a non-IH notebook or run the
 solver. Curve order and labels are fixed at export time. Application config
 then references the durable files and the Simulink block executes explicitly.
+
+Every solver-bound `.vol` runs through `check-vol` after export and before
+Simulink/solver initialization. The standalone gate always checks NGSolve
+loading, sampled curved mappings, label names/relations, and required labels.
+It auto-discovers `.vol.json` for CAD volume/area/total-edge and mesh-metadata
+comparison when available. Production application/mode meshes use a versioned
+`radia.vol-label-contract.v1` contract with strict labels, and retain the
+`cubit-mesh-export.vol-check.v1` JSON report with the run artifacts.
+
+The `.vol` checker validates topology and semantic names. It does not infer
+conductivity, permeability, BH data, frequency, or other material constants
+from labels; those values belong to the checked DesignSpec/configuration.
 """
 
 
@@ -90,7 +101,7 @@ Cubit blocks/sidesets -> export netgen -> .vol SetMaterial/SetBCName
 - Use lowercase descriptive names such as `iron`, `source`, `sink`, and `air`.
 - Block names become material labels; sideset names become boundary labels.
 - Do not mix volume and surface entities in one block.
-- Validate labels against the selected application's headless sample/CLI.
+- Validate labels against the selected application's versioned label contract.
 - A Simulink mask must not silently rename or substitute a missing label.
 
 ## Example
@@ -102,6 +113,7 @@ sideset 1 add surface 1
 sideset 1 name "source"
 ```
 
-Use `check-vol`/NGSolve inspection before a physics solve. Missing required
-labels fail and leave an application diagnostic artifact.
+Use `check-vol model.vol --contract labels.json --strict-labels` before a
+physics solve. Missing, generated, conflicting, or unexpected labels fail and
+leave a versioned JSON diagnostic artifact.
 """
