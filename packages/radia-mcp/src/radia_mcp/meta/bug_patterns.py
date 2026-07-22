@@ -94,14 +94,12 @@ PATTERNS: list[dict] = [
                       "to the .log.",
         "detection": "Code review of any legacy AnalysisWindow._on_finished "
                      "override; current application blocks are covered by "
-                     "tests/test_simulink_application.py and the IH exception "
-                     "by validation_test/panels/test_notebook_workbench.py.",
+                     "tests/test_simulink_application.py and "
+                     "tests/test_application_interface_manifest.py.",
         "prevention": "Prefer the Simulink application-runner artifact "
-                      "contract. Any temporary IH/legacy adapter that appends "
-                      "output after a run must rewrite the final .log at the "
-                      "end of the override.",
-        "related": ["validation_test/panels/test_notebook_workbench.py",
-                    "src/radia/notebook_workbench.py"],
+                      "contract; do not restore notebook-workbench adapters.",
+        "related": ["tests/test_simulink_application.py",
+                    "tests/test_application_interface_manifest.py"],
     },
     {
         "id": "calc-result-key-misnamed-time",

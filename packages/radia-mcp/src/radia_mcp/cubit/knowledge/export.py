@@ -674,8 +674,15 @@ Every `export netgen` produces a companion .vol.json:
 
 Use for:
 - Automated p-convergence regression tests
-- Consistency checks without Cubit (`check-vol model.vol --json model.vol.json`)
+- Standalone consistency checks without Cubit (`check-vol model.vol`; the
+  sibling sidecar is auto-discovered when present)
+- Strict application label checks (`check-vol model.vol --contract labels.json
+  --strict-labels --report-json run/vol_check.json`)
 - Cross-format verification (export -> GMSH reload -> compare vs .vol.json)
+
+Run the checker after export and before solver/Simulink initialization.
+Material constants are validated by the application DesignSpec/configuration,
+not inferred from `.vol` label names.
 """
 
 

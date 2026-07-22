@@ -120,7 +120,8 @@ The platform is designed for a complete engineering loop:
 
 An LLM can write and execute the Python workflow through MCP. A human operates
 the application through Simulink and inspects durable results in docs notebooks
-or native visualization tools. IH temporarily keeps a comparison workbench.
+or native visualization tools. Notebook workbenches are retired for every
+application, including IH.
 The interfaces differ; the engineering model and validation artifacts are shared.
 
 ## Architecture
@@ -371,7 +372,11 @@ configuration examples.
 For Cubit-to-NGSolve workflows, the .vol file is the process boundary:
 Cubit produces the mesh and the NGSolve/Radia process consumes it. This keeps
 the Cubit Python 3.10 runtime separate from the Radia/NGSolve Python 3.12
-runtime.
+runtime. Run `check-vol` after export and before solver or Simulink
+initialization; it checks NGSolve structure, curved mappings, labels, and an
+optional Cubit CAD sidecar. Production modes add a versioned strict label
+contract. Physical material constants remain explicit DesignSpec/configuration
+values and are never inferred from mesh labels.
 
 ## Quick start
 
@@ -479,7 +484,10 @@ The canonical human-facing interfaces are masked blocks in the single Radia
 Simulink library: Electromagnet, PCB PEEC, Motor, Stream Function, and
 Induction Heating. Each block delegates to the same `DesignSpec` and headless
 calculation used by Python/MCP, always writes `run.log` and `result.json`, and
-adds solver artifacts when execution reaches that stage.
+adds solver artifacts when execution reaches that stage. A field-producing run
+writes a checked GMSH `.msh v4.1` artifact into the same run directory and
+records it in `result.json`; scalar/circuit-only modes declare that artifact
+not applicable.
 
     addpath("matlab")
     radia.setup()
@@ -491,9 +499,16 @@ an individual application block to a MEX/ROM backend remains optional and
 requires parity and long-run testing. The native NGSolve MEX bridge above is a
 separately supported platform capability, not merely a future block backend.
 
-IH temporarily keeps its notebook workbench for an operational comparison:
+In MATLAB, `radia.simulink.openIH()` opens the production Induction Heating
+block. Supplying `Plant` and `EddyLUT` opens the separated IH Parameters / Eddy
+Current / Thermal control model; current and rotation angle remain external
+Simulink source signals.
 
-    python -m jupyter lab src/radia/panels/notebooks/radia_ih.ipynb
+For a directly inspectable MATLAB-only object, open
+`matlab/radia_ih_sample.slx`. It contains stepped RMS-current, rotation-angle,
+and ambient-temperature Source blocks wired to separate masked Eddy Current,
+Thermal, and IH Parameters subsystems; it launches neither Python nor a MEX
+S-function.
 
 The Cubit toolbar is a separate, Cubit-embedded integration surface. Normal
 Radia Python workflows do not install or depend on Cubit's private PySide
@@ -502,6 +517,7 @@ runtime.
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [Executable Radia <-> NGSolve example with saved WebGUI scenes](docs/ngsolve_integration/integration_basics.ipynb)
 - [HDiv-VIM](docs/hdiv_vim/README.md)
 - [Clebsch-Hodograph](docs/clebsch_hodograph/README.md)
 - [Eddy-current methods](docs/solver/EDDY_CURRENT_METHODS.md)

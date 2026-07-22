@@ -15,7 +15,7 @@ Source: src/radia/panels/calc_inductance.py,
         src/radia/coil_from_cad.py (STEP path -- the only input path
         since 4.13.0; .jou explicit-centerline input was retired
         per CLAUDE.md No-Fallbacks),
-        src/radia/ih_design.py + src/radia/panels/notebooks/radia_ih.ipynb
+        src/radia/ih_design.py + the Induction Heating Simulink block
         -- Method = "PEEC inductance (coil only, STEP)".
 """
 

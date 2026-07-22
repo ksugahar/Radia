@@ -14,10 +14,17 @@ Function, and Induction Heating are built by
 `solver_result.json`, and versioned `result.json`. It is not a per-time-step
 Python bridge.
 
+For a field-producing mode, the runner overrides `--msh-output` with a path in
+the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
+generated GMSH artifact in `result.json`. Scalar/circuit-only modes explicitly
+remain non-spatial. GMSH is used for post-processing only; solver interchange
+continues to use Netgen `.vol`.
+
 MEX/ROM remains an optional backend promotion. Compilation alone is not a
 production gate; numerical parity, failure propagation, handle lifecycle, and
 long-run stability must pass while the block mask and port contract stay
-unchanged. IH temporarily keeps its notebook workbench for comparison.
+unchanged. Notebook workbenches are retired for every application, including
+IH.
 
 ## Motor ROM block
 
@@ -134,11 +141,24 @@ building a new training envelope. Position and speed are kept as explicit
 ports in the waveform result so a mechanical solver can drive the same plant.
 
 When Simulink is installed, `radia.simulink.buildIHControlModel` creates a
-fixed-step model with the plant and named outputs. `IncludePID=true` adds a
-temperature-setpoint PID loop with power saturation. The external power
-provider can then be replaced by a Radia LUT, the motor-ROM S-function, or the
-native fixed reduced state-space block selected by
+fixed-step model with separate `IH Parameters`, `Eddy Current`, and `Thermal`
+blocks. Current, rotation angle, and ambient temperature remain external
+signals; the parameter block supplies fixed LUT/region values to the numerical
+blocks. `IncludePID=true` adds a temperature-setpoint PID loop with current
+saturation. Select the native fixed reduced state-space thermal boundary with
 `PlantBlock="radia-mex"`.
+
+`radia.simulink.openIH()` opens the production IH application block.
+`radia.simulink.openIH(Plant=plant,EddyLUT=eddyLut)` builds and opens the
+separated control model. Saved objects default to
+`C:\temp\radia_ih_models`; use `OutputDirectory` for an explicit artifact
+directory.
+
+`matlab/radia_ih_sample.slx` is the tracked source-driven sample object. Its
+canonical generator is `radia.simulink.buildIHSampleModel`; the sample keeps
+current and rotation as ordinary Simulink Source blocks and preserves the
+Eddy/Thermal subsystem boundary. It is a MATLAB-only support path built from
+standard Lookup Table and Discrete State-Space blocks, with no Python launch.
 
 For learning and design optimization, wrap a `sim` call or the fast waveform
 function in an objective and use:

@@ -31,6 +31,7 @@ def solve_motor_hdiv_reduced(
     center_y: float,
     eta: float,
     order: int,
+    msh_output: str = "",
 ):
     setup_paths()
     if not vol_file or not os.path.isfile(vol_file):
@@ -63,8 +64,28 @@ def solve_motor_hdiv_reduced(
             circle_points=circle_points,
             energy_delta_angle=math.radians(energy_delta_deg),
         )
+        gmsh_file = ""
+        if msh_output:
+            from radia.gmsh_post_export import GmshPostExport
+
+            state = motor.solve_angle(float(rotor_angles[-1]), field_global)
+            magnetization = ng.GridFunction(motor.body.fes)
+            magnetization.vec.FV().NumPy()[:] = state.coefficients
+            magnetization_3d = ng.CoefficientFunction(
+                (magnetization[0], magnetization[1], 0.0)
+            )
+            gmsh_file = os.path.abspath(msh_output)
+            os.makedirs(os.path.dirname(gmsh_file), exist_ok=True)
+            post = GmshPostExport(mesh)
+            post.add_vector_field(
+                "M_local_A_per_m", magnetization_3d, cell_data=True
+            )
+            post.write(gmsh_file)
     result["vol_file"] = os.path.abspath(vol_file)
     result["field_angle_deg"] = float(field_angle_deg)
+    result["gmsh_file"] = gmsh_file
+    if gmsh_file:
+        result["gmsh_field_rotor_angle_deg"] = float(rotor_angle_stop_deg)
     return result
 
 
@@ -93,6 +114,10 @@ def build_argparser():
                         help="charge-Gram admissibility parameter")
     parser.add_argument("--order", type=int, choices=(1, 2), default=1,
                         help="HDiv order: BDM1 or BDM2")
+    parser.add_argument(
+        "--msh-output", default="",
+        help="GMSH .msh v4.1 output for the final rotor-angle magnetization",
+    )
     return parser
 
 
@@ -105,7 +130,8 @@ def main():
             args.rotor_angle_start_deg, args.rotor_angle_stop_deg,
             args.rotor_angle_steps, args.maxwell_radius, args.stack_length,
             args.energy_delta_deg, args.circle_points,
-            args.center_x, args.center_y, args.eta, args.order)
+            args.center_x, args.center_y, args.eta, args.order,
+            args.msh_output)
 
     calc_main(run, parser)
 

@@ -7,13 +7,13 @@ The Cubit plugin (cubit_mesh_export.ccm) provides mesh export commands:
                                          + model.geo launch companion
 
 Consistency checking (does NOT require Cubit):
-  check-vol model.vol              # CLI
+  check-vol model.vol --strict-labels
   from cubit_mesh_export.check import check_consistency  # API
 
 cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-__version__ = "0.14.3"
+__version__ = "0.14.4"
 
 # Compatibility window with the main radia package. The Cubit plugin
 # binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)

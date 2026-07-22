@@ -25,6 +25,8 @@ TEMP = "C:/temp"
 
 
 def _run(extra_args, output_json):
+    mode = extra_args[extra_args.index("--mode") + 1]
+    output_msh = os.path.splitext(output_json)[0] + ".msh"
     cmd = [
         sys.executable,
         os.path.join(PANELS, "calc_motor_lamination.py"),
@@ -34,7 +36,10 @@ def _run(extra_args, output_json):
         # transient golden test for the full explanation).
         "--linear-solver", "sparsecholesky",
         "--output", output_json,
-    ] + extra_args
+    ]
+    if mode in ("global", "full"):
+        cmd += ["--msh-output", output_msh]
+    cmd += extra_args
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     r = subprocess.run(cmd, capture_output=True, text=True, env=env)
@@ -43,7 +48,12 @@ def _run(extra_args, output_json):
         f"STDERR:\n{r.stderr[-1500:]}"
     )
     with open(output_json, "r", encoding="utf-8") as f:
-        return json.load(f)
+        result = json.load(f)
+    if mode in ("global", "full"):
+        assert result["gmsh_file"] == os.path.abspath(output_msh)
+        with open(output_msh, "r", encoding="utf-8") as f:
+            assert f.read(40).startswith("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+    return result
 
 
 def test_cell_problem_freq_sweep():

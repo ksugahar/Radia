@@ -26,5 +26,5 @@ python tools/audit_new_panel_contract.py
 python -m pytest tests/test_simulink_application.py -q
 ```
 
-Then run `simulink-app-health`. IH additionally keeps a temporary notebook
-comparison, but it must use the same DesignSpec and CLI contract.
+Then run `simulink-app-health`. No application keeps a notebook production
+adapter; docs notebooks are checked separately by `ipynb-gui-health`.

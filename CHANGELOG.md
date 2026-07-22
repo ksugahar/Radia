@@ -5,6 +5,32 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.22 - Simulink-only applications and checked mesh artifacts
+
+Released 2026-07-22.
+
+- Added a tracked MATLAB-only induction-heating Simulink sample with explicit
+  current, rotation-angle, and ambient-temperature sources feeding separate
+  Eddy Current, Thermal, and IH Parameters objects.
+- Promoted additional cohomology documentation notebooks to executed WebGUI
+  examples with saved mesh and magnetic-field scenes.
+
+- Standardized repository CAE examples as executed `docs/**/*.ipynb`
+  notebooks with synchronized result JSON and saved NGSolve/Netgen WebGUI
+  scenes, added explicit `Draw(field, mesh, name=..., ...)` field-view
+  arguments, and added an MCP audit for the executed widget output.
+- Retired the remaining IH notebook-workbench policy exception; all production
+  human application interfaces are masked Simulink blocks.
+- Standardized spatial output from Simulink application runs as checked GMSH
+  `.msh v4.1` artifacts owned by the run directory and indexed by `result.json`.
+  Motor transient, global/full lamination, and HDiv-reduced modes now export
+  their final FE or magnetization field; table-only lamination remains
+  explicitly non-spatial.
+- Finished the standalone `.vol` preflight with optional CAD-sidecar discovery,
+  versioned strict label contracts, structured JSON reports, curved-map and
+  SIBC adjacency gates, and correct handling of consistently negative Cubit
+  element orientations.
+
 ## 4.95.21 - Acoustic/axifem MEX parity and MATLAB fallback hardening
 
 Released 2026-07-21.

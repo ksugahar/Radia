@@ -695,7 +695,7 @@ The active invariants are:
 - the application runner writes versioned result/log artifacts
 - MEX is not promoted without parity/lifecycle/long-run evidence
 
-IH keeps a separate notebook comparison test until its migration decision.
+IH uses the same Simulink production gate as the other applications.
 Normal Radia Python should not install PySide6. Coreform Cubit's embedded
 PySide6 is protected and must not be removed.
 

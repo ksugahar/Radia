@@ -505,9 +505,10 @@ def matlab_optuna_simulink_contract():
             "LTspiceRunner": "serial or parfeval LTspice trials with isolated output directories, complex RAW, and client-owned Study updates",
         },
         "simulink_blocks": [
-            "buildIHControlModel(..., PlantBlock=\"standard\") uses the native Discrete State-Space block.",
-            "buildIHControlModel(..., PlantBlock=\"radia-sfunction\") uses the Radia-owned Level-2 MATLAB S-function boundary.",
-            "buildIHControlModel(..., PlantBlock=\"radia-mex\") uses a persistent native C++ state-space handle; matrices cross MATLAB/MEX once at Start and samples call native step/reset/destroy commands.",
+            "makeIHEddyHeatDensityLUT(theta,current,q,...) defines the periodic current/rotation-angle to regional heat-density contract.",
+            "buildIHControlModel(..., eddyLut, PlantBlock=\"standard\") uses native Simulink lookup blocks plus the reference Discrete State-Space thermal block.",
+            "buildIHControlModel(..., eddyLut, PlantBlock=\"radia-sfunction\") uses the Radia-owned Level-2 MATLAB thermal boundary.",
+            "buildIHControlModel(..., eddyLut, PlantBlock=\"radia-mex\") uses a persistent native C++ thermal state-space handle; matrices cross MATLAB/MEX once at Start and samples call native step/reset/destroy commands.",
             "buildTeam28CLNModel uses the validated 50 Hz six-stage CLN force LUT for control and RL experiments.",
             "ExportHCurlEddyCLNJSON plus loadHCurlEddyCLNModel maps numeric R/L/P reduced HCurl-VIM data into a passive discrete state-space block; solveHCurlEddyCLNHarmonic uses hybrid_vim.solve. radia.ngsolve.hcurl_eddy_cln_model additionally assembles a Python-free local HCurl diffusion projection directly from a VOL mesh.",
             "buildHCurlEddyCLNModel(..., Block=\"radia-mex\") uses the same Python-free native state-space handle for fixed reduced HCurl models; moving family interpolation remains a MATLAB S-function.",
@@ -660,9 +661,30 @@ def matlab_simulink_library_contract():
                 "state lifecycle, repeated-run, and long-run stability tests"
             ),
             "notebook_policy": (
-                "IH temporarily keeps a comparison notebook; EM, PCB, Motor, "
-                "and Stream Function notebook workbenches are retired"
+                "notebook workbenches are retired for every application, "
+                "including IH; docs notebooks are result-bearing examples "
+                "whose field scenes use Draw(field, mesh, name=..., ...)"
             ),
+            "spatial_artifact": {
+                "format": "GMSH .msh v4.1",
+                "location": "application run directory",
+                "required_when": "the selected mode computes a spatial field",
+                "result_index": "radia_result.artifacts.gmsh",
+                "scalar_only": "not-applicable",
+                "purpose": "visualization and post-processing only",
+            },
+            "mesh_preflight": {
+                "input_format": "Netgen .vol",
+                "checker": "check-vol",
+                "timing": "after export and before solver initialization",
+                "required_when": "the selected mode consumes a .vol mesh",
+                "label_contract_schema": "radia.vol-label-contract.v1",
+                "report_schema": "cubit-mesh-export.vol-check.v1",
+                "material_constants": (
+                    "validated by DesignSpec/configuration and never inferred "
+                    "from labels"
+                ),
+            },
         },
         "ltspice": {
             "supported_distribution": "Current Analog Devices LTspice only",

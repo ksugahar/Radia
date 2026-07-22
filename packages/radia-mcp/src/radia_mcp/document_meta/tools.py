@@ -6,6 +6,7 @@ template scaffolding, and full-tree linting.
 """
 from __future__ import annotations
 
+import ast
 import datetime
 import difflib
 import hashlib
@@ -576,10 +577,117 @@ def _read_notebook_result_summary(path: pathlib.Path, repo_root: pathlib.Path) -
             "result_saved": False,
         }
 
+    metadata = nb.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    radia_metadata = metadata.get("radia", {})
+    if not isinstance(radia_metadata, dict):
+        radia_metadata = {}
+    notebook_role = str(radia_metadata.get("notebook_role", "")).strip().lower()
+    webgui_required = (
+        notebook_role == "example"
+        or radia_metadata.get("webgui_required") is True
+    )
+    webgui_field_required = radia_metadata.get("webgui_field_required") is True
+
     cells = nb.get("cells", [])
     code_cells = [c for c in cells if c.get("cell_type") == "code"]
     executed = [c for c in code_cells if c.get("execution_count") is not None]
     output_cells = [c for c in code_cells if c.get("outputs")]
+    code_sources = []
+    for cell in code_cells:
+        source = cell.get("source", "")
+        code_sources.append("".join(source) if isinstance(source, list) else str(source))
+
+    webgui_import_pattern = re.compile(
+        r"(?m)^\s*(?:from\s+(?:ngsolve|netgen)\.webgui\s+import\s+[^\n]*\bDraw\b"
+        r"|import\s+(?:ngsolve|netgen)\.webgui(?:\s+as\s+\w+)?)"
+    )
+    webgui_draw_pattern = re.compile(
+        r"\b(?:Draw|(?:ngsolve|netgen)\.webgui\.Draw|\w+\.Draw)\s*\("
+    )
+    webgui_import_present = any(
+        webgui_import_pattern.search(source) for source in code_sources
+    )
+    webgui_draw_indices = [
+        idx for idx, source in enumerate(code_sources)
+        if webgui_draw_pattern.search(source)
+    ]
+    webgui_draw_present = webgui_import_present and bool(webgui_draw_indices)
+
+    parameterized_field_draw_indices: list[int] = []
+    for idx, source in enumerate(code_sources):
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            is_draw = (
+                isinstance(function, ast.Name) and function.id == "Draw"
+            ) or (
+                isinstance(function, ast.Attribute) and function.attr == "Draw"
+            )
+            if not is_draw:
+                continue
+            keyword_names = {kw.arg for kw in node.keywords if kw.arg is not None}
+            if len(node.args) >= 2 and "name" in keyword_names:
+                parameterized_field_draw_indices.append(idx)
+                break
+    parameterized_field_draw_indices = sorted(set(parameterized_field_draw_indices))
+    parameterized_field_draw_present = (
+        webgui_import_present and bool(parameterized_field_draw_indices)
+    )
+
+    def _has_webgui_output(cell: dict) -> bool:
+        for output in cell.get("outputs", []):
+            if output.get("output_type") not in {"display_data", "execute_result"}:
+                continue
+            data = output.get("data", {})
+            if not isinstance(data, dict):
+                continue
+            widget = data.get("application/vnd.jupyter.widget-view+json")
+            if isinstance(widget, dict) and widget.get("model_id"):
+                return True
+            html = data.get("text/html", "")
+            html_text = "".join(html) if isinstance(html, list) else str(html)
+            if "webgui" in html_text.lower() or "netgen" in html_text.lower():
+                return True
+        return False
+
+    executed_webgui_draw_cells = [
+        code_cells[idx] for idx in webgui_draw_indices
+        if code_cells[idx].get("execution_count") is not None
+    ]
+    webgui_draw_cells_with_rich_outputs = [
+        cell for cell in executed_webgui_draw_cells if _has_webgui_output(cell)
+    ]
+    executed_parameterized_field_draw_cells = [
+        code_cells[idx] for idx in parameterized_field_draw_indices
+        if code_cells[idx].get("execution_count") is not None
+    ]
+    parameterized_field_draw_cells_with_rich_outputs = [
+        cell for cell in executed_parameterized_field_draw_cells
+        if _has_webgui_output(cell)
+    ]
+    webgui_ready = (
+        not webgui_required
+        or (
+            webgui_draw_present
+            and bool(executed_webgui_draw_cells)
+            and bool(webgui_draw_cells_with_rich_outputs)
+        )
+    )
+    webgui_field_ready = (
+        not webgui_field_required
+        or (
+            parameterized_field_draw_present
+            and bool(executed_parameterized_field_draw_cells)
+            and bool(parameterized_field_draw_cells_with_rich_outputs)
+        )
+    )
     error_outputs = []
     for idx, cell in enumerate(code_cells):
         for out in cell.get("outputs", []):
@@ -601,6 +709,24 @@ def _read_notebook_result_summary(path: pathlib.Path, repo_root: pathlib.Path) -
         "error_output_count": len(error_outputs),
         "error_outputs": error_outputs[:5],
         "result_saved": result_saved,
+        "notebook_role": notebook_role,
+        "webgui_required": webgui_required,
+        "webgui_field_required": webgui_field_required,
+        "webgui_import_present": webgui_import_present,
+        "webgui_draw_present": webgui_draw_present,
+        "webgui_draw_cell_count": len(webgui_draw_indices),
+        "executed_webgui_draw_cell_count": len(executed_webgui_draw_cells),
+        "webgui_draw_cells_with_rich_outputs": len(webgui_draw_cells_with_rich_outputs),
+        "webgui_ready": webgui_ready,
+        "parameterized_field_draw_present": parameterized_field_draw_present,
+        "parameterized_field_draw_cell_count": len(parameterized_field_draw_indices),
+        "executed_parameterized_field_draw_cell_count": len(
+            executed_parameterized_field_draw_cells
+        ),
+        "parameterized_field_draw_cells_with_rich_outputs": len(
+            parameterized_field_draw_cells_with_rich_outputs
+        ),
+        "webgui_field_ready": webgui_field_ready,
     }
 
 
@@ -759,8 +885,9 @@ def _runtime_versions() -> dict:
         "platform": platform.platform(),
     }
     try:
-        import importlib.metadata as importlib_metadata
-        versions["radia_mcp_version"] = importlib_metadata.version("radia-mcp")
+        import radia_mcp
+
+        versions["radia_mcp_version"] = getattr(radia_mcp, "__version__", None)
     except Exception:
         versions["radia_mcp_version"] = None
     try:
@@ -997,6 +1124,13 @@ def document_meta_notebook_result_audit(repo_root: str = "",
       or a ``versions``/``package_versions`` object;
     * the JSON and result-bearing notebook are a synchronized pair, so the JSON
       records ``notebook_sha256`` matching the current ``.ipynb``.
+    * notebooks marked ``metadata.radia.notebook_role = "example"`` or
+      ``metadata.radia.webgui_required = true`` must contain an executed
+      ``ngsolve.webgui.Draw``/``netgen.webgui.Draw`` cell with saved rich
+      output.
+    * notebooks marked ``metadata.radia.webgui_field_required = true`` must
+      contain an executed ``Draw(field, mesh, name=..., ...)`` call with saved
+      rich output. A bare one-argument Draw call is not a field scene.
 
     Args:
         repo_root: Radia repository root.  Empty means auto-detect from cwd.
@@ -1051,6 +1185,18 @@ def document_meta_notebook_result_audit(repo_root: str = "",
             status = "no_code_cells"
         elif not nb_summary.get("result_saved"):
             status = "needs_saved_outputs"
+        elif (nb_summary.get("webgui_required")
+              and not nb_summary.get("webgui_draw_present")):
+            status = "needs_webgui_draw"
+        elif (nb_summary.get("webgui_required")
+              and not nb_summary.get("webgui_ready")):
+            status = "needs_executed_webgui_output"
+        elif (nb_summary.get("webgui_field_required")
+              and not nb_summary.get("parameterized_field_draw_present")):
+            status = "needs_parameterized_webgui_field_draw"
+        elif (nb_summary.get("webgui_field_required")
+              and not nb_summary.get("webgui_field_ready")):
+            status = "needs_executed_parameterized_webgui_field_output"
         elif require_json and not sidecars:
             status = "needs_result_json_sidecar"
         elif require_json and good_json_count == 0:
@@ -1078,6 +1224,31 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         "notebooks_scanned": len(rows),
         "ok_result_saved": sum(1 for r in rows if r["status"] == "ok_result_saved"),
         "needs_saved_outputs": sum(1 for r in rows if r["status"] == "needs_saved_outputs"),
+        "webgui_required": sum(1 for r in rows if r.get("webgui_required")),
+        "webgui_ready": sum(
+            1 for r in rows if r.get("webgui_required") and r.get("webgui_ready")
+        ),
+        "webgui_field_required": sum(
+            1 for r in rows if r.get("webgui_field_required")
+        ),
+        "webgui_field_ready": sum(
+            1 for r in rows
+            if r.get("webgui_field_required") and r.get("webgui_field_ready")
+        ),
+        "needs_webgui_draw": sum(
+            1 for r in rows if r["status"] == "needs_webgui_draw"
+        ),
+        "needs_executed_webgui_output": sum(
+            1 for r in rows if r["status"] == "needs_executed_webgui_output"
+        ),
+        "needs_parameterized_webgui_field_draw": sum(
+            1 for r in rows
+            if r["status"] == "needs_parameterized_webgui_field_draw"
+        ),
+        "needs_executed_parameterized_webgui_field_output": sum(
+            1 for r in rows
+            if r["status"] == "needs_executed_parameterized_webgui_field_output"
+        ),
         "needs_result_json_sidecar": sum(
             1 for r in rows if r["status"] == "needs_result_json_sidecar"
         ),
@@ -1094,6 +1265,8 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         "policy": {
             "scope": "tracked docs/**/*.ipynb method/showcase notebooks",
             "notebook": "docs ipynb files should store executed outputs",
+            "example_webgui": "example notebooks must store executed ngsolve.webgui.Draw or netgen.webgui.Draw rich output",
+            "field_webgui": "field notebooks must store Draw(field, mesh, name=..., ...) rich output with explicit view arguments",
             "json": "computed docs results should have adjacent JSON with generated_at_utc and version/runtime metadata",
             "sync": "the JSON must include notebook_sha256 matching the current result-bearing ipynb",
             "tracked_only_default": "true; set tracked_only=false for explicit WIP-tree audits",

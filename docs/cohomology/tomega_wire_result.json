@@ -1,34 +1,50 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T22:49:41Z",
-  "notebook": "docs/cohomology/tomega_wire.ipynb",
-  "notebook_sha256": "08a09755a84f470979e16b93d6e8971c08a61853e471b80c111b2c2f72dc0351",
+  "generated_at_utc": "2026-07-22T07:19:38Z",
+  "notebook": "tomega_wire.ipynb",
+  "notebook_sha256": "944082449508898f7af9625d647c0137b622223c1cd8468438b7935a03db1ffb",
   "versions": {
     "python_version": "3.12.10",
-    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.18",
+    "radia_version": "4.95.22"
   },
   "summary": {
-    "path": "docs/cohomology/tomega_wire.ipynb",
-    "cells": 2,
-    "code_cells": 1,
-    "executed_code_cells": 1,
-    "code_cells_with_outputs": 1,
-    "output_count": 1,
+    "path": "tomega_wire.ipynb",
+    "cells": 3,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 2,
+    "output_count": 4,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 1,
+    "executed_webgui_draw_cell_count": 1,
+    "webgui_draw_cells_with_rich_outputs": 1,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 1,
+    "executed_parameterized_field_draw_cell_count": 1,
+    "parameterized_field_draw_cells_with_rich_outputs": 1,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "d3e2c35fd4cbfddc2e739bc71ac243c4320f21222823a329f88128e965b70215",
+      "source_sha256": "fd39a11db56254ff5a8a71176fefbddef03fcf8f20d3b464728c5d91457d6d38",
       "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"T-Omega magnetostatics with a gmsh-free cohomology CUT -- the wire field.\n\nThe PRIMARY use of cohomology in the repo is the T-Omega total-scalar-\npotential CUT (Kotiuga 1987 / Bossavit / Pellikka 2013), of which the\nClebsch current-linking demo is just one instance.  The total scalar\npotential formulation\n\n    H = -grad(phi) + sum_k NI_k h_k\n\nuses cohomology cut basis functions h_k (curl-free, UNIT circulation around\nthe k-th current loop) to make the otherwise MULTI-VALUED magnetic scalar\npotential single-valued in a current-linking (multiply-connected) region.\nThe cuts are computed by the pure-Python ``radia.cohomology`` engine -- no\ngmsh ``computeHomology``, no .msh -> .vol transfer.\n\nVerification (this script): a straight wire carrying current I along z\nthrough an annular air region (b1 = 1).  The cohomology cut carries the I\nampere-turns, and the solved T-Omega field reproduces\n\n    H_phi(r) = I / (2 pi r)      (Ampere's wire field)\n    o",
       "outputs": [
         {
@@ -38,6 +54,46 @@
           "text_sha256": "82be31e1e209ae858d549e85502bd628ce26a5b54ae2196f0e2f5d68c71416aa",
           "text_preview": "T-Omega cohomology cut (gmsh-free) -- straight-wire verification\n\n  multiply-connected air (annulus): b1 = 1  (one current loop)\n  Ampere's law:  oint H.dl = 100.003  (NI = 100.0,  rel err 2.84e-05)\n  wire field  :  H_phi vs I/(2 pi r)  mean rel err = 1.16e-02\n\n  => the cohomology cut carries the NI ampere-turns and makes the\n     magnetic scalar potential single-valued in the current-linking\n     region -- the standard T-Omega use of radia.cohomology.\n",
           "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "9fcf7e6076172461a30b287105bca63c431a6ade20b7a1f90ecba40283e71bbe",
+      "source_preview": "from ngsolve import Norm\nfrom ngsolve.webgui import Draw\n\nmesh_scene = Draw(\n    tomega_result[\"_mesh\"],\n    name=\"tomega_air_mesh\",\n    draw_vol=True,\n    draw_surf=True,\n    width=\"100%\",\n    height=\"420px\",\n)\nfield_scene = Draw(\n    Norm(tomega_result[\"_field\"]),\n    tomega_result[\"_mesh\"],\n    name=\"H_magnitude\",\n    draw_vol=True,\n    draw_surf=True,\n    autoscale=True,\n    width=\"100%\",\n    height=\"500px\",\n)\nfield_scene\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 111,
+          "text_plain_sha256": "78f4a038fbc1d2a67c2844ef368f3978f839709bc9d3c62722401c4a7a95e759",
+          "text_plain_preview": "WebGuiWidget(layout=Layout(height='420px', width='100%'), value={'gui_settings': {}, 'ngsolve_version': '6.2.2…",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 111,
+          "text_plain_sha256": "c1a50180e80dd67b4427382128cb0af3f02ca0939bcf38d0e2650e87cd49ed9c",
+          "text_plain_preview": "WebGuiWidget(layout=Layout(height='500px', width='100%'), value={'gui_settings': {}, 'ngsolve_version': '6.2.2…",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 15,
+          "text_plain_sha256": "afb6eccc907512ad9e107ffffad3b07bc4fe745b1e7fa29c206f362e876ae3eb",
+          "text_plain_preview": "BaseWebGuiScene",
+          "text_plain_truncated": false
         }
       ]
     }
