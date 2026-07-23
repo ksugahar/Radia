@@ -543,7 +543,8 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-grant-writing",
         "description": "Grant proposal helpers: Japanese technical-prose "
                        "lint, section coverage, budget alignment, "
-                       "internal-to-external scale, recommendation-letter "
+                       "internal-to-external scale, collaborative-integration "
+                       "risk, recommendation-letter "
                        "template, and KDDI Digital Innovation and KAKENHI "
                        "OSS-platform checks.",
         "primary_tools": ["grant_writing_usage",
@@ -551,6 +552,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "grant_writing_kddi_digital_check",
                             "grant_writing_kaken_oss_platform_check",
                             "grant_writing_internal_evidence_to_external_scale_check",
+                            "grant_writing_collaborative_integration_risk_check",
                             "grant_writing_recommendation_letter_template"],
         "related": ["paper-writing", "document-meta"],
         "tags": ["meta"],

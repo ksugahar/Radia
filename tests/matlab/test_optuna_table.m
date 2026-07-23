@@ -5,12 +5,19 @@ end
 function setupOnce(testCase)
 repositoryRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
 matlabDirectory = fullfile(repositoryRoot, "matlab");
-addpath(matlabDirectory);
+entries = string(strsplit(path,pathsep));
+testCase.TestData.RemoveMatlabDirectory = ...
+    ~any(strcmpi(entries,string(matlabDirectory)));
+if testCase.TestData.RemoveMatlabDirectory
+    addpath(matlabDirectory);
+end
 testCase.TestData.MatlabDirectory = matlabDirectory;
 end
 
 function teardownOnce(testCase)
-rmpath(testCase.TestData.MatlabDirectory);
+if testCase.TestData.RemoveMatlabDirectory
+    rmpath(testCase.TestData.MatlabDirectory);
+end
 end
 
 function testDefineByRunAndPersistence(testCase)
@@ -54,6 +61,83 @@ verifyEqual(testCase, reloaded.best_params(), bestParams);
 verifyEqual(testCase, reloaded.best_solution().trial_number, 0);
 end
 
+function testTPEKeepsBadSetForGammaOne(testCase)
+sampler = radia.optuna.TPESampler(Seed=17, NStartupTrials=1, Gamma=1);
+study = radia.optuna.Study(Name="tpe-boundary", Sampler=sampler, ...
+    AutoSave=false);
+study.optimize(@tpeBoundaryObjective, 12);
+
+verifyEqual(testCase, height(study.TrialTable), 12);
+verifyTrue(testCase, all(study.TrialTable.State == "COMPLETE"));
+verifyTrue(testCase, all(isfinite(study.TrialTable.Value)));
+end
+
+function testTrialCompatibilityMetadata(testCase)
+trial = radia.optuna.Study(AutoSave=false).ask();
+x = trial.suggest_float("positive", 1, 100, Log=true);
+trial.set_user_attr("role", "compatibility-test");
+trial.set_system_attr("source", "matlab");
+
+verifyTrue(testCase, isfinite(x));
+verifyTrue(testCase, isfield(trial.Distributions, "positive"));
+verifyEqual(testCase, trial.Distributions.positive.name, "FloatDistribution");
+verifyEqual(testCase, trial.UserAttrs.role, "compatibility-test");
+verifyEqual(testCase, trial.SystemAttrs.source, "matlab");
+end
+
+function testJointSearchSpaceContract(testCase)
+study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
+    Seed=21, NStartupTrials=0), AutoSave=false);
+trial = study.ask();
+values = trial.suggest_vector(["x","y"], [-1,-2], [1,2]);
+
+verifySize(testCase, values, [1 2]);
+verifyTrue(testCase, all(values >= [-1,-2] & values <= [1,2]));
+verifyTrue(testCase, isfield(trial.Distributions, "x"));
+verifyTrue(testCase, isfield(trial.Distributions, "y"));
+verifyEqual(testCase, height(study.ParamTable), 2);
+end
+
+function testJointTPESamplesSharedMixture(testCase)
+study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
+    Seed=22, NStartupTrials=3), AutoSave=false);
+study.optimize(@jointTPEObjective, 18);
+verifyEqual(testCase, height(study.TrialTable), 18);
+verifyTrue(testCase, all(study.TrialTable.State == "COMPLETE"));
+verifyLessThan(testCase, study.bestValue(), 0.5);
+end
+
+function value = jointTPEObjective(trial)
+xy = trial.suggestVector(["x","y"], [-2,-2], [2,2]);
+value = (xy(2) - 0.8 * xy(1))^2 + 0.02 * sum(xy.^2);
+end
+
+function testStudyUserAttributesPersist(testCase)
+path = string(tempname("C:\temp")) + ".mat";
+cleanup = onCleanup(@() deleteIfPresent(path));
+study = radia.optuna.Study(StoragePath=path, AutoSave=true);
+study.set_user_attr("owner", "radia");
+reloaded = radia.optuna.Study(StoragePath=path);
+verifyEqual(testCase, reloaded.UserAttrs.owner, "radia");
+clear cleanup;
+deleteIfPresent(path);
+end
+
+function testTPEParzenMixtureHasOptunaPrior(testCase)
+estimator = radia.optuna.internal.ParzenEstimator.numerical( ...
+    [0.2; 0.4; 0.8], 0, 1, PriorWeight=1);
+
+verifyEqual(testCase, numel(estimator.weights), 4);
+verifyEqual(testCase, sum(estimator.weights), 1, AbsTol=1e-14);
+verifyEqual(testCase, estimator.mu(end), 0.5, AbsTol=1e-14);
+verifyEqual(testCase, estimator.sigma(end), 1, AbsTol=1e-14);
+end
+
+function value = tpeBoundaryObjective(trial)
+x = trial.suggestFloat("x", -1, 1);
+value = (x - 0.25)^2;
+end
+
 function testMedianPruningAndOptimize(testCase)
 study = radia.optuna.Study( ...
     Sampler=radia.optuna.RandomSampler(11), ...
@@ -92,16 +176,12 @@ end
 
 modelName = "radia_optuna_runner_test";
 cleanup = onCleanup(@() closeIfLoaded(modelName));
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-eddyLut = makeTestEddyLut();
-radia.simulink.buildIHControlModel(modelName, plant, eddyLut, ...
-    StopTime_s=1, Save=false, Open=false);
+buildRunnerFixture(modelName, 1.0);
 time_s = reshape(0:0.1:1, [], 1);
-inputData = [time_s, 10 * ones(size(time_s)), zeros(size(time_s)), ...
-    293.15 * ones(size(time_s))];
+inputData = [time_s, 10 * ones(size(time_s))];
 runner = radia.optuna.SimulinkRunner(modelName, ...
-    ConfigureFcn=@(simInput, trial) simInput.setExternalInput(inputData), ...
+    ConfigureFcn=@(simInput, trial) configureRunnerInput( ...
+        simInput, trial, inputData), ...
     ScoreFcn=@(simOut, trial) simOut.get("yout").getElement(1).Values.Data(end));
 study = radia.optuna.create_study( ...
     study_name="simulink-runner", direction="minimize", ...
@@ -151,16 +231,11 @@ function testSimulinkRunnerParallelTrials(testCase)
 if isempty(ver("parallel")), testCase.assumeFail("Parallel Computing Toolbox is unavailable."); end
 name="radia_optuna_parallel_gate"; file="C:\temp\radia_optuna_parallel_gate.slx";
 cleanup=onCleanup(@()closeAndDelete(name,file));
-plant=radia.simulink.makeIHPlant(HeatCapacity_J_per_K=10, ...
-    ThermalConductance_W_per_K=2,SampleTime_s=0.1);
-eddyLut=makeTestEddyLut();
-radia.simulink.buildIHControlModel(name,plant,eddyLut, ...
-    StopTime_s=0.2,Save=false,Open=false);
+buildRunnerFixture(name,0.2);
 save_system(name,file); close_system(name,0);
-time=(0:0.1:0.2)'; input=[time,10*ones(size(time)),zeros(size(time)), ...
-    293.15*ones(size(time))];
+time=(0:0.1:0.2)'; input=[time,10*ones(size(time))];
 runner=radia.optuna.SimulinkRunner(file, ...
-    ConfigureFcn=@(simInput,trial)simInput.setExternalInput(input), ...
+    ConfigureFcn=@(simInput,trial)configureRunnerInput(simInput,trial,input), ...
     ScoreFcn=@(simOut,trial)simOut.get("yout").getElement(1).Values.Data(end));
 study=radia.optuna.createStudy(AutoSave=false);
 result=runner.optimizeParallel(study,2,ShowProgress=false);
@@ -183,6 +258,48 @@ verifyGreaterThan(testCase,height(nsga.paretoFront()),1);
 verifyTrue(testCase,all(nsga.ParamTable.ValueNumeric>=-1 & nsga.ParamTable.ValueNumeric<=3));
 end
 
+function testConstraintTablePersists(testCase)
+path=string(tempname("C:\temp"))+".mat";
+cleanup=onCleanup(@()deleteIfPresent(path));
+sampler=radia.optuna.TPESampler(Seed=31,NStartupTrials=1, ...
+    ConstraintsFcn=@(trial)trial.Params.x-0.25);
+study=radia.optuna.Study(StoragePath=path,Sampler=sampler,AutoSave=true);
+study.optimize(@constraintObjective,3);
+verifyEqual(testCase,height(study.ConstraintTable),3);
+reloaded=radia.optuna.Study(StoragePath=path);
+verifyEqual(testCase,reloaded.ConstraintTable,study.ConstraintTable);
+clear cleanup; deleteIfPresent(path);
+end
+
+function testConstrainedMOTPESplitPrefersFeasibleTrials(testCase)
+sampler=radia.optuna.MOTPESampler(Seed=32,NStartupTrials=2,Gamma=0.5, ...
+    ConstraintsFcn=@(trial)trial.Params.x-0.2);
+study=radia.optuna.createStudy(directions=["minimize","minimize"], ...
+    sampler=sampler,AutoSave=false);
+study.optimize(@constrainedMultiObjective,12);
+verifyEqual(testCase,height(study.ConstraintTable),12);
+constraints=arrayfun(@(n)study.constraintsForTrial(n), ...
+    study.TrialTable.TrialNumber,'UniformOutput',false);
+verifyTrue(testCase,any(cellfun(@(v)all(v<=0),constraints)));
+verifyGreaterThan(testCase,height(study.paretoFront()),0);
+end
+
+function testMOTPESplitSelectsFeasibleBeforeInfeasible(testCase)
+study=radia.optuna.Study(Directions=["minimize","minimize"],AutoSave=false);
+values=[0.1 0.9;0.9 0.1;0.0 0.0;0.2 0.2];
+violations=[-1;-1;1;2];
+for k=1:4
+    trial=study.ask();
+    study.tell(trial,values(k,:));
+    study.recordConstraints(trial,violations(k));
+end
+[good,weights]=radia.optuna.internal.ParetoSupport.splitMOTPE( ...
+    study,(0:3)',values,2);
+verifyEqual(testCase,good,[true;true;false;false]);
+verifySize(testCase,weights,[2 1]);
+verifyTrue(testCase,all(weights>0));
+end
+
 function testParetoRankAndCrowdingContract(testCase)
 values=[0 3;1 2;2 1;3 3;2 4];
 [rank,crowding]=radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
@@ -196,6 +313,16 @@ function value = localObjective(trial)
 x = trial.suggestFloat("x", -1, 1);
 trial.report(x^2, 0);
 value = x^2;
+end
+
+function value=constraintObjective(trial)
+x=trial.suggestFloat("x",-1,1);
+value=x^2;
+end
+
+function values=constrainedMultiObjective(trial)
+x=trial.suggestFloat("x",-1,1);
+values=[x^2,(x-0.5)^2];
 end
 
 function value = tpeObjective(trial)
@@ -215,11 +342,26 @@ x=trial.suggestFloat("x",-1,3);
 values=[x^2,(x-2)^2];
 end
 
-function lut=makeTestEddyLut()
-theta=[0;pi/2;pi;3*pi/2]; current=[0;5;10];
-heatDensity=1000*[1;1.5;2;1.5]*((current/10).^2).';
-lut=radia.simulink.makeIHEddyHeatDensityLUT(theta,current,heatDensity, ...
-    RegionVolumes_m3=0.1,CarrierFrequency_Hz=50e3,Source="test map");
+function buildRunnerFixture(modelName, stopTime)
+new_system(modelName);
+add_block("simulink/Ports & Subsystems/In1",modelName+"/Input", ...
+    Position=[30 45 60 65]);
+add_block("simulink/Math Operations/Gain",modelName+"/Trial Gain", ...
+    Gain="runner_gain",Position=[110 35 190 75]);
+add_block("simulink/Ports & Subsystems/Out1",modelName+"/Response", ...
+    Position=[250 45 280 65]);
+add_line(modelName,"Input/1","Trial Gain/1");
+add_line(modelName,"Trial Gain/1","Response/1");
+set_param(modelName,"SolverType","Fixed-step","Solver","FixedStepDiscrete", ...
+    "FixedStep","0.1","StopTime",num2str(stopTime), ...
+    "SaveOutput","on","OutputSaveName","yout","SaveFormat","Dataset");
+assignin("base","runner_gain",1);
+end
+
+function simInput=configureRunnerInput(simInput,trial,inputData)
+gain=trial.suggestFloat("gain",0.5,1.5);
+simInput=simInput.setVariable("runner_gain",gain);
+simInput=simInput.setExternalInput(inputData);
 end
 
 function closeIfLoaded(modelName)

@@ -10,7 +10,16 @@ def test_native_sfunctions_have_lifecycle_hooks_and_error_status():
         assert "mdlStart" in text
         assert "mdlTerminate" in text
         assert "ssSetErrorStatus" in text
+        assert "static thread_local char message" in text
+        assert "ssSetErrorStatus(S, error.what())" not in text
         assert "SS_OPTION_EXCEPTION_FREE_CODE" in text
+    thermal = (ROOT / "src" / "radia" / "simulink" / "radia_ih_thermal_sfun.cpp").read_text(
+        encoding="utf-8"
+    )
+    assert "mdlUpdate" in thermal
+    outputs = thermal.split("static void mdlOutputs", 1)[1].split("#define MDL_UPDATE", 1)[0]
+    assert "advance_thermal" not in outputs
+    assert "ssSetInputPortDirectFeedThrough(S, port, 0)" in thermal
 
 
 def test_thermal_sfunction_updates_once_per_discrete_step_and_transports_rotation():
@@ -44,3 +53,45 @@ def test_vol_checker_is_a_native_simulink_preflight_dependency():
     assert "check-vol" in text
     assert "VolCheckFailed" in text
     assert "--report-json" in text
+
+
+def test_native_ih_rotation_is_applied_to_both_fields():
+    eddy = (ROOT / "src" / "radia" / "simulink" / "radia_ih_eddy_sfun.cpp").read_text(
+        encoding="utf-8"
+    )
+    thermal = (
+        ROOT / "src" / "radia" / "simulink" / "radia_ih_thermal_sfun.cpp"
+    ).read_text(encoding="utf-8")
+    assert "transport_periodic(" in eddy
+    assert "-(angle - c->angle_origin_rad)" in eddy
+    assert "angle[0] - context->state.previous_angle_rad" in thermal
+    assert "transport_periodic(" in thermal
+
+
+def test_native_ih_recompute_policy_distinguishes_current_and_material_changes():
+    eddy = (ROOT / "src" / "radia" / "simulink" / "radia_ih_eddy_sfun.cpp").read_text(
+        encoding="utf-8"
+    )
+    assert "!c->matrix_temperature_slope.empty() && temperature_changed" in eddy
+    assert "const double scale = current * current" in eddy
+    assert "if (material_changed)" in eddy
+    assert "current_requires_solve" not in eddy
+    assert "does not yet implement nonlinear BH iteration" in eddy
+
+
+def test_legacy_ih_lut_and_lumped_interfaces_are_removed():
+    legacy = (
+        "buildIHControlModel.m",
+        "evaluateIHEddyHeatDensityLUT.m",
+        "evaluateIHPowerLUT.m",
+        "ihPlantSFunction.m",
+        "makeIHEddyHeatDensityLUT.m",
+        "makeIHPlant.m",
+        "makeIHPowerLUT.m",
+        "simulateIHDrive.m",
+        "simulateIHWaveform.m",
+    )
+    package = ROOT / "matlab" / "+radia" / "+simulink"
+    assert all(not (package / name).exists() for name in legacy)
+    assert not (ROOT / "matlab" / "radia_ih_plant_sfunction.m").exists()
+    assert not (ROOT / "matlab" / "+radia" / "+rl" / "makeIHEnvironment.m").exists()

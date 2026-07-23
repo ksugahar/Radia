@@ -18,6 +18,7 @@ REQUIRED_MEMBERS = {
     "matlab/install_radia_ih.m",
     "matlab/radia_ih.slx",
     "matlab/verify_radia_ih_release.m",
+    "matlab/+radia/+simulink/validateIHNativeConfig.m",
     "matlab/radia_ih_eddy_sfun.mexw64",
     "matlab/radia_ih_thermal_sfun.mexw64",
 }
