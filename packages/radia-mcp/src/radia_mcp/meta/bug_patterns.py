@@ -1048,15 +1048,20 @@ PATTERNS: list[dict] = [
         "title": "Per-element secant-nu Picard for a nonlinear FEM REFERENCE oscillates at deep "
                  "saturation -- use the closed-form nu(B) inversion + exact Newton instead",
         "topics": ["validation", "ngsolve", "solve", "nonlinear"],
-        "severity": "medium",
+        "severity": "high",
         "first_seen": "2026-07-03",
-        "last_seen": "2026-07-03",
+        "last_seen": "2026-07-23",
         "what": "The all-in-one nonlinear A_z FEM reference for the salient-bar motor case "
                 "never converged at deep saturation: per-element secant nu updates oscillated "
                 "(dA plateaued at ~0.1 for 80..300 iterations; relax 0.5 and 0.3, and an "
                 "unsafeguarded Anderson, all failed) -- corner elements kept swinging across "
                 "the BH knee.  Comparing against the UNCONVERGED reference produced a plausible "
-                "but wrong ~10% 'disagreement'.",
+                "but wrong ~10% 'disagreement'.  RECURRED 2026-07-23 on the saturable hodograph "
+                "bend forward-check: undamped Picard nu(|grad A|) stalled at rel step 2.4e-1 "
+                "after 60 iterations and reported a 142% wall-field error, which read as 'the "
+                "hodograph design is wrong'.  Damping omega=0.35 converged in 42 iterations to "
+                "9e-10 and the SAME design then matched to 0.3%.  Severity raised to high: the "
+                "failure mode is not a slow solve, it is a WRONG CONCLUSION about another method.",
         "root_cause": "The successive-substitution nu(|B|) map loses contractivity when "
                       "element fields straddle the knee (nu spans 4 orders of magnitude inside "
                       "the body); per-element averaging amplifies the swing at corners.",
@@ -1070,7 +1075,66 @@ PATTERNS: list[dict] = [
                       "6-9 iterations from a cold start at deep saturation "
                       "(docs/electric_machine/planar_vim_motor_helpers.py::fem_reference_bar).",
         "related": ["docs/electric_machine/planar_vim_motor_helpers.py",
-                    "docs/electric_machine/em_reference_audit.ipynb"],
+                    "docs/electric_machine/em_reference_audit.ipynb",
+                    "memory/hodograph_design_forward_verified.md"],
+    },
+
+    # =====================================================
+    # NGSOLVE / NETGEN SETUP BUGS
+    # =====================================================
+    {
+        "id": "numberspace-gauge-densifies-direct-solve",
+        "title": "A NumberSpace mean-zero gauge on a Neumann solve makes the direct "
+                 "factorization DENSE -- pin one DOF instead",
+        "topics": ["ngsolve", "solve", "performance", "gauge"],
+        "severity": "medium",
+        "first_seen": "2026-07-23",
+        "last_seen": "2026-07-23",
+        "what": "A gradient-recovery (pure-Neumann) solve gauged with "
+                "`H1(mesh, order=3) * NumberSpace(mesh)` ran for 10+ minutes at ~400 MB "
+                "on a 2k-element 2-D mesh (~20k DOFs) and produced no output; it looked "
+                "like an infinite loop.  The same solve takes 0.4 s once the gauge is "
+                "changed.",
+        "root_cause": "The `lam*v + u*mu` coupling terms put a FULL row and column into "
+                      "the assembled matrix (the single number DOF touches every H1 DOF). "
+                      "A sparse direct solver then fills in almost completely, so the "
+                      "factorization degenerates to a dense O(N^3) / O(N^2)-memory solve.",
+        "detection": "Wall-clock and memory blow up superlinearly with mesh refinement on "
+                     "a problem that should be seconds; per-stage timing logs localize it "
+                     "to the gauged solve.",
+        "prevention": "Fix the gauge by pinning ONE degree of freedom, which keeps the "
+                      "matrix sparse and SPD: "
+                      "`free = BitArray(fes.FreeDofs()); free[0] = False` then "
+                      "`gf.vec.data += a.mat.Inverse(free, inverse='sparsecholesky') * f.vec`. "
+                      "Only the gauge constant changes, and for potentials recovered from a "
+                      "gradient only differences are physical anyway.  Reserve NumberSpace "
+                      "for iterative solvers or genuinely small systems.",
+        "related": ["memory/hodograph_design_forward_verified.md"],
+    },
+    {
+        "id": "duplicate-corner-points-stall-mesher",
+        "title": "Concatenating sampled boundary curves duplicates each corner and stalls "
+                 "the netgen mesher with no error",
+        "topics": ["netgen", "geometry", "mesh", "hang"],
+        "severity": "medium",
+        "first_seen": "2026-07-23",
+        "last_seen": "2026-07-23",
+        "what": "`SplineGeometry(...).GenerateMesh()` on a closed outline built by "
+                "concatenating four separately sampled boundary curves hung indefinitely "
+                "with no exception and no progress output.",
+        "root_cause": "Each corner is sampled TWICE (once by each adjacent curve).  The two "
+                      "samples differ by a hair (different parameter offsets), so the loop "
+                      "gains a tiny near-degenerate segment that properly crosses its "
+                      "neighbour.  The outline is then not a simple polygon and the mesher "
+                      "cannot resolve it.  A 1 um dedup tolerance was too tight to remove it.",
+        "detection": "Run an explicit self-intersection check on the closed outline BEFORE "
+                     "meshing; the corner pairs show up as crossings between the first/last "
+                     "segments of adjacent curves.",
+        "prevention": "Build the loop from `curve1 + curve2[1:] + curve3[::-1][1:] + "
+                      "curve4[::-1][1:-1]` so shared endpoints appear once, dedup with a "
+                      "geometric tolerance (~10 um, not 1 um), and RAISE on any remaining "
+                      "self-intersection rather than handing a bad outline to the mesher.",
+        "related": ["memory/hodograph_design_forward_verified.md"],
     },
 ]
 
