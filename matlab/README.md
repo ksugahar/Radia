@@ -402,19 +402,15 @@ Open the production IH application block directly with:
 radia.simulink.openIH()
 ```
 
-When a thermal plant and `.vol`-derived heat-density LUT are available, open
-the separated control model with
-`radia.simulink.openIH(Plant=plant,EddyLUT=eddyLut)`. The resulting `.slx`
-object is saved under `C:\temp\radia_ih_models` by default; set
-`OutputDirectory` to place it in another run or artifact directory.
+`radia.simulink.openIH()` opens only the native production IH block. The old
+`Plant`/`EddyLUT` control-model entry point has been removed; LUT-only and
+lumped-state-space IH models are not production interfaces.
 
-The repository also includes `matlab/radia_ih_sample.slx`, a source-driven
-sample object with a stepped RMS current envelope, rotating-angle ramp,
-ambient-temperature source, and separate masked Eddy Current, Thermal, and IH
-Parameters subsystems. This sample is MATLAB-only: it uses standard Simulink
-lookup-table and discrete state-space blocks and never launches Python.
-Regenerate it with
-`radia.simulink.buildIHSampleModel(OutputDirectory=fullfile(pwd,"matlab"))`.
+The former LUT/Discrete-State-Space IH sample has been removed. The production
+IH model uses native Eddy/Thermal MEX S-Functions. The older
+`buildIHControlModel`/LUT helpers are retained only as non-production
+validation utilities until their tests are migrated; they are not reachable
+from `openIH` or the distributable library.
 
 For fixed reduced Radia/NGSolve models, `PlantBlock="radia-mex"` uses a native
 state-space handle. The matrices cross the MATLAB/MEX boundary once at
