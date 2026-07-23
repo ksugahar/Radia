@@ -686,6 +686,8 @@ if(RADIA_BUILD_MATLAB_MEX)
 		R2018a
 		SRC
 			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
 			${CORE_DIR}/rad_cln.cpp
 			${RADIA_CORE_SOURCES}
 			${RADIA_ACOUSTIC_SOURCES}
@@ -699,6 +701,32 @@ if(RADIA_BUILD_MATLAB_MEX)
 			# RADIA_MEX_NO_PYTHON feature below.
 			${RADIA_LIB_SOURCES}
 	)
+	matlab_add_mex(
+		NAME radia_ih_thermal_sfun
+		R2018a
+		SRC
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal_sfun.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
+	)
+	matlab_add_mex(
+		NAME radia_ih_eddy_sfun
+		R2018a
+		SRC
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_eddy_sfun.cpp
+	)
+	target_compile_features(radia_ih_eddy_sfun PRIVATE cxx_std_17)
+	if(MSVC)
+		target_compile_options(radia_ih_eddy_sfun PRIVATE /O2 /W3)
+		target_link_options(radia_ih_eddy_sfun PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+	target_include_directories(radia_ih_thermal_sfun PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
+	)
+	target_compile_features(radia_ih_thermal_sfun PRIVATE cxx_std_17)
+	if(MSVC)
+		target_compile_options(radia_ih_thermal_sfun PRIVATE /O2 /W3)
+		target_link_options(radia_ih_thermal_sfun PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
 	target_include_directories(radia_mex PRIVATE
 		${CORE_DIR}
 		${LIB_DIR}

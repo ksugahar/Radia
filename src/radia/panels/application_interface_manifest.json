@@ -80,6 +80,8 @@
       "state": "active-simulink-block",
       "block": "radia_simulink_library/Applications/Induction Heating",
       "design": "radia.ih_design.IHDesignSpec",
+      "backend": "native-mex-sfunction",
+      "backend_policy": "Eddy and Thermal execute through native C/C++ MEX S-Functions; Python is not a production fallback.",
       "notebook": null,
       "headless": [
         "src/radia/panels/calc_inductance.py",

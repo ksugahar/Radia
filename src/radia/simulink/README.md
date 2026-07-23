@@ -8,11 +8,10 @@ files only define the block contract and marshal MATLAB arrays.
 
 The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
 Function, and Induction Heating are built by
-`matlab/+radia/+simulink/buildLibrary.m`. Their initial backend is
-`radia.simulink.application`: a boolean rising trigger launches the validated
-`DesignSpec`/headless Python CLI once and records `command.txt`, `run.log`,
-`solver_result.json`, and versioned `result.json`. It is not a per-time-step
-Python bridge.
+`matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
+Function retain their explicit-trigger application boundary. Induction
+Heating is separate: its production block contains native Eddy and Thermal
+C/C++ MEX S-Functions and does not launch the Python CLI.
 
 For a field-producing mode, the runner overrides `--msh-output` with a path in
 the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
@@ -93,7 +92,7 @@ The C ABI remains the canonical implementation boundary so that Python,
 Simulink, FMI, and other hosts cannot silently acquire different numerical
 kernels.
 
-## Induction-heating control workflow
+## Induction-heating production block
 
 The MATLAB package under `matlab/+radia/+simulink` is the control-side
 surface for the IH solver. It deliberately separates the fast electromagnetic
@@ -148,17 +147,14 @@ blocks. `IncludePID=true` adds a temperature-setpoint PID loop with current
 saturation. Select the native fixed reduced state-space thermal boundary with
 `PlantBlock="radia-mex"`.
 
-`radia.simulink.openIH()` opens the production IH application block.
-`radia.simulink.openIH(Plant=plant,EddyLUT=eddyLut)` builds and opens the
-separated control model. Saved objects default to
-`C:\temp\radia_ih_models`; use `OutputDirectory` for an explicit artifact
-directory.
+`radia.simulink.openIH()` opens only the native production IH application
+block. The former `Plant`/`EddyLUT` control-model entry point is retired;
+LUT-only and lumped-state-space IH models are not production interfaces.
 
-`matlab/radia_ih_sample.slx` is the tracked source-driven sample object. Its
-canonical generator is `radia.simulink.buildIHSampleModel`; the sample keeps
-current and rotation as ordinary Simulink Source blocks and preserves the
-Eddy/Thermal subsystem boundary. It is a MATLAB-only support path built from
-standard Lookup Table and Discrete State-Space blocks, with no Python launch.
+The former tracked LUT/Discrete-State-Space IH sample is retired. The
+production IH model uses native Eddy/Thermal MEX S-Functions. The older
+`buildIHControlModel`/LUT helpers are non-production validation utilities only;
+they are not reachable from `openIH` or the distributable library.
 
 For learning and design optimization, wrap a `sim` call or the fast waveform
 function in an objective and use:

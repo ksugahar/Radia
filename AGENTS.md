@@ -164,14 +164,19 @@ production interface for Radia applications is a masked block in the single
   When a primary computed field exists, also set
   `metadata.radia.webgui_field_required=true`; the audit then requires an
   executed parameterized field scene with saved rich output.
-- A tracked `.slx` interface sample may accompany the library when it has a
+- A tracked native `.slx` interface sample may accompany the library when it has a
   canonical `.m` generator, a direct load/update regression test, and an
   explicit backend declaration. It demonstrates block composition and signal
   wiring; it does not replace the result-bearing docs notebook that owns the
-  numerical evidence. `matlab/radia_ih_sample.slx` is MATLAB-only and must not
-  acquire a hidden Python or S-function dependency.
+  numerical evidence. A production IH sample must use native Eddy/Thermal
+  MEX S-Functions and must not be a LUT or lumped-state-space surrogate.
 - Blocks must delegate to tested `radia.*` APIs, MEX/ROM handles, or validated
   headless application entry points. They must not reimplement solver logic.
+- IH is an explicit exception to the generic fallback rule: its production
+  Eddy and Thermal path is native C/C++ MEX S-Function only. Python fallback
+  is not permitted for IH production execution. Lightweight constitutive
+  blocks such as the BH evaluator may use a MATLAB S-Function, but they must
+  remain separate from the native Eddy/Thermal numerical kernels.
 - The initial application-block backend may be the validated Python/headless
   CLI, launched only on an explicit trigger or update. MEX/ROM is an optional
   later backend promotion, not a prerequisite for the Simulink interface. Move
@@ -457,6 +462,21 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 - Pre-push hook auto-uploads `.pyd` on `git push`
 - After cloning, run `./download_binaries.sh` to fetch binaries
 - `.png`, `.pdf` allowed in repository; `.msh`, `.vtu`, `.vtk`, `.vol` are gitignored
+
+### GitHub Release Publication Gate (2026-07-23)
+
+**POLICY**: A Radia Simulink library release, including
+`radia_simulink_library.slx`, MATLAB support files, and MEX assets, MUST NOT
+be published to GitHub Releases until the complete `release-qud` four-machine
+verification has passed. The four machines are LAB, 100号機, mdx, and hibino.
+
+- The release candidate is assembled and tested before publication.
+- The `release-qud` `done` gate is the authoritative publication decision.
+- A failed, partial, or manually waived machine check is not a release pass.
+- GitHub Release assets must include the versioned Simulink package,
+  `manifest.json`, and `SHA256SUMS.txt` when the candidate contains them.
+- The same gate applies to later revisions of the library, not only the first
+  Simulink publication.
 
 ### File Placement Policy
 
