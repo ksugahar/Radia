@@ -2998,25 +2998,41 @@ Golden: `validation_test/kelvin_source/test_kelvin_exterior_source_routes.py`.
 
 ## The rule
 
-| the weak form consumes | helper | rule |
+| the weak form consumes | source behaviour | helper | rule |
+|---|---|---|---|
+| a background **FIELD** `int mu H_s . grad v` | any, incl. uniform at infinity | `make_reduced_potential_background_cf` | `H_s'(r') = -(rho'/R)^2 H_s(r'-offset)` (Convention B) |
+| a background **POTENTIAL** (T-Omega `Omega_s`) | **decaying** (real coil, dipole) | `make_kelvin_aware_Omega_s_cf` | `Omega_s'(r') = -Omega_s(k(r'))` (twisted 0-form pullback) |
+| a background **FIELD**, matched to the above | decaying | `make_kelvin_aware_H_s_cf` | `H_s'(r') = -(R/rho')^2 (I-2nn^T) H_s(k(r'))` |
+
+**Convention B has NO valid 0-form flavour.**  Applying its `-(rho'/R)^2`
+factor to a scalar is not a 0-form pullback (a 0-form pullback carries NO
+metric factor -- exponent 0) and costs a factor 4/3, which is route B0 above.
+`make_reduced_potential_scalar_cf` implements it and is kept only because the
+T-Omega design note proposes it; do not drive a weak form with it.
+
+**The genuine pullback family IS gradient-consistent.**  Because pullback
+commutes with the exterior derivative (`g*(dw) = d(g*w)`) and Omega and H
+carry the SAME twist factor,
+
+    H_s' == -grad'(Omega_s')      EXACTLY  (verified to 1.4e-10)
+
+That is the property Convention B lacks: for Convention B,
+
+    curl(H_s' 1-form B) = (2 H0/R^2)(-y', x', 0)  != 0
+
+so its exterior field has no scalar potential at all, and
+
+    -grad(Omega_s' 0-form B) - H_s'(1-form B) = -(2 H0/R^2)(x'z', y'z', z'^2).
+
+## Regularity: which route your source forces
+
+| source at infinity | 0-form image at rho' -> 0 | usable route |
 |---|---|---|
-| a background **FIELD** `int mu H_s . grad v` | `make_reduced_potential_background_cf` | `H_s'(r') = -(rho'/R)^2 H_s(r'-offset)` |
-| a background **POTENTIAL** (T-Omega `Omega_s`) | `make_reduced_potential_scalar_cf` | `Omega_s'(r') = -(rho'/R)^2 Omega_s(r'-offset)` |
+| **decays** (dipole `1/r^3`, real coil) | regular, `Omega_s' = O(rho'^2)`; measured 7.0e-3 -> 1.6e-5 as rho' 0.4 -> 0.02 | **potential route works** |
+| **uniform at infinity** | diverges like `R^2/rho'^2`; measured 2.5 -> 20 as rho' 0.4 -> 0.05 | field route only (no bounded 0-form exists) |
 
-**These are separate contracts, not two views of one field.**  Verified
-symbolically (locked by `tests/test_reduced_potential_background.py`): for a
-uniform background,
-
-    curl(H_s' from the 1-form helper) = (2 H0 / R^2) (-y', x', 0)  != 0
-
-so the 1-form Convention B exterior field admits **no** scalar potential at
-all, and
-
-    -grad(Omega_s' 0-form) - H_s' (1-form) = -(2 H0/R^2)(x'z', y'z', z'^2).
-
-Never differentiate the 0-form helper to obtain a field (that is route B0 --
-it overshoots by exactly 4/3), and never integrate the 1-form helper to obtain
-a potential (impossible: non-zero curl).
+The divergence is physics -- the uniform-field potential is unbounded at
+infinity and rho'=0 IS infinity -- not a defect of the rule.
 
 ## Why the minus sign: H is a twisted 1-form
 
@@ -3041,12 +3057,33 @@ radius, build H_s with `make_reduced_potential_background_cf` and pass it via
 
 ## T-Omega
 
-T-Omega (`H = T - grad(Omega)`) needs `Omega_s` itself, so it is the 0-form
-helper's use case.  The T-Omega + Kelvin route design note is
+T-Omega (`H = T - grad(Omega)`) needs `Omega_s` itself, so use
+`make_kelvin_aware_Omega_s_cf` (twisted 0-form pullback), NOT
+`make_reduced_potential_scalar_cf`.  With a real (decaying) coil source the
+potential route is regular at the Kelvin centre and is exactly consistent with
+the matching field rule, so T-Omega + Kelvin works.
+
+The design note
 `validation_test/maglev/research_cln/ngsolve_validation/
-cuboid_521_T_Omega_Kelvin_design.md`.  Note that the T-Omega weak form must
-consume `Omega_s` directly -- if it instead differentiates `Omega_s` into a
-field it reproduces route B0 and is wrong by 4/3.
+cuboid_521_T_Omega_Kelvin_design.md` proposes the Convention-B-shaped scalar
+rule `-(rho'/R)^2 Omega_s(local)`.  That proposal is superseded: it is not a
+0-form pullback and is wrong by 4/3.
+
+## Why the minus sign, and which quantities take it
+
+`det Dk = -R^6/rho'^6 < 0`, so `s_k = -1`.  Form degree and orientation parity
+are INDEPENDENT axes, and the magnetic scalar potential is a **twisted
+0-form**:
+
+    twisted (take the extra -1):  phi_m (0-form), h (1-form), d, j (2-forms),
+                                  rho, U_m (3-forms)
+    straight (no extra sign):     V (0-form), a, e (1-forms), b (2-form)
+
+So `A` and `B` use `make_kelvin_aware_A_s_cf` (no extra minus) while `H` uses
+`make_kelvin_aware_H_s_cf` (extra minus -> radial keeps its sign, tangential
+flips).  Reference:
+https://www.ele.kindai.ac.jp/laboratory/sugahara/elemag/geometry09.php
+See also differential_forms_maxwell('twisted').
 """
 
 

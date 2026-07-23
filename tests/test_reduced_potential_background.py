@@ -40,6 +40,8 @@ from ngsolve import (
 )
 from ngsolve import TaskManager
 from radia.kelvin_material import (
+    make_kelvin_aware_H_s_cf,
+    make_kelvin_aware_Omega_s_cf,
     make_reduced_potential_background_cf,
     make_reduced_potential_scalar_cf,
 )
@@ -444,6 +446,165 @@ def test_vector_convention_b_exterior_field_has_nonzero_curl():
     print("  [OK] 1-form Convention B carries a fictitious curl in kext\n")
 
 
+# ----------------------------------------------------------------------------
+# Convention A: the genuine TWISTED pullback family.  Unlike Convention B this
+# IS gradient-consistent, because pullback commutes with the exterior
+# derivative and Omega and H carry the same twist factor s_k = sgn(det Dk).
+# Sign table: https://www.ele.kindai.ac.jp/laboratory/sugahara/elemag/geometry09.php
+# ----------------------------------------------------------------------------
+
+MOMENT = (0.30, -0.20, 0.50)
+DIP_POS = (0.15, -0.10, 0.20)
+
+
+def _omega_dipole(xc, yc, zc):
+    """Physical scalar potential of a point dipole; H = -grad(Omega)."""
+    ax, ay, az = xc - DIP_POS[0], yc - DIP_POS[1], zc - DIP_POS[2]
+    d2 = ax * ax + ay * ay + az * az + 1e-30
+    d = sqrt(d2)
+    m_dot_r = MOMENT[0] * ax + MOMENT[1] * ay + MOMENT[2] * az
+    return m_dot_r / (4.0 * math.pi * d2 * d)
+
+
+def _h_dipole(xc, yc, zc):
+    """H_s = -grad(Omega_s) = [3 (m.n) n - m] / (4 pi d^3)."""
+    ax, ay, az = xc - DIP_POS[0], yc - DIP_POS[1], zc - DIP_POS[2]
+    d2 = ax * ax + ay * ay + az * az + 1e-30
+    d = sqrt(d2)
+    m_dot_r = MOMENT[0] * ax + MOMENT[1] * ay + MOMENT[2] * az
+    pref = 1.0 / (4.0 * math.pi * d2 * d)
+    return CoefficientFunction((
+        pref * (3.0 * m_dot_r * ax / d2 - MOMENT[0]),
+        pref * (3.0 * m_dot_r * ay / d2 - MOMENT[1]),
+        pref * (3.0 * m_dot_r * az / d2 - MOMENT[2]),
+    ))
+
+
+_KEXT_PTS = [(3.4, 0.2, 0.3), (3.3, -0.25, 0.2), (2.7, 0.15, -0.3)]
+
+
+def test_twisted_0form_pullback_formula():
+    """Omega_s'(r') = -Omega_s(k(r')) with NO metric factor (0-form exponent 0)."""
+    print("=== Test 9: twisted 0-form pullback formula ===")
+    mesh, R_K, offset = build_test_geo()
+    ox, oy, oz = offset
+
+    om = make_kelvin_aware_Omega_s_cf(
+        mesh, _omega_dipole, R_K=R_K, offset=offset,
+        phys_center=(0.0, 0.0, 0.0), kelvin_mats=("kelvin",))
+
+    max_err = 0.0
+    for pt in _KEXT_PTS:
+        xl, yl, zl = pt[0] - ox, pt[1] - oy, pt[2] - oz
+        rho2 = xl * xl + yl * yl + zl * zl
+        s = R_K * R_K / rho2
+        kx, ky, kz = s * xl, s * yl, s * zl          # phys_center = origin
+        ax, ay, az = kx - DIP_POS[0], ky - DIP_POS[1], kz - DIP_POS[2]
+        d2 = ax * ax + ay * ay + az * az
+        want = -((MOMENT[0] * ax + MOMENT[1] * ay + MOMENT[2] * az)
+                 / (4.0 * math.pi * d2 * math.sqrt(d2)))
+        got = om(mesh(*pt))
+        err = abs(got - want) / max(1e-30, abs(want))
+        max_err = max(max_err, err)
+        print(f"  r'=({xl:+.2f},{yl:+.2f},{zl:+.2f}): got={got:+.8e}, "
+              f"want={want:+.8e}, rel={err:.2e}")
+    assert max_err < 1e-10, f"twisted 0-form pullback mismatch: {max_err}"
+    print("  [OK] Omega_s' = -Omega_s(k(r'))\n")
+
+
+def test_twisted_pullback_family_is_gradient_consistent():
+    """THE point: -grad(Omega_s') == H_s' for the genuine twisted pullback.
+
+    Convention B fails this (test 7, discrepancy -(2H0/R^2)(x'z', y'z', z'^2));
+    the pullback family satisfies it because g*(d w) = d(g* w) and both
+    Omega and H carry the same twist factor s_k.
+    """
+    print("=== Test 10: twisted pullback is gradient-consistent ===")
+    mesh, R_K, offset = build_test_geo()
+
+    om = make_kelvin_aware_Omega_s_cf(
+        mesh, _omega_dipole, R_K=R_K, offset=offset,
+        phys_center=(0.0, 0.0, 0.0), kelvin_mats=("kelvin",))
+    hs = make_kelvin_aware_H_s_cf(
+        mesh, _h_dipole, R_K=R_K, offset=offset,
+        phys_center=(0.0, 0.0, 0.0), kelvin_mats=("kelvin",))
+
+    h = 1e-5
+    max_rel = 0.0
+    for pt in _KEXT_PTS:
+        grad_num = []
+        for i in range(3):
+            plus, minus = list(pt), list(pt)
+            plus[i] += h
+            minus[i] -= h
+            grad_num.append((om(mesh(*plus)) - om(mesh(*minus))) / (2 * h))
+        got = [-g for g in grad_num]
+        want = [hs[i](mesh(*pt)) for i in range(3)]
+        scale = max(1e-30, max(abs(w) for w in want))
+        rel = max(abs(a - b) for a, b in zip(got, want)) / scale
+        max_rel = max(max_rel, rel)
+        print(f"  {pt}: -grad(Om') = {tuple(f'{v:+.5e}' for v in got)}")
+        print(f"        H_s'       = {tuple(f'{v:+.5e}' for v in want)}  "
+              f"rel={rel:.2e}")
+    print(f"  max rel = {max_rel:.2e}")
+    assert max_rel < 1e-4, \
+        f"twisted pullback is NOT gradient-consistent: {max_rel}"
+    print("  [OK] -grad(Omega_s') == H_s' for the twisted pullback family\n")
+
+
+def test_twisted_0form_regular_at_offset_for_decaying_source():
+    """A decaying source pulls back to something REGULAR at rho' -> 0.
+
+    geometry09: |H_s| ~ 1/r^3 in the exterior maps to |H_s'| ~ rho'/R^4, so
+    'vanishing at infinity' becomes 'vanishing at the Kelvin centre'.
+    """
+    print("=== Test 11: twisted 0-form regular at the offset (decaying) ===")
+    mesh, R_K, offset = build_test_geo()
+    ox, oy, oz = offset
+
+    om = make_kelvin_aware_Omega_s_cf(
+        mesh, _omega_dipole, R_K=R_K, offset=offset,
+        phys_center=(0.0, 0.0, 0.0), kelvin_mats=("kelvin",))
+
+    prev = None
+    for dz in (0.4, 0.2, 0.1, 0.05, 0.02):
+        val = abs(om(mesh(ox, oy, oz + dz)))
+        print(f"  rho'={dz:5.2f}: |Omega_s'| = {val:.6e}")
+        if prev is not None:
+            assert val < prev, "|Omega_s'| must decrease towards the offset"
+        prev = val
+    assert prev < 1e-3, \
+        f"|Omega_s'| should vanish at the offset for a decaying source: {prev}"
+    print("  [OK] decaying source -> regular at rho' = 0\n")
+
+
+def test_twisted_0form_diverges_for_a_uniform_background():
+    """Honest limit: a NON-decaying background has no bounded 0-form image.
+
+    The uniform-field potential is unbounded at infinity, and rho' = 0 IS
+    infinity, so Omega_s' ~ R^2/rho'^2 there.  This is physics, not a defect:
+    it is why the uniform case must be driven through the 1-form route.
+    """
+    print("=== Test 12: uniform background has no bounded 0-form image ===")
+    mesh, R_K, offset = build_test_geo()
+    ox, oy, oz = offset
+
+    om = make_kelvin_aware_Omega_s_cf(
+        mesh, lambda xc, yc, zc: -H_0 * zc, R_K=R_K, offset=offset,
+        phys_center=(0.0, 0.0, 0.0), kelvin_mats=("kelvin",))
+
+    prev = None
+    for dz in (0.4, 0.2, 0.1, 0.05):
+        val = abs(om(mesh(ox, oy, oz + dz)))
+        print(f"  rho'={dz:5.2f}: |Omega_s'| = {val:.6e}")
+        if prev is not None:
+            assert val > prev, "uniform background must BLOW UP at the offset"
+        prev = val
+    assert prev > 10.0 * H_0 * R_K, \
+        f"expected divergence for the uniform background, got {prev}"
+    print("  [OK] uniform background diverges -> use the 1-form route\n")
+
+
 if __name__ == "__main__":
     test_uniform_H()
     test_uniform_A_for_uniform_Bz()
@@ -453,6 +614,10 @@ if __name__ == "__main__":
     test_scalar_boundary_sign_flip()
     test_scalar_and_vector_convention_b_are_not_gradient_consistent()
     test_vector_convention_b_exterior_field_has_nonzero_curl()
+    test_twisted_0form_pullback_formula()
+    test_twisted_pullback_family_is_gradient_consistent()
+    test_twisted_0form_regular_at_offset_for_decaying_source()
+    test_twisted_0form_diverges_for_a_uniform_background()
     print("=" * 60)
     print("ALL TESTS PASS - make_reduced_potential_background_cf is")
     print("consistent with hand-written H-formulation and A-formulation")
