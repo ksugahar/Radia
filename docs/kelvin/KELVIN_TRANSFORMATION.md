@@ -76,6 +76,31 @@ components. For tangential A (e.g. azimuthal from a z-directed B),
 The minus sign in the B pullback arises from `det(H) = -1` via the
 Levi-Civita pseudovector identity.
 
+#### Where every sign comes from: straight vs twisted forms
+
+The Kelvin inversion is **orientation-reversing** (`det J < 0`), and that
+is the single origin of every minus sign in this document. In premetric
+electromagnetism the field quantities split by **orientation type**:
+
+| type | forms | behaviour under an orientation-reversing map |
+|---|---|---|
+| **straight** (inner-oriented) | `a` (1-form), `b` (2-form) | pull back with the Jacobian alone |
+| **twisted** (outer-oriented, densities) | `h` (1-form), `d`, `j` (2-forms), `rho` (3-form) | pick up an **extra** `sgn(det J) = -1` |
+
+So the minus in the reduced-potential rule `H_s' = -(rho'/R)^2 H_s`
+(§7.4) is *not* a fitting constant: `H` is a **twisted** 1-form, and the
+inversion reverses orientation. `A` is straight, which is why its own
+pullback (§2.3 table) carries no such factor, and `B`'s minus enters
+instead through the pseudovector (Hodge-dual) representation.
+
+The **energy is orientation-blind** — the pairing `<B, H>` contains one
+straight and one twisted factor, so the two sign flips cancel. That is
+why the material modulation `nu' = (rho'/R)^2 nu_0` (§2.4) carries **no**
+sign at all, while the field rules do.
+
+Cross-reference: `differential_forms_maxwell('twisted')` on
+mcp-server-radia-differential-forms (Bossavit / Kameari diagram).
+
 ### 2.4 Material Modulation
 
 The bilinear energy equivalence condition
@@ -595,6 +620,41 @@ For position-dependent backgrounds (e.g., `A_s = (B₀/2)(-y, x, 0)`):
 
 API: `radia.kelvin_material.make_reduced_potential_background_cf`.
 
+#### 0-form variant (T-Omega background potential)
+
+A T-Omega weak form consumes the background **potential** `Omega_s`, not
+the background field, so it needs the 0-form counterpart of the same
+Convention B rule:
+
+```
+Omega_s'(r') = -(rho'/R)^2 Omega_s(r' - offset)    (3D)
+Omega_s'(r') = -Omega_s(r' - offset)               (2D)
+```
+
+API: `radia.kelvin_material.make_reduced_potential_scalar_cf`.
+It is bounded at the offset, where the plain 0-form pullback
+`Omega_s(T(r'))` diverges like `R^2/rho'^2` for a uniform background.
+
+**The 0-form and 1-form Convention B rules are SEPARATE contracts —
+neither is the derivative of the other.** Verified symbolically and
+locked by `tests/test_reduced_potential_background.py`: for a uniform
+background `H_s = H_0 z_hat`,
+
+```
+curl(H_s' from the 1-form rule) = (2 H_0 / R^2) (-y', x', 0)   != 0
+```
+
+so the 1-form Convention B exterior field admits **no** scalar potential
+whatsoever, and
+
+```
+-grad(Omega_s' 0-form) - H_s' (1-form) = -(2 H_0/R^2)(x'z', y'z', z'^2).
+```
+
+Choose by what the weak form consumes — a background **field** takes the
+1-form helper, a background **potential** takes the 0-form helper. Never
+differentiate one into the other; §7.9 measures what that costs (4/3).
+
 ### 7.4.1 Kameari Canonical Pattern (boundary-integral source, NOT bulk)
 
 ⭐ **Reference**: Kameari (2025/10/14 slides; private slide deck).
@@ -701,7 +761,16 @@ infinity (PEEC coils).
 
 **Convention B** is bounded everywhere (vanishes at offset). Used for
 globally-defined backgrounds (uniform B, dipole, quadrupole at
-infinity).
+infinity). It comes in a 1-form and a 0-form flavour:
+
+| Convention B flavour | Formula (3D) | Weak form consumes | API |
+|---|---|---|---|
+| **B-1 (1-form)** | `H_s'(r') = -(rho'/R)^2 H_s(r'-offset)` | a background **field**, `int mu H_s . grad v` | `make_reduced_potential_background_cf` |
+| **B-0 (0-form)** | `Omega_s'(r') = -(rho'/R)^2 Omega_s(r'-offset)` | a background **potential** (T-Omega `Omega_s`) | `make_reduced_potential_scalar_cf` |
+
+B-1 and B-0 are **not** two views of one field: B-1 is not curl-free, so
+it has no potential, and differentiating B-0 does not give B-1 (§7.4).
+Mixing them costs a factor 4/3 — measured in §7.9.
 
 ### 7.7 Axisymmetric A-formulation (special case)
 
@@ -786,6 +855,33 @@ Toroidal current loop (a = 0.1 m, b = 0.01 m, R_K = 1 m):
 
 The Kelvin formulation reproduces analytical results accurately for
 both background field types.
+
+#### What the exterior source is worth (3-route golden, 2026-07-23)
+
+Magnetic sphere `mu_r = 100`, `a = 0.5 m`, uniform applied `H_0 z_hat`,
+`R_K = 1 m`, reduced scalar potential `H = H_s - grad(Omega)`, analytical
+`H_in = 3 H_0/(mu_r + 2)`. One mesh, one bilinear form; the routes differ
+**only** in what `H_s` is inside the Kelvin exterior:
+
+| route | `H_s'` in kext | err (p=2, maxh .14) | err (p=3, maxh .11) | ratio to B-1 |
+|---|---|---|---|---|
+| **Z** | `0` (source dropped) | −32.83% | −33.33% | **2/3** |
+| **B-1** | `-(rho'/R)^2 H_0 z_hat` | +0.74% | **+0.002%** | 1 |
+| **B-0** | `-grad(Omega_s')` | +34.33% | +33.34% | **4/3** |
+
+Readings:
+
+1. **B-1 is exact** (+0.002% at p=3): the 1-form Convention B rule is the
+   correct way to carry a background field into the Kelvin exterior.
+2. **Dropping the exterior source loses exactly one third.** The 2/3 and
+   4/3 factors are mesh-independent (0.666669 / 1.333338 at p=3), so they
+   are structural, not discretisation error.
+3. **Differentiating the 0-form rule into a field overshoots by 4/3** —
+   the numerical face of `curl(H_s' 1-form B) != 0` from §7.4.
+
+Golden: `validation_test/kelvin_source/test_kelvin_exterior_source_routes.py`.
+Contract locks (symbolic identities, curl, boundedness):
+`tests/test_reduced_potential_background.py`.
 
 #### Analytical solutions for benchmark cases
 
