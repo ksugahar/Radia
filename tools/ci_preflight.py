@@ -229,11 +229,22 @@ def gate_radia_mcp_matrix():
     # 4c the FAST radia-mcp pytest, UNDER minimal-dep simulation -- this is
     #     exactly the ubuntu matrix "Pytest" step. Slow corpus / subprocess
     #     selftest gates are explicit validation or dedicated CI steps.
-    rc, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q",
-                   "-p", "no:cacheprovider", "--no-header",
-                   "-m", "not xval and not slow",
-                   "--reruns", "1", "--reruns-delay", "1"],  # match matrix flaky-retry
-                  cwd=MCP, env={"RADIA_MCP_FORCE_MINIMAL": "1"})
+    # This corpus is intentionally broad (about 1,800 lightweight contract
+    # tests).  Keep the CI-equivalent retry policy, but make the local hook
+    # fail diagnostically instead of appearing to stop forever.
+    print("  [radia-mcp] running minimal-dependency pytest matrix (timeout: 10 min)...",
+          flush=True)
+    try:
+        rc, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q",
+                       "-p", "no:cacheprovider", "--no-header",
+                       "-m", "not xval and not slow",
+                       "--reruns", "1", "--reruns-delay", "1"],  # match matrix flaky-retry
+                      cwd=MCP, env={"RADIA_MCP_FORCE_MINIMAL": "1"}, timeout=600)
+    except subprocess.TimeoutExpired as exc:
+        partial = (exc.stdout or exc.stderr or "")
+        return False, ("radia-mcp pytest timed out after 600 seconds; "
+                       "the matrix is too slow or hung" +
+                       (f" (last output: {partial[-300:]})" if partial else ""))
     tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"
     if rc != 0:
         # surface collection errors / failures
