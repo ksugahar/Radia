@@ -256,6 +256,16 @@ be silently omitted or replaced by a numerically different MATLAB algorithm.
   MATLAB-friendly numeric arrays, structs, sparse matrices, file/path-based
   meshes, and checked `uint64` handles rather than trying to share Python object
   identity.
+- A standalone MEX command remains a deliberate deliverable even when the
+  production path is a native MEX S-Function. It provides a low-level user
+  entry point, a reproducible debugging surface, and an independent numerical
+  probe for diagnosing S-Function lifecycle, port, and state errors. Do not
+  discard it merely because it is not the production block.
+- MEX and MEX S-Function have separate release responsibilities: standalone
+  MEX must pass API, numerical, error-propagation, and performance tests;
+  production S-Functions must additionally pass initialization, step-time,
+  termination, repeated-run, and Simulink integration tests. The two artifacts
+  may share the C++ kernel, but neither test suite substitutes for the other.
 - Use an explicit Python fallback when the capability fundamentally depends on
   Python callbacks, Python-only ecosystem objects, or an NGSolve operation that
   has no stable native C++ boundary. The owning `.m` function may use MATLAB's
