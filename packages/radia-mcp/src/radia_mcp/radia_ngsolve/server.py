@@ -1391,6 +1391,17 @@ def kelvin_transformation(topic: str = "all") -> str:
                                formulation basis for radia.open_boundary.
                                kelvin_dtn's (a/r)^4 sigma / (a/r)^2 mu weights.
                                Read before claiming "material Kelvin" novel.
+            "exterior_source" - What background field to put INSIDE the Kelvin
+                               exterior for a reduced potential / T-Omega, and
+                               what each wrong choice costs.  Measured 3-route
+                               golden: dropping the exterior source loses
+                               exactly 2/3; the 1-form Convention B rule is
+                               exact (+0.002% at p=3); differentiating the
+                               0-form rule into a field overshoots by 4/3.
+                               Also: the twisted-1-form origin of the minus
+                               sign, and the ScalarPotentialSolver caveat.
+                               **Read this when your source does not vanish
+                               at the Kelvin radius.**
     """
     return get_kelvin_documentation(topic)
 

@@ -37,7 +37,35 @@ TWO DIFFERENT BACKGROUND-FIELD CONVENTIONS (DON'T CONFUSE):
     Helper: make_reduced_potential_background_cf (vanishes at offset =
     no singularity, sign-flipped for opposite-normal periodic BC matching
     at the Kelvin sphere boundary).
-    See docs/Reduced_Potential_Kelvin.md for the derivation.
+    The right-hand sides are evaluated at LOCAL (offset-relative)
+    coordinates r' - offset, NOT at the Kelvin-mapped physical point.
+
+    The 0-form (scalar potential) counterpart, needed by T-Omega and by
+    any Omega-reduced route that carries a background POTENTIAL rather
+    than a background FIELD in the Kelvin exterior, is
+        Omega_s'(r') = -(rho'/R)^2 * Omega_s(r' - offset)   (3D)
+    Helper: make_reduced_potential_scalar_cf.
+
+    WARNING (verified symbolically, locked by
+    tests/test_reduced_potential_background.py): the 0-form and 1-form
+    Convention B rules are NOT gradient-consistent.  For a uniform
+    background H_s = H_0 z_hat, Omega_s = -H_0 z,
+
+        curl(H_s' 1-form B) = (2 H_0 / R^2) (-y', x', 0)  != 0
+
+    so the 1-form Convention B field admits NO scalar potential at all,
+    and
+        -grad(Omega_s' 0-form B) - H_s' (1-form B)
+            = -(2 H_0 / R^2) (x' z', y' z', z'^2)  != 0 .
+
+    Pick ONE per formulation and state which: a field-driven weak form
+    (H-formulation linear form int(mu H_s . grad v)) uses the 1-form
+    helper; a potential-driven weak form (T-Omega, which needs Omega_s
+    itself) uses the 0-form helper.  Do not mix them in one model and do
+    not assume one can be differentiated into the other.
+
+    See docs/kelvin/KELVIN_TRANSFORMATION.md 7.4 / 7.6 for the derivation
+    and the Convention A vs B disambiguation table.
 
 These two conventions are INCOMPATIBLE: (A) is a covariant 1-form
 pullback that preserves line integrals exactly but is singular at
@@ -287,3 +315,114 @@ def make_reduced_potential_background_cf(mesh, F_inner_factory, R_K, offset,
     Fy = _switch(F_kelvin_y, F_inner[1])
     Fz = _switch(F_kelvin_z, F_inner[2])
     return CF((Fx, Fy, Fz))
+
+
+def make_reduced_potential_scalar_cf(mesh, Phi_inner_factory, R_K, offset,
+                                     kelvin_mats=("kelvin",),
+                                     dim=3):
+    """Build a reduced-potential background SCALAR potential CF (0-form).
+
+    *** USE THIS WHEN THE WEAK FORM CARRIES A BACKGROUND POTENTIAL ***
+    *** (T-Omega Omega_s, Omega-reduced with a potential source)   ***
+
+    0-form counterpart of :func:`make_reduced_potential_background_cf`.
+    Convention B applied to a scalar (0-form) background potential:
+
+        Omega_s'(r') = -(rho'/R)^2 * Omega_s(r' - offset)    (3D)
+        Omega_s'(r') = -Omega_s(r' - offset)                 (2D)
+
+    with rho' = |r' - offset|.  Same three defining features as the
+    1-form helper:
+
+    1. Evaluated at LOCAL (offset-relative) coordinates, NOT at the
+       Kelvin-mapped physical point r_phys = T(r').
+    2. Bounded: vanishes at the offset (rho' -> 0 = physical infinity),
+       whereas the plain 0-form pullback Omega_s(T(r')) diverges there
+       like R^2/rho'^2 for a uniform background.
+    3. Sign flip, so the inner and exterior sides match at the periodic
+       Kelvin boundary rho' = R where the normals are opposite.
+
+    WHY THIS EXISTS (and why it is not just the gradient of the 1-form
+    helper).  Verified symbolically and locked by
+    ``tests/test_reduced_potential_background.py``: for a uniform
+    background ``H_s = H_0 z_hat`` with ``Omega_s = -H_0 z``,
+
+        curl(H_s' from the 1-form helper) = (2 H_0 / R^2) (-y', x', 0)
+
+    which is NOT zero, so the 1-form Convention B exterior field admits
+    no scalar potential whatsoever.  Consequently
+
+        -grad(Omega_s' from this helper) - H_s' (1-form helper)
+            = -(2 H_0 / R^2) (x' z', y' z', z'^2)  !=  0 .
+
+    The two helpers are therefore SEPARATE contracts, not two views of
+    one field.  Choose by what the weak form consumes:
+
+    =========================  ==================================
+    weak form consumes         helper
+    =========================  ==================================
+    a background FIELD H_s     make_reduced_potential_background_cf
+    a background POTENTIAL     make_reduced_potential_scalar_cf
+    =========================  ==================================
+
+    Do not mix both in one model, and do not differentiate one to obtain
+    the other.
+
+    Args:
+        mesh: NGSolve Mesh.
+        Phi_inner_factory: callable ``(x_cf, y_cf, z_cf) -> scalar CF``
+            returning the background potential at the given coordinates.
+            Receives GLOBAL coords for inner-region values and LOCAL
+            (offset-relative) coords for Kelvin-region values.  For a
+            uniform ``H_0 z_hat`` applied at infinity:
+            ``lambda xc, yc, zc: -H_0 * zc``.
+        R_K: Kelvin sphere radius.
+        offset: 3-tuple, Kelvin sphere center.
+        kelvin_mats: substring(s) used to detect Kelvin materials.
+        dim: 2 or 3 (default 3).  Selects between 2D and 3D scaling.
+
+    Returns:
+        Scalar CoefficientFunction with:
+            inner materials:  Omega_s(x, y, z)                       (global)
+            kelvin materials: -(rho'/R)^2 * Omega_s(x-ox, y-oy, z-oz) (3D, local)
+                              -Omega_s(x-ox, y-oy, z-oz)             (2D, local)
+
+    Example::
+
+        # Uniform H_0 z_hat applied at infinity, T-Omega background:
+        Omega_s_cf = make_reduced_potential_scalar_cf(
+            mesh,
+            lambda xc, yc, zc: -H_0 * zc,
+            R_K=R_K, offset=offset, kelvin_mats=("kelvin",))
+
+    See:
+        docs/kelvin/KELVIN_TRANSFORMATION.md 7.4 (rule), 7.6 (A vs B)
+        validation_test/maglev/research_cln/ngsolve_validation/
+            cuboid_521_T_Omega_Kelvin_design.md (the T-Omega route that
+            requires this 0-form variant)
+    """
+    from ngsolve import x, y, z
+
+    if dim not in (2, 3):
+        raise ValueError(f"dim must be 2 or 3, got {dim}")
+
+    ox, oy, oz = offset
+    # Inner region: evaluate at global coordinates
+    Phi_inner = Phi_inner_factory(x, y, z)
+    # Kelvin region: evaluate at local (offset-relative) coordinates
+    Phi_local = Phi_inner_factory(x - ox, y - oy, z - oz)
+
+    if dim == 3:
+        rho2 = ((x - ox) ** 2 + (y - oy) ** 2 + (z - oz) ** 2 + 1e-24)
+        kelvin_factor = -rho2 / (R_K * R_K)            # -(rho'/R)^2
+    else:  # dim == 2
+        kelvin_factor = -1.0                            # 2D: sign flip only
+
+    Phi_kelvin = kelvin_factor * Phi_local
+
+    d = {}
+    for m in mesh.GetMaterials():
+        ml = m.lower()
+        is_kelvin = any(kw in ml for kw in kelvin_mats)
+        d[m] = Phi_kelvin if is_kelvin else Phi_inner
+    return mesh.MaterialCF(d, default=Phi_inner)

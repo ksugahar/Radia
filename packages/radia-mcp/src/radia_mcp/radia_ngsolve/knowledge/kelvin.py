@@ -134,21 +134,68 @@ magnetostatic/electromagnetic problems without artificial truncation.
    rho'=0 (where nu vanishes / mu diverges), integration order
    (bonus_intorder for rational nu), and periodic identification.
 
-4. **Background Field Modulation** (exterior domain):
-   - Physical Kelvin-transformed field: H'_i = -(R/r')^2 * H_i(R^2/r')
-   - The sign flip comes from the negative Jacobian (orientation reversal)
-   - For uniform dipole H_s=(0,0,1): exterior H'_s = (0, 0, -(R/r')^2)
-   - For quadrupole H_s=(-z,0,-x): exterior H'_s = +(R^4/r'^4)*(z',0,x')
-     (positive because the double negation: field already negative + Kelvin sign flip)
-   - At the Kelvin boundary r'=R, the rule simplifies to H'(R) = -H(R)
+4. **Background Field Modulation** (exterior domain) -- **TWO CONVENTIONS,
+   DO NOT MIX** (full table: docs/kelvin/KELVIN_TRANSFORMATION.md 7.6):
 
-5. **Periodic Boundary Conditions**:
+   | Convention | Rule (3D) | Evaluated at | Use for | API |
+   |---|---|---|---|---|
+   | **A. Proper 1-form pullback** | `F_comp(r') = (R/rho')^2 * Householder * F_phys(r_phys)` | the Kelvin-**MAPPED** point `r_phys = T(r')` | a source **localized** in the physical region (PEEC filament coil) | `kelvin_pullback_vector`, `make_kelvin_aware_A_s_cf` |
+   | **B. Reduced-potential background** | `F_s'(r') = -(rho'/R)^2 * F_s(r' - offset)` | **LOCAL** (offset-relative) coords | a background defined **globally** (uniform / dipole / quadrupole at infinity) | `make_reduced_potential_background_cf` (1-form), `make_reduced_potential_scalar_cf` (0-form) |
+
+   Convention A is SINGULAR at the offset when `F_phys` is unbounded
+   (uniform field); Convention B is bounded (vanishes at the offset).
+   Reaching for A where B is meant is the most common Kelvin bug.
+
+   Convention A examples (mapped-point evaluation, on the symmetry axis
+   where the Householder reflection reduces to a sign):
+   - uniform `H_s = (0,0,1)`      -> `H'_s = (0, 0, -(R/r')^2)`
+   - quadrupole `H_s = (-z,0,-x)` -> `H'_s = +(R^4/r'^4)*(z',0,x')`
+     (the extra `(R/r')^2` is the field's own linear position dependence)
+
+   Convention B examples (local-coordinate evaluation):
+   - uniform `H_s = (0,0,1)`      -> `H'_s = (0, 0, -(r'/R)^2)`
+   - quadrupole `H_s = (-z,0,-x)` -> `H'_s = +(r'/R)^2 * (z',0,x')`
+
+   At the Kelvin boundary r'=R both reduce to `H'(R) = -H(R)`.
+
+   **The 0-form and 1-form Convention B rules are SEPARATE contracts.**
+   Verified symbolically and by FEM (see item 5 and the goldens below):
+   the 1-form Convention B exterior field is NOT curl-free, so no scalar
+   potential reproduces it.  Use the 1-form helper when the weak form
+   consumes a background FIELD (`int mu H_s . grad v`), and the 0-form
+   helper when it consumes a background POTENTIAL (T-Omega `Omega_s`).
+   Never differentiate one into the other.
+
+5. **Why there is a sign flip at all: H is a TWISTED 1-form**:
+
+   The Kelvin inversion is **orientation-reversing** (`det J < 0`).  In
+   premetric electromagnetism the field quantities split by orientation
+   type (see the `differential_forms_maxwell('twisted')` topic on
+   mcp-server-radia-differential-forms):
+
+   - **straight** (inner-oriented) forms: `a` (1-form), `b` (2-form)
+   - **twisted** (outer-oriented / density) forms: `h` (1-form),
+     `d`, `j` (2-forms), `rho` (3-form)
+
+   A straight form pulls back with the Jacobian alone; a **twisted form
+   picks up the extra factor `sgn(det J) = -1`** under an
+   orientation-reversing map.  `H` and `J` are twisted, which is exactly
+   where the minus sign in `H'_s = -(rho'/R)^2 H_s` comes from -- it is
+   not a fitting constant.  `B` (straight 2-form) instead carries the
+   `-(R/rho')^4` sign through its Hodge-dual pseudovector representation
+   (`kelvin_pullback_B_pseudovector`).
+
+   The energy is orientation-blind: the two sign flips cancel in
+   `int (1/2) nu |B|^2`, which is why the material modulation
+   `nu' = (rho'/R)^2 nu_0` carries no sign.
+
+6. **Periodic Boundary Conditions**:
    - Identify interior outer boundary with exterior outer boundary
    - Ensures field continuity at the inversion sphere/circle
    - Uses NGSolve `Periodic()` FE space wrapper
    - Boundary terms in the weak form AUTO-CANCEL with periodic BC
 
-6. **GND Point (Dirichlet at Infinity)**:
+7. **GND Point (Dirichlet at Infinity)**:
    - Place vertex at exterior domain center (r'=0)
    - Corresponds to physical infinity
    - **H1 (scalar potential)**: Essential for uniqueness: `dirichlet_bbnd="GND"`
@@ -405,7 +452,11 @@ mu_dict = {
 mu = CoefficientFunction([mu_dict[m] for m in mesh.GetMaterials()])
 ```
 
-### 5. Background Field (with Kelvin modulation)
+### 5. Background Field (Convention B -- reduced-potential background)
+
+This is **Convention B** of the two-convention table in the overview:
+local (offset-relative) evaluation, factor `-(rho'/R)^2`, bounded at the
+Kelvin centre.  Do NOT substitute the Convention A pullback here.
 
 ```python
 # Interior: uniform applied field
@@ -1897,6 +1948,16 @@ What this solves:
 Accuracy: max 3%, RMS 1.5% vs Radia BEM reference (order=2, mu_r=100).
 Validated by pytest: `tests/test_omega_reduced_omega.py` (5/5 PASS).
 
+CAVEAT -- the source in the Kelvin exterior.  `set_source_from_radia` projects
+the Radia field onto the physical materials only and leaves the Kelvin region
+at ZERO.  That is fine while the coil field is small at rho'=R (the validated
+regime above), but it is NOT a general rule: for a background that does not
+decay before the Kelvin radius, dropping the exterior source costs exactly a
+factor 2/3.  See kelvin_transformation(topic="exterior_source") for the
+measured 3-route golden and for `set_source_cf` +
+`make_reduced_potential_background_cf`, which is the correct route in that
+case.
+
 ## Mesh Requirements
 
 ```
@@ -2909,6 +2970,85 @@ T-Magn 24/25 (1988/89); Sugahara, IEEE Magnetics 2022 (ECT + Kelvin); Sugahara,
 IEICE Trans. Electron. 2024 (Extended Kelvin, radiating).
 """
 
+KELVIN_EXTERIOR_SOURCE = """
+# The background field INSIDE the Kelvin exterior (reduced potential / T-Omega)
+
+Answers: "my source field does not vanish at the Kelvin radius -- what do I put
+in the Kelvin exterior region, and does it even matter?"
+
+Short answer: **it matters enormously (a factor 2/3 if you drop it), and there
+is exactly one correct rule -- the 1-form Convention B.**
+
+## The measured golden (3 routes, one mesh, one bilinear form)
+
+Magnetic sphere mu_r=100, radius a=0.5, uniform applied H0 z_hat, Kelvin R=1,
+reduced scalar potential H = H_s - grad(Omega).  Analytical interior field
+H_in = 3 H0/(mu_r + 2).  The three routes differ ONLY in H_s inside kext:
+
+| route | H_s' in the Kelvin exterior | err (p=2) | err (p=3) | ratio to B1 |
+|---|---|---|---|---|
+| Z  | `0` (source dropped)                    | -32.83% | -33.33% | **2/3** |
+| B1 | `-(rho'/R)^2 H0 z_hat` (1-form Conv. B)  | +0.74%  | **+0.002%** | 1 |
+| B0 | `-grad(Omega_s')` (0-form Conv. B)       | +34.33% | +33.34% | **4/3** |
+
+The 2/3 and 4/3 factors are mesh-independent (0.666669 / 1.333338 at p=3):
+these are structural errors, not discretisation error.
+
+Golden: `validation_test/kelvin_source/test_kelvin_exterior_source_routes.py`.
+
+## The rule
+
+| the weak form consumes | helper | rule |
+|---|---|---|
+| a background **FIELD** `int mu H_s . grad v` | `make_reduced_potential_background_cf` | `H_s'(r') = -(rho'/R)^2 H_s(r'-offset)` |
+| a background **POTENTIAL** (T-Omega `Omega_s`) | `make_reduced_potential_scalar_cf` | `Omega_s'(r') = -(rho'/R)^2 Omega_s(r'-offset)` |
+
+**These are separate contracts, not two views of one field.**  Verified
+symbolically (locked by `tests/test_reduced_potential_background.py`): for a
+uniform background,
+
+    curl(H_s' from the 1-form helper) = (2 H0 / R^2) (-y', x', 0)  != 0
+
+so the 1-form Convention B exterior field admits **no** scalar potential at
+all, and
+
+    -grad(Omega_s' 0-form) - H_s' (1-form) = -(2 H0/R^2)(x'z', y'z', z'^2).
+
+Never differentiate the 0-form helper to obtain a field (that is route B0 --
+it overshoots by exactly 4/3), and never integrate the 1-form helper to obtain
+a potential (impossible: non-zero curl).
+
+## Why the minus sign: H is a twisted 1-form
+
+The Kelvin inversion reverses orientation (det J < 0).  Twisted (outer-
+oriented) forms -- `h`, `j`, `d`, `rho` -- pick up the extra `sgn(det J) = -1`
+that straight forms (`a`, `b`) do not.  `H_s` is twisted, hence the minus in
+`-(rho'/R)^2`.  Energy is orientation-blind (two flips cancel), which is why
+`nu' = (rho'/R)^2 nu_0` carries no sign.  See
+`differential_forms_maxwell('twisted')` on mcp-server-radia-differential-forms.
+
+## Known limitation of ScalarPotentialSolver
+
+`radia.scalar_potential_solver.ScalarPotentialSolver.set_source_from_radia`
+projects the Radia source field onto physical materials only and leaves the
+Kelvin region at zero -- i.e. route **Z** above.  For a COMPACT coil well
+inside the Kelvin radius the resulting error tracks H_s at rho'=R and stays
+small (that path is validated to max 3% / RMS 1.5% in
+`tests/test_omega_reduced_omega.py`).  For a background applied at infinity the
+same choice costs the full 1/3.  If your source is not small at the Kelvin
+radius, build H_s with `make_reduced_potential_background_cf` and pass it via
+`set_source_cf` instead.
+
+## T-Omega
+
+T-Omega (`H = T - grad(Omega)`) needs `Omega_s` itself, so it is the 0-form
+helper's use case.  The T-Omega + Kelvin route design note is
+`validation_test/maglev/research_cln/ngsolve_validation/
+cuboid_521_T_Omega_Kelvin_design.md`.  Note that the T-Omega weak form must
+consume `Omega_s` directly -- if it instead differentiates `Omega_s` into a
+field it reproduces route B0 and is wrong by 4/3.
+"""
+
 
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
@@ -2933,6 +3073,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "benchmark_panel": KELVIN_BENCHMARK_PANEL,
         "kameari_canonical": KELVIN_KAMEARI_CANONICAL,
         "material_exterior": KELVIN_MATERIAL_EXTERIOR,
+        "exterior_source": KELVIN_EXTERIOR_SOURCE,
     }
 
     topic = topic.lower().strip()
