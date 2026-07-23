@@ -21,13 +21,12 @@ end
 
 function testLibraryRegistersBH(testCase)
 load_system("simulink");
-root = fullfile(tempdir,"radia_bh_test_library");
+root = fullfile("C:\temp","radia_bh_test_library");
 if isfolder(root), rmdir(root,"s"); end
 mkdir(root);
 addpath(fileparts(fileparts(fileparts(mfilename("fullpath")))),'-begin');
-addpath("C:/temp/radia_ih_native_mex2",'-begin');
 path = radia.simulink.buildLibrary(OutputDirectory=root);
-cleanup = onCleanup(@() closeIfLoaded("radia_simulink_library")); %#ok<NASGU>
+cleanup = onCleanup(@() cleanupLibrary(root));
 load_system(path);
 block = "radia_simulink_library/Material Models/Temperature-Dependent BH";
 verifyTrue(testCase,bdIsLoaded("radia_simulink_library"));
@@ -39,7 +38,7 @@ function out = runBHModel(cfg,T,H)
 model = "radia_bh_unit_" + erase(string(java.util.UUID.randomUUID),"-");
 assignin("base","radia_bh_test_config",cfg);
 new_system(model);
-cleanup = onCleanup(@() closeIfLoaded(model)); %#ok<NASGU>
+cleanup = onCleanup(@() closeIfLoaded(model));
 add_block("simulink/Sources/Constant",model+"/T","Value",num2str(T),"Position",[30 40 80 70]);
 add_block("simulink/Sources/Constant",model+"/H","Value",num2str(H),"Position",[30 120 80 150]);
 add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",model+"/BH", ...
@@ -59,4 +58,9 @@ end
 
 function closeIfLoaded(name)
 if bdIsLoaded(name), close_system(name,0); end
+end
+
+function cleanupLibrary(root)
+closeIfLoaded("radia_simulink_library");
+if isfolder(root), rmdir(root,"s"); end
 end

@@ -1,7 +1,5 @@
 function target = openIH(options)
-%OPENIH Open the production native IH Simulink block.
-%   radia.simulink.openIH() opens Applications/Induction Heating in the
-%   installed Radia Simulink library.
+%OPENIH Open the standalone native IH Simulink preview model.
 
 arguments
     options.ModelName (1,1) string = "radia_ih"
@@ -10,18 +8,25 @@ arguments
     options.Open (1,1) logical = true
 end
 
-libraryFile = string(which("radia_simulink_library.slx"));
-if strlength(libraryFile) == 0
-    if ispc
-        outputDirectory = fullfile("C:\temp", "radia_simulink_library");
-    else
-        outputDirectory = fullfile(tempdir, "radia_simulink_library");
-    end
-    libraryFile = radia.simulink.buildLibrary( ...
-        OutputDirectory=string(outputDirectory));
+modelFile = "";
+if options.ModelName == "radia_ih"
+    modelFile = string(which("radia_ih.slx"));
 end
-load_system(libraryFile);
-target = "radia_simulink_library/Applications/Induction Heating";
+if strlength(modelFile) == 0
+    outputDirectory = options.OutputDirectory;
+    if strlength(outputDirectory) == 0
+        if ispc
+            outputDirectory = fullfile("C:\temp", "radia_ih");
+        else
+            outputDirectory = fullfile(tempdir, "radia_ih");
+        end
+    end
+    modelFile = radia.simulink.buildIHNativeModel( ...
+        ModelName=options.ModelName, OutputDirectory=outputDirectory, ...
+        Open=false);
+end
+load_system(modelFile);
+target = options.ModelName;
 if options.Open
     open_system(target);
 end

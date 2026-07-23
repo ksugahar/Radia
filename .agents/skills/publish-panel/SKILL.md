@@ -7,12 +7,16 @@ description: Publish Radia's Simulink application library after verifying its fi
 
 1. Run `simulink-app-health`.
 2. Regenerate and inspect `matlab/radia_simulink_library.slx`.
-3. Confirm EM, PCB, Motor, Stream Function, and IH blocks are masked and use
-   the tested application runner.
-4. Load and update `matlab/radia_ih_sample.slx`; confirm it has no Python or
-   S-function dependency.
-5. Run release/deploy gates with `release-qud` when requested.
-6. Verify Cubit's toolbar separately.
+3. Confirm EM, PCB, Motor, and Stream Function use the tested application
+   runner. Confirm IH contains the native Eddy/Thermal MEX S-Functions.
+4. Load, update, and simulate `matlab/radia_ih.slx`; confirm its direct
+   Thermal-to-Eddy feedback and native-only backend. Treat the first package as
+   a preassembled-operator preview until native `.vol` assembly lands.
+5. Build the versioned archive and run `release_qud simulink-candidate` for all
+   four machines. `release_qud done --simulink-package <zip>` must pass before
+   GitHub publication.
+6. Run the remaining release/deploy gates with `release-qud` when requested.
+7. Verify Cubit's toolbar separately.
 
-Do not add PySide6 to normal Radia Python. Do not require MEX unless its
-application-specific production gates have passed.
+Do not add PySide6 to normal Radia Python. IH is the explicit native-MEX
+exception and must pass its application-specific production gates.

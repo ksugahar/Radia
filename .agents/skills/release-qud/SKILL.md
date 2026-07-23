@@ -15,8 +15,9 @@ python tools/release_qud.py phase0
 python tools/release_qud.py phase8 --target lab,100,hibino
 python tools/release_qud.py phase8e
 python tools/release_qud.py phase9
+python tools/release_qud.py simulink-candidate --package <zip> --target all
 python tools/release_qud.py all
-python tools/release_qud.py done
+python tools/release_qud.py done --simulink-package <zip>
 ```
 
 ## Machine Policy
@@ -40,11 +41,16 @@ comparison.
 - Do not publish any GitHub Release containing the Radia Simulink library,
   MATLAB support files, or MEX assets until the complete four-machine gate
   passes for LAB, 100号機, mdx, and hibino.
+- The Simulink gate hashes the exact ZIP, extracts it independently on each
+  machine, and runs `verify_radia_ih_release`. Rebuilding the ZIP invalidates
+  the recorded gate state and requires all four checks again.
 - The `done` result is the authoritative publication gate; partial, failed,
   or manually waived machine checks do not authorize publication.
-- Assemble and test the versioned Simulink package before publication. Include
-  `radia_simulink_library.slx`, its MATLAB support files, MEX assets where
-  applicable, `manifest.json`, and `SHA256SUMS.txt` in the release asset.
+- Assemble and test the versioned Simulink package before publication. A full
+  library package includes `radia_simulink_library.slx`; the standalone IH
+  preview instead includes `radia_ih.slx` and only its native support files.
+  Both forms include their applicable MEX assets, `manifest.json`, and
+  `SHA256SUMS.txt`.
 - This gate applies to every subsequent Simulink library revision as well as
   the initial release.
 - Use `ssh hibino` for hibino. For multi-line remote PowerShell, follow
