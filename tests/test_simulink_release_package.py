@@ -28,6 +28,17 @@ def test_package_builder_fails_when_mex_is_missing(tmp_path):
         module.build_package(tmp_path, tmp_path / "out")
 
 
+def test_package_commit_uses_github_sha_without_git(monkeypatch):
+    module = load_module(
+        "package_simulink_release_commit",
+        ROOT / "tools" / "package_simulink_release.py",
+    )
+    expected = "A" * 40
+    monkeypatch.setenv("GITHUB_SHA", expected)
+    monkeypatch.setenv("PATH", "")
+    assert module.commit() == expected.lower()
+
+
 def test_package_is_hashed_native_ih_allowlist(tmp_path):
     package_module = load_module(
         "package_simulink_release", ROOT / "tools" / "package_simulink_release.py"
