@@ -2,9 +2,19 @@ function tests=test_ltspice_simulink_coupling
 tests=functiontests(localfunctions);
 end
 function setupOnce(t)
-root=fileparts(fileparts(fileparts(mfilename("fullpath"))));addpath(fullfile(root,"matlab"));t.TestData.Root=root;
+root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
+matlabDirectory=fullfile(root,"matlab");
+entries=string(strsplit(path,pathsep));
+t.TestData.RemoveMatlabDirectory= ...
+    ~any(strcmpi(entries,string(matlabDirectory)));
+if t.TestData.RemoveMatlabDirectory,addpath(matlabDirectory);end
+t.TestData.Root=root;
 end
-function teardownOnce(t),rmpath(fullfile(t.TestData.Root,"matlab"));end
+function teardownOnce(t)
+if t.TestData.RemoveMatlabDirectory
+    rmpath(fullfile(t.TestData.Root,"matlab"));
+end
+end
 
 function testStatefulMultipleIOAndRestartCleanup(t)
 fixture=fullfile(t.TestData.Root,"tests","matlab","fixtures","ltspice_multi_io.cir");

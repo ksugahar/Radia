@@ -5,12 +5,19 @@ end
 function setupOnce(testCase)
 repositoryRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
 matlabDirectory = fullfile(repositoryRoot, "matlab");
-addpath(matlabDirectory);
+entries = string(strsplit(path, pathsep));
+testCase.TestData.RemoveMatlabDirectory = ...
+    ~any(strcmpi(entries, string(matlabDirectory)));
+if testCase.TestData.RemoveMatlabDirectory
+    addpath(matlabDirectory);
+end
 testCase.TestData.MatlabDirectory = matlabDirectory;
 end
 
 function teardownOnce(testCase)
-rmpath(testCase.TestData.MatlabDirectory);
+if testCase.TestData.RemoveMatlabDirectory
+    rmpath(testCase.TestData.MatlabDirectory);
+end
 end
 
 function testInstalledLTspiceRunsAndRawIsParsed(testCase)

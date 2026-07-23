@@ -1,8 +1,20 @@
 function tests=test_ltspice_hysteresis_coupling
 tests=functiontests(localfunctions);
 end
-function setupOnce(t),root=fileparts(fileparts(fileparts(mfilename("fullpath"))));addpath(fullfile(root,"matlab"));t.TestData.Root=root;end
-function teardownOnce(t),rmpath(fullfile(t.TestData.Root,"matlab"));end
+function setupOnce(t)
+root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
+matlabDirectory=fullfile(root,"matlab");
+entries=string(strsplit(path,pathsep));
+t.TestData.RemoveMatlabDirectory= ...
+    ~any(strcmpi(entries,string(matlabDirectory)));
+if t.TestData.RemoveMatlabDirectory,addpath(matlabDirectory);end
+t.TestData.Root=root;
+end
+function teardownOnce(t)
+if t.TestData.RemoveMatlabDirectory
+    rmpath(fullfile(t.TestData.Root,"matlab"));
+end
+end
 function testWaveformRelaxedCircuitHysteresisInterval(t)
 radia.UtiDelAll();cleanup=onCleanup(@()radia.UtiDelAll());material=radia.MatPlayHysteresis(1,0.1,{{[0,1,2],[0,1,2]}});hys=radia.MatHysSaveState(material);
 circuit=emptyCircuitState();fixture=fullfile(t.TestData.Root,"tests","matlab","fixtures","ltspice_hysteretic_drive.cir");
