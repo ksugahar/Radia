@@ -84,8 +84,19 @@ electromagnetism the field quantities split by **orientation type**:
 
 | type | forms | behaviour under an orientation-reversing map |
 |---|---|---|
-| **straight** (inner-oriented) | `a` (1-form), `b` (2-form) | pull back with the Jacobian alone |
-| **twisted** (outer-oriented, densities) | `h` (1-form), `d`, `j` (2-forms), `rho` (3-form) | pick up an **extra** `sgn(det J) = -1` |
+| **straight** (inner-oriented) | `V` (0-form), `a`, `e` (1-forms), `b` (2-form) | pull back with the Jacobian alone |
+| **twisted** (outer-oriented, densities) | **`phi_m` (0-form, the magnetic scalar potential)**, `h` (1-form), `d`, `j` (2-forms), `rho`, `U_m` (3-forms) | pick up an **extra** `sgn(det J) = -1` |
+
+Form **degree** and **orientation parity** are independent axes: the
+magnetic scalar potential is a 0-form *and* twisted, which is why its
+pullback carries a minus but **no** metric factor (exponent 0 in the
+table above). For the Kelvin map `det Dk = -R^6/rho'^6 < 0`, so
+`s_k = -1` and
+
+```
+phi_m = -k* phi_m'  ,   H = -k* H'  ,   J = -k* J'  ,   rho = -k* rho'
+V     =  k* V'      ,   A =  k* A'  ,   B =  k* B'
+```
 
 So the minus in the reduced-potential rule `H_s' = -(rho'/R)^2 H_s`
 (§7.4) is *not* a fitting constant: `H` is a **twisted** 1-form, and the
@@ -620,40 +631,67 @@ For position-dependent backgrounds (e.g., `A_s = (B₀/2)(-y, x, 0)`):
 
 API: `radia.kelvin_material.make_reduced_potential_background_cf`.
 
-#### 0-form variant (T-Omega background potential)
+#### Convention B has no valid 0-form flavour — use the twisted pullback
 
-A T-Omega weak form consumes the background **potential** `Omega_s`, not
-the background field, so it needs the 0-form counterpart of the same
-Convention B rule:
+It is tempting to apply the same `-(rho'/R)^2` factor to a background
+**potential** so a T-Omega weak form can consume `Omega_s`. **That is
+wrong.** A 0-form pullback carries **no** metric factor at all (§2.3
+table, exponent 0); the `(rho'/R)^2` is a 1-form weight. Measured cost of
+making that substitution: a factor **4/3** (§7.9, route B-0).
 
-```
-Omega_s'(r') = -(rho'/R)^2 Omega_s(r' - offset)    (3D)
-Omega_s'(r') = -Omega_s(r' - offset)               (2D)
-```
-
-API: `radia.kelvin_material.make_reduced_potential_scalar_cf`.
-It is bounded at the offset, where the plain 0-form pullback
-`Omega_s(T(r'))` diverges like `R^2/rho'^2` for a uniform background.
-
-**The 0-form and 1-form Convention B rules are SEPARATE contracts —
-neither is the derivative of the other.** Verified symbolically and
-locked by `tests/test_reduced_potential_background.py`: for a uniform
-background `H_s = H_0 z_hat`,
+The rule that *does* work is the genuine **twisted 0-form pullback**:
 
 ```
-curl(H_s' from the 1-form rule) = (2 H_0 / R^2) (-y', x', 0)   != 0
+Omega_s'(r') = - Omega_s( k(r') ) ,   k(r') = (R/rho')^2 (r' - offset)
 ```
 
-so the 1-form Convention B exterior field admits **no** scalar potential
-whatsoever, and
+— no metric factor, sign only, evaluated at the **mapped** point. The
+minus is `s_k = sgn(det Dk) = -1`, because the magnetic scalar potential
+is a **twisted** 0-form (§2.3).
+
+Its partner for the field is the twisted 1-form pullback
 
 ```
--grad(Omega_s' 0-form) - H_s' (1-form) = -(2 H_0/R^2)(x'z', y'z', z'^2).
+H_s'(r') = -(R/rho')^2 (I - 2 n n^T) H_s( k(r') )
 ```
 
-Choose by what the weak form consumes — a background **field** takes the
-1-form helper, a background **potential** takes the 0-form helper. Never
-differentiate one into the other; §7.9 measures what that costs (4/3).
+i.e. the **radial** component keeps its sign and the **tangential**
+components flip. Because pullback commutes with the exterior derivative
+(`g*(dw) = d(g*w)`) and both quantities carry the *same* twist factor,
+
+```
+H_s'  ==  -grad'( Omega_s' )      EXACTLY
+```
+
+— verified to `1.4e-10` (finite-difference limited) in
+`tests/test_reduced_potential_background.py`. **This is the property
+Convention B lacks**, and it is what makes the potential route usable.
+
+API: `radia.kelvin_material.make_kelvin_aware_Omega_s_cf` and
+`make_kelvin_aware_H_s_cf`. (`A` and `B` are *straight* forms and take no
+extra minus — that is the existing `make_kelvin_aware_A_s_cf`.)
+
+**Regularity, and the one real limitation.** For a source that **decays**
+at infinity the pullback is regular at the offset: a dipole
+`|H_s| ~ 1/r^3` maps to `|H_s'| ~ rho'/R^4`, and `Omega_s' = O(rho'^2)`
+(measured: `7.0e-3 -> 1.6e-5` as `rho'` goes `0.4 -> 0.02`). "Vanishing at
+infinity" becomes "vanishing at the Kelvin centre". For a background that
+does **not** decay — a uniform field applied at infinity — `Omega_s'`
+diverges like `R^2/rho'^2` (measured: `2.5 -> 20` as `rho'` goes
+`0.4 -> 0.05`), because the uniform-field potential is genuinely unbounded
+at infinity. There is **no** bounded 0-form representative in that case;
+drive it through the 1-form Convention B route instead.
+
+So: **real coil / dipole sources -> the potential route works**; a uniform
+background applied at infinity is the one case that must stay on the field
+route.
+
+Reference: <https://www.ele.kindai.ac.jp/laboratory/sugahara/elemag/geometry09.php>
+(twisted-form sign table).
+
+`make_reduced_potential_scalar_cf` is retained only because the T-Omega
+design note proposes it and its behaviour is contract-locked; it must not
+be used to drive a weak form.
 
 ### 7.4.1 Kameari Canonical Pattern (boundary-integral source, NOT bulk)
 

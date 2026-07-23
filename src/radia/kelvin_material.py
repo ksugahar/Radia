@@ -317,56 +317,213 @@ def make_reduced_potential_background_cf(mesh, F_inner_factory, R_K, offset,
     return CF((Fx, Fy, Fz))
 
 
+def _kelvin_mapped_coords(R_K, offset, phys_center):
+    """(kx, ky, kz) = phys_center + (R/rho')^2 (r' - offset), and rho'^2.
+
+    ``phys_center`` is the centre of the PHYSICAL inversion sphere.  It is an
+    explicit argument because the repository contains both conventions:
+    ``make_kelvin_aware_A_s_cf`` hard-codes ``phys_center = offset`` (the
+    mapped point stays near the Kelvin ball), whereas the two-sphere geometry
+    of docs/kelvin/KELVIN_TRANSFORMATION.md 3 puts the physical domain at the
+    ORIGIN and uses the offset purely as a meshing translation.  Passing it
+    explicitly keeps the choice visible instead of silently inherited.
+    """
+    from ngsolve import x, y, z
+
+    ox, oy, oz = offset
+    cx, cy, cz = phys_center
+    dxp, dyp, dzp = x - ox, y - oy, z - oz
+    rho2 = dxp * dxp + dyp * dyp + dzp * dzp + 1e-24
+    scale = (R_K * R_K) / rho2                    # (R/rho')^2
+    return (cx + scale * dxp, cy + scale * dyp, cz + scale * dzp), rho2
+
+
+def make_kelvin_aware_Omega_s_cf(mesh, Omega_phys_factory, R_K, offset,
+                                 phys_center=(0.0, 0.0, 0.0),
+                                 kelvin_mats=("kelvin",)):
+    """Twisted 0-form pullback of a background SCALAR potential (Convention A).
+
+    *** USE THIS FOR T-OMEGA / Omega-reduced WITH A DECAYING SOURCE ***
+    *** (real coils, dipoles -- anything that falls off at infinity) ***
+
+    The magnetic scalar potential is a **twisted 0-form**, and the Kelvin
+    inversion is orientation-reversing (`det Dk = -R^6/rho'^6 < 0`), so its
+    right-hand representative picks up `s_k = sgn(det Dk) = -1` and NO metric
+    factor at all (a 0-form pullback has exponent 0):
+
+        Omega_s'(r') = - Omega_s( k(r') ) ,   k(r') = offset + (R/rho')^2 (r'-offset)
+
+    This is the 0-form entry of the same Convention A family as
+    :func:`make_kelvin_aware_A_s_cf`, and it is the rule that makes the
+    potential route WORK, because pullback commutes with the exterior
+    derivative (`g*(d w) = d(g* w)`).  Verified to machine zero
+    (``tests/test_reduced_potential_background.py``): with the matching
+    twisted 1-form rule
+
+        H_s'(r') = -(R/rho')^2 * Householder * H_s(k(r'))
+                   (radial component +, tangential components -)
+
+    one has EXACTLY
+
+        H_s'  ==  -grad'( Omega_s' ) .
+
+    Contrast :func:`make_reduced_potential_scalar_cf`, which applies the
+    1-form Convention B factor `-(rho'/R)^2` to a scalar.  That is not a
+    0-form pullback and is not gradient-consistent; measured cost on the
+    magnetic-sphere golden: a factor 4/3
+    (``validation_test/kelvin_source/test_kelvin_exterior_source_routes.py``).
+
+    REGULARITY.  For a source that DECAYS at infinity the pullback is regular
+    at the offset: a dipole `|H_s| ~ 1/r^3` maps to `|H_s'| ~ rho'/R^4`, and
+    the potential vanishes quadratically (`Omega_s'(0,0,t) = O(t^2)`).  For a
+    background that does NOT decay -- a uniform field applied at infinity --
+    `Omega_s'` diverges like `R^2/rho'^2`, because the uniform-field potential
+    is genuinely unbounded at infinity.  That is physics, not a defect of the
+    rule: there is no bounded 0-form representative in that case, so use the
+    1-form route (:func:`make_reduced_potential_background_cf`) instead.
+
+    Args:
+        mesh: NGSolve Mesh.
+        Omega_phys_factory: callable ``(x_cf, y_cf, z_cf) -> scalar CF``
+            giving the PHYSICAL background potential at the given point.
+        R_K: Kelvin sphere radius.
+        offset: 3-tuple, Kelvin sphere center.
+        kelvin_mats: substring(s) used to detect Kelvin materials.
+
+    Returns:
+        Scalar CoefficientFunction with
+            inner materials:  Omega_s(x, y, z)
+            kelvin materials: -Omega_s(k(r'))
+
+    Reference: https://www.ele.kindai.ac.jp/laboratory/sugahara/elemag/geometry09.php
+    (twisted-form sign table, `Phi_m = -k* Phi'_m`); docs/kelvin/
+    KELVIN_TRANSFORMATION.md 2.3 (0-form exponent 0) and 7.4.
+    """
+    from ngsolve import x, y, z
+
+    (kx, ky, kz), _ = _kelvin_mapped_coords(R_K, offset, phys_center)
+
+    Omega_inner = Omega_phys_factory(x, y, z)
+    Omega_kelvin = -Omega_phys_factory(kx, ky, kz)   # twisted: s_k = -1
+
+    d = {}
+    for m in mesh.GetMaterials():
+        ml = m.lower()
+        is_kelvin = any(kw in ml for kw in kelvin_mats)
+        d[m] = Omega_kelvin if is_kelvin else Omega_inner
+    return mesh.MaterialCF(d, default=Omega_inner)
+
+
+def make_kelvin_aware_H_s_cf(mesh, H_phys_factory, R_K, offset,
+                             phys_center=(0.0, 0.0, 0.0),
+                             kelvin_mats=("kelvin",)):
+    """Twisted 1-form pullback of a background FIELD (Convention A).
+
+    Partner of :func:`make_kelvin_aware_Omega_s_cf`.  `H` is a twisted 1-form,
+    so on top of the straight 1-form pullback `(R/rho')^2 * Householder` it
+    carries `s_k = -1`:
+
+        H_s'(r') = -(R/rho')^2 * (I - 2 n n^T) * H_s(k(r'))
+
+    i.e. the RADIAL component keeps its sign and the TANGENTIAL components
+    flip -- the sign table of the geometry09 note.  Use this instead of
+    :func:`make_kelvin_aware_A_s_cf` whenever the quantity being pulled back
+    is twisted (`H`, `J`, `D`); `A` and `B` are straight and do NOT take the
+    extra minus.
+
+    Together with `make_kelvin_aware_Omega_s_cf` this satisfies
+    `H_s' = -grad'(Omega_s')` exactly, which is the whole point of using a
+    genuine pullback rather than the Convention B engineering formula.
+
+    Args / Returns: as :func:`make_kelvin_aware_Omega_s_cf`, but the factory
+    returns a 3-vector CF and the result is a VectorCF.
+    """
+    from ngsolve import x, y, z, sqrt, CoefficientFunction as CF
+
+    ox, oy, oz = offset
+    (kx, ky, kz), rho2 = _kelvin_mapped_coords(R_K, offset, phys_center)
+    scale = (R_K * R_K) / rho2                   # (R/rho')^2
+
+    H_inner = H_phys_factory(x, y, z)
+    H_at_k = H_phys_factory(kx, ky, kz)
+
+    # Householder about n = (r' - offset)/rho', then the twisted sign s_k = -1.
+    rho = sqrt(rho2)
+    nx, ny, nz = (x - ox) / rho, (y - oy) / rho, (z - oz) / rho
+    h_dot_n = H_at_k[0] * nx + H_at_k[1] * ny + H_at_k[2] * nz
+    refl = (H_at_k[0] - 2 * h_dot_n * nx,
+            H_at_k[1] - 2 * h_dot_n * ny,
+            H_at_k[2] - 2 * h_dot_n * nz)
+    factor = -scale                               # -(R/rho')^2
+    H_kelvin = tuple(factor * c for c in refl)
+
+    def _switch(kelvin_comp, inner_comp):
+        d = {}
+        for m in mesh.GetMaterials():
+            ml = m.lower()
+            is_kelvin = any(kw in ml for kw in kelvin_mats)
+            d[m] = kelvin_comp if is_kelvin else inner_comp
+        return mesh.MaterialCF(d, default=inner_comp)
+
+    return CF(tuple(_switch(H_kelvin[i], H_inner[i]) for i in range(3)))
+
+
 def make_reduced_potential_scalar_cf(mesh, Phi_inner_factory, R_K, offset,
                                      kelvin_mats=("kelvin",),
                                      dim=3):
-    """Build a reduced-potential background SCALAR potential CF (0-form).
+    """Convention B applied to a scalar -- NOT a 0-form pullback.
 
-    *** USE THIS WHEN THE WEAK FORM CARRIES A BACKGROUND POTENTIAL ***
-    *** (T-Omega Omega_s, Omega-reduced with a potential source)   ***
+    *** PREFER make_kelvin_aware_Omega_s_cf FOR T-OMEGA / Omega-reduced. ***
 
-    0-form counterpart of :func:`make_reduced_potential_background_cf`.
-    Convention B applied to a scalar (0-form) background potential:
+    This applies the 1-form Convention B factor `-(rho'/R)^2` to a scalar.
+    It is bounded at the offset, but it is NOT the pullback of a 0-form (a
+    0-form pullback carries NO metric factor) and it is NOT gradient-
+    consistent with any field rule.  Differentiating it into a field
+    overshoots the magnetic-sphere golden by exactly 4/3
+    (``validation_test/kelvin_source/test_kelvin_exterior_source_routes.py``,
+    route B-0).  It is kept because the T-Omega design note proposes it and
+    because its behaviour is contract-locked, but it should not be used to
+    drive a weak form.  Use :func:`make_kelvin_aware_Omega_s_cf`.
+
+    The formula, for the record:
 
         Omega_s'(r') = -(rho'/R)^2 * Omega_s(r' - offset)    (3D)
         Omega_s'(r') = -Omega_s(r' - offset)                 (2D)
 
-    with rho' = |r' - offset|.  Same three defining features as the
-    1-form helper:
+    evaluated at LOCAL (offset-relative) coordinates, bounded at the
+    offset, sign-flipped at the periodic Kelvin boundary.
 
-    1. Evaluated at LOCAL (offset-relative) coordinates, NOT at the
-       Kelvin-mapped physical point r_phys = T(r').
-    2. Bounded: vanishes at the offset (rho' -> 0 = physical infinity),
-       whereas the plain 0-form pullback Omega_s(T(r')) diverges there
-       like R^2/rho'^2 for a uniform background.
-    3. Sign flip, so the inner and exterior sides match at the periodic
-       Kelvin boundary rho' = R where the normals are opposite.
-
-    WHY THIS EXISTS (and why it is not just the gradient of the 1-form
-    helper).  Verified symbolically and locked by
+    Why it cannot drive a weak form.  Locked by
     ``tests/test_reduced_potential_background.py``: for a uniform
     background ``H_s = H_0 z_hat`` with ``Omega_s = -H_0 z``,
 
-        curl(H_s' from the 1-form helper) = (2 H_0 / R^2) (-y', x', 0)
+        curl(H_s' from the 1-form Convention B helper)
+            = (2 H_0 / R^2) (-y', x', 0)   !=  0
 
-    which is NOT zero, so the 1-form Convention B exterior field admits
-    no scalar potential whatsoever.  Consequently
+    so the 1-form Convention B exterior field admits no scalar potential
+    at all, and
 
-        -grad(Omega_s' from this helper) - H_s' (1-form helper)
+        -grad(Omega_s' from this helper) - H_s' (1-form Convention B)
             = -(2 H_0 / R^2) (x' z', y' z', z'^2)  !=  0 .
 
-    The two helpers are therefore SEPARATE contracts, not two views of
-    one field.  Choose by what the weak form consumes:
+    Neither of those is a defect of the helpers -- Convention B is an
+    engineering formula, not a pullback, so its 0-form and 1-form flavours
+    are simply unrelated.  The genuine pullback family
+    (:func:`make_kelvin_aware_Omega_s_cf` / :func:`make_kelvin_aware_H_s_cf`)
+    IS gradient-consistent, to machine zero, because pullback commutes with
+    the exterior derivative.
 
-    =========================  ==================================
-    weak form consumes         helper
-    =========================  ==================================
-    a background FIELD H_s     make_reduced_potential_background_cf
-    a background POTENTIAL     make_reduced_potential_scalar_cf
-    =========================  ==================================
+    Summary of which helper drives which weak form:
 
-    Do not mix both in one model, and do not differentiate one to obtain
-    the other.
+    ==============================  ===================================
+    situation                       helper
+    ==============================  ===================================
+    background FIELD, non-decaying  make_reduced_potential_background_cf
+    background POTENTIAL, decaying  make_kelvin_aware_Omega_s_cf
+    background FIELD, decaying      make_kelvin_aware_H_s_cf
+    background POTENTIAL, uniform   (none exists -- unbounded at infinity;
+                                     use the 1-form route)
+    ==============================  ===================================
 
     Args:
         mesh: NGSolve Mesh.
