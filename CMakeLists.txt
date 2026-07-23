@@ -707,12 +707,17 @@ if(RADIA_BUILD_MATLAB_MEX)
 		SRC
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal_sfun.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
 	)
 	matlab_add_mex(
 		NAME radia_ih_eddy_sfun
 		R2018a
 		SRC
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_eddy_sfun.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
+	)
+	target_include_directories(radia_ih_eddy_sfun PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
 	)
 	target_compile_features(radia_ih_eddy_sfun PRIVATE cxx_std_17)
 	if(MSVC)

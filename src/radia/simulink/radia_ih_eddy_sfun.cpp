@@ -4,13 +4,17 @@
 #include "simstruc.h"
 #include "mex.h"
 
+#include "radia_ih_transport.h"
+
 #include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstddef>
 #include <climits>
+#include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -25,13 +29,14 @@ struct Context {
     double reference_temperature_K = 293.15;
     std::vector<Complex> rhs_per_amp;
     std::vector<double> heat_projection;
+    std::vector<double> heat_weights;
+    std::vector<double> temperature_weights;
     std::vector<double> cached_heat;
-    std::vector<double> unit_current_heat;
+    std::vector<double> reference_heat;
     std::vector<double> previous_temperature;
-    double previous_current = 0.0;
     bool have_cache = false;
-    bool bh_linear = true;
-    double previous_angle = 0.0;
+    bool periodic_rotation = false;
+    double angle_origin_rad = 0.0;
 };
 
 const mxArray* field(const mxArray* a, const char* name) {
@@ -41,25 +46,68 @@ const mxArray* field(const mxArray* a, const char* name) {
 std::vector<double> real_array(const mxArray* a, const char* name) {
     if (!a || !mxIsDouble(a) || mxIsComplex(a))
         throw std::invalid_argument(std::string("IH Eddy field '") + name + "' must be real double");
-    return std::vector<double>(mxGetDoubles(a), mxGetDoubles(a) + mxGetNumberOfElements(a));
+    std::vector<double> result(
+        mxGetDoubles(a), mxGetDoubles(a) + mxGetNumberOfElements(a));
+    if (!std::all_of(result.begin(), result.end(),
+                     [](double value) { return std::isfinite(value); }))
+        throw std::invalid_argument(std::string("IH Eddy field '") + name +
+                                    "' must contain finite values");
+    return result;
 }
 
 double scalar(const mxArray* a, const char* name) {
     if (!a || !mxIsNumeric(a) || mxIsComplex(a) || mxGetNumberOfElements(a) != 1)
         throw std::invalid_argument(std::string("IH Eddy field '") + name + "' must be a scalar");
-    return mxGetScalar(a);
+    const double value = mxGetScalar(a);
+    if (!std::isfinite(value))
+        throw std::invalid_argument(std::string("IH Eddy field '") + name +
+                                    "' must be finite");
+    return value;
 }
 
-bool string_is_linear(const mxArray* a) {
-    if (!a) return true;
+int positive_integer(const mxArray* a, const char* name) {
+    const double value = scalar(a, name);
+    if (value <= 0.0 || value > static_cast<double>(INT_MAX) ||
+        std::floor(value) != value)
+        throw std::invalid_argument(std::string("IH Eddy field '") + name +
+                                    "' must be a positive integer");
+    return static_cast<int>(value);
+}
+
+void validate_bh_mode(const mxArray* a) {
+    if (!a) return;
     if (mxIsChar(a)) {
         char* text = mxArrayToUTF8String(a);
         if (!text) throw std::invalid_argument("IH Eddy field 'bh_mode' is invalid");
-        const bool linear = std::string(text) == "linear";
+        const std::string value(text);
         mxFree(text);
-        return linear;
+        if (value == "linear") return;
+        if (value == "nonlinear")
+            throw std::invalid_argument(
+                "IH native preview does not yet implement nonlinear BH iteration");
+        throw std::invalid_argument("IH Eddy field 'bh_mode' must be 'linear'");
     }
-    throw std::invalid_argument("IH Eddy field 'bh_mode' must be 'linear' or 'nonlinear'");
+    throw std::invalid_argument("IH Eddy field 'bh_mode' must be 'linear'");
+}
+
+std::string string_value(const mxArray* a, const char* name,
+                         const char* fallback) {
+    if (!a) return fallback;
+    if (!mxIsChar(a))
+        throw std::invalid_argument(std::string("IH Eddy field '") + name +
+                                    "' must be text");
+    char* text = mxArrayToUTF8String(a);
+    if (!text)
+        throw std::invalid_argument(std::string("IH Eddy field '") + name +
+                                    "' is invalid");
+    const std::string value(text);
+    mxFree(text);
+    return value;
+}
+
+bool equivalent_periodic_angle(double angle, double origin) {
+    const double period = 2.0 * std::acos(-1.0);
+    return std::abs(std::remainder(angle - origin, period)) <= 1.0e-12;
 }
 
 std::vector<Complex> complex_matrix(const mxArray* re, const mxArray* im,
@@ -108,22 +156,47 @@ std::vector<Complex> solve(const std::vector<Complex>& a0,
 
 Context* make_context(const mxArray* config) {
     if (!config || !mxIsStruct(config)) throw std::invalid_argument("IH Eddy requires a configuration struct");
-    auto* c = new Context();
-    c->n_unknown = static_cast<int>(scalar(field(config, "n_eddy_unknown"), "n_eddy_unknown"));
-    c->n_heat = static_cast<int>(scalar(field(config, "n_heat"), "n_heat"));
-    c->bh_linear = string_is_linear(field(config, "bh_mode"));
+    auto c = std::make_unique<Context>();
+    c->n_unknown = positive_integer(
+        field(config, "n_eddy_unknown"), "n_eddy_unknown");
+    c->n_heat = positive_integer(field(config, "n_heat"), "n_heat");
+    validate_bh_mode(field(config, "bh_mode"));
     if (c->n_unknown <= 0 || c->n_heat <= 0) throw std::invalid_argument("IH Eddy dimensions must be positive");
     c->matrix = complex_matrix(field(config, "eddy_matrix_real"), field(config, "eddy_matrix_imag"), c->n_unknown, c->n_unknown, "eddy_matrix");
     c->rhs_per_amp = complex_matrix(field(config, "eddy_rhs_real"), field(config, "eddy_rhs_imag"), c->n_unknown, 1, "eddy_rhs");
     c->heat_projection = real_array(field(config, "heat_projection"), "heat_projection");
     if (c->heat_projection.size() != static_cast<std::size_t>(c->n_heat * c->n_unknown))
         throw std::invalid_argument("heat_projection has the wrong shape");
+    c->heat_weights = real_array(field(config, "heat_cell_weights"), "heat_cell_weights");
+    if (c->heat_weights.size() != static_cast<std::size_t>(c->n_heat))
+        throw std::invalid_argument("heat_cell_weights has the wrong shape");
+    for (double weight : c->heat_weights)
+        if (!(weight > 0.0) || !std::isfinite(weight))
+            throw std::invalid_argument("heat_cell_weights must be finite and positive");
     c->cached_heat.assign(static_cast<std::size_t>(c->n_heat), 0.0);
-    c->unit_current_heat.assign(static_cast<std::size_t>(c->n_heat), 0.0);
-    const mxArray* n_temperature = field(config, "n_temperature");
-    if (!n_temperature || mxGetNumberOfElements(n_temperature) != 1)
-        throw std::invalid_argument("IH Eddy requires n_temperature");
-    c->previous_temperature.assign(static_cast<std::size_t>(mxGetScalar(n_temperature)), 0.0);
+    c->reference_heat.assign(static_cast<std::size_t>(c->n_heat), 0.0);
+    const int n_temperature = positive_integer(
+        field(config, "n_temperature"), "n_temperature");
+    c->previous_temperature.assign(
+        static_cast<std::size_t>(n_temperature), 0.0);
+    c->temperature_weights = real_array(
+        field(config, "temperature_cell_weights"), "temperature_cell_weights");
+    if (c->temperature_weights.size() != c->previous_temperature.size())
+        throw std::invalid_argument("temperature_cell_weights has the wrong shape");
+    for (double weight : c->temperature_weights)
+        if (!(weight > 0.0) || !std::isfinite(weight))
+            throw std::invalid_argument(
+                "temperature_cell_weights must be finite and positive");
+    const std::string rotation_mode = string_value(
+        field(config, "rotation_mode"), "rotation_mode", "none");
+    if (rotation_mode == "periodic-uniform") c->periodic_rotation = true;
+    else if (rotation_mode != "none")
+        throw std::invalid_argument(
+            "IH Eddy rotation_mode must be 'none' or 'periodic-uniform'");
+    if (const mxArray* origin = field(config, "angle_origin_rad"))
+        c->angle_origin_rad = scalar(origin, "angle_origin_rad");
+    if (!std::isfinite(c->angle_origin_rad))
+        throw std::invalid_argument("angle_origin_rad must be finite");
     if (const mxArray* reference = field(config, "bh_reference_temperature_K"))
         c->reference_temperature_K = scalar(reference, "bh_reference_temperature_K");
     const mxArray* slope_real = field(config, "eddy_matrix_temperature_slope_real");
@@ -133,7 +206,7 @@ Context* make_context(const mxArray* config) {
             slope_real, slope_imag, static_cast<int>(c->previous_temperature.size()),
             c->n_unknown * c->n_unknown, "eddy_matrix_temperature_slope");
     }
-    return c;
+    return c.release();
 }
 
 std::vector<Complex> temperature_matrix(const Context& c, const double* temperature) {
@@ -160,7 +233,9 @@ static void mdlInitializeSizes(SimStruct* S) {
         if (!value || mxGetNumberOfElements(value) != 1 || !mxIsNumeric(value))
             throw std::invalid_argument(std::string("missing scalar parameter: ") + name);
         const double number = mxGetScalar(value);
-        if (!std::isfinite(number) || number <= 0.0 || number > static_cast<double>(INT_MAX))
+        if (!std::isfinite(number) || number <= 0.0 ||
+            number > static_cast<double>(INT_MAX) ||
+            std::floor(number) != number)
             throw std::invalid_argument(std::string("invalid positive parameter: ") + name);
         return static_cast<int>(number);
     };
@@ -191,7 +266,15 @@ static void mdlInitializeSizes(SimStruct* S) {
 }
 
 static void mdlInitializeSampleTimes(SimStruct* S) {
-    ssSetSampleTime(S, 0, INHERITED_SAMPLE_TIME);
+    const mxArray* config = ssGetSFcnParam(S, 0);
+    const mxArray* sample_time = field(config, "sample_time_s");
+    if (!sample_time || !mxIsNumeric(sample_time) || mxIsComplex(sample_time) ||
+        mxGetNumberOfElements(sample_time) != 1 ||
+        !(mxGetScalar(sample_time) > 0.0) || !std::isfinite(mxGetScalar(sample_time))) {
+        ssSetErrorStatus(S, "radia_ih_eddy_sfun: sample_time_s must be positive.");
+        return;
+    }
+    ssSetSampleTime(S, 0, mxGetScalar(sample_time));
     ssSetOffsetTime(S, 0, 0.0);
 }
 
@@ -212,19 +295,32 @@ static void mdlOutputs(SimStruct* S, int_T) {
         const double angle = *static_cast<const real_T*>(ssGetInputPortSignal(S, 1));
         const auto* temperature = static_cast<const real_T*>(ssGetInputPortSignal(S, 2));
         if (!std::isfinite(current) || !std::isfinite(angle)) throw std::invalid_argument("IH Eddy inputs must be finite");
+        std::vector<double> temperature_at_angle;
+        if (c->periodic_rotation) {
+            radia::ih::transport_periodic(
+                std::vector<double>(temperature,
+                                    temperature + c->previous_temperature.size()),
+                c->temperature_weights, angle - c->angle_origin_rad,
+                temperature_at_angle);
+        } else {
+            if (!equivalent_periodic_angle(angle, c->angle_origin_rad))
+                throw std::invalid_argument(
+                    "IH Eddy received a changing angle but rotation_mode is 'none'");
+            temperature_at_angle.assign(
+                temperature, temperature + c->previous_temperature.size());
+        }
         bool temperature_changed = !c->have_cache;
         for (std::size_t i = 0; i < c->previous_temperature.size(); ++i) {
-            if (!std::isfinite(temperature[i])) throw std::invalid_argument("IH Eddy temperature input must be finite");
-            temperature_changed = temperature_changed || temperature[i] != c->previous_temperature[i];
+            if (!std::isfinite(temperature_at_angle[i]))
+                throw std::invalid_argument("IH Eddy temperature input must be finite");
+            temperature_changed = temperature_changed ||
+                temperature_at_angle[i] != c->previous_temperature[i];
         }
-        const bool material_changed = !c->have_cache || temperature_changed;
-        const bool current_requires_solve = !c->bh_linear &&
-            (!c->have_cache || current != c->previous_current);
-        if (material_changed || current_requires_solve) {
+        const bool material_changed = !c->have_cache ||
+            (!c->matrix_temperature_slope.empty() && temperature_changed);
+        if (material_changed) {
             std::vector<Complex> rhs = c->rhs_per_amp;
-            const double solve_current = c->bh_linear ? 1.0 : current;
-            for (auto& value : rhs) value *= solve_current;
-            const auto matrix = temperature_matrix(*c, temperature);
+            const auto matrix = temperature_matrix(*c, temperature_at_angle.data());
             const auto solution = solve(matrix, rhs, c->n_unknown);
             for (int i = 0; i < c->n_heat; ++i) {
                 double q = 0.0;
@@ -232,20 +328,24 @@ static void mdlOutputs(SimStruct* S, int_T) {
                     const double p = c->heat_projection[static_cast<std::size_t>(i * c->n_unknown + j)];
                     q += p * std::norm(solution[static_cast<std::size_t>(j)]);
                 }
-                if (c->bh_linear) c->unit_current_heat[static_cast<std::size_t>(i)] = q;
-                else c->cached_heat[static_cast<std::size_t>(i)] = q;
+                c->reference_heat[static_cast<std::size_t>(i)] = q;
             }
-            c->previous_current = current;
-            std::copy(temperature, temperature + c->previous_temperature.size(), c->previous_temperature.begin());
+            c->previous_temperature = temperature_at_angle;
             c->have_cache = true;
         }
-        if (c->bh_linear) {
-            const double scale = current * current;
-            for (int i = 0; i < c->n_heat; ++i)
-                c->cached_heat[static_cast<std::size_t>(i)] =
-                    scale * c->unit_current_heat[static_cast<std::size_t>(i)];
+        std::vector<double> heat_at_origin = c->reference_heat;
+        const double scale = current * current;
+        for (int i = 0; i < c->n_heat; ++i)
+            heat_at_origin[static_cast<std::size_t>(i)] *= scale;
+        if (c->periodic_rotation) {
+            // The source is stationary. Express its heat distribution in
+            // the rotating workpiece coordinate system.
+            radia::ih::transport_periodic(
+                heat_at_origin, c->heat_weights,
+                -(angle - c->angle_origin_rad), c->cached_heat);
+        } else {
+            c->cached_heat = std::move(heat_at_origin);
         }
-        c->previous_angle = angle;
         auto* output = static_cast<real_T*>(ssGetOutputPortSignal(S, 0));
         std::copy(c->cached_heat.begin(), c->cached_heat.end(), output);
     } catch (const std::exception& error) { ssSetErrorStatus(S, error.what()); }

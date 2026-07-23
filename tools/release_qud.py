@@ -29,8 +29,15 @@ Usage:
     python tools/release_qud.py phase9
         Cross-machine consistency probe. Final gate.
 
+    python tools/release_qud.py simulink-candidate --package <zip> --target all
+        Extract and execute the exact IH package on all four MATLAB machines.
+
     python tools/release_qud.py all
         phase8 -> phase8e -> phase9 with all preconditions enforced.
+
+    python tools/release_qud.py done --simulink-package <zip>
+        Require both the normal release gate and the matching four-machine
+        Simulink candidate state.
 
 Exit codes:
     0   success
@@ -49,6 +56,8 @@ import os
 import shutil
 import subprocess
 import sys
+import zipfile
+from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 from urllib.parse import urlparse
@@ -70,6 +79,14 @@ SSH_100 = "192.168.11.100"
 SSH_MDX = "mdx"
 SSH_HIBINO = "hibino"
 PY_HIBINO = "py -3.12"
+MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
+SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-qud")
+SIMULINK_TARGETS = {
+    "lab": ("LAB", None, "python"),
+    "100": ("100号機", SSH_100, "python"),
+    "mdx": ("mdx", SSH_MDX, "python"),
+    "hibino": ("hibino", SSH_HIBINO, "py -3.12"),
+}
 
 
 # ============================================================
@@ -166,6 +183,175 @@ def _bundled_plugin_mtime():
         if p.is_file():
             times.append(p.stat().st_mtime)
     return max(times) if times else 0.0
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _simulink_manifest(package: Path) -> dict:
+    verifier = REPO / "tools/verify_simulink_release.py"
+    result = subprocess.run(
+        [sys.executable, str(verifier), str(package), "--manifest-only"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    with zipfile.ZipFile(package) as bundle:
+        return json.loads(bundle.read("manifest.json"))
+
+
+def _simulink_state_path(package_sha256: str) -> Path:
+    return SIMULINK_GATE_ROOT / f"simulink-{package_sha256}.json"
+
+
+def _write_simulink_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+
+def _run_simulink_candidate_target(
+        key: str, package: Path, package_sha256: str) -> tuple[bool, str]:
+    label, host, python_command = SIMULINK_TARGETS[key]
+    verifier = REPO / "tools/verify_simulink_release.py"
+    if host is None:
+        command = [
+            sys.executable, str(verifier), str(package),
+            "--matlab", MATLAB_EXE,
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+    else:
+        remote_root_posix = f"C:/temp/radia-release-qud/{package_sha256[:16]}"
+        remote_root_windows = remote_root_posix.replace("/", "\\")
+        prepare = f"New-Item -ItemType Directory -Force -Path '{remote_root_windows}' | Out-Null\n"
+        created = subprocess.run(
+            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", "-"],
+            input=prepare, capture_output=True, text=True,
+        )
+        if created.returncode != 0:
+            return False, created.stderr.strip() or created.stdout.strip()
+        remote_package = f"{remote_root_posix}/{package.name}"
+        remote_verifier = f"{remote_root_posix}/{verifier.name}"
+        for source, destination in (
+                (package, remote_package), (verifier, remote_verifier)):
+            copied = subprocess.run(
+                ["scp", str(source), f"{host}:{destination}"],
+                capture_output=True, text=True,
+            )
+            if copied.returncode != 0:
+                return False, copied.stderr.strip() or copied.stdout.strip()
+        invocation = (
+            f"& {python_command} '{remote_verifier}' '{remote_package}' "
+            f"--matlab '{MATLAB_EXE}'\nexit $LASTEXITCODE\n"
+        )
+        result = subprocess.run(
+            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", "-"],
+            input=invocation, capture_output=True, text=True,
+        )
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    if result.returncode != 0:
+        return False, output
+    if "RADIA_IH_RELEASE_OK" not in output or '"status": "passed"' not in output:
+        return False, f"{label} did not emit both release success markers:\n{output}"
+    return True, output
+
+
+def cmd_simulink_candidate(args):
+    """Verify one extracted IH archive on the requested MATLAB machines."""
+    package = Path(args.package).resolve()
+    step("Simulink candidate gate (LAB / 100号機 / mdx / hibino)")
+    try:
+        manifest = _simulink_manifest(package)
+    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
+        fail(f"invalid Simulink candidate: {error}")
+        return 2
+    package_sha256 = _sha256_file(package)
+    state_path = _simulink_state_path(package_sha256)
+    state = {
+        "schema": "radia.release-qud.simulink-candidate.v1",
+        "package": str(package),
+        "package_sha256": package_sha256,
+        "version": manifest.get("version"),
+        "commit": manifest.get("commit"),
+        "targets": {},
+    }
+    if state_path.is_file():
+        previous = json.loads(state_path.read_text(encoding="utf-8"))
+        if previous.get("package_sha256") == package_sha256:
+            state["targets"] = previous.get("targets", {})
+
+    requested = [part.strip().lower() for part in args.target.split(",")]
+    if "all" in requested:
+        requested = list(SIMULINK_TARGETS)
+    unknown = sorted(set(requested) - set(SIMULINK_TARGETS))
+    if unknown:
+        fail(f"unknown Simulink target(s): {', '.join(unknown)}")
+        return 2
+
+    failed = 0
+    for key in requested:
+        label = SIMULINK_TARGETS[key][0]
+        info(f"verifying extracted package on {label}")
+        passed, output = _run_simulink_candidate_target(
+            key, package, package_sha256)
+        state["targets"][key] = {
+            "label": label,
+            "status": "passed" if passed else "failed",
+            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+            "output_tail": output[-4000:],
+        }
+        _write_simulink_state(state_path, state)
+        if passed:
+            ok(f"IH package passed on {label}")
+        else:
+            failed += 1
+            fail(f"IH package failed on {label}")
+            if output:
+                print(output[-4000:])
+    if failed:
+        return 4
+    ok(f"Simulink candidate state: {state_path}")
+    return 0
+
+
+def _verify_simulink_candidate_state(package_arg: str) -> int:
+    package = Path(package_arg).resolve()
+    try:
+        manifest = _simulink_manifest(package)
+        package_sha256 = _sha256_file(package)
+    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
+        fail(f"invalid Simulink candidate: {error}")
+        return 2
+    state_path = _simulink_state_path(package_sha256)
+    if not state_path.is_file():
+        fail("Simulink candidate has no release-qud state. Run "
+             "`release_qud simulink-candidate --package <zip> --target all`.")
+        return 4
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    if state.get("package_sha256") != package_sha256 or \
+            state.get("commit") != manifest.get("commit"):
+        fail("Simulink candidate state does not match the supplied archive")
+        return 4
+    missing = [key for key in SIMULINK_TARGETS
+               if state.get("targets", {}).get(key, {}).get("status") != "passed"]
+    if missing:
+        fail(f"Simulink candidate has not passed: {', '.join(missing)}")
+        return 4
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPO,
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    if manifest.get("commit") != head:
+        fail("Simulink manifest commit differs from HEAD; rebuild the archive")
+        return 4
+    ok("supplied Simulink candidate passed LAB / 100号機 / mdx / hibino")
+    return 0
 
 
 # ============================================================
@@ -1182,10 +1368,18 @@ def cmd_done(args):
              "`release_qud done`.")
         return rc
 
+    if getattr(args, "simulink_package", None):
+        rc = _verify_simulink_candidate_state(args.simulink_package)
+        if rc != 0:
+            fail("Simulink candidate did not satisfy the four-machine gate.")
+            return rc
+
     print("")
+    suffix = (" The supplied Simulink candidate also passed all four MATLAB "
+              "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
        "mdx / hibino, the editable tier is intact, and the retired standalone "
-       "PySide panel surface is absent.")
+       "PySide panel surface is absent." + suffix)
     return 0
 
 
@@ -1210,16 +1404,25 @@ def main():
                     help="upgrade mdx from PyPI (after PyPI propagation)")
     sub.add_parser("phase9",
                     help="cross-machine consistency probe")
+    ss = sub.add_parser(
+        "simulink-candidate",
+        help="verify one extracted IH Simulink package on four MATLAB machines")
+    ss.add_argument("--package", required=True,
+                    help="path to radia-ih-simulink ZIP")
+    ss.add_argument("--target", default="all",
+                    help="comma list: lab, 100, mdx, hibino, all")
     sub.add_parser("all",
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
                     help="LAB/100号機 editable-install pointers check (read-only)")
     sub.add_parser("ci-verify",
                     help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
-    sub.add_parser("done",
-                    help="definition-of-done: preflight + editable-tier + "
-                         "phase9 + retired standalone PySide panel guard "
-                         "(read-only)")
+    done = sub.add_parser(
+        "done",
+        help="definition-of-done: preflight + editable-tier + phase9 + guards")
+    done.add_argument(
+        "--simulink-package",
+        help="also require a matching four-machine Simulink candidate pass")
 
     args = p.parse_args()
     handler = {
@@ -1228,6 +1431,7 @@ def main():
         "phase8":           cmd_phase8,
         "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
+        "simulink-candidate": cmd_simulink_candidate,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
         "ci-verify":        cmd_ci_verify,

@@ -168,11 +168,14 @@ if ~hasSimulink
 end
 
 target = radia.simulink.openIH(Open=false);
-verifyEqual(testCase, target, ...
-    "radia_simulink_library/Applications/Induction Heating");
-verifyTrue(testCase, bdIsLoaded("radia_simulink_library"));
-verifyEqual(testCase, string(get_param(target, "Mask")), "on");
-close_system("radia_simulink_library", 0);
+verifyEqual(testCase, target, "radia_ih");
+verifyTrue(testCase, bdIsLoaded("radia_ih"));
+verifyEqual(testCase, string(get_param(target+"/IH Parameters", "Mask")), "on");
+verifyEqual(testCase,string(get_param(target+"/Eddy","FunctionName")), ...
+    "radia_ih_eddy_sfun");
+verifyEqual(testCase,string(get_param(target+"/Thermal","FunctionName")), ...
+    "radia_ih_thermal_sfun");
+close_system("radia_ih", 0);
 end
 
 function testEddyAngleUsesPreviousSample(testCase)
@@ -500,8 +503,7 @@ applications = [ ...
     "Electromagnet", "em"; ...
     "PCB PEEC", "pcb"; ...
     "Motor", "motor"; ...
-    "Stream Function", "streamfunction"; ...
-    "Induction Heating", "ih"];
+    "Stream Function", "streamfunction"];
 for row = 1:size(applications, 1)
     blockPath = "radia_simulink_library/Applications/" + applications(row, 1);
     verifyEqual(testCase, string(get_param(blockPath, "FunctionName")), ...
@@ -515,6 +517,16 @@ for row = 1:size(applications, 1)
     verifyTrue(testCase, contains(displayScript, "'primary'"));
     verifyTrue(testCase, contains(displayScript, "'elapsed_s'"));
 end
+ihPath = "radia_simulink_library/Applications/Induction Heating";
+verifyEqual(testCase,string(get_param(ihPath,"BlockType")),"SubSystem");
+verifyEqual(testCase,string(get_param(ihPath,"Mask")),"on");
+verifyEqual(testCase,string(get_param(ihPath+"/Eddy MEX S-Function", ...
+    "FunctionName")),"radia_ih_eddy_sfun");
+verifyEqual(testCase,string(get_param(ihPath+"/Thermal MEX S-Function", ...
+    "FunctionName")),"radia_ih_thermal_sfun");
+ihContract = get_param(ihPath,"UserData");
+verifyEqual(testCase,string(ihContract.backend),"native-mex-sfunction");
+verifyFalse(testCase,ihContract.python_fallback);
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/LTspice Circuit","FunctionName")),"radia_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/Hysteretic LTspice Plant","FunctionName")),"radia_hysteretic_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/Optimization/Optuna Optimization","FunctionName")),"radia_optuna_sfun");

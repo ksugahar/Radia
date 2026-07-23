@@ -16,6 +16,10 @@ Stream Function, and IH are Simulink-only. Notebook workbenches are retired.
 - Never call Python at every simulation step.
 - MEX/ROM is optional. Do not make it the default until numerical parity,
   errors, state lifecycle, repeated runs, and long-run stability are tested.
+- IH is the native-only exception. Its first standalone release is a preview
+  runtime for checked preassembled operators. Do not call it production-complete
+  until Cubit `.vol` to PEEC/BEM-A/BIM/FEM operator assembly and strict label
+  contracts pass on the supported machines.
 - Solver logic stays in tested Radia APIs; the block is orchestration only.
 
 ## Required Gates
@@ -36,7 +40,12 @@ Use the official MATLAB MCP Server for MATLAB checks:
    `tests/matlab/test_simulink_workflow.m`.
 3. Build the library in `C:\temp`, load it, and update a model containing one
    copied application block connected to a Boolean trigger source.
-4. Verify all five blocks have masks and use `radia_application_sfun`.
+4. Verify Electromagnet, PCB, Motor, and Stream Function have masks and use
+   `radia_application_sfun`. Verify IH is a masked subsystem with separate
+   `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun` native blocks, closed
+   temperature feedback, and no Python fallback.
+5. For an IH preview release, run the extracted-package verifier through
+   `release_qud simulink-candidate` on LAB, 100号機, mdx, and hibino.
 
 ## Artifact Contract
 

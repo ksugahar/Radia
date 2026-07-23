@@ -2,9 +2,11 @@
 
 Radia's final human-facing application interface is the single **Radia**
 Simulink library. Its Electromagnet, PCB PEEC, Motor, Stream Function, and
-Induction Heating blocks initially launch the validated Python/headless CLI
-once on an explicit rising trigger. This is the supported production path; it
-does not call Python at every simulation step.
+Induction Heating blocks share one Library Browser entry. Electromagnet, PCB
+PEEC, Motor, and Stream Function launch the validated Python/headless CLI once
+on an explicit rising trigger. Induction Heating instead uses separate native
+Eddy and Thermal MEX S-Functions and has no Python fallback in its simulation
+loop.
 
 When an application run computes a spatial field, the runner writes a checked
 GMSH `.msh v4.1` post-processing artifact inside the run directory and lists it
@@ -12,11 +14,9 @@ in `result.json`. The GMSH path is runner-owned rather than a mask parameter.
 Scalar/circuit-only modes report the artifact as not applicable instead of
 inventing an empty field file.
 
-The native MEX interfaces documented below are optional acceleration and
-persistent-state paths. They are not a prerequisite for using the Simulink
-application blocks. Promote an application backend to MEX/ROM only after
-numerical parity, error propagation, object lifecycle, repeated-run, and
-long-run stability tests pass.
+Native MEX remains an optional promotion for the four batch application
+blocks. It is mandatory for the IH runtime. Every promoted path must pass error
+propagation, object lifecycle, repeated-run, and long-run stability tests.
 
 ## Optional MEX Interface
 
@@ -350,87 +350,43 @@ to Radia's row-major `[target][source]` convention internally.
 
 ## Simulink and induction heating
 
-The MATLAB package also contains the Simulink-facing control layer:
+Open the native IH model with:
 
 ```matlab
-addpath("<radia-repository>\matlab")
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=2.4e3, ...
-    ThermalConductance_W_per_K=12, SampleTime_s=1e-2);
-
-% Replace this demonstration table with angle/current samples exported by
-% the selected Radia VIM/FEM/SIBC/ESIM analysis.
-theta_rad = [0; pi/2; pi; 3*pi/2];
-current_rms_A = [0; 50; 100];
-angle_factor = [1; 1.2; 1.5; 1.2];
-q_W_per_m3 = 1e6 * angle_factor * ((current_rms_A / 100).^2).';
-eddyLut = radia.simulink.makeIHEddyHeatDensityLUT( ...
-    theta_rad, current_rms_A, q_W_per_m3, ...
-    RegionVolumes_m3=2.5e-4, CarrierFrequency_Hz=50e3);
+addpath("<radia-release>\matlab")
+install_radia_ih()
 ```
 
-The generated model keeps the electromagnetic and thermal responsibilities in
-separate top-level `Eddy Current` and `Thermal` subsystems. `Eddy Current`
-accepts `coil_current_rms_A(t)` and `rotation_angle_rad(t)` and evaluates the
-periodic Radia table at every Simulink sample. Its output is
-`heat_density_W_per_m3(t)`, with one value per heated region. The current is
-the slowly varying RMS envelope at the LUT carrier frequency, not an
-instantaneous carrier sample. This keeps nonlinear current scaling in the
-exported table instead of assuming it inside Simulink.
+`radia_ih.slx` exposes current, workpiece angle, and ambient temperature as
+ordinary Simulink sources. Eddy produces a spatial heat-density vector;
+Thermal owns the discrete temperature state and feeds it directly back to Eddy.
+The update order is fixed as Eddy at the accepted temperature, conservative
+transport from the previous angle to the current angle, then one implicit
+thermal step. A linear magnetic configuration reuses its Eddy solution under a
+current-only change and rescales heat by current squared.
 
-The top-level masked `IH Parameters` block owns fixed model values: angle
-origin/period, heated-region volumes, sample time, carrier frequency, and the
-thermal backend. It supplies the values used by the Eddy and Thermal blocks;
-it does not generate motion or drive waveforms. Build current and rotation
-angle with normal Simulink Source blocks and connect them to the model inputs.
+The preview accepts linear or temperature-linearized operator data only.
+Nonlinear BH iteration is not implemented and `bh_mode="nonlinear"` fails
+loudly rather than substituting the dense linear solve.
 
-`Thermal` alone owns temperature and accumulated-energy state. It converts the
-region density vector to total heat with the recorded region volumes, consumes
-ambient temperature, and returns temperature, heat loss, input energy, and
-temperature rate. The root model also exposes the heat-density vector for
-inspection and logging. Use
-`radia.simulink.buildIHControlModel` when Simulink is installed, and
-`radia.simulink.optimizeIH` to wrap either `sim`/`parsim` or a fast MATLAB
-waveform objective for controller and process optimization.
-The builder supports `PlantBlock="radia-sfunction"` for a Radia-owned
-Level-2 MATLAB S-function boundary; the default `"standard"` path uses the
-native Discrete State-Space block and is useful as an independent reference.
+The first distributable native IH package is a preview runtime. Its model ships
+with a one-DOF diagnostic configuration and accepts checked MAT/JSON files that
+contain preassembled native operators. `radia.simulink.makeIHNativeConfig`
+validates row-major matrices, strict `.vol` reports, rotation mode, and thermal
+state dimensions. Cubit `.vol` to PEEC/BEM-A/BIM/FEM operator assembly is the
+remaining production gate and is not claimed by this preview.
 
-Open the production IH application block directly with:
+LUT and lumped-state-space IH helpers are not reachable from `openIH`, are not
+included in the IH release package, and are not supported production
+interfaces.
 
-```matlab
-radia.simulink.openIH()
-```
+### Reduced state-space MEX blocks
 
-`radia.simulink.openIH()` opens only the native production IH block. The old
-`Plant`/`EddyLUT` control-model entry point has been removed; LUT-only and
-lumped-state-space IH models are not production interfaces.
-
-The former LUT/Discrete-State-Space IH sample has been removed. The production
-IH model uses native Eddy/Thermal MEX S-Functions. The older
-`buildIHControlModel`/LUT helpers are retained only as non-production
-validation utilities until their tests are migrated; they are not reachable
-from `openIH` or the distributable library.
-
-For fixed reduced Radia/NGSolve models, `PlantBlock="radia-mex"` uses a native
-state-space handle. The matrices cross the MATLAB/MEX boundary once at
-simulation start; each Simulink sample calls C++ `step` with only the input and
-returns only the output. No Python process, Python object, or per-step state
-vector round trip is involved:
-
-```matlab
-radia.simulink.buildIHControlModel("radia_ih_native_mex", plant, eddyLut, ...
-    PlantBlock="radia-mex", StopTime_s=1.0);
-
-radia.simulink.buildHCurlEddyCLNModel("radia_hcurl_native_mex", reduced, ...
-    Block="radia-mex", StopTime_s=0.02);
-```
-
-The underlying commands are `simulink.state_space.create`, `info`, `step`,
-`reset`, and `destroy`. The native block is intended for fixed reduced
-state-space models such as IH and HCurl Eddy Bubble/CLN. Moving height-family
-interpolation remains a MATLAB S-function because its parameter field changes
-at runtime.
+Separate reduced-order blocks use `simulink.state_space.create`, `info`,
+`step`, `reset`, and `destroy`. They are intended for fixed Motor, MagLev, and
+HCurl Eddy Bubble/CLN models, not for the native IH field runtime above. Moving
+height-family interpolation remains a MATLAB S-function because its parameter
+field changes at runtime.
 
 The validated TEAM 28 levitation curve is also available as a fixed-50 Hz
 control model. `force_N` follows the benchmark sign convention (negative is
@@ -593,14 +549,15 @@ FFT, and explicit capacitor-voltage/inductor-current handoff between long
 windows. Run `radia.simulink.buildLibrary` once after installation and
 `sl_refresh_customizations` to expose the single **Radia** entry in Simulink
 Library Browser. Its `Applications` subsystem contains Electromagnet, PCB PEEC,
-Motor, Stream Function, and Induction Heating blocks. These batch-analysis
-blocks delegate to the same `DesignSpec` and validated headless Python CLI used
-by MCP; a boolean rising trigger runs once and always leaves `run.log` and
-`result.json`, with solver artifacts when execution reaches that stage. Create the versioned settings file with
+Motor, Stream Function, and Induction Heating blocks. The first four
+batch-analysis blocks delegate to the same `DesignSpec` and validated headless
+Python CLI used by MCP; a boolean rising trigger runs once and leaves `run.log`
+and `result.json`, with solver artifacts when execution reaches that stage.
+Create the versioned settings file with
 `radia.simulink.writeApplicationConfig`. The Python backend is intentional
-while the MEX routes mature; promote a MEX/ROM backend only after parity,
-failure, lifecycle, and long-run tests. Notebook workbenches are retired for
-all applications, including IH.
+for those four blocks while their MEX routes mature. IH is the native-only
+exception described above. Notebook workbenches are retired for all
+applications, including IH.
 
 The remaining library blocks delegate to the same tested MATLAB APIs.
 The `LTspice Circuit` block accepts vector `InputNames` and `OutputTraces`.

@@ -10,8 +10,10 @@ The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
 Function, and Induction Heating are built by
 `matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
 Function retain their explicit-trigger application boundary. Induction
-Heating is separate: its production block contains native Eddy and Thermal
-C/C++ MEX S-Functions and does not launch the Python CLI.
+Heating is separate: its runtime block contains native Eddy and Thermal C/C++
+MEX S-Functions and does not launch the Python CLI. The first distributable IH
+package is a preview for preassembled operators; native `.vol` operator
+assembly remains its production gate.
 
 For a field-producing mode, the runner overrides `--msh-output` with a path in
 the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
@@ -19,11 +21,11 @@ generated GMSH artifact in `result.json`. Scalar/circuit-only modes explicitly
 remain non-spatial. GMSH is used for post-processing only; solver interchange
 continues to use Netgen `.vol`.
 
-MEX/ROM remains an optional backend promotion. Compilation alone is not a
-production gate; numerical parity, failure propagation, handle lifecycle, and
-long-run stability must pass while the block mask and port contract stay
-unchanged. Notebook workbenches are retired for every application, including
-IH.
+MEX/ROM remains an optional backend promotion for the four batch blocks and is
+mandatory for IH. Compilation alone is not a production gate; failure
+propagation, handle lifecycle, repeated runs, and long-run stability must pass
+while the block mask and port contract stay unchanged. Notebook workbenches are
+retired for every application, including IH.
 
 ## Motor ROM block
 
@@ -92,69 +94,29 @@ The C ABI remains the canonical implementation boundary so that Python,
 Simulink, FMI, and other hosts cannot silently acquire different numerical
 kernels.
 
-## Induction-heating production block
+## Induction-heating native preview
 
-The MATLAB package under `matlab/+radia/+simulink` is the control-side
-surface for the IH solver. It deliberately separates the fast electromagnetic
-calculation from the slower thermal and mechanical loop:
-
-```matlab
-addpath('S:/Radia/01_GitHub/matlab');
-
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=2.4e3, ...
-    ThermalConductance_W_per_K=12, ...
-    SampleTime_s=1e-2, InitialTemperature_K=293.15);
-
-% The power signal can come from Radia VIM/FEM/SIBC/ESIM, a measurement,
-% or a position/drive/temperature lookup table.
-t = (0:plant.sample_time_s:30).';
-P = 2.0e3 * ones(size(t));
-Tamb = 293.15 * ones(size(t));
-waveform = radia.simulink.simulateIHWaveform(plant, t, P, Tamb);
-plot(waveform.time_s, waveform.temperature_K);
-xlabel('time (s)'); ylabel('workpiece temperature (K)');
-```
-
-`makeIHPlant` produces the exact zero-order-hold discrete matrices for a
-lumped thermal envelope. Its inputs are `power_W` and
-`ambient_temperature_K`; its outputs are temperature, heat loss, accumulated
-input energy, and temperature rate. The model does not pretend that a lumped
-thermal equation replaces the Radia field solve. The high-precision result
-must feed `power_W`.
-
-For moving workpieces, build the electromagnetic loss table on physical
-grids and use the same table in MATLAB or an n-D Lookup Table block:
+The tracked `matlab/radia_ih.slx` model separates Eddy and Thermal native MEX
+S-Functions and closes the temperature feedback explicitly:
 
 ```matlab
-lut = radia.simulink.makeIHPowerLUT( ...
-    {position_rad, drive_A, temperature_K}, P_wp_W, ...
-    InputNames=["position_rad", "drive_A", "temperature_K"]);
-P_now = radia.simulink.evaluateIHPowerLUT(lut, ...
-    [position_now, drive_now, temperature_now]);
+addpath('matlab');
+install_radia_ih();
 ```
 
-The default LUT policy clips outside the Radia training domain. This avoids
-silent extrapolation of SIBC/ESIM data; use `Extrapolation="error"` while
-building a new training envelope. Position and speed are kept as explicit
-ports in the waveform result so a mechanical solver can drive the same plant.
+The S-Functions consume checked row-major electromagnetic operators, a
+heat-to-temperature projection, thermal CSR matrices, cell weights, and an
+explicit rotation mode. Thermal publishes only the accepted DWork state and
+advances it in `mdlUpdate`, so the closed loop has a real one-step delay.
+Rotation transports the accepted workpiece temperature conservatively before
+the implicit thermal solve; Eddy maps the stationary-source heat distribution
+back into workpiece coordinates.
 
-When Simulink is installed, `radia.simulink.buildIHControlModel` creates a
-fixed-step model with separate `IH Parameters`, `Eddy Current`, and `Thermal`
-blocks. Current, rotation angle, and ambient temperature remain external
-signals; the parameter block supplies fixed LUT/region values to the numerical
-blocks. `IncludePID=true` adds a temperature-setpoint PID loop with current
-saturation. Select the native fixed reduced state-space thermal boundary with
-`PlantBlock="radia-mex"`.
-
-`radia.simulink.openIH()` opens only the native production IH application
-block. The former `Plant`/`EddyLUT` control-model entry point is retired;
-LUT-only and lumped-state-space IH models are not production interfaces.
-
-The former tracked LUT/Discrete-State-Space IH sample is retired. The
-production IH model uses native Eddy/Thermal MEX S-Functions. The older
-`buildIHControlModel`/LUT helpers are non-production validation utilities only;
-they are not reachable from `openIH` or the distributable library.
+The release model contains a one-DOF diagnostic configuration. Physical cases
+must supply preassembled operators through a checked MAT/JSON configuration.
+The preview does not yet assemble PEEC/BEM-A/BIM/FEM operators from Cubit
+`.vol` files. LUT and lumped-state-space helpers are neither reachable from
+`openIH` nor included in the native IH release package.
 
 For learning and design optimization, wrap a `sim` call or the fast waveform
 function in an objective and use:
