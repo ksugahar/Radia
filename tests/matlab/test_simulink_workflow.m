@@ -8,75 +8,6 @@ repoRoot = fileparts(fileparts(testDir));
 addpath(fullfile(repoRoot, "matlab"));
 end
 
-function testIHPlantMatchesEnergyAndCoolingContract(testCase)
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ...
-    ThermalConductance_W_per_K=2, ...
-    SampleTime_s=0.1, ...
-    InitialTemperature_K=293.15);
-time_s = (0:0.1:1).';
-power_W = 100 * ones(size(time_s));
-ambient_K = 293.15 * ones(size(time_s));
-result = radia.simulink.simulateIHWaveform( ...
-    plant, time_s, power_W, ambient_K);
-
-verifyEqual(testCase, plant.schema, "radia.ih.simulink.plant.v1");
-verifyEqual(testCase, result.schema, "radia.ih.simulink.waveform.v1");
-verifyEqual(testCase, result.final_state(2), 110, "AbsTol", 1e-12);
-verifyGreaterThan(testCase, result.temperature_K(end), 293.15);
-verifyGreaterThanOrEqual(testCase, result.heat_loss_W(end), 0);
-verifyEqual(testCase, result.position_rad, zeros(size(time_s)));
-end
-
-function testMotionAwarePowerLUTClipsOutsideTrainingRange(testCase)
-lut = radia.simulink.makeIHPowerLUT( ...
-    {[0, 1], [10, 20]}, [0, 10; 20, 30]);
-power_W = radia.simulink.evaluateIHPowerLUT(lut, [0.5, 15; 2, 15]);
-verifyEqual(testCase, power_W, [15; 25], "AbsTol", 1e-12);
-verifyEqual(testCase, lut.schema, "radia.ih.simulink.power_lut.v1");
-end
-
-function testOneDimensionalPowerLUT(testCase)
-lut = radia.simulink.makeIHPowerLUT({[0, 1]}, [5, 7]);
-power_W = radia.simulink.evaluateIHPowerLUT(lut, [0.5; 2]);
-verifyEqual(testCase, power_W, [6; 7], "AbsTol", 1e-12);
-verifySize(testCase, lut.table_power_W, [2, 1]);
-end
-
-function testPeriodicEddyHeatDensityLUTTracksCurrentAndAngle(testCase)
-lut = makeTestEddyLut();
-heatDensity = radia.simulink.evaluateIHEddyHeatDensityLUT( ...
-    lut, [10; 5; -5], [0; pi; 2 * pi + pi / 2]);
-verifyEqual(testCase, lut.schema, ...
-    "radia.ih.simulink.eddy_heat_density_lut.v1");
-verifyEqual(testCase, heatDensity, [1000; 500; 375], "AbsTol", 1e-12);
-verifyEqual(testCase, lut.rotation_angle_breakpoints_rad(end), 2 * pi, ...
-    "AbsTol", 1e-12);
-verifyEqual(testCase, lut.table_heat_density_W_per_m3(end, :, :), ...
-    lut.table_heat_density_W_per_m3(1, :, :), "AbsTol", 1e-12);
-end
-
-function testDriveMotionAndTemperatureFeedback(testCase)
-position = [0, 1];
-drive = [0, 10];
-temperature = [293.15, 303.15];
-[p, d, t] = ndgrid(position, drive, temperature);
-values = 1 + p + 0.1 * d + 0.01 * (t - 293.15);
-lut = radia.simulink.makeIHPowerLUT( ...
-    {position, drive, temperature}, values, ...
-    InputNames=["position_rad", "drive_A", "temperature_K"]);
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=0, SampleTime_s=0.1);
-time_s = (0:0.1:0.3).';
-result = radia.simulink.simulateIHDrive( ...
-    plant, time_s, 5 * ones(size(time_s)), 293.15 * ones(size(time_s)), lut, ...
-    Position_rad=0.5 * ones(size(time_s)), Speed_rad_s=ones(size(time_s)));
-verifyEqual(testCase, result.power_in_W(1), 2, "AbsTol", 1e-12);
-verifyGreaterThan(testCase, result.power_in_W(end), result.power_in_W(1));
-verifyGreaterThan(testCase, result.final_state(1), 293.15);
-verifyEqual(testCase, result.schema, "radia.ih.simulink.drive_waveform.v1");
-end
-
 function testOptimizationAdapter(testCase)
 objective = @(x) (x(1) - 2)^2 + (x(2) + 1)^2;
 result = radia.simulink.optimizeIH( ...
@@ -85,78 +16,6 @@ result = radia.simulink.optimizeIH( ...
 verifyEqual(testCase, result.schema, "radia.ih.simulink.optimization.v1");
 verifyLessThan(testCase, norm(result.x - [2, -1]), 1e-3);
 verifyLessThan(testCase, result.objective_value, 1e-6);
-end
-
-function testSimulinkBuilderUpdatesPlantAndPIDModels(testCase)
-hasSimulink = exist("new_system", "file") == 2 || ...
-    exist("new_system", "builtin") == 5;
-if ~hasSimulink
-    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
-    return
-end
-
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-eddyLut = makeTestEddyLut();
-for includePID = [false, true]
-    modelName = "radia_ih_test_model_" + string(includePID);
-    cleanup = onCleanup(@() closeIfLoaded(modelName));
-    radia.simulink.buildIHControlModel(modelName, plant, eddyLut, ...
-        IncludePID=includePID, Save=false, Open=false);
-    set_param(modelName, "SimulationCommand", "update");
-    verifyTrue(testCase, bdIsLoaded(modelName));
-    eddyPath = modelName + "/Eddy Current";
-    thermalPath = modelName + "/Thermal";
-    parameterPath = modelName + "/IH Parameters";
-    verifyEqual(testCase, string(get_param(eddyPath, "BlockType")), "SubSystem");
-    verifyEqual(testCase, string(get_param(thermalPath, "BlockType")), "SubSystem");
-    verifyEqual(testCase, string(get_param(parameterPath, "BlockType")), "SubSystem");
-    verifyEqual(testCase, string(get_param(eddyPath, "Mask")), "on");
-    verifyEqual(testCase, string(get_param(thermalPath, "Mask")), "on");
-    verifyEqual(testCase, string(get_param(parameterPath, "Mask")), "on");
-    parameterMask = Simulink.Mask.get(parameterPath);
-    verifyEqual(testCase, ...
-        str2double(parameterMask.getParameter("angle_period_rad").Value), ...
-        eddyLut.angle_period_rad, "AbsTol", eps(eddyLut.angle_period_rad));
-    verifyEqual(testCase, ...
-        eval(parameterMask.getParameter("region_volumes_m3").Value), ...
-        eddyLut.region_volumes_m3);
-    verifyEqual(testCase, ...
-        string(get_param(eddyPath + "/HeatDensity_1", "BlockType")), ...
-        "Lookup_n-D");
-    verifyEqual(testCase, ...
-        string(get_param(eddyPath + "/PreviousRotationAngle", "BlockType")), ...
-        "UnitDelay");
-    currentMagnitudePorts = get_param(eddyPath + "/CurrentMagnitude", "PortHandles");
-    verifyNotEqual(testCase, get_param(currentMagnitudePorts.Inport, "Line"), -1);
-    verifyEqual(testCase, ...
-        string(get_param(thermalPath + "/ThermalPlant", "BlockType")), ...
-        "DiscreteStateSpace");
-    eddyPorts = get_param(eddyPath, "PortHandles");
-    thermalPorts = get_param(thermalPath, "PortHandles");
-    parameterPorts = get_param(parameterPath, "PortHandles");
-    eddyLine = get_param(eddyPorts.Outport(1), "Line");
-    verifyTrue(testCase, any(get_param(eddyLine, "DstPortHandle") == ...
-        thermalPorts.Inport(1)));
-    verifyTrue(testCase, any(get_param( ...
-        get_param(parameterPorts.Outport(1), "Line"), "DstPortHandle") == ...
-        eddyPorts.Inport(3)));
-    verifyTrue(testCase, any(get_param( ...
-        get_param(parameterPorts.Outport(2), "Line"), "DstPortHandle") == ...
-        eddyPorts.Inport(4)));
-    verifyTrue(testCase, any(get_param( ...
-        get_param(parameterPorts.Outport(3), "Line"), "DstPortHandle") == ...
-        thermalPorts.Inport(3)));
-    if includePID
-        delayPath = modelName + "/TemperatureFeedbackDelay";
-        verifyEqual(testCase, string(get_param(delayPath, "BlockType")), ...
-            "UnitDelay");
-        verifyEqual(testCase, str2double(get_param(delayPath, "InitialCondition")), ...
-            plant.x0(1), "AbsTol", eps(plant.x0(1)));
-    end
-    clear cleanup
-    closeIfLoaded(modelName);
-end
 end
 
 function testOpenIHLaunchEntryPoint(testCase)
@@ -170,112 +29,13 @@ end
 target = radia.simulink.openIH(Open=false);
 verifyEqual(testCase, target, "radia_ih");
 verifyTrue(testCase, bdIsLoaded("radia_ih"));
-verifyEqual(testCase, string(get_param(target+"/IH Parameters", "Mask")), "on");
-verifyEqual(testCase,string(get_param(target+"/Eddy","FunctionName")), ...
-    "radia_ih_eddy_sfun");
-verifyEqual(testCase,string(get_param(target+"/Thermal","FunctionName")), ...
-    "radia_ih_thermal_sfun");
+verifyEqual(testCase, string(get_param(target + "/Eddy", ...
+    "FunctionName")), "radia_ih_eddy_sfun");
+verifyEqual(testCase, string(get_param(target + "/Thermal", ...
+    "FunctionName")), "radia_ih_thermal_sfun");
+verifyEqual(testCase, string(get_param(target + "/IH Parameters", ...
+    "Mask")), "on");
 close_system("radia_ih", 0);
-end
-
-function testEddyAngleUsesPreviousSample(testCase)
-hasSimulink = exist("new_system", "file") == 2 || ...
-    exist("new_system", "builtin") == 5;
-if ~hasSimulink
-    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
-    return
-end
-
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=0, SampleTime_s=0.1);
-eddyLut = makeTestEddyLut();
-modelName = "radia_ih_angle_delay_test";
-cleanup = onCleanup(@() closeIfLoaded(modelName));
-radia.simulink.buildIHControlModel( ...
-    modelName, plant, eddyLut, StopTime_s=0.3, Save=false, Open=false);
-time_s = (0:0.1:0.3).';
-angle = [0; pi / 2; pi; 3 * pi / 2];
-inputData = [time_s, 10 * ones(size(time_s)), angle, ...
-    293.15 * ones(size(time_s))];
-assignin("base", "radia_ih_angle_delay_input", inputData);
-set_param(modelName, "LoadExternalInput", "on", ...
-    "ExternalInput", "radia_ih_angle_delay_input", ...
-    "SaveOutput", "on", "OutputSaveName", "yout");
-simOut = sim(modelName, "ReturnWorkspaceOutputs", "on");
-dataset = simOut.get("yout");
-heatDensity = dataset.getElement(5).Values.Data;
-verifyEqual(testCase, heatDensity, [1000; 1000; 1500; 2000], ...
-    "AbsTol", 1e-10);
-clear cleanup
-closeIfLoaded(modelName);
-end
-
-function testSimulinkExternalInputProducesHeatingWaveform(testCase)
-hasSimulink = exist("new_system", "file") == 2 || ...
-    exist("new_system", "builtin") == 5;
-if ~hasSimulink
-    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
-    return
-end
-
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1, ...
-    InitialTemperature_K=293.15);
-modelName = "radia_ih_external_test";
-cleanup = onCleanup(@() closeIfLoaded(modelName));
-eddyLut = makeTestEddyLut();
-radia.simulink.buildIHControlModel( ...
-    modelName, plant, eddyLut, Save=false, Open=false);
-time_s = (0:0.1:1).';
-inputData = [time_s, 10 * ones(size(time_s)), zeros(size(time_s)), ...
-    293.15 * ones(size(time_s))];
-assignin("base", "radia_ih_external_input", inputData);
-set_param(modelName, "LoadExternalInput", "on", ...
-    "ExternalInput", "radia_ih_external_input", ...
-    "SaveOutput", "on", "OutputSaveName", "yout");
-simOut = sim(modelName, "ReturnWorkspaceOutputs", "on");
-dataset = simOut.get("yout");
-temperatureSignal = dataset.getElement(1);
-heatDensitySignal = dataset.getElement(5);
-verifyGreaterThan(testCase, temperatureSignal.Values.Data(end), 293.15);
-verifyEqual(testCase, heatDensitySignal.Values.Data(end), 1000, "AbsTol", 1e-12);
-clear cleanup
-closeIfLoaded(modelName);
-end
-
-function testRadiaSFunctionBlockMatchesStandardPlant(testCase)
-hasSimulink = exist("new_system", "file") == 2 || ...
-    exist("new_system", "builtin") == 5;
-if ~hasSimulink
-    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
-    return
-end
-
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-modelName = "radia_ih_sfunction_test";
-cleanup = onCleanup(@() closeIfLoaded(modelName));
-eddyLut = makeTestEddyLut();
-radia.simulink.buildIHControlModel(modelName, plant, eddyLut, ...
-    PlantBlock="radia-sfunction", StopTime_s=1.0, Save=false, Open=false);
-set_param(modelName, "SimulationCommand", "update");
-time_s = (0:0.1:1).';
-inputData = [time_s, 10 * ones(size(time_s)), zeros(size(time_s)), ...
-    293.15 * ones(size(time_s))];
-assignin("base", "radia_ih_sfunction_input", inputData);
-set_param(modelName, "LoadExternalInput", "on", ...
-    "ExternalInput", "radia_ih_sfunction_input", ...
-    "SaveOutput", "on", "OutputSaveName", "yout");
-simOut = sim(modelName, "ReturnWorkspaceOutputs", "on");
-dataset = simOut.get("yout");
-temperatureSignal = dataset.getElement(1);
-reference = radia.simulink.simulateIHWaveform( ...
-    plant, time_s, 100 * ones(size(time_s)), 293.15 * ones(size(time_s)));
-verifyGreaterThan(testCase, temperatureSignal.Values.Data(end), 293.15);
-verifyEqual(testCase, temperatureSignal.Values.Data(end), ...
-    reference.temperature_K(end), "AbsTol", 1e-10);
-clear cleanup
-closeIfLoaded(modelName);
 end
 
 function testTeam28CLNLUTAndSimulinkBlock(testCase)
@@ -315,38 +75,13 @@ clear cleanup
 closeIfLoaded(modelName);
 end
 
-function testNativeMexStateSpaceSimulinkBlocks(testCase)
+function testNativeMexHCurlStateSpaceSimulinkBlock(testCase)
 hasSimulink = exist("new_system", "file") == 2 || ...
     exist("new_system", "builtin") == 5;
 if ~hasSimulink
     testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
     return
 end
-
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-modelName = "radia_ih_native_mex_test";
-cleanup = onCleanup(@() closeIfLoaded(modelName));
-eddyLut = makeTestEddyLut();
-radia.simulink.buildIHControlModel(modelName, plant, eddyLut, ...
-    PlantBlock="radia-mex", StopTime_s=1.0, Save=false, Open=false);
-set_param(modelName, "SimulationCommand", "update");
-time_s = (0:0.1:1).';
-inputData = [time_s, 10 * ones(size(time_s)), zeros(size(time_s)), ...
-    293.15 * ones(size(time_s))];
-assignin("base", "radia_ih_native_mex_input", inputData);
-set_param(modelName, "LoadExternalInput", "on", ...
-    "ExternalInput", "radia_ih_native_mex_input", ...
-    "SaveOutput", "on", "OutputSaveName", "yout");
-simOut = sim(modelName, "ReturnWorkspaceOutputs", "on");
-dataset = simOut.get("yout");
-temperatureSignal = dataset.getElement(1);
-reference = radia.simulink.simulateIHWaveform( ...
-    plant, time_s, 100 * ones(size(time_s)), 293.15 * ones(size(time_s)));
-verifyEqual(testCase, temperatureSignal.Values.Data(end), ...
-    reference.temperature_K(end), "AbsTol", 1e-10);
-clear cleanup
-closeIfLoaded(modelName);
 
 R = [2.0, 0.1; 0.1, 1.0];
 L = [3.0, 0.2; 0.2, 2.0];
@@ -517,19 +252,51 @@ for row = 1:size(applications, 1)
     verifyTrue(testCase, contains(displayScript, "'primary'"));
     verifyTrue(testCase, contains(displayScript, "'elapsed_s'"));
 end
-ihPath = "radia_simulink_library/Applications/Induction Heating";
+ihPath="radia_simulink_library/Applications/Induction Heating";
 verifyEqual(testCase,string(get_param(ihPath,"BlockType")),"SubSystem");
 verifyEqual(testCase,string(get_param(ihPath,"Mask")),"on");
-verifyEqual(testCase,string(get_param(ihPath+"/Eddy MEX S-Function", ...
-    "FunctionName")),"radia_ih_eddy_sfun");
-verifyEqual(testCase,string(get_param(ihPath+"/Thermal MEX S-Function", ...
-    "FunctionName")),"radia_ih_thermal_sfun");
-ihContract = get_param(ihPath,"UserData");
+verifyEqual(testCase,string(get_param( ...
+    ihPath+"/Eddy MEX S-Function","FunctionName")), ...
+    "radia_ih_eddy_sfun");
+verifyEqual(testCase,string(get_param( ...
+    ihPath+"/Thermal MEX S-Function","FunctionName")), ...
+    "radia_ih_thermal_sfun");
+ihPorts=get_param(ihPath,"PortHandles");
+verifyEqual(testCase,numel(ihPorts.Inport),3);
+verifyEqual(testCase,numel(ihPorts.Outport),2);
+verifyEmpty(testCase,find_system(ihPath, ...
+    "LookUnderMasks","all","BlockType","Lookup_n-D"));
+verifyEmpty(testCase,find_system(ihPath, ...
+    "LookUnderMasks","all","BlockType","DiscreteStateSpace"));
+ihContract=get_param(ihPath,"UserData");
 verifyEqual(testCase,string(ihContract.backend),"native-mex-sfunction");
 verifyFalse(testCase,ihContract.python_fallback);
+verifyTrue(testCase,ihContract.distributed_field);
+verifyFalse(testCase,ihContract.surrogate);
+verifyEqual(testCase,string(ihContract.temperature_feedback), ...
+    "previous-accepted-thermal-state");
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/LTspice Circuit","FunctionName")),"radia_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/Hysteretic LTspice Plant","FunctionName")),"radia_hysteretic_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/Optimization/Optuna Optimization","FunctionName")),"radia_optuna_sfun");
+verifyEqual(testCase,string(get_param( ...
+    "radia_simulink_library/Optimization/Optuna Optimization","Mask")),"on");
+verifyEqual(testCase,string(get_param( ...
+    "radia_simulink_library/Optimization/Optuna Optimization", ...
+    "sampler_name")),"auto");
+sheetPath="radia_simulink_library/Optimization/Sheet Metal Optimization";
+verifyEqual(testCase,string(get_param(sheetPath,"FunctionName")),"radia_optuna_sfun");
+verifyEqual(testCase,string(get_param(sheetPath,"Mask")),"on");
+verifyEqual(testCase,string(get_param(sheetPath,"sampler_name")),"auto");
+sheetContract=get_param(sheetPath,"UserData");
+verifyEqual(testCase,string(sheetContract.domain),"sheet-metal");
+verifyEqual(testCase,string(sheetContract.backend), ...
+    "matlab-native-ngsolve-cubit");
+verifyFalse(testCase,sheetContract.browser_required);
+monitorPath="radia_simulink_library/Optimization/Optuna Monitor";
+verifyEqual(testCase,string(get_param(monitorPath,"Mask")),"on");
+monitorContract=get_param(monitorPath,"UserData");
+verifyFalse(testCase,monitorContract.browser_required);
+verifyEqual(testCase,string(monitorContract.visualization),"simulink-scope-xy");
 clear cleanup
 end
 
@@ -598,17 +365,6 @@ verifyEqual(testCase, string(decoded.radia_result.schema), ...
 verifyEqual(testCase, string(decoded.radia_result.status), "failed");
 end
 
-function lut = makeTestEddyLut()
-theta = [0; pi / 2; pi; 3 * pi / 2];
-current = [0; 5; 10];
-angleScale = [1; 1.5; 2; 1.5];
-currentScale = (current / 10).^2;
-heatDensity = 1000 * angleScale * currentScale.';
-lut = radia.simulink.makeIHEddyHeatDensityLUT( ...
-    theta, current, heatDensity, RegionVolumes_m3=0.1, ...
-    CarrierFrequency_Hz=50e3, Source="test map");
-end
-
 function snapshot = makeFamilySnapshot(height_m, resistance, force_operator)
 base = radia.simulink.makeHCurlEddyCLNModel( ...
     resistance, 1.0, 1.0, SampleTime_s=0.01);
@@ -642,12 +398,5 @@ end
 function deleteIfExists(fileName)
 if isfile(fileName)
     delete(fileName);
-end
-end
-
-function cleanSavedModel(modelName, outputDirectory)
-closeIfLoaded(modelName);
-if isfolder(outputDirectory)
-    rmdir(outputDirectory, "s");
 end
 end

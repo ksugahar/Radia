@@ -615,21 +615,19 @@ Toolbox, while `radia.rl.toFunctionEnv` adapts it to `rlFunctionEnv` when that
 toolbox is installed:
 
 ```matlab
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=2.4e3, ThermalConductance_W_per_K=12, ...
-    SampleTime_s=1e-2);
-environment = radia.rl.makeIHEnvironment(plant, ...
-    TargetTemperature_K=450, MaxSteps=2000);
+environment = radia.rl.Environment( ...
+    ResetFcn=@resetNativeState, ...
+    StepFcn=@stepNativeSolver, ...
+    MaxSteps=2000);
 [observation, info] = environment.reset();
-[nextObservation, reward, isDone, info] = environment.step( ...
-    5e3);
+[nextObservation, reward, isDone, info] = environment.step(action);
 ```
 
-Each step advances the discrete thermal plant exactly once. A custom
-`RewardFcn(state, observation, power_W, step)` can call a Radia/NGSolve MEX
-field evaluation, LUT, or reduced model. This lets MATLAB RL Toolbox or a
-Simulink RL Agent use the same Radia numerical kernels without putting the
-optimizer inside the fixed-step solver.
+The callbacks own an explicit native solver state and advance it exactly once
+per environment step. IH production models use the distributed Eddy and
+Thermal MEX S-Functions; the retired lumped thermal plant and IH LUT helpers
+are not RL backends. `toFunctionEnv` connects the same checked callback
+contract to MATLAB Reinforcement Learning Toolbox when it is installed.
 
 ## Native NGSolve field and matrix handles
 

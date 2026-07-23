@@ -2,31 +2,6 @@ function tests = test_rl_workflow
 tests = functiontests(localfunctions);
 end
 
-function testIHEnvironmentResetStepAndTermination(testCase)
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-environment = radia.rl.makeIHEnvironment(plant, ...
-    TargetTemperature_K=303.15, MaxSteps=3);
-
-[observation, resetInfo] = environment.reset();
-verifySize(testCase, observation, [4, 1]);
-verifyEqual(testCase, resetInfo.step, 0);
-verifyEqual(testCase, environment.StepCount, 0);
-
-[nextObservation, reward, isDone, stepInfo] = environment.step(100);
-verifySize(testCase, nextObservation, [4, 1]);
-verifyTrue(testCase, isfinite(reward));
-verifyFalse(testCase, isDone);
-verifyEqual(testCase, stepInfo.power_W, 100);
-verifyGreaterThan(testCase, nextObservation(1), observation(1));
-
-environment.step(100);
-[~, ~, isDone] = environment.step(100);
-verifyTrue(testCase, isDone);
-verifyEqual(testCase, environment.StepCount, 3);
-verifyError(testCase, @() environment.step(100), "radia:rl:EpisodeDone");
-end
-
 function testGenericEnvironmentAndSeed(testCase)
 state = 0;
 environment = radia.rl.Environment( ...
@@ -64,11 +39,29 @@ if ~hasRL
     return
 end
 
-plant = radia.simulink.makeIHPlant( ...
-    HeatCapacity_J_per_K=10, ThermalConductance_W_per_K=2, SampleTime_s=0.1);
-environment = radia.rl.makeIHEnvironment(plant, MaxSteps=2);
-observationInfo = rlNumericSpec([4, 1]);
+environment = makeCounterEnvironment();
+observationInfo = rlNumericSpec([1, 1]);
 actionInfo = rlNumericSpec([1, 1], LowerLimit=0, UpperLimit=1e6);
 rlEnvironment = environment.toFunctionEnv(observationInfo, actionInfo);
 verifyClass(testCase, rlEnvironment, "rl.env.rlFunctionEnv");
+end
+
+function environment = makeCounterEnvironment()
+state = 0;
+environment = radia.rl.Environment( ...
+    ResetFcn=@resetCounter,StepFcn=@stepCounter,MaxSteps=2);
+
+    function [observation,info] = resetCounter()
+        state = 0;
+        observation = state;
+        info = struct("step",0);
+    end
+
+    function [observation,reward,isDone,info] = stepCounter(action)
+        state = state + action;
+        observation = state;
+        reward = -abs(action);
+        isDone = false;
+        info = struct("step",state);
+    end
 end

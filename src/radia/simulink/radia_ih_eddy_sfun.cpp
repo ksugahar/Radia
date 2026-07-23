@@ -11,6 +11,7 @@
 #include <complex>
 #include <cstddef>
 #include <climits>
+#include <cstdio>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -19,6 +20,13 @@
 
 namespace {
 using Complex = std::complex<double>;
+
+void set_error_status(SimStruct* S, const std::exception& error) {
+    static thread_local char message[1024];
+    std::snprintf(message, sizeof(message), "radia_ih_eddy_sfun: %s",
+                  error.what());
+    ssSetErrorStatus(S, message);
+}
 
 struct Context {
     int n_unknown = 0;
@@ -242,7 +250,7 @@ static void mdlInitializeSizes(SimStruct* S) {
     int n_temperature = 0;
     int n_heat = 0;
     try { n_temperature = positive_scalar("n_temperature"); n_heat = positive_scalar("n_heat"); }
-    catch (const std::exception& error) { ssSetErrorStatus(S, error.what()); return; }
+    catch (const std::exception& error) { set_error_status(S, error); return; }
     if (!ssSetNumInputPorts(S, 3)) return;
     ssSetInputPortWidth(S, 0, 1);
     ssSetInputPortWidth(S, 1, 1);
@@ -284,7 +292,7 @@ static void mdlStart(SimStruct* S) {
         auto* c = make_context(ssGetSFcnParam(S, 0));
         ssSetOutputPortWidth(S, 0, c->n_heat);
         ssGetPWork(S)[0] = c;
-    } catch (const std::exception& error) { ssSetErrorStatus(S, error.what()); }
+    } catch (const std::exception& error) { set_error_status(S, error); }
 }
 
 static void mdlOutputs(SimStruct* S, int_T) {
@@ -348,7 +356,7 @@ static void mdlOutputs(SimStruct* S, int_T) {
         }
         auto* output = static_cast<real_T*>(ssGetOutputPortSignal(S, 0));
         std::copy(c->cached_heat.begin(), c->cached_heat.end(), output);
-    } catch (const std::exception& error) { ssSetErrorStatus(S, error.what()); }
+    } catch (const std::exception& error) { set_error_status(S, error); }
 }
 
 static void mdlTerminate(SimStruct* S) {

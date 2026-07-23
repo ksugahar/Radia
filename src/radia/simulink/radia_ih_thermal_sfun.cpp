@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstddef>
 #include <climits>
+#include <cstdio>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -18,6 +19,13 @@
 #include <vector>
 
 namespace {
+
+void set_error_status(SimStruct* S, const std::exception& error) {
+    static thread_local char message[1024];
+    std::snprintf(message, sizeof(message), "radia_ih_thermal_sfun: %s",
+                  error.what());
+    ssSetErrorStatus(S, message);
+}
 
 struct Context {
     int n_heat = 0;
@@ -259,7 +267,7 @@ static void mdlStart(SimStruct* S) {
         std::copy(context->initial_temperature_K.begin(),
                   context->initial_temperature_K.end(), state);
     } catch (const std::exception& error) {
-        ssSetErrorStatus(S, error.what());
+        set_error_status(S, error);
     }
 }
 
@@ -328,7 +336,7 @@ static void mdlUpdate(SimStruct* S, int_T) {
         std::copy(context->state.temperature_K.begin(),
                   context->state.temperature_K.end(), next_state);
     } catch (const std::exception& error) {
-        ssSetErrorStatus(S, error.what());
+        set_error_status(S, error);
     }
 }
 

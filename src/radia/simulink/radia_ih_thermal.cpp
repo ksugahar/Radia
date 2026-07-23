@@ -1,5 +1,4 @@
 #include "radia_ih_thermal.h"
-
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -91,10 +90,9 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
         if (!(w > 0.0) || !std::isfinite(w))
             throw std::invalid_argument("IH thermal cell weights must be finite and positive");
 
-    // M + dt*K is assembled from the same workpiece mesh as the Python
-    // reference.  The right-hand side uses the previous workpiece state;
-    // angle transport is performed by the Thermal S-Function before calling
-    // this kernel, so dt ordering remains explicit and testable.
+    // M + dt*K is assembled from the same workpiece mesh as the reference.
+    // The S-Function performs the conservative theta_prev -> theta_now
+    // transport exactly once before entering this backward-Euler kernel.
     CSRMatrix system;
     add_scaled(stiffness, options.dt_s * options.conductivity_scale, system);
     if (system.row_ptr.size() != mass.row_ptr.size() || system.col != mass.col ||

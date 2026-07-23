@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **870 tools** across 48 MCP servers.
+Total: **871 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **870 tools** across 48 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 20 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 21 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1128,7 +1128,7 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
@@ -1141,6 +1141,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用 15 パターン検出。 |
 | `grant_writing_check_notation_variants` | 同一テキスト内で同じ概念が複数の表記で書かれていないかを検出。 |
 | `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
+| `grant_writing_collaborative_integration_risk_check` | Check recurring risks in collaborative software-integration proposals. |
 | `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
 | `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
 | `grant_writing_health_report` | Integrated grant-writing health report. |

@@ -41,7 +41,8 @@ practical design platform.
   power-electronic circuit before committing either state.
 - **Optimize the coupled machine, circuit, and controller together.** Run
   parallel Simulink/LTspice trials with MATLAB-native Optuna-style studies,
-  multiple objectives, and live Pareto monitoring.
+  multiple objectives, and live Pareto monitoring. Native NGSolve/Cubit sheet
+  topology can use the same trial lifecycle through `SheetMetalRunner`.
 - **Turn a SPICE netlist into an editable LTspice schematic.** Convert `.cir`
   or `.net` files to automatically laid-out `.asc` schematics from Python or
   MATLAB, then verify connectivity by converting back with LTspice.
@@ -89,7 +90,7 @@ sl_refresh_customizations
 
 The Simulink Library Browser then shows one **Radia** library containing the
 Electromagnet, PCB PEEC, Motor, Stream Function, Induction Heating, LTspice,
-and Optuna blocks. For the machine-readable setup and compatibility contract, ask the
+Optuna, and Sheet Metal Optimization blocks. For the machine-readable setup and compatibility contract, ask the
 `mcp-server-radia-matlab` tool `matlab_simulink_library_contract`.
 
 ## The central idea
@@ -202,7 +203,8 @@ workflow rather than the top-level purpose by itself:
   steps output current, flux density, flux linkage, back EMF, Maxwell force,
   and hysteresis energy;
 - MATLAB-native Optuna-style single- and multi-objective studies, parallel
-  Simulink/LTspice trials, and live Pareto monitoring.
+  Simulink/LTspice trials, native sheet-metal topology trials, and live Pareto
+  monitoring with standard Simulink Scope and XY Graph blocks.
 
 ```matlab
 % Convert a netlist to an editable schematic and verify connectivity by

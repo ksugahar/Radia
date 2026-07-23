@@ -12,8 +12,10 @@ classdef Study < handle
         ParamTable table
         IntermediateTable table
         UserAttrTable table
+        ConstraintTable table
         ObjectiveTable table
         ProgressFcn = []
+        UserAttrs struct = struct()
     end
 
     properties (Access=private)
@@ -136,6 +138,60 @@ classdef Study < handle
 
         function value = sampleCategorical(obj, trial, name, choices)
             value = obj.Sampler.sampleCategorical(obj, trial, name, choices);
+        end
+
+        function values = sampleJoint(obj, trial, names, lows, highs, options)
+            arguments
+                obj
+                trial (1,1) radia.optuna.Trial
+                names (1,:) string
+                lows (1,:) double
+                highs (1,:) double
+                options.Log (1,:) logical = false(1, numel(names))
+            end
+            if numel(names) ~= numel(lows) || numel(names) ~= numel(highs)
+                error("radia:optuna:JointShape", ...
+                    "Joint names and bounds must have the same length.");
+            end
+            if numel(options.Log) ~= numel(names)
+                error("radia:optuna:JointShape", ...
+                    "Joint Log flags must have the same length as names.");
+            end
+            if ismethod(obj.Sampler, "sampleJoint")
+                values = obj.Sampler.sampleJoint(obj, trial, names, lows, ...
+                    highs, options);
+            else
+                values = zeros(1, numel(names));
+                for index = 1:numel(names)
+                    values(index) = obj.sampleFloat(trial, names(index), ...
+                        lows(index), highs(index), struct( ...
+                        "Log", options.Log(index), "Step", NaN));
+                end
+            end
+            values = reshape(double(values), 1, []);
+            if numel(values) ~= numel(names) || any(~isfinite(values))
+                error("radia:optuna:JointValue", ...
+                    "Joint sampler returned invalid values.");
+            end
+        end
+
+        function setUserAttr(obj, name, value)
+            arguments
+                obj
+                name (1,1) string
+                value
+            end
+            key = matlab.lang.makeValidName(name);
+            obj.UserAttrs.(key) = value;
+            obj.persist();
+        end
+
+        function set_user_attr(obj, name, value)
+            obj.setUserAttr(name, value);
+        end
+
+        function value = user_attrs(obj)
+            value = obj.UserAttrs;
         end
 
         function result = bestTrial(obj)
@@ -295,7 +351,9 @@ classdef Study < handle
                 "ParamTable", obj.ParamTable, ...
                 "IntermediateTable", obj.IntermediateTable, ...
                 "UserAttrTable", obj.UserAttrTable, ...
-                "ObjectiveTable", obj.ObjectiveTable);
+                "ConstraintTable", obj.ConstraintTable, ...
+                "UserAttrs", obj.UserAttrs, ...
+                "ObjectiveTable", obj.ObjectiveTable); %#ok<NASGU>
             folder = fileparts(obj.StoragePath);
             if strlength(folder) > 0 && ~isfolder(folder)
                 mkdir(folder);
@@ -320,6 +378,9 @@ classdef Study < handle
             obj.UserAttrTable = table('Size', [0, 3], ...
                 'VariableTypes', {'double','string','string'}, ...
                 'VariableNames', {'TrialNumber','Name','ValueJSON'});
+            obj.ConstraintTable = table('Size', [0, 3], ...
+                'VariableTypes', {'double','double','double'}, ...
+                'VariableNames', {'TrialNumber','ConstraintIndex','Value'});
             obj.ObjectiveTable = table('Size', [0, 3], ...
                 'VariableTypes', {'double','double','double'}, ...
                 'VariableNames', {'TrialNumber','ObjectiveIndex','Value'});
@@ -338,6 +399,12 @@ classdef Study < handle
             obj.ParamTable = data.ParamTable;
             obj.IntermediateTable = data.IntermediateTable;
             obj.UserAttrTable = data.UserAttrTable;
+            if isfield(data, "ConstraintTable")
+                obj.ConstraintTable = data.ConstraintTable;
+            end
+            if isfield(data, "UserAttrs")
+                obj.UserAttrs = data.UserAttrs;
+            end
             if isfield(data, "ObjectiveTable")
                 obj.ObjectiveTable = data.ObjectiveTable;
             else
@@ -379,6 +446,30 @@ classdef Study < handle
             obj.UserAttrTable(rows,:) = [];
             obj.UserAttrTable(end+1,:) = {trial.Number, name, string(jsonencode(value))};
             obj.persist();
+        end
+
+        function recordConstraints(obj, trial, values)
+            values = reshape(double(values), [], 1);
+            if any(isnan(values))
+                error("radia:optuna:Constraints", ...
+                    "Constraint values must not contain NaN.");
+            end
+            obj.ConstraintTable( ...
+                obj.ConstraintTable.TrialNumber == trial.Number, :) = [];
+            if ~isempty(values)
+                obj.ConstraintTable = [obj.ConstraintTable; table( ...
+                    repmat(trial.Number, numel(values), 1), ...
+                    (1:numel(values))', values, ...
+                    'VariableNames', obj.ConstraintTable.Properties.VariableNames)];
+            end
+            trial.setConstraints(values);
+            obj.persist();
+        end
+
+        function values = constraintsForTrial(obj, trialNumber)
+            rows = obj.ConstraintTable.TrialNumber == trialNumber;
+            selected = sortrows(obj.ConstraintTable(rows,:), "ConstraintIndex");
+            values = reshape(selected.Value, 1, []);
         end
 
         function finishTrial(obj, trial, state, value, message)

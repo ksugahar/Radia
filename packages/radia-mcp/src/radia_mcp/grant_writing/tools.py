@@ -874,6 +874,158 @@ def grant_writing_internal_evidence_to_external_scale_check(text: str) -> dict:
     }
 
 
+def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
+    """Check recurring risks in collaborative software-integration proposals.
+
+    The check is domain-neutral and applies only when a draft proposes coupling,
+    integration, interoperability, or cross-organization reuse. It distinguishes
+    the academic question from the implementation mechanism and checks costs on
+    both sides of the interface, ecosystem positioning, scope control, negative
+    results, team readiness, evaluation ethics, and asset provenance.
+    """
+    text = _read_text_if_path(text)
+    low = text.lower()
+    applicable_hits = _contains_any(
+        low,
+        [
+            "結合",
+            "統合",
+            "連携",
+            "連成",
+            "相互運用",
+            "interoperability",
+            "integration",
+            "coupling",
+        ],
+    )
+
+    axis_groups = {
+        "academic_question_vs_mechanism": [
+            ["学術的問い", "中心の問い", "研究上の問い", "仮説", "research question"],
+            ["実装手段", "検証手段", "研究手段", "method", "mechanism"],
+        ],
+        "provider_and_reuse_cost": [
+            ["所有者側", "提供者側", "開発元", "provider", "maintainer"],
+            ["初期整備", "初期費用", "保守", "maintenance", "setup cost"],
+            ["総負担", "再利用", "損益分岐", "reuse", "total cost"],
+        ],
+        "existing_ecosystem_boundary": [
+            ["既存基盤", "既存規格", "既存oss", "existing framework", "existing standard"],
+            ["置き換えず", "置換しない", "再利用", "補完", "boundary", "reuse"],
+        ],
+        "core_vs_optional_scope": [
+            ["中核", "必達", "成立条件", "core", "required"],
+            ["独立課題", "別課題", "発展候補", "条件付き", "optional", "exploratory"],
+        ],
+        "negative_result_value": [
+            ["結合不能", "適用境界", "不能理由", "反例", "不成立", "negative result"],
+            ["成果", "判定", "同定", "明らか", "result", "outcome"],
+        ],
+        "team_readiness": [
+            ["共著", "既往成果", "既発表", "共同遂行", "prior work", "track record"],
+            ["担当", "役割", "責任", "role", "responsibility"],
+            ["着手", "準備", "基礎", "既に", "ready", "readiness"],
+        ],
+        "evaluation_unit_and_ethics": [
+            ["評価単位", "分析単位", "課題単位", "unit of analysis"],
+            ["個人を評価", "個人の能力", "個人情報", "individual productivity"],
+            ["倫理", "同意", "該当性", "ethics", "consent"],
+        ],
+        "asset_provenance_and_fallback": [
+            ["権利", "保守主体", "所有者", "provenance", "maintainer"],
+            ["参照実装", "公開ベンチマーク", "代替", "fallback", "reference implementation"],
+        ],
+    }
+
+    axis_results = {}
+    for axis, groups in axis_groups.items():
+        group_hits = [_contains_any(low, group) for group in groups]
+        axis_results[axis] = {
+            "ok": all(bool(hits) for hits in group_hits),
+            "group_matches": [hits[:8] for hits in group_hits],
+            "groups": groups,
+        }
+
+    people_process_hits = _contains_any(
+        low,
+        [
+            "学生",
+            "若手",
+            "工程時間",
+            "手作業時間",
+            "生産性",
+            "被験者",
+            "アンケート",
+            "参加者",
+        ],
+    )
+    if not people_process_hits:
+        axis_results["evaluation_unit_and_ethics"].update(
+            {"ok": True, "not_applicable": True}
+        )
+
+    if not applicable_hits:
+        return {
+            "applicable": False,
+            "score": None,
+            "missing_count": 0,
+            "missing_axes": [],
+            "axis_results": axis_results,
+            "comments": [],
+            "target": (
+                "for collaborative integration proposals, separate the research "
+                "question from tooling and test lifecycle cost, scope, negative "
+                "results, ethics, and provenance"
+            ),
+            "source": "generic collaborative-integration risk check",
+        }
+
+    missing = [axis for axis, result in axis_results.items() if not result["ok"]]
+    comments_by_axis = {
+        "academic_question_vs_mechanism": (
+            "製品・プロトコル名を問いにせず、学術的問いと実装手段を分ける。"
+        ),
+        "provider_and_reuse_cost": (
+            "利用側だけでなく、提供者側の初期整備・保守を含む総負担を再利用回数に対して評価する。"
+        ),
+        "existing_ecosystem_boundary": (
+            "既存規格・連携基盤が担う範囲を認め、置換せず再利用する範囲と研究上の空白を示す。"
+        ),
+        "core_vs_optional_scope": (
+            "中核実証と条件付きの発展候補を分け、発展候補を必達成果の成立条件にしない。"
+        ),
+        "negative_result_value": (
+            "順位不変、結合不能、反例等も、条件・原因・適用境界を同定できれば成果となる成功条件を置く。"
+        ),
+        "team_readiness": (
+            "各担当者について、既往成果、利用可能資産、役割、着手可能性を一続きで示す。"
+        ),
+        "evaluation_unit_and_ethics": (
+            "工程を比較する場合は個人でなく課題・成果物を評価単位とし、倫理該当性と同意手続を確認する。"
+        ),
+        "asset_provenance_and_fallback": (
+            "固有資産の権利・保守主体を確認し、利用不能時の公開ベンチマークまたは参照実装を用意する。"
+        ),
+    }
+    comments = [comments_by_axis[axis] for axis in missing]
+    score = round(10.0 * (len(axis_groups) - len(missing)) / len(axis_groups), 1)
+    return {
+        "applicable": True,
+        "score": score,
+        "missing_count": len(missing),
+        "missing_axes": missing,
+        "axis_results": axis_results,
+        "people_process_hits": people_process_hits,
+        "comments": comments,
+        "target": (
+            "a collaborative integration proposal with an academic question distinct "
+            "from tooling, full lifecycle cost, ecosystem boundaries, controlled scope, "
+            "valuable negative results, team readiness, ethical evaluation, and fallback assets"
+        ),
+        "source": "generic collaborative-integration risk check",
+    }
+
+
 def grant_writing_budget_alignment_check(text: str) -> dict:
     """Check that budget items are tied to verification and implementation."""
     text = _read_text_if_path(text)
@@ -1051,6 +1203,20 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(scale["score"]),
                     "score": scale["score"],
                     "comments": scale["comments"][:5],
+                })
+
+    if "integration" not in skip_set:
+        integration = grant_writing_collaborative_integration_risk_check(text)
+        detailed_results["collaborative_integration_risk"] = integration
+        if integration["applicable"]:
+            detailed_scores["collaborative_integration_risk"] = integration["score"]
+            if integration["comments"]:
+                priority_issues.append({
+                    "tool": "integration",
+                    "name": "collaborative_integration_risk_check",
+                    "severity": _severity_from_score(integration["score"]),
+                    "score": integration["score"],
+                    "comments": integration["comments"][:5],
                 })
 
     if "sentence" not in skip_set:

@@ -4,7 +4,13 @@ end
 
 function setupOnce(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(root,"matlab"));
+matlabDirectory=fullfile(root,"matlab");
+entries=string(strsplit(path,pathsep));
+testCase.TestData.RemoveMatlabDirectory= ...
+    ~any(strcmpi(entries,string(matlabDirectory)));
+if testCase.TestData.RemoveMatlabDirectory
+    addpath(matlabDirectory);
+end
 testCase.TestData.Root=root;
 testCase.TestData.MeshPath=writeUnitTetra();
 [testCase.TestData.ReferencePath,testCase.TestData.PythonReference]= ...
@@ -12,7 +18,8 @@ testCase.TestData.MeshPath=writeUnitTetra();
 end
 
 function teardownOnce(testCase)
-if isfield(testCase.TestData,"Root")
+if isfield(testCase.TestData,"Root") && ...
+        testCase.TestData.RemoveMatlabDirectory
     rmpath(fullfile(testCase.TestData.Root,"matlab"));
 end
 if isfield(testCase.TestData,"MeshPath") && isfile(testCase.TestData.MeshPath)

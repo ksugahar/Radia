@@ -1,0 +1,183 @@
+{
+  "schema": "radia.validation.matlab-optuna-quality.v1",
+  "generated_at_utc": "2026-07-23T06:18:27.226Z",
+  "hostname": "HIBINO",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "matlab_release": "2026a",
+  "platform": "PCWIN64",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "single_trials": 80,
+  "multi_trials": 120,
+  "single_objective": {
+    "branin_random": {
+      "median_regret": 0.72650374532079631,
+      "regret": [
+        0.042117575452687461,
+        0.2010193148520063,
+        1.0005719843271397,
+        0.72650374532079631,
+        1.3068382446919173
+      ],
+      "median_elapsed_s": 0.525732,
+      "median_ask_tell_ms_per_trial": 6.57165
+    },
+    "branin_tpe": {
+      "median_regret": 5.3643215440548655,
+      "regret": [
+        2.3722643518798296,
+        11.302347237622579,
+        3.3599133526487277,
+        16.756634482161978,
+        5.3643215440548655
+      ],
+      "median_elapsed_s": 0.6239189,
+      "median_ask_tell_ms_per_trial": 7.7989862500000005
+    },
+    "branin_cmaes": {
+      "median_regret": 0.88530179544102161,
+      "regret": [
+        0.14913207669562745,
+        0.88530179544102161,
+        2.5978856633020042,
+        1.4788201882564085,
+        1.5702243414850159E-5
+      ],
+      "median_elapsed_s": 0.3807522,
+      "median_ask_tell_ms_per_trial": 4.7594024999999993
+    },
+    "correlated_valley_random": {
+      "median_regret": 0.17699803339897993,
+      "regret": [
+        0.19545881556248704,
+        0.17699803339897993,
+        0.056384071474978169,
+        0.12409887513968763,
+        0.27685807808176432
+      ],
+      "median_elapsed_s": 0.439539,
+      "median_ask_tell_ms_per_trial": 5.4942375
+    },
+    "correlated_valley_tpe": {
+      "median_regret": 0.935139387607143,
+      "regret": [
+        1.7973793643901894,
+        0.46943809027165517,
+        0.52967324717455622,
+        0.935139387607143,
+        1.842263361799
+      ],
+      "median_elapsed_s": 0.6658245,
+      "median_ask_tell_ms_per_trial": 8.3228062500000011
+    },
+    "correlated_valley_cmaes": {
+      "median_regret": 0.059941495533262092,
+      "regret": [
+        0.049646178499318787,
+        0.059941495533262092,
+        0.26129978494362288,
+        0.0015127824041403504,
+        0.52639341961930508
+      ],
+      "median_elapsed_s": 0.5600572,
+      "median_ask_tell_ms_per_trial": 7.0007150000000014
+    }
+  },
+  "multi_objective_zdt1": {
+    "random": {
+      "median_front_error": 0.481342465780339,
+      "front_error": [
+        1.3037668077058739,
+        0.73320448940037952,
+        0.14639279723666734,
+        0.37760534474739971,
+        0.481342465780339
+      ],
+      "median_f1_coverage": 0.82700109635338759,
+      "f1_coverage": [
+        0.81655981606389161,
+        0.82700109635338759,
+        0.79043714792580988,
+        0.82825555643282744,
+        0.969950517510759
+      ],
+      "median_pareto_points": 8,
+      "pareto_points": [
+        10,
+        8,
+        6,
+        8,
+        10
+      ],
+      "median_elapsed_s": 0.8253803,
+      "median_ask_tell_ms_per_trial": 6.878169166666666
+    },
+    "motpe": {
+      "median_front_error": 0.058938873671759491,
+      "front_error": [
+        0.19544404896543074,
+        0.058938873671759491,
+        7.8984495249330831,
+        0.0065531454042106361,
+        0.054826238423201411
+      ],
+      "median_f1_coverage": 0.42754653856318403,
+      "f1_coverage": [
+        0.94558782470428748,
+        0.049839084128742273,
+        0.42754653856318403,
+        0.02265934812149939,
+        0.975891007830969
+      ],
+      "median_pareto_points": 74,
+      "pareto_points": [
+        74,
+        47,
+        36,
+        96,
+        101
+      ],
+      "median_elapsed_s": 1.6606695,
+      "median_ask_tell_ms_per_trial": 13.8389125
+    },
+    "nsgaii": {
+      "median_front_error": 0.014781087258541152,
+      "front_error": [
+        0.66352312209729325,
+        0.013648507655995701,
+        0.17786272123098756,
+        0.0016861570233888006,
+        0.014781087258541152
+      ],
+      "median_f1_coverage": 0.61436617732452425,
+      "f1_coverage": [
+        0.61436617732452425,
+        0.69210223698704354,
+        0.36292516774085654,
+        0.16146004678056775,
+        0.96728835710868677
+      ],
+      "median_pareto_points": 12,
+      "pareto_points": [
+        12,
+        12,
+        12,
+        19,
+        34
+      ],
+      "median_elapsed_s": 2.0109221,
+      "median_ask_tell_ms_per_trial": 16.757684166666667
+    }
+  },
+  "interpretation": {
+    "lower_single_regret_is_better": true,
+    "lower_front_error_is_better": true,
+    "higher_f1_coverage_is_better": true,
+    "timing_scope": "MATLAB sampler plus table-backed ask/tell and analytic objective"
+  }
+}

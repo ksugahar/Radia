@@ -18,7 +18,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["status"] == "ready"
     assert contract["command_count"] == 311
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_class_count"] == 11
+    assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
         contract["matlab_optuna_classes"]
     )
@@ -76,6 +76,7 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "TrialTable" in contract["tables"]
     assert "ObjectiveTable" in contract["tables"]
     assert "SimulinkRunner" in contract["classes"]
+    assert "SheetMetalRunner" in contract["classes"]
     assert contract["multi_objective"]["selection"].startswith("bestTrial")
     assert contract["multi_objective"]["samplers"] == [
         "RandomSampler", "MOTPESampler", "NSGAIISampler"
@@ -83,8 +84,9 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "parsim" in contract["parallel_trials"]["simulink"]
     assert "parfeval" in contract["parallel_trials"]["ltspice"]
     assert "complex" in contract["ltspice_integrated_workflow"]["raw"]
-    assert len(contract["simulink_blocks"]) == 8
-    assert "heat-density contract" in contract["simulink_blocks"][0]
+    assert len(contract["simulink_blocks"]) == 9
+    assert "distributed-field kernels" in contract["simulink_blocks"][0]
+    assert "LUT and lumped IH builders are removed" in contract["simulink_blocks"][2]
     assert contract["team28"]["frequency_hz"] == 50
     assert contract["hcurl_eddy_cln"]["mex_kernel"] == "hybrid_vim.solve"
     assert contract["hcurl_eddy_cln"]["moving_family"].startswith("ExportHCurlEddyCLNFamilyJSON")
@@ -98,6 +100,11 @@ def test_optuna_simulink_contract_is_table_backed():
     ]
     assert "existing hex mesh" in topology["boundary"]
     assert topology["sheet_metal"]["two_level_loop"]["inner"].startswith("5-20")
+    assert topology["sheet_metal"]["optuna_runner"] == "radia.optuna.SheetMetalRunner"
+    assert topology["sheet_metal"]["simulink_block"] == (
+        "Optimization/Sheet Metal Optimization"
+    )
+    assert contract["sampler_quality"]["python_parity_claim"].startswith("none")
     hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
     assert hcurl["status"] == "native-mex-ready"
     assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"

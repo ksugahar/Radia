@@ -22,7 +22,7 @@ silently dropped from the count.
 | Underscore numerical kernels | 27 / 27 covered |
 | Stateful pybind11 class surface | 111 / 111 covered |
 | MEX gateway commands | 311 |
-| MATLAB Optuna classes | 11 |
+| MATLAB Optuna classes | 12 |
 | MATLAB Optuna factory functions | 2 |
 
 Seven acoustic commands share their implementation with the pybind11
@@ -191,8 +191,10 @@ loop never rebuilds the H-matrix.
 For Simulink, `simulink.state_space.create` stores `A`, `B`, `C`, `D`, and the
 initial state in a checked native handle. `step` computes `y=C*x+D*u` and then
 updates `x=A*x+B*u`; `reset`, `info`, and `destroy` manage the handle lifecycle.
-`radia.simulink.buildIHControlModel(..., eddyLut, PlantBlock="radia-mex")` and
-`radia.simulink.buildHCurlEddyCLNModel(..., Block="radia-mex")` use this path.
+`radia.simulink.buildHCurlEddyCLNModel(..., Block="radia-mex")` uses this path.
+Induction heating does not: its distributed Eddy and Thermal fields are owned
+by `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun`, respectively. The former
+IH LUT and lumped state-space builders have been removed.
 
 The handle layer is explicit: MATLAB does not alias a Python object. A
 `Mesh` owns the native `MeshAccess`, an `FESpace` shares that mesh, and a
@@ -258,3 +260,33 @@ persisted single-objective best for warm starts and downstream Simulink setup;
 multi-objective studies use `paretoFront`. The workflow and table schema are compatible with Optuna;
 sampler random streams and optimizer internals are not promised to reproduce
 Python Optuna bit for bit.
+
+Sampler constraint callbacks use Optuna's `c_i <= 0` feasibility convention.
+The resulting vectors are persisted in `Study.ConstraintTable`. Multi-objective
+TPE prioritizes feasible trials, ranks infeasible trials by summed positive
+violation, and uses hypervolume contribution for boundary selection and good
+density weights.
+
+`radia.optuna.SheetMetalRunner` connects this lifecycle to the native
+`optimizeHexSheetTopology`, `optimizeHCurlEddyBubbleHexSheet`, and
+`optimizeHCurlEddyBubbleActivationHexSheet` drivers. The matching Simulink
+block advances one complete trial per sample and sends incumbent-update and
+Pareto telemetry to standard Scope/XY Graph blocks. Solver execution remains
+MATLAB/MEX plus NGSolve/Cubit; there is no Python call in that optimization
+loop.
+
+The MATLAB TPE follows the Optuna 4.9 univariate TPE defaults and Parzen
+construction, including startup trials, gamma/max-good selection,
+truncated-normal kernels, history weights, an explicit prior, magic clipping,
+and EI candidate sampling. `Trial.suggestVector` adds an explicit joint numeric
+entry point that samples a shared Parzen mixture component; ordinary scalar
+suggestions remain univariate. The implementation is algorithmically aligned
+with the reference Python optimizer, but MATLAB random streams and optimizer
+internals are not promised to reproduce Python Optuna bit for bit. The MATLAB
+CMA-ES remains an engineering implementation rather than a complete copy of
+the reference optimizer. Use
+`validation_test/optimization/validate_matlab_optuna_quality.m` to compare
+fixed-seed, equal-budget regret, Pareto-front error/coverage, and ask/tell cost
+before making sample-efficiency claims. For expensive CAE the field solve is
+expected to dominate this bookkeeping, but that fact does not establish equal
+search quality.
