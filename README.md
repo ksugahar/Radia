@@ -482,27 +482,33 @@ instructions, and runtime requirements.
 
 The canonical human-facing interfaces are masked blocks in the single Radia
 Simulink library: Electromagnet, PCB PEEC, Motor, Stream Function, and
-Induction Heating. Each block delegates to the same `DesignSpec` and headless
-calculation used by Python/MCP, always writes `run.log` and `result.json`, and
-adds solver artifacts when execution reaches that stage. A field-producing run
-writes a checked GMSH `.msh v4.1` artifact into the same run directory and
-records it in `result.json`; scalar/circuit-only modes declare that artifact
-not applicable.
+Induction Heating. Electromagnet, PCB PEEC, Motor, and Stream Function delegate
+to the same `DesignSpec` and headless calculation used by Python/MCP. Induction
+Heating is the native exception: its Eddy and Thermal blocks are C/C++ MEX
+S-Functions with no Python fallback in the simulation loop.
+
+The four batch blocks write `run.log` and `result.json`; field-producing runs
+also write a checked GMSH `.msh v4.1` artifact in the run directory. The IH
+preview currently exposes its field vectors directly in Simulink and does not
+claim that batch artifact contract.
 
     addpath("matlab")
     radia.setup()
     radia.simulink.buildLibrary()
 
-The initial application-block backend launches the validated Python CLI only
-on a rising trigger; it does not start Python every simulation step. Promoting
-an individual application block to a MEX/ROM backend remains optional and
-requires parity and long-run testing. The native NGSolve MEX bridge above is a
-separately supported platform capability, not merely a future block backend.
+The four batch application blocks launch the validated Python CLI only on a
+rising trigger; they do not start Python every simulation step. Promoting those
+blocks to MEX/ROM remains optional and requires parity and long-run testing.
+The native NGSolve MEX bridge above is a separately supported platform
+capability, not merely a future block backend.
 
-In MATLAB, `radia.simulink.openIH()` opens the production Induction Heating
-block. The production IH model is defined by the Python `IHDesignSpec`
-contract and uses native Eddy/Thermal MEX S-Functions; LUT-only and lumped
-state-space sample models are not shipped as Radia IH interfaces.
+In MATLAB, `radia.simulink.openIH()` opens `radia_ih.slx`. The first native IH
+release is explicitly a preview runtime for checked, preassembled Eddy and
+Thermal operators. It proves the S-Function lifecycle, current and rotation
+inputs, conservative temperature transport, and closed thermal feedback. The
+remaining Cubit `.vol` to PEEC/BEM-A/BIM/FEM operator-assembly boundary is not
+claimed complete by that preview. LUT-only and lumped state-space models are
+not shipped as Radia IH interfaces.
 
 The Cubit toolbar is a separate, Cubit-embedded integration surface. Normal
 Radia Python workflows do not install or depend on Cubit's private PySide

@@ -14,7 +14,7 @@ verifyGreaterThan(testCase,min(local.conductivity_S_per_m),0);
 end
 
 function testFieldStateRejectsDifferentSizes(testCase)
-verifyError(testCase,@() radia.material.makeFieldState([293.15;300],[1]), ...
+verifyError(testCase,@() radia.material.makeFieldState([293.15;300],1), ...
     "radia:material:FieldStateSize");
 end
 
@@ -25,13 +25,12 @@ end
 
 function testLibraryRegistersMaterialDatabaseBlock(testCase)
 load_system("simulink");
-root = fullfile(tempdir,"radia_material_block_test");
+root = fullfile("C:\temp","radia_material_block_test");
 if isfolder(root), rmdir(root,"s"); end
 mkdir(root);
 addpath(fileparts(fileparts(fileparts(mfilename("fullpath")))),'-begin');
-addpath("C:/temp/radia_ih_native_mex2",'-begin');
 path = radia.simulink.buildLibrary(OutputDirectory=root);
-cleanup = onCleanup(@() closeIfLoaded("radia_simulink_library")); %#ok<NASGU>
+cleanup = onCleanup(@() cleanupLibrary(root));
 load_system(path);
 block = "radia_simulink_library/Material Models/Material Database";
 verifyEqual(testCase,get_param(block,"BlockType"),'SubSystem');
@@ -52,4 +51,9 @@ end
 
 function closeIfLoaded(name)
 if bdIsLoaded(name), close_system(name,0); end
+end
+
+function cleanupLibrary(root)
+closeIfLoaded("radia_simulink_library");
+if isfolder(root), rmdir(root,"s"); end
 end
