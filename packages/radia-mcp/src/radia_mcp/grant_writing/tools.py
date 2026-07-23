@@ -199,6 +199,7 @@ _KAKEN_OSS_PLATFORM_AXES = {
         "重複開発",
         "AIが開発を加速",
         "AIによる開発加速",
+        "AIにより開発が加速",
     ],
     "jpmars_github_governance": [
         "JP-MARs",
@@ -537,7 +538,14 @@ def grant_writing_kaken_oss_platform_check(text: str) -> dict:
     )
     ai_urgency_hits = _contains_any(
         low,
-        ["AIが開発を加速", "AIによる開発加速", "AI時代", "高速に再生産", "増幅"],
+        [
+            "AIが開発を加速",
+            "AIによる開発加速",
+            "AIにより開発が加速",
+            "AI時代",
+            "高速に再生産",
+            "増幅",
+        ],
     )
     if not silo_hits or not ai_urgency_hits:
         comments.append(

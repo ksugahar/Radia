@@ -75,6 +75,18 @@ def test_grant_writing_kaken_oss_platform_check():
     assert result["platform_focus"]["ok"]
 
 
+def test_grant_writing_kaken_oss_accepts_ai_acceleration_variant():
+    text = KAKEN_OSS_SAMPLE.replace(
+        "AIによる開発加速が重複実装を増幅することを防ぐ。",
+        "AIにより開発が加速する現在、重複実装を防ぐ。",
+    )
+
+    result = gw.grant_writing_kaken_oss_platform_check(text)
+
+    assert "AIにより開発が加速" in result["ai_urgency_hits"]
+    assert not any("why-now" in comment for comment in result["comments"])
+
+
 def test_grant_writing_kaken_oss_accepts_negated_catch_up_frame():
     result = gw.grant_writing_kaken_oss_platform_check(
         KAKEN_OSS_SAMPLE + "本研究は欧州に追いつく計画ではなく、国内外の相互交流を作る。"
