@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -58,11 +59,23 @@ def radia_version() -> str:
 
 
 def commit() -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
-        capture_output=True, text=True,
-    )
-    return result.stdout.strip()
+    github_sha = os.environ.get("GITHUB_SHA", "").strip()
+    if re.fullmatch(r"[0-9a-fA-F]{40}", github_sha):
+        return github_sha.lower()
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+            capture_output=True, text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError) as error:
+        raise RuntimeError(
+            "Cannot determine the release source commit; set GITHUB_SHA or "
+            "run the packager inside a Git worktree"
+        ) from error
+    value = result.stdout.strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+        raise RuntimeError("git rev-parse HEAD returned an invalid commit")
+    return value.lower()
 
 
 def validate_native_binary(path: Path) -> None:
