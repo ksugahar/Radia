@@ -500,15 +500,9 @@ requires parity and long-run testing. The native NGSolve MEX bridge above is a
 separately supported platform capability, not merely a future block backend.
 
 In MATLAB, `radia.simulink.openIH()` opens the production Induction Heating
-block. Supplying `Plant` and `EddyLUT` opens the separated IH Parameters / Eddy
-Current / Thermal control model; current and rotation angle remain external
-Simulink source signals.
-
-For a directly inspectable MATLAB-only object, open
-`matlab/radia_ih_sample.slx`. It contains stepped RMS-current, rotation-angle,
-and ambient-temperature Source blocks wired to separate masked Eddy Current,
-Thermal, and IH Parameters subsystems; it launches neither Python nor a MEX
-S-function.
+block. The production IH model is defined by the Python `IHDesignSpec`
+contract and uses native Eddy/Thermal MEX S-Functions; LUT-only and lumped
+state-space sample models are not shipped as Radia IH interfaces.
 
 The Cubit toolbar is a separate, Cubit-embedded integration surface. Normal
 Radia Python workflows do not install or depend on Cubit's private PySide
