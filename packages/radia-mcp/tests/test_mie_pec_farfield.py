@@ -11,6 +11,10 @@ import sys
 
 import pytest
 
+# This is a numerical far-field validation corpus, not a lightweight contract
+# test.  Keep it out of the pre-push matrix; run it in the validation lane.
+pytestmark = pytest.mark.slow
+
 np = pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 from scipy.integrate import trapezoid
