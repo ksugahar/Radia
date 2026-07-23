@@ -49,6 +49,14 @@ config.current_change_recomputes_eddy = true;
 config.temperature_coordinate_system = "workpiece";
 config.rotation_transport = "conservative-periodic";
 config.dt_order = "eddy;transport(theta_prev,theta_now);thermal";
+vol_files = string({spec.coil_vol,spec.wp_vol});
+if any(isfile(vol_files))
+    existing = vol_files(isfile(vol_files));
+    config.vol_check_reports = radia.simulink.validateVolFiles(existing);
+    config.vol_check_required = true;
+else
+    config.vol_check_required = true;
+end
 if isfield(spec, "bh_reference_temperature_K")
     config.bh_reference_temperature_K = spec.bh_reference_temperature_K;
 end
