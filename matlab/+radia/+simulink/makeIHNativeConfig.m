@@ -115,9 +115,11 @@ config.backend = "native-mex-sfunction";
 config.python_fallback = false;
 config.release_channel = "preview";
 config.operator_assembly = "preassembled";
+config.eddy_solver = physicalEddySolver(spec.method);
 config.eddy_method = string(spec.method);
 config.linear_solver = string(spec.solver);
-config.thermal_solver = string(spec.thermal_mesh_type);
+config.thermal_solver = "fem";
+config.thermal_mesh_type = string(spec.thermal_mesh_type);
 config.bh_mode = char(lower(string(spec.bh_mode)));
 config.current_change_recomputes_eddy = false;
 config.temperature_coordinate_system = "workpiece";
@@ -166,6 +168,25 @@ if isfield(spec, "eddy_matrix_temperature_slope_real")
     config.eddy_matrix_temperature_slope_imag = matrixStackRowMajor( ...
         spec.eddy_matrix_temperature_slope_imag, nUnknown, ...
         options.NTemperature, "eddy_matrix_temperature_slope_imag");
+end
+config = radia.simulink.validateIHNativeConfig(config);
+end
+
+function solver = physicalEddySolver(method)
+method = lower(string(method));
+if contains(method, "bem-a")
+    solver = "bem-a";
+elseif contains(method, "bim")
+    solver = "bim";
+elseif contains(method, "peec")
+    solver = "peec";
+elseif contains(method, "fem") || contains(method, "full simulation") || ...
+        startsWith(method, "thermal:")
+    solver = "fem";
+else
+    error("radia:simulink:IHConfigMethod", ...
+        "IHDesignSpec.method cannot be mapped to FEM, PEEC, BEM-A, or BIM: %s", ...
+        method);
 end
 end
 

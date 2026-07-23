@@ -45,6 +45,7 @@ servers:
 - `grant_writing_kddi_power_electronics_focus_check(text)`
 - `grant_writing_kaken_oss_platform_check(text)`
 - `grant_writing_internal_evidence_to_external_scale_check(text)`
+- `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`
 - `grant_writing_analyze_sentences(text)`
 - `grant_writing_count_weak_expressions(text)`
@@ -70,6 +71,21 @@ external validity. The optional check asks who used the internal result, what
 transferable unit leaves the original setting, which route and external actor
 receive it, and how independent success is verified. It remains not applicable
 for proposals that do not claim prior internal evidence.
+
+For proposals that integrate software, models, solvers, data, or organizations,
+also use `grant_writing_collaborative_integration_risk_check(text)`. Keep the
+academic question distinct from the named protocol or product. Count the
+provider's initial description, validation, and maintenance effort as well as
+the user's setup effort, then evaluate total cost against reuse. Position the
+proposal against existing standards and frameworks and reuse them where they
+already solve the problem. Separate core experiments from optional transfers.
+Treat unchanged rankings, failed coupling, and counterexamples as results when
+their conditions are identified. For every collaborator, connect prior work,
+available assets, assigned responsibility, and readiness. If process logs or
+students are involved, analyze tasks and artifacts rather than individual
+productivity and obtain an ethics determination. Confirm asset ownership and
+maintainers, and provide a public benchmark or reference implementation when a
+named private asset is unavailable.
 
 For KAKENHI proposals that establish an OSS research platform in the AI era,
 use `program="kaken_oss"` or call

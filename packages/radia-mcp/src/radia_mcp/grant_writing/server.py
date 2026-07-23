@@ -4,7 +4,8 @@ Grant proposal writing support: Japanese technical-prose lint, section
 coverage checks, KDDI Digital Innovation / social-implementation axes,
 KAKENHI AI-era OSS research-platform axes, domain focus checks, budget
 alignment checks, internal-evidence-to-external-scale checks, and integrated
-health reports.
+health reports. Collaborative-integration checks cover lifecycle cost,
+ecosystem boundaries, scope, negative results, ethics, and asset provenance.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / figure / grant-writing / presentation.
@@ -34,7 +35,8 @@ register_status_tool(
         "Grant proposal lint and review helpers: Japanese technical prose, "
         "section coverage, KDDI Digital Innovation social-implementation "
         "axes, KAKENHI AI-era OSS platform axes, domain focus, budget "
-        "alignment, internal-to-external scale, and integrated health reports."
+        "alignment, internal-to-external scale, collaborative-integration "
+        "risks, and integrated health reports."
     ),
     subpackage="radia_mcp.grant_writing",
     related_servers=["paper-writing", "figure", "presentation", "document-meta"],

@@ -2,12 +2,18 @@ function tests=test_topology_optimization
 tests=functiontests(localfunctions);
 end
 function setupOnce(testCase)
-root=fileparts(fileparts(fileparts(mfilename("fullpath")))); path=fullfile(root,"matlab"); addpath(path); testCase.TestData.Path=path;
+root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
+matlabDirectory=fullfile(root,"matlab");
+entries=string(strsplit(path,pathsep));
+testCase.TestData.RemoveMatlabDirectory= ...
+    ~any(strcmpi(entries,string(matlabDirectory)));
+if testCase.TestData.RemoveMatlabDirectory, addpath(matlabDirectory); end
+testCase.TestData.Path=matlabDirectory;
 testCase.TestData.MeshPath=writeUnitTetra();
 testCase.TestData.MultiMeshPath=writeTetraMesh(10);
 end
 function teardownOnce(testCase)
-rmpath(testCase.TestData.Path);
+if testCase.TestData.RemoveMatlabDirectory, rmpath(testCase.TestData.Path); end
 if isfile(testCase.TestData.MeshPath), delete(testCase.TestData.MeshPath); end
 if isfile(testCase.TestData.MultiMeshPath), delete(testCase.TestData.MultiMeshPath); end
 end
@@ -145,6 +151,34 @@ verifyError(testCase,@()radia.topopt.optimizeHexSheetTopology(initial, ...
  "radia:topopt:InnerIterations");
 end
 
+function testSheetMetalOptunaRunnerPersistsParetoTrial(testCase)
+study=radia.optuna.createStudy(directions=["minimize","minimize"], ...
+ Sampler=radia.optuna.RandomSampler(17),AutoSave=false);
+runner=radia.optuna.SheetMetalRunner( ...
+ @(trial)localSheetMetalProblem(trial,testCase.TestData.MeshPath), ...
+ Solver="hex-sheet", ...
+ ScoreFcn=@(result,trial)[result.state.objective, ...
+     sum(result.state.thickness.*result.state.activation)], ... %#ok<INUSD>
+ OutputRoot="C:\temp\radia_sheet_metal_optuna_test");
+trial=study.ask();
+[score,result]=runner.evaluate(trial);
+meshCleanup=onCleanup(@()delete(result.state.mesh));
+study.tell(trial,score);
+verifySize(testCase,score,[1,2]);
+verifyEqual(testCase,height(study.paretoFront()),1);
+verifyEqual(testCase,string(trial.UserAttrs.sheet_metal_solver),"hex-sheet");
+verifyTrue(testCase,isfolder(trial.UserAttrs.run_dir));
+verifyTrue(testCase,isfile(trial.UserAttrs.result_json));
+summary=jsondecode(fileread(trial.UserAttrs.result_json));
+verifyEqual(testCase,string(summary.schema), ...
+    "radia.optuna.sheet-metal-trial.v1");
+verifyEqual(testCase,string(summary.solver),"hex-sheet");
+verifyEqual(testCase,reshape(summary.objective_values,1,[]),score, ...
+    "AbsTol",1e-14);
+verifyEqual(testCase,summary.inner_iteration_count,5);
+clear meshCleanup
+end
+
 function model=localLinearize(density)
 model=struct("response",[density(1)-density(3);density(2)], ...
  "response_jacobian",[-1 0 1;0 1 0]);
@@ -166,6 +200,31 @@ end
 function step=localStableActivationStep(state)
 update=struct("normal_displacement",state.normal_displacement, ...
  "thickness",state.thickness,"activation",min(0.85,state.activation+0.01));
+step=struct("update",update,"requires_cubit",false);
+end
+
+function problem=localSheetMetalProblem(trial,meshPath)
+target=trial.suggestFloat("activation_target",0.75,0.85);
+mesh=radia.ngsolve.Mesh.create(meshPath);
+initial=struct("mesh",mesh,"model",struct("generation",0), ...
+ "normal_displacement",0,"thickness",1,"activation",0.8, ...
+ "objective",(1-0.8)^2);
+problem=struct( ...
+ "initialState",initial, ...
+ "linearizeStep",@(state)localTargetActivationStep(state,target), ...
+ "deformationFactory",@localZeroDeformation, ...
+ "evaluateObjective",@localActivationObjective, ...
+ "rebuildHMatrix",@localRebuildModel, ...
+ "cubitBackend",@(request)radia.ngsolve.Mesh.create(meshPath), ...
+ "elementSizes",1, ...
+ "driverOptions",struct("InnerIterations",5, ...
+     "MinimumInnerIterations",5,"MaxOuterIterations",1, ...
+     "FinalizeTopology",false));
+end
+
+function step=localTargetActivationStep(state,target)
+update=struct("normal_displacement",state.normal_displacement, ...
+ "thickness",state.thickness,"activation",target*ones(size(state.activation)));
 step=struct("update",update,"requires_cubit",false);
 end
 

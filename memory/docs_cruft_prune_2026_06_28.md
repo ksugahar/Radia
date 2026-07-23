@@ -40,3 +40,25 @@ should not become a warehouse for development chronology.
 When a docs artifact is only a source archive, migration ledger, failed
 attempt log, or old path mirror, prune it before promoting more examples.
 Promote the distilled rule/API/result instead.
+
+## IH Simulink Native-Only Contract (2026-07-23)
+
+The production induction-heating interface is the masked Simulink application
+block containing `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun`. A heat/power
+LUT, lumped thermal plant, or generic discrete state-space block is not an
+independent validation route and must not be restored as an IH example, test
+fixture, RL environment, or fallback.
+
+The retired MATLAB surfaces were `buildIHControlModel`, `makeIHPlant`, the IH
+power/heat LUT constructors and evaluators, the waveform simulators, and the
+lumped `makeIHEnvironment` adapter. Generic HCurl reduced state-space support,
+the TEAM28 CLN table, and the temperature-dependent BH material block remain
+separate canonical capabilities.
+
+The fast regression route uses the actual library block with a synthetic
+distributed native operator. It checks current-squared scaling, asymmetric
+multi-cell rotation, weighted thermal conservation, temperature feedback,
+temperature-dependent operator updates, MAT/JSON loading, fail-fast config
+validation, and singular-operator lifecycle recovery. Thermal state advances
+only in `mdlUpdate`; advancing it in `mdlOutputs` can apply `dt` more than once
+when Simulink reevaluates outputs at one simulation time.

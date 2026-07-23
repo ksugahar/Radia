@@ -12,6 +12,7 @@ def test_package_builder_requires_native_ih_assets():
     assert "radia_ih.slx" in text
     assert "radia_ih_eddy_sfun.mexw64" in text
     assert "radia_ih_thermal_sfun.mexw64" in text
+    assert "validateIHNativeConfig.m" in text
     assert "manifest.json" in text
     assert "SHA256SUMS.txt" in text
 

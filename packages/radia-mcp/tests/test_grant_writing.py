@@ -36,6 +36,18 @@ KAKEN_OSS_SAMPLE = (
     "移植できる可搬な環境構築手順を整備する。Radiaは異なる手法を融合した先行実証とする。"
 )
 
+COLLABORATIVE_INTEGRATION_SAMPLE = (
+    "本研究の学術的問いは、異種解析を結合して新しい設計知を導く条件は何かである。"
+    "MCPは仮説を検証する実装手段とする。所有者側の自己記述・試験の初期整備と保守、"
+    "利用側の作業を含む総負担を、中核ペアと別問題への再利用回数に対して評価する。"
+    "既存基盤を置き換えず再利用し、その境界にある科学的自己記述を研究対象とする。"
+    "中核実証の成立条件と、独立課題として試す発展候補を分ける。結合不能や反例も、"
+    "原因と適用境界を同定できれば成果とする。各担当者には共著の既往成果、役割、"
+    "直ちに着手できる準備がある。分析単位は結合課題であり、個人の能力を評価しない。"
+    "手作業時間を記録する前に倫理該当性を確認する。資産の権利と保守主体を確認し、"
+    "利用不能時は公開ベンチマークと参照実装を用いる。"
+)
+
 
 def test_grant_writing_kddi_health_report_runs():
     report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
@@ -196,6 +208,39 @@ def test_internal_evidence_to_external_scale_is_optional_without_prior_result():
     assert not result["applicable"]
     assert result["score"] is None
     assert result["comments"] == []
+
+
+def test_collaborative_integration_risk_check_accepts_complete_plan():
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        COLLABORATIVE_INTEGRATION_SAMPLE
+    )
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["missing_axes"] == []
+    assert all(axis["ok"] for axis in result["axis_results"].values())
+
+
+def test_collaborative_integration_risk_check_exposes_hidden_costs_and_boundaries():
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        "MCPで複数研究室のソフトウェアを統合して効率化する。"
+    )
+
+    assert result["applicable"]
+    assert result["score"] < 5
+    assert "provider_and_reuse_cost" in result["missing_axes"]
+    assert "existing_ecosystem_boundary" in result["missing_axes"]
+    assert "negative_result_value" in result["missing_axes"]
+    assert result["comments"]
+
+
+def test_collaborative_integration_risk_check_is_optional_for_unrelated_plan():
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        "本研究では新しい磁性材料の物性を測定する。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
 
 
 def test_grant_writing_reexports_ja_lint_helpers():

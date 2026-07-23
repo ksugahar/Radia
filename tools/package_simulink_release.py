@@ -27,10 +27,12 @@ PACKAGE_FILES = (
     "verify_radia_ih_release.m",
     "+radia/+simulink/buildIHNativeModel.m",
     "+radia/+simulink/configureIHNativeModel.m",
+    "+radia/+simulink/loadIHNativeConfig.m",
     "+radia/+simulink/makeIHNativeConfig.m",
     "+radia/+simulink/makeIHNativeSmokeConfig.m",
     "+radia/+simulink/openIH.m",
     "+radia/+simulink/requireIHNativeRuntime.m",
+    "+radia/+simulink/validateIHNativeConfig.m",
     "+radia/+simulink/validateVolFiles.m",
 )
 
