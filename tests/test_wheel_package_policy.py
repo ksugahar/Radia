@@ -20,6 +20,16 @@ def test_radia_wheel_excludes_native_backup_files():
     } <= excluded
 
 
+def test_pre_push_upload_excludes_native_backup_files():
+    hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(
+        encoding="utf-8"
+    )
+    assert "*.locked-old.*" in hook
+    assert "*.lockedold.*" in hook
+    assert "*.pre_*.*" in hook
+    assert "*.backup*.*" in hook
+
+
 def test_retired_notebook_workbenches_are_absent_from_source():
     retired = {
         "notebook_workbench.py",

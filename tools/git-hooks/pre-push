@@ -53,7 +53,7 @@ fi
 UPLOAD_FILES=()
 for f in src/radia/*.pyd src/radia/*.dll src/radia/*.so src/radia/*.dylib; do
     case "$f" in
-        *locked-old.pyd|*.lockedold.pyd) continue ;;
+        *.locked-old.*|*.lockedold.*|*.pre_*.*|*.backup*.*) continue ;;
     esac
     [ -f "$f" ] && UPLOAD_FILES+=("$f")
 done
