@@ -172,6 +172,12 @@ radia = [
     # cubit-mesh-export package, never by radia -- exclude it from the
     # "*.pyd" glob in case a stale build artifact lingers in src/radia/.
     "cubit_mesh_curver.pyd",
+    # Local lock-release and pre-change native backups must never enter a
+    # wheel assembled from an editable development checkout.
+    "*.locked-old.pyd",
+    "*.lockedold.pyd",
+    "*.pre_*.pyd",
+    "*.backup*.pyd",
     # Debug/temp files that match package-data globs but should not ship
     "panels/samples/_*.jou",
     "panels/samples/_*.py",
