@@ -34,6 +34,61 @@ linearize=@localLinearize; r=radia.topopt.optimizeVIMLP(0.5*ones(3,1),ones(3,1),
 verifyLessThanOrEqual(testCase,sum(r.density),1.5+1e-12); verifyGreaterThanOrEqual(testCase,r.density(1),r.density(3));
 end
 
+function testAdjointDirectionalDerivativeDiagnostic(testCase)
+design=[0.35;0.55];
+result=radia.topopt.checkAdjointGradient( ...
+    design,@localConstrainedQuadratic,RelativeStep=2e-6);
+verifyTrue(testCase,result.passed);
+verifyEqual(testCase,result.evaluation_count,5);
+verifyLessThan(testCase,max(result.history.ObjectiveError),1e-9);
+verifyLessThan(testCase,max(result.history.ConstraintError),1e-9);
+end
+
+function testStreamFunctionAdjointRunner(testCase)
+runner=radia.topopt.makeStreamFunctionAdjointDemoRunner();
+verifyEqual(testCase,string(runner.Metadata.domain),"stream-function");
+diagnostic=radia.topopt.checkAdjointGradient( ...
+    runner.InitialDesign,runner.EvaluateFcn,RelativeStep=2e-6);
+verifyTrue(testCase,diagnostic.passed);
+result=runner.run();
+verifyTrue(testCase,result.converged,result.output.message);
+verifyEqual(testCase,result.design,[0.15;0.75],"AbsTol",2e-3);
+verifyLessThanOrEqual(testCase,max(result.constraints),1e-6);
+verifyLessThan(testCase,result.objective,0.003);
+end
+
+function testMMAUsesAnalyticObjectiveAndConstraintAdjoints(testCase)
+result=radia.topopt.optimizeAdjoint([0.4;0.4], ...
+    @localConstrainedQuadratic,Solver="mma", ...
+    LowerBounds=zeros(2,1),UpperBounds=ones(2,1), ...
+    MoveLimit=0.2,MaxIterations=60,StepTolerance=2e-6, ...
+    OptimalityTolerance=2e-5,ConstraintTolerance=1e-7);
+verifyEqual(testCase,result.solver,"mma");
+verifyTrue(testCase,result.converged,result.output.message);
+verifyLessThanOrEqual(testCase,max(result.constraints),1e-6);
+verifyEqual(testCase,result.design,[0.5;0.5],"AbsTol",2e-3);
+verifyGreaterThan(testCase,height(result.history),2);
+end
+
+function testSQPUsesAnalyticEqualityAdjoint(testCase)
+result=radia.topopt.optimizeAdjoint([0.5;0.5], ...
+    @localEqualityQuadratic,Solver="sqp", ...
+    LowerBounds=zeros(2,1),UpperBounds=ones(2,1), ...
+    MaxIterations=30,OptimalityTolerance=1e-10, ...
+    ConstraintTolerance=1e-10,StepTolerance=1e-12);
+verifyEqual(testCase,result.solver,"sqp");
+verifyTrue(testCase,result.converged,result.output.message);
+verifyEqual(testCase,result.design,[0.75;0.25],"AbsTol",2e-7);
+verifyLessThan(testCase,abs(result.equalities),1e-9);
+end
+
+function testAdjointContractRejectsTransposedJacobian(testCase)
+verifyError(testCase,@()radia.topopt.optimizeAdjoint([0.2;0.4], ...
+    @localWrongAdjointJacobian,Solver="sqp", ...
+    LowerBounds=zeros(2,1),UpperBounds=ones(2,1)), ...
+    "radia:topopt:AdjointJacobian");
+end
+
 function testSheetMetalLPAndMeshRouting(testCase)
 n=3; u=zeros(n,1); t=ones(n,1); rho=ones(n,1); area=ones(n,1); L=[1,-2,1];
 update=radia.topopt.solveSheetMetalLP(u,t,rho,[-ones(n,1);ones(n,1);ones(n,1)],area, ...
@@ -182,6 +237,25 @@ end
 function model=localLinearize(density)
 model=struct("response",[density(1)-density(3);density(2)], ...
  "response_jacobian",[-1 0 1;0 1 0]);
+end
+
+function evaluation=localConstrainedQuadratic(design)
+target=[0.8;0.8];
+delta=design-target;
+evaluation=struct("objective",sum(delta.^2),"gradient",2*delta, ...
+    "constraints",sum(design)-1,"constraint_jacobian",ones(2,1));
+end
+
+function evaluation=localEqualityQuadratic(design)
+target=[0.8;0.3];
+delta=design-target;
+evaluation=struct("objective",sum(delta.^2),"gradient",2*delta, ...
+    "equalities",sum(design)-1,"equality_jacobian",ones(2,1));
+end
+
+function evaluation=localWrongAdjointJacobian(design)
+evaluation=struct("objective",sum(design.^2),"gradient",2*design, ...
+    "constraints",sum(design)-1,"constraint_jacobian",[1,1]);
 end
 
 function step=localRemovedActivationStep(state)

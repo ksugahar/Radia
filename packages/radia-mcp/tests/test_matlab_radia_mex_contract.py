@@ -99,6 +99,11 @@ def test_optuna_simulink_contract_is_table_backed():
         "cubit_levelset_sculpt_hex_validation_gate",
     ]
     assert "existing hex mesh" in topology["boundary"]
+    adjoint = topology["adjoint_optimization"]
+    assert adjoint["status"] == "ready"
+    assert "radia.topopt.optimizeAdjoint" in adjoint["matlab_api"]
+    assert "radia.topopt.optimizeHCurlActivationAdjoint" in adjoint["matlab_api"]
+    assert "never" in adjoint["finite_difference_policy"]
     assert topology["sheet_metal"]["two_level_loop"]["inner"].startswith("5-20")
     assert topology["sheet_metal"]["optuna_runner"] == "radia.optuna.SheetMetalRunner"
     assert topology["sheet_metal"]["simulink_block"] == (
@@ -108,6 +113,8 @@ def test_optuna_simulink_contract_is_table_backed():
     hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
     assert hcurl["status"] == "native-mex-ready"
     assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
+    assert "radia.topopt.optimizeAdjoint" in hcurl["matlab_api"]
+    assert "radia.topopt.optimizeHCurlActivationAdjoint" in hcurl["matlab_api"]
     assert {
         "hcurl.topopt.operator.*",
         "hcurl.topopt.resistance_shape_tangents",

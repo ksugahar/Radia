@@ -5,6 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.23 - MATLAB optimization and induction-heating validation
+
+Released 2026-07-24.
+
+- Added table-persistent automatic intersection search spaces, multivariate
+  TPE proposals, Optuna-style MOTPE selection, and full-covariance CMA-ES with
+  resumable generation and random-stream state.
+- Added analytic-adjoint MMA/SQP optimization, the native HCurl material
+  adapter, and a dedicated Stream Function Simulink optimization subsystem
+  with a generated standalone model and visible objective/constraint history.
+- Added the retained TEAM Workshop Problem 36 axisymmetric magneto-thermal
+  validation with noncoincident EM/thermal meshes, conservative power mapping,
+  a complete 250 s solver gate, and an independent-reference boundary that
+  cannot promote a Radia run by self-report alone.
+
 ## 4.95.22 - Simulink-only applications and checked mesh artifacts
 
 Released 2026-07-22.

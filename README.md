@@ -204,7 +204,9 @@ workflow rather than the top-level purpose by itself:
   and hysteresis energy;
 - MATLAB-native Optuna-style single- and multi-objective studies, parallel
   Simulink/LTspice trials, native sheet-metal topology trials, and live Pareto
-  monitoring with standard Simulink Scope and XY Graph blocks.
+  monitoring with standard Simulink Scope and XY Graph blocks;
+- analytic-adjoint continuous optimization with bounded MMA or gradient-only
+  SQP, including a direct native HCurl Eddy-Bubble material-topology adapter.
 
 ```matlab
 % Convert a netlist to an editable schematic and verify connectivity by
@@ -479,6 +481,14 @@ matrices share one C++ implementation across the NGSolve BFI, pybind11, and
 MEX, while NGSolve continues to own spaces and global assembly. See the
 [MATLAB integration guide](matlab/README.md) for the supported surface, build
 instructions, and runtime requirements.
+
+When a field objective exposes an analytic sensitivity, MATLAB can pass the
+native MEX adjoint directly to `radia.topopt.optimizeAdjoint` and select MMA or
+SQP. `radia.topopt.optimizeHCurlActivationAdjoint` already closes the native
+multifrequency HCurl Joule adjoint with a material-volume constraint. TPE and
+CMA-ES remain the outer/global choices for discrete and conditional designs;
+MMA/SQP perform the continuous inner refinement without numerical-gradient
+fallbacks.
 
 ## Simulink application blocks
 

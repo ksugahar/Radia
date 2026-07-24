@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.19] - 2026-07-24
+
+- Added JSON-only TEAM Workshop Problem 36 contract and validation tools. The
+  cross-validation gate now resolves named 250 s observables from the supplied
+  Radia artifact and requires an identity-matched independent reference.
+- Published the analytic-adjoint MMA/SQP and native HCurl topology contracts,
+  including the rule that directional finite differences are QA only.
+- Updated the executable MATLAB guidance for automatic multivariate TPE,
+  table-persistent full-covariance CMA-ES, and the Stream Function Simulink
+  optimization interface.
+
 ## [1.4.18] - 2026-07-22
 
 - Published the Simulink-only application policy, MATLAB-only IH sample-object
