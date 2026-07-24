@@ -1,0 +1,53 @@
+{
+  "schema": "radia.validation.matlab-adjoint-quality.v1",
+  "generated_at_utc": "2026-07-24T01:37:00.148Z",
+  "hostname": "lab",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "matlab_release": "2026a",
+  "platform": "PCWIN64",
+  "design_count": 6,
+  "initial_objective": 0.00956814689537596,
+  "gradient_check": {
+    "passed": true,
+    "maximum_objective_error": 2.3504154351983164E-12,
+    "maximum_constraint_error": 3.6674052683594027E-11,
+    "evaluation_count": 13
+  },
+  "mma": {
+    "converged": true,
+    "exitflag": 1,
+    "objective": 1.8800177947617556E-10,
+    "max_constraint": 0,
+    "target_design_error_inf": 7.69095484695892E-5,
+    "iterations": 131,
+    "final_step_inf": 4.1656509180976187E-6,
+    "final_first_order_optimality": 5.6784368326577676E-7,
+    "evaluation_count": 132,
+    "elapsed_s": 7.5452949
+  },
+  "sqp": {
+    "converged": true,
+    "exitflag": 2,
+    "objective": 2.5351903591192774E-16,
+    "max_constraint": 0,
+    "target_design_error_inf": 1.0510091347226691E-7,
+    "iterations": 33,
+    "final_step_inf": 1.1102230246251565E-16,
+    "final_first_order_optimality": 2.4189202750078804E-9,
+    "evaluation_count": 34,
+    "elapsed_s": 0.1344006
+  },
+  "relative_objective_gap": 1.8800152595713965E-10,
+  "quality_gates": {
+    "adjoint_directional_check": true,
+    "mma_converged": true,
+    "sqp_converged": true,
+    "mma_feasible": true,
+    "sqp_feasible": true,
+    "mma_sqp_relative_objective_gap_below_1e_5": true,
+    "mma_target_design_error_below_5e_3": true,
+    "sqp_target_design_error_below_5e_4": true,
+    "all_passed": true
+  },
+  "timing_scope": "LAB smoke observation; not a published performance benchmark"
+}

@@ -241,6 +241,35 @@ separate production stages.
 
 ## Optimization boundary
 
+Continuous electromagnetic designs use a separate analytic-adjoint contract:
+
+```matlab
+evaluation = @(x) struct( ...
+    "objective", objective(x), ...
+    "gradient", objectiveAdjoint(x), ...
+    "constraints", constraints(x), ...
+    "constraint_jacobian", constraintAdjoints(x));
+
+radia.topopt.checkAdjointGradient(x0, evaluation);
+result = radia.topopt.optimizeAdjoint(x0, evaluation, ...
+    Solver="mma", LowerBounds=xmin, UpperBounds=xmax);
+```
+
+Constraint values follow `c <= 0`; Jacobians have one row per design variable
+and one column per constraint, matching the native HCurl MEX `case_gradient`
+orientation and MATLAB's analytic-gradient solver interface. MMA requires
+finite bounds and inequality constraints. SQP additionally accepts equality
+constraints. Missing, transposed, nonfinite, or size-changing gradients fail
+before an optimizer step. `checkAdjointGradient` uses centered directional
+differences only as an explicit QA diagnostic, never as a production fallback.
+
+`radia.topopt.optimizeHCurlActivationAdjoint` connects this contract directly
+to `hcurl.topopt.activation_multifrequency_joule`: the MEX kernel performs the
+complex state and adjoint solves, MATLAB adds the normalized material-volume
+constraint, and MMA or SQP updates the bounded cell activation vector. TPE and
+CMA-ES remain useful outer/global optimizers; MMA/SQP own the continuous inner
+refinement when an analytic field sensitivity is available.
+
 `radia.optuna` follows the familiar Optuna workflow:
 
 ```matlab
@@ -278,13 +307,24 @@ loop.
 The MATLAB TPE follows the Optuna 4.9 univariate TPE defaults and Parzen
 construction, including startup trials, gamma/max-good selection,
 truncated-normal kernels, history weights, an explicit prior, magic clipping,
-and EI candidate sampling. `Trial.suggestVector` adds an explicit joint numeric
-entry point that samples a shared Parzen mixture component; ordinary scalar
-suggestions remain univariate. The implementation is algorithmically aligned
-with the reference Python optimizer, but MATLAB random streams and optimizer
-internals are not promised to reproduce Python Optuna bit for bit. The MATLAB
-CMA-ES remains an engineering implementation rather than a complete copy of
-the reference optimizer. Use
+and EI candidate sampling. `TPESampler` keeps `Multivariate=false` by default.
+With `Multivariate=true`, it automatically infers the intersection search
+space from persisted COMPLETE and PRUNED trial distributions and jointly
+samples ordinary `suggestFloat`, `suggest_int`, and `suggest_categorical`
+calls. Conditional parameters or changed distributions remain outside the
+intersection and use their ordinary independent proposal. `Trial.suggestVector`
+remains an explicit numeric convenience rather than a requirement for joint
+sampling. The implementation is algorithmically aligned with the reference
+Python optimizer, but MATLAB random streams and optimizer internals are not
+promised to reproduce Python Optuna bit for bit. The MATLAB CMA-ES remains an
+independent MATLAB implementation, but now follows the standard
+full-covariance generation update: weighted recombination, cumulative
+step-size and covariance evolution paths, rank-one/rank-mu covariance
+adaptation, bounded resampling, and positive-definite covariance repair. It
+automatically uses the numeric intersection search space and persists complete
+and partial-generation state in `Study.SamplerStateTable`. Python-only CMA
+variants such as separable CMA, margin handling, and restart strategies remain
+separate future extensions rather than silent aliases. Use
 `validation_test/optimization/validate_matlab_optuna_quality.m` to compare
 fixed-seed, equal-budget regret, Pareto-front error/coverage, and ask/tell cost
 before making sample-efficiency claims. For expensive CAE the field solve is

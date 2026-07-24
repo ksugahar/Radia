@@ -67,6 +67,10 @@
       "title": "Stream Function",
       "state": "active-simulink-block",
       "block": "radia_simulink_library/Applications/Stream Function",
+      "optimization_block": "radia_simulink_library/Applications/Stream Function Optimization",
+      "optimization_sample": "matlab/radia_streamfunction_optimization.slx",
+      "optimization_generator": "radia.simulink.buildStreamFunctionOptimizationModel",
+      "optimization_backend": "Explicit Python/headless design or Pareto batch followed by MATLAB-native analytic-gradient MMA/SQP over preassembled stream-function coefficients.",
       "design": "radia.streamfunction_design.StreamFunctionDesignSpec",
       "notebook": null,
       "headless": [

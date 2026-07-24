@@ -192,7 +192,7 @@ switch name
     case "tpe"
         sampler = radia.optuna.TPESampler(Seed=0, NStartupTrials=10);
     case "cmaes"
-        sampler = radia.optuna.CmaEsSampler(Seed=0, NStartupTrials=4);
+        sampler = radia.optuna.CmaEsSampler(Seed=0, NStartupTrials=1);
     case "motpe"
         sampler = radia.optuna.MOTPESampler(Seed=0, NStartupTrials=20);
     case "nsgaii"
