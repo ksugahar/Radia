@@ -1,0 +1,169 @@
+{
+  "radia_version": "4.95.23",
+  "executed_at_utc": "2026-07-24T08:31:52.442727+00:00",
+  "host": "lab",
+  "artifact_schema": "radia_ih_team36_axisymmetric_v1",
+  "benchmark_source": "https://www.compumag.org/wp/wp-content/uploads/2021/07/problem-36.pdf",
+  "profile": "smoke",
+  "coordinate_system": "axisymmetric_r_z",
+  "identity": {
+    "geometry_sha256": "e3e9774713e3d667792b0f71bb68275e6b339378c413e68e68052af87fe172c4",
+    "material_tables_sha256": "5bd02ac50af63669fa39cad6ad5dc696db8692a6eb8fc6642b26d278acd7266a",
+    "excitation_sha256": "fbfb8bca5da5d1b83f4465c1b80dd374cdd1cba17d8f3d6f112d8f4c71bb9b41",
+    "coordinate_system": "axisymmetric_r_z"
+  },
+  "geometry_m": {
+    "billet_length": 1.0,
+    "billet_radius": 0.03,
+    "coil_length": 1.0,
+    "coil_inner_radius": 0.048,
+    "turn_axial_length": 0.04,
+    "turn_radial_width": 0.02,
+    "turn_conductor_thickness": 0.003
+  },
+  "excitation": {
+    "frequency_hz": 2000.0,
+    "current_rms_a": 3500.0,
+    "duration_s": 25.0
+  },
+  "material_model": {
+    "resistivity_point_count": 16,
+    "mu20_point_count": 20,
+    "conductivity_point_count": 17,
+    "heat_capacity_point_count": 36,
+    "curie_temperature_c": 770.0,
+    "transition_width_c": 20.0,
+    "density_kg_m3": 7800.0,
+    "tables_sha256": "5bd02ac50af63669fa39cad6ad5dc696db8692a6eb8fc6642b26d278acd7266a"
+  },
+  "meshes": {
+    "electromagnetic": {
+      "file": "team36_em.vol",
+      "topology_sha256": "9ed9431a53690d74bc562b3c86604dcbbd112d2b3cad4141632762ea4685f95b",
+      "vertex_count": 2503,
+      "element_count": 4916,
+      "element_kinds": [
+        "triangle"
+      ],
+      "element_order": 1,
+      "billet_skin_layer_count": 5
+    },
+    "thermal": {
+      "file": "team36_thermal.vol",
+      "topology_sha256": "049b061d769d4ca4f6a3f06117dc273d8cfe234cdf5701d7c68568eddb728f6a",
+      "vertex_count": 981,
+      "element_count": 1654,
+      "element_kinds": [
+        "triangle"
+      ],
+      "element_order": 1,
+      "independent_radial_partition_count": 5
+    }
+  },
+  "coupling": {
+    "temperature_to_em": {
+      "source_mesh_sha256": "049b061d769d4ca4f6a3f06117dc273d8cfe234cdf5701d7c68568eddb728f6a",
+      "target_mesh_sha256": "9ed9431a53690d74bc562b3c86604dcbbd112d2b3cad4141632762ea4685f95b",
+      "sample_count": 2347,
+      "outside_count": 0,
+      "method": "element_centroid_interpolation"
+    },
+    "joule_power_to_thermal": {
+      "source_mesh_sha256": "9ed9431a53690d74bc562b3c86604dcbbd112d2b3cad4141632762ea4685f95b",
+      "target_mesh_sha256": "049b061d769d4ca4f6a3f06117dc273d8cfe234cdf5701d7c68568eddb728f6a",
+      "sample_count": 1654,
+      "method": "centroid_interpolation_with_global_power_conservation",
+      "maximum_relative_error": 6.397664632174078e-16,
+      "maximum_scale_deviation": 0.032252652557698935
+    }
+  },
+  "history": [
+    {
+      "time_s": 0.0,
+      "axis_temperature_c": 20.0,
+      "surface_temperature_c": 20.0,
+      "maximum_temperature_c": 20.0,
+      "induced_power_w": 0.0
+    },
+    {
+      "time_s": 25.0,
+      "axis_temperature_c": 163.36708165487326,
+      "surface_temperature_c": 278.48382644425,
+      "maximum_temperature_c": 368.645524825041,
+      "minimum_temperature_c": 119.91646519942182,
+      "induced_power_w": 56864.168665487574,
+      "mapped_power_w": 56864.16866548761,
+      "raw_mapped_power_w": 55087.45220909867,
+      "power_mapping_relative_error": 6.397664632174078e-16,
+      "power_mapping_scale": 1.032252652557699,
+      "em_iterations": 17,
+      "em_converged": true,
+      "em_relative_update": 0.0015439073252577317,
+      "thermal_iterations": 13,
+      "thermal_converged": true,
+      "thermal_relative_update": 9.623385187101064e-06,
+      "temperature_map_min_c": 19.999999999999996,
+      "temperature_map_max_c": 20.000000000000004,
+      "mu_r_min": 4.8580403459900845,
+      "mu_r_max": 593.8219576010713
+    }
+  ],
+  "provenance": {
+    "executed_at_utc": "2026-07-24T08:31:52.442727+00:00",
+    "host": "lab",
+    "radia_version": "4.95.23",
+    "radia_mcp_version": "1.4.19",
+    "ngsolve_version": "6.2.2604",
+    "git_commit": "7a6de4ad034b435a2ffedb43928efb5203fc5204",
+    "result_file": "results_smoke_baseline.json",
+    "temperature_file": "team36_temperature_25s.sol"
+  },
+  "timing_s": {
+    "mesh": 0.7018953999995574,
+    "electromagnetic": 7.061485000000175,
+    "mapping": 0.4028643999990891,
+    "thermal": 3.5642227999996976,
+    "total": 11.780371599999853
+  },
+  "gate": {
+    "policy": "radia_ih_team36_axisymmetric_gate_v1",
+    "accepted_for_solver_execution": false,
+    "accepted_for_cross_validation": false,
+    "accepted_for_mcp_learning": false,
+    "checks": {
+      "result_starts_with_version_date_and_host": true,
+      "schema_matches": true,
+      "benchmark_source_is_public_original": true,
+      "axisymmetric_coordinate_system": true,
+      "geometry_matches_original": true,
+      "excitation_matches_original": false,
+      "material_tables_are_complete": true,
+      "mesh_hashes_are_present": true,
+      "meshes_are_first_order_triangles": true,
+      "meshes_are_noncoincident": true,
+      "temperature_mapping_is_bidirectional_evidence": true,
+      "joule_mapping_is_conservative": true,
+      "run_timestamp_and_versions_present": true,
+      "four_major_timing_components_present": true,
+      "history_has_initial_and_transient_rows": true,
+      "history_starts_at_zero": true,
+      "history_ends_at_250_s": false,
+      "history_time_is_strictly_increasing": true,
+      "history_observables_are_finite": true,
+      "induced_power_is_positive_after_start": true,
+      "all_em_steps_converged": true,
+      "all_thermal_steps_converged": true,
+      "cross_reference_supplied": false,
+      "cross_reference_identity_matches": false,
+      "cross_reference_observables_match": false
+    },
+    "failed_checks": [
+      "excitation_matches_original",
+      "history_ends_at_250_s",
+      "cross_reference_supplied",
+      "cross_reference_identity_matches",
+      "cross_reference_observables_match"
+    ],
+    "next_action": "Repair the failed solver or artifact checks before comparing solvers."
+  }
+}
