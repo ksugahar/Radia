@@ -19,6 +19,11 @@ classdef Trial < handle
         LastStep double = NaN
     end
 
+    properties (Access=private)
+        RelativeParams struct = struct()
+        RelativeDistributions struct = struct()
+    end
+
     methods (Hidden=true)
         function obj = Trial(study, number)
             obj.Study = study;
@@ -42,6 +47,26 @@ classdef Trial < handle
         function setConstraints(obj, values)
             obj.Constraints = reshape(double(values), 1, []);
         end
+
+        function setRelativeParameters(obj, searchSpace, values, source)
+            if nargin < 4
+                source = "tpe";
+            end
+            if ~iscell(values) || numel(values) ~= numel(searchSpace)
+                error("radia:optuna:RelativeParameters", ...
+                    "Relative parameter values must match the search space.");
+            end
+            names = strings(1, numel(searchSpace));
+            for index = 1:numel(searchSpace)
+                names(index) = searchSpace(index).name;
+                key = matlab.lang.makeValidName(searchSpace(index).name);
+                obj.RelativeParams.(key) = values{index};
+                obj.RelativeDistributions.(key) = searchSpace(index).distribution;
+            end
+            attribute = matlab.lang.makeValidName( ...
+                string(source) + "_relative_search_space");
+            obj.SystemAttrs.(attribute) = names;
+        end
     end
 
     methods
@@ -60,14 +85,19 @@ classdef Trial < handle
                 value = obj.Params.(key);
                 return;
             end
-            value = obj.Study.sampleFloat(obj, name, low, high, ...
-                struct("Log", options.Log, "Step", options.Step));
+            spec = radia.optuna.internal.DistributionCodec.float( ...
+                low, high, options.Log, options.Step);
+            [isRelative, value] = obj.relativeValue(name, spec);
+            if ~isRelative
+                value = obj.Study.sampleFloat(obj, name, low, high, ...
+                    struct("Log", options.Log, "Step", options.Step));
+            end
             obj.Params.(key) = value;
             obj.Distributions.(key) = struct( ...
                 "name", "FloatDistribution", "low", low, "high", high, ...
                 "log", options.Log, "step", options.Step);
             obj.Study.recordParameter(obj, name, "float", value, ...
-                sprintf("[%g,%g]", low, high));
+                radia.optuna.internal.DistributionCodec.encode(spec));
         end
 
         function value = suggestInteger(obj, name, low, high)
@@ -83,13 +113,18 @@ classdef Trial < handle
                 value = obj.Params.(key);
                 return;
             end
-            value = obj.Study.sampleInteger(obj, name, low, high);
+            spec = radia.optuna.internal.DistributionCodec.integer( ...
+                low, high, false, 1);
+            [isRelative, value] = obj.relativeValue(name, spec);
+            if ~isRelative
+                value = obj.Study.sampleInteger(obj, name, low, high);
+            end
             obj.Params.(key) = value;
             obj.Distributions.(key) = struct( ...
                 "name", "IntDistribution", "low", low, "high", high, ...
                 "log", false, "step", 1);
             obj.Study.recordParameter(obj, name, "integer", value, ...
-                sprintf("[%g,%g]", low, high));
+                radia.optuna.internal.DistributionCodec.encode(spec));
         end
 
         function value = suggestCategorical(obj, name, choices)
@@ -104,12 +139,17 @@ classdef Trial < handle
                 value = obj.Params.(key);
                 return;
             end
-            value = obj.Study.sampleCategorical(obj, name, choices);
+            spec = ...
+                radia.optuna.internal.DistributionCodec.categorical(choices);
+            [isRelative, value] = obj.relativeValue(name, spec);
+            if ~isRelative
+                value = obj.Study.sampleCategorical(obj, name, choices);
+            end
             obj.Params.(key) = value;
             obj.Distributions.(key) = struct( ...
                 "name", "CategoricalDistribution", "choices", choices);
             obj.Study.recordParameter(obj, name, "categorical", value, ...
-                string(jsonencode(choices)));
+                radia.optuna.internal.DistributionCodec.encode(spec));
         end
 
         function values = suggestVector(obj, names, lows, highs, options)
@@ -146,8 +186,23 @@ classdef Trial < handle
                 end
                 return;
             end
-            values = obj.Study.sampleJoint(obj, names, lows, highs, ...
-                Log=options.Log);
+            specs = repmat( ...
+                radia.optuna.internal.DistributionCodec.float(0, 1, false, NaN), ...
+                1, numel(names));
+            values = zeros(1, numel(names));
+            allRelative = true;
+            for index = 1:numel(names)
+                specs(index) = ...
+                    radia.optuna.internal.DistributionCodec.float( ...
+                    lows(index), highs(index), options.Log(index), NaN);
+                [available, values(index)] = ...
+                    obj.relativeValue(names(index), specs(index));
+                allRelative = allRelative && available;
+            end
+            if ~allRelative
+                values = obj.Study.sampleJoint(obj, names, lows, highs, ...
+                    Log=options.Log);
+            end
             for index = 1:numel(keys)
                 obj.Params.(keys(index)) = values(index);
                 obj.Distributions.(keys(index)) = struct( ...
@@ -155,7 +210,8 @@ classdef Trial < handle
                     "high", highs(index), "log", options.Log(index), ...
                     "step", NaN);
                 obj.Study.recordParameter(obj, names(index), "float", ...
-                    values(index), sprintf("[%g,%g]", lows(index), highs(index)));
+                    values(index), ...
+                    radia.optuna.internal.DistributionCodec.encode(specs(index)));
             end
         end
 
@@ -203,16 +259,25 @@ classdef Trial < handle
                     error("radia:optuna:LogBounds", ...
                         "Log integer bounds must be positive.");
                 end
-                value = obj.Study.sampleFloat(obj, name, low, high, ...
-                    struct("Log", true, "Step", 1));
-                value = min(max(round(value), low), high);
                 key = matlab.lang.makeValidName(name);
+                if isfield(obj.Params, key)
+                    value = obj.Params.(key);
+                    return
+                end
+                spec = radia.optuna.internal.DistributionCodec.integer( ...
+                    low, high, true, 1);
+                [isRelative, value] = obj.relativeValue(name, spec);
+                if ~isRelative
+                    value = obj.Study.sampleFloat(obj, name, low, high, ...
+                        struct("Log", true, "Step", 1));
+                    value = min(max(round(value), low), high);
+                end
                 obj.Params.(key) = value;
                 obj.Distributions.(key) = struct( ...
                     "name", "IntDistribution", "low", low, "high", high, ...
                     "log", true, "step", 1);
                 obj.Study.recordParameter(obj, name, "integer", value, ...
-                    sprintf("[%g,%g] log", low, high));
+                    radia.optuna.internal.DistributionCodec.encode(spec));
             else
                 value = obj.suggestInteger(name, low, high);
             end
@@ -302,6 +367,33 @@ classdef Trial < handle
     end
 
     methods (Access=private)
+        function [available, value] = relativeValue(obj, name, distribution)
+            key = matlab.lang.makeValidName(name);
+            available = isfield(obj.RelativeParams, key) && ...
+                isfield(obj.RelativeDistributions, key) && ...
+                radia.optuna.internal.DistributionCodec.equivalent( ...
+                obj.RelativeDistributions.(key), distribution);
+            if available
+                value = obj.RelativeParams.(key);
+                if distribution.kind == "categorical"
+                    token = ...
+                        radia.optuna.internal.DistributionCodec.choiceToken(value);
+                    tokens = ...
+                        radia.optuna.internal.DistributionCodec.choiceTokens( ...
+                        distribution.choices);
+                    match = find(tokens == token, 1);
+                    available = ~isempty(match);
+                    if available
+                        value = ...
+                            radia.optuna.internal.DistributionCodec.choiceAt( ...
+                            distribution.choices, match);
+                    end
+                end
+            else
+                value = NaN;
+            end
+        end
+
         function ensureRunning(obj)
             if obj.State ~= "RUNNING"
                 error("radia:optuna:TrialState", ...

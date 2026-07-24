@@ -1,8 +1,8 @@
 {
-  "schema": "radia.validation.matlab-optuna-quality.v1",
-  "generated_at_utc": "2026-07-23T06:18:27.226Z",
-  "hostname": "HIBINO",
-  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
+  "schema": "radia.validation.matlab-optuna-quality.v3",
+  "generated_at_utc": "2026-07-24T00:57:32.410Z",
+  "hostname": "MDX",
+  "matlab_version": "26.1.0.3203278 (R2026a)",
   "matlab_release": "2026a",
   "platform": "PCWIN64",
   "seeds": [
@@ -24,32 +24,44 @@
         0.72650374532079631,
         1.3068382446919173
       ],
-      "median_elapsed_s": 0.525732,
-      "median_ask_tell_ms_per_trial": 6.57165
+      "median_elapsed_s": 0.4064559,
+      "median_ask_tell_ms_per_trial": 5.08069875
     },
     "branin_tpe": {
-      "median_regret": 5.3643215440548655,
+      "median_regret": 0.090905721617938084,
       "regret": [
-        2.3722643518798296,
-        11.302347237622579,
-        3.3599133526487277,
-        16.756634482161978,
-        5.3643215440548655
+        0.0022542747842813071,
+        0.062944113616518749,
+        0.14471609866137314,
+        0.10526169453005174,
+        0.090905721617938084
       ],
-      "median_elapsed_s": 0.6239189,
-      "median_ask_tell_ms_per_trial": 7.7989862500000005
+      "median_elapsed_s": 0.7229136,
+      "median_ask_tell_ms_per_trial": 9.0364200000000015
+    },
+    "branin_tpe_joint": {
+      "median_regret": 0.0893066986836164,
+      "regret": [
+        0.016312716688416273,
+        0.015168153715588772,
+        0.48468679022066929,
+        0.49615775974102938,
+        0.0893066986836164
+      ],
+      "median_elapsed_s": 2.3413704,
+      "median_ask_tell_ms_per_trial": 29.26713
     },
     "branin_cmaes": {
-      "median_regret": 0.88530179544102161,
+      "median_regret": 0.038739733451688352,
       "regret": [
-        0.14913207669562745,
-        0.88530179544102161,
-        2.5978856633020042,
-        1.4788201882564085,
-        1.5702243414850159E-5
+        0.057459260895088349,
+        0.0911697238527438,
+        0.00065712260118111487,
+        0.021231511101637679,
+        0.038739733451688352
       ],
-      "median_elapsed_s": 0.3807522,
-      "median_ask_tell_ms_per_trial": 4.7594024999999993
+      "median_elapsed_s": 1.389487,
+      "median_ask_tell_ms_per_trial": 17.368587499999997
     },
     "correlated_valley_random": {
       "median_regret": 0.17699803339897993,
@@ -60,32 +72,44 @@
         0.12409887513968763,
         0.27685807808176432
       ],
-      "median_elapsed_s": 0.439539,
-      "median_ask_tell_ms_per_trial": 5.4942375
+      "median_elapsed_s": 0.4541888,
+      "median_ask_tell_ms_per_trial": 5.67736
     },
     "correlated_valley_tpe": {
-      "median_regret": 0.935139387607143,
+      "median_regret": 0.094873405279759265,
       "regret": [
-        1.7973793643901894,
-        0.46943809027165517,
-        0.52967324717455622,
-        0.935139387607143,
-        1.842263361799
+        0.11643195663119731,
+        0.094873405279759265,
+        0.07216031191808496,
+        0.15916362052386962,
+        0.02453187977236522
       ],
-      "median_elapsed_s": 0.6658245,
-      "median_ask_tell_ms_per_trial": 8.3228062500000011
+      "median_elapsed_s": 0.9660386,
+      "median_ask_tell_ms_per_trial": 12.0754825
+    },
+    "correlated_valley_tpe_joint": {
+      "median_regret": 0.053368485571423527,
+      "regret": [
+        0.13210815805935125,
+        0.012555796407489158,
+        0.017373559994541293,
+        0.072633066583959391,
+        0.053368485571423527
+      ],
+      "median_elapsed_s": 3.4900287,
+      "median_ask_tell_ms_per_trial": 43.62535875
     },
     "correlated_valley_cmaes": {
-      "median_regret": 0.059941495533262092,
+      "median_regret": 0.020833123938007975,
       "regret": [
-        0.049646178499318787,
-        0.059941495533262092,
-        0.26129978494362288,
-        0.0015127824041403504,
-        0.52639341961930508
+        0.016091730278970911,
+        0.020833123938007975,
+        0.013547084028673865,
+        0.024299874662514782,
+        0.043210299828252412
       ],
-      "median_elapsed_s": 0.5600572,
-      "median_ask_tell_ms_per_trial": 7.0007150000000014
+      "median_elapsed_s": 1.6449893,
+      "median_ask_tell_ms_per_trial": 20.56236625
     }
   },
   "multi_objective_zdt1": {
@@ -114,36 +138,36 @@
         8,
         10
       ],
-      "median_elapsed_s": 0.8253803,
-      "median_ask_tell_ms_per_trial": 6.878169166666666
+      "median_elapsed_s": 0.6174234,
+      "median_ask_tell_ms_per_trial": 5.1451949999999993
     },
     "motpe": {
-      "median_front_error": 0.058938873671759491,
+      "median_front_error": 0.063701121516994988,
       "front_error": [
-        0.19544404896543074,
-        0.058938873671759491,
-        7.8984495249330831,
-        0.0065531454042106361,
-        0.054826238423201411
+        0.063701121516994988,
+        0.14031841275089402,
+        0.044635929744509112,
+        0.049971188427953755,
+        0.0935153816564094
       ],
-      "median_f1_coverage": 0.42754653856318403,
+      "median_f1_coverage": 0.91368787376933625,
       "f1_coverage": [
-        0.94558782470428748,
-        0.049839084128742273,
-        0.42754653856318403,
-        0.02265934812149939,
-        0.975891007830969
+        0.91120533368454382,
+        0.91368787376933625,
+        0.960933573493711,
+        0.62286547581216745,
+        0.97599258632233643
       ],
-      "median_pareto_points": 74,
+      "median_pareto_points": 20,
       "pareto_points": [
-        74,
-        47,
-        36,
-        96,
-        101
+        20,
+        21,
+        23,
+        19,
+        19
       ],
-      "median_elapsed_s": 1.6606695,
-      "median_ask_tell_ms_per_trial": 13.8389125
+      "median_elapsed_s": 1.2752731,
+      "median_ask_tell_ms_per_trial": 10.627275833333332
     },
     "nsgaii": {
       "median_front_error": 0.014781087258541152,
@@ -170,14 +194,28 @@
         19,
         34
       ],
-      "median_elapsed_s": 2.0109221,
-      "median_ask_tell_ms_per_trial": 16.757684166666667
+      "median_elapsed_s": 1.1473594,
+      "median_ask_tell_ms_per_trial": 9.5613283333333339
     }
+  },
+  "quality_gates": {
+    "branin_tpe_beats_random": true,
+    "branin_joint_tpe_beats_random": true,
+    "branin_cmaes_beats_random": true,
+    "correlated_tpe_beats_random": true,
+    "correlated_joint_tpe_beats_random": true,
+    "correlated_cmaes_beats_random": true,
+    "motpe_front_error_beats_random": true,
+    "motpe_coverage_exceeds_half_domain": true,
+    "all_passed": true
   },
   "interpretation": {
     "lower_single_regret_is_better": true,
     "lower_front_error_is_better": true,
     "higher_f1_coverage_is_better": true,
+    "tpe_joint_uses_automatic_intersection_search_space": true,
+    "cmaes_uses_full_covariance_evolution_paths": true,
+    "sampler_state_storage": "MATLAB SamplerStateTable",
     "timing_scope": "MATLAB sampler plus table-backed ask/tell and analytic objective"
   }
 }

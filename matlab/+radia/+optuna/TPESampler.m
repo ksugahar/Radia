@@ -15,7 +15,8 @@ classdef TPESampler < handle
         PriorWeight (1,1) double = 1
         ConsiderMagicClip (1,1) logical = true
         ConsiderEndpoints (1,1) logical = false
-        ConstantLiar (1,1) logical = true
+        Multivariate (1,1) logical = false
+        ConstantLiar (1,1) logical = false
         ConstraintsFcn = []
     end
 
@@ -30,7 +31,8 @@ classdef TPESampler < handle
                 options.PriorWeight (1,1) double = 1
                 options.ConsiderMagicClip (1,1) logical = true
                 options.ConsiderEndpoints (1,1) logical = false
-                options.ConstantLiar (1,1) logical = true
+                options.Multivariate (1,1) logical = false
+                options.ConstantLiar (1,1) logical = false
                 options.ConstraintsFcn = []
             end
             if options.NStartupTrials < 0 || ...
@@ -64,6 +66,7 @@ classdef TPESampler < handle
             obj.PriorWeight = options.PriorWeight;
             obj.ConsiderMagicClip = options.ConsiderMagicClip;
             obj.ConsiderEndpoints = options.ConsiderEndpoints;
+            obj.Multivariate = options.Multivariate;
             obj.ConstantLiar = options.ConstantLiar;
             if ~isempty(options.ConstraintsFcn) && ...
                     ~isa(options.ConstraintsFcn, "function_handle")
@@ -175,51 +178,55 @@ classdef TPESampler < handle
 
         function values = sampleJoint(obj, study, ~, names, lows, highs, options)
             %SAMPLEJOINT Multivariate TPE with a shared mixture component.
-            [observations, objectives] = obj.jointObservations(study, names, ...
-                lows, highs, options.Log);
-            if size(observations, 1) < obj.NStartupTrials || isempty(objectives)
-                values = zeros(1, numel(names));
-                for index = 1:numel(names)
-                    values(index) = obj.uniform(lows(index), highs(index), ...
-                        options.Log(index));
-                end
-                return;
-            end
-            [good, bad] = obj.splitJointObservations(observations, objectives, ...
-                study.Directions(1));
-            below = cell(1, numel(names));
-            above = cell(1, numel(names));
+            template = struct( ...
+                "name", "", ...
+                "distribution", ...
+                    radia.optuna.internal.DistributionCodec.float( ...
+                    0, 1, false, NaN));
+            searchSpace = repmat(template, 1, numel(names));
             for index = 1:numel(names)
-                estimatorOptions = {"Log", options.Log(index), "Step", NaN, ...
-                    "PriorWeight", obj.PriorWeight, ...
-                    "ConsiderMagicClip", obj.ConsiderMagicClip, ...
-                    "ConsiderEndpoints", obj.ConsiderEndpoints};
-                below{index} = radia.optuna.internal.ParzenEstimator.numerical( ...
-                    good(:,index), lows(index), highs(index), estimatorOptions{:});
-                above{index} = radia.optuna.internal.ParzenEstimator.numerical( ...
-                    bad(:,index), lows(index), highs(index), estimatorOptions{:});
+                searchSpace(index).name = names(index);
+                searchSpace(index).distribution = ...
+                    radia.optuna.internal.DistributionCodec.float( ...
+                    lows(index), highs(index), options.Log(index), NaN);
             end
-            count = obj.NumberOfEIChoices;
-            components = obj.sampleComponents(below{1}.weights, count);
-            candidates = zeros(count, numel(names));
-            for index = 1:numel(names)
-                candidates(:,index) = ...
-                    radia.optuna.internal.ParzenEstimator.sampleNumericalComponents( ...
-                    below{index}, obj.Stream, components);
+            sampled = obj.sampleRelativeSpace(study, searchSpace);
+            values = zeros(1, numel(sampled));
+            for index = 1:numel(sampled)
+                values(index) = double(sampled{index});
             end
-            acquisition = zeros(count, 1);
-            for index = 1:numel(names)
-                acquisition = acquisition + ...
-                    radia.optuna.internal.ParzenEstimator.logPdfNumerical( ...
-                    below{index}, candidates(:,index)) - ...
-                    radia.optuna.internal.ParzenEstimator.logPdfNumerical( ...
-                    above{index}, candidates(:,index));
-            end
-            [~, best] = max(acquisition);
-            values = candidates(best,:);
         end
 
-        function beforeTrial(obj, study, trial) %#ok<INUSD>
+        function searchSpace = inferRelativeSearchSpace(obj, study, trial) %#ok<INUSD>
+            if ~obj.Multivariate
+                searchSpace = obj.emptySearchSpace();
+                return
+            end
+            searchSpace = obj.intersectionSearchSpace(study);
+        end
+
+        function searchSpace = infer_relative_search_space(obj, study, trial)
+            if nargin < 3
+                trial = [];
+            end
+            searchSpace = obj.inferRelativeSearchSpace(study, trial);
+        end
+
+        function beforeTrial(obj, study, trial)
+            if ~obj.Multivariate || numel(study.Directions) ~= 1
+                return
+            end
+            finished = study.TrialTable.State == "COMPLETE" | ...
+                study.TrialTable.State == "PRUNED";
+            if sum(finished) < obj.NStartupTrials
+                return
+            end
+            searchSpace = obj.inferRelativeSearchSpace(study, trial);
+            if isempty(searchSpace)
+                return
+            end
+            values = obj.sampleRelativeSpace(study, searchSpace);
+            trial.setRelativeParameters(searchSpace, values);
         end
 
         function afterTrial(obj, study, trial)
@@ -304,7 +311,113 @@ classdef TPESampler < handle
             indices = 1 + sum(cumulative.' < u, 2);
         end
 
-        function [x, y] = jointObservations(obj, study, names, lows, highs, logs)
+        function searchSpace = intersectionSearchSpace(~, study)
+            searchSpace = ...
+                radia.optuna.internal.IntersectionSearchSpace.calculate( ...
+                study, IncludePruned=true);
+        end
+
+        function searchSpace = emptySearchSpace(~)
+            template = struct( ...
+                "name", "", ...
+                "distribution", ...
+                    radia.optuna.internal.DistributionCodec.float( ...
+                    0, 1, false, NaN));
+            searchSpace = reshape(template([]), 0, 1);
+        end
+
+        function values = sampleRelativeSpace(obj, study, searchSpace)
+            [observations, objectives] = ...
+                obj.relativeObservations(study, searchSpace);
+            if size(observations, 1) < obj.NStartupTrials || ...
+                    isempty(objectives)
+                values = cell(1, numel(searchSpace));
+                for index = 1:numel(searchSpace)
+                    values{index} = obj.randomRelativeValue( ...
+                        searchSpace(index).distribution);
+                end
+                return
+            end
+
+            [good, bad] = obj.splitJointObservations( ...
+                observations, objectives, study.Directions(1));
+            dimension = numel(searchSpace);
+            below = cell(1, dimension);
+            above = cell(1, dimension);
+            for index = 1:dimension
+                distribution = searchSpace(index).distribution;
+                if distribution.kind == "categorical"
+                    choiceCount = numel(distribution.choices);
+                    below{index} = ...
+                        radia.optuna.internal.ParzenEstimator.categorical( ...
+                        good(:,index), choiceCount, ...
+                        PriorWeight=obj.PriorWeight);
+                    above{index} = ...
+                        radia.optuna.internal.ParzenEstimator.categorical( ...
+                        bad(:,index), choiceCount, ...
+                        PriorWeight=obj.PriorWeight);
+                else
+                    estimatorOptions = { ...
+                        "Log", distribution.log, ...
+                        "Step", distribution.step, ...
+                        "PriorWeight", obj.PriorWeight, ...
+                        "ConsiderMagicClip", obj.ConsiderMagicClip, ...
+                        "ConsiderEndpoints", obj.ConsiderEndpoints, ...
+                        "MultivariateDimension", dimension};
+                    below{index} = ...
+                        radia.optuna.internal.ParzenEstimator.numerical( ...
+                        good(:,index), distribution.low, distribution.high, ...
+                        estimatorOptions{:});
+                    above{index} = ...
+                        radia.optuna.internal.ParzenEstimator.numerical( ...
+                        bad(:,index), distribution.low, distribution.high, ...
+                        estimatorOptions{:});
+                end
+            end
+
+            count = obj.NumberOfEIChoices;
+            components = obj.sampleComponents(below{1}.weights, count);
+            candidates = zeros(count, dimension);
+            acquisition = zeros(count, 1);
+            for index = 1:dimension
+                distribution = searchSpace(index).distribution;
+                if distribution.kind == "categorical"
+                    candidates(:,index) = ...
+                        radia.optuna.internal.ParzenEstimator. ...
+                        sampleCategoricalComponents( ...
+                        below{index}, obj.Stream, components);
+                    acquisition = acquisition + ...
+                        radia.optuna.internal.ParzenEstimator. ...
+                        logPdfCategorical(below{index}, candidates(:,index)) - ...
+                        radia.optuna.internal.ParzenEstimator. ...
+                        logPdfCategorical(above{index}, candidates(:,index));
+                else
+                    candidates(:,index) = ...
+                        radia.optuna.internal.ParzenEstimator. ...
+                        sampleNumericalComponents( ...
+                        below{index}, obj.Stream, components);
+                    acquisition = acquisition + ...
+                        radia.optuna.internal.ParzenEstimator. ...
+                        logPdfNumerical(below{index}, candidates(:,index)) - ...
+                        radia.optuna.internal.ParzenEstimator. ...
+                        logPdfNumerical(above{index}, candidates(:,index));
+                end
+            end
+            [~, best] = max(acquisition);
+            values = cell(1, dimension);
+            for index = 1:dimension
+                distribution = searchSpace(index).distribution;
+                if distribution.kind == "categorical"
+                    values{index} = ...
+                        radia.optuna.internal.DistributionCodec.choiceAt( ...
+                        distribution.choices, candidates(best,index));
+                else
+                    values{index} = candidates(best,index);
+                end
+            end
+        end
+
+        function [x, y] = relativeObservations(obj, study, searchSpace)
             states = study.TrialTable.State;
             usable = states == "COMPLETE" | states == "PRUNED" | ...
                 (states == "RUNNING" & obj.ConstantLiar);
@@ -318,25 +431,35 @@ classdef TPESampler < handle
             else
                 liar = min(finiteFinished);
             end
-            x = zeros(0, numel(names));
+            x = zeros(0, numel(searchSpace));
             y = zeros(0, 1);
             for number = reshape(trialNumbers, 1, [])
                 row = study.TrialTable.TrialNumber == number;
                 state = study.TrialTable.State(find(row,1));
-                values = NaN(1, numel(names));
+                values = NaN(1, numel(searchSpace));
                 valid = true;
-                for index = 1:numel(names)
+                for index = 1:numel(searchSpace)
                     p = study.ParamTable.TrialNumber == number & ...
-                        study.ParamTable.Name == names(index) & ...
-                        study.ParamTable.Kind == "float";
+                        study.ParamTable.Name == searchSpace(index).name;
                     if ~any(p)
                         valid = false;
                         break;
                     end
-                    values(index) = study.ParamTable.ValueNumeric(find(p,1));
-                    valid = valid && values(index) >= lows(index) && ...
-                        values(index) <= highs(index) && ...
-                        (~logs(index) || values(index) > 0);
+                    parameterRow = find(p, 1);
+                    stored = ...
+                        radia.optuna.internal.DistributionCodec.decode( ...
+                        study.ParamTable.Kind(parameterRow), ...
+                        study.ParamTable.Distribution(parameterRow));
+                    valid = valid && ...
+                        radia.optuna.internal.DistributionCodec.equivalent( ...
+                        searchSpace(index).distribution, stored);
+                    if ~valid
+                        break
+                    end
+                    [validValue, values(index)] = obj.parameterInternalValue( ...
+                        study.ParamTable(parameterRow,:), ...
+                        searchSpace(index).distribution);
+                    valid = valid && validValue;
                 end
                 if state == "COMPLETE"
                     objectiveValue = study.TrialTable.Value(find(row,1));
@@ -356,6 +479,49 @@ classdef TPESampler < handle
                     x(end+1,:) = values; %#ok<AGROW>
                     y(end+1,1) = objectiveValue; %#ok<AGROW>
                 end
+            end
+        end
+
+        function [valid, value] = parameterInternalValue(obj, row, distribution)
+            if distribution.kind == "categorical"
+                if isfinite(row.ValueNumeric)
+                    token = obj.token(row.ValueNumeric);
+                else
+                    token = row.ValueText;
+                end
+                tokens = ...
+                    radia.optuna.internal.DistributionCodec.choiceTokens( ...
+                    distribution.choices);
+                match = find(tokens == token, 1);
+                valid = ~isempty(match);
+                if valid
+                    value = match;
+                else
+                    value = NaN;
+                end
+                return
+            end
+            value = row.ValueNumeric;
+            valid = isfinite(value) && value >= distribution.low && ...
+                value <= distribution.high && ...
+                (~distribution.log || value > 0);
+        end
+
+        function value = randomRelativeValue(obj, distribution)
+            if distribution.kind == "categorical"
+                index = 1 + floor(rand(obj.Stream, 1, 1) * ...
+                    numel(distribution.choices));
+                value = ...
+                    radia.optuna.internal.DistributionCodec.choiceAt( ...
+                    distribution.choices, index);
+                return
+            end
+            value = obj.uniform( ...
+                distribution.low, distribution.high, distribution.log);
+            value = obj.quantize(value, distribution.low, ...
+                distribution.high, distribution.step);
+            if distribution.kind == "integer"
+                value = round(value);
             end
         end
 

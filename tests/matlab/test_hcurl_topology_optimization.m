@@ -161,6 +161,26 @@ verifyEqual(testCase,result.gradient,finiteDifference, ...
 clear cleanup
 end
 
+function testNativeActivationAdjointRunsThroughMMA(testCase)
+[gram,operator]=makeOperator();
+cleanup=onCleanup(@()cleanupOperator(operator,gram));
+cellGrams=zeros(1,2,2); cellGrams(1,:,:)=[1.8,0.15;0.15,1.1];
+conductivity=struct("solid",5.0,"void",0.4,"power",3.0);
+result=radia.topopt.optimizeHCurlActivationAdjoint( ...
+    0.63,operator,cellGrams,91,[0.8+0.1i;-0.2+0.3i], ...
+    conductivity,1,0.9,Solver="mma", ...
+    InductancePower=1.2,OptimizerOptions=struct( ...
+    "MaxIterations",8,"MoveLimit",0.1,"ConstraintTolerance",1e-7));
+verifyEqual(testCase,result.schema, ...
+    "radia.hcurl.topopt.activation-adjoint/v1");
+verifyEqual(testCase,result.optimizer_schema, ...
+    "radia.topopt.adjoint-optimization/v1");
+verifyLessThanOrEqual(testCase,result.volume,result.volume_max+1e-6);
+verifyTrue(testCase,isfinite(result.objective));
+verifyEqual(testCase,numel(result.linearization.gradient),1);
+clear cleanup
+end
+
 function testActivationHCurlDriverUsesExistingTwoLevelLoop(testCase)
 [gram,operator]=makeOperator();
 operatorCleanup=onCleanup(@()cleanupOperator(operator,gram));

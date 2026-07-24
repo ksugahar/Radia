@@ -8,6 +8,19 @@ on an explicit rising trigger. Induction Heating instead uses separate native
 Eddy and Thermal MEX S-Functions and has no Python fallback in its simulation
 loop.
 
+The additional `Applications/Stream Function Optimization` subsystem keeps
+that explicit batch boundary and adds MATLAB-native MMA/SQP over preassembled
+stream-function response, regularization, and current-constraint operators.
+It exposes the complete objective/constraint history as fixed-size Simulink
+vectors for XY Graph display. Python is not launched from an optimization
+sample step; the headless design/Pareto lane and analytic-adjoint lane have
+separate explicit triggers.
+
+The tracked standalone composition is `radia_streamfunction_optimization.slx`.
+Regenerate it with `radia.simulink.buildStreamFunctionOptimizationModel`; the
+`.m` generator, rather than manual SLX editing, owns its block layout and mask
+contract.
+
 When an application run computes a spatial field, the runner writes a checked
 GMSH `.msh v4.1` post-processing artifact inside the run directory and lists it
 in `result.json`. The GMSH path is runner-owned rather than a mask parameter.
@@ -270,6 +283,39 @@ matlab -batch "addpath('matlab'); results = runtests('tests/matlab'); assert(all
 Python installation and places its DLL directories before older Netgen DLLs.
 This setup operation is cached; numerical calls enter C++ directly.
 
+For continuous electromagnetic shape or material variables, use the checked
+adjoint optimizer instead of treating every update as a black-box trial. The
+evaluator returns one scalar objective, its design gradient, optional
+inequalities in `c <= 0` form, and a design-by-constraint Jacobian:
+
+```matlab
+evaluate = @(rho) struct( ...
+    "objective", jouleLoss(rho), ...
+    "gradient", jouleAdjointGradient(rho), ...
+    "constraints", volumes' * rho / volumeMax - 1, ...
+    "constraint_jacobian", volumes / volumeMax);
+
+qa = radia.topopt.checkAdjointGradient(rho0, evaluate);
+result = radia.topopt.optimizeAdjoint(rho0, evaluate, ...
+    Solver="mma", LowerBounds=zeros(size(rho0)), ...
+    UpperBounds=ones(size(rho0)));
+```
+
+`checkAdjointGradient` is a QA-only directional finite-difference diagnostic;
+the optimizer itself always consumes the supplied analytic derivatives. MMA
+uses moving asymptotes and analytic convex-subproblem Jacobians, requires
+finite bounds, and accepts inequalities. `Solver="sqp"` uses `fmincon` with
+`SpecifyObjectiveGradient` and `SpecifyConstraintGradient` enabled and also
+accepts equality constraints. Neither route silently estimates a missing
+gradient.
+
+`optimizeHCurlActivationAdjoint` is the first direct electromagnetic adapter.
+It evaluates the native Eddy-Bubble multifrequency Joule MEX adjoint, adds a
+dimensionless volume inequality, and sends the resulting material activation
+problem to MMA or SQP without a Python call. A practical hybrid is TPE/CMA-ES
+for discrete or global outer variables followed by MMA/SQP for continuous
+field-sensitive refinement.
+
 ## Current production slice
 
 - NGSolve TaskManager execution and HCurl/HDiv p-space construction
@@ -509,10 +555,40 @@ spellings for the MATLAB camelCase methods. `Trial.report` and
 `Trial.should_prune` support intermediate-value pruning through
 `radia.optuna.MedianPruner`. `RandomSampler`, `TPESampler`, and
 `CmaEsSampler` share the same ask/tell lifecycle. TPE uses the persisted
-MATLAB tables for good/bad density proposals; CMA-ES jointly updates numeric
-variables and rounds integer variables. The workflow and tables are
+MATLAB tables for good/bad density proposals. CMA-ES infers the numeric
+intersection search space, samples a full population jointly, and applies
+full-covariance rank-one/rank-mu adaptation with cumulative evolution paths;
+integer variables are quantized after sampling. Its mean, covariance, step
+size, evolution paths, partial population, and random state are retained in
+`Study.SamplerStateTable` and survive MAT-file reloads. The workflow and tables are
 compatible with Optuna, while sampler random streams and optimizer internals
 are not promised to be bit-for-bit identical to Python Optuna.
+
+Set `Multivariate=true` to let TPE infer the intersection search space from
+the persisted COMPLETE and PRUNED trials. Ordinary `suggestFloat`,
+`suggest_int`, and `suggest_categorical` calls then participate in one mixed
+joint proposal without requiring `suggestVector`:
+
+```matlab
+sampler = radia.optuna.TPESampler(Seed=42, Multivariate=true);
+study = radia.optuna.create_study( ...
+    direction="minimize", sampler=sampler, ...
+    storage="C:\temp\multivariate-study.mat");
+study.optimize(@(trial) objectiveWithScalarSuggestions(trial), 40);
+```
+
+Parameters that are absent from any eligible trial, or whose persisted
+distribution changed, stay outside the intersection and use their ordinary
+independent proposal. This preserves define-by-run conditional spaces across
+study reloads. `suggestVector` remains available as an explicit numeric
+convenience, but it is not required for multivariate TPE.
+
+For electromagnetic CAE, multivariate TPE and CMA-ES are the primary
+production samplers. TPE owns mixed, conditional, and discrete search spaces;
+CMA-ES owns continuous correlated geometry and control variables. Random
+sampling remains the quality baseline, while NSGA-II and the separate MOTPE
+entry point remain alternative multi-objective validation routes rather than
+additional production defaults.
 
 Simulink is evaluated through `radia.optuna.SimulinkRunner`. Its
 `ConfigureFcn` receives a `Simulink.SimulationInput` and a Trial, so the same

@@ -22,13 +22,15 @@ classdef ParetoSupport
             goodMask=false(count,1); goodWeights=zeros(count,1);
             if nBelow==0, return, end
             violations=zeros(count,1); feasible=true(count,1);
-            for k=1:count
-                constraints=study.constraintsForTrial(trialNumbers(k));
-                if any(isnan(constraints))
-                    feasible(k)=false; violations(k)=Inf;
-                elseif ~isempty(constraints)
-                    positive=max(constraints,0); feasible(k)=all(positive<=0);
-                    violations(k)=sum(positive);
+            if ~isempty(study.ConstraintTable)
+                for k=1:count
+                    constraints=study.constraintsForTrial(trialNumbers(k));
+                    if any(isnan(constraints))
+                        feasible(k)=false; violations(k)=Inf;
+                    elseif ~isempty(constraints)
+                        positive=max(constraints,0); feasible(k)=all(positive<=0);
+                        violations(k)=sum(positive);
+                    end
                 end
             end
             feasibleIndices=find(feasible);
@@ -102,20 +104,26 @@ classdef ParetoSupport
 
     methods (Static,Access=private)
         function [data,values,trialNumbers] = collect(study,trialNumbers,data)
-            objectiveCount=numel(study.Directions); keep=false(numel(trialNumbers),1);
-            values=NaN(numel(trialNumbers),objectiveCount);
-            for k=1:numel(trialNumbers)
-                complete=study.TrialTable.TrialNumber==trialNumbers(k) & ...
-                    study.TrialTable.State=="COMPLETE";
-                if ~any(complete), continue, end
-                rows=study.ObjectiveTable.TrialNumber==trialNumbers(k);
-                objectives=study.ObjectiveTable(rows,:);
-                for j=1:height(objectives)
-                    values(k,objectives.ObjectiveIndex(j))=objectives.Value(j);
-                end
-                keep(k)=all(isfinite(values(k,:)));
+            objectiveCount = numel(study.Directions);
+            count = numel(trialNumbers);
+            values = NaN(count, objectiveCount);
+            [knownTrials, trialRows] = ismember( ...
+                trialNumbers, study.TrialTable.TrialNumber);
+            complete = false(count, 1);
+            complete(knownTrials) = ...
+                study.TrialTable.State(trialRows(knownTrials)) == "COMPLETE";
+            objectives = study.ObjectiveTable;
+            for objective = 1:objectiveCount
+                rows = objectives.ObjectiveIndex == objective;
+                numbers = objectives.TrialNumber(rows);
+                objectiveValues = objectives.Value(rows);
+                [present, locations] = ismember(trialNumbers, numbers);
+                values(present, objective) = objectiveValues(locations(present));
             end
-            data=data(keep); values=values(keep,:); trialNumbers=trialNumbers(keep);
+            keep = complete & all(isfinite(values), 2);
+            data = data(keep);
+            values = values(keep,:);
+            trialNumbers = trialNumbers(keep);
         end
 
 
@@ -128,17 +136,76 @@ classdef ParetoSupport
                 if numel(front)<=remaining
                     selected(front)=true;
                 else
-                    pool=front;
-                    while numel(pool)>remaining
-                        contributions=radia.optuna.internal.ParetoSupport.hypervolumeContributions( ...
-                            values(pool,:),directions);
-                        [~,remove]=min(contributions);
-                        pool(remove)=[];
-                    end
-                    selected(pool)=true;
+                    chosen = ...
+                        radia.optuna.internal.ParetoSupport.greedyHVSubset( ...
+                        values(front,:), directions, remaining);
+                    selected(front(chosen)) = true;
                     break
                 end
             end
+        end
+
+        function selected = greedyHVSubset(values, directions, count)
+            % Match Optuna HSSP's forward greedy hypervolume selection.
+            signs = ones(1, numel(directions));
+            signs(string(directions) == "maximize") = -1;
+            points = double(values) .* signs;
+            [points, order] = sortrows(points);
+            worst = max(points, [], 1);
+            reference = worst + max(0.1 * abs(worst), 1e-12);
+            if size(points, 2) == 2
+                selected = ...
+                    radia.optuna.internal.ParetoSupport.greedyHVSubset2D( ...
+                    points, order, count, reference);
+                return
+            end
+            chosen = false(size(points, 1), 1);
+            currentVolume = 0;
+            for slot = 1:min(count, size(points, 1))
+                contributions = -Inf(size(points, 1), 1);
+                for candidate = reshape(find(~chosen), 1, [])
+                    included = chosen;
+                    included(candidate) = true;
+                    contributions(candidate) = ...
+                        radia.optuna.internal.ParetoSupport.hypervolume( ...
+                        points(included,:), reference) - currentVolume;
+                end
+                [~, best] = max(contributions);
+                chosen(best) = true;
+                currentVolume = ...
+                    radia.optuna.internal.ParetoSupport.hypervolume( ...
+                    points(chosen,:), reference);
+            end
+            selected = sort(order(chosen));
+        end
+
+        function selected = greedyHVSubset2D( ...
+                points, originalOrder, count, reference)
+            % O(subset size * population) rectangle update for two objectives.
+            remainingIndices = (1:size(points, 1)).';
+            rectangleDiagonals = repmat(reference, size(points, 1), 1);
+            selectedSorted = zeros(min(count, size(points, 1)), 1);
+            for slot = 1:numel(selectedSorted)
+                contributions = prod(rectangleDiagonals - points, 2);
+                [~, best] = max(contributions);
+                selectedSorted(slot) = remainingIndices(best);
+                selectedPoint = points(best, :);
+
+                keep = true(size(points, 1), 1);
+                keep(best) = false;
+                remainingIndices = remainingIndices(keep);
+                rectangleDiagonals = rectangleDiagonals(keep, :);
+                points = points(keep, :);
+                if best > 1
+                    rectangleDiagonals(1:best-1, 1) = min( ...
+                        selectedPoint(1), rectangleDiagonals(1:best-1, 1));
+                end
+                if best <= size(rectangleDiagonals, 1)
+                    rectangleDiagonals(best:end, 2) = min( ...
+                        selectedPoint(2), rectangleDiagonals(best:end, 2));
+                end
+            end
+            selected = sort(originalOrder(selectedSorted));
         end
 
         function weights = hypervolumeContributions(values,directions)

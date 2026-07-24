@@ -45,3 +45,12 @@ list and the explicit non-parity boundaries. Use
 workflow. The MEX boundary shares numerical contracts, not Python object
 identity: NGSolve continues to own meshes, spaces, Piola maps, and FE
 orientation.
+
+For analytic electromagnetic sensitivities, use
+`radia.topopt.optimizeAdjoint` with `Solver="mma"` or `Solver="sqp"`.
+Objective and constraint gradients are mandatory and use a
+design-by-constraint Jacobian. `radia.topopt.checkAdjointGradient` is an
+explicit QA diagnostic, not a production finite-difference fallback. The
+native HCurl material-topology path is
+`radia.topopt.optimizeHCurlActivationAdjoint`; it consumes the existing MEX
+complex-adjoint result and enforces the material-volume inequality in MATLAB.

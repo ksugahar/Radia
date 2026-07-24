@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **871 tools** across 48 MCP servers.
+Total: **873 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **871 tools** across 48 MCP servers.
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
-| [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
+| [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 6 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
 | [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 44 |
@@ -544,6 +544,8 @@ Module: `radia_mcp.ih.server`
 | `ih_esim` | Induction-heating ESIM (Effective Surface Impedance Method) usage. |
 | `ih_sibc` | Get IH solver architecture and SIBC documentation. |
 | `ih_status` | (no description) |
+| `ih_team36_contract` | Return the strict public TEAM 36 magneto-thermal benchmark contract. |
+| `ih_team36_validate` | Validate a saved radia-ih TEAM 36 artifact and optional reference. |
 | `induction_heating` | Get induction heating simulation documentation. |
 
 ## `mcp-server-peec`

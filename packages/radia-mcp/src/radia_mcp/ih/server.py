@@ -29,6 +29,7 @@ from mcp.server.fastmcp import FastMCP
 from .ih_knowledge import get_induction_heating_documentation
 from .sibc_knowledge import get_ih_sibc_documentation
 from .esim_knowledge import get_ih_esim_documentation
+from .team36_gate import evaluate_team36_json, team36_contract
 from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-ih")
@@ -149,6 +150,25 @@ def ih_esim(topic: str = "all") -> str:
                                      Bessel cell validation table.
     """
     return get_ih_esim_documentation(topic)
+
+
+@mcp.tool()
+def ih_team36_contract() -> dict:
+    """Return the strict public TEAM 36 magneto-thermal benchmark contract."""
+
+    return team36_contract()
+
+
+@mcp.tool()
+def ih_team36_validate(artifact_json: str, reference_json: str = "") -> dict:
+    """Validate a saved radia-ih TEAM 36 artifact and optional reference.
+
+    Inputs are JSON objects, not local paths.  A complete 250 s radia-ih run can
+    pass the solver-execution gate by itself.  Cross-validation and MCP learning
+    remain false until an independent, identity-matched reference is supplied.
+    """
+
+    return evaluate_team36_json(artifact_json, reference_json)
 
 
 # ============================================================

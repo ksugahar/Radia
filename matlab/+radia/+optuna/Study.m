@@ -14,6 +14,7 @@ classdef Study < handle
         UserAttrTable table
         ConstraintTable table
         ObjectiveTable table
+        SamplerStateTable table
         ProgressFcn = []
         UserAttrs struct = struct()
     end
@@ -353,7 +354,8 @@ classdef Study < handle
                 "UserAttrTable", obj.UserAttrTable, ...
                 "ConstraintTable", obj.ConstraintTable, ...
                 "UserAttrs", obj.UserAttrs, ...
-                "ObjectiveTable", obj.ObjectiveTable); %#ok<NASGU>
+                "ObjectiveTable", obj.ObjectiveTable, ...
+                "SamplerStateTable", obj.SamplerStateTable); %#ok<NASGU>
             folder = fileparts(obj.StoragePath);
             if strlength(folder) > 0 && ~isfolder(folder)
                 mkdir(folder);
@@ -384,9 +386,15 @@ classdef Study < handle
             obj.ObjectiveTable = table('Size', [0, 3], ...
                 'VariableTypes', {'double','double','double'}, ...
                 'VariableNames', {'TrialNumber','ObjectiveIndex','Value'});
+            obj.SamplerStateTable = table('Size', [0, 7], ...
+                'VariableTypes', ...
+                {'string','string','double','double','double','cell','datetime'}, ...
+                'VariableNames', {'Sampler','Schema','Revision','TrialNumber', ...
+                'Generation','State','Timestamp'});
             obj.TrialTable.StartTime.TimeZone = "local";
             obj.TrialTable.EndTime.TimeZone = "local";
             obj.IntermediateTable.Timestamp.TimeZone = "local";
+            obj.SamplerStateTable.Timestamp.TimeZone = "local";
         end
 
         function loadState(obj)
@@ -413,6 +421,43 @@ classdef Study < handle
                     ones(sum(complete),1), obj.TrialTable.Value(complete), ...
                     'VariableNames',{'TrialNumber','ObjectiveIndex','Value'});
             end
+            if isfield(data, "SamplerStateTable")
+                obj.SamplerStateTable = data.SamplerStateTable;
+            end
+        end
+
+        function recordSamplerState(obj, sampler, schema, trialNumber, ...
+                generation, state)
+            if ~isstruct(state) || ~isscalar(state)
+                error("radia:optuna:SamplerState", ...
+                    "Sampler state must be one scalar struct.");
+            end
+            sampler = string(sampler);
+            schema = string(schema);
+            rows = obj.SamplerStateTable.Sampler == sampler & ...
+                obj.SamplerStateTable.Schema == schema;
+            revision = 1;
+            if any(rows)
+                revision = max(obj.SamplerStateTable.Revision(rows)) + 1;
+                obj.SamplerStateTable(rows,:) = [];
+            end
+            obj.SamplerStateTable(end+1,:) = {sampler, schema, revision, ...
+                double(trialNumber), double(generation), {state}, ...
+                datetime("now", "TimeZone", "local")};
+        end
+
+        function state = samplerState(obj, sampler, schema)
+            sampler = string(sampler);
+            schema = string(schema);
+            rows = obj.SamplerStateTable.Sampler == sampler & ...
+                obj.SamplerStateTable.Schema == schema;
+            if ~any(rows)
+                state = [];
+                return
+            end
+            selected = obj.SamplerStateTable(rows,:);
+            [~, index] = max(selected.Revision);
+            state = selected.State{index};
         end
 
         function recordParameter(obj, trial, name, kind, value, distribution)

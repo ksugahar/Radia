@@ -1,28 +1,35 @@
 classdef CmaEsSampler < handle
-    %CMAESSAMPLER Stateful CMA-ES-compatible sampler for numeric variables.
-    %   The public behavior follows Optuna's sampler lifecycle.  Continuous
-    %   variables are optimized jointly; integer variables are rounded and
-    %   categorical variables use a seeded random fallback.
+    %CMAESSAMPLER Table-persistent full-covariance CMA-ES sampler.
+    %   Numeric parameters in the completed-trial intersection search space
+    %   are sampled jointly. Categorical and non-intersection parameters use
+    %   an independent seeded random proposal.
 
     properties (SetAccess=private)
         Stream
+        Seed (1,1) double = 0
         NStartupTrials (1,1) double = 1
         PopulationSize (1,1) double = 0
-        Sigma (1,1) double = 0.3
+        Sigma0 (1,1) double = NaN
+        Sigma (1,1) double = NaN
+        X0 struct = struct()
+        ConsiderPrunedTrials (1,1) logical = false
     end
 
     properties (Access=private)
-        DimensionNames string = strings(1,0)
-        LogDimensions logical = false(1,0)
-        LowerBounds double = zeros(1,0)
-        UpperBounds double = zeros(1,0)
-        Mean double = zeros(1,0)
-        Covariance double = zeros(0,0)
-        ActiveTrialNumber (1,1) double = -1
-        ActiveCandidate double = zeros(1,0)
-        ActiveValues struct = struct()
-        HistoryX double = zeros(0,0)
-        HistoryY double = zeros(0,1)
+        Engine = []
+        SearchSpace struct = ...
+            radia.optuna.internal.IntersectionSearchSpace.empty()
+        SearchSpaceSignature (1,1) string = ""
+        PopulationPoints double = zeros(0,0)
+        PopulationFitness double = zeros(0,1)
+        PopulationTrialNumbers double = zeros(0,1)
+        AttachedStudy = []
+        Restored (1,1) logical = false
+    end
+
+    properties (Constant, Access=private)
+        StateSchema = "radia.optuna.cma-sampler-state.v1"
+        SamplerName = "cmaes"
     end
 
     methods
@@ -31,220 +38,370 @@ classdef CmaEsSampler < handle
                 options.Seed (1,1) double = 0
                 options.NStartupTrials (1,1) double = 1
                 options.PopulationSize (1,1) double = 0
-                options.Sigma (1,1) double = 0.3
+                options.Sigma0 (1,1) double = NaN
+                options.Sigma (1,1) double = NaN
+                options.X0 struct = struct()
+                options.ConsiderPrunedTrials (1,1) logical = false
             end
-            if options.NStartupTrials < 0 || options.NStartupTrials ~= floor(options.NStartupTrials)
-                error("radia:optuna:CMAStartup", "NStartupTrials must be a nonnegative integer.");
+            if options.NStartupTrials < 0 || ...
+                    options.NStartupTrials ~= floor(options.NStartupTrials)
+                error("radia:optuna:CMAStartup", ...
+                    "NStartupTrials must be a nonnegative integer.");
             end
-            if ~(options.Sigma > 0 && isfinite(options.Sigma))
-                error("radia:optuna:CMASigma", "Sigma must be positive and finite.");
+            if options.PopulationSize ~= 0 && ...
+                    (options.PopulationSize < 2 || ...
+                    options.PopulationSize ~= floor(options.PopulationSize))
+                error("radia:optuna:CMAPopulation", ...
+                    "PopulationSize must be zero or an integer of at least two.");
             end
-            obj.Stream = RandStream("mt19937ar", "Seed", double(options.Seed));
+            if isfinite(options.Sigma0) && isfinite(options.Sigma)
+                error("radia:optuna:CMASigma", ...
+                    "Specify only Sigma0 or the legacy Sigma option.");
+            end
+            sigma = options.Sigma0;
+            if ~isfinite(sigma)
+                sigma = options.Sigma;
+            end
+            if isfinite(sigma) && sigma <= 0
+                error("radia:optuna:CMASigma", ...
+                    "Sigma0 must be positive when specified.");
+            end
+            obj.Seed = double(options.Seed);
+            obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
             obj.NStartupTrials = options.NStartupTrials;
             obj.PopulationSize = options.PopulationSize;
-            obj.Sigma = options.Sigma;
+            obj.Sigma0 = sigma;
+            obj.Sigma = sigma;
+            obj.X0 = options.X0;
+            obj.ConsiderPrunedTrials = options.ConsiderPrunedTrials;
         end
 
-        function beforeTrial(obj, study, trial) %#ok<INUSD>
-            obj.ActiveTrialNumber = trial.Number;
-            obj.ActiveCandidate = zeros(1,0);
-            obj.ActiveValues = struct();
+        function searchSpace = inferRelativeSearchSpace(obj, study, trial) %#ok<INUSD>
+            searchSpace = ...
+                radia.optuna.internal.IntersectionSearchSpace.calculate( ...
+                study, IncludePruned=obj.ConsiderPrunedTrials, ...
+                NumericOnly=true);
+        end
+
+        function searchSpace = infer_relative_search_space(obj, study, trial)
+            if nargin < 3
+                trial = [];
+            end
+            searchSpace = obj.inferRelativeSearchSpace(study, trial);
+        end
+
+        function beforeTrial(obj, study, trial)
+            if numel(study.Directions) ~= 1
+                error("radia:optuna:CMAMultiObjective", ...
+                    "CMA-ES supports one objective. Use multivariate TPE for multiple objectives.");
+            end
+            obj.attach(study);
+            completed = study.TrialTable.State == "COMPLETE";
+            if sum(completed) < obj.NStartupTrials
+                return
+            end
+            searchSpace = obj.inferRelativeSearchSpace(study, trial);
+            if numel(searchSpace) < 2
+                return
+            end
+            signature = obj.searchSpaceFingerprint(searchSpace);
+            if isempty(obj.Engine) || signature ~= obj.SearchSpaceSignature
+                obj.initializeEngine(searchSpace);
+            end
+            candidate = obj.Engine.ask();
+            values = cell(1, numel(searchSpace));
+            for index = 1:numel(searchSpace)
+                values{index} = obj.fromInternal( ...
+                    candidate(index), searchSpace(index).distribution);
+            end
+            trial.setRelativeParameters(searchSpace, values, "cmaes");
+            obj.recordState(study, trial.Number);
         end
 
         function value = sampleFloat(obj, study, trial, name, low, high, options) %#ok<INUSD>
-            if ~(isfinite(low) && isfinite(high) && low < high)
-                error("radia:optuna:Bounds", "Float bounds must satisfy low < high.");
+            obj.validateBounds(low, high, options.Log, options.Step);
+            if low == high
+                value = low;
+                return
             end
-            if options.Log && low <= 0
-                error("radia:optuna:LogBounds", "Log-uniform bounds must be positive.");
-            end
-            key = matlab.lang.makeValidName(name);
-            if isfield(obj.ActiveValues, key)
-                value = obj.ActiveValues.(key);
-                return;
-            end
-            index = obj.ensureDimension(name, low, high, options.Log);
-            if trial.Number < obj.NStartupTrials
-                u = rand(obj.Stream, 1, 1);
-                if options.Log
-                    value = exp(log(low) + u * (log(high)-log(low)));
-                else
-                    value = low + u * (high-low);
-                end
-            else
-                obj.ensureCandidate();
-                value = obj.ActiveCandidate(index);
-                if options.Log
-                    value = exp(value);
-                end
-                value = min(max(value, low), high);
-            end
-            if isfinite(options.Step)
-                if options.Step <= 0
-                    error("radia:optuna:Step", "Step must be positive.");
-                end
-                value = low + round((value-low)/options.Step)*options.Step;
-                value = min(max(value, low), high);
-            end
-            obj.ActiveValues.(key) = value;
+            value = obj.uniform(low, high, options.Log);
+            value = obj.quantize(value, low, high, options.Step);
+            obj.recordState(study, trial.Number);
         end
 
-        function value = sampleInteger(obj, study, trial, name, low, high)
+        function value = sampleInteger(obj, study, trial, name, low, high) %#ok<INUSD>
             if low ~= floor(low) || high ~= floor(high) || low > high
-                error("radia:optuna:Bounds", "Integer bounds must be finite integers with low <= high.");
+                error("radia:optuna:Bounds", ...
+                    "Integer bounds must be finite integers with low <= high.");
             end
-            value = obj.sampleFloat(study, trial, name, low, high, ...
-                struct("Log", false, "Step", 1));
+            if low == high
+                value = low;
+                return
+            end
+            value = obj.uniform(low, high, false);
             value = min(max(round(value), low), high);
-            obj.ActiveValues.(matlab.lang.makeValidName(name)) = value;
+            obj.recordState(study, trial.Number);
         end
 
         function value = sampleCategorical(obj, study, trial, name, choices) %#ok<INUSD>
-            if isempty(choices)
-                error("radia:optuna:Choices", "Categorical choices must not be empty.");
-            end
-            key = matlab.lang.makeValidName(name);
-            if isfield(obj.ActiveValues, key)
-                value = obj.ActiveValues.(key);
-                return;
-            end
-            count = numel(choices);
+            spec = radia.optuna.internal.DistributionCodec.categorical(choices);
+            count = numel(spec.choices);
             index = 1 + floor(rand(obj.Stream, 1, 1) * count);
-            if iscell(choices)
-                value = choices{index};
-            else
-                value = choices(index);
-            end
-            obj.ActiveValues.(key) = value;
+            value = radia.optuna.internal.DistributionCodec.choiceAt( ...
+                spec.choices, index);
+            obj.recordState(study, trial.Number);
         end
 
         function afterTrial(obj, study, trial)
-            if trial.State ~= "COMPLETE" || isempty(obj.DimensionNames)
-                return;
+            obj.attach(study);
+            if trial.State ~= "COMPLETE" || isempty(obj.Engine) || ...
+                    isempty(obj.SearchSpace)
+                obj.recordState(study, trial.Number);
+                return
             end
-            row = NaN(1, numel(obj.DimensionNames));
-            for k = 1:numel(obj.DimensionNames)
-                key = matlab.lang.makeValidName(obj.DimensionNames(k));
+            point = zeros(1, numel(obj.SearchSpace));
+            for index = 1:numel(obj.SearchSpace)
+                key = matlab.lang.makeValidName(obj.SearchSpace(index).name);
                 if ~isfield(trial.Params, key)
-                    return;
+                    obj.recordState(study, trial.Number);
+                    return
                 end
-                value = trial.Params.(key);
-                if obj.LogDimensions(k)
-                    if ~(isfinite(value) && value > 0)
-                        return;
-                    end
-                    row(k) = log(value);
-                else
-                    row(k) = value;
+                parameterRow = study.ParamTable.TrialNumber == trial.Number & ...
+                    study.ParamTable.Name == obj.SearchSpace(index).name;
+                if sum(parameterRow) ~= 1
+                    obj.recordState(study, trial.Number);
+                    return
                 end
+                stored = radia.optuna.internal.DistributionCodec.decode( ...
+                    study.ParamTable.Kind(parameterRow), ...
+                    study.ParamTable.Distribution(parameterRow));
+                if ~radia.optuna.internal.DistributionCodec.equivalent( ...
+                        obj.SearchSpace(index).distribution, stored)
+                    obj.recordState(study, trial.Number);
+                    return
+                end
+                point(index) = obj.toInternal( ...
+                    trial.Params.(key), ...
+                    obj.SearchSpace(index).distribution);
             end
-            if any(~isfinite(row))
-                return;
+            if any(~isfinite(point))
+                obj.recordState(study, trial.Number);
+                return
             end
-            obj.HistoryX(end+1,:) = row;
-            obj.HistoryY(end+1,1) = trial.Value;
-            obj.updateDistribution(study);
+            fitness = trial.Value;
+            if study.Directions(1) == "maximize"
+                fitness = -fitness;
+            end
+            obj.PopulationPoints(end+1,:) = point;
+            obj.PopulationFitness(end+1,1) = fitness;
+            obj.PopulationTrialNumbers(end+1,1) = trial.Number;
+            if size(obj.PopulationPoints,1) == obj.Engine.PopulationSize
+                obj.Engine.tell(obj.PopulationPoints, obj.PopulationFitness);
+                obj.PopulationPoints = zeros(0, numel(obj.SearchSpace));
+                obj.PopulationFitness = zeros(0,1);
+                obj.PopulationTrialNumbers = zeros(0,1);
+            end
+            obj.Sigma = obj.Engine.Sigma;
+            obj.recordState(study, trial.Number);
         end
     end
 
     methods (Access=private)
-        function index = ensureDimension(obj, name, low, high, isLog)
-            internalLow = low;
-            internalHigh = high;
-            if isLog
-                internalLow = log(low);
-                internalHigh = log(high);
+        function attach(obj, study)
+            changed = isempty(obj.AttachedStudy) || ...
+                ~isequal(obj.AttachedStudy, study);
+            if changed
+                obj.AttachedStudy = study;
+                obj.Engine = [];
+                obj.SearchSpace = ...
+                    radia.optuna.internal.IntersectionSearchSpace.empty();
+                obj.SearchSpaceSignature = "";
+                obj.PopulationPoints = zeros(0,0);
+                obj.PopulationFitness = zeros(0,1);
+                obj.PopulationTrialNumbers = zeros(0,1);
+                obj.Restored = false;
             end
-            index = find(obj.DimensionNames == string(name), 1);
-            if ~isempty(index)
-                if obj.LogDimensions(index) ~= isLog || ...
-                        abs(obj.LowerBounds(index) - internalLow) > eps(max(1, abs(internalLow))) || ...
-                        abs(obj.UpperBounds(index) - internalHigh) > eps(max(1, abs(internalHigh)))
-                    error("radia:optuna:DistributionChanged", ...
-                        "Distribution for parameter '%s' changed during the study.", name);
-                end
-                return;
+            if obj.Restored
+                return
             end
-            obj.DimensionNames(end+1) = string(name);
-            obj.LogDimensions(end+1) = isLog;
-            obj.LowerBounds(end+1) = internalLow;
-            obj.UpperBounds(end+1) = internalHigh;
-            obj.Mean(end+1) = 0.5*(internalLow+internalHigh);
-            d = numel(obj.Mean);
-            if ~isempty(obj.HistoryX) && size(obj.HistoryX, 2) < d
-                obj.HistoryX(:, end+1:d) = NaN;
+            state = study.samplerState(obj.SamplerName, obj.StateSchema);
+            if ~isempty(state)
+                obj.restoreState(state);
             end
-            if d == 1
-                obj.Covariance = 1;
-            else
-                old = obj.Covariance;
-                obj.Covariance = blkdiag(old, 1);
-            end
-            index = d;
+            obj.Restored = true;
         end
 
-        function ensureCandidate(obj)
-            d = numel(obj.Mean);
-            if isempty(obj.ActiveCandidate)
-                [L, flag] = chol(obj.Covariance + 1e-10*eye(d), "lower");
-                if flag ~= 0
-                    L = eye(d);
+        function initializeEngine(obj, searchSpace)
+            dimension = numel(searchSpace);
+            mean = 0.5 * ones(1, dimension);
+            fields = fieldnames(obj.X0);
+            if ~isempty(fields)
+                for index = 1:dimension
+                    key = matlab.lang.makeValidName(searchSpace(index).name);
+                    if isfield(obj.X0, key)
+                        mean(index) = obj.toInternal( ...
+                            obj.X0.(key), searchSpace(index).distribution);
+                    end
                 end
-                z = randn(obj.Stream, d, 1);
-                widths = max(obj.UpperBounds-obj.LowerBounds, eps).';
-                obj.ActiveCandidate = obj.Mean + ...
-                    (obj.Sigma * (widths .* (L*z))).';
-            elseif numel(obj.ActiveCandidate) < d
-                newIndex = numel(obj.ActiveCandidate)+1;
-                width = max(obj.UpperBounds(newIndex)-obj.LowerBounds(newIndex), eps);
-                obj.ActiveCandidate(newIndex) = obj.Mean(newIndex) + ...
-                    obj.Sigma*width*randn(obj.Stream, 1, 1);
             end
-            for k = 1:d
-                width = max(obj.UpperBounds(k)-obj.LowerBounds(k), eps);
-                obj.ActiveCandidate(k) = min(max(obj.ActiveCandidate(k), ...
-                    obj.LowerBounds(k)-obj.Sigma*width), ...
-                    obj.UpperBounds(k)+obj.Sigma*width);
+            if any(~isfinite(mean) | mean < 0 | mean > 1)
+                error("radia:optuna:CMAX0", ...
+                    "X0 values must lie inside their parameter distributions.");
+            end
+            sigma = obj.Sigma0;
+            if ~isfinite(sigma)
+                sigma = 1 / 6;
+            end
+            obj.Engine = ...
+                radia.optuna.internal.CMAEvolutionStrategy(mean, sigma, ...
+                Bounds=repmat([0,1], dimension, 1), ...
+                PopulationSize=obj.PopulationSize, Seed=obj.Seed);
+            obj.SearchSpace = searchSpace;
+            obj.SearchSpaceSignature = obj.searchSpaceFingerprint(searchSpace);
+            obj.PopulationPoints = zeros(0, dimension);
+            obj.PopulationFitness = zeros(0,1);
+            obj.PopulationTrialNumbers = zeros(0,1);
+            obj.Sigma = obj.Engine.Sigma;
+        end
+
+        function state = snapshot(obj)
+            engineState = [];
+            generation = 0;
+            if ~isempty(obj.Engine)
+                engineState = obj.Engine.snapshot();
+                generation = obj.Engine.Generation;
+            end
+            state = struct( ...
+                "schema", obj.StateSchema, ...
+                "seed", obj.Seed, ...
+                "search_space", obj.SearchSpace, ...
+                "search_space_signature", obj.SearchSpaceSignature, ...
+                "engine", engineState, ...
+                "population_points", obj.PopulationPoints, ...
+                "population_fitness", obj.PopulationFitness, ...
+                "population_trial_numbers", obj.PopulationTrialNumbers, ...
+                "independent_random_state", obj.Stream.State, ...
+                "generation", generation);
+        end
+
+        function restoreState(obj, state)
+            required = ["schema","search_space","search_space_signature", ...
+                "engine","population_points","population_fitness", ...
+                "population_trial_numbers","independent_random_state"];
+            if ~isstruct(state) || ~isscalar(state) || ...
+                    any(~isfield(state, required)) || ...
+                    string(state.schema) ~= obj.StateSchema
+                error("radia:optuna:CMAState", ...
+                    "Stored CMA-ES sampler state is invalid or unsupported.");
+            end
+            obj.SearchSpace = state.search_space;
+            obj.SearchSpaceSignature = string(state.search_space_signature);
+            if isempty(state.engine)
+                obj.Engine = [];
+            else
+                obj.Engine = ...
+                    radia.optuna.internal.CMAEvolutionStrategy.fromSnapshot( ...
+                    state.engine);
+                if obj.PopulationSize ~= 0 && ...
+                        obj.Engine.PopulationSize ~= obj.PopulationSize
+                    error("radia:optuna:CMAState", ...
+                        "Stored CMA-ES population size does not match the sampler.");
+                end
+                obj.Sigma = obj.Engine.Sigma;
+            end
+            obj.PopulationPoints = double(state.population_points);
+            obj.PopulationFitness = reshape( ...
+                double(state.population_fitness), [], 1);
+            obj.PopulationTrialNumbers = reshape( ...
+                double(state.population_trial_numbers), [], 1);
+            obj.Stream.State = state.independent_random_state;
+        end
+
+        function recordState(obj, study, trialNumber)
+            generation = 0;
+            if ~isempty(obj.Engine)
+                generation = obj.Engine.Generation;
+            end
+            study.recordSamplerState(obj.SamplerName, obj.StateSchema, ...
+                trialNumber, generation, obj.snapshot());
+        end
+
+        function signature = searchSpaceFingerprint(~, searchSpace)
+            parts = strings(1, numel(searchSpace));
+            for index = 1:numel(searchSpace)
+                parts(index) = searchSpace(index).name + "=" + ...
+                    radia.optuna.internal.DistributionCodec.encode( ...
+                    searchSpace(index).distribution);
+            end
+            signature = strjoin(parts, "|");
+        end
+
+        function value = toInternal(~, value, distribution)
+            value = double(value);
+            low = distribution.low;
+            high = distribution.high;
+            if distribution.log
+                if value <= 0
+                    value = NaN;
+                    return
+                end
+                value = log(value);
+                low = log(low);
+                high = log(high);
+            end
+            value = (value - low) / (high - low);
+            if value < -1e-12 || value > 1 + 1e-12
+                value = NaN;
+            else
+                value = min(max(value, 0), 1);
             end
         end
 
-        function updateDistribution(obj, study)
-            if isempty(obj.HistoryX)
-                return;
-            end
-            valid = all(isfinite(obj.HistoryX), 2) & isfinite(obj.HistoryY);
-            if ~any(valid)
-                return;
-            end
-            historyX = obj.HistoryX(valid, :);
-            historyY = obj.HistoryY(valid);
-            if study.Directions(1) == "minimize"
-                [~, order] = sort(historyY, "ascend");
+        function value = fromInternal(obj, value, distribution)
+            value = min(max(double(value), 0), 1);
+            low = distribution.low;
+            high = distribution.high;
+            if distribution.log
+                value = exp(log(low) + value * (log(high) - log(low)));
             else
-                [~, order] = sort(historyY, "descend");
+                value = low + value * (high - low);
             end
-            d = size(historyX, 2);
-            lambda = obj.PopulationSize;
-            if lambda <= 0
-                lambda = max(4, 4 + floor(3*log(max(2,d))));
+            value = obj.quantize( ...
+                value, distribution.low, distribution.high, ...
+                distribution.step);
+            if distribution.kind == "integer"
+                value = round(value);
             end
-            mu = max(1, min(numel(order), floor(lambda/2)));
-            weights = log(mu + 0.5) - log((1:mu).');
-            weights = weights / sum(weights);
-            selected = historyX(order(1:mu), :);
-            newMean = (weights.' * selected);
-            centered = selected - newMean;
-            newCov = zeros(d,d);
-            for k = 1:mu
-                newCov = newCov + weights(k) * (centered(k,:).'*centered(k,:));
+        end
+
+        function value = uniform(obj, low, high, logScale)
+            u = rand(obj.Stream, 1, 1);
+            if logScale
+                value = exp(log(low) + u * (log(high) - log(low)));
+            else
+                value = low + u * (high - low);
             end
-            scales = max(obj.UpperBounds-obj.LowerBounds, eps);
-            newCov = newCov ./ (scales.'*scales);
-            newCov = 0.8*obj.Covariance + 0.2*(newCov + 1e-8*eye(d));
-            obj.Mean = min(max(newMean, obj.LowerBounds), obj.UpperBounds);
-            obj.Covariance = (newCov + newCov.')/2;
-            spread = sqrt(max(diag(obj.Covariance), 1e-8)).';
-            obj.Sigma = min(1.0, max(0.02, 0.9*obj.Sigma + 0.1*mean(spread)));
+        end
+
+        function value = quantize(~, value, low, high, step)
+            if isfinite(step)
+                value = low + round((value - low) / step) * step;
+            end
+            value = min(max(value, low), high);
+        end
+
+        function validateBounds(~, low, high, logScale, step)
+            if ~(isfinite(low) && isfinite(high) && low <= high)
+                error("radia:optuna:Bounds", ...
+                    "Float bounds must satisfy low <= high.");
+            end
+            if logScale && low <= 0
+                error("radia:optuna:LogBounds", ...
+                    "Log-uniform bounds must be positive.");
+            end
+            if isfinite(step) && step <= 0
+                error("radia:optuna:Step", "Step must be positive.");
+            end
         end
     end
 end

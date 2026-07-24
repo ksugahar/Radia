@@ -18,6 +18,194 @@ verifyLessThan(testCase, norm(result.x - [2, -1]), 1e-3);
 verifyLessThan(testCase, result.objective_value, 1e-6);
 end
 
+function testAdjointTopologyOptimizationBlock(testCase)
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
+    return
+end
+
+runner = radia.topopt.makeAdjointDemoRunner();
+modelName = "radia_adjoint_topopt_test";
+cleanup = onCleanup(@() cleanupAdjointModel(modelName));
+blockPath = radia.simulink.buildAdjointOptimizationBlock(modelName, ...
+    Runner=runner,Solver="mma",Save=false);
+add_block("simulink/Sources/Constant",modelName + "/Start", ...
+    Value="1");
+signalNames = ["Objective","Status","Iterations","Design"];
+variables = ["objective_signal","status_signal", ...
+    "iterations_signal","design_signal"];
+for index = 1:numel(signalNames)
+    add_block("simulink/Sinks/To Workspace", ...
+        modelName + "/" + signalNames(index), ...
+        VariableName=variables(index),SaveFormat="Array");
+    add_line(modelName, ...
+        "Adjoint Topology Optimization/" + index, ...
+        signalNames(index) + "/1");
+end
+add_line(modelName,"Start/1","Adjoint Topology Optimization/1");
+set_param(modelName,"StopTime","0.2","Solver","FixedStepDiscrete", ...
+    "FixedStep","0.1","ReturnWorkspaceOutputs","on");
+simulation = sim(modelName);
+
+objectiveSignal = simulation.get("objective_signal");
+statusSignal = simulation.get("status_signal");
+iterationsSignal = simulation.get("iterations_signal");
+designSignal = simulation.get("design_signal");
+verifyEqual(testCase,size(objectiveSignal,2),1);
+verifyEqual(testCase,size(statusSignal,2),1);
+verifyEqual(testCase,size(iterationsSignal,2),1);
+verifyEqual(testCase,size(designSignal,2),2);
+verifyEqual(testCase,statusSignal(end),2);
+verifyTrue(testCase,runner.Result.converged,runner.Result.output.message);
+verifyLessThan(testCase,runner.Result.objective,0.006);
+verifyLessThanOrEqual(testCase,max(runner.Result.constraints),1e-6);
+verifyEqual(testCase,objectiveSignal(end),runner.Result.objective, ...
+    "AbsTol",1e-12);
+verifyEqual(testCase,designSignal(end,:).',runner.Result.design, ...
+    "AbsTol",1e-12);
+verifyEqual(testCase,iterationsSignal(end),height(runner.Result.history)-1);
+verifyEqual(testCase,string(get_param(blockPath,"FunctionName")), ...
+    "radia_adjoint_optimization_sfun");
+clear cleanup
+cleanupAdjointModel(modelName);
+end
+
+function testAdjointLibraryBlockCompilesInModel(testCase)
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
+    return
+end
+
+output = "C:\temp\radia_adjoint_library_compile_test";
+library = radia.simulink.buildLibrary(OutputDirectory=output);
+load_system(library);
+libraryCleanup = onCleanup(@() closeIfLoaded("radia_simulink_library"));
+modelName = "radia_adjoint_library_compile_test";
+modelCleanup = onCleanup(@() cleanupAdjointModel(modelName));
+new_system(modelName);
+add_block("simulink/Sources/Constant",modelName + "/Start",Value="0");
+add_block( ...
+    "radia_simulink_library/Optimization/Adjoint Topology Optimization", ...
+    modelName + "/Topology Optimization");
+add_line(modelName,"Start/1","Topology Optimization/1");
+set_param(modelName,"SimulationCommand","update");
+
+blockPath = modelName + "/Topology Optimization";
+verifyEqual(testCase,string(get_param(blockPath,"FunctionName")), ...
+    "radia_adjoint_optimization_sfun");
+verifyEqual(testCase,string(get_param(blockPath,"Parameters")), ...
+    "runner,sample_time_s");
+verifyTrue(testCase,isa(evalin("base","radia_adjoint_runner"), ...
+    "radia.topopt.AdjointRunner"));
+clear modelCleanup libraryCleanup
+cleanupAdjointModel(modelName);
+closeIfLoaded("radia_simulink_library");
+end
+
+function testStreamFunctionOptimizationModel(testCase)
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
+    return
+end
+
+modelName = "radia_streamfunction_topopt_test";
+output = "C:\temp\radia_streamfunction_topopt_test";
+modelPath = fullfile(output,modelName + ".slx");
+cleanup = onCleanup(@() cleanupStreamFunctionModel(modelName,modelPath));
+radia.simulink.buildStreamFunctionOptimizationModel( ...
+    ModelName=modelName,OutputDirectory=output, ...
+    SampleTime_s=0.1,HistoryCapacity=64);
+load_system(modelPath);
+set_param(modelName + "/Run Adjoint","Value","true");
+ports = [4,5,6,7,8,9,10,11];
+variables = [ ...
+    "sf_objective","sf_status","sf_iterations","sf_design", ...
+    "sf_history_count","sf_history_iteration", ...
+    "sf_history_objective","sf_history_constraint"];
+for index = 1:numel(ports)
+    add_block("simulink/Sinks/To Workspace", ...
+        modelName + "/" + variables(index), ...
+        VariableName=variables(index),SaveFormat="Array");
+    add_line(modelName, ...
+        "Stream Function Optimization/" + ports(index), ...
+        variables(index) + "/1");
+end
+set_param(modelName,"StopTime","0.2","ReturnWorkspaceOutputs","on");
+simulation = sim(modelName);
+
+objective = simulation.get("sf_objective");
+status = simulation.get("sf_status");
+iterations = simulation.get("sf_iterations");
+design = simulation.get("sf_design");
+historyCount = simulation.get("sf_history_count");
+historyIteration = simulation.get("sf_history_iteration");
+historyObjective = simulation.get("sf_history_objective");
+historyConstraint = simulation.get("sf_history_constraint");
+count = historyCount(end);
+verifyEqual(testCase,status(end),2);
+verifyLessThan(testCase,objective(end),0.003);
+verifyGreaterThan(testCase,iterations(end),1);
+verifyEqual(testCase,size(design,2),2);
+verifyGreaterThan(testCase,count,2);
+verifyEqual(testCase,size(historyIteration,2),64);
+verifyEqual(testCase,size(historyObjective,2),64);
+verifyEqual(testCase,size(historyConstraint,2),64);
+verifyTrue(testCase,all(isfinite(historyObjective(end,1:count))));
+verifyLessThanOrEqual(testCase,historyConstraint(end,count),1e-6);
+blockPath = modelName + "/Stream Function Optimization";
+contract = get_param(blockPath,"UserData");
+verifyFalse(testCase,contract.python_per_step);
+verifyEqual(testCase,string(contract.adjoint_backend), ...
+    "matlab-native-analytic-gradient");
+customRunner = radia.topopt.makeStreamFunctionAdjointDemoRunner();
+assignin("base","radia_streamfunction_custom_runner",customRunner);
+set_param(blockPath,"radia_streamfunction_adjoint_runner", ...
+    "radia_streamfunction_custom_runner");
+set_param(modelName,"SimulationCommand","update");
+verifyEqual(testCase,string(get_param( ...
+    blockPath + "/Analytic Topology Optimization","Parameters")), ...
+    "radia_streamfunction_custom_runner,0.10000000000000001,64");
+clear cleanup
+cleanupStreamFunctionModel(modelName,modelPath);
+end
+
+function testTrackedStreamFunctionOptimizationArtifact(testCase)
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
+    return
+end
+
+testDirectory = fileparts(mfilename("fullpath"));
+repositoryRoot = fileparts(fileparts(testDirectory));
+modelPath = fullfile(repositoryRoot,"matlab", ...
+    "radia_streamfunction_optimization.slx");
+verifyTrue(testCase,isfile(modelPath));
+modelName = "radia_streamfunction_optimization";
+closeIfLoaded(modelName);
+cleanup = onCleanup(@() closeIfLoaded(modelName));
+load_system(modelPath);
+set_param(modelName,"SimulationCommand","update");
+blockPath = modelName + "/Stream Function Optimization";
+verifyEqual(testCase,string(get_param(blockPath,"Mask")),"on");
+verifyEqual(testCase,string(get_param( ...
+    blockPath + "/Analytic Topology Optimization","FunctionName")), ...
+    "radia_streamfunction_topology_sfun");
+contract = get_param(blockPath,"UserData");
+verifyEqual(testCase,string(contract.domain), ...
+    "stream-function-topology-optimization");
+verifyFalse(testCase,contract.python_per_step);
+clear cleanup
+closeIfLoaded(modelName);
+end
+
 function testOpenIHLaunchEntryPoint(testCase)
 hasSimulink = exist("new_system", "file") == 2 || ...
     exist("new_system", "builtin") == 5;
@@ -275,6 +463,29 @@ verifyTrue(testCase,ihContract.distributed_field);
 verifyFalse(testCase,ihContract.surrogate);
 verifyEqual(testCase,string(ihContract.temperature_feedback), ...
     "previous-accepted-thermal-state");
+sfOptimizationPath = ...
+    "radia_simulink_library/Applications/Stream Function Optimization";
+verifyEqual(testCase,string(get_param(sfOptimizationPath,"BlockType")), ...
+    "SubSystem");
+verifyEqual(testCase,string(get_param(sfOptimizationPath,"Mask")),"on");
+verifyEqual(testCase,string(get_param( ...
+    sfOptimizationPath + "/Stream Function Design","FunctionName")), ...
+    "radia_application_sfun");
+verifyEqual(testCase,string(get_param( ...
+    sfOptimizationPath + "/Analytic Topology Optimization", ...
+    "FunctionName")),"radia_streamfunction_topology_sfun");
+sfPorts = get_param(sfOptimizationPath,"PortHandles");
+verifyEqual(testCase,numel(sfPorts.Inport),2);
+verifyEqual(testCase,numel(sfPorts.Outport),11);
+sfContract = get_param(sfOptimizationPath,"UserData");
+verifyEqual(testCase,string(sfContract.domain), ...
+    "stream-function-topology-optimization");
+verifyFalse(testCase,sfContract.python_per_step);
+verifyEqual(testCase,string(sfContract.visualization),"simulink-scope-xy");
+verifyGreaterThan(testCase,getSimulinkBlockHandle( ...
+    sfOptimizationPath + "/Objective History"),0);
+verifyGreaterThan(testCase,getSimulinkBlockHandle( ...
+    sfOptimizationPath + "/Constraint History"),0);
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/LTspice Circuit","FunctionName")),"radia_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/Hysteretic LTspice Plant","FunctionName")),"radia_hysteretic_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/Optimization/Optuna Optimization","FunctionName")),"radia_optuna_sfun");
@@ -283,6 +494,17 @@ verifyEqual(testCase,string(get_param( ...
 verifyEqual(testCase,string(get_param( ...
     "radia_simulink_library/Optimization/Optuna Optimization", ...
     "sampler_name")),"auto");
+adjointPath = ...
+    "radia_simulink_library/Optimization/Adjoint Topology Optimization";
+verifyEqual(testCase,string(get_param(adjointPath,"FunctionName")), ...
+    "radia_adjoint_optimization_sfun");
+verifyEqual(testCase,string(get_param(adjointPath,"Mask")),"on");
+adjointContract = get_param(adjointPath,"UserData");
+verifyEqual(testCase,string(adjointContract.domain), ...
+    "topology-optimization");
+verifyEqual(testCase,string(adjointContract.backend), ...
+    "matlab-native-adjoint");
+verifyFalse(testCase,adjointContract.finite_difference_fallback);
 sheetPath="radia_simulink_library/Optimization/Sheet Metal Optimization";
 verifyEqual(testCase,string(get_param(sheetPath,"FunctionName")),"radia_optuna_sfun");
 verifyEqual(testCase,string(get_param(sheetPath,"Mask")),"on");
@@ -399,4 +621,18 @@ function deleteIfExists(fileName)
 if isfile(fileName)
     delete(fileName);
 end
+end
+
+function cleanupAdjointModel(modelName)
+closeIfLoaded(modelName);
+evalin("base","clear radia_adjoint_runner");
+end
+
+function cleanupStreamFunctionModel(modelName,modelPath)
+closeIfLoaded(modelName);
+if isfile(modelPath)
+    delete(modelPath);
+end
+evalin('base', ...
+    'clear radia_streamfunction_adjoint_runner radia_streamfunction_custom_runner');
 end
