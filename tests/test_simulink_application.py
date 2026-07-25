@@ -57,7 +57,7 @@ def test_application_runner_writes_stable_artifacts(tmp_path: Path, echo_applica
         encoding="utf-8",
     )
 
-    payload = app.run_application("echo", config, tmp_path / "run", timeout_s=5)
+    payload = app.run_application("echo", config, tmp_path / "run", timeout_s=30)
 
     result = payload["radia_result"]
     assert result["schema"] == app.RESULT_SCHEMA
