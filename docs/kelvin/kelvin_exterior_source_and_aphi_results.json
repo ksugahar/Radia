@@ -1,6 +1,6 @@
 {
   "schema": "radia.kelvin_exterior_source_and_aphi.v1",
-  "generated_at_utc": "2026-07-25T10:25:56Z",
+  "generated_at_utc": "2026-07-25T10:45:30Z",
   "radia_version": "4.95.23",
   "ngsolve_version": "6.2.2604",
   "python_version": "3.12.10",
@@ -9,20 +9,20 @@
     "H_analytic": 0.029411764705882353,
     "routes": {
       "Z": {
-        "H_z": 0.019755896194892153,
-        "err_pct": -32.82995293736668
+        "H_z": 0.019755896194897815,
+        "err_pct": -32.82995293734743
       },
       "B1": {
-        "H_z": 0.029630234300284553,
-        "err_pct": 0.7427966209674786
+        "H_z": 0.02963023430028444,
+        "err_pct": 0.7427966209671011
       },
       "B0": {
-        "H_z": 0.039508488095342464,
-        "err_pct": 34.32885952416438
+        "H_z": 0.039508488095340244,
+        "err_pct": 34.328859524156826
       }
     },
-    "ratio_Z_over_B1": 0.6667478898303018,
-    "ratio_B0_over_B1": 1.333384261999003
+    "ratio_Z_over_B1": 0.6667478898304954,
+    "ratio_B0_over_B1": 1.3333842619989331
   },
   "part2_twisted_pullback": {
     "gradient_consistency": "H_s' == -grad(Omega_s') to ~1e-10 (FD-limited)",
@@ -50,9 +50,24 @@
     },
     "p2_factor_aphi_over_astar": 8.94819350268897
   },
+  "part4_coil_source_and_curve_order": {
+    "m_analytic": [
+      -37.63624013711727,
+      -51.150700092779864
+    ],
+    "rel_pct": {
+      "astar_p1": 2.899381060422398,
+      "aphi_p1": 2.899381057616894,
+      "astar_p2": 0.4746616641659902,
+      "aphi_p2": 0.05427498370615661,
+      "aphi_p2_curve1": 1.869542461598679
+    },
+    "curve1_degradation_factor": 34.445748924040856
+  },
   "goldens": [
     "validation_test/kelvin_source/test_kelvin_exterior_source_routes.py",
     "tests/test_reduced_potential_background.py",
-    "validation_test/kelvin_source/test_aphi_kelvin_eddy.py"
+    "validation_test/kelvin_source/test_aphi_kelvin_eddy.py",
+    "validation_test/kelvin_source/test_reduced_aphi_kelvin_coil.py"
   ]
 }
