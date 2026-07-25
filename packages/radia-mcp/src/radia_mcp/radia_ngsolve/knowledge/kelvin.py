@@ -2613,6 +2613,52 @@ mesh enlarges the kernel and the pollution.
 **Fix order**: (1) `nograds=True`, (2) gauge reg restricted to
 non-Kelvin, (3) bonus_intorder=4, (4) THEN refine mesh / raise order.
 
+## p=2 and beyond: use A-Phi (A-V), not the plain A-method (measured 2026-07-25)
+
+With `nograds=True` -- which this recipe REQUIRES for Periodic Kelvin -- the
+gradient test functions that would enforce discrete charge conservation
+`div(sigma A) = 0` are removed from the HCurl space.  For a VOLUME conductor
+(eddy mass term `s sigma A . A'`) the plain A-method's accuracy is therefore
+p-SATURATED (raising the order does not help) and improves only slowly under
+h-refinement (~O(h)); adding the electric scalar (A-Phi / A-V mixed
+formulation) restores charge conservation explicitly and recovers fast
+convergence in BOTH p and h.
+
+Measured golden (conducting sphere a/delta = 2 in uniform AC field, analytic
+Smythe moment, both lanes share every recipe element):
+
+    p-sweep, ne=10000:            h-sweep at p=2:
+    p    A* (A-only)  A-Phi       ne      A*      A-Phi   factor
+    1    2.889%       2.889%      10000   0.473%  0.053%    9x
+    2    0.473%       0.053%      28022   0.243%  0.011%   22x
+    3    0.442%       0.005%      67850   0.141%  0.004%   35x
+         (A* p-saturated)              (A* ~O(h) only)
+
+Gauge-reg sensitivity 1e-5..1e-10: both lanes flat to 4 digits -- the A*
+defect is NOT the regularization.  The continuous V is exactly zero for this
+axisymmetric problem, so the whole gap is DISCRETE charge-conservation error:
+with A* you can only buy accuracy with h; with A-Phi, p-refinement pays.
+
+The A-Phi symmetric form (W = V/s absorbs the frequency):
+
+```python
+fesA = Periodic(HCurl(mesh, order=p, complex=True, nograds=True))
+fesV = H1(mesh, order=p, complex=True, definedon=mesh.Materials("conductor"))
+fes  = fesA * fesV
+(u, w), (v, q) = fes.TnT()
+a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
+a += s * sigma_cf * InnerProduct(u + grad(w), v + grad(q)) * dx("conductor")
+a += 1e-6 * NU_0 * InnerProduct(u, v) * dx(non_kelvin_mats)   # gauge reg
+a += 1e-6 * SIGMA * w * q * dx("conductor")   # pin the constant of W
+f += -s * sigma_cf * InnerProduct(A_s, v + grad(q)) * dx("conductor")
+# J = -s * sigma * (A_s + A_r + grad(W))
+```
+
+Rule of thumb: SIBC-driven problems (no volume eddy mass) stay on the plain
+A-method; a VOLUME conductor at p >= 2 takes the A-Phi block.  Golden:
+`validation_test/kelvin_source/test_aphi_kelvin_eddy.py` (FES-verify trio
+locked at p=1 and p=2: slaved 1659 / 3871, ratio 1.000000).
+
 ## References
 
 - `src/radia/panels/calc_fem_kelvin.py` (production reference for IH)
