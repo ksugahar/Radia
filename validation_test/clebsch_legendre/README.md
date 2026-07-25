@@ -318,6 +318,53 @@ rate (order ~3 in `h`) -- confirming the energy minimiser on Clebsch fields is
 the **vacuum** field (not merely force-free). This is the 3-D field-side piece
 that the Tampere 2-D map (Sec. 7) had only announced.
 
+## Field-plane (Chaplygin) design verification
+
+The transforms above use the **potential** pair as coordinates. Two further
+drivers validate the **field-plane** hodograph `(q, theta)` (Chaplygin), where
+a saturating material law `mu(q)` becomes a known coefficient and the design
+problem is exactly linear. The Legendre potential `chi = H.r - Psi` collapses
+the two coordinate unknowns into one scalar whose first derivatives ARE the
+physical coordinates; reparameterizing the radius by `B = mu q` feeds a
+measured secant curve `mu_s(B)` into the coefficients with no table inversion.
+
+**Machinery vs closed forms** (numpy only):
+```
+python verify_chi_modesum_solver.py
+```
+Radial mode solver against the exact `q^s` / Froehlich closed forms
+(rel err < 1e-5 at M=401, FD order 2.0), 2-D mode-sum assembly with exact
+coordinate recovery, MMF-type Robin boundary `q chi_q - chi = g`
+(manufactured solutions), orientation monitor `J` single-signed.
+Writes `results_chi_modesum_solver.json`.
+
+**End-to-end design check** (NGSolve; the headline result):
+```
+python verify_chaplygin_bend_design.py
+```
+A 90-degree saturable flux-guide bend is DESIGNED by one linear hodograph
+solve (walls are flux lines; outer wall 1.00 T constant, inner wall tapered
+1.30 -> 1.75 T; `mu_r(B) = 1 + 199/(1+(B/1 T)^2)`), then the designed shape is
+meshed and an INDEPENDENT nonlinear FEM (`div(nu(|grad A|) grad A) = 0`,
+damped Picard) is solved on it with the same flux data. 2026-07-23 baseline:
+
+| check | result |
+|---|---|
+| constant-mu sanity (design must be an exact annulus) | circularity dev 1.3e-9 / 3.5e-9, radius-ratio err 1.8e-9 |
+| inner wall \|B\| vs spec (5..85 deg core) | mean 0.29--0.31 %, max 0.86 % |
+| outer wall \|B\| vs spec (5..85 deg core) | mean 0.27--0.43 % (corner boundary layer only above that) |
+| MMF, independent global quantity | design 908.7 A vs FEM 909.8 A (0.12 %); flat case 0.03 % |
+| mesh convergence | maxh w/8 -> w/16 moves core errors by < 0.02 points |
+| orientation | `J` keeps one sign on every design (no folding) |
+
+Both drivers assert these golden bands and exit nonzero on violation; the
+committed `results_*.json` sidecars are the durable records. Note the forward
+check REQUIRES damped Picard (omega = 0.35): the undamped iteration stalls at
+a large residual and fakes a ~140 % "design error" (bug-pattern
+`reference-secant-picard-oscillation` in radia-mcp). Scope: this validates the
+design direction on a known hodograph domain; the analysis direction (given a
+fixed pole shape, the hodograph image is unknown) remains open research.
+
 ## References
 
 - A. Clebsch, "Ueber die Integration der hydrodynamischen
