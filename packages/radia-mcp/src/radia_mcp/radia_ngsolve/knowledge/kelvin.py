@@ -2658,12 +2658,35 @@ f += -s * sigma_cf * InnerProduct(A_s, v + grad(q)) * dx("conductor")
 # J = -s * sigma * (A_s + A_r + grad(W))
 ```
 
+The same numbers hold for a REAL coil source (reduced A-Phi, coaxial
+filament loop, analytic reference by the degree-1 reflection coefficient
+Gamma_1): A-Phi p=2 = 0.054%, A* floor 0.475% -- source-independent.  The
+loop's A_s enters ONLY through the conductor mass term (curl(nu0 curl A_s)
+= J_coil cancels the coil current; nothing is carried into the Kelvin
+exterior for a decaying source).
+
+CURVE ORDER MUST MATCH p (measured): the same p=2 A-Phi solve on a
+mesh.Curve(1) straight-tet mesh degrades 35x (0.054% -> 1.87%; A* 2.20%) --
+geometry error buries the formulation.  "p=2" always means mesh.Curve(2).
+A p=2 Kelvin model that underperforms should be checked for a missing
+Curve() call FIRST.
+
 Rule of thumb: SIBC-driven problems (no volume eddy mass) stay on the plain
-A-method; a VOLUME conductor at p >= 2 takes the A-Phi block.  Golden:
-`validation_test/kelvin_source/test_aphi_kelvin_eddy.py` (FES-verify trio
-locked at p=1 and p=2: slaved 1659 / 3871, ratio 1.000000).  Rendered
-walkthrough with executed outputs:
-`docs/kelvin/kelvin_exterior_source_and_aphi.ipynb`.
+A-method; a VOLUME conductor at p >= 2 takes the A-Phi block.  Goldens:
+`validation_test/kelvin_source/test_aphi_kelvin_eddy.py` (uniform source;
+FES-verify trio locked at p=1 and p=2: slaved 1659 / 3871, ratio 1.000000)
+and `validation_test/kelvin_source/test_reduced_aphi_kelvin_coil.py`
+(coil source + the curve-order lock).  Rendered walkthrough with executed
+outputs: `docs/kelvin/kelvin_exterior_source_and_aphi.ipynb`.
+
+Debug signatures (match your error magnitude against these measured modes):
+| observed error at p=2      | likely cause                                |
+|----------------------------|---------------------------------------------|
+| ~0.4-0.5%, p-saturated     | plain A-method on a volume conductor        |
+| ~2% (p=2 no better than p=1)| mesh.Curve missing / curve order 1         |
+| ~ -33% (factor 2/3)        | source dropped in the Kelvin exterior       |
+| ~ +33% (factor 4/3)        | 0-form Convention B differentiated to field |
+| O(10x) off                 | nograds/Periodic/reg missing (table above)  |
 
 ## References
 

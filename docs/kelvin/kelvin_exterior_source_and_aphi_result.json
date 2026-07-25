@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-25T10:26:14Z",
+  "generated_at_utc": "2026-07-25T10:45:38Z",
   "notebook": "kelvin_exterior_source_and_aphi.ipynb",
-  "notebook_sha256": "12f14af6bb03490818f13ce426d2a77939455dee56e199860f9d6ce0fb49d442",
+  "notebook_sha256": "c8ccf8a850bb4d2bdb7b5100518ce776a18e52ec30c51a862fbc958789aba943",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
@@ -12,11 +12,11 @@
   },
   "summary": {
     "path": "kelvin_exterior_source_and_aphi.ipynb",
-    "cells": 14,
-    "code_cells": 6,
-    "executed_code_cells": 6,
-    "code_cells_with_outputs": 6,
-    "output_count": 7,
+    "cells": 17,
+    "code_cells": 7,
+    "executed_code_cells": 7,
+    "code_cells_with_outputs": 7,
+    "output_count": 9,
     "error_output_count": 0,
     "result_saved": true,
     "notebook_role": "",
@@ -103,9 +103,17 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 531,
-          "text_sha256": "a6f34d8329f8da706988c0b90805da6a61cd026e57ed3de51d9a1d132b525cd3",
-          "text_preview": "  rho'= 0.40: |Omega_s'| = 7.031474e-03\n  rho'= 0.20: |Omega_s'| = 1.676622e-03\n  rho'= 0.10: |Omega_s'| = 4.085902e-04\n  rho'= 0.05: |Omega_s'| = 1.008126e-04\n  rho'= 0.02: |Omega_s'| = 1.600139e-05\n  [OK] decaying source -> regular at rho' = 0\n\n=== Test 12: uniform background has no bounded 0-form image ===\n  rho'= 0.40: |Omega_s'| = 2.500000e+00\n  rho'= 0.20: |Omega_s'| = 5.000000e+00\n  rho'= 0.10: |Omega_s'| = 1.000000e+01\n  rho'= 0.05: |Omega_s'| = 2.000000e+01\n  [OK] uniform background diverges -> use the 1-form route\n\n",
+          "text_chars": 311,
+          "text_sha256": "8e21828574ba1dc6b3490533d20909e48d9065b8cd5ab08978c9206c67c99044",
+          "text_preview": "  rho'= 0.40: |Omega_s'| = 7.031474e-03\n  rho'= 0.20: |Omega_s'| = 1.676622e-03\n  rho'= 0.10: |Omega_s'| = 4.085902e-04\n  rho'= 0.05: |Omega_s'| = 1.008126e-04\n  rho'= 0.02: |Omega_s'| = 1.600139e-05\n  [OK] decaying source -> regular at rho' = 0\n\n=== Test 12: uniform background has no bounded 0-form image ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 220,
+          "text_sha256": "c9f01efa65a558ea7132912ba336b1a134f36ea2ebc858ce4f75c31080a52fae",
+          "text_preview": "  rho'= 0.40: |Omega_s'| = 2.500000e+00\n  rho'= 0.20: |Omega_s'| = 5.000000e+00\n  rho'= 0.10: |Omega_s'| = 1.000000e+01\n  rho'= 0.05: |Omega_s'| = 2.000000e+01\n  [OK] uniform background diverges -> use the 1-form route\n\n",
           "text_truncated": false
         }
       ]
@@ -127,17 +135,33 @@
       ]
     },
     {
-      "cell_index": 12,
+      "cell_index": 13,
       "execution_count": 6,
-      "source_sha256": "93911d743e7962739573c088999bbe03884c8c2ffa3d5ea619922f1926bdef4c",
-      "source_preview": "# Persist the domain results JSON next to this notebook (Data Persistence policy)\nresults = {\n    \"schema\": \"radia.kelvin_exterior_source_and_aphi.v1\",\n    \"generated_at_utc\": dt.datetime.now(dt.timezone.utc)\n        .isoformat(timespec=\"seconds\").replace(\"+00:00\", \"Z\"),\n    **versions,\n    \"part1_exterior_source_routes\": part1,\n    \"part2_twisted_pullback\": part2,\n    \"part3_aphi_vs_astar\": part3,\n    \"goldens\": [\n        \"validation_test/kelvin_source/test_kelvin_exterior_source_routes.py\",\n        \"tests/test_reduced_potential_background.py\",\n        \"validation_test/kelvin_source/test_aphi_kelvin_eddy.py\",\n    ],\n}\nout = NOTEBOOK_DIR / \"kelvin_exterior_source_and_aphi_results.json\"\nout.write_text(json.dumps(results, indent=2) + \"\\n\", encoding=\"utf-8\")\nprint(\"wrote\", out.name)\nprint(json.dumps({k: results[k] for k in\n                  (\"schema\", \"generated_at_utc\", \"radia_version\")}, indent=1))",
+      "source_sha256": "990170aa05dce369c13818eb2418589dd5bdd7b5212713216047cc58f48a1166",
+      "source_preview": "coil = load_module(\n    \"validation_test/kelvin_source/test_reduced_aphi_kelvin_coil.py\",\n    \"reduced_aphi_coil\")\nres4 = coil._results()\nm_ana4 = res4[\"m_ana\"]\nprint(f\"m_analytic (loop source) = {m_ana4:.6e}\")\nprint(f\"A_s CF vs exact elliptic: max rel = {res4['As_pointwise_rel']:.2e}\\n\")\nrows4 = {}\nfor key, label in ((\"astar_p1\", \"p=1 A*            \"),\n                   (\"aphi_p1\",  \"p=1 A-Phi         \"),\n                   (\"astar_p2\", \"p=2 A*            \"),\n                   (\"aphi_p2\",  \"p=2 A-Phi         \"),\n                   (\"aphi_p2_curve1\", \"p=2 A-Phi curve=1 \")):\n    rel = abs(res4[key] - m_ana4) / abs(m_ana4)\n    rows4[key] = 100 * rel\n    print(f\"  {label}: rel = {rel*100:6.3f}%\")\ncurve_factor = rows4[\"aphi_p2_curve1\"] / rows4[\"aphi_p2\"]\nprint(f\"\\ncurve=1 degrades A-Phi p=2 by a factor {curve_factor:.0f}\")\npart4 = {\"m_analytic\": [m_ana4.real, m_ana4.imag],\n         \"rel_pct\": rows4, \"curve1_degradation_factor\": curve_factor}",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 324,
+          "text_sha256": "7cb1fb9b698e73f1942a3cb9887d7a7c0aefdb0a10eae3b5401beb074af5e099",
+          "text_preview": "m_analytic (loop source) = -3.763624e+01-5.115070e+01j\nA_s CF vs exact elliptic: max rel = 4.63e-11\n\n  p=1 A*            : rel =  2.899%\n  p=1 A-Phi         : rel =  2.899%\n  p=2 A*            : rel =  0.475%\n  p=2 A-Phi         : rel =  0.054%\n  p=2 A-Phi curve=1 : rel =  1.870%\n\ncurve=1 degrades A-Phi p=2 by a factor 34\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 15,
+      "execution_count": 7,
+      "source_sha256": "c0d14a1aee0f7826a2cef5d39a8101e96a7311610f0e52969d3911f824ac2b0c",
+      "source_preview": "# Persist the domain results JSON next to this notebook (Data Persistence policy)\nresults = {\n    \"schema\": \"radia.kelvin_exterior_source_and_aphi.v1\",\n    \"generated_at_utc\": dt.datetime.now(dt.timezone.utc)\n        .isoformat(timespec=\"seconds\").replace(\"+00:00\", \"Z\"),\n    **versions,\n    \"part1_exterior_source_routes\": part1,\n    \"part2_twisted_pullback\": part2,\n    \"part3_aphi_vs_astar\": part3,\n    \"part4_coil_source_and_curve_order\": part4,\n    \"goldens\": [\n        \"validation_test/kelvin_source/test_kelvin_exterior_source_routes.py\",\n        \"tests/test_reduced_potential_background.py\",\n        \"validation_test/kelvin_source/test_aphi_kelvin_eddy.py\",\n        \"validation_test/kelvin_source/test_reduced_aphi_kelvin_coil.py\",\n    ],\n}\nout = NOTEBOOK_DIR / \"kelvin_exterior_source_and_aphi_results.json\"\nout.write_text(json.dumps(results, indent=2) + \"\\n\", encoding=\"utf-8\")\nprint(\"wrote\", out.name)\nprint(json.dumps({k: results[k] for k in\n                  (\"schema\", \"generated_at_utc",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 183,
-          "text_sha256": "397d9f165c04a946a8bd11530b9af0ece3fe344c97fa0468d2f5d0973ac1a7b0",
-          "text_preview": "wrote kelvin_exterior_source_and_aphi_results.json\n{\n \"schema\": \"radia.kelvin_exterior_source_and_aphi.v1\",\n \"generated_at_utc\": \"2026-07-25T10:25:56Z\",\n \"radia_version\": \"4.95.23\"\n}\n",
+          "text_sha256": "f93fef86341ab83f09b1ac8f96af57b28ecee51badf9b22ee3bb3181590dfa5b",
+          "text_preview": "wrote kelvin_exterior_source_and_aphi_results.json\n{\n \"schema\": \"radia.kelvin_exterior_source_and_aphi.v1\",\n \"generated_at_utc\": \"2026-07-25T10:45:30Z\",\n \"radia_version\": \"4.95.23\"\n}\n",
           "text_truncated": false
         }
       ]
