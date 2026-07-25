@@ -864,6 +864,37 @@ accelerator("endpack_cobake")
 accelerator("sector_saturation")
 ```
 
+## Field-plane (Chaplygin) design direction: VERIFIED end-to-end (2026-07-23)
+
+The field-plane hodograph `(q, theta)` linearizes a saturable `mu(q)` exactly
+(the material law becomes a known coefficient of the independent variable).
+Three facts make it practical, all locked by
+`validation_test/clebsch_legendre/`:
+
+- **Legendre potential** `chi = H.r - Psi`: one scalar unknown whose FIRST
+  derivatives are the physical coordinates (`e_H.r = chi_q`,
+  `e_perp.r = chi_theta/q`, `Psi = q chi_q - chi`). Self-adjoint equation
+  `d/dq(mu q chi_q) + ((mu q)'/q) chi_thth = 0`.
+- **B-radial form** feeds a measured secant curve `mu_s(B)` directly
+  (`mu_d = mu_s^2/(mu_s - B dmu_s/dB)`), no table inversion.
+- **End-to-end check** (`verify_chaplygin_bend_design.py`): a 90-deg
+  saturable flux-guide bend designed by ONE linear solve, then re-solved by
+  an independent nonlinear FEM on the designed shape. Wall |B| matches the
+  spec to 0.29-0.43 % mean (5-85 deg core), MMF to 0.12 % (0.03 % flat
+  case), constant-mu sanity reproduces an exact annulus to 1.8e-9,
+  mesh-converged, J single-signed (no folding). Golden-banded; committed
+  sidecars `results_*.json`.
+
+Pitfall: the forward nonlinear FEM check REQUIRES damped Picard
+(omega ~ 0.35). The undamped iteration stalls and fakes a ~140 % "design
+error" -- see bug pattern `reference-secant-picard-oscillation`
+(`bug_patterns_lookup(topic="nonlinear")`).
+
+Scope: the DESIGN direction on a known hodograph domain (spec posed in
+`(|B|, theta)`: saturable throats, flux regulators, bend guides). The
+ANALYSIS direction (fixed pole shape, hodograph image unknown) remains open
+research; do not present it as solved.
+
 Repository anchors:
 
 - `docs/clebsch_hodograph/public_demo.ipynb` (result-saved public demo entry point)
@@ -873,6 +904,10 @@ Repository anchors:
 - `docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md`
 - `docs/clebsch_hodograph/demos/` (runnable companion set)
 - `tests/feec/test_clebsch_hodograph_research.py`
+- `validation_test/clebsch_legendre/verify_chaplygin_bend_design.py`
+  (field-plane design -> shape -> independent nonlinear FEM, golden-banded)
+- `validation_test/clebsch_legendre/verify_chi_modesum_solver.py`
+  (Legendre-potential mode-sum machinery vs closed forms)
 """
 
 
