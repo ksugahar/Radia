@@ -921,6 +921,30 @@ Golden: `validation_test/kelvin_source/test_kelvin_exterior_source_routes.py`.
 Contract locks (symbolic identities, curl, boundedness):
 `tests/test_reduced_potential_background.py`.
 
+#### A-Phi (A-V) eddy formulation at p = 2 (measured 2026-07-25)
+
+Conducting sphere `a/delta = 2` in a uniform AC field vs the analytic Smythe
+moment, two lanes on one mesh (every verified-recipe element shared):
+
+| | p=1 | p=2 | p=3 | h-sweep at p=2 (ne 10k → 28k → 68k) |
+|---|---|---|---|---|
+| **A\*** (plain A-method) | 2.889% | 0.473% | 0.442% (saturated) | 0.473 → 0.243 → 0.141% (~O(h)) |
+| **A-Phi** (mixed) | 2.889% | **0.053%** | 0.005% | 0.053 → 0.011 → 0.004% |
+
+`nograds=True` (required for Periodic Kelvin) removes the gradient test
+functions that enforce discrete charge conservation; the explicit Phi block
+restores them. SIBC-driven problems stay plain-A; a volume conductor at
+p >= 2 takes the A-Phi block. Golden:
+`validation_test/kelvin_source/test_aphi_kelvin_eddy.py`.
+
+#### Rendered walkthrough
+
+`docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` (executed, with the
+synchronized `kelvin_exterior_source_and_aphi_results.json`) re-runs all
+three goldens of this section — the exterior-source routes, the twisted
+0-form pullback contracts, and the A\*/A-Phi p-sweep — and embeds the
+outputs.
+
 #### Analytical solutions for benchmark cases
 
 For a magnetic sphere of radius `a` and relative permeability `μ_r`:

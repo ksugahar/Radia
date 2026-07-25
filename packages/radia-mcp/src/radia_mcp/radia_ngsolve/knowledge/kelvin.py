@@ -43,6 +43,10 @@ Reference docs (consolidated 2026-05-04):
     classic A/H/Omega/Radia-IEM demos pruned from examples/, with
     representative excerpts plus full source text and SHA-256 hashes in the
     synchronized JSON)
+  docs/kelvin/kelvin_exterior_source_and_aphi.ipynb (executed, re-runs the
+    three 2026-07 goldens live: exterior-source routes 2/3 - exact - 4/3,
+    twisted 0-form pullback contracts, A* vs A-Phi p-sweep with the
+    charge-conservation diagnosis; synchronized results JSON + sidecar)
   docs/kelvin/ARCHIVE_RETIREMENT.md (routing table from former full-source
     archives to maintained docs, src/radia APIs, and validation_test lanes)
   src/radia/open_boundary + validation_test/open_boundary (production DtN/CLN
@@ -2657,7 +2661,9 @@ f += -s * sigma_cf * InnerProduct(A_s, v + grad(q)) * dx("conductor")
 Rule of thumb: SIBC-driven problems (no volume eddy mass) stay on the plain
 A-method; a VOLUME conductor at p >= 2 takes the A-Phi block.  Golden:
 `validation_test/kelvin_source/test_aphi_kelvin_eddy.py` (FES-verify trio
-locked at p=1 and p=2: slaved 1659 / 3871, ratio 1.000000).
+locked at p=1 and p=2: slaved 1659 / 3871, ratio 1.000000).  Rendered
+walkthrough with executed outputs:
+`docs/kelvin/kelvin_exterior_source_and_aphi.ipynb`.
 
 ## References
 
@@ -3100,6 +3106,14 @@ small (that path is validated to max 3% / RMS 1.5% in
 same choice costs the full 1/3.  If your source is not small at the Kelvin
 radius, build H_s with `make_reduced_potential_background_cf` and pass it via
 `set_source_cf` instead.
+
+## Rendered explanation (docs notebook)
+
+`docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` -- executed,
+result-bearing; re-runs the three goldens (exterior-source routes, twisted
+pullback contracts, A*/A-Phi p-sweep) and embeds every number, with the
+synchronized `kelvin_exterior_source_and_aphi_results.json` sidecar.  Read it
+for the full narrative; this topic is the operational summary.
 
 ## T-Omega
 
