@@ -2688,6 +2688,25 @@ Debug signatures (match your error magnitude against these measured modes):
 | ~ +33% (factor 4/3)        | 0-form Convention B differentiated to field |
 | O(10x) off                 | nograds/Periodic/reg missing (table above)  |
 
+Recommended workflow when YOUR model misbehaves: (0) run the two goldens on
+your machine first -- if they pass, the environment and recipe are fine and
+the difference is in your model; (1) run the FES-verify trio on YOUR mesh;
+(2) match your error against the signature table; (3) only then touch the
+solver.
+
+HONEST LIMITS of the A-Phi goldens (do not extrapolate past these):
+- Both goldens solve with a DIRECT solver (pardiso).  Iterative solution of
+  the MIXED A-Phi system (e.g. BDDC/CG on fesA*fesV) is NOT locked by any
+  golden; recipe element 5 (BDDC at p>=2) is verified for the pure-HCurl
+  space only.
+- The geometry is a smooth sphere.  Sharp-cornered conductors (cuboid) are
+  NOT covered; a cuboid + Kelvin HCurl gauge collapse (-76%) is on record
+  from the 2026-05 CLN study, so corners are a known risk area, not a
+  solved one.
+- The goldens validate the FEM formulation layer.  CLN / Cauer-ladder
+  extraction on top of it (Lanczos, Foster poles, R_0 normalization) is a
+  separate layer with its own open questions.
+
 ## References
 
 - `src/radia/panels/calc_fem_kelvin.py` (production reference for IH)
