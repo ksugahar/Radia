@@ -1,0 +1,58 @@
+{
+  "schema": "radia.kelvin_exterior_source_and_aphi.v1",
+  "generated_at_utc": "2026-07-25T10:25:56Z",
+  "radia_version": "4.95.23",
+  "ngsolve_version": "6.2.2604",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "part1_exterior_source_routes": {
+    "H_analytic": 0.029411764705882353,
+    "routes": {
+      "Z": {
+        "H_z": 0.019755896194892153,
+        "err_pct": -32.82995293736668
+      },
+      "B1": {
+        "H_z": 0.029630234300284553,
+        "err_pct": 0.7427966209674786
+      },
+      "B0": {
+        "H_z": 0.039508488095342464,
+        "err_pct": 34.32885952416438
+      }
+    },
+    "ratio_Z_over_B1": 0.6667478898303018,
+    "ratio_B0_over_B1": 1.333384261999003
+  },
+  "part2_twisted_pullback": {
+    "gradient_consistency": "H_s' == -grad(Omega_s') to ~1e-10 (FD-limited)",
+    "decaying_source": "regular at rho'->0, Omega_s' = O(rho'^2)",
+    "uniform_background": "diverges like R^2/rho'^2 (no bounded 0-form image)"
+  },
+  "part3_aphi_vs_astar": {
+    "m_analytic": [
+      -79271.78075603256,
+      -107736.77361234133
+    ],
+    "by_order": {
+      "1": {
+        "astar_rel_pct": 2.888750682420026,
+        "aphi_rel_pct": 2.888750679694522,
+        "slaved": 1659,
+        "kelvin_ratio": 1.0000000000000002
+      },
+      "2": {
+        "astar_rel_pct": 0.4733630314828237,
+        "aphi_rel_pct": 0.05290040177836746,
+        "slaved": 3871,
+        "kelvin_ratio": 0.9999999999999999
+      }
+    },
+    "p2_factor_aphi_over_astar": 8.94819350268897
+  },
+  "goldens": [
+    "validation_test/kelvin_source/test_kelvin_exterior_source_routes.py",
+    "tests/test_reduced_potential_background.py",
+    "validation_test/kelvin_source/test_aphi_kelvin_eddy.py"
+  ]
+}
