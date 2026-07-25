@@ -106,7 +106,7 @@ def _analytic():
     return omega, m
 
 
-def _build_mesh():
+def _build_mesh(curve=2):
     cond = Sphere(Pnt(0, 0, 0), A_C)
     outer = Sphere(Pnt(0, 0, 0), R_K)
     for f in cond.faces:
@@ -139,7 +139,7 @@ def _build_mesh():
 
     with TaskManager():
         mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=MAXH, grading=0.5))
-        mesh.Curve(2)
+        mesh.Curve(curve)
     return mesh
 
 
@@ -181,10 +181,15 @@ def _moment_z(mesh, J):
                              definedon=mesh.Materials("conductor"), order=8))
 
 
-def _solve_astar(mesh, p, omega):
+def _uniform_A_s():
+    return CF((-y, x, 0)) * (B_0 / 2)
+
+
+def _solve_astar(mesh, p, omega, A_s=None):
     nu_cf, sg_cf = _material_cfs(mesh)
     s = 1j * omega
-    A_s = CF((-y, x, 0)) * (B_0 / 2)
+    if A_s is None:
+        A_s = _uniform_A_s()
     non_kelvin = "|".join(m for m in mesh.GetMaterials()
                           if "kelvin" not in m.lower())
 
@@ -206,10 +211,11 @@ def _solve_astar(mesh, p, omega):
     return _moment_z(mesh, -s * SIGMA * (A_s + gf))
 
 
-def _solve_aphi(mesh, p, omega):
+def _solve_aphi(mesh, p, omega, A_s=None):
     nu_cf, sg_cf = _material_cfs(mesh)
     s = 1j * omega
-    A_s = CF((-y, x, 0)) * (B_0 / 2)
+    if A_s is None:
+        A_s = _uniform_A_s()
     non_kelvin = "|".join(m for m in mesh.GetMaterials()
                           if "kelvin" not in m.lower())
 
