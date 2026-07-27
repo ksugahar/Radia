@@ -232,6 +232,47 @@ def test_cln_composite_warm_start_reproduces_previous_lookahead():
     )
 
 
+def test_cln_two_stage_training_with_global_objective_runs():
+    freqs = np.logspace(2, 5, 14)
+    omega = 2.0 * np.pi * freqs
+    inner = _compose_stage(
+        0.5 + 1j * omega * 3.0e-6,
+        1.0 / (0.05 / (1.0 + 1j * omega * 2.0e-5)),
+        np.full(freqs.shape, 12.0 + 0.0j),
+    )
+    z = _compose_stage(
+        2.0 + 1j * omega * 1.0e-5,
+        1.0 / (0.02 / (1.0 + 1j * omega * 8.0e-5)),
+        inner,
+    )
+    cfg = CLNPeelingConfig(
+        n_stages=2,
+        branch_epochs=15,
+        branch_restarts=1,
+        pair_epochs=20,
+        pair_polish_epochs=5,
+        pair_restarts=1,
+        branch_sparsity_weight=0.0,
+        positive_real_weight=0.1,
+        min_tail_sensitivity=0.0,
+        residual_real_tolerance=100.0,
+        max_stage_relative_degradation=10.0,
+        min_trusted_fraction=0.0,
+        seed=71,
+    )
+    assert cfg.global_objective and cfg.composite_warm_start  # defaults
+
+    model = train_cln_peeling_urn(freqs, z, cfg, verbose=False)
+
+    # Stage 0 must freeze; stage 1 exercises the through-ladder objective
+    # (frozen outer chain composition) whether or not it survives the gates.
+    assert len(model.stages) >= 1
+    assert "global_lookahead_s_rmse" in model.stages[0].metrics
+    prediction = model.predict_terminated(freqs, termination="lookahead")
+    assert np.all(np.isfinite(prediction.real))
+    assert np.all(np.isfinite(prediction.imag))
+
+
 def test_cln_frozen_stage_records_global_lookahead_rmse(smoke_ladder_model):
     freqs, z, model = smoke_ladder_model
     stage = model.stages[0]
