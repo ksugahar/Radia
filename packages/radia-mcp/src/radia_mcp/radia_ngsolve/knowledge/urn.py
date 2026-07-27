@@ -1,6 +1,6 @@
 r"""Universal Relaxation Network (URN) -- causal/passive rational fitting of a
 
-SHOWCASE NOTEBOOK: docs/universal_relaxation_network/urn_showcase.ipynb -- 4 verified paper figures (URN-vs-VF ~22.8%, NASA/TDK fits, attention ablation).
+SHOWCASE NOTEBOOK: docs/universal_relaxation_network/urn_showcase.ipynb -- legacy validation figures (URN-vs-VF, NASA/TDK fits, older attention ablation).
 frequency response, with direct time-domain (relaxation-network / SPICE / ADE)
 synthesis.
 
@@ -9,8 +9,7 @@ response Z(omega) (impedance, dispersive permittivity/permeability, or an
 open-boundary DtN symbol G_n(omega)) into a sparse sum of PHYSICAL relaxation
 mechanisms -- Debye, Cole-Cole, Cole-Davidson, Havriliak-Negami, CPE, Warburg,
 Gerischer, RLC, skin-effect -- in both a series and a parallel (admittance)
-branch, with KAN-style adaptive relaxation-time (tau) refinement and a
-frequency-dependent attention gate.  Because every basis is a passive,
+branch, with KAN-style adaptive relaxation-time (tau) refinement.  Because every basis is a passive,
 causal relaxation, the fitted model is GUARANTEED causal/passive and maps
 directly to a stable time-domain realisation: an equivalent SPICE circuit
 (generate_spice_netlist) or, equivalently, a set of first-order auxiliary
@@ -66,9 +65,9 @@ URN_METHOD = r"""
 
 Model:  Z(omega) = Z_inf + sum_k w_k * basis_k(omega; tau_k, ...)   (series)
                           + parallel/admittance branch (Y-space)
-with a frequency-dependent ATTENTION gate a_k(omega) (small MLP, softmax) that
-lets each basis dominate only in its own frequency band (sharpens the
-decomposition; ~79-83% accuracy gain on real data in the ablation).
+The current SA/RM direction avoids frequency-dependent attention and instead
+uses continued-fraction residual peeling to obtain frequency selectivity from
+the circuit topology.
 
 Relaxation basis library (relaxation_basis_library.py):
   Debye:             1 / (1 + j w tau)
@@ -89,6 +88,59 @@ Training (train_urn): Adam + cosine LR, multi-restart, relative-error loss
 log-spaced tau parameters are stored as log_tau (nn.Parameter); active
 components are read out by get_active_components(threshold) (weight above
 threshold), returning tau (in seconds), alpha/beta, weight_magnitude, branch.
+
+SA/RM-2026 paper variant (YAdmittanceURN): the research-meeting draft by
+Sato/Sugahara uses a pure attention-free Y-domain dictionary:
+Debye/magnetic-Debye/Cole-Cole/magnetic-Cole-Cole/inductive-CPE/
+capacitive-CPE/series-RLC = 22 bases, S-domain Huber loss with z0=median(|Z|),
+nonnegative gates, and output-ablation importance I_i.  This is exposed as train_y_admittance_urn,
+refit_y_admittance_active_bases, and s_domain_rmse so the draft can evolve
+without replacing the original NASA/TDK train_urn path.
+
+Cauer-ladder review variant (CauerLadderURN): instead of increasing the number
+of parallel bases, a small passive continued fraction is fitted:
+  Z_k = R_k + s L_k + 1 / (G_k + s C_k + 1 / Z_{k+1}).
+A 6-section ladder has 24 positive parameters, close to the 22-basis draft
+dictionary, but represents pole-zero/anti-resonance behavior through
+series/parallel nesting.  train_cauer_ladder_alternating updates R,L with a
+direct impedance-domain residual and G,C with a direct admittance-domain
+residual, rolling back unstable blocks and lowering the learning rate.  This is
+attention-free and therefore a better candidate for direct time-domain circuit
+synthesis.  use_peeling_initialization=True is experimental; naive peeling can
+over-subtract and should not yet be treated as the default result path.
+For resonance/anti-resonance data, set use_rational_initialization=True and
+use_least_squares_polish=True: Radia first builds a small pole-zero rational
+teacher, distills it into positive Cauer parameters by nonlinear least squares,
+then optionally uses train_cauer_ladder_tail_then_polish to freeze outer
+sections while fitting the inner ladder and finally unfreeze all sections.
+
+CLN peeling variant (paired-basis): train_cln_peeling_urn fits, per stage,
+  R_n = Z_2n + (Z_2n+1 || R_n+1)
+where one 22-basis composite fit supplies the physical basis shapes and its
+coefficients are split continuously between the even series branch and the odd
+shunt branch (soft split a_2n,k = a_k p_k, a_2n+1,k = a_k (1-p_k)) while a
+fresh 22-basis lookahead model represents R_n+1.  Accepted pairs are frozen
+(no global polish; past stages are never re-trained) and the measured tail is
+peeled by the exact inverse map R_n+1 = [1/(R_n - Z_2n) - 1/Z_2n+1]^-1.
+Evaluation policy: report the termination="lookahead" S-domain RMSE (learned
+physical tail) plus audit_passivity() -- a dense-grid min Re(Z)/min Re(Y)
+audit of every frozen branch and the full lookahead ladder, with 1-decade
+extrapolation.  termination="stored" re-inserts the exactly peeled measurement
+residue: identity reconstruction only, never a fit-accuracy number.
+Stage-wise trust region (2026-07-27): the exact peel amplifies measurement
+error where R_n - Z_2n cancels, and yields sign-unstable spikes where the
+peeled tail admittance nearly vanishes (parallel-resonance bands where the
+tail barely loads the ladder).  On the SA/RM PCB coil the 1.36-1.49 MHz
+self-resonance band gave a -59.7 kOhm negative-real spike in R_1 (median 56
+Ohm), rejecting stage 2 with min_parallel_real_normalized = -1063 regardless
+of the series branch.  Each stage therefore stores per-frequency trust
+weights (config: denominator_margin_relative, tail_admittance_margin_relative)
+computed from the relative series cancellation and the peeled-tail admittance
+magnitude; the next stage fits with those weights and is accepted on trusted
+points only (min_parallel_real_trusted, min_tail_admittance_real_trusted,
+seed/parent_s_rmse_trusted, trusted_fraction >= min_trusted_fraction), and
+inherited weights multiply stage by stage.  The stored exact tail is never
+modified.
 """
 
 URN_API = r"""
@@ -105,8 +157,52 @@ spice  = generate_spice_netlist(model, "Z")  # SPICE netlist string (RC/RL ladde
 
 URNConfig fields: n_debye/n_cole_cole/n_cole_davidson/n_havriliak_negami/n_cpe/
   n_warburg/n_gerischer/n_rlc/n_skin_effect (series), *_parallel (admittance),
-  sparsity_weight, lr, n_epochs(=6000), n_restarts(=10), omega_ref/Z_ref(auto),
-  use_attention(=True).  For a responsive tool call, lower n_epochs/n_restarts.
+  sparsity_weight, lr, n_epochs(=6000), n_restarts(=10), omega_ref/Z_ref(auto).
+  For a responsive tool call, lower n_epochs/n_restarts.
+
+Y-domain SA/RM variant:
+from radia.urn import (
+    YAdmittanceURNConfig, refit_y_admittance_active_bases,
+    s_domain_rmse, train_y_admittance_urn)
+cfg = YAdmittanceURNConfig.paper_22_basis()
+model = train_y_admittance_urn(freqs_Hz, Z_complex, cfg, verbose=False)
+active = model.active_bases()   # output-ablation ranking
+Zfit = model.predict(freqs_Hz)
+rmse_s = s_domain_rmse(Zfit, Z_complex)
+realizable = refit_y_admittance_active_bases(freqs_Hz, Z_complex, active, cfg)
+
+Cauer continued-fraction review variant:
+from radia.urn import (
+    CauerLadderURNConfig, fit_rational_pole_zero,
+    train_cauer_ladder_alternating,
+    train_cauer_ladder_progressive)
+cfg = CauerLadderURNConfig.twenty_two_parameter_candidate()
+model = train_cauer_ladder_alternating(freqs_Hz, Z_complex, cfg, verbose=False)
+Zfit = model.predict(freqs_Hz)
+sections = model.parameter_summary()  # positive R,L,G,C per Cauer section
+
+Pole-zero assisted Cauer path:
+from radia.urn import train_cauer_ladder_tail_then_polish
+cfg = CauerLadderURNConfig.twenty_two_parameter_candidate(
+    use_rational_initialization=True,
+    use_least_squares_polish=True,
+    frozen_outer_sections=2)
+teacher = fit_rational_pole_zero(freqs_Hz, Z_complex, order=6)
+model = train_cauer_ladder_tail_then_polish(freqs_Hz, Z_complex, cfg)
+
+CLN peeling path (paired even/odd split + stage-wise trust region):
+from radia.urn import CLNPeelingConfig, train_cln_peeling_urn
+cfg = CLNPeelingConfig(
+    n_stages=2,
+    denominator_margin_relative=3.0e-2,     # series-cancellation trust margin
+    tail_admittance_margin_relative=5.0e-3,  # peeled-tail activity trust margin
+    min_trusted_fraction=0.8)
+model = train_cln_peeling_urn(freqs_Hz, Z_complex, cfg)
+Zla = model.predict_terminated(freqs_Hz, termination="lookahead")  # REPORT THIS
+audit = model.audit_passivity()  # dense grid + 1-decade extrapolation
+# model.predict(freqs_Hz) / termination="stored" = identity check only;
+# lookahead/constant/open/short accept arbitrary frequency grids.
+# stage.metrics: *_trusted gates, trusted_fraction; stage.tail_trust_weight
 
 This MCP module wraps it:
   run_urn_fit(freqs, Z, n_debye=.., n_cole_cole=.., n_warburg=.., n_epochs=..,
