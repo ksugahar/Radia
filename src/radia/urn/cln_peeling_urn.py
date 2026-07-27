@@ -94,6 +94,15 @@ class CLNPeelingConfig:
     # greedy frozen-stage ladder otherwise loses.
     composite_warm_start: bool = True
 
+    # Train each stage's pair through the frozen outer branches against the
+    # measured response instead of against the peeled local tail.  The frozen
+    # branches enter the composition as constants (no gradient flows to past
+    # stages), so the freeze principle is untouched, but the optimisation
+    # objective is the whole-ladder fit -- a stage can then never improve
+    # locally while degrading globally.  The peeled tail remains the seed and
+    # the acceptance diagnostics.
+    global_objective: bool = True
+
 
 @dataclass
 class CLNBranchFit:
@@ -564,6 +573,9 @@ def _pair_loss(
     seed_coefficients: torch.Tensor,
     config: CLNPeelingConfig,
     sample_weight: torch.Tensor | None = None,
+    outer_chain: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+    measured: torch.Tensor | None = None,
+    measured_ref: float | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     even_coeff = total_coefficients * split_fraction
     odd_coeff = total_coefficients * (1.0 - split_fraction)
@@ -581,9 +593,18 @@ def _pair_loss(
     exact_tail, exact_tail_y = _peel_tail(target, series, shunt)
     parallel_part = target - series
 
-    loss_fit = _s_loss(
-        pred, target, impedance_ref, config.huber_delta, weight=sample_weight
-    )
+    if outer_chain is not None and measured is not None and measured_ref is not None:
+        # Whole-ladder objective: compose the current pair through the frozen
+        # outer branches (constants -- no gradient reaches past stages) and
+        # fit the raw measured response on every point.
+        pred_global = pred
+        for outer_series, outer_shunt in reversed(outer_chain):
+            pred_global = _compose_stage(outer_series, outer_shunt, pred_global)
+        loss_fit = _s_loss(pred_global, measured, measured_ref, config.huber_delta)
+    else:
+        loss_fit = _s_loss(
+            pred, target, impedance_ref, config.huber_delta, weight=sample_weight
+        )
     loss_tail = _s_loss(
         child_response, exact_tail, impedance_ref, config.huber_delta, weight=sample_weight
     )
@@ -674,6 +695,9 @@ def _fit_paired_stage(
     *,
     stage_index: int,
     sample_weight: np.ndarray | None = None,
+    outer_chain: list[tuple[np.ndarray, np.ndarray]] | None = None,
+    measured: np.ndarray | None = None,
+    measured_ref: float | None = None,
 ) -> CLNPeelingStage:
     omega = torch.tensor(2.0 * np.pi * freqs_hz, dtype=torch.float64)
     target_t = torch.tensor(target, dtype=torch.complex128)
@@ -687,6 +711,22 @@ def _fit_paired_stage(
     )
     weight_t = (
         None if sample_weight_np is None else torch.tensor(sample_weight_np)
+    )
+    outer_chain_t = (
+        None
+        if outer_chain is None
+        else [
+            (
+                torch.tensor(np.asarray(series, dtype=np.complex128)),
+                torch.tensor(np.asarray(shunt, dtype=np.complex128)),
+            )
+            for series, shunt in outer_chain
+        ]
+    )
+    measured_t = (
+        None
+        if measured is None
+        else torch.tensor(np.asarray(measured, dtype=np.complex128))
     )
     with torch.no_grad():
         outer_basis = composite_seed.model.basis_matrix(omega, normalize=True).detach()
@@ -733,6 +773,9 @@ def _fit_paired_stage(
                 seed_coefficients=seed_coeff,
                 config=config,
                 sample_weight=weight_t,
+                outer_chain=outer_chain_t,
+                measured=measured_t,
+                measured_ref=measured_ref,
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(
@@ -774,6 +817,9 @@ def _fit_paired_stage(
                 seed_coefficients=seed_coeff,
                 config=config,
                 sample_weight=weight_t,
+                outer_chain=outer_chain_t,
+                measured=measured_t,
+                measured_ref=measured_ref,
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(
@@ -802,6 +848,9 @@ def _fit_paired_stage(
                 seed_coefficients=seed_coeff,
                 config=config,
                 sample_weight=weight_t,
+                outer_chain=outer_chain_t,
+                measured=measured_t,
+                measured_ref=measured_ref,
             )
 
         total_np = total.detach().cpu().numpy()
@@ -966,6 +1015,8 @@ def train_cln_peeling_urn(
     log: list[dict[str, float | int | bool]] = []
     sample_weight = np.ones(freqs.shape, dtype=np.float64)
     z_measured = z_current.copy()
+    measured_ref = float(max(np.median(np.abs(z_measured)), _EPS))
+    outer_chain: list[tuple[np.ndarray, np.ndarray]] = []
     previous_global_rmse: float | None = None
     for stage_index in range(cfg.n_stages):
         warm_start = (
@@ -988,6 +1039,9 @@ def train_cln_peeling_urn(
             cfg,
             stage_index=stage_index,
             sample_weight=sample_weight,
+            outer_chain=outer_chain if cfg.global_objective else None,
+            measured=z_measured if cfg.global_objective else None,
+            measured_ref=measured_ref if cfg.global_objective else None,
         )
         entry: dict[str, float | int | bool] = {
             "stage": stage_index,
@@ -1038,6 +1092,12 @@ def train_cln_peeling_urn(
             break
         previous_global_rmse = global_rmse
         stages.append(stage)
+        outer_chain.append(
+            (
+                stage.series_impedance.response(freqs),
+                stage.shunt_impedance.response(freqs),
+            )
+        )
         z_current = np.asarray(stage.exact_tail_impedance, dtype=np.complex128)
         sample_weight = sample_weight * np.asarray(
             stage.tail_trust_weight, dtype=np.float64
