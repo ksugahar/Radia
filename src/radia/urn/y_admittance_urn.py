@@ -38,6 +38,11 @@ class YAdmittanceURNConfig:
     n_inductive_cpe: int = 2
     n_capacitive_cpe: int = 2
     n_series_rlc: int = 2
+    # Anti-resonance extensions (0 by default = the paper 22-basis dictionary).
+    # parallel_rlc: R||L||C, Y*R = 1 + jQ(x - 1/x)  (damped anti-resonance)
+    # coil_antiresonance: C||(R+L), Y*R = jx/Q + 1/(1+jQx)  (self-resonant coil)
+    n_parallel_rlc: int = 0
+    n_coil_antiresonance: int = 0
 
     sparsity_weight: float = 1.0e-4
     lr: float = 1.0e-3
@@ -70,6 +75,8 @@ class YAdmittanceURNConfig:
             + self.n_inductive_cpe
             + self.n_capacitive_cpe
             + self.n_series_rlc
+            + self.n_parallel_rlc
+            + self.n_coil_antiresonance
         )
 
     @classmethod
@@ -225,6 +232,8 @@ _BASIS_COUNT_FIELDS = {
     "inductive_cpe": "n_inductive_cpe",
     "capacitive_cpe": "n_capacitive_cpe",
     "series_rlc": "n_series_rlc",
+    "parallel_rlc": "n_parallel_rlc",
+    "coil_antiresonance": "n_coil_antiresonance",
 }
 
 
@@ -331,6 +340,8 @@ class YAdmittanceURN(nn.Module):
             ("inductive_cpe", self.config.n_inductive_cpe),
             ("capacitive_cpe", self.config.n_capacitive_cpe),
             ("series_rlc", self.config.n_series_rlc),
+            ("parallel_rlc", self.config.n_parallel_rlc),
+            ("coil_antiresonance", self.config.n_coil_antiresonance),
         ):
             labels.extend((name, i) for i in range(count))
         return labels
@@ -361,6 +372,18 @@ class YAdmittanceURN(nn.Module):
             _initial_raw_log_grid(c.n_series_rlc, self.omega_min, self.omega_max)
         )
         self.rlc_q_raw = nn.Parameter(_initial_raw_constant(0.7, c.q_min, c.q_max, c.n_series_rlc))
+        self.prlc_omega0_raw = nn.Parameter(
+            _initial_raw_log_grid(c.n_parallel_rlc, self.omega_min, self.omega_max)
+        )
+        self.prlc_q_raw = nn.Parameter(
+            _initial_raw_constant(0.7, c.q_min, c.q_max, c.n_parallel_rlc)
+        )
+        self.coil_omega0_raw = nn.Parameter(
+            _initial_raw_log_grid(c.n_coil_antiresonance, self.omega_min, self.omega_max)
+        )
+        self.coil_q_raw = nn.Parameter(
+            _initial_raw_constant(2.0, c.q_min, c.q_max, c.n_coil_antiresonance)
+        )
 
     def initialize_from_active_bases(
         self, active_bases: list[YAdmittanceURNActiveBasis]
@@ -452,25 +475,38 @@ class YAdmittanceURN(nn.Module):
                     self.config.beta_max,
                 )
             )
-            omega0_values = []
-            for item in by_type["series_rlc"]:
-                if "omega0" in item.parameters:
-                    omega0_values.append(float(item.parameters["omega0"]))
-                elif "f0" in item.parameters:
-                    omega0_values.append(2.0 * np.pi * float(item.parameters["f0"]))
-                else:
-                    raise ValueError("series_rlc active basis is missing 'omega0' or 'f0'")
-            self.rlc_omega0_raw.copy_(
-                torch.tensor(
+            def omega0_raw(basis_type: str) -> torch.Tensor:
+                omega0_values = []
+                for item in by_type[basis_type]:
+                    if "omega0" in item.parameters:
+                        omega0_values.append(float(item.parameters["omega0"]))
+                    elif "f0" in item.parameters:
+                        omega0_values.append(2.0 * np.pi * float(item.parameters["f0"]))
+                    else:
+                        raise ValueError(
+                            f"{basis_type} active basis is missing 'omega0' or 'f0'"
+                        )
+                return torch.tensor(
                     [
                         _raw_for_positive_value(value, self.omega_min, self.omega_max)
                         for value in omega0_values
                     ],
                     dtype=torch.float64,
                 )
-            )
+
+            self.rlc_omega0_raw.copy_(omega0_raw("series_rlc"))
             self.rlc_q_raw.copy_(
                 bounded_raw(by_type["series_rlc"], "q", self.config.q_min, self.config.q_max)
+            )
+            self.prlc_omega0_raw.copy_(omega0_raw("parallel_rlc"))
+            self.prlc_q_raw.copy_(
+                bounded_raw(by_type["parallel_rlc"], "q", self.config.q_min, self.config.q_max)
+            )
+            self.coil_omega0_raw.copy_(omega0_raw("coil_antiresonance"))
+            self.coil_q_raw.copy_(
+                bounded_raw(
+                    by_type["coil_antiresonance"], "q", self.config.q_min, self.config.q_max
+                )
             )
 
     def initialize_from_model(
@@ -516,6 +552,10 @@ class YAdmittanceURN(nn.Module):
             copy_prefix(self.cap_cpe_beta_raw, source.cap_cpe_beta_raw)
             copy_prefix(self.rlc_omega0_raw, source.rlc_omega0_raw)
             copy_prefix(self.rlc_q_raw, source.rlc_q_raw)
+            copy_prefix(self.prlc_omega0_raw, source.prlc_omega0_raw)
+            copy_prefix(self.prlc_q_raw, source.prlc_q_raw)
+            copy_prefix(self.coil_omega0_raw, source.coil_omega0_raw)
+            copy_prefix(self.coil_q_raw, source.coil_q_raw)
 
     def _tau(self, raw: torch.Tensor) -> torch.Tensor:
         return _positive_range_from_raw(raw, self.tau_min, self.tau_max)
@@ -581,6 +621,26 @@ class YAdmittanceURN(nn.Module):
             q = _bounded_from_raw(self.rlc_q_raw, self.config.q_min, self.config.q_max)
             ratio = omega[:, None] / omega0[None, :]
             cols.append(1.0 / (1.0 + 1j * q[None, :] * (ratio - 1.0 / ratio)))
+
+        if self.config.n_parallel_rlc:
+            # R||L||C: Y*R = 1 + jQ(x - 1/x); Re(Y)*R = 1 > 0 (damped
+            # anti-resonance -- admittance valley / impedance peak at x=1).
+            omega0 = self._omega0(self.prlc_omega0_raw)
+            q = _bounded_from_raw(self.prlc_q_raw, self.config.q_min, self.config.q_max)
+            ratio = omega[:, None] / omega0[None, :]
+            cols.append(
+                (1.0 + 1j * q[None, :] * (ratio - 1.0 / ratio)).to(torch.complex128)
+            )
+
+        if self.config.n_coil_antiresonance:
+            # C||(R+L) self-resonant coil: Y*R = jx/Q + 1/(1 + jQx);
+            # Re(Y)*R = 1/(1+Q^2 x^2) > 0 (damped anti-resonance near x=1).
+            omega0 = self._omega0(self.coil_omega0_raw)
+            q = _bounded_from_raw(self.coil_q_raw, self.config.q_min, self.config.q_max)
+            ratio = omega[:, None] / omega0[None, :]
+            cols.append(
+                1j * ratio / q[None, :] + 1.0 / (1.0 + 1j * q[None, :] * ratio)
+            )
 
         if not cols:
             raise RuntimeError("basis dictionary is empty")
@@ -710,6 +770,8 @@ class YAdmittanceURN(nn.Module):
                 "inductive_cpe": [],
                 "capacitive_cpe": [],
                 "series_rlc": [],
+                "parallel_rlc": [],
+                "coil_antiresonance": [],
             }
             cc_tau = self._tau(self.cc_tau_raw).cpu().numpy()
             cc_alpha = _bounded_from_raw(
@@ -743,6 +805,22 @@ class YAdmittanceURN(nn.Module):
             out["series_rlc"] = [
                 {"omega0": float(w0), "f0": float(w0 / (2.0 * np.pi)), "q": float(q_i)}
                 for w0, q_i in zip(omega0, q, strict=True)
+            ]
+            prlc_omega0 = self._omega0(self.prlc_omega0_raw).cpu().numpy()
+            prlc_q = _bounded_from_raw(
+                self.prlc_q_raw, self.config.q_min, self.config.q_max
+            ).cpu().numpy()
+            out["parallel_rlc"] = [
+                {"omega0": float(w0), "f0": float(w0 / (2.0 * np.pi)), "q": float(q_i)}
+                for w0, q_i in zip(prlc_omega0, prlc_q, strict=True)
+            ]
+            coil_omega0 = self._omega0(self.coil_omega0_raw).cpu().numpy()
+            coil_q = _bounded_from_raw(
+                self.coil_q_raw, self.config.q_min, self.config.q_max
+            ).cpu().numpy()
+            out["coil_antiresonance"] = [
+                {"omega0": float(w0), "f0": float(w0 / (2.0 * np.pi)), "q": float(q_i)}
+                for w0, q_i in zip(coil_omega0, coil_q, strict=True)
             ]
         return out
 

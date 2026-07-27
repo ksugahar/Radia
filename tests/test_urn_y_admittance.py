@@ -51,6 +51,56 @@ def test_s_domain_rmse_matches_manuscript_metric():
     assert s_domain_rmse(z_fit, z) > 0.0
 
 
+def test_anti_resonance_bases_extend_dictionary_and_stay_passive():
+    freqs = np.logspace(2, 7, 64)
+    z = 10.0 + 1j * 2.0 * np.pi * freqs * 1.0e-4
+    cfg = YAdmittanceURNConfig.paper_22_basis(
+        n_parallel_rlc=2, n_coil_antiresonance=2
+    )
+
+    model = YAdmittanceURN(freqs, cfg, z_data=z)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    assert cfg.total_basis_functions == 26
+    assert model.basis_labels[-4:] == [
+        ("parallel_rlc", 0),
+        ("parallel_rlc", 1),
+        ("coil_antiresonance", 0),
+        ("coil_antiresonance", 1),
+    ]
+    basis = model.basis_matrix(omega, normalize=False).detach().numpy()
+    assert basis.shape == (freqs.size, 26)
+    # Structural passivity: every dictionary column has Re(Y) >= 0.
+    assert np.min(basis.real) >= -1.0e-14
+
+    summary = model.parameter_summary()
+    prlc = [s for s in summary if s["basis_type"] == "parallel_rlc"]
+    coil = [s for s in summary if s["basis_type"] == "coil_antiresonance"]
+    assert len(prlc) == 2 and len(coil) == 2
+    for item in prlc + coil:
+        assert item["omega0"] > 0.0
+        assert item["q"] > 0.0
+
+
+def test_anti_resonance_coil_basis_has_admittance_valley():
+    freqs = np.logspace(4, 8, 401)
+    cfg = YAdmittanceURNConfig(
+        n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
+        n_inductive_cpe=0, n_capacitive_cpe=0, n_series_rlc=0,
+        n_parallel_rlc=0, n_coil_antiresonance=1,
+    )
+    model = YAdmittanceURN(freqs, cfg)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    column = model.basis_matrix(omega, normalize=False).detach().numpy()[:, 0]
+    magnitude = np.abs(column)
+    valley = int(np.argmin(magnitude))
+    # Anti-resonance: |Y| has an interior minimum (impedance peak).
+    assert 0 < valley < freqs.size - 1
+    assert magnitude[valley] < 0.5 * min(magnitude[0], magnitude[-1])
+    assert np.min(column.real) >= -1.0e-14
+
+
 def test_complex_smooth_l1_weighted_matches_unweighted_for_unit_weights():
     residual = torch.tensor(
         [0.5 + 0.2j, -0.01 + 0.03j, 2.0 - 1.0j], dtype=torch.complex128

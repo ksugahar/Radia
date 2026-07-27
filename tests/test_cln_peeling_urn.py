@@ -199,6 +199,17 @@ def test_cln_stage_records_trust_weights(smoke_ladder_model):
     assert 0.0 <= stage.metrics["trusted_fraction"] <= 1.0
 
 
+def test_cln_frozen_stage_records_global_lookahead_rmse(smoke_ladder_model):
+    freqs, z, model = smoke_ladder_model
+    stage = model.stages[0]
+
+    recorded = stage.metrics["global_lookahead_s_rmse"]
+    recomputed = model.s_domain_rmse_terminated(z, termination="lookahead")
+    assert recorded == pytest.approx(recomputed, rel=1.0e-9)
+    # A frozen stage is never the one rejected by the global stopping rule.
+    assert "rejected_by_global_degradation" not in stage.metrics
+
+
 def test_cln_predict_terminated_supports_dense_grid(smoke_ladder_model):
     freqs, _z, model = smoke_ladder_model
     dense = np.logspace(1.5, 5.5, 41)
