@@ -43,6 +43,11 @@ class YAdmittanceURNConfig:
     # coil_antiresonance: C||(R+L), Y*R = jx/Q + 1/(1+jQx)  (self-resonant coil)
     n_parallel_rlc: int = 0
     n_coil_antiresonance: int = 0
+    # Ideal reactances (parameter-free; the gate carries the scale).  The CPE
+    # exponents are bounded at beta_max < 1, so a pure jwL / 1/(jwC) branch is
+    # otherwise unreachable.  Lossless: Re(Y) = 0 (marginally passive).
+    n_ideal_inductor: int = 0
+    n_ideal_capacitor: int = 0
 
     sparsity_weight: float = 1.0e-4
     lr: float = 1.0e-3
@@ -77,6 +82,8 @@ class YAdmittanceURNConfig:
             + self.n_series_rlc
             + self.n_parallel_rlc
             + self.n_coil_antiresonance
+            + self.n_ideal_inductor
+            + self.n_ideal_capacitor
         )
 
     @classmethod
@@ -234,6 +241,8 @@ _BASIS_COUNT_FIELDS = {
     "series_rlc": "n_series_rlc",
     "parallel_rlc": "n_parallel_rlc",
     "coil_antiresonance": "n_coil_antiresonance",
+    "ideal_inductor": "n_ideal_inductor",
+    "ideal_capacitor": "n_ideal_capacitor",
 }
 
 
@@ -342,6 +351,8 @@ class YAdmittanceURN(nn.Module):
             ("series_rlc", self.config.n_series_rlc),
             ("parallel_rlc", self.config.n_parallel_rlc),
             ("coil_antiresonance", self.config.n_coil_antiresonance),
+            ("ideal_inductor", self.config.n_ideal_inductor),
+            ("ideal_capacitor", self.config.n_ideal_capacitor),
         ):
             labels.extend((name, i) for i in range(count))
         return labels
@@ -642,6 +653,16 @@ class YAdmittanceURN(nn.Module):
                 1j * ratio / q[None, :] + 1.0 / (1.0 + 1j * q[None, :] * ratio)
             )
 
+        if self.config.n_ideal_inductor:
+            cols.append(
+                (1.0 / jw_norm)[:, None].expand(-1, self.config.n_ideal_inductor)
+            )
+
+        if self.config.n_ideal_capacitor:
+            cols.append(
+                jw_norm[:, None].expand(-1, self.config.n_ideal_capacitor)
+            )
+
         if not cols:
             raise RuntimeError("basis dictionary is empty")
 
@@ -772,6 +793,12 @@ class YAdmittanceURN(nn.Module):
                 "series_rlc": [],
                 "parallel_rlc": [],
                 "coil_antiresonance": [],
+                "ideal_inductor": [
+                    {} for _ in range(self.config.n_ideal_inductor)
+                ],
+                "ideal_capacitor": [
+                    {} for _ in range(self.config.n_ideal_capacitor)
+                ],
             }
             cc_tau = self._tau(self.cc_tau_raw).cpu().numpy()
             cc_alpha = _bounded_from_raw(
