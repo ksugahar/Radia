@@ -49,6 +49,16 @@ class YAdmittanceURNConfig:
     n_ideal_inductor: int = 0
     n_ideal_capacitor: int = 0
 
+    # Analytic strict-passivity floor: a constant conductance
+    # ``G_min = y_ref * conductance_floor`` added to the admittance sum.
+    # Every basis is a positive-real function (Re B(s) >= 0 on Re s >= 0) and
+    # the gates are nonnegative, so with a positive floor
+    #     Re Y(s) >= G_min > 0   on Re s >= 0.
+    # Y then has no zeros in the closed right half plane, hence Z = 1/Y has no
+    # unstable or j-axis poles anywhere -- an analytic guarantee strictly
+    # stronger than any sampled dense-grid audit.  0 keeps the legacy model.
+    conductance_floor: float = 0.0
+
     sparsity_weight: float = 1.0e-4
     lr: float = 1.0e-3
     n_epochs: int = 5000
@@ -580,9 +590,33 @@ class YAdmittanceURN(nn.Module):
         return torch.nn.functional.softplus(self.gate_raw)
 
     def basis_matrix(self, omega: torch.Tensor, *, normalize: bool = True) -> torch.Tensor:
-        """Return basis responses in admittance space with shape ``(N, M)``."""
+        """Return basis responses in admittance space with shape ``(N, M)``.
+
+        The RMS normalisation is always computed on the training grid, so the
+        same gates describe the same circuit at every evaluation frequency:
+        interpolation and extrapolation audits evaluate the trained model, not
+        a re-normalised variant of it.
+        """
 
         omega = omega.to(dtype=torch.float64).reshape(-1)
+        columns = self._raw_basis_matrix(omega)
+        if not normalize:
+            return columns
+        train_omega = torch.as_tensor(
+            self.omega, dtype=torch.float64, device=omega.device
+        )
+        if omega.shape == train_omega.shape and bool(torch.equal(omega, train_omega)):
+            train_columns = columns
+        else:
+            train_columns = self._raw_basis_matrix(train_omega)
+        rms = torch.sqrt(
+            torch.mean(torch.abs(train_columns) ** 2, dim=0)
+        ).clamp_min(1.0e-24)
+        return columns / rms[None, :]
+
+    def _raw_basis_matrix(self, omega: torch.Tensor) -> torch.Tensor:
+        """Un-normalised basis columns at ``omega``."""
+
         jw = 1j * omega
         w_norm = omega / self.omega_ref
         jw_norm = 1j * w_norm
@@ -666,11 +700,7 @@ class YAdmittanceURN(nn.Module):
         if not cols:
             raise RuntimeError("basis dictionary is empty")
 
-        basis = torch.cat(cols, dim=1).to(torch.complex128)
-        if normalize:
-            rms = torch.sqrt(torch.mean(torch.abs(basis) ** 2, dim=0)).clamp_min(1.0e-24)
-            basis = basis / rms[None, :]
-        return basis
+        return torch.cat(cols, dim=1).to(torch.complex128)
 
     def forward_admittance(self, omega: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
         """Evaluate the fitted admittance ``Y(omega)``."""
@@ -679,7 +709,13 @@ class YAdmittanceURN(nn.Module):
         weights = self.gates()[None, :]
         if mask is not None:
             weights = weights * mask.to(dtype=torch.float64, device=weights.device)[None, :]
-        return self.y_ref * torch.sum(weights.to(torch.complex128) * basis, dim=1)
+        total = torch.sum(weights.to(torch.complex128) * basis, dim=1)
+        floor = float(self.config.conductance_floor)
+        if floor > 0.0:
+            total = total + torch.as_tensor(
+                floor, dtype=torch.complex128, device=total.device
+            )
+        return self.y_ref * total
 
     def forward(self, omega: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
         """Evaluate the fitted impedance ``Z(omega)=1/Y(omega)``."""
