@@ -101,7 +101,41 @@ def test_anti_resonance_coil_basis_has_admittance_valley():
     assert np.min(column.real) >= -1.0e-14
 
 
-def test_ideal_reactance_bases_are_pure_and_lossless():
+def test_basis_normalization_is_fixed_on_the_training_grid():
+    freqs = np.logspace(2, 6, 24)
+    z = 10.0 + 1j * 2.0 * np.pi * freqs * 1.0e-4
+    cfg = YAdmittanceURNConfig.paper_22_basis(n_coil_antiresonance=1)
+    model = YAdmittanceURN(freqs, cfg, z_data=z)
+
+    dense = np.logspace(1.5, 6.5, 173)
+    union = np.unique(np.concatenate([freqs, dense]))
+    z_union = model.predict(union)
+    z_train = model.predict(freqs)
+    idx = np.searchsorted(union, freqs)
+
+    # The same gates must describe the same circuit on any evaluation grid:
+    # values at the training frequencies are identical whether evaluated alone
+    # or inside a larger grid (the RMS normalisation is training-grid fixed).
+    np.testing.assert_allclose(z_union[idx], z_train, rtol=1.0e-10)
+
+
+def test_conductance_floor_gives_strict_passivity():
+    freqs = np.logspace(3, 7, 48)
+    cfg = YAdmittanceURNConfig(
+        n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
+        n_inductive_cpe=0, n_capacitive_cpe=0, n_series_rlc=0,
+        n_ideal_inductor=1, n_ideal_capacitor=1,  # lossless-only dictionary
+        conductance_floor=1.0e-6,
+    )
+    model = YAdmittanceURN(freqs, cfg)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    with torch.no_grad():
+        admittance = model.forward_admittance(omega).numpy()
+
+    floor = model.y_ref * 1.0e-6
+    # Even with a purely lossless dictionary, Re(Y) >= G_min > 0 everywhere.
+    assert np.min(admittance.real) >= floor * (1.0 - 1.0e-12)
     freqs = np.logspace(2, 6, 32)
     cfg = YAdmittanceURNConfig(
         n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
