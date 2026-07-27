@@ -49,6 +49,16 @@ class YAdmittanceURNConfig:
     n_ideal_inductor: int = 0
     n_ideal_capacitor: int = 0
 
+    # Training loss. "s_domain" is the manuscript scattering-residual loss.
+    # "log_components" fits log(Re Z) and arcsinh(Im Z / x0) independently:
+    # both components are matched in RELATIVE terms over their full dynamic
+    # range (the S loss is nearly blind to Re Z wherever |Z| is reactance
+    # dominated).  Re Z is positive for passive data and models, so its log
+    # is direct; Im Z changes sign, so the sign-preserving arcsinh (symlog)
+    # is used.  x0 = floor = median|Z| * log_loss_floor_relative.
+    loss_mode: str = "s_domain"
+    log_loss_floor_relative: float = 1.0e-3
+
     # Analytic strict-passivity floor: a constant conductance
     # ``G_min = y_ref * conductance_floor`` added to the admittance sum.
     # Every basis is a positive-real function (Re B(s) >= 0 on Re s >= 0) and
@@ -219,6 +229,50 @@ def s_domain_rmse(
     s_fit = (fit - z0_value) / (fit + z0_value + _EPS)
     s_target = (target - z0_value) / (target + z0_value + _EPS)
     return float(np.sqrt(np.mean(np.abs(s_fit - s_target) ** 2)))
+
+
+def log_component_residual(
+    z_fit: torch.Tensor,
+    z_target: torch.Tensor,
+    floor: float,
+) -> torch.Tensor:
+    """Relative-scale residual of Re and Im fitted independently.
+
+    Returns ``dlog(Re) + j * d(arcsinh(Im/floor))`` so the two per-component
+    relative errors can be fed to :func:`complex_smooth_l1` unchanged.
+    """
+
+    floor_t = torch.as_tensor(float(floor), dtype=torch.float64, device=z_fit.device)
+    d_re = torch.log(z_fit.real.clamp_min(floor_t)) - torch.log(
+        z_target.real.clamp_min(floor_t)
+    )
+    d_im = torch.arcsinh(z_fit.imag / floor_t) - torch.arcsinh(
+        z_target.imag / floor_t
+    )
+    return d_re + 1j * d_im
+
+
+def log_component_rmse(
+    z_fit: np.ndarray | list[complex],
+    z_target: np.ndarray | list[complex],
+    *,
+    floor: float | None = None,
+) -> float:
+    """RMS of the independent log-Re / arcsinh-Im component errors."""
+
+    fit = _as_1d_complex128(z_fit, "z_fit")
+    target = _as_1d_complex128(z_target, "z_target")
+    if fit.shape != target.shape:
+        raise ValueError("z_fit and z_target must have the same length")
+    floor_value = (
+        float(np.median(np.abs(target))) * 1.0e-3 if floor is None else float(floor)
+    )
+    floor_value = max(floor_value, _EPS)
+    d_re = np.log(np.maximum(fit.real, floor_value)) - np.log(
+        np.maximum(target.real, floor_value)
+    )
+    d_im = np.arcsinh(fit.imag / floor_value) - np.arcsinh(target.imag / floor_value)
+    return float(np.sqrt(np.mean(d_re**2 + d_im**2)))
 
 
 def complex_smooth_l1(
@@ -732,7 +786,18 @@ class YAdmittanceURN(nn.Module):
 
     def loss(self, omega: torch.Tensor, z_target: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         z_pred = self(omega)
-        residual = scattering_transform(z_pred, self.z0) - scattering_transform(z_target, self.z0)
+        if self.config.loss_mode == "log_components":
+            residual = log_component_residual(
+                z_pred,
+                z_target,
+                self.z0 * float(self.config.log_loss_floor_relative),
+            )
+        elif self.config.loss_mode == "s_domain":
+            residual = scattering_transform(z_pred, self.z0) - scattering_transform(
+                z_target, self.z0
+            )
+        else:
+            raise ValueError("loss_mode must be 's_domain' or 'log_components'")
         loss_fit = complex_smooth_l1(residual, self.config.huber_delta)
         loss_sparse = self.config.sparsity_weight * torch.mean(self.gates())
         loss = loss_fit + loss_sparse
@@ -1224,6 +1289,8 @@ __all__ = [
     "YAdmittanceURNConfig",
     "active_basis_refit_config",
     "complex_smooth_l1",
+    "log_component_residual",
+    "log_component_rmse",
     "refit_y_admittance_active_bases",
     "s_domain_rmse",
     "scattering_transform",

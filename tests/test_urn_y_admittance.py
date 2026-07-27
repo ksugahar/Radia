@@ -13,7 +13,11 @@ from radia.urn import (
     train_y_admittance_urn,
 )
 from radia.urn import train_stacked_y_urn
-from radia.urn.y_admittance_urn import complex_smooth_l1
+from radia.urn.y_admittance_urn import (
+    complex_smooth_l1,
+    log_component_residual,
+    log_component_rmse,
+)
 
 
 def test_y_admittance_default_dictionary_matches_research_meeting_model():
@@ -287,6 +291,56 @@ def test_stacked_series_second_section_starts_negligible():
     # A gate_init of 1e4 makes the series contribution a near short, so a new
     # series section reproduces the previous stack at initialization.
     assert np.max(np.abs(contribution)) < 1.0e-3 * np.median(np.abs(z))
+
+
+def test_log_component_residual_measures_relative_component_errors():
+    floor = 1.0e-3
+    target = torch.tensor([1.0 + 10.0j, 100.0 - 5.0j], dtype=torch.complex128)
+    fit_exact = target.clone()
+    # +1% on Re only, then a sign-consistent Im perturbation.
+    fit_re = torch.tensor([1.01 + 10.0j, 101.0 - 5.0j], dtype=torch.complex128)
+
+    zero = log_component_residual(fit_exact, target, floor)
+    assert float(torch.max(torch.abs(zero.real))) < 1.0e-12
+    assert float(torch.max(torch.abs(zero.imag))) < 1.0e-12
+
+    res = log_component_residual(fit_re, target, floor)
+    # log(1.01) ~ 0.00995 on both points regardless of the Re magnitude:
+    np.testing.assert_allclose(
+        res.real.numpy(), np.log(1.01), rtol=1.0e-6
+    )
+    assert float(torch.max(torch.abs(res.imag))) < 1.0e-12
+
+    rmse = log_component_rmse(
+        fit_re.numpy(), target.numpy(), floor=floor
+    )
+    assert rmse == pytest.approx(np.log(1.01), rel=1.0e-6)
+
+
+def test_y_admittance_log_components_training_smoke():
+    freqs = np.logspace(2, 5, 24)
+    omega = 2.0 * np.pi * freqs
+    y_true = 0.05 / (1.0 + 1j * omega * 2.0e-4)
+    z_true = 1.0 / y_true
+    cfg = YAdmittanceURNConfig(
+        n_debye=1,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=2.0e-2,
+        n_epochs=25,
+        n_restarts=1,
+        loss_mode="log_components",
+    )
+
+    model = train_y_admittance_urn(freqs, z_true, cfg, verbose=False)
+
+    assert np.all(np.isfinite(model.predict(freqs)))
+    assert model.training_history[0]["loss"] > model.training_history[-1]["loss"]
 
 
 def test_y_admittance_multi_restart_perturbs_deterministic_init():
