@@ -83,7 +83,8 @@ class CLNPeelingConfig:
     min_trusted_fraction: float = 0.8
     trust_weight_floor: float = 0.0
 
-    # Anti-resonance dictionary extensions (0 = the paper 22-basis dictionary).
+    # Dictionary composition (defaults = the paper 22-basis dictionary).
+    n_series_rlc: int = 2
     n_parallel_rlc: int = 0
     n_coil_antiresonance: int = 0
 
@@ -325,6 +326,7 @@ def _branch_config(config: CLNPeelingConfig) -> YAdmittanceURNConfig:
         sparsity_weight=0.0,
         gate_init=config.gate_init,
         huber_delta=config.huber_delta,
+        n_series_rlc=config.n_series_rlc,
         n_parallel_rlc=config.n_parallel_rlc,
         n_coil_antiresonance=config.n_coil_antiresonance,
     )
