@@ -234,6 +234,30 @@ def test_initialize_from_model_embeds_smaller_dictionary_response():
     np.testing.assert_allclose(large.predict(freqs), small.predict(freqs), rtol=1.0e-8)
 
 
+def test_y_admittance_multi_restart_perturbs_deterministic_init():
+    freqs = np.logspace(2, 5, 24)
+    omega = 2.0 * np.pi * freqs
+    y_true = 0.05 / (1.0 + 1j * omega * 2.0e-4)
+    z_true = 1.0 / y_true
+    cfg = YAdmittanceURNConfig(
+        n_debye=2,
+        n_magnetic_debye=0,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=0,
+        n_capacitive_cpe=0,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=2.0e-2,
+        n_epochs=10,
+        n_restarts=3,
+    )
+
+    model = train_y_admittance_urn(freqs, z_true, cfg, verbose=False)
+
+    assert np.all(np.isfinite(model.predict(freqs)))
+
+
 def test_y_admittance_training_smoke_single_debye_basis():
     freqs = np.logspace(2, 5, 24)
     omega = 2.0 * np.pi * freqs
