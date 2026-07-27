@@ -141,6 +141,9 @@ def test_conductance_floor_gives_strict_passivity():
     floor = model.y_ref * 1.0e-6
     # Even with a purely lossless dictionary, Re(Y) >= G_min > 0 everywhere.
     assert np.min(admittance.real) >= floor * (1.0 - 1.0e-12)
+
+
+def test_ideal_reactance_bases_are_pure_and_lossless():
     freqs = np.logspace(2, 6, 32)
     cfg = YAdmittanceURNConfig(
         n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
@@ -363,6 +366,11 @@ def test_y_admittance_multi_restart_perturbs_deterministic_init():
     )
 
     model = train_y_admittance_urn(freqs, z_true, cfg, verbose=False)
+
+    assert len(model.restart_summaries) == 3
+    assert [item["restart"] for item in model.restart_summaries] == [1.0, 2.0, 3.0]
+    assert len({item["seed"] for item in model.restart_summaries}) == 3
+    assert all(np.isfinite(item["loss"]) for item in model.restart_summaries)
 
     assert np.all(np.isfinite(model.predict(freqs)))
 

@@ -408,6 +408,7 @@ class YAdmittanceURN(nn.Module):
         self._init_parameters()
 
         self.training_history: list[dict[str, float]] = []
+        self.restart_summaries: list[dict[str, float]] = []
 
     def _build_basis_labels(self) -> list[tuple[str, int]]:
         labels: list[tuple[str, int]] = []
@@ -982,6 +983,7 @@ def train_y_admittance_urn(
     best_model: YAdmittanceURN | None = None
     best_loss = float("inf")
     best_history: list[dict[str, float]] = []
+    restart_summaries: list[dict[str, float]] = []
     check_interval = max(int(best_check_interval), 1)
     for restart in range(cfg.n_restarts):
         torch.manual_seed(int(cfg.seed) + 7919 * restart)
@@ -1035,8 +1037,17 @@ def train_y_admittance_urn(
 
         final_loss, final_parts = model.loss(omega, z_target)
         final_value = float(final_loss.detach().cpu())
+        active_count = len(model.active_bases(freqs))
+        restart_summaries.append(
+            {
+                "restart": float(restart + 1),
+                "seed": float(int(cfg.seed) + 7919 * restart),
+                "loss": final_value,
+                "loss_fit": float(final_parts["loss_fit"]),
+                "active_count": float(active_count),
+            }
+        )
         if verbose:
-            active_count = len(model.active_bases(freqs))
             print(
                 f"  Y-URN restart {restart + 1}/{cfg.n_restarts}: "
                 f"loss={final_value:.6e}, fit={final_parts['loss_fit']:.6e}, "
@@ -1051,6 +1062,7 @@ def train_y_admittance_urn(
     if best_model is None:
         raise RuntimeError("Y-admittance URN training did not produce a model")
     best_model.training_history = best_history
+    best_model.restart_summaries = restart_summaries
     return best_model
 
 
