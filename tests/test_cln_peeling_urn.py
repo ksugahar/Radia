@@ -199,6 +199,39 @@ def test_cln_stage_records_trust_weights(smoke_ladder_model):
     assert 0.0 <= stage.metrics["trusted_fraction"] <= 1.0
 
 
+def test_cln_composite_warm_start_reproduces_previous_lookahead():
+    from dataclasses import replace
+
+    freqs = np.logspace(2, 5, 16)
+    omega = 2.0 * np.pi * freqs
+    z_series = 2.0 + 1j * omega * 1.0e-5
+    z_shunt = 1.0 / (0.02 / (1.0 + 1j * omega * 8.0e-5))
+    z = _compose_stage(z_series, z_shunt, np.full(freqs.shape, 30.0 + 0.0j))
+    cfg = CLNPeelingConfig(
+        branch_epochs=10,
+        branch_restarts=1,
+        branch_sparsity_weight=0.0,
+        seed=61,
+    )
+
+    donor = _fit_composite_seed(freqs, z, cfg, seed_offset=0)
+    # Different target scale -> different y_ref; the gate rescaling in the
+    # warm start must still reproduce the donor branch exactly at epoch 0.
+    other_target = 2.5 * z
+    frozen_cfg = replace(cfg, branch_epochs=0)
+    seeded = _fit_composite_seed(
+        freqs,
+        other_target,
+        frozen_cfg,
+        seed_offset=1,
+        warm_start_model=donor.model,
+    )
+
+    np.testing.assert_allclose(
+        seeded.response(freqs), donor.response(freqs), rtol=1.0e-9
+    )
+
+
 def test_cln_frozen_stage_records_global_lookahead_rmse(smoke_ladder_model):
     freqs, z, model = smoke_ladder_model
     stage = model.stages[0]
