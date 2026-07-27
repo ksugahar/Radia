@@ -87,6 +87,13 @@ class CLNPeelingConfig:
     n_parallel_rlc: int = 0
     n_coil_antiresonance: int = 0
 
+    # Warm-start the next stage's composite seed from the previous stage's
+    # lookahead branch.  The previous lookahead was optimised through the
+    # whole-ladder loss, so starting from it (instead of refitting the peeled
+    # tail from scratch) restores the monotonic-improvement property that a
+    # greedy frozen-stage ladder otherwise loses.
+    composite_warm_start: bool = True
+
 
 @dataclass
 class CLNBranchFit:
@@ -448,6 +455,7 @@ def _fit_composite_seed(
     *,
     seed_offset: int,
     sample_weight: np.ndarray | None = None,
+    warm_start_model: YAdmittanceURN | None = None,
 ) -> CLNBranchFit:
     target_arr = _as_1d_complex128(target, "target")
     omega = torch.tensor(2.0 * np.pi * freqs_hz, dtype=torch.float64)
@@ -464,6 +472,17 @@ def _fit_composite_seed(
     for restart in range(config.branch_restarts):
         torch.manual_seed(int(config.seed) + seed_offset + 7919 * restart)
         model = YAdmittanceURN(freqs_hz, cfg, z_data=target_arr)
+        if warm_start_model is not None and restart == 0:
+            # Reproduce the previous lookahead branch exactly: copy its
+            # parameters and rescale the gates for the new y_ref, so
+            # y_ref_new * sum(g_new B) == y_ref_old * sum(g_old B).
+            model.load_state_dict(warm_start_model.state_dict())
+            scale = float(warm_start_model.y_ref) / float(model.y_ref)
+            with torch.no_grad():
+                gates = torch.nn.functional.softplus(model.gate_raw) * scale
+                model.gate_raw.copy_(
+                    torch.log(torch.expm1(gates.clamp_min(1.0e-12)))
+                )
         optimizer = optim.Adam(model.parameters(), lr=config.branch_lr)
         for _epoch in range(config.branch_epochs):
             optimizer.zero_grad()
@@ -949,12 +968,18 @@ def train_cln_peeling_urn(
     z_measured = z_current.copy()
     previous_global_rmse: float | None = None
     for stage_index in range(cfg.n_stages):
+        warm_start = (
+            stages[-1].lookahead_tail.model
+            if cfg.composite_warm_start and stages
+            else None
+        )
         composite = _fit_composite_seed(
             freqs,
             z_current,
             cfg,
             seed_offset=10_000 * stage_index,
             sample_weight=sample_weight,
+            warm_start_model=warm_start,
         )
         stage = _fit_paired_stage(
             freqs,
