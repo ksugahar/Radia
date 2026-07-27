@@ -189,6 +189,9 @@ def _raw_for_bounded_value(value: float, lo: float, hi: float) -> float:
 
 def _raw_for_gate(value: float) -> float:
     gate = max(float(value), 1.0e-9)
+    if gate > 30.0:
+        # log(expm1(g)) = g + log1p(-exp(-g)); the direct form overflows.
+        return float(gate + np.log1p(-np.exp(-gate)))
     return float(np.log(np.expm1(gate)))
 
 
@@ -340,9 +343,12 @@ class YAdmittanceURN(nn.Module):
 
         self.basis_labels = self._build_basis_labels()
         n_basis = len(self.basis_labels)
-        gate_init = max(float(self.config.gate_init), 1.0e-9)
         self.gate_raw = nn.Parameter(
-            torch.full((n_basis,), np.log(np.expm1(gate_init)), dtype=torch.float64)
+            torch.full(
+                (n_basis,),
+                _raw_for_gate(float(self.config.gate_init)),
+                dtype=torch.float64,
+            )
         )
 
         self._init_parameters()
@@ -983,6 +989,161 @@ def train_y_admittance_urn(
     return best_model
 
 
+@dataclass
+class StackedYURN:
+    """Frozen series/parallel stack of Y-URN sections.
+
+    Section ``k`` was trained with all earlier sections frozen, against the
+    raw measured response through the composition (never against a peeled
+    residual):
+
+    - ``composition="series"``:   ``Z = sum_k 1/Y_k``
+    - ``composition="parallel"``: ``Y = sum_k Y_k``
+
+    Sums of positive-real section impedances/admittances stay positive-real,
+    so the stack inherits the structural passivity of its sections.
+    """
+
+    freqs_hz: np.ndarray
+    composition: str
+    sections: list[YAdmittanceURN] = field(default_factory=list)
+    training_log: list[dict[str, float]] = field(default_factory=list)
+
+    def predict(self, freqs_hz: np.ndarray | list[float]) -> np.ndarray:
+        freqs = _as_1d_float64(freqs_hz, "freqs_hz")
+        if not self.sections:
+            raise RuntimeError("stack has no sections")
+        if self.composition == "series":
+            total = np.zeros(freqs.shape, dtype=np.complex128)
+            for section in self.sections:
+                total = total + section.predict(freqs)
+            return total
+        if self.composition == "parallel":
+            total_y = np.zeros(freqs.shape, dtype=np.complex128)
+            for section in self.sections:
+                total_y = total_y + 1.0 / section.predict(freqs)
+            return 1.0 / total_y
+        raise ValueError("composition must be 'series' or 'parallel'")
+
+
+def train_stacked_y_urn(
+    freqs_hz: np.ndarray | list[float],
+    z_data: np.ndarray | list[complex],
+    config: YAdmittanceURNConfig | None = None,
+    *,
+    n_sections: int = 2,
+    composition: str = "series",
+    verbose: bool = True,
+) -> StackedYURN:
+    """Grow a frozen stack of Y-URN sections against the measured response.
+
+    Every section is trained on the raw measurement through the frozen
+    composition (gradients reach the new section only), so the target is
+    always positive-real and adding a section can never degrade the training
+    fit: the new section starts at a negligible contribution (series: near
+    short; parallel: near open), which reproduces the previous stack exactly.
+    """
+
+    if composition not in ("series", "parallel"):
+        raise ValueError("composition must be 'series' or 'parallel'")
+    freqs = _as_1d_float64(freqs_hz, "freqs_hz")
+    z_arr = _as_1d_complex128(z_data, "z_data")
+    if freqs.shape != z_arr.shape:
+        raise ValueError("freqs_hz and z_data must have the same length")
+    if n_sections <= 0:
+        raise ValueError("n_sections must be positive")
+    cfg = config or YAdmittanceURNConfig()
+
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+    z_target = torch.tensor(z_arr, dtype=torch.complex128)
+    z0_value = float(max(np.median(np.abs(z_arr)), _EPS))
+    stack = StackedYURN(freqs_hz=freqs, composition=composition)
+
+    frozen = torch.zeros(freqs.size, dtype=torch.complex128)
+    for section_index in range(n_sections):
+        section_cfg_kwargs = {
+            field_name: getattr(cfg, field_name)
+            for field_name in YAdmittanceURNConfig.__dataclass_fields__
+        }
+        if section_index > 0:
+            # Negligible initial contribution: the stack starts at the
+            # previous solution exactly and can only improve from there.
+            section_cfg_kwargs["gate_init"] = (
+                1.0e4 if composition == "series" else 1.0e-8
+            )
+        section_cfg = YAdmittanceURNConfig(**section_cfg_kwargs)
+
+        best_loss = float("inf")
+        best_state: dict[str, torch.Tensor] | None = None
+        best_model: YAdmittanceURN | None = None
+        for restart in range(cfg.n_restarts):
+            torch.manual_seed(int(cfg.seed) + 104_729 * section_index + 7919 * restart)
+            section = YAdmittanceURN(freqs, section_cfg, z_data=z_arr)
+            if restart > 0:
+                with torch.no_grad():
+                    for parameter in section.parameters():
+                        parameter.add_(0.3 * torch.randn_like(parameter))
+            optimizer = optim.Adam(section.parameters(), lr=cfg.lr)
+            for _epoch in range(cfg.n_epochs):
+                optimizer.zero_grad()
+                y_section = section.forward_admittance(omega)
+                if composition == "series":
+                    prediction = frozen + 1.0 / (y_section + _EPS)
+                else:
+                    prediction = 1.0 / (frozen + y_section + _EPS)
+                residual = scattering_transform(prediction, z0_value) - scattering_transform(
+                    z_target, z0_value
+                )
+                loss = complex_smooth_l1(residual, cfg.huber_delta)
+                loss = loss + cfg.sparsity_weight * torch.mean(section.gates())
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(section.parameters(), max_norm=10.0)
+                optimizer.step()
+            with torch.no_grad():
+                y_section = section.forward_admittance(omega)
+                if composition == "series":
+                    prediction = frozen + 1.0 / (y_section + _EPS)
+                else:
+                    prediction = 1.0 / (frozen + y_section + _EPS)
+                residual = scattering_transform(prediction, z0_value) - scattering_transform(
+                    z_target, z0_value
+                )
+                final = float(complex_smooth_l1(residual, cfg.huber_delta).cpu())
+            if final < best_loss:
+                best_loss = final
+                best_model = section
+                best_state = {
+                    key: value.detach().clone()
+                    for key, value in section.state_dict().items()
+                }
+
+        if best_model is None or best_state is None:
+            raise RuntimeError("stacked Y-URN training did not produce a section")
+        best_model.load_state_dict(best_state)
+        stack.sections.append(best_model)
+        with torch.no_grad():
+            y_section = best_model.forward_admittance(omega)
+            if composition == "series":
+                frozen = frozen + 1.0 / (y_section + _EPS)
+            else:
+                frozen = frozen + y_section
+        stack_rmse = s_domain_rmse(stack.predict(freqs), z_arr)
+        stack.training_log.append(
+            {
+                "section": float(section_index),
+                "loss": best_loss,
+                "stack_s_rmse": stack_rmse,
+            }
+        )
+        if verbose:
+            print(
+                f"  stacked Y-URN section {section_index + 1}/{n_sections} "
+                f"({composition}): loss={best_loss:.6e}, stack_rmse={stack_rmse:.6e}"
+            )
+
+    return stack
+
+
 def refit_y_admittance_active_bases(
     freqs_hz: np.ndarray | list[float],
     z_data: np.ndarray | list[complex],
@@ -1057,6 +1218,7 @@ def refit_y_admittance_active_bases(
 
 
 __all__ = [
+    "StackedYURN",
     "YAdmittanceURN",
     "YAdmittanceURNActiveBasis",
     "YAdmittanceURNConfig",
@@ -1065,5 +1227,6 @@ __all__ = [
     "refit_y_admittance_active_bases",
     "s_domain_rmse",
     "scattering_transform",
+    "train_stacked_y_urn",
     "train_y_admittance_urn",
 ]

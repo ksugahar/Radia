@@ -25,12 +25,14 @@ try:
         train_cln_peeling_urn,
     )
     from .y_admittance_urn import (
+        StackedYURN,
         YAdmittanceURN,
         YAdmittanceURNActiveBasis,
         YAdmittanceURNConfig,
         active_basis_refit_config,
         refit_y_admittance_active_bases,
         s_domain_rmse,
+        train_stacked_y_urn,
         train_y_admittance_urn,
     )
 except ModuleNotFoundError as exc:
@@ -42,6 +44,7 @@ except ModuleNotFoundError as exc:
 
 __all__ = [
     "URNConfig",
+    "StackedYURN",
     "CauerLadderURN",
     "CauerLadderURNConfig",
     "CauerRationalFit",
@@ -63,6 +66,7 @@ __all__ = [
     "train_cauer_ladder_tail_then_polish",
     "train_cauer_ladder_urn",
     "train_cln_peeling_urn",
+    "train_stacked_y_urn",
     "train_urn",
     "train_y_admittance_urn",
 ]
