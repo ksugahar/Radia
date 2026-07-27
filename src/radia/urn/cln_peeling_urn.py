@@ -83,6 +83,10 @@ class CLNPeelingConfig:
     min_trusted_fraction: float = 0.8
     trust_weight_floor: float = 0.0
 
+    # Anti-resonance dictionary extensions (0 = the paper 22-basis dictionary).
+    n_parallel_rlc: int = 0
+    n_coil_antiresonance: int = 0
+
 
 @dataclass
 class CLNBranchFit:
@@ -305,6 +309,8 @@ def _branch_config(config: CLNPeelingConfig) -> YAdmittanceURNConfig:
         sparsity_weight=0.0,
         gate_init=config.gate_init,
         huber_delta=config.huber_delta,
+        n_parallel_rlc=config.n_parallel_rlc,
+        n_coil_antiresonance=config.n_coil_antiresonance,
     )
 
 
@@ -940,6 +946,8 @@ def train_cln_peeling_urn(
     stages: list[CLNPeelingStage] = []
     log: list[dict[str, float | int | bool]] = []
     sample_weight = np.ones(freqs.shape, dtype=np.float64)
+    z_measured = z_current.copy()
+    previous_global_rmse: float | None = None
     for stage_index in range(cfg.n_stages):
         composite = _fit_composite_seed(
             freqs,
@@ -974,6 +982,36 @@ def train_cln_peeling_urn(
             )
         if not stage.accepted:
             break
+        # Global stopping rule: a stage replaces the previous lookahead branch
+        # by two frozen branches plus a fresh lookahead.  If that replacement
+        # degrades the whole-ladder lookahead fit of the measured response,
+        # the deeper stage adds no value -- do not freeze it.
+        tentative = CLNPeelingNetwork(
+            freqs_hz=freqs,
+            stages=[*stages, stage],
+            final_tail_impedance=np.asarray(
+                stage.exact_tail_impedance, dtype=np.complex128
+            ),
+        )
+        global_rmse = s_domain_rmse(
+            tentative.predict_terminated(freqs, termination="lookahead"),
+            z_measured,
+        )
+        stage.metrics["global_lookahead_s_rmse"] = global_rmse
+        entry["global_lookahead_s_rmse"] = global_rmse
+        if (
+            previous_global_rmse is not None
+            and global_rmse > previous_global_rmse + 1.0e-12
+        ):
+            stage.metrics["rejected_by_global_degradation"] = True
+            entry["rejected_by_global_degradation"] = True
+            if verbose:
+                print(
+                    f"  CLN pair {stage_index + 1}: rejected by global "
+                    f"degradation ({global_rmse:.3e} > {previous_global_rmse:.3e})"
+                )
+            break
+        previous_global_rmse = global_rmse
         stages.append(stage)
         z_current = np.asarray(stage.exact_tail_impedance, dtype=np.complex128)
         sample_weight = sample_weight * np.asarray(
