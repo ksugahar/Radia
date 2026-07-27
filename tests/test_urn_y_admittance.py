@@ -101,6 +101,27 @@ def test_anti_resonance_coil_basis_has_admittance_valley():
     assert np.min(column.real) >= -1.0e-14
 
 
+def test_ideal_reactance_bases_are_pure_and_lossless():
+    freqs = np.logspace(2, 6, 32)
+    cfg = YAdmittanceURNConfig(
+        n_debye=0, n_magnetic_debye=0, n_cole_cole=0, n_magnetic_cole_cole=0,
+        n_inductive_cpe=0, n_capacitive_cpe=0, n_series_rlc=0,
+        n_ideal_inductor=1, n_ideal_capacitor=1,
+    )
+    model = YAdmittanceURN(freqs, cfg)
+    omega = torch.tensor(2.0 * np.pi * freqs, dtype=torch.float64)
+
+    assert cfg.total_basis_functions == 2
+    basis = model.basis_matrix(omega, normalize=False).detach().numpy()
+    w_norm = 2.0 * np.pi * freqs / model.omega_ref
+    np.testing.assert_allclose(basis[:, 0], 1.0 / (1j * w_norm), rtol=1.0e-12)
+    np.testing.assert_allclose(basis[:, 1], 1j * w_norm, rtol=1.0e-12)
+    np.testing.assert_allclose(basis.real, 0.0, atol=1.0e-15)  # lossless
+
+    summary = model.parameter_summary()
+    assert [s["basis_type"] for s in summary] == ["ideal_inductor", "ideal_capacitor"]
+
+
 def test_complex_smooth_l1_weighted_matches_unweighted_for_unit_weights():
     residual = torch.tensor(
         [0.5 + 0.2j, -0.01 + 0.03j, 2.0 - 1.0j], dtype=torch.complex128
