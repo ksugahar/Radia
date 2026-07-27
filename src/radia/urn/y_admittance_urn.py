@@ -917,6 +917,15 @@ def train_y_admittance_urn(
         model = YAdmittanceURN(freqs, cfg, z_data=z_arr)
         if warm_start_model is not None:
             model.initialize_from_model(warm_start_model)
+        elif restart > 0:
+            # The dictionary initialisation is deterministic (log-grid tau,
+            # constant gates), so without a perturbation every restart would
+            # repeat the identical run.  Jitter the raw parameters to make
+            # restarts an actual multi-start search (reproducible via the
+            # per-restart manual_seed above).
+            with torch.no_grad():
+                for parameter in model.parameters():
+                    parameter.add_(0.3 * torch.randn_like(parameter))
         optimizer = optim.Adam(model.parameters(), lr=cfg.lr)
         history: list[dict[str, float]] = []
         best_epoch_loss = float("inf")
