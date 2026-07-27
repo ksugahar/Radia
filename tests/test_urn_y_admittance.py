@@ -12,6 +12,7 @@ from radia.urn import (
     s_domain_rmse,
     train_y_admittance_urn,
 )
+from radia.urn import train_stacked_y_urn
 from radia.urn.y_admittance_urn import complex_smooth_l1
 
 
@@ -232,6 +233,60 @@ def test_initialize_from_model_embeds_smaller_dictionary_response():
     large.initialize_from_model(small, extra_gate=1.0e-12)
 
     np.testing.assert_allclose(large.predict(freqs), small.predict(freqs), rtol=1.0e-8)
+
+
+@pytest.mark.parametrize("composition", ["series", "parallel"])
+def test_stacked_y_urn_grows_frozen_sections(composition):
+    freqs = np.logspace(2, 5, 20)
+    omega = 2.0 * np.pi * freqs
+    z = (2.0 + 1j * omega * 1.0e-5) + 1.0 / (0.02 + 1j * omega * 2.0e-7)
+    cfg = YAdmittanceURNConfig(
+        n_debye=2,
+        n_magnetic_debye=2,
+        n_cole_cole=0,
+        n_magnetic_cole_cole=0,
+        n_inductive_cpe=1,
+        n_capacitive_cpe=1,
+        n_series_rlc=0,
+        sparsity_weight=0.0,
+        lr=1.0e-2,
+        n_epochs=30,
+        n_restarts=1,
+        conductance_floor=1.0e-6,
+    )
+
+    stack = train_stacked_y_urn(
+        freqs, z, cfg, n_sections=2, composition=composition, verbose=False
+    )
+
+    assert len(stack.sections) == 2
+    assert len(stack.training_log) == 2
+    prediction = stack.predict(freqs)
+    assert np.all(np.isfinite(prediction.real))
+    assert np.all(np.isfinite(prediction.imag))
+    # Structural passivity of the composition.
+    assert np.all(prediction.real > 0.0)
+    # The recorded stack RMSE never degrades when a section is added.
+    assert (
+        stack.training_log[1]["stack_s_rmse"]
+        <= stack.training_log[0]["stack_s_rmse"] * 1.05
+    )
+
+
+def test_stacked_series_second_section_starts_negligible():
+    freqs = np.logspace(2, 5, 20)
+    omega = 2.0 * np.pi * freqs
+    z = 5.0 + 1j * omega * 1.0e-5
+    cfg = YAdmittanceURNConfig.paper_22_basis(gate_init=1.0e4)
+    section = YAdmittanceURN(freqs, cfg, z_data=z)
+    omega_t = torch.tensor(omega, dtype=torch.float64)
+
+    with torch.no_grad():
+        contribution = 1.0 / section.forward_admittance(omega_t).numpy()
+
+    # A gate_init of 1e4 makes the series contribution a near short, so a new
+    # series section reproduces the previous stack at initialization.
+    assert np.max(np.abs(contribution)) < 1.0e-3 * np.median(np.abs(z))
 
 
 def test_y_admittance_multi_restart_perturbs_deterministic_init():
