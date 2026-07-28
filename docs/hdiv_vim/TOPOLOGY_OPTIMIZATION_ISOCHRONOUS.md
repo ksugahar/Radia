@@ -161,8 +161,14 @@ precedent, importing the LP driver, editing nothing in the shared module.
 
 **Stage-1 status (2026-07-28): build items 1 and 2 SHIPPED** in
 `radia.isochronous_topopt` (plus the `density_to_s` floor of item 3 and the
-warm-start lever of Sec. 8).  Remaining from the list: the Helmholtz
-filter/projection (Stage 2) and the iron-only remesh driver (Stage 3).
+warm-start lever of Sec. 8).
+
+**Stage-2 status (2026-07-28): item 3 SHIPPED** (`HelmholtzFilter` with the
+self-adjoint chain and the clipped-with-exact-chain-rule composition inside
+`optimize_density`; smooth tanh PROJECTION remains future polish -- the
+converged surrogate designs carry ~45 % intermediate-density elements at
+verification-mesh coarseness).  Remaining from the list: the iron-only
+remesh driver (Stage 3).
 
 Knowledge homes unchanged: `radia_mcp.topology_optimization`,
 `radia_mcp.accelerator`; validation lanes land under `validation_test/`.
@@ -184,7 +190,7 @@ Knowledge homes unchanged: `radia_mcp.topology_optimization`,
 |---|---|---|
 | 0 | **DONE 2026-07-28.** Reconnaissance of `radia.topology_optimization` (LP semantics, reuse points, filter status) | Sec. 5 findings: adjoint exists only shape-side; density adjoint + `F^T c` + filter are the build list; LP driver and `A_ub` constraint slot reused as-is; new work lands in `radia/isochronous_topopt.py` |
 | 1 | **DONE 2026-07-28.** `radia.isochronous_topopt` shipped: `DensityAdjointVIM` (one weighted-mass assembly + factorization, state+adjoint CG, ALL element sensitivities from one element-wise `Integrate`), `field_functional_load` (`F^T c` by dipole-pair reciprocity; dense `F` never formed), `gradient_pair_points`, `density_to_s` (validated `chi_min = 1e-6` floor) + chain rule, warm-started CG with the rhs-anchored ABSOLUTE tolerance (krylovspace's relative tol is anchored to the run's first residual, which makes warm restarts harder, not cheaper -- anchor to `\|\|rhs\|\|_pre`; upstream `abstol=` kwarg is broken, use `atol=`) | gate PASSED (unit ball, log-uniform `s` in [1e-2, 1]): adjoint == central FD to 8.1e-10 directional / 3.9e-7 worst per-element (the smallest-gradient element, FD noise floor); reciprocity load == the independent C++ charge evaluator to 1.1e-10 at `bonus_intorder=10`; locked by `tests/test_isochronous_topopt.py` (9 tests) |
-| 2 | Isochronous sector case: orbit, `BL` constraints, volume budget; design loop with warm-started CG and block forward+adjoint rhs | monotone constrained descent; per-iterate wall time ms-to-seconds class at study scale |
+| 2 | **DONE 2026-07-28 (verification scale).** `optimize_density` shipped in `radia.isochronous_topopt`: trust-region SLP (LP via `solve_lp_update` with normalized `A_ub` constraint rows -- Tesla-scale rows sit below HiGHS's ABSOLUTE feasibility tolerance and must be scaled to O(1)), absolute engineering bands (default 0.5 % of target) with restore/hold modes, acceptance = monotone J AND (violation <= 1.25 band OR strict geometric decrease) -- no ratchet path; `HelmholtzFilter` (self-adjoint chain, FD-locked; filtered density clipped to [0,1] with the piecewise-exact chain rule -- the P1 realization undershoots ~1e-2 at bang-bang transitions), `DensityAdjointVIM.linearize` (state + K adjoints on ONE factorization, warm-started), per-point-direction `gradient_pair_points` + `orbit_arc_points` | gate MET at verification scale: sector-pole surrogate (194 tets; arc-orbit radial `dB_z/dr` objective, two mean-`B_z` arc constraints, volume budget) J strictly MONOTONE **+16.1 %** riding the active band at 1.06 x band (ball: +0.7 %, peak 1.24 x band <= the 1.25 cap); median 115-120 ms/iterate incl. trial evaluations (informal LAB; ~50 warm CG iters/solve, LP 3-5 ms); locked by `tests/test_isochronous_topopt.py` (15 tests). STUDY-SCALE timing = the planned mdx job (Sec. 8); rejected schemes recorded in the docstring (fixed-move SLP limit-cycles; violation-relative shrink bands lock into a ratcheting hold mode) |
 | 3 | **Final verification protocol**: remesh the converged design iron-only (void REMOVED -- exact-void gold standard, discharging the `O(h)` embedded bias), re-measure with the full RK4 Hill chain | removed-void `gL` inside a stated band of the embedded prediction; band quantifies the ersatz error honestly |
 | 4 | Promotion: `validation_test/` lane with golden bands; companion result-bearing notebook in this directory; knowledge sync | ladder rules of CLAUDE.md |
 
