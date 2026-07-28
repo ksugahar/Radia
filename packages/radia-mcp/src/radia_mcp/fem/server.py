@@ -272,6 +272,63 @@ async def fem_kelvin_open_boundary_validation(request_json: str = "{}") -> str:
 
 
 @mcp.tool(
+    title="Harmonic magnetic validation",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def fem_harmonic_magnetic_validation(request_json: str = "{}") -> str:
+    """Run planar and weighted-axisymmetric complex magnetic solves."""
+
+    process = None
+    try:
+        request = json.loads(request_json)
+        if not isinstance(request, dict):
+            raise ValueError("request_json must decode to an object")
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.harmonic_magnetic_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(json.dumps(request).encode("utf-8")), timeout=120.0
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "harmonic magnetic worker failed")
+        result = _decode_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.harmonic-magnetic-validation.v1",
+            "status": "timeout",
+            "pass": False,
+            "error": "harmonic magnetic worker exceeded 120 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.harmonic-magnetic-validation.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
     title="2-D transient runtime gate",
     annotations=ToolAnnotations(
         readOnlyHint=True,
