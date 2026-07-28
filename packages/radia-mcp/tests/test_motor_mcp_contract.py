@@ -31,3 +31,9 @@ def test_circuit_age_plan_is_read_only_and_closed_world():
     assert analysis.annotations.destructiveHint is False
     assert analysis.annotations.idempotentHint is True
     assert analysis.annotations.openWorldHint is False
+
+    vol_analysis = mcp._tool_manager._tools["motor_vol2d_circuit_analysis"]
+    assert vol_analysis.annotations.readOnlyHint is True
+    assert vol_analysis.annotations.destructiveHint is False
+    assert vol_analysis.annotations.idempotentHint is True
+    assert vol_analysis.annotations.openWorldHint is False

@@ -2002,6 +2002,11 @@ def parse_netgen_tri_tet_vol(text: str, source: str | None = None) -> NetgenTriT
         else:
             raise ValueError(f"unsupported or unexpected .vol section: {key}")
 
+    if dimension != 3:
+        raise ValueError(
+            f"Netgen tri/tet FEM/BEM policy requires dimension 3, got {dimension}"
+        )
+
     mesh = NetgenTriTetVolMesh(
         points=tuple(points),
         surface_triangles=tuple(surface_triangles),

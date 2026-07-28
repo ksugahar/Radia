@@ -72,6 +72,32 @@ public:
         for (size_t i = 0; i < afel.GetNDof(); ++i)
             mat(0, i) = shape(i);
     }
+
+    void ApplyTrans(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    FlatVector<double> flux,
+                    BareSliceVector<double> values,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(mip.IP(), shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            values(i) = shape(i) * flux(0);
+    }
+
+    void ApplyTrans(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    FlatVector<Complex> flux,
+                    BareSliceVector<Complex> values,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(mip.IP(), shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            values(i) = shape(i) * flux(0);
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -123,6 +149,32 @@ public:
         afel.CalcShape(ip, shape);
         for (size_t i = 0; i < afel.GetNDof(); ++i)
             mat(0, i) = shape(i);
+    }
+
+    void ApplyTrans(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    FlatVector<double> flux,
+                    BareSliceVector<double> values,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(mip.IP(), shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            values(i) = shape(i) * flux(0);
+    }
+
+    void ApplyTrans(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    FlatVector<Complex> flux,
+                    BareSliceVector<Complex> values,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(mip.IP(), shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            values(i) = shape(i) * flux(0);
     }
 };
 

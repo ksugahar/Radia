@@ -10,7 +10,7 @@ import pytest
 
 pytest.importorskip("ngsolve")
 
-from ngsolve import BilinearForm, CoefficientFunction as CF, TaskManager
+from ngsolve import BilinearForm, CoefficientFunction as CF, LinearForm, TaskManager, dx, x
 
 from _vol_mesh import structured_rect_vol_mesh
 
@@ -52,3 +52,32 @@ def test_p1_triangle_rejects_singular_r2z_vandermonde():
     axifem = pytest.importorskip("radia.axifem")
     with pytest.raises(Exception, match="singular Vandermonde"):
         axifem.AxiHenrotteFE_P1_Triangle([1.0, 1.0, 1.0], [0.0, 1.0, 2.0])
+
+
+def test_volume_linear_form_uses_axifem_apply_trans_without_base_fallback(capfd):
+    axifem = pytest.importorskip("radia.axifem")
+    mesh = structured_rect_vol_mesh(
+        0.1,
+        1.1,
+        -0.5,
+        0.5,
+        quads=False,
+        nx=2,
+        ny=2,
+        stem="axifem_apply_trans",
+    )
+    fes = axifem.H1Henrotte(
+        mesh,
+        order=1,
+        dirichlet="bottom|right|top|left",
+    )
+    form = LinearForm(fes)
+    form += 2.0 * 3.141592653589793 * x * fes.TestFunction() * dx
+
+    with TaskManager():
+        form.Assemble()
+
+    captured = capfd.readouterr()
+    assert "base class apply trans" not in captured.out
+    assert "base class apply trans" not in captured.err
+    assert form.vec.Norm() > 0.0
