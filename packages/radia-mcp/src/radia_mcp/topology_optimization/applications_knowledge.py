@@ -423,6 +423,80 @@ scipy.optimize.differential_evolution.
 """
 
 
+ISOCHRONOUS_DENSITY_ADJOINT = r"""
+# Isochronous accelerator-magnet density topopt on HDiv-MMM (radia.isochronous_topopt)
+
+## What it is (shipped 2026-07-28; design record docs/hdiv_vim/TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md)
+
+Per-element DENSITY adjoint on the HDiv-MMM volume-integral engine.  The system
+A(s) = sum_e s_e M^(e) + N is exactly AFFINE in the design variable s_e = 1/chi_e
+(N = B^T G B is the geometry-only charge-Gram H-matrix, built ONCE and reused for
+every design iterate), so dA/ds_e = M^(e) exactly and the self-adjoint operator
+serves state and adjoint with one factorization.  Iron-only meshing, exact open
+boundary, per-iterate cost = one weighted-mass reassembly + warm-started CG.
+
+API (radia.isochronous_topopt):
+- DensityAdjointVIM: .linearize(s, state_load, loads, warm=) = state + K adjoints
+  on ONE factorization; ALL element sensitivities from a single element-wise
+  Integrate(lambda . m):  dJ/ds_e = -lambda^T M^(e) m.
+- field_functional_load: F^T c by DIPOLE-ARRAY kernel reciprocity (the adjoint
+  load is the mass projection of the analytic H of point dipoles at the orbit
+  points; the dense magnetization-to-field matrix is never formed).  Derivative
+  functionals (dB_z/dr for the focusing integral gL) as +/- pairs via
+  gradient_pair_points(direction=per-point radial); orbit_arc_points helper.
+- HelmholtzFilter (self-adjoint chain, FD-locked; the loop clips the filtered
+  density to [0,1] with the piecewise-exact chain rule), density_to_s
+  (validated chi_min = 1e-6 ersatz floor; SIMP penalty chi ~ rho^p -- use p=3
+  for runs whose result will be thresholded), optimize_density (trust-region
+  SLP over radia.topology_optimization.solve_lp_update; isochronism/mean-B
+  constraints as +/- row pairs in the A_ub slot).
+- iron_only_mesh + verify_design_iron_only: the Stage-3 exact-void protocol --
+  threshold, extract the kept elements into a NEW iron-only mesh, and compare
+  MATCHED 0/1 representations (embedded ersatz vs exact void) per functional.
+
+Gates (verification scale, all test-locked): adjoint == central FD to 8.1e-10;
+reciprocity vs the independent C++ charge evaluator 1.1e-10; sector surrogate
++16.1 % strictly monotone riding the active constraint band at 1.06x band
+(acceptance cap 1.25x); matched-0/1 ersatz band +0.69 %.  Locks:
+tests/test_isochronous_topopt.py (19 tests), validation_test/isochronous_topopt
+(golden bands + committed record JSON), docs/hdiv_vim/isochronous_topopt.ipynb.
+
+## Traps (measured 2026-07-28; do not re-walk)
+
+1. HiGHS uses ABSOLUTE feasibility tolerances: Tesla-scale LP rows (~1e-9
+   coefficients) read as noise / spurious "infeasible".  Normalize every A_ub
+   row (and the LP objective vector) to O(1).
+2. ngsolve.krylovspace relative tol anchors to the run's FIRST residual, so a
+   warm start from the converged solution makes the criterion HARDER (79 vs 75
+   iterations measured).  Anchor an absolute criterion atol = tol*||rhs||_pre.
+   (CGSolver's deprecated abstol= kwarg is broken upstream -- use atol=.)
+3. Rejected SLP schemes: a fixed move limit limit-cycles (J ~1e-4 relative
+   oscillation); violation-relative shrink bands + per-step growth allowances
+   RATCHET (0.2 % -> 2 % measured).  The working scheme: ABSOLUTE engineering
+   band (default 0.5 % of target) + trust-region acceptance = monotone J AND
+   (violation <= 1.25 band OR strict geometric decrease).
+4. netgen surface-element handedness: boundary triangles are stored right-hand-
+   OUTWARD for FaceDescriptor(domin=1, domout=0); the Radia TETRA_FACES
+   ordering is the OPPOSITE handedness there -- wrong orientation flips every
+   surface charge into a runaway MAGNETIZING solve (<Mz> 18-34 instead of 2.2).
+5. Gray designs: linear chi(rho) + a filter radius near the element size give
+   ~100 % intermediate density; thresholding then destroys objective and
+   constraints (-96 % class gap) -- the verification protocol EXPOSES this.
+   penalty=3 moves designs toward 0/1 (0.73 -> 0.28 intermediate fraction in 30
+   iterations); threshold-READY designs take penalty/projection continuation.
+6. Staircase (jagged element) boundaries do NOT converge to the smooth body
+   (+5-8 % hemisphere <Mz>): the exact-void verification is the gold standard
+   AT THE DESIGN'S OWN DISCRETIZATION; manufacturing-shape numbers come from
+   the shape route on a smoothed body-fitted remesh.
+
+## When to reach for it
+
+Accelerator pole/yoke density design with orbit-functional objectives (gL
+focusing, mean-B isochronism bands), and any HDiv-MMM per-element material
+design where the build-once geometry operator amortizes over design iterates.
+"""
+
+
 def get_applications_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -446,13 +520,27 @@ def get_applications_documentation(topic: str = "all") -> str:
       "global_optimizers" - Differential Evolution: global, derivative-free population
                          optimizer for MULTIMODAL/non-convex objectives where local
                          methods stall, verified on Rastrigin/Ackley/Rosenbrock + scipy
+      "isochronous"    - Isochronous accelerator-magnet DENSITY topopt on
+                         HDiv-MMM (radia.isochronous_topopt): affine per-element
+                         adjoint, dipole-reciprocity F^T c, trust-region SLP with
+                         banded orbit constraints, exact-void verification
+                         protocol, and the measured traps (HiGHS row scaling,
+                         warm-start tol anchoring, netgen surface handedness,
+                         gray designs, staircase boundaries)
     """
     t = topic.lower().strip()
     if t == "all":
         return (MOTOR_OPTIMIZATION + "\n\n" + FIELD_SYNTHESIS
                 + "\n\n" + LINEAR_INVERSE + "\n\n" + OUTER_LOOP_OPTIMIZERS
                 + "\n\n" + KRYLOV_SOLVERS + "\n\n" + NONLINEAR_LSQ
-                + "\n\n" + GLOBAL_OPTIMIZERS)
+                + "\n\n" + GLOBAL_OPTIMIZERS
+                + "\n\n" + ISOCHRONOUS_DENSITY_ADJOINT)
+    if t in ("isochronous", "isochronous_topopt", "isochronous-topopt",
+             "density_adjoint", "density-adjoint", "hdiv_mmm", "hdiv-mmm",
+             "vim_topopt", "vim-topopt", "accelerator", "accelerator_pole",
+             "cyclotron", "pole", "gl", "exact_void", "exact-void",
+             "iron_only", "iron-only"):
+        return ISOCHRONOUS_DENSITY_ADJOINT
     if t in ("motor", "ipm"):
         return MOTOR_OPTIMIZATION
     if t in ("field_synthesis", "field-synthesis", "fieldsynthesis",
