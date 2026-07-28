@@ -985,6 +985,67 @@ async def motor_age_periodic_motion_analysis(analysis_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+async def motor_vol2d_postprocess_analysis(analysis_json: str) -> str:
+    """Solve or replay a portable 2-D ``.vol`` postprocessing artifact.
+
+    One owned worker assembles the planar H1 or axisymmetric H1Henrotte
+    operator, reuses one factorization across a prescribed-current sweep, and
+    returns point probes, oriented paths, material energy integrals, canonical
+    JSON/CSV, and a Gmsh 4.1 ``.msh`` with exact ``.geo/.opt`` companions.
+    The tool never writes to a caller-selected path and cancellation cannot
+    terminate a shared CAE session.
+    """
+
+    process = None
+    try:
+        json.loads(analysis_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.vol2d_postprocess_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(analysis_json.encode("utf-8")),
+            timeout=180.0,
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "vol2d postprocess worker failed")
+        result = _decode_owned_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.vol2d-postprocess-analysis.v1",
+            "status": "timeout",
+            "error": "vol2d postprocess worker exceeded 180 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.vol2d-postprocess-analysis.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
 @mcp.tool()
 def motor_validation_lanes(topic: str = "overview") -> str:
     """
