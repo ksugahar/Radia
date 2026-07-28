@@ -46,6 +46,9 @@ shielding            Static + thin-shell AC shielding factor; spherical
                      Part 8 §2)
 conductor_impedance  Planar surface impedance and full Bessel cylinder
                      AC impedance (Part 6 §4 + §5)
+sphere_eddy          Complex magnetic polarizability of a solid conducting
+                     permeable sphere in a uniform AC field (BVP closed
+                     form; Wait 1951, Landau-Lifshitz sec. 59)
 
 Numerics and special functions:
 
@@ -134,6 +137,7 @@ from .conductor_impedance import (
     cylinder_dc_resistance,
     cylinder_internal_inductance,
 )
+from .sphere_eddy import sphere_complex_polarizability
 from .adaptive_quadrature import (
     patterson_nodes_weights,
     adaptive_integrate,
@@ -201,6 +205,8 @@ __all__ = [
     "cylinder_ac_impedance",
     "cylinder_dc_resistance",
     "cylinder_internal_inductance",
+    # sphere_eddy (conducting permeable sphere in a uniform AC field)
+    "sphere_complex_polarizability",
     # adaptive_quadrature (Part 9 §2)
     "patterson_nodes_weights",
     "adaptive_integrate",
