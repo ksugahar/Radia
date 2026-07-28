@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **879 tools** across 48 MCP servers.
+Total: **880 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -21,7 +21,7 @@ Total: **879 tools** across 48 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 6 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 50 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 51 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -631,6 +631,7 @@ Module: `radia_mcp.motor.server`
 | `motor_vol2d_circuit_analysis` | Analyze a Netgen dimension-2 ``.vol`` and its coupled field circuit. |
 | `motor_vol2d_dynamic_analysis` | Analyze nonlinear, conductive-transient, or MEX-ready ``.vol`` data. |
 | `motor_vol2d_force_analysis` | Extract boundary-aware force from a solved dimension-2 ``.vol`` model. |
+| `motor_vol2d_postprocess_analysis` | Solve or replay a portable 2-D ``.vol`` postprocessing artifact. |
 
 ## `mcp-server-accelerator`
 
