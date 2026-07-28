@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **882 tools** across 48 MCP servers.
+Total: **883 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -14,7 +14,7 @@ Total: **882 tools** across 48 MCP servers.
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 13 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 14 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
@@ -484,6 +484,7 @@ Module: `radia_mcp.fem.server`
 | `fem_status` | (no description) |
 | `fem_time_domain_axisym` | Time-domain, axisymmetric (Henrotte), harmonic balance, HF, circuit coupling. |
 | `fem_vol2d_scalar_analysis` | Solve or replay a portable 2-D scalar-PDE ``.vol`` artifact. |
+| `fem_vol2d_transient_runtime` | Run one digest-bound fixed-width field/thermal lifecycle operation. |
 | `fem_xfem_em_hiruma` | EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current |
 
 ## `mcp-server-bem`
