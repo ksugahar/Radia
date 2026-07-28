@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **887 tools** across 48 MCP servers.
+Total: **888 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -14,7 +14,7 @@ Total: **887 tools** across 48 MCP servers.
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 17 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 18 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
@@ -472,6 +472,7 @@ Module: `radia_mcp.fem.server`
 
 | Tool | Description |
 |---|---|
+| `fem_axifem_element_evidence_gate` | Validate content-addressed evidence for P1/Q1/P2/Q2 curved axifem paths. |
 | `fem_elements` | Element technology: edge (Nedelec), high-order, XFEM, isogeometric, DG. |
 | `fem_equivalence_source` | Equivalence-theorem near-field source (Schelkunoff/Love -- Stratton-Chu). |
 | `fem_gauge_open_boundary` | Gauging + open boundary techniques. |
