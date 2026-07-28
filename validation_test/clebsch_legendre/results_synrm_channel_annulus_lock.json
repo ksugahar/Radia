@@ -1,0 +1,322 @@
+{
+  "case": {
+    "abstraction": "pure 90-degree turn, flux-line walls, equipotential terminals, 20-degree lead-in/out",
+    "B_cap_T": 1.9,
+    "H_cap_A_per_m": 3025.2452047264906,
+    "flux_Wb_per_m": 0.0011,
+    "body_turn_deg": 90.0,
+    "material": "same representative curve as the promoted bridge driver (NOT a datasheet fit; percentages are model-dependent)"
+  },
+  "chart": [
+    {
+      "rho": 1.2,
+      "B_out_T": 1.827501534597489,
+      "f": 0.37249337673692806,
+      "r_in_mm": 2.953072641548928,
+      "width_mm": 0.5906145283097854,
+      "w_over_phi_per_T": 0.5369222984634413,
+      "body_area_mm2": 3.0136361593722083,
+      "area_over_phi2": 2.490608396175378,
+      "mmf_full_span_A": 20.270078531385636
+    },
+    {
+      "rho": 1.5,
+      "B_out_T": 1.7415888895615697,
+      "f": 0.9073033280045897,
+      "r_in_mm": 1.2123839580961349,
+      "width_mm": 0.6061919790480674,
+      "w_over_phi_per_T": 0.5510836173164249,
+      "body_area_mm2": 1.4430462711502061,
+      "area_over_phi2": 1.1926002240910794,
+      "mmf_full_span_A": 8.321880638842265
+    },
+    {
+      "rho": 2.0,
+      "B_out_T": 1.6350061165894638,
+      "f": 1.7499919805376147,
+      "r_in_mm": 0.6285743090445873,
+      "width_mm": 0.6285743090445873,
+      "w_over_phi_per_T": 0.5714311900405339,
+      "body_area_mm2": 0.9309457838267114,
+      "area_over_phi2": 0.7693766808485216,
+      "mmf_full_span_A": 4.314574056824517
+    },
+    {
+      "rho": 2.5,
+      "B_out_T": 1.5552184290301634,
+      "f": 2.546708879109446,
+      "r_in_mm": 0.4319300132901948,
+      "width_mm": 0.6478950199352922,
+      "w_over_phi_per_T": 0.5889954726684474,
+      "body_area_mm2": 0.7692649588599498,
+      "area_over_phi2": 0.6357561643470659,
+      "mmf_full_span_A": 2.9647950972389343
+    },
+    {
+      "rho": 3.0,
+      "B_out_T": 1.4916644764887694,
+      "f": 3.3078883681216205,
+      "r_in_mm": 0.33253842862437144,
+      "width_mm": 0.6650768572487429,
+      "w_over_phi_per_T": 0.6046153247715844,
+      "body_area_mm2": 0.6948059819173619,
+      "area_over_phi2": 0.5742198197664147,
+      "mmf_full_span_A": 2.2825649352750292
+    },
+    {
+      "rho": 4.0,
+      "B_out_T": 1.3939224911716053,
+      "f": 4.74810398564552,
+      "r_in_mm": 0.23167142154542586,
+      "width_mm": 0.6950142646362776,
+      "w_over_phi_per_T": 0.6318311496693433,
+      "body_area_mm2": 0.6323042013124356,
+      "area_over_phi2": 0.522565455630112,
+      "mmf_full_span_A": 1.590207379978439
+    },
+    {
+      "rho": 5.0,
+      "B_out_T": 1.3198220619655459,
+      "f": 6.103492133989596,
+      "r_in_mm": 0.18022469364287955,
+      "width_mm": 0.7208987745715182,
+      "w_over_phi_per_T": 0.6553625223377438,
+      "body_area_mm2": 0.6122512986589824,
+      "area_over_phi2": 0.5059928088090764,
+      "mmf_full_span_A": 1.2370737658251267
+    },
+    {
+      "rho": 5.825942120191546,
+      "B_out_T": 1.2696852717480513,
+      "f": 7.17232587072759,
+      "r_in_mm": 0.15336726465391506,
+      "width_mm": 0.7401415423518928,
+      "w_over_phi_per_T": 0.6728559475926298,
+      "body_area_mm2": 0.6085551407301647,
+      "area_over_phi2": 0.5029381328348468,
+      "mmf_full_span_A": 1.0527226641631382
+    },
+    {
+      "rho": 10.0,
+      "B_out_T": 1.0940750698561033,
+      "f": 12.07261959481135,
+      "r_in_mm": 0.09111527049794274,
+      "width_mm": 0.8200374344814847,
+      "w_over_phi_per_T": 0.7454885768013497,
+      "body_area_mm2": 0.6455165979347358,
+      "area_over_phi2": 0.5334847916815999,
+      "mmf_full_span_A": 0.625421014849473
+    },
+    {
+      "rho": 20.0,
+      "B_out_T": 0.8600647931487361,
+      "f": 21.72660403945004,
+      "r_in_mm": 0.05062917324781531,
+      "width_mm": 0.9619542917084909,
+      "w_over_phi_per_T": 0.8745039015531735,
+      "body_area_mm2": 0.8032753652274434,
+      "area_over_phi2": 0.6638639382044985,
+      "mmf_full_span_A": 0.3475218669778671
+    }
+  ],
+  "optimum": {
+    "rho_star": 5.825942120191546,
+    "area_over_phi2": 0.5029381328348468,
+    "flat_5pct_rho_range": [
+      3.84437917296175,
+      9.478290372988473
+    ]
+  },
+  "linear_baseline": {
+    "rho_lin": 2.2184574899167,
+    "r_in_mm": 0.7265795117934595,
+    "area_mm2": 1.6259767651409884,
+    "peak_B_on_shape_T": 1.3907340613415957,
+    "cap_slack_T": 0.5092659386584042,
+    "area_ratio_vs_capbound_same_rho": 1.92958480767488,
+    "area_ratio_capbound_vs_optimal": 1.384683537036083,
+    "area_ratio_vs_optimal": 2.671864316502343,
+    "width_rule_rows": [
+      {
+        "rho": 1.5,
+        "w_over_phi_exact": 0.5510836173164249,
+        "w_over_phi_linear_rule": 0.6490272269411663,
+        "linear_overestimate_pct": 17.772912593862067
+      },
+      {
+        "rho": 2.0,
+        "w_over_phi_exact": 0.5714311900405339,
+        "w_over_phi_linear_rule": 0.7593131794152439,
+        "linear_overestimate_pct": 32.87919746931958
+      },
+      {
+        "rho": 2.2184574899167,
+        "w_over_phi_exact": 0.5793872162738033,
+        "w_over_phi_linear_rule": 0.8048238619679635,
+        "linear_overestimate_pct": 38.909495991990404
+      },
+      {
+        "rho": 3.0,
+        "w_over_phi_exact": 0.6046153247715844,
+        "w_over_phi_linear_rule": 0.9581465543440394,
+        "linear_overestimate_pct": 58.47209210352291
+      },
+      {
+        "rho": 5.0,
+        "w_over_phi_exact": 0.6553625223377438,
+        "w_over_phi_linear_rule": 1.308073546441288,
+        "linear_overestimate_pct": 99.59541503460687
+      }
+    ],
+    "mmf_full_span_A": 1.2350105108130935
+  },
+  "hodograph_lock": [
+    {
+      "rho": 1.5,
+      "B_out_T": 1.7415888895615697,
+      "r_in_fit_mm": 1.2123286758837168,
+      "rho_fit": 1.5000226000422359,
+      "circ_dev": 5.1775365090482496e-09,
+      "r_in_rel_err": 4.5597941187567164e-05,
+      "rho_rel_err": 1.5066694823910135e-05,
+      "area_rel_err": 0.0038964639834413906,
+      "mmf_rel_err": 4.560138908797451e-05,
+      "J_single_sign": true
+    },
+    {
+      "rho": 2.2184574899167,
+      "B_out_T": 1.5976452167384543,
+      "r_in_fit_mm": 0.523046232104475,
+      "rho_fit": 2.2184883299763807,
+      "circ_dev": 4.862742188771146e-09,
+      "r_in_rel_err": 2.5636522547784916e-05,
+      "rho_rel_err": 1.3901577930095593e-05,
+      "area_rel_err": 0.003875966092180882,
+      "mmf_rel_err": 2.5639960488380677e-05,
+      "J_single_sign": true
+    },
+    {
+      "rho": 3.0,
+      "B_out_T": 1.4916644764887694,
+      "r_in_fit_mm": 0.33253757169302806,
+      "rho_fit": 3.000000847689329,
+      "circ_dev": 5.561297161196208e-09,
+      "r_in_rel_err": 2.576939293692272e-06,
+      "rho_rel_err": 2.8256310965109793e-07,
+      "area_rel_err": 0.003864149007545248,
+      "mmf_rel_err": 2.580363227475272e-06,
+      "J_single_sign": true
+    },
+    {
+      "rho": 5.0,
+      "B_out_T": 1.3198220619655459,
+      "r_in_fit_mm": 0.18022392181855582,
+      "rho_fit": 5.000009781283384,
+      "circ_dev": 1.6205808044449918e-08,
+      "r_in_rel_err": 4.282566989739484e-06,
+      "rho_rel_err": 1.9562566768271948e-06,
+      "area_rel_err": 0.003864120348910467,
+      "mmf_rel_err": 4.286055539588182e-06,
+      "J_single_sign": true
+    },
+    {
+      "rho": 5.825942120191546,
+      "B_out_T": 1.2696852717480513,
+      "r_in_fit_mm": 0.15336640526437562,
+      "rho_fit": 5.825961576875182,
+      "circ_dev": 1.60375541461335e-08,
+      "r_in_rel_err": 5.603474388015426e-06,
+      "rho_rel_err": 3.3396630509518685e-06,
+      "area_rel_err": 0.0038639563014169695,
+      "mmf_rel_err": 5.606961274781507e-06,
+      "J_single_sign": true
+    },
+    {
+      "rho": 10.0,
+      "B_out_T": 1.0940750698561033,
+      "r_in_fit_mm": 0.09111467538213107,
+      "rho_fit": 10.000048857299541,
+      "circ_dev": 1.1763863828560227e-08,
+      "r_in_rel_err": 6.531460735610253e-06,
+      "rho_rel_err": 4.8857299541182895e-06,
+      "area_rel_err": 0.00386282891935162,
+      "mmf_rel_err": 6.534950148330719e-06,
+      "J_single_sign": true
+    },
+    {
+      "rho": 20.0,
+      "B_out_T": 0.8600647931487361,
+      "r_in_fit_mm": 0.050628853792228874,
+      "rho_fit": 20.000109520242706,
+      "circ_dev": 3.784415811832045e-09,
+      "r_in_rel_err": 6.309713667881048e-06,
+      "rho_rel_err": 5.476012135297026e-06,
+      "area_rel_err": 0.0038612827219875858,
+      "mmf_rel_err": 6.313271674450952e-06,
+      "J_single_sign": true
+    }
+  ],
+  "fem_verify": [
+    {
+      "label": "rho3_h8",
+      "n_elements": 3168,
+      "picard_iterations": 44,
+      "inner_body_min_T": 1.8949531883335435,
+      "inner_body_peak_T": 1.8978446152471224,
+      "inner_dev_mean": 0.0019914178074932503,
+      "inner_dev_max": 0.0026562166665559865,
+      "mmf_fem_A": 2.286607461049904,
+      "mmf_expect_A": 2.2825649352750292,
+      "mmf_rel_err": 0.0017710452449352819
+    },
+    {
+      "label": "rho3_h16",
+      "n_elements": 3758,
+      "picard_iterations": 44,
+      "inner_body_min_T": 1.8949437687224815,
+      "inner_body_peak_T": 1.8979657470320823,
+      "inner_dev_mean": 0.0020022027924765837,
+      "inner_dev_max": 0.002661174356588642,
+      "mmf_fem_A": 2.286597298746559,
+      "mmf_expect_A": 2.2825649352750292,
+      "mmf_rel_err": 0.0017665931028787725
+    },
+    {
+      "label": "rhostar5.83_h16",
+      "n_elements": 6296,
+      "picard_iterations": 44,
+      "inner_body_min_T": 1.887431415452718,
+      "inner_body_peak_T": 1.8934904612127954,
+      "inner_dev_mean": 0.0049006760765234105,
+      "inner_dev_max": 0.006615044498569382,
+      "mmf_fem_A": 1.0558632509620043,
+      "mmf_expect_A": 1.0527226641631382,
+      "mmf_rel_err": 0.002983299311184389
+    },
+    {
+      "label": "linear_h16",
+      "n_elements": 4063,
+      "picard_iterations": 41,
+      "inner_body_min_T": 1.3882335840292752,
+      "inner_body_peak_T": 1.3899685845653285,
+      "inner_dev_mean": 0.00105489738548668,
+      "inner_dev_max": 0.0017979550381532865,
+      "mmf_fem_A": 1.2363036851030111,
+      "mmf_expect_A": 1.2350105108130935,
+      "mmf_rel_err": 0.0010470957765907685
+    }
+  ],
+  "verdict": {
+    "pure_turn_optimum_is_annulus": true,
+    "rho_star": 5.825942120191546,
+    "iron_linear_designed_over_optimal": 2.671864316502343,
+    "cap_slack_of_linear_design_T": 0.5092659386584042,
+    "note": "shape freedom adds nothing for the pure symmetric turn; the payoff here is designing aspect+size with the real curve; non-annulus optima need distributed collection (Rung 1.5)"
+  },
+  "meta": {
+    "generated_at_utc": "2026-07-28T12:46:51+00:00",
+    "hostname": "lab",
+    "python_version": "3.12.10",
+    "purpose": "correctness validation only (no timing claims)"
+  }
+}

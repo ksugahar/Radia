@@ -1170,6 +1170,74 @@ PATTERNS: list[dict] = [
         "related": ["validation_test/clebsch_legendre/verify_ipm_bridge_free_boundary.py",
                     "memory/hodograph_ipm_bridge_free_boundary.md"],
     },
+    {
+        "id": "hodograph-wall-cusp-speed-cancellation",
+        "title": "A hodograph-designed wall cusps into self-intersection where the "
+                 "wall-advance speed collapses (ramp kinks, excessive local contrast)",
+        "topics": ["hodograph", "design", "geometry"],
+        "severity": "medium",
+        "first_seen": "2026-07-28",
+        "last_seen": "2026-07-28",
+        "what": "The recovered cap wall of a collecting-channel design curled into a "
+                "~50 um hook and the outline self-intersected.  Two distinct causes, "
+                "hit on consecutive iterations: (1) pinning the wall at the cap while "
+                "the opposite wall still sat at the entry level drove the local "
+                "contrast H(B_cap)/H(B_low) to ~17, which demands a ~50 um turning "
+                "radius; (2) with linear-in-theta wall ramps, the wall speed dropped "
+                "abruptly at the EXACT ramp-end angle (slowest sample at 70.0 deg for "
+                "a 70-deg ramp) and the wall crawled into a cusp.",
+        "root_cause": "Along an A = const wall the advance speed per unit field angle "
+                      "is |Psi_theta + Psi_B * B'|/q: the local turning radius scales "
+                      "like Phi/f(rho_local), so high wall-to-wall contrast means a "
+                      "tiny radius; and a DISCONTINUOUS ramp slope B' makes the speed "
+                      "jump at the kink, leaving a boundary layer where the wall "
+                      "barely moves.",
+        "detection": "Print the per-sample wall step |dr| along each recovered wall "
+                     "and the location of min |J|: a step collapsing orders of "
+                     "magnitude below its median at a specific angle IS the cusp, and "
+                     "the angle names the offending profile feature.  Plot the "
+                     "outline before meshing.",
+        "prevention": "Keep rho_local = H(B_highwall)/H(B_lowwall) <= ~5 at every "
+                      "theta (the exact-annulus chart's flat region, reused as a "
+                      "local rule); make wall B-profiles C1 (sin(pi t/2T) ramps, "
+                      "finite start slope, flat into the plateau); stagger profile "
+                      "feature angles so no two coincide.",
+        "related": ["validation_test/clebsch_legendre/verify_synrm_collector_design.py",
+                    "memory/hodograph_synrm_channel_rungs.md"],
+    },
+    {
+        "id": "outline-piece-reversed-phantom-self-intersections",
+        "title": "A boundary piece concatenated in the wrong direction produces dozens "
+                 "of phantom self-intersections that mimic a genuine design fold",
+        "topics": ["geometry", "mesh", "validation", "hodograph"],
+        "severity": "medium",
+        "first_seen": "2026-07-28",
+        "last_seen": "2026-07-28",
+        "what": "Three debugging rounds attributed self-intersection failures of a "
+                "designed outline to wall cusps / folding.  Real cusp issues existed "
+                "and were fixed, but the crossings that kept firing came from the "
+                "EXIT face being appended to the loop in its sampling order (low "
+                "corner -> cap corner) when the circuit required the reverse: the "
+                "loop jumped across the face and retraced it backward, crossing the "
+                "adjacent wall repeatedly.",
+        "root_cause": "Assembling a closed loop from separately sampled boundary "
+                      "pieces without checking that consecutive pieces CONNECT.  A "
+                      "reversed piece folds the circuit; the self-intersection "
+                      "checker then reports crossings that look exactly like a "
+                      "genuine geometry fold, sending the debugging at the physics.",
+        "detection": "Look at WHERE the crossing pairs sit: phantom crossings "
+                     "cluster near one piece junction or span two specific pieces; "
+                     "a real fold sits inside one wall.  Check the seam gap between "
+                     "each piece's last point and the next piece's first point "
+                     "against the outline extent.",
+        "prevention": "Assert seam continuity when concatenating (gap << outline "
+                      "extent; the promoted collector driver raises with the piece "
+                      "indices).  Sibling of duplicate-corner-points-stall-mesher: "
+                      "that one is about shared corners appearing twice, this one "
+                      "about a whole piece traversed backward.",
+        "related": ["validation_test/clebsch_legendre/verify_synrm_collector_design.py",
+                    "duplicate-corner-points-stall-mesher"],
+    },
 ]
 
 

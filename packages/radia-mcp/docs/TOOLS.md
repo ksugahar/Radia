@@ -614,7 +614,7 @@ Module: `radia_mcp.motor.server`
 | `motor_rotating_circuit_transient_gate` | Gate rotating-circuit identities and endpoint state before FFT use. |
 | `motor_status` | (no description) |
 | `motor_thermal_handoff_gate` | Validate one motor-loss table for both LPTN and 3D all-hex thermal paths. |
-| `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 AE + level-set) and bridge shaping. |
+| `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 AE + level-set), bridge and channel shaping. |
 | `motor_transient_no_load_load_cycle_gate` | Gate paired no-load and loaded three-phase transient cycles. |
 | `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-MMM/HCurl eddy-bubble motor artifact. |
 | `motor_triple_check_plan` | Plan the standard radia-motor comparison. |

@@ -356,7 +356,7 @@ def motor_onelab(topic: str = "overview") -> str:
 @mcp.tool()
 def motor_topology_optimization(topic: str = "wakao_ae_ls") -> str:
     """
-    SynRM topology optimization (Wakao 2025 AE + level-set) and bridge shaping.
+    SynRM topology optimization (Wakao 2025 AE + level-set), bridge and channel shaping.
 
     Args:
         topic: One of:
@@ -366,6 +366,11 @@ def motor_topology_optimization(topic: str = "wakao_ae_ls") -> str:
             "saturable_bridge_hodograph" - IPM bridge/rib at the saturation cap:
                                            free boundary -> hodograph coordinate
                                            line, one linear solve (verified)
+            "flux_channel_hodograph"     - SynRM channel: exact saturated sizing
+                                           chart (pure turn = annulus, any
+                                           material) + free-form collecting
+                                           channel design (verified; naive
+                                           +78% iron)
             "all"                        - Everything
     """
     return get_topology_opt_knowledge(topic)
