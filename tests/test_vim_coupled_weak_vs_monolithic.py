@@ -1,8 +1,7 @@
 """Sequential weak coupling vs the monolithic mixed solve on the coupled
 HDiv-MMM x HCurl-VIM system.
 
-Three locks the coupled suite did not have (study 2026-07-28,
-C:/temp/vim_topopt/coupled_weak_vs_monolithic.{py,json}):
+Three locks the coupled suite did not have (study recorded 2026-07-28):
 
 1. INDEPENDENT block reconstruction: [A_M K; K^H Z(s)] rebuilt from the public
    parts (magnetic_operator / coupling / eddy_impedance / magnetic_rhs /

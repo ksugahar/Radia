@@ -85,9 +85,8 @@ print("SPICE netlist saved to battery_model.sp")
 
 ## SA/RM-2026 Y-Domain Variant
 
-The research-meeting manuscript in
-`W:\02_学会資料\2026年度\2026_08_25_静止器・回転機@八戸\URN@佐藤・菅原\paper\`
-uses a newer attention-free Y-base formulation: 22 physical basis functions are
+The SA/RM-2026 research-meeting manuscript uses a newer attention-free Y-base
+formulation: 22 physical basis functions are
 summed as a parallel admittance network, fitted through an S-domain Huber loss,
 and selected by output ablation.  The Radia package exposes this variant
 without replacing the older Z-domain implementation:
@@ -115,13 +114,10 @@ Use this API when reproducing the SA-26/RM-26 draft model
 capacitive-CPE/series-RLC in Y space).  Use `train_urn` for the original
 Radia URN model used by the NASA/TDK validation notebooks.
 
-When checking the conference PDF rather than the original measurement CSV, first
-digitize Fig. 1 measured points and treat the result as approximate.  In the
-2026-07-27 check, the extracted PCB/NL87 curves were saved under
-`C:\temp\urn_pdf_extract\` and fitted with
-`YAdmittanceURNConfig.paper_22_basis(n_epochs=8000)`.  The fit visually tracked
-the vector-extracted points, with S-domain RMSE in the `1e-3` range; the PDF's
-table still reports VF as the lower-error method.
+When checking a conference figure rather than the original measurement CSV,
+treat digitized points as approximate. Use original measurement data for
+quantitative claims; figure-extracted points are suitable only for qualitative
+workflow checks.
 
 For time-domain review, this attention-free Y-branch is now treated mainly as a
 branch model for CLN peeling.  A single parallel 22-basis sum is not rich enough
@@ -353,11 +349,9 @@ This implementation accompanies the paper:
 
 > K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis," IEEE Access, 2026.
 
-The manuscript source is maintained **outside** the code repository, in the lab's
-conference-materials area (paper manuscripts live in 学会資料, not the repo):
-`W:\02_学会資料\2026年度\2026_08_25_静止器・回転機@八戸\URN@佐藤・菅原\paper\`.
-The reproducibility scripts, result JSON, and showcase notebooks in this directory
-remain in the repo.
+The manuscript source is maintained **outside** the code repository in the
+lab's conference-materials archive. The reproducibility scripts, result JSON,
+and showcase notebooks in this directory remain in the repo.
 
 ## Requirements
 
