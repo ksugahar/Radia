@@ -1,5 +1,20 @@
 from radia_mcp.common.mcp_contract import SCHEMA
-from radia_mcp.motor.server import mcp
+import pytest
+
+from radia_mcp.motor.server import _decode_owned_worker_json, mcp
+
+
+def test_owned_worker_decoder_tolerates_native_diagnostics_before_json():
+    payload = _decode_owned_worker_json(
+        b"native diagnostic line\nsecond line\n{\"status\":\"solved\",\"value\":3}\n"
+    )
+    assert payload == {"status": "solved", "value": 3}
+
+
+@pytest.mark.parametrize("payload", [b"", b"native diagnostic only\n"])
+def test_owned_worker_decoder_rejects_missing_json(payload):
+    with pytest.raises(ValueError, match="JSON"):
+        _decode_owned_worker_json(payload)
 
 
 def test_motor_server_has_mathworks_style_runtime_contract():
@@ -43,3 +58,9 @@ def test_circuit_age_plan_is_read_only_and_closed_world():
     assert dynamic.annotations.destructiveHint is False
     assert dynamic.annotations.idempotentHint is True
     assert dynamic.annotations.openWorldHint is False
+
+    force = mcp._tool_manager._tools["motor_vol2d_force_analysis"]
+    assert force.annotations.readOnlyHint is True
+    assert force.annotations.destructiveHint is False
+    assert force.annotations.idempotentHint is True
+    assert force.annotations.openWorldHint is False

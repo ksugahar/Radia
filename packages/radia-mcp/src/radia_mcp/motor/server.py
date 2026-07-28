@@ -19,6 +19,7 @@ import json
 import sys
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from ..common import register_status_tool
 from ..common.mcp_contract import apply_tool_contract
 
@@ -96,6 +97,25 @@ except ImportError:
 
 
 mcp = FastMCP("mcp-server-motor")
+
+
+def _decode_owned_worker_json(stdout: bytes) -> dict:
+    """Decode the final JSON object while tolerating native stdout diagnostics."""
+
+    text = stdout.decode("utf-8", errors="replace").strip()
+    if not text:
+        raise ValueError("owned worker returned no JSON output")
+    for line in reversed(text.splitlines()):
+        candidate = line.strip()
+        if not candidate.startswith("{"):
+            continue
+        try:
+            result = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(result, dict):
+            return result
+    raise ValueError("owned worker output did not end with a JSON object")
 
 
 # ============================================================
@@ -767,7 +787,7 @@ async def motor_vol2d_circuit_analysis(analysis_json: str) -> str:
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
             raise RuntimeError(message[-1000:] or "vol2d worker failed")
-        result = json.loads(stdout.decode("utf-8"))
+        result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
             process.kill()
@@ -819,7 +839,7 @@ async def motor_vol2d_dynamic_analysis(analysis_json: str) -> str:
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
             raise RuntimeError(message[-1000:] or "vol2d dynamics worker failed")
-        result = json.loads(stdout.decode("utf-8"))
+        result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
             process.kill()
@@ -837,6 +857,67 @@ async def motor_vol2d_dynamic_analysis(analysis_json: str) -> str:
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.vol2d-dynamic-analysis.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+async def motor_vol2d_force_analysis(analysis_json: str) -> str:
+    """Extract boundary-aware force from a solved dimension-2 ``.vol`` model.
+
+    ``solve`` reconstructs the NGSolve/axifem field and evaluates an air-only
+    weighted-stress band.  Planar conductor targets can request an independent
+    Lorentz comparison; passive magnetic targets remain weighted-stress plus
+    virtual-work problems.  ``virtual_work_gate`` and ``refinement_gate`` close
+    the displacement and mesh-evidence contracts.  All NGSolve work runs in one
+    owned worker that can be cancelled without touching shared solver sessions.
+    """
+
+    process = None
+    try:
+        json.loads(analysis_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.vol2d_force_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(analysis_json.encode("utf-8")),
+            timeout=120.0,
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "vol2d force worker failed")
+        result = _decode_owned_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.vol2d-force-analysis.v1",
+            "status": "timeout",
+            "error": "vol2d force worker exceeded 120 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.vol2d-force-analysis.v1",
             "status": "invalid_input",
             "error": str(exc),
         }
