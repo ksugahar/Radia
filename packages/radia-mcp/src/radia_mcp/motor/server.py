@@ -36,6 +36,7 @@ from .age_quality_knowledge import (
     route_age_validation_plan,
 )
 from ..radia_ngsolve.circuit_excitation import compile_circuit_age_application
+from ..radia_ngsolve.circuit_system import analyze_circuit_field
 from .validation_lanes_knowledge import (
     format_artifact_gate_result,
     format_motor_validation_lanes,
@@ -707,6 +708,27 @@ def motor_circuit_age_application_plan(application_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "schema": "radia.circuit-age-application.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def motor_circuit_field_analysis(analysis_json: str) -> str:
+    """Analyze a solved 2D field-circuit, AGE sweep, or MEX state-space request.
+
+    The pure numerical kernel supports planar and axisymmetric source matrices.
+    Parallel circuits are augmented with branch-current and common-voltage
+    unknowns; AGE sweeps reuse one operator; linear RL reductions target the
+    existing native Simulink state-space MEX/S-Function.
+    """
+
+    try:
+        result = analyze_circuit_field(json.loads(analysis_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.circuit-field-analysis.v1",
             "status": "invalid_input",
             "error": str(exc),
         }
