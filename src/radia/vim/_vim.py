@@ -345,6 +345,42 @@ def _blockdiag_density_map(M, Bx, fes_dg, vorb, mesh):
     return (Minv @ Bx).tocsr()
 
 
+def _exterior_bnd_elements(mesh):
+    """Surface elements on the TRUE exterior boundary: their facet is owned by exactly ONE volume element.
+
+    The charge layer treats every listed surface element as a charged boundary face (sigma = M.n,
+    single-sided).  That is correct only for the exterior skin.  An INTERNAL surface element (a conforming
+    multi-region material interface from glued CAD, fd with domin != 0 and domout != 0) sits between two
+    solved volume elements whose normal trace is HDiv-continuous, so its true single-layer charge is the
+    JUMP = 0; charging it single-sided injects a spurious charge sheet.  Measured 2026-07-28 (two-region
+    glued ball, conforming, uniform chi=100): <Mz> reads -12 % low with the interface flux clamped ~23x;
+    dropping the internal faces restores the exact single-region result (2.9190/2.9134/2.9125 at maxh
+    .35/.22/.14 vs exact 2.91262) and makes conforming multi-region meshes valid inputs.
+
+    Matching is by sorted corner-vertex tuples: BND-element facet NUMBERS are not comparable with the
+    volume facet numbering, and netgen fd/index conventions are not relied on.  Works for tri/quad faces
+    (tet/hex/wedge) and for boundary edges of planar 2D meshes.  Cost is one O(n_el) dict pass, negligible
+    vs the Gram build.  A surface element matching NO volume facet means a non-conforming or corrupt mesh:
+    raise (fail loud), never charge it."""
+    owners = {}
+    for el in mesh.Elements(ng.VOL):
+        for fa in el.facets:
+            key = tuple(sorted(v.nr for v in mesh[fa].vertices))
+            owners[key] = owners.get(key, 0) + 1
+    kept = []
+    for i in range(mesh.GetNE(ng.BND)):
+        e = ng.ElementId(ng.BND, i)
+        n = owners.get(tuple(sorted(v.nr for v in mesh[e].vertices)), 0)
+        if n == 1:
+            kept.append(e)
+        elif n != 2:
+            raise ValueError(
+                "HDiv-VIM charge basis: surface element %d matches %d volume facets "
+                "(expected 1 = exterior, or 2 = internal interface which carries no "
+                "single-sided charge); the mesh is non-conforming or corrupt." % (i, n))
+    return kept
+
+
 def _charge_basis(fes, quad, *, materialize_mass=True):
     """Shared geometry + monomial charge-density map for the BDM1 HDiv-VIM operator.
 
@@ -371,7 +407,7 @@ def _charge_basis(fes, quad, *, materialize_mass=True):
     M_mass = _csr(mh) if materialize_mass else None
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
     vV = [np.array([mesh[v].point for v in mesh[e].vertices]) for e in vels]
     bV = [np.array([mesh[v].point for v in mesh[e].vertices]) for e in bels]
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
@@ -511,7 +547,7 @@ def _charge_basis_curved(fes, quad, *, materialize_mass=True):
     M_mass = _csr(mh) if materialize_mass else None
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
     bdof = [list(L2b.GetDofNrs(e)) for e in bels]
     mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
@@ -687,7 +723,7 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
     t_assembly = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
     rhp, rhw = _ref_prod_gauss(cob_quad, 3)
     rqp, rqw = _ref_prod_gauss(cob_quad, 2)
     ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
@@ -930,7 +966,7 @@ def _charge_basis_2d(fes, cob_quad=3, *, materialize_mass=True):
     ep = g.reshape(-1, 1); ew = gw
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
     Brows, host, kind, expo = [], [], [], []
     cell_map, cell_type, edge_map = [], [], []
     for c, e in enumerate(vels):
@@ -1105,7 +1141,7 @@ def _charge_basis_wedge(fes, *, materialize_mass=True):
     t_forms = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
     php, phw = _prism_cob_quad()                                  # prism ref change-of-basis quadrature
     qp2, qw2 = _ref_prod_gauss(3, 2)                             # quad-face ref quadrature ([0,1]^2)
     tp2, tw2 = np.asarray(_SYM5_TRI[0]), np.asarray(_SYM5_TRI[1])  # tri-face ref quadrature (ref tri)
