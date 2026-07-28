@@ -322,11 +322,102 @@ See also `radia_mcp.electromagnet` topic `clebsch_hodograph` for the
 formulation and the 90-degree bend case it generalises.
 """
 
+FLUX_CHANNEL_HODOGRAPH = """\
+## SynRM flux channel: saturated sizing chart + free-form collector design
+
+VERIFIED 2026-07-28 -- two golden-banded drivers in
+`validation_test/clebsch_legendre/`:
+`verify_synrm_channel_annulus_lock.py` (part 1) and
+`verify_synrm_collector_design.py` (part 2), with committed JSON sidecars
+and the outline figure `synrm_collector_outlines.png`.
+
+### Part 1 -- the pure turn is exactly solvable; use the chart, not FEM loops
+
+A 90-degree turning channel with flux-line walls and equipotential terminals
+is exactly solvable for ANY material law: curl H = 0 with azimuthal H forces
+H = C/r regardless of mu(B).  The cap-binding family reduces to quadrature:
+
+    rho = H_cap/H(B_out),  f(rho) = INT_1^rho B_of_H(H_cap/s) ds,
+    Phi = r_in f(rho),     body area = (Theta/2) r_in^2 (rho^2 - 1)
+
+Numbers for the representative steel (cap 1.90 T; percentages are
+material-model-dependent, the (B,H) samples are in the JSON):
+
+- area/Phi^2 minimum at rho* = 5.83, FLAT within 5% over rho in [3.8, 9.5]
+  -- pick rho by layout, the iron penalty is small.
+- radial width w/Phi is nearly aspect-independent (0.55..0.67 per T): the
+  q-axis budget cost of a channel barely depends on the turn aspect; what
+  varies (5x) is the iron AREA, i.e. loss volume.
+- The LINEAR-designed annulus (B ~ 1/r sizing, linear-optimal rho = 2.22)
+  wastes 26.8% of the cap (peak 1.391 T) and uses 2.67x the optimal iron
+  (sizing-with-the-real-curve x0.518, then aspect x0.722).  The linear 1/r
+  width rule overestimates channel width by +18% (rho 1.5) to +59% (rho 3).
+  The practitioner's B_avg ~ 1.5 T experience rule is far better (~+10% at
+  rho = 3); the chart replaces the experience constant with a guaranteed
+  cap-binding value.
+
+The hodograph adds NOTHING here (the constant-wall solution IS the annulus);
+its role in part 1 is to be LOCKED against this exact nonlinear reference
+(r_in/rho/MMF to 2.6e-6..4.6e-5, circularity ~1e-8) -- the strongest
+validation of the design machinery in the lane.
+
+### Part 2 -- the collecting channel: where free-form shaping pays
+
+The real SynRM channel collects flux DISTRIBUTED along the gap-side face.
+That kills H = C/r (no quadrature) and the hodograph becomes the only
+linear-cost tool.  New BC class: entry face = the hodograph segment
+B = B_e with the Dirichlet ramp A(theta) = Phi theta/theta_c; barrier-side
+wall pinned at the cap through the carrying turn.  Verified by independent
+nonlinear FEM: flat-cap region mean 0.032% / max 0.068%, peak 1.900 T;
+MMF agrees at the |B| level x the saturation slope (see rule 4).
+
+Payoff: the compass-drawn baseline through the SAME entry face and SAME
+exit (circular-arc walls -- what an engineer sketches) uses +78% iron
+(3.29 vs 1.84 mm^2) and peaks at only 1.371 T (28% of the cap unused).
+With fixed terminals, circular walls cannot follow the accumulating flux.
+SynRM translation: same d-axis flux, same terminals, -44% channel iron ->
+directly thicker barriers.
+
+### Four reusable design rules (each cost one failed iteration)
+
+1. **Wall assignment is forced by non-crossing in (B, theta)**: the cap wall
+   is the LONG wall attached at the theta = 0 corner of the entry face.
+   The reverse assignment makes the two wall images cross (domain pinch).
+2. **Local contrast rule**: keep rho_local = H(B_capwall)/H(B_lowwall) <= ~5
+   at EVERY theta (the part-1 chart reused as a local rule).  At ~17 the
+   wall demands a ~50 um turning radius and cusps into self-intersection.
+3. **Ramps must be C1**: the wall-advance speed along an A = const wall is
+   |Psi_theta + Psi_B B'|/q, so a discontinuous ramp slope B' puts a cusp
+   exactly at the kink.  Use sin(pi t/2T) ramps; stagger feature angles so
+   no two profile features coincide.
+4. **MMF comparisons amplify B errors by mu_s/mu_d**: on the saturating
+   curve dH/H = (mu_s/mu_d) dB/B (~4.3 at 1.45 T).  Band MMF checks at the
+   |B| band times this slope, or a healthy design reads as a failure.
+
+### Scope -- read before quoting
+
+- LOCAL design kernel: entry level B_e, flux, and turn come from the
+  surrounding rotor solve; matching a specific stator MMF harmonic content
+  at the face is future work (the design's required gap loading dA/ds is
+  reported: near-uniform ~ B_e here).
+- The baseline is ONE compass construction (arcs through the same
+  anchors); the claim is the mechanism (circular walls cannot track
+  accumulating flux), not superiority over every hand method.
+- Embedding in a full rotor and measuring L_d/L_q/saliency is the open
+  next rung; until then the -44% iron is a channel-level, not a
+  machine-level, number.
+
+See also topic `saturable_bridge_hodograph` (the free-boundary cap trick on
+the leakage bridge) and `radia_mcp.electromagnet` topic `clebsch_hodograph`
+(formulation and the verified 90-degree bend).
+"""
+
 SECTIONS = {
     "wakao_ae_ls": WAKAO_AUTOENCODER_LS,
     "liu_thesis_application": LIU_THESIS_APPLICATION,
     "pareto_navigation": PARETO_NAVIGATION,
     "saturable_bridge_hodograph": SATURABLE_BRIDGE_HODOGRAPH,
+    "flux_channel_hodograph": FLUX_CHANNEL_HODOGRAPH,
 }
 
 

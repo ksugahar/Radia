@@ -425,6 +425,86 @@ throat width is a mechanical input, not an output. The intended architecture is
 a local shape-design kernel inside a global nonlinear FEM loop, not a
 replacement for it.
 
+### SynRM flux channel, part 1: exact nonlinear lock + the sizing chart
+
+```
+python verify_synrm_channel_annulus_lock.py
+```
+
+A pure 90-degree turning channel (flux-line walls, equipotential terminals)
+is **exactly solvable for any material law**: `curl H = 0` with azimuthal `H`
+forces `H = C/r` regardless of `mu(B)`, so the whole cap-binding channel
+family reduces to 1-D quadrature (`rho = H_cap/H(B_out)`,
+`Phi = r_in * f(rho)`, `MMF = r_in H_cap * angle`). Two consequences, both
+exploited by this driver:
+
+- **Machinery lock against an exact NONLINEAR reference** -- far stronger
+  than the constant-mu annulus sanity. The hodograph design with constant-B
+  walls (whose solution is theta-independent, i.e. IS this annulus)
+  reproduces `r_in` / `rho` / MMF to 2.6e-6..4.6e-5 relative, circularity
+  ~1e-8, across `rho` = 1.5..20. The body-area residual is a constant
+  3.86e-3 = the angular quantization of the body mask (sampled arc spans
+  1.5647 rad instead of pi/2 -- exactly 0.385 %), not machinery error.
+- **The saturated sizing chart** engineers actually need: area/Phi^2 minimum
+  at `rho* = 5.83`, flat within 5 % over `rho` in [3.8, 9.5]; the radial
+  width `w/Phi` is nearly aspect-independent (0.55..0.67 /T over the whole
+  practical range). The LINEAR-designed annulus (`B ~ 1/r` sizing at the
+  linear-optimal `rho` = 2.22) carries the same flux with peak 1.391 T --
+  26.8 % of the cap unused -- and 2.67x the optimal iron; the linear width
+  rule overestimates the needed channel width by +18 % (`rho` = 1.5) to
+  +59 % (`rho` = 3). Independent nonlinear FEM confirms the designed
+  outlines (mean 0.20 % at `rho` = 3) AND the quadrature itself (peak on the
+  linear-designed shape: FEM 1.388..1.390 T vs predicted 1.391 T).
+
+Honest structural statement: for the pure turn the hodograph adds nothing --
+the annulus quadrature suffices, and shape freedom pays only when the channel
+stops being a pure turn. That is part 2.
+
+### SynRM flux channel, part 2: the collecting channel (free-form pays here)
+
+```
+python verify_synrm_collector_design.py
+```
+
+The real SynRM channel COLLECTS: flux enters distributed along the gap-side
+face and accumulates. That kills `H = C/r` -- no quadrature exists -- and the
+hodograph becomes the only linear-cost design tool. New BC class: the entry
+face is the hodograph segment `B = B_e` carrying the Dirichlet ramp
+`A(theta) = Phi theta/theta_c`; the barrier-side wall is pinned at the
+1.90 T cap through the 90-degree carrying turn. 2026-07-28 baseline (h/16):
+
+| check | result |
+|---|---|
+| flat-cap region \|B\| | mean 0.032 %, max 0.068 %, peak 1.900 T |
+| full cap profile (ramp incl.) | mean 0.20 % |
+| low wall vs prescription | mean 0.34 % |
+| MMF (prescription-direct vs FEM) | 1.658 vs 1.683 A -- the 0.35 % \|B\| agreement amplified by `mu_s/mu_d` = 4.26 (MMF is an H-quantity; the band is the \|B\| band x that slope) |
+| entry density dA/ds | 0.868..0.884 T, near-uniform ~ `B_e` |
+| compass baseline (same face, same exit, arc walls) | 3.29 mm^2 vs 1.84 mm^2 (**+78 % iron**), peak 1.371 T = 28 % of the cap unused |
+
+With fixed terminals the circular walls cannot follow the accumulating flux
+-- they balloon. In SynRM terms: same d-axis flux, same terminals, -44 %
+channel iron, and the saving is directly barrier budget.
+
+Three reusable design rules, each learned from one failed iteration (see
+bug patterns `hodograph-wall-cusp-speed-cancellation` and
+`outline-piece-reversed-phantom-self-intersections`):
+
+1. **Wall assignment is forced by non-crossing in (B, theta)**: the cap wall
+   is the LONG wall attached at the theta = 0 corner of the entry face; the
+   reverse assignment makes the wall images cross and the domain pinch.
+2. **Local contrast rule**: keep `rho_local = H(B_capwall)/H(B_lowwall)`
+   below ~5 at every theta (the part-1 chart reused as a local rule), or the
+   wall demands a ~50 um turning radius and cusps.
+3. **Ramps must be C1**: the wall-advance speed is
+   `|Psi_theta + Psi_B B'|/q`, so a `B'` discontinuity puts a cusp exactly
+   at the kink. Use `sin(pi t/2T)` ramps and stagger the feature angles.
+
+Scope: entry-face `|B| = B_e` is a prescription (the recovered face demands
+a near-uniform gap loading, reported, but matching a specific stator MMF
+harmonic content is future work); the baseline is one compass construction;
+embedding in a full rotor and measuring L_d/L_q is the open next rung.
+
 ## References
 
 - A. Clebsch, "Ueber die Integration der hydrodynamischen
