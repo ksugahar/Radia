@@ -227,10 +227,106 @@ shapes = ae.decode(z)                # 441 × 100 × 100
 ```
 """
 
+SATURABLE_BRIDGE_HODOGRAPH = """\
+## Saturable rotor bridge / rib: shape the iron with the field-plane hodograph
+
+VERIFIED 2026-07-28 --
+`validation_test/clebsch_legendre/verify_ipm_bridge_free_boundary.py`
+(golden-banded, exits nonzero on violation; sidecar
+`results_ipm_bridge_free_boundary.json`).
+
+### When this applies
+
+The IPM bridge / rib is the one place in a machine where saturation is the
+DESIGN INTENT, not a nuisance: the iron neck is meant to saturate so leakage
+flux is capped and predictable.  The engineering constraint is therefore a CAP
+
+    |B| must nowhere exceed the knee B_knee
+
+and the cheapest iron is the iron that sits EXACTLY at the cap on its
+most-loaded surface -- no hot spot, no wasted margin.
+
+In physical space that surface is a FREE BOUNDARY (an unknown curve on which a
+field condition holds), so locating it means an outer shape loop whose every
+iteration is a nonlinear solve.  In the field-plane (Chaplygin) hodograph
+`(B, theta)` the SAME condition is the COORDINATE LINE `B = B_knee`, i.e. a
+fixed Dirichlet edge, and the design collapses to ONE LINEAR SOLVE.  The
+saturating law enters as a known coefficient of the independent variable:
+
+    d/dB( a A_B ) + b A_thth = 0,   a = B mu_d / mu_s^2,   b = 1/(mu_s B)
+
+with `mu_s(B) = B/H` the measured SECANT curve (no table inversion) and
+`mu_d = dB/dH` the differential.  In log-polar `u = ln B` the operator is
+Laplace stretched by exactly `mu_d / mu_s` -- linear material gives 1
+(conformal); saturation IS the departure from conformality.  For silicon steel
+near 1.9 T that ratio is ~0.21, a domain stretch of only ~2.2, so the solve is
+well conditioned.  Ellipticity never fails: `(mu q)' = dB/dH > 0` for any
+monotone B-H curve, so there is no magnetic analogue of the sonic line.
+
+### What the verification measured
+
+90-degree turn around a barrier tip, inner (barrier-side) wall pinned at the
+1.900 T cap, outer wall ramping 0.90 -> 1.70 T (the funnel closing), leakage
+flux 1.1e-3 Wb/m, representative steel `mu_r(B) = 1 + 6999/(1+(B/1 T)^4)`.
+Designed by one linear hodograph solve, then checked by an INDEPENDENT
+nonlinear FEM on the designed outline:
+
+| quantity | hodograph design | naive baseline |
+|---|---|---|
+| body inner wall abs(B) vs the 1.900 T cap | 1.875--1.902 T | 1.329--2.156 T |
+| cap overshoot | +0.10 % | +13.50 % |
+| inner-wall spread | 1.40 % | 43.56 % |
+| body iron area, same flux | 0.7590 mm^2 | 0.8049 mm^2 (+6.0 %) |
+| MMF (independent global check) | 2.4447 A design vs 2.4476 A FEM (0.12 %) | -- |
+
+The naive baseline is a circular centreline through the same two body end
+mid-points, same turn, same two widths, same lead-in/out, same flux -- what a
+competent engineer draws, not a straw man.
+
+### Two facts you can build on
+
+1. **Flux scale-freedom is EXACT.**  The equation is linear in `A` and `Psi` is
+   linear in `A`, so a fixed FIELD spec determines the geometry up to one scale
+   that is exactly proportional to the flux (measured deviation 2e-12 at half
+   flux).  Practical consequence: solve ONCE, then scale to the
+   mechanically-set throat width and read the leakage flux straight off.  A
+   flux sweep costs nothing.
+2. **Terminals contaminate the body -- always design a lead-in / lead-out.**
+   With the end faces attached directly to the body, the inlet corner corrupts
+   the first ~11 degrees of the inner wall by up to 9.1 %, MESH-INDEPENDENTLY
+   (9.07 % at h/8, 9.00 % at h/16).  A 20-degree flat lead-in/out at each end
+   (which a real bridge has where it merges into the core) drops the worst body
+   error to 1.3 %.  See bug pattern `terminal-corner-contaminates-designed-body`.
+
+### Scope -- read before quoting this
+
+- This is a **LOCAL** design kernel.  The bridge's boundary data (flux, turn
+  angle, terminal field levels) comes from the surrounding rotor solve, and the
+  throat width is a MECHANICAL input (centrifugal stress), not an output.  The
+  intended architecture is: global nonlinear FEM -> extract the local boundary
+  data -> hodograph designs the local shape -> substitute -> re-solve.
+- The claim is NOT that the hodograph beats FEM.  A nonlinear shape loop
+  converges to the same shape.  The claim is that the CAP becomes a boundary
+  condition instead of an outcome to check afterwards, and the loop of
+  nonlinear solves collapses to one linear solve.
+- **Where it does NOT apply**: slots (current-carrying, so not source-free);
+  magnet interiors (fixed `M`, so `B` and `H` are not collinear and there is no
+  `mu(|H|)`); the air gap (`mu = mu0`, where the hodograph degenerates to a
+  conformal map -- that is classical Schwarz-Christoffel / Carter territory,
+  nothing new); and the cross-section AS A WHOLE, because field nulls on the
+  d/q symmetry lines are singular points of `(B, theta)` and flux barriers make
+  the iron multiply connected so `theta` is not single-valued.  One tooth or
+  one bridge, away from nulls, is the right unit.
+
+See also `radia_mcp.electromagnet` topic `clebsch_hodograph` for the
+formulation and the 90-degree bend case it generalises.
+"""
+
 SECTIONS = {
     "wakao_ae_ls": WAKAO_AUTOENCODER_LS,
     "liu_thesis_application": LIU_THESIS_APPLICATION,
     "pareto_navigation": PARETO_NAVIGATION,
+    "saturable_bridge_hodograph": SATURABLE_BRIDGE_HODOGRAPH,
 }
 
 

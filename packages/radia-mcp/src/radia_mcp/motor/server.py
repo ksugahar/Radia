@@ -356,14 +356,17 @@ def motor_onelab(topic: str = "overview") -> str:
 @mcp.tool()
 def motor_topology_optimization(topic: str = "wakao_ae_ls") -> str:
     """
-    SynRM topology optimization (Wakao 2025 autoencoder + level-set).
+    SynRM topology optimization (Wakao 2025 AE + level-set) and bridge shaping.
 
     Args:
         topic: One of:
-            "wakao_ae_ls"            - Autoencoder + LS hybrid method
-            "liu_thesis_application" - Liu Xinyao end-to-end recipe
-            "pareto_navigation"      - 2D latent-space Pareto walk
-            "all"                    - Everything
+            "wakao_ae_ls"                - Autoencoder + LS hybrid method
+            "liu_thesis_application"     - Liu Xinyao end-to-end recipe
+            "pareto_navigation"          - 2D latent-space Pareto walk
+            "saturable_bridge_hodograph" - IPM bridge/rib at the saturation cap:
+                                           free boundary -> hodograph coordinate
+                                           line, one linear solve (verified)
+            "all"                        - Everything
     """
     return get_topology_opt_knowledge(topic)
 
