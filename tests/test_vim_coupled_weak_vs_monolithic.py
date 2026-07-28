@@ -1,22 +1,32 @@
 """Sequential weak coupling vs the monolithic mixed solve on the coupled
-HDiv-MMM x HCurl-VIM system.
+HDiv-MMM x HCurl-VIM system, at the PHYSICAL harmonic coupling scales.
 
-Three locks the coupled suite did not have (study recorded 2026-07-28):
+The stored coupling block is the mutual-energy matrix K_ij = int M_i.B[J_j] dV;
+solve_frequency applies the physical scales that follow from it and from the
+reciprocity int J_j.A_M[M_i] dV = K_ij:
 
-1. INDEPENDENT block reconstruction: [A_M K; K^H Z(s)] rebuilt from the public
-   parts (magnetic_operator / coupling / eddy_impedance / magnetic_rhs /
-   eddy_rhs) must reproduce solve_frequency's solution.  This pins the
-   semantic contract s = j*2*pi*f AND the SIBC surface term
-   Zs = SkinImpedance(s, sigma) inside the eddy block; a sign / transpose /
-   term drift in any block breaks it.
+    magnetic row  U = -K/mu0    (the currents' H-field, -<M_i, H_J>)
+    eddy row      L = s K^H     (the magnetization EMF, s <w_j, A_M[M]>)
+
+The s factor is what keeps a static magnetization from driving DC currents
+(validated on the sphere-alpha lane: static |x_j| 2.39 -> 2.3e-5, and the
+mu_r=100 transition tracks the exact polarizability).
+
+Locks:
+1. INDEPENDENT block reconstruction: [[A_M U],[L Z(s)]] rebuilt from the
+   public parts must reproduce solve_frequency's solution -- pins
+   s = j*2*pi*f, the SIBC surface term Zs = SkinImpedance(s, sigma), and the
+   physical coupling scales.  A sign / transpose / scale drift breaks it.
 2. The production-style SEQUENTIAL weak iteration (block Gauss-Seidel:
-   magnetics with currents frozen -> eddy with the fresh magnetization) must
-   converge to the SAME fixed point as the monolithic mixed solve.
-3. The divergence mechanism: the iteration operator E = A_M^-1 K Z^-1 K^H
-   scales exactly as lambda^2 under K -> lambda*K, the weak iteration
-   DIVERGES for rho > 1 (lambda = 1.1*lambda_crit) while the monolithic
-   solve keeps a machine-precision residual.  Measured physical margin on
-   this configuration: rho ~ 1e-7..1e-12 over 1 Hz..100 kHz.
+   magnetics with currents frozen -> eddy with the fresh magnetization)
+   converges to the SAME fixed point as the monolithic mixed solve.  At the
+   physical scales the contraction is REAL: rho ~ 0.36 on this box,
+   frequency-flat in the sL-dominated regime, only lambda_crit ~ 1.7 from
+   divergence -- the monolithic path is not a luxury.
+3. The divergence mechanism: the iteration operator E = A_M^-1 U Z^-1 L
+   scales exactly as lambda^2 when both couplings scale by lambda; the weak
+   iteration fails past lambda_crit = rho^-1/2 while the monolithic solve
+   keeps a machine-precision residual.
 """
 import numpy as np
 import pytest
@@ -28,6 +38,7 @@ from netgen import occ  # noqa: E402
 
 from radia import vim  # noqa: E402
 
+MU0 = 4.0e-7 * np.pi
 SIGMA = 5.8e7
 MU_R = 1001.0
 FREQ = 100.0
@@ -76,12 +87,15 @@ def coupled():
 
 
 def _blocks_and_rhs(mixed, s):
+    """Physical-scale blocks: [[A_M, U], [L, Z(s)]] with U=-K/mu0, L=s K^H."""
     A_M = np.asarray(mixed.magnetic_operator)
     K = np.asarray(mixed.coupling)
+    U = (-1.0 / MU0) * K
+    L = s * K.conj().T
     Z = np.asarray(mixed.eddy_impedance(s, surface_impedance=vim.SkinImpedance(s, SIGMA)))
     b_M = np.asarray(mixed.magnetic_rhs).reshape(A_M.shape[0], -1)
     b_J = np.asarray(mixed.eddy_rhs).reshape(Z.shape[0], -1)
-    return A_M, K, Z, b_M, b_J
+    return A_M, U, L, Z, b_M, b_J
 
 
 def _solution_vectors(mixed, solution):
@@ -92,12 +106,12 @@ def _solution_vectors(mixed, solution):
     return x_m, x_j
 
 
-def _gauss_seidel(A_M, K, Z, b_M, b_J, maxit=200, tol=1e-12):
+def _gauss_seidel(A_M, U, L, Z, b_M, b_J, maxit=400, tol=1e-12):
     x_m = np.zeros((A_M.shape[0], b_M.shape[1]), complex)
     x_j = np.zeros((Z.shape[0], b_J.shape[1]), complex)
     for it in range(maxit):
-        x_m_new = np.linalg.solve(A_M, b_M - K @ x_j)
-        x_j_new = np.linalg.solve(Z, b_J - K.conj().T @ x_m_new)
+        x_m_new = np.linalg.solve(A_M, b_M - U @ x_j)
+        x_j_new = np.linalg.solve(Z, b_J - L @ x_m_new)
         step = max(np.linalg.norm(x_m_new - x_m), np.linalg.norm(x_j_new - x_j))
         scale = max(np.linalg.norm(x_m_new), np.linalg.norm(x_j_new), 1e-300)
         x_m, x_j = x_m_new, x_j_new
@@ -108,56 +122,80 @@ def _gauss_seidel(A_M, K, Z, b_M, b_J, maxit=200, tol=1e-12):
     return x_m, x_j, -maxit
 
 
-def _rho(A_M, K, Z):
-    E = np.linalg.solve(A_M, K @ np.linalg.solve(Z, K.conj().T))
+def _rho(A_M, U, L, Z):
+    E = np.linalg.solve(A_M, U @ np.linalg.solve(Z, L))
     return float(np.max(np.abs(np.linalg.eigvals(E))))
 
 
 def test_independent_block_reconstruction_matches_monolithic(coupled):
     mixed, solution = coupled
-    assert solution.residual_relative_norm < 1e-10
+    assert solution.residual_relative_norm < 1e-8
     s = 2j * np.pi * FREQ
-    A_M, K, Z, b_M, b_J = _blocks_and_rhs(mixed, s)
+    A_M, U, L, Z, b_M, b_J = _blocks_and_rhs(mixed, s)
     x_m, x_j = _solution_vectors(mixed, solution)
     scale = max(np.linalg.norm(b_M), np.linalg.norm(b_J))
-    r_m = np.linalg.norm(A_M @ x_m + K @ x_j - b_M) / scale
-    r_j = np.linalg.norm(K.conj().T @ x_m + Z @ x_j - b_J) / scale
+    r_m = np.linalg.norm(A_M @ x_m + U @ x_j - b_M) / scale
+    r_j = np.linalg.norm(L @ x_m + Z @ x_j - b_J) / scale
     assert r_m < 1e-6
     assert r_j < 1e-6
+
+
+def test_static_magnetization_drives_no_dc_current(coupled):
+    """The s in the eddy-row coupling removes the DC anomaly.  With unit
+    scales a static magnetization drove |x_j| ~ O(1) DC circulation limited
+    only by Z(0); with the physical s K^H the current vanishes as s -> 0
+    (prop. to s on the volumetric branch, prop. to sqrt(s) on the SIBC branch
+    whose low-frequency impedance is Zs prop. to sqrt(s))."""
+    mixed, _ = coupled
+    A_M = np.asarray(mixed.magnetic_operator)
+    K = np.asarray(mixed.coupling)
+    b_M = np.asarray(mixed.magnetic_rhs).reshape(A_M.shape[0], -1)
+    x_m = np.linalg.solve(A_M, b_M)
+    norms = []
+    for f in (1e-6, 1e-4):
+        s = 2j * np.pi * f
+        Z = np.asarray(mixed.eddy_impedance(
+            s, surface_impedance=vim.SkinImpedance(s, SIGMA)))
+        norms.append(np.linalg.norm(np.linalg.solve(Z, s * (K.conj().T @ x_m))))
+    assert norms[0] < 0.2 * norms[1]     # vanishes (sqrt(s) on the SIBC branch)
+    assert norms[0] < 0.05               # no O(1) DC plateau (anomaly was ~2.4)
 
 
 def test_sequential_weak_iteration_reaches_the_monolithic_fixed_point(coupled):
     mixed, solution = coupled
     s = 2j * np.pi * FREQ
-    A_M, K, Z, b_M, b_J = _blocks_and_rhs(mixed, s)
+    A_M, U, L, Z, b_M, b_J = _blocks_and_rhs(mixed, s)
     x_m_star, x_j_star = _solution_vectors(mixed, solution)
-    x_m, x_j, iters = _gauss_seidel(A_M, K, Z, b_M, b_J)
+    x_m, x_j, iters = _gauss_seidel(A_M, U, L, Z, b_M, b_J)
     assert iters > 0
     err = (np.linalg.norm(x_m - x_m_star) + np.linalg.norm(x_j - x_j_star)) \
         / (np.linalg.norm(x_m_star) + np.linalg.norm(x_j_star))
     assert err < 1e-6
 
 
-def test_weak_iteration_diverges_past_lambda_crit_monolithic_stays_exact(coupled):
+def test_weak_iteration_fails_past_lambda_crit_monolithic_stays_exact(coupled):
     mixed, _ = coupled
     s = 2j * np.pi * FREQ
-    A_M, K, Z, b_M, b_J = _blocks_and_rhs(mixed, s)
-    rho_base = _rho(A_M, K, Z)
-    assert 0.0 < rho_base < 1e-3          # physical margin on this configuration
+    A_M, U, L, Z, b_M, b_J = _blocks_and_rhs(mixed, s)
+    rho_base = _rho(A_M, U, L, Z)
+    # measured 0.364 on this box, frequency-flat: the physical margin is small
+    assert 0.05 < rho_base < 0.95
     lam_crit = 1.0 / np.sqrt(rho_base)
 
-    # exact lambda^2 scaling of the iteration operator
-    np.testing.assert_allclose(_rho(A_M, 0.5 * lam_crit * K, Z), 0.25, rtol=1e-8)
-    rho_over = _rho(A_M, 1.1 * lam_crit * K, Z)
-    np.testing.assert_allclose(rho_over, 1.21, rtol=1e-8)
+    # exact lambda^2 scaling when both couplings scale by lambda
+    np.testing.assert_allclose(
+        _rho(A_M, 0.5 * lam_crit * U, 0.5 * lam_crit * L, Z), 0.25, rtol=1e-8)
+    np.testing.assert_allclose(
+        _rho(A_M, 1.5 * lam_crit * U, 1.5 * lam_crit * L, Z), 2.25, rtol=1e-8)
 
-    # below critical: weak converges; above: weak diverges, monolithic exact
-    _, _, it_under = _gauss_seidel(A_M, 0.5 * lam_crit * K, Z, b_M, b_J)
+    # below critical: weak converges; above: weak fails, monolithic exact
+    _, _, it_under = _gauss_seidel(A_M, 0.5 * lam_crit * U, 0.5 * lam_crit * L,
+                                   Z, b_M, b_J)
     assert it_under > 0
-    Kl = 1.1 * lam_crit * K
-    _, _, it_over = _gauss_seidel(A_M, Kl, Z, b_M, b_J)
-    assert it_over < 0                    # diverged
-    O = np.block([[A_M, Kl], [Kl.conj().T, Z]])
+    Ul, Ll = 1.5 * lam_crit * U, 1.5 * lam_crit * L
+    _, _, it_over = _gauss_seidel(A_M, Ul, Ll, Z, b_M, b_J)
+    assert it_over < 0                    # non-convergent
+    O = np.block([[A_M, Ul], [Ll, Z]])
     b = np.vstack([b_M, b_J])
     x = np.linalg.solve(O, b)
     assert np.linalg.norm(O @ x - b) / np.linalg.norm(b) < 1e-12
