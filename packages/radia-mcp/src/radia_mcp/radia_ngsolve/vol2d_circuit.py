@@ -603,3 +603,119 @@ def write_structured_rect_vol(
         mesh.Add(Element1D([point_ids[j][0], point_ids[j + 1][0]], index=4))
     mesh.Save(str(target))
     return inspect_netgen_2d_vol(target.read_text(encoding="utf-8"), source_name=target.name)
+
+
+def write_structured_material_rect_vol(
+    path: str | Path,
+    *,
+    x0: float,
+    x1: float,
+    y0: float,
+    y1: float,
+    nx: int,
+    ny: int,
+    rectangles: Sequence[Mapping[str, Any]],
+    background_material: str = "air",
+    quads: bool = False,
+) -> dict[str, Any]:
+    """Generate a deterministic multi-material replay mesh.
+
+    Rectangles are assigned by cell centroid and therefore must align with the
+    structured grid when exact interfaces are required.  The generated
+    ``.vol`` is an execution artifact; callers need only version the script.
+    """
+
+    if nx < 2 or ny < 2:
+        raise ValueError("nx and ny must be at least two")
+    if not (x1 > x0 and y1 > y0):
+        raise ValueError("rectangle bounds must be strictly increasing")
+    background = str(background_material).strip()
+    if not background:
+        raise ValueError("background_material must be non-empty")
+    parsed: list[dict[str, Any]] = []
+    names = {background}
+    for index, raw in enumerate(rectangles):
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"rectangles[{index}] must be an object")
+        name = str(raw.get("name", "")).strip()
+        if not name or name in names:
+            raise ValueError("rectangle material names must be non-empty and unique")
+        bounds = tuple(
+            float(raw.get(key)) for key in ("x0", "x1", "y0", "y1")
+        )
+        if not all(math.isfinite(value) for value in bounds):
+            raise ValueError(f"rectangles[{index}] bounds must be finite")
+        rx0, rx1, ry0, ry1 = bounds
+        if not (x0 <= rx0 < rx1 <= x1 and y0 <= ry0 < ry1 <= y1):
+            raise ValueError(f"rectangles[{index}] must lie inside the domain")
+        for other in parsed:
+            overlap_x = min(rx1, other["x1"]) - max(rx0, other["x0"])
+            overlap_y = min(ry1, other["y1"]) - max(ry0, other["y0"])
+            if overlap_x > 0.0 and overlap_y > 0.0:
+                raise ValueError("material rectangles must not overlap")
+        parsed.append(
+            {"name": name, "x0": rx0, "x1": rx1, "y0": ry0, "y1": ry1}
+        )
+        names.add(name)
+
+    from netgen.meshing import (  # type: ignore
+        Element1D,
+        Element2D,
+        FaceDescriptor,
+        Mesh as NgMesh,
+        MeshPoint,
+        Pnt,
+    )
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    mesh = NgMesh()
+    mesh.dim = 2
+    material_names = [background, *(row["name"] for row in parsed)]
+    for material_index, name in enumerate(material_names, start=1):
+        mesh.SetMaterial(material_index, name)
+    for boundary, name in enumerate(("bottom", "right", "top", "left"), start=1):
+        mesh.Add(FaceDescriptor(surfnr=boundary, domin=0, bc=boundary))
+        mesh.SetBCName(boundary - 1, name)
+    point_ids: list[list[Any]] = []
+    for j in range(ny + 1):
+        row = []
+        y_value = y0 + (y1 - y0) * j / ny
+        for i in range(nx + 1):
+            x_value = x0 + (x1 - x0) * i / nx
+            row.append(mesh.Add(MeshPoint(Pnt(x_value, y_value, 0.0))))
+        point_ids.append(row)
+
+    def material_at(x_value: float, y_value: float) -> int:
+        for material_index, rectangle in enumerate(parsed, start=2):
+            if (
+                rectangle["x0"] <= x_value <= rectangle["x1"]
+                and rectangle["y0"] <= y_value <= rectangle["y1"]
+            ):
+                return material_index
+        return 1
+
+    for j in range(ny):
+        for i in range(nx):
+            xa = x0 + (x1 - x0) * i / nx
+            xb = x0 + (x1 - x0) * (i + 1) / nx
+            ya = y0 + (y1 - y0) * j / ny
+            yb = y0 + (y1 - y0) * (j + 1) / ny
+            material = material_at(0.5 * (xa + xb), 0.5 * (ya + yb))
+            p00, p10 = point_ids[j][i], point_ids[j][i + 1]
+            p01, p11 = point_ids[j + 1][i], point_ids[j + 1][i + 1]
+            if quads:
+                mesh.Add(Element2D(material, [p00, p10, p11, p01]))
+            else:
+                mesh.Add(Element2D(material, [p00, p10, p11]))
+                mesh.Add(Element2D(material, [p00, p11, p01]))
+    for i in range(nx):
+        mesh.Add(Element1D([point_ids[0][i], point_ids[0][i + 1]], index=1))
+        mesh.Add(Element1D([point_ids[ny][i], point_ids[ny][i + 1]], index=3))
+    for j in range(ny):
+        mesh.Add(Element1D([point_ids[j][nx], point_ids[j + 1][nx]], index=2))
+        mesh.Add(Element1D([point_ids[j][0], point_ids[j + 1][0]], index=4))
+    mesh.Save(str(target))
+    return inspect_netgen_2d_vol(
+        target.read_text(encoding="utf-8"), source_name=target.name
+    )
