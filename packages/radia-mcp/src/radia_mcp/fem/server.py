@@ -50,6 +50,7 @@ from .nonconforming_mesh_coupling_knowledge import (
 from .equivalence_source_knowledge import (
     get_equivalence_source_knowledge,
 )
+from ..radia_ngsolve.profile2d_handoff import profile2d_handoff_gate
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -130,6 +131,39 @@ async def fem_vol2d_scalar_analysis(analysis_json: str) -> str:
         result = {
             "schema": "radia.vol2d-scalar-analysis.v1",
             "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+def fem_profile2d_handoff_gate(packet_json: str) -> str:
+    """Gate a source-neutral 2-D CAD/mesh/solver handoff packet.
+
+    The packet uses metre coordinates, explicit line and signed-arc topology,
+    and separate material/boundary/conductor semantics.  STEP is accepted as
+    geometry only and therefore requires a matching semantic JSON sidecar.
+    Optional MATLAB MEX or Simulink S-function I/O must be fixed width, use
+    explicit SI units, and contain no dynamic paths.
+    """
+
+    try:
+        packet = json.loads(packet_json)
+        if not isinstance(packet, dict):
+            raise ValueError("packet_json must decode to an object")
+        result = profile2d_handoff_gate(packet)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.profile2d-handoff-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
             "error": str(exc),
         }
     return json.dumps(result, indent=2, sort_keys=True)
