@@ -21,9 +21,10 @@ from netgen.occ import OCCGeometry, Pnt, Sphere  # noqa: E402
 from ngsolve import HDiv, InnerProduct, Mesh, SetNumThreads, TaskManager  # noqa: E402
 
 from radia.isochronous_topopt import (  # noqa: E402
-    CHI_MIN, MU0, DensityAdjointVIM, demag_field_from_solution,
-    density_gradient_from_s_gradient, density_to_s, field_functional_load,
-    gradient_pair_points, uniform_field_load,
+    CHI_MIN, MU0, DensityAdjointVIM, HelmholtzFilter,
+    demag_field_from_solution, density_gradient_from_s_gradient,
+    density_to_s, field_functional_load, gradient_pair_points,
+    optimize_density, orbit_arc_points, uniform_field_load,
 )
 
 
@@ -152,3 +153,117 @@ def test_element_volumes_sum_to_mesh_volume(problem):
     assert abs(total - direct) / direct < 1e-12
     deficit = (4.0 * pi / 3.0 - total) / (4.0 * pi / 3.0)
     assert 0.0 < deficit < 0.12    # measured 7.0% straight-facet deficit at maxh=0.45
+
+
+# ---------------------------------------------------------------- Stage 2
+def test_helmholtz_filter_transpose_and_invariants(problem):
+    with TaskManager():
+        filt = HelmholtzFilter(problem.mesh, radius=0.15)
+        n_el = problem.prob.n_el
+        rng = np.random.default_rng(3)
+        rho = rng.uniform(0.2, 0.8, n_el)
+        g = rng.standard_normal(n_el)
+        # constants are exact fixed points (pure-Neumann Helmholtz)
+        np.testing.assert_allclose(filt.apply(np.ones(n_el)), 1.0, atol=1e-9)
+        # chain == transpose of apply: FD of g . apply(rho) per component
+        chain = filt.chain(g)
+        h = 1e-6
+        for e in [0, n_el // 2, n_el - 1]:
+            rp = rho.copy(); rp[e] += h
+            rm = rho.copy(); rm[e] -= h
+            fd = (g @ filt.apply(rp) - g @ filt.apply(rm)) / (2.0 * h)
+            assert abs(fd - chain[e]) <= 1e-8 * max(1.0, abs(chain[e]))
+        # smoothing: a spike loses amplitude; the P1 Helmholtz realization
+        # undershoots slightly (measured -1.0e-3 here) -- the design loop
+        # clips the filtered density with the piecewise-exact chain rule.
+        spike = np.zeros(n_el); spike[n_el // 3] = 1.0
+        smoothed = filt.apply(spike)
+        assert smoothed.max() < 0.9 and smoothed.min() > -5e-3
+
+
+def test_linearize_block_matches_single_adjoint(problem):
+    with TaskManager():
+        cpts, _ = orbit_arc_points(1.4, -0.3, 6)
+        f_con = field_functional_load(problem.fes, cpts,
+                                      np.full(len(cpts), 1.0 / len(cpts)),
+                                      axis=2, scale=MU0, bonus_intorder=10)
+        s = problem.s0
+        lin = problem.prob.linearize(s, problem.f_state,
+                                     [problem.f_adj, f_con])
+        single = problem.prob.objective_and_gradient(s, problem.f_state, f_con)
+    assert lin.values[0] == pytest.approx(problem.base.objective, rel=1e-10)
+    np.testing.assert_allclose(lin.jacobians[0], problem.base.gradient,
+                               rtol=1e-8, atol=1e-18)
+    assert lin.values[1] == pytest.approx(single.objective, rel=1e-10)
+    np.testing.assert_allclose(lin.jacobians[1], single.gradient,
+                               rtol=1e-8, atol=1e-18)
+
+
+def test_optimize_density_constrained_monotone(problem):
+    with TaskManager():
+        filt = HelmholtzFilter(problem.mesh, radius=0.12)
+        cpts, _ = orbit_arc_points(1.4, -0.3, 8)
+        f_con = field_functional_load(problem.fes, cpts,
+                                      np.full(len(cpts), 1.0 / len(cpts)),
+                                      axis=2, scale=MU0, bonus_intorder=10)
+        rho0 = np.full(problem.prob.n_el, 0.5)
+        lin0 = problem.prob.linearize(
+            density_to_s(filt.apply(rho0), 100.0), problem.f_state,
+            [problem.f_adj, f_con])
+        target = float(lin0.values[1])
+        result = optimize_density(
+            problem.prob, problem.f_state, problem.f_adj, [f_con], [target],
+            chi_iron=100.0, volume_fraction=0.5, density_filter=filt,
+            move_limit=0.1, max_iterations=6)
+    hist = result.history
+    assert len(hist) >= 3
+    objectives = [h["objective"] for h in hist]
+    assert objectives[-1] > float(lin0.values[0])          # real ascent
+    assert all(b >= a * (1.0 - 1e-6) for a, b in zip(objectives,
+                                                     objectives[1:]))
+    volume_max = 0.5 * problem.prob.element_volumes.sum()
+    for h in hist:
+        assert max(np.array(h["violation"]) / np.array(h["band"])) <= 1.25 + 1e-9
+        assert h["volume"] <= volume_max * (1.0 + 1e-9)
+    assert result.density.min() >= 0.0 and result.density.max() <= 1.0
+    assert result.solves >= len(hist) + 1
+
+
+def test_optimize_density_unconstrained_runs(problem):
+    with TaskManager():
+        result = optimize_density(
+            problem.prob, problem.f_state, problem.f_adj,
+            chi_iron=100.0, volume_fraction=0.5, max_iterations=3)
+    objectives = [h["objective"] for h in result.history]
+    assert len(objectives) == 3
+    assert all(b >= a * (1.0 - 1e-6) for a, b in zip(objectives,
+                                                     objectives[1:]))
+
+
+def test_optimize_density_validation_errors(problem):
+    with pytest.raises(ValueError, match="targets"):
+        optimize_density(problem.prob, problem.f_state, problem.f_adj,
+                         [problem.f_adj], [], chi_iron=100.0,
+                         volume_fraction=0.5)
+    with pytest.raises(ValueError, match="volume_fraction"):
+        optimize_density(problem.prob, problem.f_state, problem.f_adj,
+                         chi_iron=100.0, volume_fraction=0.0)
+
+
+def test_orbit_arc_and_direction_pairs():
+    pts, radial = orbit_arc_points(2.0, 0.5, 4)
+    assert pts.shape == (4, 3) and radial.shape == (4, 3)
+    np.testing.assert_allclose(np.linalg.norm(radial, axis=1), 1.0)
+    np.testing.assert_allclose(pts[0], [2.0, 0.0, 0.5], atol=1e-14)
+    # full circle omits the duplicate endpoint
+    assert not np.allclose(pts[-1], pts[0])
+    ppts, wts = gradient_pair_points(pts, np.ones(4), delta=0.2,
+                                     direction=radial)
+    assert ppts.shape == (8, 3)
+    np.testing.assert_allclose(ppts[0], [2.1, 0.0, 0.5], atol=1e-14)
+    np.testing.assert_allclose(ppts[4], [1.9, 0.0, 0.5], atol=1e-14)
+    np.testing.assert_allclose(wts[:4], 5.0)
+    np.testing.assert_allclose(wts[4:], -5.0)
+    with pytest.raises(ValueError, match="zero direction"):
+        gradient_pair_points(pts, np.ones(4), delta=0.2,
+                             direction=np.zeros((4, 3)))
