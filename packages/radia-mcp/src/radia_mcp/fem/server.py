@@ -209,6 +209,69 @@ def fem_validation_evidence_bundle(packet_json: str) -> str:
 
 
 @mcp.tool(
+    title="Kelvin open-boundary validation",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def fem_kelvin_open_boundary_validation(request_json: str = "{}") -> str:
+    """Run static 2-D/3-D Kelvin validation in one owned native worker.
+
+    This is a magnetostatic/Poisson gate.  It deliberately rejects PML and any
+    attempt to infer a wave-radiation boundary from static Kelvin evidence.
+    The genuine 3-D two-sphere periodic solve returns mesh, operator, residual,
+    and result identities together with analytic multipole errors.
+    """
+
+    process = None
+    try:
+        request = json.loads(request_json)
+        if not isinstance(request, dict):
+            raise ValueError("request_json must decode to an object")
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.kelvin_open_boundary_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(json.dumps(request).encode("utf-8")), timeout=180.0
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "Kelvin validation worker failed")
+        result = _decode_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.kelvin-open-boundary-validation.v1",
+            "status": "timeout",
+            "pass": False,
+            "error": "Kelvin validation worker exceeded 180 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.kelvin-open-boundary-validation.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
     title="2-D transient runtime gate",
     annotations=ToolAnnotations(
         readOnlyHint=True,

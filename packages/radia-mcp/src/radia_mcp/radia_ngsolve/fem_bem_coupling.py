@@ -31,6 +31,8 @@ Reference: Steinbach (2007) Numerical Approx. Methods for Elliptic BVPs.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import numpy as np
 import ngsolve as ng
@@ -579,7 +581,8 @@ def kelvin_openbc_error_vs_exterior_mesh(kelvin_maxh_list=(0.7, 0.5, 0.35, 0.25)
 
 
 def kelvin_twosphere_shell_dipole(R_inner=0.5, R_outer=1.0, offset=3.0,
-                                  maxh=0.25, order=2, intorder=6):
+                                  maxh=0.25, order=2, intorder=6,
+                                  curve_order=3):
     """The lab's REAL Kelvin transformation (two offset spheres + periodic BC +
     material modulation), solved for the shell dipole, vs the exact u = R_in²z/r³.
 
@@ -616,11 +619,14 @@ def kelvin_twosphere_shell_dipole(R_inner=0.5, R_outer=1.0, offset=3.0,
 
     fi = [f for f in shell.faces if f.name == "kelvin_int"][0]
     fe = [f for f in kball.faces if f.name == "kelvin_ext"][0]
-    fi.Identify(fe, "kelvin", IdentificationType.PERIODIC,
-                occ.gp_Trsf.Translation(_Vec(offset, 0, 0)))
+    # Netgen's periodic hash map is directional.  Map the translated exterior
+    # face back to the physical face with the inverse translation; the opposite
+    # direction leaves an unused periodic hash in current Netgen releases.
+    fe.Identify(fi, "kelvin", IdentificationType.PERIODIC,
+                occ.gp_Trsf.Translation(_Vec(-offset, 0, 0)))
 
     shape = occ.Glue([shell, kball, gnd])
-    mesh = ng.Mesh(OCCGeometry(shape).GenerateMesh(maxh=maxh)).Curve(3)
+    mesh = ng.Mesh(OCCGeometry(shape).GenerateMesh(maxh=maxh)).Curve(curve_order)
 
     fes = Periodic(ng.H1(mesh, order=order, dirichlet="inner|GND"))
     rp2 = (_x - offset) ** 2 + _y ** 2 + _z ** 2 + 1e-20
@@ -635,9 +641,39 @@ def kelvin_twosphere_shell_dipole(R_inner=0.5, R_outer=1.0, offset=3.0,
     rhs.data = -(a.mat * gfu.vec)
     gfu.vec.data += a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky") * rhs
 
+    values, columns, row_starts = a.mat.CSR()
+    matrix_hash = hashlib.sha256()
+    for array in (values, columns, row_starts):
+        contiguous = np.ascontiguousarray(np.asarray(array))
+        matrix_hash.update(str(contiguous.dtype).encode("ascii"))
+        matrix_hash.update(np.asarray(contiguous.shape, dtype=np.int64).tobytes())
+        matrix_hash.update(contiguous.tobytes())
+    mesh_identity = {
+        "vertices": mesh.nv,
+        "volume_elements": mesh.ne,
+        "maxh": float(maxh),
+        "curve_order": int(curve_order),
+        "materials": sorted(mesh.GetMaterials()),
+        "boundaries": sorted(mesh.GetBoundaries()),
+        "periodic_map": "kelvin_ext_to_kelvin_int_inverse_translation",
+    }
+    mesh_sha256 = hashlib.sha256(
+        json.dumps(mesh_identity, sort_keys=True, separators=(",", ":")).encode("ascii")
+    ).hexdigest()
+    residual = gfu.vec.CreateVector()
+    residual.data = a.mat * gfu.vec
+    free = fes.FreeDofs()
+    residual_inf = max(
+        (abs(float(residual[index])) for index in range(fes.ndof) if free[index]),
+        default=0.0,
+    )
+
     r2 = _x * _x + _y * _y + _z * _z
     u_exact = R_inner ** 2 * _z / (r2 * _sqrt(r2))
     err = math.sqrt(abs(float(ng.Integrate((gfu - u_exact) ** 2 * dx("shell"), mesh))))
     ref = math.sqrt(abs(float(ng.Integrate(u_exact ** 2 * dx("shell"), mesh))))
     return {"ndof": fes.ndof, "maxh": maxh, "order": order,
-            "rel_err": err / ref if ref > 0 else float("nan")}
+            "curve_order": curve_order, "rel_err": err / ref if ref > 0 else float("nan"),
+            "mesh": mesh_identity, "mesh_sha256": mesh_sha256,
+            "operator_sha256": matrix_hash.hexdigest(),
+            "free_residual_inf": residual_inf}
