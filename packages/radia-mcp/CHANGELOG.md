@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.20] - 2026-07-28
+
+- Added executable URN guidance for Y-admittance, Cauer-ladder, and CLN-peeling
+  workflows, including passivity checks and the distinction between stored-grid
+  reconstruction and look-ahead termination.
+
 ## [1.4.19] - 2026-07-24
 
 - Added JSON-only TEAM Workshop Problem 36 contract and validation tools. The

@@ -5,6 +5,17 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.24 - Passive URN ladder identification and multi-region VIM
+
+Released 2026-07-28.
+
+- Added Y-admittance, Cauer-ladder, and CLN-peeling URN models with passive
+  physical bases, trust-aware stopping, global objectives, and reproducible
+  restart selection.
+- Excluded conforming internal material interfaces from VIM exterior-boundary
+  assembly and locked the coupled weak formulation against an independently
+  reconstructed monolithic system.
+
 ## 4.95.23 - MATLAB optimization and induction-heating validation
 
 Released 2026-07-24.
