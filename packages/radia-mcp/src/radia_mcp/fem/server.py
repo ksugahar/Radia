@@ -27,6 +27,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from ..common import register_status_tool
+from ..common.mcp_contract import apply_tool_contract
 
 from .overview_knowledge import get_overview_knowledge
 from .potential_formulations_knowledge import get_potential_formulations_knowledge
@@ -51,6 +52,7 @@ from .equivalence_source_knowledge import (
     get_equivalence_source_knowledge,
 )
 from ..radia_ngsolve.profile2d_handoff import profile2d_handoff_gate
+from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -162,6 +164,39 @@ def fem_profile2d_handoff_gate(packet_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "schema": "radia.profile2d-handoff-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    title="2-D transient runtime gate",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+def fem_vol2d_transient_runtime(packet_json: str) -> str:
+    """Run one digest-bound fixed-width field/thermal lifecycle operation.
+
+    Operations are ``initialize``, ``step``, ``reset``, and ``terminate``.
+    The returned state token is portable across Python, MATLAB MEX, and a
+    Simulink S-function: it contains no file path or hidden server handle.
+    Optional thermal states receive conductivity loss from the field step.
+    """
+
+    try:
+        packet = json.loads(packet_json)
+        if not isinstance(packet, dict):
+            raise ValueError("packet_json must decode to an object")
+        result = execute_transient_runtime(packet)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.vol2d-transient-runtime.v1",
             "status": "invalid_input",
             "pass": False,
             "error": str(exc),
@@ -532,6 +567,12 @@ register_status_tool(
     description='FEM formulations theory layer (A-Omega / T-Omega / H / Reduced / Darwin, edge / HO / XFEM / IGA / DG, gauging + Kelvin, MSFEM, Schur...',
     subpackage='radia_mcp.fem',
     related_servers=["radia-ngsolve", "bem", "differential-forms"],
+)
+
+apply_tool_contract(
+    mcp,
+    server_name="mcp-server-fem",
+    version="1.4.19",
 )
 
 

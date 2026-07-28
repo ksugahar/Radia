@@ -7,7 +7,10 @@ import pytest
 
 from radia_mcp.motor.server import motor_vol2d_circuit_analysis
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol
-from radia_mcp.radia_ngsolve.vol2d_circuit import inspect_netgen_2d_vol
+from radia_mcp.radia_ngsolve.vol2d_circuit import (
+    assemble_vol2d_field,
+    inspect_netgen_2d_vol,
+)
 
 
 TRIANGLE_VOL = """mesh3d
@@ -67,3 +70,17 @@ def test_vol2d_mcp_rejects_invalid_json_before_worker_launch():
 
     assert result["schema"] == "radia.vol2d-circuit-analysis.v1"
     assert result["status"] == "invalid_input"
+
+
+def test_inventory_shorthand_is_rejected_before_native_assembly():
+    with pytest.raises(ValueError, match="facedescriptors"):
+        assemble_vol2d_field(
+            {
+                "vol_text": TRIANGLE_VOL,
+                "element_family": "P1",
+                "formulation": "planar",
+                "dirichlet_boundaries": ["bottom"],
+                "permeability_h_per_m": 1.2566370614359173e-6,
+                "branches": [{"name": "coil", "material": "coil", "turns": 1.0}],
+            }
+        )
