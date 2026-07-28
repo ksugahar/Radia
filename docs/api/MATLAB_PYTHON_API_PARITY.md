@@ -72,17 +72,20 @@ boundary provides a measurable operational benefit.
 
 ## axifem promotion
 
-`radia.axifem.q1_magnetic_element_matrices` and
-`radia.axifem.q1MagneticElementMatrices` now expose the same shared C++ Q1
-Henrotte kernel through pybind11 and MEX. The returned 4-by-4 stiffness and
-sigma-mass matrices use nodal `A_phi` values in node order
-`(ra,za),(rb,za),(rb,zb),(ra,zb)`. The production NGSolve Q1 bilinear-form
-integrators call that same source, so this is not a separate MATLAB formula.
+`radia.axifem.q1_magnetic_element_matrices` / `q2_magnetic_element_matrices`
+and their MATLAB adapters now expose the same shared C++ Q1/Q2 Henrotte
+kernels through pybind11 and MEX. The returned 4-by-4 or 9-by-9 stiffness and
+sigma-mass matrices use nodal `A_phi` values. The production NGSolve Q1/Q2
+bilinear-form integrators call that same source, so these are not separate
+MATLAB formulas.
 
 The focused gates compare the native array API with the independent Python
-formula, the NGSolve BFI assembly, and the MATLAB adapter, including an
-axis-touching element and fail-loud invalid geometry. NGSolve continues to own
-the mesh, FESpace, CoefficientFunction, BilinearForm, and global assembly.
+formula, the NGSolve BFI assembly, and the MATLAB adapter, including
+axis-touching elements and fail-loud invalid geometry. The Q2 matrices also
+feed `makeAxiEddyElementModel`, whose exact-ZOH state model runs through the
+native Simulink state-space MEX with no Python-per-step path. NGSolve continues
+to own the mesh, FESpace, CoefficientFunction, BilinearForm, and global
+assembly.
 
 ## Acoustic promotion
 

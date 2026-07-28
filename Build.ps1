@@ -383,11 +383,24 @@ try {
     $BuildResult = $LASTEXITCODE
 
     if (Test-Path $BuildLog) {
+        $BuildLogText = Get-Content $BuildLog -Raw
         Get-Content $BuildLog -Tail 30 | ForEach-Object {
             if ($_ -match "error|ERROR") { Write-Host $_ -ForegroundColor Red }
             elseif ($_ -match "warning|WARNING") { Write-Host $_ -ForegroundColor Yellow }
             else { Write-Host $_ }
         }
+        # cmd.exe can lose a nested batch `exit /b` code on some Windows
+        # configurations. Never report a successful native build when the
+        # generator itself recorded a failed subcommand.
+        if ($BuildLogText -match "MATLAB MEX target build failed" -or
+                $BuildLogText -match "ninja: build stopped: subcommand failed") {
+            $BuildResult = 1
+        }
+    }
+    if ($MatlabMexOnly -and
+            -not (Test-Path "$PROJECT_DIR\matlab\radia_mex.mexw64")) {
+        Write-Host "ERROR: MATLAB MEX artifact was not produced" -ForegroundColor Red
+        $BuildResult = 1
     }
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }

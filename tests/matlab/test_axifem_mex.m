@@ -1,6 +1,20 @@
 function tests = test_axifem_mex
-% Cross-language parity tests for the shared-native axifem Q1 boundary.
+% Cross-language parity tests for the shared-native axifem Q1/Q2 boundary.
 tests = functiontests(localfunctions);
+end
+
+function testQ2InteriorAndAxisElementsMatchPybind(testCase)
+reference = testCase.TestData.reference;
+verifyQ2Case(testCase, reference.q2_interior_input, ...
+    reference.q2_interior_stiffness, reference.q2_interior_sigma_mass);
+actual = verifyQ2Case(testCase, reference.q2_axis_input, ...
+    reference.q2_axis_stiffness, reference.q2_axis_sigma_mass);
+verifyTrue(testCase, actual.axis_touching);
+axisDofs = [1, 4, 8];
+verifyEqual(testCase, actual.stiffness(axisDofs, :), zeros(3, 9), AbsTol=0);
+verifyEqual(testCase, actual.stiffness(:, axisDofs), zeros(9, 3), AbsTol=0);
+verifyEqual(testCase, actual.sigma_mass(axisDofs, :), zeros(3, 9), AbsTol=0);
+verifyEqual(testCase, actual.sigma_mass(:, axisDofs), zeros(9, 3), AbsTol=0);
 end
 
 function setupOnce(testCase)
@@ -35,6 +49,7 @@ end
 function testCommandAndMetadataAreExplicit(testCase)
 commands = string(radia.internal.callMex('api.commands'));
 verifyTrue(testCase, any(commands == "axifem.q1_magnetic_element_matrices"));
+verifyTrue(testCase, any(commands == "axifem.q2_magnetic_element_matrices"));
 values = testCase.TestData.reference.interior_input;
 result = radia.axifem.q1MagneticElementMatrices(values(1), values(2), ...
     values(3), values(4), values(5), values(6));
@@ -42,6 +57,21 @@ verifyEqual(testCase, string(result.backend), "native-mex");
 verifyEqual(testCase, string(result.dof_convention), "nodal A_phi (V-DOF)");
 verifyEqual(testCase, string(result.node_order), ...
     "(ra,za),(rb,za),(rb,zb),(ra,zb)");
+
+q2 = radia.axifem.q2MagneticElementMatrices(values(1), values(2), ...
+    values(3), values(4), values(5), values(6));
+verifyEqual(testCase, string(q2.backend), "native-mex");
+verifyEqual(testCase, string(q2.dof_convention), "nodal A_phi (V-DOF)");
+verifyEqual(testCase, size(q2.stiffness), [9, 9]);
+end
+
+function actual = verifyQ2Case(testCase, values, expectedK, expectedM)
+actual = radia.axifem.q2MagneticElementMatrices(values(1), values(2), ...
+    values(3), values(4), values(5), values(6));
+verifyEqual(testCase, actual.stiffness, expectedK, ...
+    RelTol=2e-12, AbsTol=2e-10*max(1, max(abs(expectedK), [], "all")));
+verifyEqual(testCase, actual.sigma_mass, expectedM, ...
+    RelTol=2e-12, AbsTol=2e-10*max(1, max(abs(expectedM), [], "all")));
 end
 
 function testInvalidGeometryFailsLoudly(testCase)

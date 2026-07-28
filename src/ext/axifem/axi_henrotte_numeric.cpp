@@ -1,6 +1,9 @@
 #include "axi_henrotte_numeric.hpp"
+#include "q2_henrotte_generated.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace axifem::numeric {
@@ -11,20 +14,189 @@ constexpr double PI = 3.14159265358979323846;
 
 using CoefficientMatrix = std::array<double, 16>;
 
+template <std::size_t N>
+using Square = std::array<double, N * N>;
+
+template <std::size_t N>
+Square<N> Invert(const Square<N>& matrix, const char* message) {
+    std::array<double, N * 2 * N> work{};
+    for (std::size_t row = 0; row < N; ++row) {
+        for (std::size_t col = 0; col < N; ++col) {
+            const double value = matrix[N * row + col];
+            work[(2 * N) * row + col] = value;
+        }
+        work[(2 * N) * row + N + row] = 1.0;
+    }
+    for (std::size_t pivot_col = 0; pivot_col < N; ++pivot_col) {
+        std::size_t pivot_row = pivot_col;
+        double pivot_size = std::abs(work[(2 * N) * pivot_row + pivot_col]);
+        for (std::size_t row = pivot_col + 1; row < N; ++row) {
+            const double candidate = std::abs(work[(2 * N) * row + pivot_col]);
+            if (candidate > pivot_size) {
+                pivot_size = candidate;
+                pivot_row = row;
+            }
+        }
+        // The physical monomial basis contains s^2 and z^2. Millimetre-scale
+        // elements therefore have valid pivots far below machine epsilon even
+        // though ra < rb and za < zb make this tensor-product Vandermonde
+        // analytically nonsingular. Reject only an actual zero/underflow pivot.
+        if (pivot_size < std::numeric_limits<double>::min() * N)
+            throw std::invalid_argument(message);
+        if (pivot_row != pivot_col)
+            for (std::size_t col = 0; col < 2 * N; ++col)
+                std::swap(work[(2 * N) * pivot_row + col],
+                          work[(2 * N) * pivot_col + col]);
+        const double pivot = work[(2 * N) * pivot_col + pivot_col];
+        for (std::size_t col = 0; col < 2 * N; ++col)
+            work[(2 * N) * pivot_col + col] /= pivot;
+        for (std::size_t row = 0; row < N; ++row) {
+            if (row == pivot_col)
+                continue;
+            const double factor = work[(2 * N) * row + pivot_col];
+            for (std::size_t col = 0; col < 2 * N; ++col)
+                work[(2 * N) * row + col] -=
+                    factor * work[(2 * N) * pivot_col + col];
+        }
+    }
+    Square<N> inverse{};
+    for (std::size_t row = 0; row < N; ++row)
+        for (std::size_t col = 0; col < N; ++col)
+            inverse[N * row + col] = work[(2 * N) * row + N + col];
+    return inverse;
+}
+
+void Q2GeneralMonomials(double s, double z, double values[9]) {
+    values[0] = 1.0;
+    values[1] = s;
+    values[2] = s * s;
+    values[3] = z;
+    values[4] = s * z;
+    values[5] = s * s * z;
+    values[6] = z * z;
+    values[7] = s * z * z;
+    values[8] = s * s * z * z;
+}
+
+void Q2AxisMonomials(double s, double z, double values[6]) {
+    values[0] = s;
+    values[1] = s * s;
+    values[2] = s * z;
+    values[3] = s * s * z;
+    values[4] = s * z * z;
+    values[5] = s * s * z * z;
+}
+
+template <std::size_t N>
+Matrix9 Q2MonomialToVDof(
+    const Square<N>& monomial,
+    const Square<N>& inverse,
+    const std::array<int, N>& active,
+    const std::array<double, 9>& radius) {
+    Square<N> temporary{};
+    for (std::size_t row = 0; row < N; ++row)
+        for (std::size_t col = 0; col < N; ++col)
+            for (std::size_t inner = 0; inner < N; ++inner)
+                temporary[N * row + col] +=
+                    monomial[N * row + inner] * inverse[N * inner + col];
+
+    Matrix9 result{};
+    for (std::size_t local_i = 0; local_i < N; ++local_i) {
+        const int i = active[local_i];
+        for (std::size_t local_j = 0; local_j < N; ++local_j) {
+            const int j = active[local_j];
+            double value = 0.0;
+            for (std::size_t inner = 0; inner < N; ++inner)
+                value += inverse[N * inner + local_i] *
+                         temporary[N * inner + local_j];
+            result[9 * i + j] =
+                (2.0 * PI * radius[i]) * value * (2.0 * PI * radius[j]);
+        }
+    }
+    for (int i = 0; i < 9; ++i)
+        for (int j = i + 1; j < 9; ++j) {
+            const double average = 0.5 * (result[9 * i + j] + result[9 * j + i]);
+            result[9 * i + j] = average;
+            result[9 * j + i] = average;
+        }
+    return result;
+}
+
+Q2MagneticElementMatrices Q2Matrices(
+    double ra, double rb, double za, double zb, double mu, double sigma) {
+    const double sa = ra * ra;
+    const double sb = rb * rb;
+    const double sm = 0.5 * (sa + sb);
+    const double zm = 0.5 * (za + zb);
+    const double rm = std::sqrt(sm);
+    const std::array<double, 9> radius =
+        {ra, rb, rb, ra, rm, rb, rm, ra, rm};
+    const std::array<double, 9> s_nodes =
+        {sa, sb, sb, sa, sm, sb, sm, sa, sm};
+    const std::array<double, 9> z_nodes =
+        {za, za, zb, zb, za, zm, zb, zm, zm};
+    const bool axis_touching = ra < EPS_AXIS;
+
+    if (!axis_touching) {
+        Square<9> vandermonde{};
+        for (int row = 0; row < 9; ++row) {
+            double monomial[9];
+            Q2GeneralMonomials(s_nodes[row], z_nodes[row], monomial);
+            for (int col = 0; col < 9; ++col)
+                vandermonde[9 * row + col] = monomial[col];
+        }
+        const auto inverse = Invert<9>(
+            vandermonde, "axifem Q2 interior Vandermonde is singular");
+        Square<9> stiffness_monomial{};
+        Square<9> mass_monomial{};
+        q2_henrotte::KPhiGeneral(
+            sa, sb, za, zb, mu, mu, stiffness_monomial.data());
+        q2_henrotte::MSigmaPhiGeneral(
+            sa, sb, za, zb, sigma, mass_monomial.data());
+        const std::array<int, 9> active = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+        return {
+            Q2MonomialToVDof(stiffness_monomial, inverse, active, radius),
+            Q2MonomialToVDof(mass_monomial, inverse, active, radius),
+            false,
+        };
+    }
+
+    const std::array<int, 6> active = {1, 2, 4, 5, 6, 8};
+    Square<6> vandermonde{};
+    for (int row = 0; row < 6; ++row) {
+        double monomial[6];
+        const int local = active[row];
+        Q2AxisMonomials(s_nodes[local], z_nodes[local], monomial);
+        for (int col = 0; col < 6; ++col)
+            vandermonde[6 * row + col] = monomial[col];
+    }
+    const auto inverse = Invert<6>(
+        vandermonde, "axifem Q2 axis Vandermonde is singular");
+    Square<6> stiffness_monomial{};
+    Square<6> mass_monomial{};
+    q2_henrotte::KPhiAxis(sb, za, zb, mu, mu, stiffness_monomial.data());
+    q2_henrotte::MSigmaPhiAxis(sb, za, zb, sigma, mass_monomial.data());
+    return {
+        Q2MonomialToVDof(stiffness_monomial, inverse, active, radius),
+        Q2MonomialToVDof(mass_monomial, inverse, active, radius),
+        true,
+    };
+}
+
 void ValidateInputs(double ra, double rb, double za, double zb,
                     double mu, double sigma) {
     if (!std::isfinite(ra) || !std::isfinite(rb) ||
         !std::isfinite(za) || !std::isfinite(zb) ||
         !std::isfinite(mu) || !std::isfinite(sigma))
-        throw std::invalid_argument("axifem Q1 inputs must be finite");
+        throw std::invalid_argument("axifem element inputs must be finite");
     if (ra < 0.0 || rb <= ra)
-        throw std::invalid_argument("axifem Q1 requires 0 <= ra < rb");
+        throw std::invalid_argument("axifem element requires 0 <= ra < rb");
     if (zb <= za)
-        throw std::invalid_argument("axifem Q1 requires za < zb");
+        throw std::invalid_argument("axifem element requires za < zb");
     if (mu <= 0.0)
-        throw std::invalid_argument("axifem Q1 permeability must be positive");
+        throw std::invalid_argument("axifem element permeability must be positive");
     if (sigma < 0.0)
-        throw std::invalid_argument("axifem Q1 conductivity must be nonnegative");
+        throw std::invalid_argument("axifem element conductivity must be nonnegative");
 }
 
 // Row k, column i contains coefficient k of nodal basis function i in
@@ -177,6 +349,12 @@ Q1MagneticElementMatrices ComputeQ1MagneticElementMatrices(
     ValidateInputs(ra, rb, za, zb, mu, sigma);
     return {Q1Stiffness(ra, rb, za, zb, mu),
             Q1SigmaMass(ra, rb, za, zb, sigma)};
+}
+
+Q2MagneticElementMatrices ComputeQ2MagneticElementMatrices(
+    double ra, double rb, double za, double zb, double mu, double sigma) {
+    ValidateInputs(ra, rb, za, zb, mu, sigma);
+    return Q2Matrices(ra, rb, za, zb, mu, sigma);
 }
 
 }  // namespace axifem::numeric

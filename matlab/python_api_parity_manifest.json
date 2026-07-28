@@ -245,10 +245,10 @@
     {
       "python": "axifem.pyd",
       "classification": "native-mex",
-      "matlab": "matlab/+radia/+axifem/q1MagneticElementMatrices.m",
+      "matlab": "matlab/+radia/+axifem/q1MagneticElementMatrices.m; matlab/+radia/+axifem/q2MagneticElementMatrices.m",
       "status": "focused-native-commands",
-      "native_commands": ["axifem.q1_magnetic_element_matrices"],
-      "python_entry": "radia.axifem.q1_magnetic_element_matrices",
+      "native_commands": ["axifem.q1_magnetic_element_matrices", "axifem.q2_magnetic_element_matrices"],
+      "python_entry": "radia.axifem.q1_magnetic_element_matrices; radia.axifem.q2_magnetic_element_matrices",
       "fallback": "matlab/+radia/+python/electromagnetics.m"
     },
     {

@@ -23,7 +23,10 @@ def test_every_python_module_has_a_checked_matlab_classification():
     )
     assert axifem["classification"] == "native-mex"
     assert axifem["status"] == "focused-native-commands"
-    assert axifem["native_commands"] == ["axifem.q1_magnetic_element_matrices"]
+    assert axifem["native_commands"] == [
+        "axifem.q1_magnetic_element_matrices",
+        "axifem.q2_magnetic_element_matrices",
+    ]
     backlog = result["native_promotion_backlog"]
     assert [item["priority"] for item in backlog] == list(range(1, 8))
     assert [item["family"] for item in backlog] == [

@@ -27,7 +27,7 @@
 #include <bilinearform.hpp>
 #include <cg.hpp>
 #include <coefficient.hpp>
-#include <flags.hpp>
+#include <core/flags.hpp>
 #include <h1hofespace.hpp>
 #include <hcurl_equations.hpp>
 #include <hcurlhofespace.hpp>
@@ -1419,6 +1419,7 @@ mxArray* Commands() {
         "acoustic.soft_sphere_complex_k", "acoustic.bdf_delta",
         "acoustic.cq_grid",
         "axifem.q1_magnetic_element_matrices",
+        "axifem.q2_magnetic_element_matrices",
         "biot_savart.h_segments_complex", "biot_savart.a_segments_complex",
         "biot_savart.a_triangles_complex", "biot_savart.b_triangles_complex",
         "bem.assemble_sldl", "bem.assemble_sldl_p2",
@@ -8943,6 +8944,34 @@ void AxiFEMQ1MagneticElementMatrices(int nlhs, mxArray* plhs[], int nrhs,
                TextOutput("(ra,za),(rb,za),(rb,zb),(ra,zb)"));
 }
 
+void AxiFEMQ2MagneticElementMatrices(int nlhs, mxArray* plhs[], int nrhs,
+                                     const mxArray* prhs[]) {
+    CheckArity(
+        nrhs, 7, nlhs, 1,
+        "result = radia_mex('axifem.q2_magnetic_element_matrices', ra, rb, za, zb, mu, sigma)");
+    const auto matrices = axifem::numeric::ComputeQ2MagneticElementMatrices(
+        Scalar(prhs[1], "ra"), Scalar(prhs[2], "rb"),
+        Scalar(prhs[3], "za"), Scalar(prhs[4], "zb"),
+        Scalar(prhs[5], "mu"), Scalar(prhs[6], "sigma"));
+    static const char* fields[] = {
+        "stiffness", "sigma_mass", "backend", "dof_convention",
+        "node_order", "axis_touching"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 6, fields);
+    mxSetField(plhs[0], 0, "stiffness", RealMatrixOutput(
+        std::vector<double>(matrices.stiffness.begin(), matrices.stiffness.end()),
+        9, 9));
+    mxSetField(plhs[0], 0, "sigma_mass", RealMatrixOutput(
+        std::vector<double>(matrices.sigma_mass.begin(), matrices.sigma_mass.end()),
+        9, 9));
+    mxSetField(plhs[0], 0, "backend", TextOutput("native-mex"));
+    mxSetField(plhs[0], 0, "dof_convention",
+               TextOutput("nodal A_phi (V-DOF)"));
+    mxSetField(plhs[0], 0, "node_order", TextOutput(
+        "(ra,za),(rb,za),(rb,zb),(ra,zb),(rm,za),(rb,zm),(rm,zb),(ra,zm),(rm,zm)"));
+    mxSetField(plhs[0], 0, "axis_touching",
+               mxCreateLogicalScalar(matrices.axis_touching));
+}
+
 mxArray* AcousticFluidOutput(const radia::acoustics::ScatteringResult& result) {
     static const char* fields[] = {
         "kind", "wavenumber", "interior_wavenumber", "density_ratio",
@@ -9099,6 +9128,10 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
               const mxArray* prhs[]) {
     if (command == "axifem.q1_magnetic_element_matrices") {
         AxiFEMQ1MagneticElementMatrices(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "axifem.q2_magnetic_element_matrices") {
+        AxiFEMQ2MagneticElementMatrices(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "acoustic.soft_sphere" ||
