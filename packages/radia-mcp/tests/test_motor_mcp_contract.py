@@ -64,3 +64,9 @@ def test_circuit_age_plan_is_read_only_and_closed_world():
     assert force.annotations.destructiveHint is False
     assert force.annotations.idempotentHint is True
     assert force.annotations.openWorldHint is False
+
+    periodic = mcp._tool_manager._tools["motor_age_periodic_motion_analysis"]
+    assert periodic.annotations.readOnlyHint is True
+    assert periodic.annotations.destructiveHint is False
+    assert periodic.annotations.idempotentHint is True
+    assert periodic.annotations.openWorldHint is False

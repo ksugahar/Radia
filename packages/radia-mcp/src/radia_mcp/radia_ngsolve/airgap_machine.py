@@ -113,7 +113,13 @@ def airgap_solve(factor, fes, dirichlet_cf=None, source_lf=None):
     beta = smallinv @ np.array([InnerProduct(U[i], Kr, conjugate=False) for i in range(len(U))])
     delta = Kr.CreateVector(); delta.data = Kr
     for i in range(len(U)):
-        delta.data -= complex(beta[i]) * w[i]
+        coefficient = complex(beta[i])
+        if not delta.is_complex:
+            scale = max(1.0, abs(coefficient.real))
+            if abs(coefficient.imag) > 1.0e-12 * scale:
+                raise ValueError("real AGE space received a complex Woodbury coefficient")
+            coefficient = float(coefficient.real)
+        delta.data -= coefficient * w[i]
     gfu.vec.data += delta
     return gfu
 
