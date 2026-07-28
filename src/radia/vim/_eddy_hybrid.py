@@ -7983,12 +7983,27 @@ class CoupledHDivHybridVIMSystem:
         surface_impedance=None,
         sigma: float | None = None,
         mu: float = MU0,
-        coupling_scale=1.0,
+        coupling_scale=None,
         adjoint_coupling_scale=None,
         mixed_galerkin_keep_blocks=None,
         mixed_galerkin_eliminate_blocks=None,
     ) -> HCurlVIMHDivMMMSolution:
         """Solve one harmonic excitation and reconstruct all retained fields.
+
+        The stored coupling block is the mutual-energy matrix
+        ``K_ij = int M_i . B[J_j] dV``.  By default this physics driver applies
+        the harmonic scales that follow from it and from the reciprocity
+        ``int J_j . A_M[M_i] dV = K_ij``:
+
+        * magnetic row  ``-K/mu``   (the currents' H-field, ``-<M_i, H_J>``),
+        * eddy row      ``s K^H``   (the magnetization EMF, ``s <w_j, A_M[M]>``).
+
+        The ``s`` factor is what makes a STATIC magnetization drive no eddy
+        current; with unit scales a static M drives a spurious DC circulation
+        limited only by ``Z(0) = R`` (measured on the sphere-alpha lane:
+        coefficient norm ~2.4 vs the physical ~1e-5 at uHz).  Pass explicit
+        ``coupling_scale`` / ``adjoint_coupling_scale`` for neutral-algebra
+        uses (the raw containers keep their unit defaults).
 
         When both mixed-Galerkin block arguments are supplied, the elimination
         is performed on the complete HDiv-MMM/HCurl-VIM operator.  This updates
@@ -8002,6 +8017,10 @@ class CoupledHDivHybridVIMSystem:
         if mu <= 0.0:
             raise ValueError("mu must be positive")
         s = 1j * 2.0 * np.pi * frequency
+        if coupling_scale is None:
+            coupling_scale = -1.0 / mu
+        if adjoint_coupling_scale is None:
+            adjoint_coupling_scale = s
         if surface_impedance is None:
             conductivity = self.conductivity if sigma is None else sigma
             if conductivity is None and isinstance(
