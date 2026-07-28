@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **886 tools** across 48 MCP servers.
+Total: **887 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -21,7 +21,7 @@ Total: **886 tools** across 48 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 6 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 51 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 52 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -589,6 +589,7 @@ Module: `radia_mcp.motor.server`
 |---|---|
 | `motor_age_periodic_motion_analysis` | Run or validate a no-remesh AGE periodic-motion torque sweep. |
 | `motor_age_quality` | NGSolve AGE quality gates for radia-motor. |
+| `motor_age_retirement_validation` | Generate a two-region .vol and verify no-remesh AGE motion evidence. |
 | `motor_age_validation_plan` | Route a motor prompt to the required NGSolve AGE quality gates. |
 | `motor_angle_periodic_rom` | HCurl Eddy Bubble + HDiv-MMM angle-periodic motor ROM knowledge. |
 | `motor_bibliography` | Search the motor analysis bibliography catalog. |
