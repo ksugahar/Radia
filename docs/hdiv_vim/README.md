@@ -10,6 +10,11 @@ Design documents in this directory:
 [TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md](TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md)
 (topology optimization of isochronous-magnet iron: verified foundations,
 gL objective/adjoint formulation, staged execution plan, CUDA lane).
+Result-bearing showcase notebooks:
+[isochronous_topopt.ipynb](isochronous_topopt.ipynb) (density adjoint gate,
+constrained trust-region SLP design loop, exact-void iron-only verification;
+sidecar `isochronous_topopt_result.json`; golden-band lane
+`validation_test/isochronous_topopt/`).
 
 ## NGSolve Family Convention
 
