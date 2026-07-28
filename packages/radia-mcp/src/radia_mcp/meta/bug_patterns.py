@@ -1136,6 +1136,40 @@ PATTERNS: list[dict] = [
                       "self-intersection rather than handing a bad outline to the mesher.",
         "related": ["memory/hodograph_design_forward_verified.md"],
     },
+    {
+        "id": "terminal-corner-contaminates-designed-body",
+        "title": "A designed duct verified with its end faces attached directly to the body "
+                 "reads a large MESH-INDEPENDENT 'design error' that is a terminal artefact",
+        "topics": ["validation", "hodograph", "design", "ngsolve", "geometry"],
+        "severity": "medium",
+        "first_seen": "2026-07-28",
+        "last_seen": "2026-07-28",
+        "what": "A hodograph-designed saturable IPM bridge was checked by nonlinear FEM on the "
+                "designed outline.  The barrier-side wall was specified at a constant 1.900 T "
+                "cap but the FEM read 1.728 T near the inlet -- a 9.1 % 'design failure' -- "
+                "while the rest of the wall sat within 1 %.  Refining the mesh did NOT move it "
+                "(9.07 % at h/8, 9.00 % at h/16), which is exactly what makes it easy to "
+                "misread as a real formulation error rather than a boundary artefact.",
+        "root_cause": "The design's terminals are MMF (Psi) equipotentials, so the flux "
+                      "crosses them normally, while the walls are flux lines with the field "
+                      "tangential.  Where the two meet, the field must reorganise over a "
+                      "boundary layer whose reach is set by the channel width, not by h -- "
+                      "here about 11 degrees of turn.  The inverse map is near-degenerate at "
+                      "the same corner (min |J| 2.0e-8 against a 1.2e-6 median), so the "
+                      "geometry there is the least trustworthy part of the design.",
+        "detection": "Refine the mesh: an error that does NOT shrink is not discretisation.  "
+                     "Plot the wall error against the along-path coordinate -- a terminal "
+                     "artefact is monotone-decaying from one end, a formulation error is "
+                     "spread over the body.  Report where min |J| of the inverse map sits; if "
+                     "it is at a terminal corner the body is fine.",
+        "prevention": "Design a LEAD-IN / LEAD-OUT (here 20 degrees of flat spec at each end, "
+                      "which a real part has anyway where it merges into the core) and verify "
+                      "only the body.  That alone took the worst body error from 9.1 % to "
+                      "1.3 %.  Never trim the contaminated samples silently -- the trim length "
+                      "must be justified by a measured decay, or the check is circular.",
+        "related": ["validation_test/clebsch_legendre/verify_ipm_bridge_free_boundary.py",
+                    "memory/hodograph_ipm_bridge_free_boundary.md"],
+    },
 ]
 
 

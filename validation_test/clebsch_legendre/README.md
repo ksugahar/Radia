@@ -365,6 +365,66 @@ a large residual and fakes a ~140 % "design error" (bug-pattern
 design direction on a known hodograph domain; the analysis direction (given a
 fixed pole shape, the hodograph image is unknown) remains open research.
 
+### Free-boundary case: an IPM rotor bridge at the saturation cap
+
+```
+python verify_ipm_bridge_free_boundary.py
+```
+
+The bend above prescribes BOTH wall fields. This driver instead imposes an
+engineering **cap** -- `|B|` may nowhere exceed the knee `B_knee` -- on the
+barrier-side surface of the thin iron bridge that carries IPM leakage flux
+around a flux-barrier tip. In physical space that surface is a **free
+boundary** (an unknown curve on which a field condition holds) and locating it
+needs a nonlinear shape iteration; in the hodograph the same condition is the
+**coordinate line** `B = B_knee`, so it becomes a fixed Dirichlet edge and the
+design is one linear solve. The flux funnels (outer wall ramps 0.90 -> 1.70 T
+over a 90-degree turn) with the inner wall pinned at 1.90 T; material
+`mu_r(B) = 1 + 6999/(1+(B/1 T)^4)` (representative silicon steel, NOT a
+datasheet fit -- the `(B, H, mu_r,s, mu_r,d)` samples used are in the JSON).
+2026-07-28 baseline:
+
+| check | hodograph design | naive baseline |
+|---|---|---|
+| body inner wall \|B\| vs the 1.900 T cap | 1.875--1.902 T | 1.329--2.156 T |
+| cap overshoot | **+0.10 %** | **+13.50 %** |
+| inner-wall spread | 1.40 % | 43.56 % |
+| body iron area, same flux | 0.7590 mm^2 | 0.8049 mm^2 (**+6.0 %**) |
+| inner wall rel err (mean / max) | 0.43 % / 1.31 % | -- |
+| outer wall vs the designed ramp (mean) | 0.13 % | -- |
+| MMF, independent global quantity | design 2.4447 A vs FEM 2.4476 A (0.12 %) | -- |
+| mesh convergence | h/8 vs h/16 agree to three digits | -- |
+
+The naive baseline is a circular centreline through the same two body end
+mid-points, the same turn, the same two widths, the same lead-in/lead-out and
+the same flux -- i.e. what a competent engineer draws, not a straw man. The
+claim is NOT that the hodograph beats FEM: a nonlinear shape loop converges to
+the same shape. The claim is that the cap becomes a **boundary condition**
+instead of an outcome to check afterwards, and the shape-loop-of-nonlinear-
+solves collapses to one linear solve.
+
+Two reusable facts fall out and are asserted by the driver:
+
+- **Flux scale-freedom is exact.** The equation is linear in `A` and `Psi` is
+  linear in `A`, so a fixed field spec fixes the geometry up to one scale that
+  is exactly proportional to the flux (measured deviation 2e-12 at half flux).
+  One solve therefore gives the whole flux family: scale to the
+  mechanically-set throat width and read off the leakage.
+- **Terminals contaminate the body; lead-in/lead-out is mandatory.** With the
+  end faces attached directly to the body, the inlet corner corrupts the first
+  ~11 degrees of the inner wall by up to 9.1 %, and it is mesh-INDEPENDENT
+  (9.07 % at h/8, 9.00 % at h/16) -- a real terminal effect, not
+  discretisation. A 20-degree flat lead-in/lead-out at each end (which a real
+  bridge has anyway, where it merges into the core) drops the worst body error
+  to 1.31 %. The near-degenerate Jacobian sits at the same terminal corner
+  (min \|J\| 2.0e-8 against a 1.2e-6 median) and not in the body.
+
+Scope: this is a **local** design. The bridge's boundary data -- flux, turn
+angle, terminal field levels -- comes from the surrounding rotor solve, and the
+throat width is a mechanical input, not an output. The intended architecture is
+a local shape-design kernel inside a global nonlinear FEM loop, not a
+replacement for it.
+
 ## References
 
 - A. Clebsch, "Ueber die Integration der hydrodynamischen
