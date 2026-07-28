@@ -86,6 +86,15 @@ def topology_opt_applications(topic: str = "all") -> str:
                  trick (Sugahara Lab MATLAB optimizer toolbox), verified on
                  Rosenbrock; pointer to the `evolutionary` and
                  `bayesian-opt` servers for population / global search.
+      "isochronous" — isochronous accelerator-magnet DENSITY topology
+                 optimization on HDiv-MMM (radia.isochronous_topopt):
+                 exactly-affine per-element adjoint (one element-wise
+                 Integrate for ALL sensitivities), F^T c by dipole-array
+                 kernel reciprocity, trust-region SLP with banded orbit
+                 constraints in solve_lp_update's A_ub slot, the exact-void
+                 iron-only verification protocol, and the measured traps
+                 (HiGHS row scaling, warm-start tol anchoring, netgen
+                 surface handedness, gray designs, staircase boundaries).
     """
     return get_applications_documentation(topic)
 
