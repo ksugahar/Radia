@@ -111,16 +111,56 @@ Forward and adjoint share `A` -> solve as one block of right-hand sides.
 move limits) or a standard OC/MMA step on the filtered variable. The choice is
 a Stage-0 reconnaissance decision, not new research.
 
-## 5. Existing assets (reuse, do not rebuild)
+## 5. Existing assets — Stage-0 reconnaissance findings (2026-07-28, DONE)
 
-| Asset | Location | Role here |
+Full read of `radia.topology_optimization` (651 lines, single module) plus its
+consumers (`tests/test_topology_optimization.py`,
+`radia.magnetic_shield_optimization`).
+
+**EXISTS — reuse as-is:**
+
+| Asset | What it is | Role here |
 |---|---|---|
-| VIM linearization + LP + shape tangents | `radia.topology_optimization` (`linearize_vim_system`, `optimize_vim_lp`, `solve_lp_update`, per-family `production_*_derivatives`, `write_cubit_density_journal`; exercised by `tests/test_topology_optimization.py`) | update driver; the SHAPE route of Sec. 6; Cubit export of converged densities |
-| Operator API | `radia.vim.DemagOperator` / `HDivSolver` / `build_charge_gram` | build-once `N`, weighted mass, solves |
-| `gL` measurement chain | `docs/clebsch_hodograph/edge_focusing_tracking.*` + its golden | orbit points, weights, verification objective |
-| Coil source | `radia.coil_builder` | `H_ext` without a coil mesh |
-| Knowledge | `radia_mcp.topology_optimization`, `radia_mcp.accelerator` (`edge_focusing_tracking`) | formulation and lane conventions |
-| Validation homes | `validation_test/feec/`, `validation_test/vim_coupled/` | where the Stage gates land |
+| Shape route, complete | GetTrafo mode sampling -> analytic `dG/dM/dB` (C++ kernels, tet/hex/wedge, dense or streaming directional H-matrices) -> `dA` -> `production_vim_rms_adjoint_gradient_streaming` (state CG + adjoint CG on the same operator + per-mode contraction) | Sec.-6 SHAPE polish stage; also the PROOF PATTERN for adjoint solves in this codebase |
+| `solve_lp_update` | bounded LP (HiGHS), move limits, volume budget, **extra `A_ub`/`b_ub` rows** | update step; the isochronism constraints go into the existing `A_ub` slot (equalities as +/- row pairs) |
+| `optimize_vim_lp` | sequential linearize -> LP loop with history/convergence | reusable AS-IS by an adjoint-backed callback: with a scalar objective, `weights=[1.0]` and `response_jacobian` = the 1 x n_el gradient row satisfy its interface |
+| `write_cubit_density_journal` | thresholded density -> Cubit block journal | converged-design export toward the Stage-3 iron-only remesh |
+| `linearize_vim_system` | dense FORWARD sensitivities (one solve per design cell) | small/sheet problems only; NOT the m-scale route (kept, not extended) |
+| `radia.magnetic_shield_optimization` | an application module composing the above | the COMPOSITION PRECEDENT this project mirrors |
+| `radia.vim.build_charge_gram` / `DemagOperator` | build-once `N`, weighted mass, mass-Riesz solves | forward engine |
+| `docs/clebsch_hodograph/edge_focusing_tracking.*` + golden | verified orbit/tracking chain | orbit points/weights; Stage-3 verification objective |
+| `radia.coil_builder` | Biot-Savart coil source | `H_ext` without a coil mesh |
+
+**MISSING — the Stage-1 build list (verified non-duplicating):**
+
+1. **Per-element DENSITY adjoint at scale.**  The existing density path is
+   forward-mode (O(n_el) solves, dense `A`); the existing adjoint is
+   shape-mode only.  To build: one state + one adjoint solve of
+   `A(s) = M_s + N` (weighted-mass-Riesz preconditioner, warm starts,
+   block rhs), then ALL element sensitivities in one call:
+   `dJ/ds_e = -lambda^T M^(e) m = -Integrate(gf_lambda * gf_m,
+   element_wise=True)` -- the element mass contraction IS the element-wise
+   integral of the product of the two solution fields.  No per-mode
+   machinery, no P-matrix.
+2. **`gL` objective vector `F^T c` by kernel reciprocity.**  The dipole
+   kernel is symmetric, so the adjoint load is the mass projection of the
+   field of a weighted DIPOLE-PAIR array on the orbit points
+   (`dB_z/dx` realized as +/- pairs): an analytic CoefficientFunction /
+   `rad.Fld` evaluation.  The dense magnetization-to-field matrix `F` is
+   never formed.
+3. **Density -> `s` mapping, filter, projection.**  `s(rho)` interpolation
+   with the validated floor `chi_min = 1e-6`; no density filter exists
+   anywhere yet (Helmholtz/convolution + projection to build).
+4. Stage-3 iron-only remesh/verification driver.
+
+**Placement decision (mutex):** `topology_optimization.py` is under active
+co-agent development (recent commits: streaming adjoint contractions, Cubit
+remeshing).  Stage 1 therefore lands as a separate APPLICATION module
+`radia/isochronous_topopt.py` -- mirroring the `magnetic_shield_optimization`
+precedent, importing the LP driver, editing nothing in the shared module.
+
+Knowledge homes unchanged: `radia_mcp.topology_optimization`,
+`radia_mcp.accelerator`; validation lanes land under `validation_test/`.
 
 ## 6. Two design-variable routes (both exist; ordered)
 
@@ -137,7 +177,7 @@ a Stage-0 reconnaissance decision, not new research.
 
 | Stage | Content | Gate |
 |---|---|---|
-| 0 | Reconnaissance of `radia.topology_optimization` (LP semantics, reuse points, filter status) | design memo; no duplicated machinery |
+| 0 | **DONE 2026-07-28.** Reconnaissance of `radia.topology_optimization` (LP semantics, reuse points, filter status) | Sec. 5 findings: adjoint exists only shape-side; density adjoint + `F^T c` + filter are the build list; LP driver and `A_ub` constraint slot reused as-is; new work lands in `radia/isochronous_topopt.py` |
 | 1 | `J`, `F^T c`, adjoint on a sanity geometry (sphere/bar in a uniform + gradient drive) | adjoint gradient == finite differences to 1e-6 class on every tested `s_e` |
 | 2 | Isochronous sector case: orbit, `BL` constraints, volume budget; design loop with warm-started CG and block forward+adjoint rhs | monotone constrained descent; per-iterate wall time ms-to-seconds class at study scale |
 | 3 | **Final verification protocol**: remesh the converged design iron-only (void REMOVED -- exact-void gold standard, discharging the `O(h)` embedded bias), re-measure with the full RK4 Hill chain | removed-void `gL` inside a stated band of the embedded prediction; band quantifies the ersatz error honestly |
