@@ -94,6 +94,14 @@
       "notes": "MATLAB owns the production optimization loops and uses the same MEX operators."
     },
     {
+      "id": "isochronous-topopt",
+      "patterns": ["isochronous_topopt.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/machines.m"],
+      "notes": "Density-adjoint HDiv-MMM topology optimization for isochronous magnets: NGSolve CG/adjoint composition above the native charge-Gram kernels; design-loop promotion decides any later native surface."
+    },
+    {
       "id": "mesh-cad-io",
       "patterns": ["cubit_bem_extractor.py", "gmsh_post_export.py", "netgen_mesh_import.py", "peec_mesh_import.py", "setup_cubit.py", "step_mesh_builder.py"],
       "classification": "python-fallback",
