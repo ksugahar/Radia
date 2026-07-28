@@ -53,6 +53,7 @@ from .equivalence_source_knowledge import (
 )
 from ..radia_ngsolve.profile2d_handoff import profile2d_handoff_gate
 from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
+from ..radia_ngsolve.validation_evidence import validate_evidence_bundle
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -166,6 +167,42 @@ def fem_profile2d_handoff_gate(packet_json: str) -> str:
             "schema": "radia.profile2d-handoff-gate.v1",
             "status": "invalid_input",
             "pass": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    title="Validation evidence bundle gate",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+def fem_validation_evidence_bundle(packet_json: str) -> str:
+    """Validate balanced, content-addressed solver-replacement evidence.
+
+    Artifact content is supplied inline, so this public tool never reads a
+    caller-selected local path.  It requires verified public and source lanes,
+    full commit identities, explicit capability claims, and exact required
+    coverage.  An incomplete bundle remains useful but cannot authorize a
+    dependency retirement.
+    """
+
+    try:
+        packet = json.loads(packet_json)
+        if not isinstance(packet, dict):
+            raise ValueError("packet_json must decode to an object")
+        result = validate_evidence_bundle(packet)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.validation-evidence-bundle.v1",
+            "status": "invalid_input",
+            "contract_valid": False,
+            "retirement_ready": False,
+            "solver_uninstall_performed": False,
             "error": str(exc),
         }
     return json.dumps(result, indent=2, sort_keys=True)
