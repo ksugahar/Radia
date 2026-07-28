@@ -117,7 +117,7 @@ solves only. It must not execute once per Simulink time step.
 
 ### Axisymmetric Henrotte element matrices
 
-The first native `axifem` slice exposes Q1 axis-aligned magnetic element
+The native `axifem` slice exposes Q1 and Q2 axis-aligned magnetic element
 matrices without reproducing NGSolve's finite-element object model:
 
 ```matlab
@@ -126,12 +126,28 @@ element = radia.axifem.q1MagneticElementMatrices( ...
     1e-3, 2e-3, -0.5e-3, 0.5e-3, mu0, 5.8e7);
 K = element.stiffness;
 M = element.sigma_mass;
+
+q2 = radia.axifem.q2MagneticElementMatrices( ...
+    0, 1e-3, -0.5e-3, 0.5e-3, mu0, 5.8e7);
 ```
 
-The node order is `(ra,za),(rb,za),(rb,zb),(ra,zb)` and the DOFs are nodal
-`A_phi` values. The MEX command, pybind11 array API, and NGSolve Q1 BFI use one
-C++ source. Q2/heat arrays are the next native target; mesh, FESpace,
+The Q1 node order is `(ra,za),(rb,za),(rb,zb),(ra,zb)`. Q2 appends the four
+edge-midpoint nodes and the face-centre node, using the midpoint convention in
+`s=r^2`. All DOFs are nodal `A_phi` values. The MEX command, pybind11 array
+API, and NGSolve Q1/Q2 BFIs use one C++ source. Mesh, FESpace,
 CoefficientFunction, BilinearForm, and global assembly remain NGSolve-owned.
+
+For a compact transient teaching model, the Q2 matrices can be converted once
+to an exact-ZOH state-space system and run by the native MEX S-Function:
+
+```matlab
+state = radia.simulink.makeAxiEddyElementModel( ...
+    0, 1e-3, -0.5e-3, 0.5e-3, mu0, 5.8e7, SampleTime_s=1e-5);
+radia.simulink.buildAxiEddyElementModel("axi_q2_eddy", state, Save=false);
+```
+
+Finite-element assembly and Python are not called per Simulink time step. A
+global `.vol` assembly adapter is a separate promotion step.
 
 ### NGSolve CoefficientFunction and GridFunction handles
 
