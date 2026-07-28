@@ -146,6 +146,13 @@ state = radia.simulink.makeAxiEddyElementModel( ...
 radia.simulink.buildAxiEddyElementModel("axi_q2_eddy", state, Save=false);
 ```
 
+Linear planar or axisymmetric coil matrices can use the same native state-space
+MEX boundary. `makeCircuitFieldStateSpace` reduces the constrained field matrix
+and signed branch source vectors to an RL model, while
+`buildCircuitFieldStateSpaceModel` wires it to
+`radia_state_space_mex_sfunction`. The field factorization is offline and no
+Python call occurs per Simulink step.
+
 Finite-element assembly and Python are not called per Simulink time step. A
 global `.vol` assembly adapter is a separate promotion step.
 

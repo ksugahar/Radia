@@ -14,7 +14,7 @@ _WRITE = re.compile(
     r"(?:^|_)(?:add|convert|create|delete|edit|exec|export|generate|import|install|launch|mesh|remove|run|save|set|solve|start|stop|submit|update|write)(?:_|$)"
 )
 _READ = re.compile(
-    r"(?:^|_)(?:audit|catalog|check|compare|diagnos|estimate|explain|gate|get|health|index|inspect|inventory|lesson|lint|list|overview|plan|policy|preflight|profile|query|read|readiness|reference|report|roadmap|route|search|status|summary|taxonomy|topic|topology|validate)(?:_|$)"
+    r"(?:^|_)(?:analysis|analyze|audit|catalog|check|compare|diagnos|estimate|explain|gate|get|health|index|inspect|inventory|lesson|lint|list|overview|plan|policy|preflight|profile|query|read|readiness|reference|report|roadmap|route|search|status|summary|taxonomy|topic|topology|validate)(?:_|$)"
 )
 _OPEN = re.compile(
     r"(?:^|_)(?:download|fetch|github|http|live|online|remote|session|web)(?:_|$)"
@@ -33,7 +33,7 @@ def _annotations(name: str, description: str) -> ToolAnnotations:
     read_only = not mutating and bool(
         _READ.search(name.lower())
         or re.search(
-            r"\b(?:check|compare|compile|compute|inspect|list|plan|read|report|return|route|search|validate)\b",
+            r"\b(?:analyze|check|compare|compile|compute|inspect|list|plan|read|report|return|route|search|validate)\b",
             description,
             re.IGNORECASE,
         )
