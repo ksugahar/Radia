@@ -94,6 +94,24 @@ def test_curved_converges_on_skewed_annular_quads():
     print("[OK] Q2_Curved converges on general (skewed annular) quads")
 
 
+def test_curve2_q2_geometry_survives_vol_roundtrip():
+    from pathlib import Path
+    from ngsolve import Mesh
+
+    mesh = _annulus(6, 12)
+    mesh.Curve(2)
+    path = Path(r"C:\temp\radia_axifem_tests\axifem_q2_curve2_roundtrip.vol")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mesh.ngmesh.Save(str(path))
+    loaded = Mesh(str(path))
+
+    assert mesh.GetCurveOrder() == 2
+    assert loaded.GetCurveOrder() == 2
+    value = _lam_min(loaded, True)
+    assert np.isfinite(value)
+    assert abs(value - 14.27147488765551) < 1.0e-9
+
+
 if __name__ == "__main__":
     test_curved_matches_axis_aligned_on_straight_quads()
     test_curved_converges_on_skewed_annular_quads()
