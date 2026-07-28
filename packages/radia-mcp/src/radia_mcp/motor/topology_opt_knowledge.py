@@ -403,9 +403,37 @@ directly thicker barriers.
 - The baseline is ONE compass construction (arcs through the same
   anchors); the claim is the mechanism (circular walls cannot track
   accumulating flux), not superiority over every hand method.
-- Embedding in a full rotor and measuring L_d/L_q/saliency is the open
-  next rung; until then the -44% iron is a channel-level, not a
-  machine-level, number.
+
+### Machine-level embedding: MEASURED 2026-07-28 -- marginal, read carefully
+
+Full 2-D current-sheet machine harness (calibration isotropy 5e-9), scratch
+`C:\\temp\\synrm_rotor\\` (not promoted; results JSONs there).
+
+- SINGLE barrier per pole (channel low wall virtual): NO benefit.  Saliency
+  hodograph 1.243 vs hand-U 1.253-1.255 (same corners; both same-area and
+  capability-matched).  Mechanism: (a) with a virtual low wall the d-flux
+  has unmetered alternative iron, so cap-tight channel optimality buys
+  nothing (lam_d identical to 1e-5 across barrier shapes at low drive);
+  (b) for q-blocking, air near the BORE beats air at depth, and the
+  channel-optimal barrier is deep-narrow.
+- TWO barriers per pole (channel 1 fully metered, both walls designed):
+  the verdict is MATERIAL-TAIL SENSITIVE.  With the lab's soft-tail curve
+  (NEXP 4, mu_r(3 T) ~ 86) the practitioner baselines WIN +16..20% torque
+  proxy by running their channel walls at 2.3..3.1 T -- overloading iron
+  past the cap is barely punished by that model.  With a realistic knee
+  (NEXP 6, mu_r(1.9) = 147, mu_r(3) = 10.6) the hodograph rotor wins
+  +1.2..2.8% (lam_d - lam_q) at the same drive AND is the only design whose
+  channel wall respects the 1.9 T cap (baselines peak 2.27..2.29 T).
+- Honest summary: the machine-level saliency gain is SMALL and flips sign
+  with the material tail; the robust machine-level deliverable is the CAP
+  GUARANTEE (no local overload by construction), not raw torque.  Do not
+  quote a percent without naming the material model.
+
+Harness lessons (cost real runs): the current-sheet FLUX wave is a quarter
+pole pitch off the CURRENT wave -- identify d/q empirically by comparing
+flux linkages, never by derivation; rated-drive searches on a saturated
+branch need bracketed bisection (a multiplicative heuristic oscillates and
+can exit unconverged); a sharp knee needs adaptive Picard damping.
 
 See also topic `saturable_bridge_hodograph` (the free-boundary cap trick on
 the leakage bridge) and `radia_mcp.electromagnet` topic `clebsch_hodograph`
