@@ -792,6 +792,58 @@ async def motor_vol2d_circuit_analysis(analysis_json: str) -> str:
 
 
 @mcp.tool()
+async def motor_vol2d_dynamic_analysis(analysis_json: str) -> str:
+    """Analyze nonlinear, conductive-transient, or MEX-ready ``.vol`` data.
+
+    The request must carry a complete SI material law for every mesh material.
+    Supported operations are ``assemble``, ``nonlinear_static``, ``transient``,
+    and ``state_space``.  NGSolve/axifem execution is isolated in one owned
+    worker so timeout or cancellation never terminates a shared solver session.
+    """
+
+    process = None
+    try:
+        json.loads(analysis_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.vol2d_dynamics_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(analysis_json.encode("utf-8")),
+            timeout=120.0,
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "vol2d dynamics worker failed")
+        result = json.loads(stdout.decode("utf-8"))
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.vol2d-dynamic-analysis.v1",
+            "status": "timeout",
+            "error": "vol2d dynamics worker exceeded 120 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.vol2d-dynamic-analysis.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def motor_validation_lanes(topic: str = "overview") -> str:
     """
     Cross-validation lane policy for radia-motor.
