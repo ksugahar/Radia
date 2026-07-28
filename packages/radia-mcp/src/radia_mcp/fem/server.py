@@ -20,9 +20,12 @@ Usage:
     mcp-server-fem --selftest   # self-test
 """
 
+import asyncio
+import json
 import sys
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from ..common import register_status_tool
 
 from .overview_knowledge import get_overview_knowledge
@@ -50,6 +53,86 @@ from .equivalence_source_knowledge import (
 
 
 mcp = FastMCP("mcp-server-fem")
+
+
+def _decode_worker_json(stdout: bytes) -> dict:
+    """Decode the final JSON object while tolerating native diagnostics."""
+
+    text = stdout.decode("utf-8", errors="replace").strip()
+    if not text:
+        raise RuntimeError("scalar worker returned no JSON")
+    for line in reversed(text.splitlines()):
+        candidate = line.strip()
+        if not candidate.startswith("{"):
+            continue
+        try:
+            result = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(result, dict):
+            return result
+    raise RuntimeError("scalar worker output did not end with a JSON object")
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+async def fem_vol2d_scalar_analysis(analysis_json: str) -> str:
+    """Solve or replay a portable 2-D scalar-PDE ``.vol`` artifact.
+
+    The closed-world physics choices are electrostatics, current flow (DC or
+    harmonic lossy dielectric), and steady heat conduction.  Planar models
+    carry an explicit depth; axisymmetric models use the full ``2*pi*r``
+    measure.  One owned worker returns terminal/balance observables and exact
+    JSON/CSV/Gmsh sidecars without touching a shared CAE session or a
+    caller-selected output path.
+    """
+
+    process = None
+    try:
+        json.loads(analysis_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.vol2d_scalar_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(analysis_json.encode("utf-8")),
+            timeout=180.0,
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "scalar worker failed")
+        result = _decode_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.vol2d-scalar-analysis.v1",
+            "status": "timeout",
+            "error": "scalar worker exceeded 180 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.vol2d-scalar-analysis.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
