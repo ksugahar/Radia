@@ -14,6 +14,7 @@ Usage:
     mcp-server-motor --selftest   # Run self-test
 """
 
+import asyncio
 import json
 import sys
 
@@ -729,6 +730,61 @@ def motor_circuit_field_analysis(analysis_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "schema": "radia.circuit-field-analysis.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+async def motor_vol2d_circuit_analysis(analysis_json: str) -> str:
+    """Analyze a Netgen dimension-2 ``.vol`` and its coupled field circuit.
+
+    NGSolve assembly runs in one owned worker process because its runtime is not
+    thread-safe inside FastMCP's request executor.  A timeout terminates only
+    that worker.  The mesh stays a replayable input artifact rather than a
+    tracked fixture.
+    Planar P/Q elements use NGSolve H1; axisymmetric P/Q elements use Radia's
+    Henrotte space.  Signed turns are assembled on the named mesh materials
+    before the v2 series/parallel circuit kernel is evaluated.
+    """
+
+    process = None
+    try:
+        json.loads(analysis_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.vol2d_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(analysis_json.encode("utf-8")),
+            timeout=120.0,
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "vol2d worker failed")
+        result = json.loads(stdout.decode("utf-8"))
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {
+            "schema": "radia.vol2d-circuit-analysis.v1",
+            "status": "timeout",
+            "error": "vol2d worker exceeded 120 seconds",
+        }
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {
+            "schema": "radia.vol2d-circuit-analysis.v1",
             "status": "invalid_input",
             "error": str(exc),
         }
