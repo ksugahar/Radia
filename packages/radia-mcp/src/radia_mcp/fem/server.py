@@ -54,6 +54,7 @@ from .equivalence_source_knowledge import (
 from ..radia_ngsolve.profile2d_handoff import profile2d_handoff_gate
 from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
 from ..radia_ngsolve.validation_evidence import validate_evidence_bundle
+from .uninstall_safety import validate_solver_uninstall_safety_evidence
 from .axifem_retirement import validate_axifem_element_evidence
 
 
@@ -98,6 +99,32 @@ def fem_axifem_element_evidence_gate(evidence_json: str) -> str:
             "schema": "radia.axifem-element-evidence-gate.v1",
             "status": "invalid_input",
             "pass": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+def fem_solver_uninstall_safety_gate(evidence_json: str) -> str:
+    """Validate reversible solver-uninstall evidence without local path access."""
+
+    try:
+        evidence = json.loads(evidence_json)
+        result = validate_solver_uninstall_safety_evidence(evidence)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.solver-uninstall-safety-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "ready_for_explicit_uninstall_approval": False,
+            "solver_uninstall_performed": False,
             "error": str(exc),
         }
     return json.dumps(result, indent=2, sort_keys=True)
