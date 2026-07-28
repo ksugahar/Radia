@@ -54,6 +54,7 @@ from .equivalence_source_knowledge import (
 from ..radia_ngsolve.profile2d_handoff import profile2d_handoff_gate
 from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
 from ..radia_ngsolve.validation_evidence import validate_evidence_bundle
+from .axifem_retirement import validate_axifem_element_evidence
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -76,6 +77,30 @@ def _decode_worker_json(stdout: bytes) -> dict:
         if isinstance(result, dict):
             return result
     raise RuntimeError("scalar worker output did not end with a JSON object")
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+def fem_axifem_element_evidence_gate(evidence_json: str) -> str:
+    """Validate content-addressed evidence for P1/Q1/P2/Q2 curved axifem paths."""
+
+    try:
+        evidence = json.loads(evidence_json)
+        result = validate_axifem_element_evidence(evidence)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.axifem-element-evidence-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool(
