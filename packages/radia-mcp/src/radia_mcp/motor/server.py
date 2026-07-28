@@ -19,6 +19,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
+from ..common.mcp_contract import apply_tool_contract
 
 from .onelab_knowledge import get_onelab_knowledge
 from .topology_opt_knowledge import get_topology_opt_knowledge
@@ -34,6 +35,7 @@ from .age_quality_knowledge import (
     get_age_quality_report,
     route_age_validation_plan,
 )
+from ..radia_ngsolve.circuit_excitation import compile_circuit_age_application
 from .validation_lanes_knowledge import (
     format_artifact_gate_result,
     format_motor_validation_lanes,
@@ -690,6 +692,28 @@ def motor_age_validation_plan(goal: str) -> str:
 
 
 @mcp.tool()
+def motor_circuit_age_application_plan(application_json: str) -> str:
+    """Compile planar/axisymmetric current circuits and optional AGE motion.
+
+    Series regions receive explicit signed ampere-turn source densities.
+    Parallel branches remain field-circuit unknowns with one common voltage
+    and a total-current constraint. Rotary and linear AGE motion is represented
+    by Fourier phase factors, so neither FE mesh is rebuilt.
+    """
+
+    try:
+        payload = json.loads(application_json)
+        result = compile_circuit_age_application(payload)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.circuit-age-application.v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def motor_validation_lanes(topic: str = "overview") -> str:
     """
     Cross-validation lane policy for radia-motor.
@@ -1062,6 +1086,12 @@ register_status_tool(
     subpackage='radia_mcp.motor',
     related_servers=["electromagnet", "topology-optimization", "magnetic-materials"],
     optional_deps=["radia", "ngsolve"],
+)
+
+apply_tool_contract(
+    mcp,
+    server_name="mcp-server-motor",
+    version="1.4.19",
 )
 
 

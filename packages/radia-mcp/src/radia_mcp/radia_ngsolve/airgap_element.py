@@ -33,6 +33,38 @@ import math
 MU0 = 4e-7 * math.pi
 
 
+def annular_rotation_phase(harmonic, angle_rad):
+    """Return the rotor-trace phase for harmonic ``n`` after rotation ``angle_rad``.
+
+    With ``A_n(theta) ~ exp(i*n*theta)``, replacing ``theta`` by
+    ``theta-angle_rad`` multiplies the rotor trace by ``exp(-i*n*angle_rad)``.
+    The AGE mesh and DtN operator are unchanged.
+    """
+
+    if isinstance(harmonic, bool) or int(harmonic) != harmonic or int(harmonic) <= 0:
+        raise ValueError("AGE harmonic must be a positive integer")
+    angle = float(angle_rad)
+    if not math.isfinite(angle):
+        raise ValueError("AGE rotation angle must be finite")
+    return cmath.exp(-1j * int(harmonic) * angle)
+
+
+def planar_translation_phase(wavenumber, displacement):
+    """Return the moving-trace phase for a planar AGE translation.
+
+    With ``A_k(x) ~ exp(i*k*x)``, replacing ``x`` by ``x-displacement``
+    multiplies the moving trace by ``exp(-i*k*displacement)`` without remeshing.
+    """
+
+    wave = float(wavenumber)
+    shift = float(displacement)
+    if not math.isfinite(wave) or wave <= 0.0:
+        raise ValueError("AGE wavenumber must be positive and finite")
+    if not math.isfinite(shift):
+        raise ValueError("AGE displacement must be finite")
+    return cmath.exp(-1j * wave * shift)
+
+
 def annular_harmonic_coeffs(n, ri, ro, A_in, A_out):
     """Complex (alpha, beta) of A_n(r) = alpha r^n + beta r^-n in the current-free
     annulus ri<r<ro, from the ring phasors A_n(ri)=A_in (rotor), A_n(ro)=A_out (stator).
