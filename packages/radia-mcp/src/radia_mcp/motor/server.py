@@ -993,6 +993,50 @@ async def motor_age_periodic_motion_analysis(analysis_json: str) -> str:
         openWorldHint=False,
     )
 )
+async def motor_age_retirement_validation(request_json: str = "{}") -> str:
+    """Generate a two-region .vol and verify no-remesh AGE motion evidence."""
+
+    process = None
+    try:
+        json.loads(request_json)
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "radia_mcp.radia_ngsolve.age_retirement_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(request_json.encode("utf-8")), timeout=180.0
+        )
+        if process.returncode != 0:
+            message = stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(message[-1000:] or "AGE retirement worker failed")
+        result = _decode_owned_worker_json(stdout)
+    except asyncio.TimeoutError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        result = {"schema": "radia.age-retirement-validation.v1", "status": "timeout", "pass": False, "error": "AGE retirement worker exceeded 180 seconds"}
+    except asyncio.CancelledError:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+        result = {"schema": "radia.age-retirement-validation.v1", "status": "invalid_input", "pass": False, "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 async def motor_vol2d_postprocess_analysis(analysis_json: str) -> str:
     """Solve or replay a portable 2-D ``.vol`` postprocessing artifact.
 
