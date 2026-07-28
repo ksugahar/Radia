@@ -5,6 +5,12 @@ magnetization, material state, charge map, and reduced-FEM handoff in NGSolve
 mesh/function-space vocabulary, then uses Radia's C++ charge-Gram H-matrix for
 the open-boundary integral operator.
 
+Design documents in this directory:
+[PRODUCTIONIZATION.md](PRODUCTIONIZATION.md) (productionization plan),
+[TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md](TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md)
+(topology optimization of isochronous-magnet iron: verified foundations,
+gL objective/adjoint formulation, staged execution plan, CUDA lane).
+
 ## NGSolve Family Convention
 
 Radia's established production path constructs `HDiv(mesh, order=1|2)` without
