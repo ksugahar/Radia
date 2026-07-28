@@ -27,6 +27,12 @@ import sys
 _package_dir = os.path.dirname(os.path.abspath(__file__))
 
 if sys.platform == 'win32':
+    # oneMKL otherwise selects Intel OpenMP, while PyTorch bundles a separate
+    # libiomp5md.dll. Loading both aborts the process with OMP Error #15. TBB
+    # is a supported threaded oneMKL backend and is installed by the mkl wheel.
+    # Preserve an explicit application-level choice when one is already set.
+    os.environ.setdefault('MKL_THREADING_LAYER', 'TBB')
+
     _dirs_to_add = []
 
     # 1. Package directory (for _radia_pybind.pyd and other .pyd files)

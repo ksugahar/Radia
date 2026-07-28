@@ -15,6 +15,9 @@ Released 2026-07-28.
 - Excluded conforming internal material interfaces from VIM exterior-boundary
   assembly and locked the coupled weak formulation against an independently
   reconstructed monolithic system.
+- Selected oneMKL's supported TBB threading layer by default on Windows and
+  suspended NGSolve workers around dense PEEC solves, preventing PyTorch/OpenMP
+  runtime collisions without unsafe duplicate-runtime overrides.
 
 ## 4.95.23 - MATLAB optimization and induction-heating validation
 

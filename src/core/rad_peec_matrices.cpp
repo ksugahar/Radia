@@ -2037,6 +2037,13 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
     for (int i = 0; i < n_ports * n_ports; ++i) Z_out[i] = std::complex<double>(0, 0);
 
 #ifdef HAVE_LAPACK
+    // NGSolve keeps its TaskManager worker pool alive between Python calls.
+    // Suspend those workers while dense MKL owns the CPU, and restore MKL's
+    // process setting when this solve returns. This also prevents TBB and
+    // TaskManager from oversubscribing the host during a PEEC solve.
+    SuspendTaskManager suspended_workers;
+    MKLThreadGuard mkl_threads(GetMaxThreads());
+
     int info = 0;
 
     // Step 1: Invert Z_eff -> Y_branch
