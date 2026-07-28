@@ -59,50 +59,60 @@ CHI_MIN = 1.0e-6
 __all__ = [
     "MU0", "CHI_MIN", "AdjointGradientResult", "DensityAdjointVIM",
     "FunctionalLinearization", "DensityDesignResult", "HelmholtzFilter",
-    "density_to_s", "density_gradient_from_s_gradient",
-    "gradient_pair_points", "dipole_array_field_cf",
-    "field_functional_load", "uniform_field_load",
+    "IronOnlyVerification", "density_to_s",
+    "density_gradient_from_s_gradient", "gradient_pair_points",
+    "dipole_array_field_cf", "field_functional_load", "uniform_field_load",
     "demag_field_from_solution", "orbit_arc_points", "optimize_density",
+    "iron_only_mesh", "verify_design_iron_only",
 ]
 
 
 # --------------------------------------------------------------------------
 # density <-> s mapping
 # --------------------------------------------------------------------------
-def density_to_s(density, chi_iron, chi_min=CHI_MIN):
+def density_to_s(density, chi_iron, chi_min=CHI_MIN, penalty=1.0):
     """Map a per-element density ``rho in [0, 1]`` to ``s = 1/chi(rho)``.
 
-    Linear interpolation in susceptibility, ``chi(rho) = chi_min +
-    (chi_iron - chi_min) rho`` -- the penalization/filtering layer of the
-    design loop operates on ``rho`` before this map.  ``chi_min`` defaults to
-    the validated ersatz floor :data:`CHI_MIN`.
+    SIMP-style interpolation in susceptibility, ``chi(rho) = chi_min +
+    (chi_iron - chi_min) rho^penalty``.  ``penalty=1`` (default) is the
+    linear map; ``penalty=3`` makes intermediate densities material-
+    inefficient and drives designs toward 0/1 (use for runs whose result
+    will be thresholded/manufactured).  The filtering layer of the design
+    loop operates on ``rho`` before this map.  ``chi_min`` defaults to the
+    validated ersatz floor :data:`CHI_MIN`.
     """
     rho = np.asarray(density, dtype=float)
     if not chi_iron > chi_min > 0.0:
         raise ValueError(
             "density_to_s: need chi_iron > chi_min > 0 (got chi_iron=%r, chi_min=%r)"
             % (chi_iron, chi_min))
+    if not penalty >= 1.0:
+        raise ValueError("density_to_s: penalty must be >= 1")
     if np.any(rho < -1e-9) or np.any(rho > 1.0 + 1e-9):
         raise ValueError(
             "density_to_s: density must lie in [0, 1] (got min=%r, max=%r)"
             % (float(rho.min()), float(rho.max())))
-    chi = chi_min + (chi_iron - chi_min) * np.clip(rho, 0.0, 1.0)
+    chi = chi_min + (chi_iron - chi_min) * np.clip(rho, 0.0, 1.0) ** penalty
     return 1.0 / chi
 
 
 def density_gradient_from_s_gradient(density, s_gradient, chi_iron,
-                                     chi_min=CHI_MIN):
+                                     chi_min=CHI_MIN, penalty=1.0):
     """Chain rule ``dJ/drho_e = dJ/ds_e * ds/drho_e`` for :func:`density_to_s`.
 
-    ``ds/drho = -(chi_iron - chi_min)/chi(rho)^2``.
+    ``ds/drho = -(chi_iron - chi_min) penalty rho^(penalty-1) / chi(rho)^2``.
     """
     rho = np.clip(np.asarray(density, dtype=float), 0.0, 1.0)
     grad_s = np.asarray(s_gradient, dtype=float)
     if rho.shape != grad_s.shape:
         raise ValueError("density_gradient_from_s_gradient: shape mismatch %r vs %r"
                          % (rho.shape, grad_s.shape))
-    chi = chi_min + (chi_iron - chi_min) * rho
-    return grad_s * (-(chi_iron - chi_min) / (chi * chi))
+    if not penalty >= 1.0:
+        raise ValueError("density_gradient_from_s_gradient: penalty must be >= 1")
+    chi = chi_min + (chi_iron - chi_min) * rho ** penalty
+    dchi = ((chi_iron - chi_min) * penalty * rho ** (penalty - 1.0)
+            if penalty != 1.0 else (chi_iron - chi_min) * np.ones_like(rho))
+    return grad_s * (-dchi / (chi * chi))
 
 
 # --------------------------------------------------------------------------
@@ -546,7 +556,7 @@ class DensityDesignResult:
 
 def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      targets=(), *, chi_iron, volume_fraction,
-                     density_filter=None, initial_density=None,
+                     density_filter=None, initial_density=None, penalty=1.0,
                      move_limit=0.1, max_iterations=30,
                      band_relative=5e-3, band_floor=None, restore_shrink=0.1,
                      move_min=1e-3, objective_slack=1e-6,
@@ -620,11 +630,13 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         else:
             rho_f = rho_vec
             unclipped = None
-        lin = problem.linearize(density_to_s(rho_f, chi_iron), state_load,
-                                loads, tol=tol, maxiter=cg_maxiter, warm=warm)
+        lin = problem.linearize(density_to_s(rho_f, chi_iron, penalty=penalty),
+                                state_load, loads, tol=tol,
+                                maxiter=cg_maxiter, warm=warm)
 
         def to_rho(g_s):
-            g_rf = density_gradient_from_s_gradient(rho_f, g_s, chi_iron)
+            g_rf = density_gradient_from_s_gradient(rho_f, g_s, chi_iron,
+                                                    penalty=penalty)
             if density_filter is None:
                 return g_rf
             return density_filter.chain(np.where(unclipped, g_rf, 0.0))
@@ -715,3 +727,152 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     return DensityDesignResult(density=rho, history=tuple(history),
                                converged=converged, final_move=move,
                                solves=n_solves)
+
+
+# --------------------------------------------------------------------------
+# Stage-3 verification protocol: exact-void iron-only re-evaluation
+# --------------------------------------------------------------------------
+# Boundary triangles of a netgen tet, ordered so the right-hand-rule normal
+# points OUT of the element -- netgen stores surface elements outward for
+# FaceDescriptor(domin=1, domout=0) (probed on an OCC sphere mesh).  The
+# opposite handedness flips every surface charge and turns the demag solve
+# into runaway magnetization (measured <Mz> 18-34 instead of ~2.2).
+_TET_BOUNDARY_FACES = ((0, 3, 1), (1, 3, 2), (2, 3, 0), (0, 1, 2))
+
+
+def iron_only_mesh(mesh, keep):
+    """New straight-tet netgen/NGSolve mesh from the kept VOL elements.
+
+    Exact void removal: vertices of the kept set are copied, kept tets are
+    re-added as one ``iron`` material, and the boundary facets of the kept
+    set (facets owned by exactly one kept element) become the new exterior
+    surface.  ``keep`` is a boolean mask in NGSolve VOL element numbering;
+    the numbering correspondence with the netgen element list is verified
+    element-by-element (fail loud on mismatch).
+    """
+    import netgen.meshing as nm
+
+    keep = np.asarray(keep, dtype=bool).ravel()
+    if mesh.dim != 3:
+        raise NotImplementedError("iron_only_mesh: 3D meshes only")
+    if mesh.GetCurveOrder() >= 2:
+        raise NotImplementedError(
+            "iron_only_mesh: curved parent meshes are not supported (the "
+            "extraction copies vertices only); pass the straight design mesh")
+    src = mesh.ngmesh
+    points = list(src.Points())
+    elements = list(src.Elements3D())
+    if keep.size != len(elements):
+        raise ValueError("iron_only_mesh: mask has %d entries, mesh has %d "
+                         "volume elements" % (keep.size, len(elements)))
+    if not keep.any() or keep.all():
+        raise ValueError("iron_only_mesh: the kept set must be a proper "
+                         "non-empty subset (got %d of %d elements)"
+                         % (int(keep.sum()), keep.size))
+    # the mask lives in NGSolve VOL numbering -- verify it matches the
+    # netgen element list order before using it
+    for ng_el, nm_el in zip(mesh.Elements(ng.VOL), elements):
+        if (tuple(sorted(v.nr for v in ng_el.vertices))
+                != tuple(sorted(v.nr - 1 for v in nm_el.vertices))):
+            raise RuntimeError(
+                "iron_only_mesh: NGSolve VOL element numbering does not "
+                "match the netgen Elements3D order on this mesh")
+    new = nm.Mesh(3)
+    new.SetMaterial(1, "iron")
+    pmap = {}
+
+    def pid(nr):
+        if nr not in pmap:
+            p = points[nr - 1].p
+            pmap[nr] = new.Add(nm.MeshPoint(nm.Pnt(p[0], p[1], p[2])))
+        return pmap[nr]
+
+    facets = {}
+    for index in np.flatnonzero(keep):
+        vs = [v.nr for v in elements[index].vertices]
+        if len(vs) != 4:
+            raise NotImplementedError("iron_only_mesh: TET meshes only")
+        new.Add(nm.Element3D(1, [pid(v) for v in vs]))
+        for fa in _TET_BOUNDARY_FACES:
+            tri = (vs[fa[0]], vs[fa[1]], vs[fa[2]])
+            facets.setdefault(tuple(sorted(tri)), []).append(tri)
+    descriptor = new.Add(nm.FaceDescriptor(surfnr=1, domin=1, domout=0, bc=1))
+    for occurrences in facets.values():
+        if len(occurrences) == 1:
+            new.Add(nm.Element2D(descriptor,
+                                 [pid(v) for v in occurrences[0]]))
+        elif len(occurrences) != 2:
+            raise RuntimeError("iron_only_mesh: facet shared by %d kept "
+                               "elements" % len(occurrences))
+    return ng.Mesh(new)
+
+
+@dataclass
+class IronOnlyVerification:
+    """Exact-void re-evaluation of a thresholded design (Stage-3 protocol).
+
+    ``values_*[k]`` are the functional values (state solve + load inner
+    product) for the supplied builders; ``bands[k] = (embedded - iron_only)
+    / |iron_only|`` quantifies the ersatz-void error of the embedded model
+    honestly, per functional, at matched 0/1 representation.
+    """
+    keep: np.ndarray               # thresholded iron mask (parent numbering)
+    iron_mesh: "ng.Mesh"
+    values_embedded: np.ndarray    # 0/1 ersatz void on the parent mesh
+    values_iron_only: np.ndarray   # exact void on the extracted mesh
+    bands: np.ndarray
+    embedded_iterations: int
+    iron_only_iterations: int
+
+
+def verify_design_iron_only(problem, density, state_load_builder,
+                            functional_builders, *, chi_iron, threshold=0.5,
+                            density_filter=None, chi_min=CHI_MIN,
+                            tol=1e-10, cg_maxiter=5000, gram_kwargs=None):
+    """Stage-3 final-verification protocol for a converged density design.
+
+    Thresholds the (filtered) density at ``threshold``, evaluates every
+    functional on (a) the PARENT mesh with the 0/1 ersatz void
+    (``chi_min``) and (b) a NEW iron-only mesh with the void REMOVED
+    (:func:`iron_only_mesh` -- the exact-void gold standard), and reports
+    the per-functional ersatz band.  Loads are mesh-bound, so the caller
+    passes BUILDERS: ``state_load_builder(fes)`` and
+    ``functional_builders = [f(fes) -> assembled load, ...]`` are invoked
+    on both spaces (orbit points and weights are geometry-fixed).
+
+    The comparison is at MATCHED 0/1 representation: it quantifies the
+    ersatz-void/interface-charge error alone.  The separate gap between
+    the CONTINUOUS design objective and the thresholded one (large for
+    gray designs; drive it down with ``penalty``/projection before
+    manufacturing conclusions) is the caller's report from the design
+    history.  Never report final design numbers from the embedded model --
+    this function exists to replace them.
+    """
+    density = np.asarray(density, dtype=float).ravel()
+    if density.shape != (problem.n_el,):
+        raise ValueError("verify_design_iron_only: density shape %r != (%d,)"
+                         % (density.shape, problem.n_el))
+    rho_f = (np.clip(density_filter.apply(density), 0.0, 1.0)
+             if density_filter is not None else density)
+    keep = rho_f >= float(threshold)
+    loads = [b(problem.fes) for b in functional_builders]
+    s_bin = np.where(keep, 1.0 / chi_iron, 1.0 / chi_min)
+    gf_emb, it_emb = problem.solve(s_bin, state_load_builder(problem.fes),
+                                   tol=tol, maxiter=cg_maxiter)
+    values_emb = np.array([float(ng.InnerProduct(load.vec, gf_emb.vec))
+                           for load in loads])
+    mesh_iron = iron_only_mesh(problem.mesh, keep)
+    fes_iron = ng.HDiv(mesh_iron, order=int(problem.fes.globalorder))
+    problem_iron = DensityAdjointVIM(fes_iron, **(gram_kwargs or {}))
+    loads_iron = [b(fes_iron) for b in functional_builders]
+    gf_iron, it_iron = problem_iron.solve(
+        np.full(problem_iron.n_el, 1.0 / chi_iron),
+        state_load_builder(fes_iron), tol=tol, maxiter=cg_maxiter)
+    values_iron = np.array([float(ng.InnerProduct(load.vec, gf_iron.vec))
+                            for load in loads_iron])
+    bands = (values_emb - values_iron) / np.maximum(np.abs(values_iron),
+                                                    1e-300)
+    return IronOnlyVerification(
+        keep=keep, iron_mesh=mesh_iron, values_embedded=values_emb,
+        values_iron_only=values_iron, bands=bands,
+        embedded_iterations=it_emb, iron_only_iterations=it_iron)

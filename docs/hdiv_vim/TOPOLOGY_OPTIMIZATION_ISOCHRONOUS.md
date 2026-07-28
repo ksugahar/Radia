@@ -167,8 +167,13 @@ warm-start lever of Sec. 8).
 self-adjoint chain and the clipped-with-exact-chain-rule composition inside
 `optimize_density`; smooth tanh PROJECTION remains future polish -- the
 converged surrogate designs carry ~45 % intermediate-density elements at
-verification-mesh coarseness).  Remaining from the list: the iron-only
-remesh driver (Stage 3).
+verification-mesh coarseness).
+
+**Stage-3 status (2026-07-28): item 4 SHIPPED** (`iron_only_mesh` +
+`verify_design_iron_only` + SIMP `penalty`).  The build list of Sec. 5 is
+complete; what remains is the STUDY itself (Sec. 6.2: real isochronous
+profile, penalty/projection continuation, study-scale mdx runs, RK4 Hill
+re-measure on the verified iron-only design).
 
 Knowledge homes unchanged: `radia_mcp.topology_optimization`,
 `radia_mcp.accelerator`; validation lanes land under `validation_test/`.
@@ -191,7 +196,7 @@ Knowledge homes unchanged: `radia_mcp.topology_optimization`,
 | 0 | **DONE 2026-07-28.** Reconnaissance of `radia.topology_optimization` (LP semantics, reuse points, filter status) | Sec. 5 findings: adjoint exists only shape-side; density adjoint + `F^T c` + filter are the build list; LP driver and `A_ub` constraint slot reused as-is; new work lands in `radia/isochronous_topopt.py` |
 | 1 | **DONE 2026-07-28.** `radia.isochronous_topopt` shipped: `DensityAdjointVIM` (one weighted-mass assembly + factorization, state+adjoint CG, ALL element sensitivities from one element-wise `Integrate`), `field_functional_load` (`F^T c` by dipole-pair reciprocity; dense `F` never formed), `gradient_pair_points`, `density_to_s` (validated `chi_min = 1e-6` floor) + chain rule, warm-started CG with the rhs-anchored ABSOLUTE tolerance (krylovspace's relative tol is anchored to the run's first residual, which makes warm restarts harder, not cheaper -- anchor to `\|\|rhs\|\|_pre`; upstream `abstol=` kwarg is broken, use `atol=`) | gate PASSED (unit ball, log-uniform `s` in [1e-2, 1]): adjoint == central FD to 8.1e-10 directional / 3.9e-7 worst per-element (the smallest-gradient element, FD noise floor); reciprocity load == the independent C++ charge evaluator to 1.1e-10 at `bonus_intorder=10`; locked by `tests/test_isochronous_topopt.py` (9 tests) |
 | 2 | **DONE 2026-07-28 (verification scale).** `optimize_density` shipped in `radia.isochronous_topopt`: trust-region SLP (LP via `solve_lp_update` with normalized `A_ub` constraint rows -- Tesla-scale rows sit below HiGHS's ABSOLUTE feasibility tolerance and must be scaled to O(1)), absolute engineering bands (default 0.5 % of target) with restore/hold modes, acceptance = monotone J AND (violation <= 1.25 band OR strict geometric decrease) -- no ratchet path; `HelmholtzFilter` (self-adjoint chain, FD-locked; filtered density clipped to [0,1] with the piecewise-exact chain rule -- the P1 realization undershoots ~1e-2 at bang-bang transitions), `DensityAdjointVIM.linearize` (state + K adjoints on ONE factorization, warm-started), per-point-direction `gradient_pair_points` + `orbit_arc_points` | gate MET at verification scale: sector-pole surrogate (194 tets; arc-orbit radial `dB_z/dr` objective, two mean-`B_z` arc constraints, volume budget) J strictly MONOTONE **+16.1 %** riding the active band at 1.06 x band (ball: +0.7 %, peak 1.24 x band <= the 1.25 cap); median 115-120 ms/iterate incl. trial evaluations (informal LAB; ~50 warm CG iters/solve, LP 3-5 ms); locked by `tests/test_isochronous_topopt.py` (15 tests). STUDY-SCALE timing = the planned mdx job (Sec. 8); rejected schemes recorded in the docstring (fixed-move SLP limit-cycles; violation-relative shrink bands lock into a ratcheting hold mode) |
-| 3 | **Final verification protocol**: remesh the converged design iron-only (void REMOVED -- exact-void gold standard, discharging the `O(h)` embedded bias), re-measure with the full RK4 Hill chain | removed-void `gL` inside a stated band of the embedded prediction; band quantifies the ersatz error honestly |
+| 3 | **DONE 2026-07-28 (protocol shipped; full RK4 Hill re-measure joins the Sec.-6.2 design study).** `iron_only_mesh` (kept-element extraction into a NEW straight-tet netgen mesh: exact void removal at the design's own discretization; volume identity 4e-16; NGSolve-vs-netgen element-order verified per call, fail-loud; SURFACE-ORIENTATION TRAP documented -- netgen stores boundary triangles right-hand-outward for `domin=1/domout=0`, the Radia `TETRA_FACES` handedness is opposite and flips every charge into runaway magnetization, `<Mz>` 18-34 instead of 2.2) + `verify_design_iron_only` (threshold -> matched-0/1 embedded vs exact-void bands per functional, loads rebuilt from BUILDERS on both spaces) + SIMP `penalty` in `density_to_s`/`optimize_density` | gate MET: the protocol MEASURES and STATES the band per design. Hemisphere machinery validation: matched-shape ersatz `<Mz>` band -8.3/-8.8 % (maxh .35/.22, pre-asymptotic jagged interface; the smooth-interface case is the established O(h)); jagged-vs-smooth +4.6/+7.7 % (STAIRCASE boundaries do not converge to the smooth body -- manufacturing-shape numbers need the Sec.-6 shape route). Sector surrogate: matched-0/1 FUNCTIONAL band **+0.69 %** (filtered design) / +10.2 % (bang-bang, more interface); the protocol EXPOSED the gray-design gap (continuous-vs-threshold -96 %, constraints destroyed) -> `penalty=3` shipped (intermediate 0.73 -> 0.28, gap -91 -> -33 %, iron-only constraint shift -81 -> -23 % at 30 move-limited iterations); threshold-READY designs need penalty/projection continuation at study scale = the Sec.-6.2 design study. Locked by `tests/test_isochronous_topopt.py` (19 tests) |
 | 4 | Promotion: `validation_test/` lane with golden bands; companion result-bearing notebook in this directory; knowledge sync | ladder rules of CLAUDE.md |
 
 In parallel: the design-scale timing of the Python assembled route runs on
@@ -236,6 +241,19 @@ sides (state + adjoint). Levers, in order of cost:
 * **Embedded-design accuracy** is `O(h)` at design boundaries (Sec. 3.7);
   never report final numbers from the embedded model -- Stage 3 exists for
   that.
+* **Staircase boundaries are their own limit**: the iron-only extraction
+  keeps the design's jagged element boundary, and jagged does NOT converge
+  to the smooth body (hemisphere `<Mz>`: +4.6/+7.7 % vs the smooth-meshed
+  hemisphere at maxh .35/.22 -- the staircase surface has its own
+  homogenized boundary response, Schwarz-lantern style).  The exact-void
+  verification is the gold standard AT THE DESIGN'S OWN DISCRETIZATION;
+  manufacturing-shape numbers come from the Sec.-6 shape route on a
+  smoothed body-fitted remesh.
+* **Netgen surface-element handedness**: boundary triangles are stored
+  right-hand-OUTWARD for `FaceDescriptor(domin=1, domout=0)`; the Radia
+  `TETRA_FACES` ordering is the opposite handedness in this context and
+  produces runaway magnetization if used for surface reconstruction
+  (`iron_only_mesh` carries the correct `_TET_BOUNDARY_FACES`).
 * **Ownership**: `src/core/rad_hacapk_hdiv.*`, `src/radia/vim/**` are the
   co-agent's active area -- coordinate before editing; heavy timings run on
   idle mdx/hibino only.

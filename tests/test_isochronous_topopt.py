@@ -24,7 +24,8 @@ from radia.isochronous_topopt import (  # noqa: E402
     CHI_MIN, MU0, DensityAdjointVIM, HelmholtzFilter,
     demag_field_from_solution, density_gradient_from_s_gradient,
     density_to_s, field_functional_load, gradient_pair_points,
-    optimize_density, orbit_arc_points, uniform_field_load,
+    iron_only_mesh, optimize_density, orbit_arc_points, uniform_field_load,
+    verify_design_iron_only,
 )
 
 
@@ -248,6 +249,101 @@ def test_optimize_density_validation_errors(problem):
     with pytest.raises(ValueError, match="volume_fraction"):
         optimize_density(problem.prob, problem.f_state, problem.f_adj,
                          chi_iron=100.0, volume_fraction=0.0)
+
+
+# ---------------------------------------------------------------- Stage 3
+def test_iron_only_extraction_and_ersatz_band(problem):
+    """Hemisphere extraction: exact volume, sane demag physics (surface
+    orientation lock), and the embedded-vs-exact-void ersatz sign.
+
+    Bands from measured values (maxh=0.45 ball, 86 kept tets):
+    <Mz> extracted 2.284 (a flipped surface orientation runs away to 18+),
+    embedded 0/1 <Mz> 2.089, ersatz -8.6 % (charge clamp under-magnetizes
+    the embedded iron; -8.3/-8.8 % on the maxh .35/.22 research meshes).
+    """
+    with TaskManager():
+        vols = problem.prob.element_volumes
+        cz = np.asarray(ng.Integrate(ng.z, problem.mesh, element_wise=True),
+                        float) / vols
+        keep = cz > 0.0
+        hemi = iron_only_mesh(problem.mesh, keep)
+        V_kept = float(vols[keep].sum())
+        V_new = float(ng.Integrate(ng.CoefficientFunction(1.0), hemi))
+        assert abs(V_new - V_kept) / V_kept < 1e-12
+        assert hemi.ne == int(keep.sum())
+        prob_h = DensityAdjointVIM(ng.HDiv(hemi, order=1), eps=1e-7)
+        gf, _ = prob_h.solve(np.full(prob_h.n_el, 1.0 / 100.0),
+                             uniform_field_load(prob_h.fes, (0, 0, 1.0)))
+        Mz_extracted = float(ng.Integrate(gf[2], hemi)) / V_new
+        s_bin = np.where(keep, 1.0 / 100.0, 1.0 / CHI_MIN)
+        gf_b, _ = problem.prob.solve(s_bin, problem.f_state)
+        vals = np.asarray(ng.Integrate(gf_b[2], problem.mesh,
+                                       element_wise=True), float)
+        Mz_embedded = float(vals[keep].sum() / V_kept)
+    assert 2.2 < Mz_extracted < 2.4, Mz_extracted
+    ersatz = (Mz_embedded - Mz_extracted) / Mz_extracted
+    assert -0.15 < ersatz < -0.03, ersatz
+
+
+def test_verify_design_iron_only_protocol(problem):
+    """Matched-0/1 verification bands from the promoted protocol function.
+
+    Measured on this mesh: band +4.4 % for an external-field functional
+    (values -1.77e-7 embedded vs -1.85e-7 iron-only)."""
+    with TaskManager():
+        vols = problem.prob.element_volumes
+        cz = np.asarray(ng.Integrate(ng.z, problem.mesh, element_wise=True),
+                        float) / vols
+        density = (cz > 0.0).astype(float)
+        cpts, _ = orbit_arc_points(1.5, 0.4, 6)
+
+        def state_builder(fes):
+            return uniform_field_load(fes, (0.0, 0.0, 1.0))
+
+        def functional_builder(fes):
+            return field_functional_load(fes, cpts, np.full(6, 1.0 / 6.0),
+                                         axis=2, scale=MU0, bonus_intorder=10)
+
+        ver = verify_design_iron_only(
+            problem.prob, density, state_builder, [functional_builder],
+            chi_iron=100.0, gram_kwargs=dict(eps=1e-7))
+    assert ver.keep.sum() == int((cz > 0.0).sum())
+    assert ver.values_embedded.shape == ver.values_iron_only.shape == (1,)
+    assert ver.values_embedded[0] < 0.0 and ver.values_iron_only[0] < 0.0
+    assert 0.0 < ver.bands[0] < 0.12, ver.bands
+    assert ver.embedded_iterations > 0 and ver.iron_only_iterations > 0
+
+
+def test_iron_only_mesh_guards(problem):
+    n_el = problem.prob.n_el
+    with pytest.raises(ValueError, match="proper non-empty subset"):
+        iron_only_mesh(problem.mesh, np.ones(n_el, bool))
+    with pytest.raises(ValueError, match="mask has"):
+        iron_only_mesh(problem.mesh, np.ones(3, bool))
+    with pytest.raises(ValueError, match="shape"):
+        verify_design_iron_only(problem.prob, np.ones(3),
+                                lambda fes: None, [], chi_iron=100.0)
+
+
+def test_density_penalty_mapping():
+    chi_iron = 1000.0
+    rho = np.array([0.0, 0.5, 1.0])
+    s1 = density_to_s(rho, chi_iron, penalty=1.0)
+    s3 = density_to_s(rho, chi_iron, penalty=3.0)
+    # endpoints penalty-invariant; interior penalized (chi smaller -> s larger)
+    assert s3[0] == s1[0] and s3[2] == s1[2]
+    assert s3[1] > s1[1]
+    # chain rule vs FD at penalty=3
+    rho = np.array([0.2, 0.5, 0.9])
+    grad_s = np.array([1.0, -2.0, 0.5])
+    h = 1e-7
+    fd = grad_s * (density_to_s(rho + h, chi_iron, penalty=3.0)
+                   - density_to_s(rho - h, chi_iron, penalty=3.0)) / (2 * h)
+    chain = density_gradient_from_s_gradient(rho, grad_s, chi_iron,
+                                             penalty=3.0)
+    np.testing.assert_allclose(chain, fd, rtol=1e-5)
+    with pytest.raises(ValueError, match="penalty"):
+        density_to_s(rho, chi_iron, penalty=0.5)
 
 
 def test_orbit_arc_and_direction_pairs():
