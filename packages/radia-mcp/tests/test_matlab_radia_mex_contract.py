@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 311
+    assert contract["command_count"] == 312
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -37,8 +37,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["pybind_internal_unclassified"] == []
     assert contract["command_groups"]["acoustic"] == 7
     assert "acoustic.elastic_sphere" in contract["command_names"]
-    assert contract["command_groups"]["axifem"] == 1
+    assert contract["command_groups"]["axifem"] == 2
     assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
+    assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
     assert contract["pybind_class_surface_count"] == 111
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
     assert contract["pybind_class_missing_commands"] == []

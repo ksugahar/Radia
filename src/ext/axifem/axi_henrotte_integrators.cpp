@@ -67,6 +67,13 @@ void CopyMatrix4(const numeric::Matrix4 & source, FlatMatrix<double> target)
             target(i, j) = source[4 * i + j];
 }
 
+void CopyMatrix9(const numeric::Matrix9 & source, FlatMatrix<double> target)
+{
+    for (int i = 0; i < 9; ++i)
+        for (int j = 0; j < 9; ++j)
+            target(i, j) = source[9 * i + j];
+}
+
 void Q1InverseVandermonde(double ra, double rb, double za, double zb,
                           Mat<4,4> & inverse)
 {
@@ -167,33 +174,15 @@ void Q2MonomialToVDof(const AxiHenrotteFE_Q2_AxisAligned & fe,
 void Q2StiffnessElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double mu,
                         FlatMatrix<double> elmat)
 {
-    double sa = fe.r_a * fe.r_a, sb = fe.r_b * fe.r_b;
-    double za = fe.z_a,           zb = fe.z_b;
-    if (!fe.is_axis) {
-        double M[81];
-        q2_henrotte::KPhiGeneral(sa, sb, za, zb, mu, mu, M);
-        Q2MonomialToVDof<9>(fe, M, elmat);
-    } else {
-        double M[36];
-        q2_henrotte::KPhiAxis(sb, za, zb, mu, mu, M);
-        Q2MonomialToVDof<6>(fe, M, elmat);
-    }
+    CopyMatrix9(numeric::ComputeQ2MagneticElementMatrices(
+        fe.r_a, fe.r_b, fe.z_a, fe.z_b, mu, 0.0).stiffness, elmat);
 }
 
 void Q2SigmaMassElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double sigma,
                         FlatMatrix<double> elmat)
 {
-    double sa = fe.r_a * fe.r_a, sb = fe.r_b * fe.r_b;
-    double za = fe.z_a,           zb = fe.z_b;
-    if (!fe.is_axis) {
-        double M[81];
-        q2_henrotte::MSigmaPhiGeneral(sa, sb, za, zb, sigma, M);
-        Q2MonomialToVDof<9>(fe, M, elmat);
-    } else {
-        double M[36];
-        q2_henrotte::MSigmaPhiAxis(sb, za, zb, sigma, M);
-        Q2MonomialToVDof<6>(fe, M, elmat);
-    }
+    CopyMatrix9(numeric::ComputeQ2MagneticElementMatrices(
+        fe.r_a, fe.r_b, fe.z_a, fe.z_b, 1.0, sigma).sigma_mass, elmat);
 }
 
 // ---------------------------------------------------------------------------
@@ -970,6 +959,35 @@ void ExportAxiHenrotteIntegrators(pybind11::module & m)
         py::arg("ra"), py::arg("rb"), py::arg("za"), py::arg("zb"),
         py::arg("mu"), py::arg("sigma"),
         "Return shared-native Q1 Henrotte stiffness and sigma-mass matrices.");
+
+    m.def(
+        "q2_magnetic_element_matrices",
+        [](double ra, double rb, double za, double zb,
+           double mu, double sigma) {
+            const auto matrices = numeric::ComputeQ2MagneticElementMatrices(
+                ra, rb, za, zb, mu, sigma);
+            auto as_numpy = [](const numeric::Matrix9 & values) {
+                py::array_t<double> result({
+                    static_cast<py::ssize_t>(9), static_cast<py::ssize_t>(9)});
+                auto view = result.mutable_unchecked<2>();
+                for (py::ssize_t i = 0; i < 9; ++i)
+                    for (py::ssize_t j = 0; j < 9; ++j)
+                        view(i, j) = values[9 * i + j];
+                return result;
+            };
+            py::dict result;
+            result["stiffness"] = as_numpy(matrices.stiffness);
+            result["sigma_mass"] = as_numpy(matrices.sigma_mass);
+            result["backend"] = "native-pybind";
+            result["dof_convention"] = "nodal A_phi (V-DOF)";
+            result["node_order"] =
+                "(ra,za),(rb,za),(rb,zb),(ra,zb),(rm,za),(rb,zm),(rm,zb),(ra,zm),(rm,zm)";
+            result["axis_touching"] = matrices.axis_touching;
+            return result;
+        },
+        py::arg("ra"), py::arg("rb"), py::arg("za"), py::arg("zb"),
+        py::arg("mu"), py::arg("sigma"),
+        "Return shared-native Q2 Henrotte stiffness and sigma-mass matrices.");
 
     py::class_<AxiHenrotteStiffnessBFI, BilinearFormIntegrator,
                shared_ptr<AxiHenrotteStiffnessBFI>>(
