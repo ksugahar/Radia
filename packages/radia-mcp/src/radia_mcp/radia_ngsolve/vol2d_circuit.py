@@ -351,14 +351,51 @@ def _dense_matrix(matrix: Any) -> np.ndarray:
     return dense
 
 
+def _validate_ngsolve_2d_execution_text(text: str) -> None:
+    """Reject inventory-only shorthand before it reaches native NGSolve code.
+
+    ``inspect_netgen_2d_vol`` intentionally accepts compact educational text,
+    but native assembly needs the face descriptors and complete edge records
+    written by Netgen.  Passing shorthand through can terminate the process in
+    native code instead of raising a Python exception.
+    """
+
+    lines = [line.strip() for line in text.splitlines()]
+    lowered = [line.lower() for line in lines]
+    if "facedescriptors" not in lowered:
+        raise ValueError(
+            "solver-ready dimension-2 .vol requires a facedescriptors section; "
+            "generate it with the Netgen writer"
+        )
+    try:
+        edge_index = lowered.index("edgesegmentsgi2")
+        edge_count = int(lines[edge_index + 1])
+    except (ValueError, IndexError) as exc:
+        raise ValueError("solver-ready dimension-2 .vol has invalid edgesegmentsgi2") from exc
+    edge_rows: list[list[str]] = []
+    for line in lines[edge_index + 2 :]:
+        if not line or line.startswith("#"):
+            continue
+        edge_rows.append(line.split())
+        if len(edge_rows) == edge_count:
+            break
+    if len(edge_rows) != edge_count or any(len(row) < 12 for row in edge_rows):
+        raise ValueError(
+            "solver-ready dimension-2 .vol requires complete Netgen edge records"
+        )
+
+
 def assemble_vol2d_field(request: Mapping[str, Any]) -> dict[str, Any]:
     """Assemble one constrained global K and signed branch-source matrix."""
 
     if not isinstance(request, Mapping):
         raise ValueError("request must be an object")
     text = request.get("vol_text")
+    if not isinstance(text, str):
+        raise ValueError("vol_text must be text")
     source_name = str(request.get("source_name", "generated.vol"))
     mesh_view = parse_netgen_2d_vol(text, source_name=source_name)
+    _validate_ngsolve_2d_execution_text(text)
     mesh_contract = mesh_view.contract()
     if mesh_contract["points"] > _MAX_MCP_POINTS or mesh_contract["cells"] > _MAX_MCP_CELLS:
         raise ValueError(
