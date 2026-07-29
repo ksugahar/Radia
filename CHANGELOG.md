@@ -5,6 +5,15 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.26 - Robust STEP filament extraction
+
+Released 2026-07-29.
+
+- Added an orientation-independent seed for the default STEP-to-PEEC walker,
+  including oblique-coil regression coverage.
+- Added fail-loud STEP extent and unit-scale diagnostics, with explicit
+  boundary and invalid-input tests to prevent silent inductance scaling errors.
+
 ## 4.95.25 - Isochronous topology optimization and conducting-sphere reference
 
 Released 2026-07-29.
