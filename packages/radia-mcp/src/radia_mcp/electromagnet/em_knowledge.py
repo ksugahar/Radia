@@ -895,6 +895,47 @@ Scope: the DESIGN direction on a known hodograph domain (spec posed in
 ANALYSIS direction (fixed pole shape, hodograph image unknown) remains open
 research; do not present it as solved.
 
+## Free boundaries with a KNOWN hodograph image (2026-07-29)
+
+The Kirchhoff free-streamline device carries over exactly: when the air
+side of an iron surface is prescribed (uniform B0 gap, or a |B| cap), the
+surface's hodograph image is KNOWN a priori and only WHERE each physical
+point sits along it is unknown.  Two verified applications:
+
+- **Saturable pole face** (`verify_poleface_design.py`): interface
+  continuity pins the face to `Gamma(alpha)` (unique transversal root of
+  `|B|^2 = B0^2 cos^2 a + m(|B|)^2 B0^2 sin^2 a`); the BC on Gamma is the
+  exact oblique condition `dA/dPsi = mu0 cot(alpha)` = a
+  tangential-derivative boundary term (`grad(u).Trace()*tau` on H1;
+  MEASURE the tangential orientation with an integral probe).  Proven
+  identities: `J <= 0` (no folding) and `dA/ds = -B0 cos(alpha)`
+  pointwise (uniform-B0 support exact by construction).  Below the knee
+  the solve COLLAPSES to the flat pole (correctly); at B0 = 2.0 T it
+  yields a 0.33 mm shim-like bump that an independent nonlinear FEM
+  confirms: good-field flatness 1.1e-3 vs 4.7e-3 flat (x4.2), with the
+  honest decomposition "geometry share 3.8e-3, saturation-differential
+  share only 2e-4" (low-field control run).
+- **Flux-concentrator horn** (`verify_concentrator_horn.py`):
+  all-Dirichlet hodograph quadrilateral; +5.1 % gain vs a straight taper
+  at the SAME footprint with the iron |B| capped by construction.
+
+**Verdict framing (use these words, do not oversell)**: the hodograph is
+NOT an optimizer.  It translates boundary prescriptions into
+saturation-exact shapes in ONE linear solve.  Its unique value is the
+constructive cap/interface guarantee (|B| <= B_sat built into the
+boundary data) plus zero nonlinear iteration -- not performance
+exclusivity (a hand-tuned shim/spline can plausibly match the static
+geometry).  It earns its keep only when (a) the iron works at/above the
+knee, (b) the deliverable is the channel/face itself rather than a
+machine-embedded objective (motor torque: measured marginal, see
+`motor("flux_channel_hodograph")`), and (c) the cap guarantee is part of
+the spec.
+
+Pitfall: the hodograph corner degeneracy maps many small-alpha stations
+to nearly the same physical point; the exported polyline then carries
+1e-12 m segments which crash netgen with no traceback -- dedup at the
+mesh scale before meshing.
+
 Repository anchors:
 
 - `docs/clebsch_hodograph/public_demo.ipynb` (result-saved public demo entry point)
@@ -908,6 +949,11 @@ Repository anchors:
   (field-plane design -> shape -> independent nonlinear FEM, golden-banded)
 - `validation_test/clebsch_legendre/verify_chi_modesum_solver.py`
   (Legendre-potential mode-sum machinery vs closed forms)
+- `validation_test/clebsch_legendre/verify_poleface_design.py`
+  (free boundary with a known hodograph image: oblique BC, collapse
+  control, independent FEM flatness comparison, golden-banded)
+- `validation_test/clebsch_legendre/verify_concentrator_horn.py`
+  (all-Dirichlet horn design + facing-pair FEM sweep, golden-banded)
 """
 
 
