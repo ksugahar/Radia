@@ -40,7 +40,13 @@ def test_nonlinear_axisymmetric_solver_preserves_legacy_positional_prefix():
         "tol",
         "min_iter",
     ]
-    assert names[9:] == ["magnets", "ring_currents", "point_potentials"]
+    assert names[9:] == [
+        "magnets",
+        "ring_currents",
+        "point_potentials",
+        "dof_constraints",
+        "mixed_boundaries",
+    ]
 
 
 def test_axisymmetric_source_rows_are_normalized_without_array_truth_tests():

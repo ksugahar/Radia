@@ -3555,6 +3555,23 @@ def _axisymmetric_triplet_rows(values, name):
     return rows
 
 
+def _axisymmetric_dof_constraint_rows(values):
+    """Normalize signed DOF rows and reject lossy index coercions."""
+    rows = _axisymmetric_triplet_rows(values, "dof_constraints")
+    constraints = []
+    for index, (master, slave, phase) in enumerate(rows):
+        if not math.isfinite(master) or not master.is_integer():
+            raise ValueError(
+                f"dof_constraints[{index}] master index must be a finite integer"
+            )
+        if not math.isfinite(slave) or not slave.is_integer():
+            raise ValueError(
+                f"dof_constraints[{index}] slave index must be a finite integer"
+            )
+        constraints.append((int(master), int(slave), phase))
+    return constraints
+
+
 def axisymmetric_ring_current_load_contract(mesh, ring_currents, tolerance=None):
     """Map ideal azimuthal ring currents to exact meridional mesh vertices.
 
@@ -3725,14 +3742,15 @@ def _solve_with_axisymmetric_point_potentials(
     fes, mesh, matrix, rhs, point_potentials, *, inverse, dof_constraints=None
 ):
     """Solve after eliminating prescribed values and signed DOF identifications."""
-    if dof_constraints:
+    constraint_rows = _axisymmetric_dof_constraint_rows(dof_constraints)
+    if constraint_rows:
         solution, _ = _solve_axisymmetric_reduced_system(
             fes,
             mesh,
             matrix,
             rhs,
             point_potentials,
-            dof_constraints,
+            constraint_rows,
         )
         return solution
 
@@ -3768,24 +3786,24 @@ def _axisymmetric_reduction(
     import numpy as np
     from scipy import sparse
 
+    tolerance = float(consistency_tolerance)
+    if not math.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError("consistency_tolerance must be finite and positive")
+
     ndof = int(fes.ndof)
     rows = []
     adjacency = {}
     self_zero = set()
-    for raw in dof_constraints or []:
-        if len(raw) != 3:
-            raise ValueError("each DOF constraint must be (master, slave, phase)")
-        master, slave = int(raw[0]), int(raw[1])
-        phase = float(raw[2])
+    for master, slave, phase in _axisymmetric_dof_constraint_rows(dof_constraints):
         if not (0 <= master < ndof and 0 <= slave < ndof):
             raise ValueError("DOF constraint index is outside the finite-element space")
+        if not math.isfinite(phase) or abs(phase) <= tolerance:
+            raise ValueError("DOF constraint phase must be finite and nonzero")
         if master == slave:
-            if abs(phase - 1.0) > consistency_tolerance:
+            if abs(phase - 1.0) > tolerance:
                 rows.append((master, slave, phase))
                 self_zero.add(master)
             continue
-        if not math.isfinite(phase) or abs(phase) <= consistency_tolerance:
-            raise ValueError("DOF constraint phase must be finite and nonzero")
         rows.append((master, slave, phase))
         adjacency.setdefault(master, []).append((slave, phase))
         adjacency.setdefault(slave, []).append((master, 1.0 / phase))
@@ -3798,12 +3816,12 @@ def _axisymmetric_reduction(
     known = np.zeros(ndof, dtype=float)
     is_known = np.array([not bool(free[i]) for i in range(ndof)], dtype=bool)
     for dof, value in prescribed.items():
-        if is_known[dof] and abs(value) > consistency_tolerance:
+        if is_known[dof] and abs(value) > tolerance:
             raise ValueError("a nonzero point value conflicts with an essential boundary")
         known[dof] = value
         is_known[dof] = True
     for dof in self_zero:
-        if is_known[dof] and abs(known[dof]) > consistency_tolerance:
+        if is_known[dof] and abs(known[dof]) > tolerance:
             raise ValueError("a signed self-identification requires a zero value")
         known[dof] = 0.0
         is_known[dof] = True
@@ -3824,10 +3842,14 @@ def _axisymmetric_reduction(
             members.append(current)
             for neighbor, ratio in adjacency[current]:
                 expected = coefficient[current] * ratio
+                if not math.isfinite(expected) or abs(expected) <= tolerance:
+                    raise ValueError(
+                        "signed DOF-identification coefficients are numerically singular"
+                    )
                 if neighbor in component:
                     if component[neighbor] != index or abs(
                         coefficient[neighbor] - expected
-                    ) > consistency_tolerance * max(1.0, abs(expected)):
+                    ) > tolerance * max(1.0, abs(expected)):
                         raise ValueError("inconsistent signed DOF-identification cycle")
                     continue
                 component[neighbor] = index
@@ -3849,7 +3871,7 @@ def _axisymmetric_reduction(
             root_value = root_values[0]
             if any(
                 abs(value - root_value)
-                > consistency_tolerance * max(1.0, abs(root_value))
+                > tolerance * max(1.0, abs(root_value))
                 for value in root_values[1:]
             ):
                 raise ValueError("identified DOFs carry conflicting prescribed values")
@@ -4048,10 +4070,12 @@ def solve_axi_magnetostatic(
     potential_rows = _axisymmetric_triplet_rows(
         point_potentials, "point_potentials"
     )
+    constraint_rows = _axisymmetric_dof_constraint_rows(dof_constraints)
     if order < 2:
-        if potential_rows or dof_constraints or mixed_boundaries:
+        if potential_rows or constraint_rows or mixed_boundaries:
             raise NotImplementedError(
-                "point, signed-DOF and mixed-boundary constraints require order>=2"
+                "point, signed-DOF and mixed-boundary constraints are not "
+                "implemented for order-1; use order>=2"
             )
         return _solve_axi_magnetostatic_vdof_order1(
             mesh, nu, Jr, magnets, ring_rows, dirichlet
@@ -4084,7 +4108,7 @@ def solve_axi_magnetostatic(
         f.vec,
         potential_rows,
         inverse="sparsecholesky",
-        dof_constraints=dof_constraints,
+        dof_constraints=constraint_rows,
     )
     return gfu
 
@@ -4108,13 +4132,18 @@ def solve_axi_magnetostatic_dual_boundary_average(
     Both component fields are returned with the average so callers can verify
     the construction without applying either component residual to the average.
     """
+    ring_rows = _axisymmetric_triplet_rows(ring_currents, "ring_currents")
+    potential_rows = _axisymmetric_triplet_rows(
+        point_potentials, "point_potentials"
+    )
+    constraint_rows = _axisymmetric_dof_constraint_rows(dof_constraints)
     common = {
         "Jr": Jr,
         "magnets": magnets,
         "order": order,
-        "ring_currents": ring_currents,
-        "point_potentials": point_potentials,
-        "dof_constraints": dof_constraints,
+        "ring_currents": ring_rows,
+        "point_potentials": potential_rows,
+        "dof_constraints": constraint_rows,
         "mixed_boundaries": mixed_boundaries,
     }
     natural = solve_axi_magnetostatic(
@@ -4335,6 +4364,7 @@ def solve_axi_magnetostatic_nonlinear(
     potential_rows = _axisymmetric_triplet_rows(
         point_potentials, "point_potentials"
     )
+    constraint_rows = _axisymmetric_dof_constraint_rows(dof_constraints)
     if order < 2 and potential_rows:
         raise NotImplementedError(
             "point-potential constraints are not implemented for order-1 H1Henrotte"
@@ -4349,10 +4379,14 @@ def solve_axi_magnetostatic_nonlinear(
     potential_evidence = axisymmetric_point_potential_constraint_contract(
         fes, mesh, potential_rows
     )
-    initial_reduction = _axisymmetric_reduction(
-        fes, mesh, point_potentials, dof_constraints
-    )
-    gfu.vec.FV().NumPy()[:] = initial_reduction["known"]
+    if constraint_rows:
+        initial_reduction = _axisymmetric_reduction(
+            fes, mesh, potential_rows, constraint_rows
+        )
+        gfu.vec.FV().NumPy()[:] = initial_reduction["known"]
+    else:
+        for row in potential_evidence:
+            gfu.vec[row["dof_index"]] = row["a_phi_wb_per_m"]
     prev = None
     for it in range(max_iter):
         B = CoefficientFunction((grad(gfu)[0] + gfu / r, -grad(gfu)[1]))
@@ -4383,7 +4417,7 @@ def solve_axi_magnetostatic_nonlinear(
             f.vec,
             potential_rows,
             inverse="sparsecholesky",
-            dof_constraints=dof_constraints,
+            dof_constraints=constraint_rows,
         )
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
         for row in potential_evidence:

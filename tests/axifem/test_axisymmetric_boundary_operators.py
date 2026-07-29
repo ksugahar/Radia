@@ -2,6 +2,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 from netgen.geom2d import SplineGeometry
 from ngsolve import BilinearForm, CoefficientFunction, LinearForm, Mesh, ds, dx, grad, x
 
@@ -18,6 +19,7 @@ from radia_mcp.radia_ngsolve.solve import (
     axisymmetric_constraint_residual_contract,
     solve_axi_magnetostatic,
     solve_axi_magnetostatic_dual_boundary_average,
+    solve_axi_magnetostatic_nonlinear,
 )
 
 
@@ -52,6 +54,18 @@ def _assembled(fes, mixed=None):
     return a, f
 
 
+def _free_vertex_dofs(mesh):
+    from ngsolve import NodeId, VERTEX
+
+    fes = H1Henrotte(mesh, order=2, dirichlet="left")
+    return [
+        dof
+        for vertex in mesh.vertices
+        for dof in fes.GetDofNrs(NodeId(VERTEX, vertex.nr))
+        if dof >= 0 and fes.FreeDofs()[dof]
+    ]
+
+
 def test_signed_dof_identification_is_exact_and_reduced_residual_is_small():
     mesh = _mesh()
     fes = H1Henrotte(mesh, order=2, dirichlet="left")
@@ -62,7 +76,9 @@ def test_signed_dof_identification_is_exact_and_reduced_residual_is_small():
         dofs = [dof for dof in fes.GetDofNrs(NodeId(VERTEX, vertex.nr)) if dof >= 0]
         if dofs and fes.FreeDofs()[dofs[0]]:
             free_vertices.append(dofs[0])
-    constraints = [(free_vertices[0], free_vertices[-1], 1.0)]
+    constraints = np.asarray(
+        [(free_vertices[0], free_vertices[-1], 1.0)], dtype=float
+    )
     solution = solve_axi_magnetostatic(
         mesh,
         CoefficientFunction(1.0),
@@ -142,3 +158,50 @@ def test_dual_boundary_average_returns_verifiable_components():
     )
     assert np.max(np.abs(average_values - expected)) < 1e-14
     assert np.linalg.norm(natural.vec.FV().NumPy() - essential.vec.FV().NumPy()) > 1e-6
+
+
+@pytest.mark.parametrize("phase", [float("nan"), float("inf"), -float("inf"), 0.0])
+def test_self_identification_rejects_nonfinite_or_zero_phase(phase):
+    mesh = _mesh()
+    dof = _free_vertex_dofs(mesh)[0]
+    with pytest.raises(ValueError, match="phase must be finite and nonzero"):
+        solve_axi_magnetostatic(
+            mesh,
+            CoefficientFunction(1.0),
+            Jr=CoefficientFunction(1.0),
+            order=2,
+            dirichlet="left",
+            dof_constraints=[(dof, dof, phase)],
+        )
+
+
+def test_signed_identification_rejects_fractional_dof_index():
+    mesh = _mesh()
+    master, slave = _free_vertex_dofs(mesh)[:2]
+    with pytest.raises(ValueError, match="master index must be a finite integer"):
+        solve_axi_magnetostatic(
+            mesh,
+            CoefficientFunction(1.0),
+            Jr=CoefficientFunction(1.0),
+            order=2,
+            dirichlet="left",
+            dof_constraints=[(master + 0.5, slave, 1.0)],
+        )
+
+
+def test_nonlinear_signed_constraint_generator_persists_across_picard_steps():
+    mesh = _mesh()
+    master, slave = _free_vertex_dofs(mesh)[::-1][:2]
+    constraints = ((master, slave, -1.0) for _ in range(1))
+    solution = solve_axi_magnetostatic_nonlinear(
+        mesh,
+        lambda _field: CoefficientFunction(1.0),
+        Jr=CoefficientFunction(1.0),
+        order=2,
+        dirichlet="left",
+        relax=0.5,
+        max_iter=3,
+        min_iter=2,
+        dof_constraints=constraints,
+    )
+    assert abs(float(solution.vec[slave] + solution.vec[master])) < 1e-12
