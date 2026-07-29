@@ -24,7 +24,12 @@ for k=1:count
     if isempty(tokens)
         error("radia:simulink:VolBoundaries","Invalid boundary row %d.",k);
     end
-    ids(k)=uint32(str2double(tokens{1})); names(k)=string(tokens{2});
+    id=str2double(tokens{1});
+    if ~isfinite(id) || id<1 || fix(id)~=id || id>double(intmax("uint32"))
+        error("radia:simulink:VolBoundaries", ...
+            "Boundary id at row %d is outside the uint32 contract.",k);
+    end
+    ids(k)=uint32(id); names(k)=string(tokens{2});
 end
 if any(ids<1) || numel(unique(ids))~=count || any(strlength(names)==0)
     error("radia:simulink:VolBoundaries", ...

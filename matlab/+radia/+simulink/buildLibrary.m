@@ -71,7 +71,7 @@ add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",name+"/LTs
  "FunctionName","radia_hysteretic_ltspice_sfun","Parameters","'', 1e-3, 'C:\temp\radia_hysteretic_ltspice_block'",Position=[45 105 200 155]);
 coupling=addEmptySubsystem(name,"Coupling",[470 305 730 405]);
 addWindingDictionaryBlock(coupling,"Winding Dictionary",[45 35 285 105]);
-addFieldStudyBlock(coupling,"Field Study",[45 125 285 195]);
+addFieldStudyBlock(coupling,"Field Study Configuration",[45 125 285 195]);
 optimization=addEmptySubsystem(name,"Optimization",[70 435 430 560]);
 addOptunaLibraryBlock(optimization,"Optuna Optimization",[45 35 240 105]);
 addSheetMetalLibraryBlock(optimization,"Sheet Metal Optimization", ...

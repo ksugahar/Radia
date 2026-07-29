@@ -142,11 +142,11 @@
     },
     {
       "id": "simulink-headless-backend",
-      "patterns": ["simulink/application.py", "panels/calc_*.py", "panels/check_vol_consistency.py", "panels/em_table.py", "panels/generate_coil.py"],
+      "patterns": ["field_study_design.py", "simulink/application.py", "panels/calc_*.py", "panels/check_vol_consistency.py", "panels/em_table.py", "panels/generate_coil.py"],
       "classification": "python-fallback",
       "backend_contract": "process-python",
       "matlab": ["matlab/+radia/+simulink/runApplication.m"],
-      "notes": "Allowed only on explicit trigger/update; never once per Simulink time step."
+      "notes": "Field Study and the other application workers are allowed only on explicit trigger/update; never once per Simulink time step."
     },
     {
       "id": "retired-or-operator-ui",

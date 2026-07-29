@@ -566,9 +566,12 @@ def _solve_harmonic_matrices(
     residual = operator @ state - rhs
     flux_linkage = sources.T @ state
     branch_voltage = 1j * omega * flux_linkage
-    apparent_power = 0.5 * np.vdot(currents, branch_voltage)
-    magnetic_energy = 0.25 * float(np.real(np.vdot(state, stiffness @ state)))
-    eddy_loss = 0.5 * omega * omega * float(np.real(np.vdot(state, mass @ state)))
+    # Currents and field state use RMS phasors.  The cycle-average power is
+    # therefore I^H V (without the peak-phasor 1/2), while the cycle-average
+    # magnetic energy retains the constitutive 1/2 factor.
+    apparent_power = np.vdot(currents, branch_voltage)
+    magnetic_energy = 0.5 * float(np.real(np.vdot(state, stiffness @ state)))
+    eddy_loss = omega * omega * float(np.real(np.vdot(state, mass @ state)))
     power_error = float(np.real(apparent_power) - eddy_loss)
     power_scale = max(1.0, abs(eddy_loss), abs(float(np.real(apparent_power))))
     if abs(power_error) > 1.0e-9 * power_scale:
@@ -693,9 +696,9 @@ def _solve_nonlinear_harmonic_state(
     residual = (stiffness.astype(complex) + 1j * omega * mass) @ state - rhs
     flux_linkage = sources.T @ state
     branch_voltage = 1j * omega * flux_linkage
-    apparent_power = 0.5 * np.vdot(currents, branch_voltage)
-    energy_proxy = 0.25 * float(np.real(np.vdot(state, stiffness @ state)))
-    eddy_loss = 0.5 * omega * omega * float(np.real(np.vdot(state, mass @ state)))
+    apparent_power = np.vdot(currents, branch_voltage)
+    energy_proxy = 0.5 * float(np.real(np.vdot(state, stiffness @ state)))
+    eddy_loss = omega * omega * float(np.real(np.vdot(state, mass @ state)))
     power_error = float(np.real(apparent_power) - eddy_loss)
     power_scale = max(1.0, abs(eddy_loss), abs(float(np.real(apparent_power))))
     if abs(power_error) > 1.0e-7 * power_scale:

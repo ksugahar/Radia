@@ -127,6 +127,28 @@ classdef test_field_study_simulink < matlab.unittest.TestCase
                 "relative_permittivity"));
         end
 
+        function rejectsOutOfRangeBoundaryIdsAndNonportableRegions(testCase)
+            path=string(tempname("C:\temp"))+".vol";
+            cleanup=onCleanup(@()deleteIfPresent(path)); %#ok<NASGU>
+            text="mesh3d"+newline+"dimension"+newline+"2"+newline+ ...
+                "materials"+newline+"1"+newline+"1 air-gap"+newline+ ...
+                "bcnames"+newline+"1"+newline+"4294967296 outer"+newline+ ...
+                "endmesh"+newline;
+            file=fopen(path,"w","n","UTF-8");fprintf(file,"%s",text);fclose(file);
+            testCase.verifyError(@()radia.simulink.inspectVolBoundaries(path), ...
+                "radia:simulink:VolBoundaries");
+
+            text=replace(text,"4294967296 outer","1 outer");
+            file=fopen(path,"w","n","UTF-8");fprintf(file,"%s",text);fclose(file);
+            materials=struct("air",radia.simulink.makeMaterialSpec());
+            materialContract=radia.simulink.compileMaterialDictionary(materials, ...
+                MeshFile=path,RegionMaterials=dictionary("air-gap","air"));
+            study=radia.simulink.makeFieldStudySpec(Physics="electrostatic", ...
+                DirichletValues=struct("outer",0));
+            testCase.verifyError(@()radia.simulink.compileFieldStudy( ...
+                study,materialContract),"radia:simulink:FieldStudyPortableName");
+        end
+
         function collapsesRepeatedNetgenBoundaryIdsByExactName(testCase)
             path=string(tempname("C:\temp"))+".vol";
             cleanup=onCleanup(@()deleteIfPresent(path));
@@ -167,7 +189,7 @@ classdef test_field_study_simulink < matlab.unittest.TestCase
             cleanup=onCleanup(@()closeIfLoaded(name));
 
             application=name+"/Applications/Field Study";
-            coupling=name+"/Coupling/Field Study";
+            coupling=name+"/Coupling/Field Study Configuration";
             testCase.verifyEqual(string(get_param(application,"FunctionName")), ...
                 "radia_application_sfun");
             testCase.verifySubstring(string(get_param(application,"Parameters")), ...
@@ -175,6 +197,36 @@ classdef test_field_study_simulink < matlab.unittest.TestCase
             testCase.verifyEqual(string(get_param(coupling+"/Compiled Study Bus", ...
                 "OutDataTypeStr")),"Bus: RadiaStudyBus");
             testCase.verifyEqual(string(get_param(coupling+"/study","Port")),"1");
+        end
+
+        function applicationBlockUpdatesWithConnectedPorts(testCase)
+            root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
+            library=fullfile(root,"matlab","radia_simulink_library.slx");
+            libraryName="radia_simulink_library";
+            if bdIsLoaded(libraryName),close_system(libraryName,0);end
+            load_system(library);
+            libraryCleanup=onCleanup(@()closeIfLoaded(libraryName)); %#ok<NASGU>
+
+            modelName="radia_field_study_compile_test";
+            closeIfLoaded(modelName);
+            new_system(modelName);
+            modelCleanup=onCleanup(@()closeIfLoaded(modelName)); %#ok<NASGU>
+            add_block("simulink/Sources/Constant",modelName+"/Run", ...
+                Value="false",OutDataTypeStr="boolean",Position=[30 90 70 120]);
+            add_block(libraryName+"/Applications/Field Study", ...
+                modelName+"/Field Study",Position=[130 60 330 150]);
+            outputNames=["Status","Primary","Elapsed"];
+            for index=1:numel(outputNames)
+                add_block("simulink/Sinks/Terminator", ...
+                    modelName+"/"+outputNames(index), ...
+                    Position=[400 45+45*index 420 65+45*index]);
+                add_line(modelName,"Field Study/"+index, ...
+                    outputNames(index)+"/1");
+            end
+            add_line(modelName,"Run/1","Field Study/1");
+
+            set_param(modelName,"SimulationCommand","update");
+            testCase.verifyTrue(bdIsLoaded(modelName));
         end
     end
 end
