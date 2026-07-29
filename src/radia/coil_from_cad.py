@@ -2580,7 +2580,8 @@ def _filaments_from_step_compute(step_path: str,
         return _filaments_via_coil_builder(
             step_path, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
             n_slices=n_slices,
-            start_hint=None,  # auto-detect from bounding box
+            cad_units_per_meter=cad_units_per_meter,
+            start_hint=None,  # auto-detect (labels -> axis-agnostic seed)
             n_peri=None)
 
     if n_peri is not None and use_coil_builder:
@@ -2851,9 +2852,9 @@ def filaments_from_shape(shape,
         + inward normal are used to construct the walking-plane start
         hint.  Most reliable option; recommended for all build123d
         callers.
-      - If omitted, the function falls back to the bbox-based auto-hint
-        (z-axis torus assumption; works for the classical single-axis
-        helical coils but not for off-axis geometry).
+      - If omitted, the orientation-agnostic seed probes the wire
+        tangent by minimum cross-section area (any coil orientation,
+        open or closed loops).
 
     STEP-file workflows should use `filaments_from_step(step_path)`
     instead, which picks up XCAF labels written by external CAD tools
@@ -2868,10 +2869,9 @@ def filaments_from_shape(shape,
     Returns:
         dict compatible with `filaments_from_step` CoilBuilder result.
     """
-    from radia.coil_from_step import extract_centerline, to_coil_builder
-    from radia.peec_bundle import build_bundle_solver
+    from radia.coil_from_step import _axis_agnostic_seed
 
-    # --- 1. Resolve start_hint ---
+    # --- 1. Resolve start_hint (CAD units) ---
     start_hint = None
     if port_face is not None:
         start_hint = _bd_face_to_start_hint(port_face, cad_units_per_meter)
@@ -2879,34 +2879,21 @@ def filaments_from_shape(shape,
     # --- 2. Convert to netgen.occ solid ---
     ng_solid = _bd_shape_to_netgen_solid(shape)
 
-    # --- 3. bbox fallback if still no hint ---
+    # --- 3. orientation-agnostic seed if still no hint ---
     if start_hint is None:
-        bb = ng_solid.bounding_box
-        cx = 0.5 * (bb[0][0] + bb[1][0])
-        cy = 0.5 * (bb[0][1] + bb[1][1])
-        rx = 0.5 * (bb[1][0] - bb[0][0])
-        cz = 0.5 * (bb[0][2] + bb[1][2])
-        start_hint = (np.array([cx + rx * 0.5, cy, cz]),
-                      np.array([0.0, 1.0, 0.0]))
+        start_hint = _axis_agnostic_seed(ng_solid)
 
-    # --- 4. Walking-plane + CoilBuilder (reuses the existing pipeline) ---
-    res = extract_centerline(ng_solid, start_hint=start_hint, verbose=False)
-    coil, _segs = to_coil_builder(res, current=1.0)
-    paths, _currents = coil.to_filaments(
-        nw=nwinc, nh=nhinc, frequency=0.0, sigma=sigma)
-    cell_wh = coil._last_filament_info.get('cell_wh')
-    solver, seg_of_fil, port_p, port_m = build_bundle_solver(
-        paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
-    return {
-        "solver": solver,
-        "seg_of_filament": seg_of_fil,
-        "filament_paths": paths,
-        "cell_wh": cell_wh,
-        "coil_builder": coil,
-        "n_loop": len(paths),
-        "port_plus": port_p,
-        "port_minus": port_m,
-    }
+    # --- 4. Shared walking-plane core (scaling + verification inside).
+    # Tight AABB from the build123d input shape (netgen bbox unreliable,
+    # see _filaments_from_walked_centerline docstring).
+    bb = shape.bounding_box()
+    solid_bbox_cad = (
+        np.array([bb.min.X, bb.min.Y, bb.min.Z], dtype=float),
+        np.array([bb.max.X, bb.max.Y, bb.max.Z], dtype=float))
+    return _filaments_from_walked_centerline(
+        ng_solid, start_hint, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
+        n_peri=None, cad_units_per_meter=cad_units_per_meter,
+        solid_bbox_cad=solid_bbox_cad)
 
 
 def export_step_with_labels(items, path: str, schema: str = "AP214IS"):
@@ -3017,46 +3004,50 @@ def _start_hint_from_step_labels(step_path: str,
     return None
 
 
-def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
-                                start_hint=None, n_peri=None):
-    """CoilBuilder path: STEP -> centerline -> CoilBuilder -> to_filaments.
+def _filaments_from_walked_centerline(ng_solid, start_hint, *, sigma,
+                                      nwinc, nhinc, n_peri,
+                                      cad_units_per_meter, solid_bbox_cad):
+    """Shared walking-plane core: netgen solid -> centerline -> metres ->
+    CoilBuilder -> filaments -> bundle solver -> coverage verification.
 
-    Uses Profile.sample_at() for cross-section-aware filament placement.
-    Supports circular, rectangular, and lofted cross-sections.
+    Used by ``_filaments_via_coil_builder`` (STEP-path entry) and
+    ``filaments_from_shape`` (in-memory build123d entry) so the two
+    wrappers cannot drift.
 
-    If ``n_peri`` is given, uses perimeter-only placement via
-    ``to_filaments_peri`` (thin-skin limit) and ignores ``nwinc``/``nhinc``.
+    Unit boundary: the walker operates in the solid's native CAD units
+    (see ``_bd_face_to_start_hint``); this core scales the walked
+    centerline by ``1 / cad_units_per_meter`` BEFORE CoilBuilder, so
+    everything downstream (filaments, PEEC, L) is in metres.  Before
+    v4.95.27 this scaling was missing: a mm-authored STEP flowed into
+    PEEC as if metres and returned a silently ~1000x-too-large L.
+
+    Verification (No-Fallbacks / Fail-Loud): the walker can halt
+    mid-solid (e.g. at a sharp spine corner) and return a PARTIAL
+    centerline; ``_check_filaments_cover_solid_bbox`` turns that into a
+    hard ValueError instead of a silently-wrong partial coil (observed
+    on B_rect_sweep: a single ~97 mm leg of a ~600 mm racetrack).
+
+    ``solid_bbox_cad`` is the TIGHT conductor AABB in CAD units,
+    ``(min_xyz, max_xyz)``, computed by the caller from build123d.
+    Do NOT derive it from ``ng_solid.bounding_box``: the netgen.occ
+    bbox of a loaded shape is unreliable for verification -- measured
+    2026-07-29 on a STEP-roundtripped torus, it inflates curved x/y
+    extents by ~8% (bspline control-polygon hull) and collapses z to
+    +-1e-7 (falsely degenerate) while ``.mass`` stays correct.
     """
-    from radia.coil_from_step import extract_centerline, to_coil_builder
+    from radia.coil_from_step import (extract_centerline,
+                                      scale_centerline_result,
+                                      to_coil_builder)
     from radia.peec_bundle import build_bundle_solver
     import numpy as np
 
-    # Step 1: Extract centerline with profile classification.
-    # Start-hint resolution order (first hit wins):
-    #   1. Caller-supplied start_hint.
-    #   2. XCAF label on a "peec_port*" child (FreeCAD Import.export, or
-    #      build123d in-memory via filaments_from_shape).  Requires the
-    #      optional build123d dependency; silently skipped otherwise.
-    #   3. Bounding-box heuristic (z-axis torus assumption — works for
-    #      our canonical test cases but fails on x- or y-axis coils).
-    if start_hint is None:
-        start_hint = _start_hint_from_step_labels(step_path)
-    if start_hint is None:
-        # Orientation-agnostic seed (v4.95.x): the legacy z-axis-torus
-        # heuristic (start +x, tangent +y) forced a z-axis assumption and
-        # broke on x/y-axis coils.  ``_axis_agnostic_seed`` probes the wire
-        # tangent by minimum cross-section area, so any coil orientation
-        # (and open OR closed loops) seeds correctly.
-        from radia.coil_from_step import load_step_solid, _axis_agnostic_seed
-        solid = load_step_solid(step_path)
-        start_hint = _axis_agnostic_seed(solid)
+    res = extract_centerline(ng_solid, start_hint=start_hint, verbose=False)
+    res = scale_centerline_result(res, 1.0 / cad_units_per_meter)
 
-    res = extract_centerline(step_path, start_hint=start_hint, verbose=False)
-
-    # Step 2: Reconstruct CoilBuilder from centerline + profiles
+    # Reconstruct CoilBuilder from centerline + profiles (metres).
     coil, _segs = to_coil_builder(res, current=1.0)
 
-    # Step 3: Generate profile-aware filaments
+    # Generate profile-aware filaments.
     if n_peri is not None:
         paths, _currents = coil.to_filaments_peri(
             n_peri=n_peri, frequency=0.0, sigma=sigma)
@@ -3065,15 +3056,22 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
             nw=nwinc, nh=nhinc, frequency=0.0, sigma=sigma)
     cell_wh = coil._last_filament_info.get('cell_wh')
 
-    # Step 4: Build PEEC topology via bundle solver
-    # build_bundle_solver internally calls PEECBuilder.build_topology()
-    # and remaps nodes for the parallel-bundle topology.  It returns
-    # a PEECCircuitSolver (not a raw topo dict).  We return the solver
-    # plus metadata for the caller.
+    # Build PEEC topology via bundle solver.  build_bundle_solver
+    # internally calls PEECBuilder.build_topology() and remaps nodes for
+    # the parallel-bundle topology.  It returns a PEECCircuitSolver (not
+    # a raw topo dict).  We return the solver plus metadata.
     solver, seg_of_fil, port_p, port_m = build_bundle_solver(
         paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 
-    # Return a dict compatible with the legacy path
+    # Equivalent wire radius for the coverage-check slack: half the
+    # largest cross-section bounding dimension over all stations (covers
+    # flat-ribbon profiles where the equivalent-circle radius would
+    # under-estimate the legitimate centerline-to-surface offset).
+    r_eq = 0.0
+    for prof in res.profiles:
+        w, h = prof.bounding_wh()
+        r_eq = max(r_eq, 0.5 * float(max(w, h)))
+
     result = {
         "solver": solver,
         "seg_of_filament": seg_of_fil,
@@ -3083,8 +3081,67 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
         "n_loop": len(paths),
         "port_plus": port_p,
         "port_minus": port_m,
+        "cross_section_radius_m": r_eq,
     }
+
+    bbox_min = np.asarray(solid_bbox_cad[0], dtype=float) / cad_units_per_meter
+    bbox_max = np.asarray(solid_bbox_cad[1], dtype=float) / cad_units_per_meter
+    # slack_factor 2.5 (vs the UV tiers' 1.5): a closed-loop CENTERLINE
+    # legitimately stops r_wire short of the solid extent on each side,
+    # and the current 1x1 to_filaments sample on a CircleProfile sits at
+    # r/sqrt(2) off the centerline (area-preserving (0.5, 0.5) is not
+    # the geometric center), so the legitimate shortfall reaches
+    # r * (1 + 1/sqrt(2)) ~= 1.71 * r_eq.  The tier's actual failure
+    # mode -- the walker halting mid-solid -- leaves O(10 * r_eq) gaps,
+    # so 2.5 keeps full detection margin.
+    _check_filaments_cover_solid_bbox(
+        result, bbox_min, bbox_max, tier="coil_builder", slack_factor=2.5)
     return result
+
+
+def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
+                                cad_units_per_meter,
+                                start_hint=None, n_peri=None):
+    """CoilBuilder path: STEP -> centerline -> CoilBuilder -> to_filaments.
+
+    Uses Profile.sample_at() for cross-section-aware filament placement.
+    Supports circular, rectangular, and lofted cross-sections.
+
+    If ``n_peri`` is given, uses perimeter-only placement via
+    ``to_filaments_peri`` (thin-skin limit) and ignores ``nwinc``/``nhinc``.
+    """
+    from radia.coil_from_step import load_step_solid, _axis_agnostic_seed
+    from radia._b3d_shim import import_step as _import_step_bbox
+
+    # Load the conductor solid ONCE (seed + walk share it).
+    ng_solid = load_step_solid(step_path)
+
+    # Tight conductor AABB for coverage verification (build123d; the
+    # netgen.occ bbox of a loaded shape is unreliable -- see
+    # _filaments_from_walked_centerline docstring).
+    bb = _import_step_bbox(step_path).bounding_box()
+    solid_bbox_cad = (
+        np.array([bb.min.X, bb.min.Y, bb.min.Z], dtype=float),
+        np.array([bb.max.X, bb.max.Y, bb.max.Z], dtype=float))
+
+    # Start-hint resolution order (first hit wins):
+    #   1. Caller-supplied start_hint (CAD units).
+    #   2. XCAF label on a "peec_port*" child (FreeCAD Import.export, or
+    #      build123d in-memory via filaments_from_shape).  Requires the
+    #      optional build123d dependency; silently skipped otherwise.
+    #   3. Orientation-agnostic seed (v4.95.x): probes the wire tangent
+    #      by minimum cross-section area, so any coil orientation (and
+    #      open OR closed loops) seeds correctly.  Replaced the legacy
+    #      z-axis-torus bbox heuristic that broke on x/y-axis coils.
+    if start_hint is None:
+        start_hint = _start_hint_from_step_labels(step_path)
+    if start_hint is None:
+        start_hint = _axis_agnostic_seed(ng_solid)
+
+    return _filaments_from_walked_centerline(
+        ng_solid, start_hint, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
+        n_peri=n_peri, cad_units_per_meter=cad_units_per_meter,
+        solid_bbox_cad=solid_bbox_cad)
 
 
 # ----------------------------------------------------------------------
