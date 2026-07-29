@@ -68,17 +68,6 @@ from radia.coil_profile import (Profile, RectProfile, CircleProfile,
 # ---------- Data containers -------------------------------------------------
 
 
-@dataclass
-class Station:
-    """One station along the extracted centerline."""
-    s: float                        # arc length from start
-    point: np.ndarray               # (3,) world coordinates of centroid
-    tangent: np.ndarray             # (3,) unit tangent
-    area: float                     # cross-section area
-    profile: Profile                # classified Profile object
-    polygon: np.ndarray             # (N,2) cross-section outline in local UV
-
-
 def _pnt_to_np(p):
     """Convert a netgen.occ gp_Pnt (or sequence) to np.ndarray of length 3."""
     return np.array([p[0], p[1], p[2]], dtype=float)
