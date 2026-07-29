@@ -7,7 +7,7 @@ It composes :class:`radia.vim.DemagOperator` (build-once geometry operator
 ``N = B^T G B``) with the per-element design variable ``s_e = 1/chi_e``
 (an ``L2(order=0)`` mass weight) into the adjoint gradient route:
 
-    (M_s + N) m      = f_state        state solve (SPD; CG + mass-Riesz)
+    (M_s + N) m      = f_state        state solve (native H-matrix Jacobi-PCG)
     (M_s + N) lambda = f_adjoint      adjoint (same operator, same factor)
     J(s)             = f_adjoint^T m  (the design-dependent objective part)
     dJ/ds_e          = -lambda^T M^(e) m
@@ -59,6 +59,8 @@ CHI_MIN = 1.0e-6
 __all__ = [
     "MU0", "CHI_MIN", "AdjointGradientResult", "DensityAdjointVIM",
     "FunctionalLinearization", "DensityDesignResult", "HelmholtzFilter",
+    "HeavisideProjection", "density_discreteness",
+    "iron_only_verification_ready",
     "IronOnlyVerification", "density_to_s",
     "density_gradient_from_s_gradient", "gradient_pair_points",
     "dipole_array_field_cf", "field_functional_load", "uniform_field_load",
@@ -359,6 +361,75 @@ class HelmholtzFilter:
             np.asarray(gradient_filtered, dtype=float) / self._volumes)
 
 
+class HeavisideProjection:
+    """Smooth density projection with an exact analytic chain rule.
+
+    ``beta`` controls sharpness and ``eta`` is the transition density.  Use a
+    continuation sequence (for example 1, 2, 4, 8) across design phases; a
+    large beta from a flat start suppresses useful topology gradients.
+    """
+
+    def __init__(self, beta, eta=0.5):
+        self.beta = float(beta)
+        self.eta = float(eta)
+        if not np.isfinite(self.beta) or self.beta <= 0.0:
+            raise ValueError("HeavisideProjection: beta must be positive")
+        if not np.isfinite(self.eta) or not 0.0 < self.eta < 1.0:
+            raise ValueError("HeavisideProjection: eta must lie in (0, 1)")
+        self._denominator = (np.tanh(self.beta*self.eta)
+                             + np.tanh(self.beta*(1.0-self.eta)))
+
+    def apply(self, density):
+        rho = np.asarray(density, dtype=float)
+        if (not np.all(np.isfinite(rho)) or np.any(rho < 0.0)
+                or np.any(rho > 1.0)):
+            raise ValueError("HeavisideProjection: density must lie in [0, 1]")
+        return ((np.tanh(self.beta*self.eta)
+                 + np.tanh(self.beta*(rho-self.eta))) / self._denominator)
+
+    def derivative(self, density):
+        rho = np.asarray(density, dtype=float)
+        if (not np.all(np.isfinite(rho)) or np.any(rho < 0.0)
+                or np.any(rho > 1.0)):
+            raise ValueError("HeavisideProjection: density must lie in [0, 1]")
+        return (self.beta / self._denominator
+                / np.cosh(self.beta*(rho-self.eta))**2)
+
+    def chain(self, density, gradient_projected):
+        gradient = np.asarray(gradient_projected, dtype=float)
+        rho = np.asarray(density, dtype=float)
+        if gradient.shape != rho.shape:
+            raise ValueError("HeavisideProjection.chain: shape mismatch")
+        return gradient*self.derivative(rho)
+
+
+def density_discreteness(density, *, lower=0.1, upper=0.9):
+    """Return stable grayness diagnostics for a continuous density design."""
+    rho = np.asarray(density, dtype=float).reshape(-1)
+    if (rho.size == 0 or not np.all(np.isfinite(rho))
+            or np.any(rho < 0.0) or np.any(rho > 1.0)):
+        raise ValueError("density_discreteness: density must be non-empty in [0,1]")
+    lower, upper = float(lower), float(upper)
+    if not 0.0 <= lower < upper <= 1.0:
+        raise ValueError("density_discreteness: need 0 <= lower < upper <= 1")
+    intermediate = (rho > lower) & (rho < upper)
+    return {
+        "intermediate_fraction": float(np.mean(intermediate)),
+        "binary_distance_mean": float(np.mean(np.minimum(rho, 1.0-rho))),
+        "binary_distance_max": float(np.max(np.minimum(rho, 1.0-rho))),
+    }
+
+
+def iron_only_verification_ready(density, *, maximum_intermediate_fraction=0.05,
+                                 lower=0.1, upper=0.9):
+    """Whether thresholded exact-void verification is scientifically useful."""
+    limit = float(maximum_intermediate_fraction)
+    if not np.isfinite(limit) or not 0.0 <= limit <= 1.0:
+        raise ValueError("maximum_intermediate_fraction must lie in [0,1]")
+    metrics = density_discreteness(density, lower=lower, upper=upper)
+    return metrics["intermediate_fraction"] <= limit, metrics
+
+
 # --------------------------------------------------------------------------
 # adjoint solver
 # --------------------------------------------------------------------------
@@ -375,7 +446,7 @@ class AdjointGradientResult:
 
 @dataclass
 class FunctionalLinearization:
-    """State + one adjoint per functional, all on one factorization.
+    """State + one adjoint per functional, all on one configured operator.
 
     ``values[k] = f_k^T m`` and ``jacobians[k, e] = d(f_k^T m)/ds_e`` for the
     functional loads passed to :meth:`DensityAdjointVIM.linearize` --
@@ -395,7 +466,7 @@ class DensityAdjointVIM:
     ``fes`` is the HDiv space on the design mesh (order 1 or 2).  The geometry
     operator ``N`` is built once (``demag=None``) or shared from an existing
     :class:`radia.vim.DemagOperator`; every design iterate then costs one
-    weighted-mass assembly + factorization and two CG solves.  The caller
+    weighted-mass assembly and the state/adjoint CG solves.  The caller
     wraps construction and every solve in ``with TaskManager():``.
     """
 
@@ -433,7 +504,7 @@ class DensityAdjointVIM:
         return self._volumes
 
     # -------------------------------------------------------------- internals
-    def _system(self, s):
+    def _system(self, s, *, need_ngsolve_solver=True):
         s = np.ascontiguousarray(s, dtype=float).ravel()
         if s.size != self.n_el:
             raise ValueError("DensityAdjointVIM: s has %d entries, mesh has %d "
@@ -447,6 +518,8 @@ class DensityAdjointVIM:
         mass = ng.BilinearForm(self.fes, symmetric=True)
         mass += self._s_gf * u * v * ng.dx
         mass.Assemble()
+        if not need_ngsolve_solver:
+            return mass, None, None
         A = mass.mat + self.demag.mat
         pre = mass.mat.Inverse(self.fes.FreeDofs(), inverse="sparsecholesky")
         return mass, A, pre
@@ -478,22 +551,88 @@ class DensityAdjointVIM:
                 % (int(maxiter), tol))
         return iters
 
+    def _native_solve_many(self, mass, rhs_vecs, tol, maxiter,
+                           warm_vecs=None, mass_riesz=True):
+        """Solve shared-matrix VIM systems in the configured C++ kernel.
+
+        The weighted HDiv mass is registered once.  H-matrix application,
+        Krylov updates, and true-residual stopping tests remain inside C++.
+        ``mass_riesz=False`` uses the inexpensive exact system diagonal and is
+        the study-scale default; ``True`` reuses the persistent PARDISO mass
+        factor.  Python crosses the boundary only once per right-hand side.
+        """
+        gram = getattr(self.demag, "_G", None)
+        solve_name = ("solve_configured_linear_material_mass_riesz"
+                      if mass_riesz else
+                      "solve_configured_linear_material_auto_prec")
+        required = ("configure_mass_matrix_ngsolve", solve_name)
+        if gram is None or any(not hasattr(gram, name) for name in required):
+            raise RuntimeError(
+                "DensityAdjointVIM: native H-matrix CG is unavailable "
+                "on this DemagOperator; pass solver='ngsolve-cg' only for "
+                "the explicit reference path")
+        gram.configure_mass_matrix_ngsolve(mass.mat)
+        rhs_vecs = list(rhs_vecs)
+        if warm_vecs is None:
+            warm_vecs = [None] * len(rhs_vecs)
+        else:
+            warm_vecs = list(warm_vecs)
+            if len(warm_vecs) != len(rhs_vecs):
+                raise ValueError(
+                    "DensityAdjointVIM: native warm-start count mismatch")
+        fields, iterations = [], []
+        for rhs, warm_vec in zip(rhs_vecs, warm_vecs):
+            rhs_array = np.ascontiguousarray(rhs.FV().NumPy(), dtype=float)
+            x0 = None if warm_vec is None else np.ascontiguousarray(
+                warm_vec.FV().NumPy(), dtype=float)
+            if mass_riesz:
+                result = gram.solve_configured_linear_material_mass_riesz(
+                    1.0, rhs_array, float(tol), int(maxiter), True, x0=x0)
+            else:
+                result = gram.solve_configured_linear_material_auto_prec(
+                    1.0, rhs_array, float(tol), int(maxiter), x0=x0)
+            iters = int(result["iters"])
+            if iters >= int(maxiter):
+                raise RuntimeError(
+                    "DensityAdjointVIM: native %s CG did not converge "
+                    "within %d iterations (tol=%g)"
+                    % ("mass-Riesz" if mass_riesz else "Jacobi",
+                       int(maxiter), tol))
+            gf = ng.GridFunction(self.fes)
+            gf.vec.FV().NumPy()[:] = np.asarray(result["m"], dtype=float)
+            fields.append(gf)
+            iterations.append(iters)
+        return fields, iterations
+
     # ------------------------------------------------------------ public API
-    def solve(self, s, load, tol=1e-12, maxiter=5000, warm=None):
+    def solve(self, s, load, tol=1e-12, maxiter=20000, warm=None,
+              solver="native-jacobi"):
         """One SPD solve ``(M_s + N) x = load.vec``.
 
         ``warm`` is an optional GridFunction whose vector seeds CG (warm start
         across design iterates).  Returns ``(GridFunction, iterations)``.
         """
-        mass, A, pre = self._system(s)
+        mass, A, pre = self._system(
+            s, need_ngsolve_solver=(solver == "ngsolve-cg"))
+        if solver in {"native", "native-jacobi"}:
+            fields, iterations = self._native_solve_many(
+                mass, [load.vec], tol, maxiter,
+                warm_vecs=None if warm is None else [warm.vec],
+                mass_riesz=(solver == "native"))
+            return fields[0], iterations[0]
+        if solver != "ngsolve-cg":
+            raise ValueError(
+                "DensityAdjointVIM.solve: solver must be 'native-jacobi', "
+                "'native', or 'ngsolve-cg'")
         gf = ng.GridFunction(self.fes)
         iters = self._cg(A, pre, load.vec, gf, tol, maxiter,
                          warm_vec=None if warm is None else warm.vec)
         return gf, iters
 
     def linearize(self, s, state_load, functional_loads,
-                  tol=1e-12, maxiter=5000, warm=None):
-        """State + one adjoint per functional, sharing one factorization.
+                  tol=1e-12, maxiter=20000, warm=None,
+                  solver="native-jacobi"):
+        """State + one adjoint per functional, sharing one configured matrix.
 
         The self-adjoint operator serves every solve; ``warm`` is an optional
         :class:`FunctionalLinearization` from the previous design iterate
@@ -508,17 +647,32 @@ class DensityAdjointVIM:
             raise ValueError(
                 "DensityAdjointVIM.linearize: warm start carries %d adjoints "
                 "for %d loads" % (len(warm.gfLambdas), len(loads)))
-        mass, A, pre = self._system(s)
-        gfm = ng.GridFunction(self.fes)
-        it_m = self._cg(A, pre, state_load.vec, gfm, tol, maxiter,
-                        warm_vec=None if warm is None else warm.gfM.vec)
-        gfls, its = [], []
-        for k, load in enumerate(loads):
-            gfl = ng.GridFunction(self.fes)
-            wv = None if warm is None else warm.gfLambdas[k].vec
-            its.append(self._cg(A, pre, load.vec, gfl, tol, maxiter,
-                                warm_vec=wv))
-            gfls.append(gfl)
+        mass, A, pre = self._system(
+            s, need_ngsolve_solver=(solver == "ngsolve-cg"))
+        if solver in {"native", "native-jacobi"}:
+            rhs = [state_load.vec] + [load.vec for load in loads]
+            warm_vecs = None if warm is None else [warm.gfM.vec] + [
+                value.vec for value in warm.gfLambdas]
+            fields, native_iterations = self._native_solve_many(
+                mass, rhs, tol, maxiter, warm_vecs=warm_vecs,
+                mass_riesz=(solver == "native"))
+            gfm, gfls = fields[0], fields[1:]
+            it_m, its = native_iterations[0], native_iterations[1:]
+        elif solver == "ngsolve-cg":
+            gfm = ng.GridFunction(self.fes)
+            it_m = self._cg(A, pre, state_load.vec, gfm, tol, maxiter,
+                            warm_vec=None if warm is None else warm.gfM.vec)
+            gfls, its = [], []
+            for k, load in enumerate(loads):
+                gfl = ng.GridFunction(self.fes)
+                wv = None if warm is None else warm.gfLambdas[k].vec
+                its.append(self._cg(A, pre, load.vec, gfl, tol, maxiter,
+                                    warm_vec=wv))
+                gfls.append(gfl)
+        else:
+            raise ValueError(
+                "DensityAdjointVIM.linearize: solver must be "
+                "'native-jacobi', 'native', or 'ngsolve-cg'")
         values = np.array([float(ng.InnerProduct(load.vec, gfm.vec))
                            for load in loads])
         jacobians = np.stack([
@@ -531,11 +685,12 @@ class DensityAdjointVIM:
             adjoint_iterations=tuple(its))
 
     def objective_and_gradient(self, s, state_load, adjoint_load,
-                               tol=1e-12, maxiter=5000, warm=None):
+                               tol=1e-12, maxiter=20000, warm=None,
+                               solver="native-jacobi"):
         """State + adjoint solve and the full per-element gradient.
 
-        One-functional convenience over :meth:`linearize` (same operator,
-        same factorization).  ``warm`` is an optional
+        One-functional convenience over :meth:`linearize` (same configured
+        operator).  ``warm`` is an optional
         :class:`AdjointGradientResult` from the previous design iterate; its
         fields seed both CG solves.  The objective is the design-dependent
         part ``adjoint_load^T m``; the gradient is
@@ -550,7 +705,7 @@ class DensityAdjointVIM:
                 state_iterations=warm.state_iterations,
                 adjoint_iterations=(warm.adjoint_iterations,))
         lin = self.linearize(s, state_load, [adjoint_load], tol=tol,
-                             maxiter=maxiter, warm=warm_lin)
+                             maxiter=maxiter, warm=warm_lin, solver=solver)
         return AdjointGradientResult(
             objective=float(lin.values[0]), gradient=lin.jacobians[0],
             gfM=lin.gfM, gfLambda=lin.gfLambdas[0],
@@ -573,18 +728,22 @@ class DensityDesignResult:
 
 def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      targets=(), *, chi_iron, volume_fraction,
-                     density_filter=None, initial_density=None, penalty=1.0,
+                     density_filter=None, density_projection=None,
+                     initial_density=None, penalty=1.0,
                      move_limit=0.1, max_iterations=30,
                      band_relative=5e-3, band_floor=None,
                      move_min=1e-3, objective_slack=1e-6,
-                     tol=1e-10, cg_maxiter=5000, callback=None):
+                     tol=1e-10, cg_maxiter=20000,
+                     linear_solver="native-jacobi", callback=None,
+                     checkpoint_callback=None, initial_warm=None,
+                     evaluation_callback=None):
     """MAXIMIZE ``J = objective_load^T m`` under linear-functional equality
     bands, an iron volume budget, and box/move limits (trust-region SLP).
 
     Constraints are engineering bands: ``|constraint_k - target_k| <=
     band_k`` with ``band_k = band_relative * |target_k|`` (or explicit
     ``band_floor``, absolute, per constraint).  Each iterate costs one
-    weighted-mass assembly + factorization and ``1 + n_constraints``
+    weighted-mass assembly and ``1 + n_constraints``
     warm-started CG solves (:meth:`DensityAdjointVIM.linearize`), one
     element-wise Integrate per functional, and a milliseconds HiGHS LP
     (:func:`radia.topology_optimization.solve_lp_update` with the constraint
@@ -637,6 +796,10 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         raise ValueError("optimize_density: objective_slack must be non-negative")
     if not np.all(np.isfinite(targets)):
         raise ValueError("optimize_density: targets must be finite")
+    if linear_solver not in {"native-jacobi", "native", "ngsolve-cg"}:
+        raise ValueError(
+            "optimize_density: linear_solver must be 'native-jacobi', "
+            "'native', or 'ngsolve-cg'")
     volumes = problem.element_volumes
     volume_max = float(volume_fraction * volumes.sum())
     if initial_density is None:
@@ -665,7 +828,11 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         raise ValueError("optimize_density: constraint bands must be positive")
     loads = [objective_load] + constraint_loads
 
+    evaluation_index = 0
+
     def evaluate(rho_vec, warm):
+        nonlocal evaluation_index
+        t_evaluate = time.perf_counter()
         # The P1 Helmholtz filter under/overshoots at bang-bang transitions
         # (measured -1.2e-2 on a coarse ball); clip the FILTERED density to
         # [0, 1] with the exact piecewise chain rule (zero derivative on
@@ -677,13 +844,21 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         else:
             rho_f = rho_vec
             unclipped = None
-        lin = problem.linearize(density_to_s(rho_f, chi_iron, penalty=penalty),
+        if density_projection is not None:
+            rho_material = density_projection.apply(rho_f)
+        else:
+            rho_material = rho_f
+        lin = problem.linearize(density_to_s(
+            rho_material, chi_iron, penalty=penalty),
                                 state_load, loads, tol=tol,
-                                maxiter=cg_maxiter, warm=warm)
+                                maxiter=cg_maxiter, warm=warm,
+                                solver=linear_solver)
 
         def to_rho(g_s):
-            g_rf = density_gradient_from_s_gradient(rho_f, g_s, chi_iron,
-                                                    penalty=penalty)
+            g_rf = density_gradient_from_s_gradient(
+                rho_material, g_s, chi_iron, penalty=penalty)
+            if density_projection is not None:
+                g_rf = density_projection.chain(rho_f, g_rf)
             if density_filter is None:
                 return g_rf
             return density_filter.chain(np.where(unclipped, g_rf, 0.0))
@@ -691,9 +866,18 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         gJ = to_rho(lin.jacobians[0])
         gks = [to_rho(lin.jacobians[1 + k])
                for k in range(len(constraint_loads))]
+        if evaluation_callback is not None:
+            evaluation_callback(dict(
+                evaluation=evaluation_index,
+                elapsed_s=time.perf_counter() - t_evaluate,
+                warm_start=warm is not None,
+                state_iterations=int(lin.state_iterations),
+                adjoint_iterations=[int(v) for v in lin.adjoint_iterations],
+                values=np.asarray(lin.values, dtype=float).tolist()))
+        evaluation_index += 1
         return lin, gJ, gks
 
-    lin, gJ, gks = evaluate(rho, None)
+    lin, gJ, gks = evaluate(rho, initial_warm)
     n_solves = 1
     history = []
     move = move_limit
@@ -807,9 +991,18 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      t_iter_s=time.perf_counter() - t_iter,
                      state_iterations=lin.state_iterations,
                      adjoint_iterations=list(lin.adjoint_iterations))
+        if density_filter is not None:
+            rho_report = np.clip(density_filter.apply(rho), 0.0, 1.0)
+        else:
+            rho_report = rho
+        if density_projection is not None:
+            rho_report = density_projection.apply(rho_report)
+        entry.update(density_discreteness(rho_report))
         history.append(entry)
         if callback is not None:
             callback(entry)
+        if checkpoint_callback is not None:
+            checkpoint_callback(entry, rho.copy())
     return DensityDesignResult(density=rho, history=tuple(history),
                                converged=converged, final_move=move,
                                solves=n_solves)

@@ -217,18 +217,60 @@ decrease with per-constraint blow-up caps.  Physically, deep restoration IS
 the isochronization step: it shapes the iron until `<B_z>(r)` matches the
 gamma profile, after which the J-polish phase engages.
 
+**Gray-design continuation update (2026-07-29):** the study outcome showed
+that three penalty phases with about 14 accepted iterates each were not enough
+to leave the flat-density basin (`intermediate_fraction = 1.00`).  The reusable
+design API now includes `HeavisideProjection(beta, eta)` with the exact
+projection/filter/SIMP chain rule in `optimize_density`.  Continue `beta`
+between phases (start gently; do not launch a large-beta projection from the
+flat design).  Every accepted history row records `intermediate_fraction`,
+`binary_distance_mean`, and `binary_distance_max`.  Before Stage-3 extraction,
+call `iron_only_verification_ready`; an all-gray design is now classified as
+not ready instead of reaching the meaningless empty threshold mask.  The
+projection directional chain is locked against central differences, and the
+complete fast suite is 23/23 green.  The native Jacobi-PCG closure below makes
+a longer continuation budget practical, but the study remains a compute-host
+task.
+
 ## 8. Performance plan
 
-Per-iterate cost = mass reweight (ms) + one SPD solve with two right-hand
-sides (state + adjoint). Levers, in order of cost:
+Per-iterate cost = mass reweight (ms) + one shared H-matrix system with a
+state and all adjoint right-hand sides.  The production density path now
+registers the per-element weighted HDiv mass in the persistent C++ operator
+and calls its native Jacobi-PCG.  The NGSolve mass-Riesz CG remains an explicit
+`solver="ngsolve-cg"` numerical reference, not the study-scale default.
 
-1. **Warm starts across design iterates** (small design steps -> CG from the
-   previous solution; expected 3-10x fewer iterations).
-2. **Block rhs** (state + adjoint together; ~2x).
-3. **C++ vector `inv_chi`** so the fast native path takes per-element
-   material (today scalar, `rad_hacapk_hdiv.cpp`; codex-owned -- coordinate).
-4. **Krylov recycling / deflation** across iterates (optional).
-5. **CUDA lane** (active, staged): the hot kernel is the HACApK H-matrix
+**Measured solver closure (hibino, 2026-07-29):** 6,257 TET elements / 40,590
+HDiv DOFs, 38 threads, five profile constraints.  H-matrix construction took
+6.1 s.  One accepted deep-restoration step (three trial evaluations) took
+92.36 s and the complete diagnostic run took 139 s; individual warm trial
+linearizations took 28.40--33.99 s at 4,805--6,042 CG iterations.  The earlier
+NGSolve mass-Riesz run recorded 290.29 s for the comparable first accepted
+step and 908 s for its first phase.  Thus the native Jacobi route reduced the
+accepted-step wall time by 3.1x and the phase/run wall by 6.5x on this case.
+
+The speedup is not allowed to weaken accuracy: C++ PCG now recomputes the true
+residual `b-Ax` before accepting convergence and replaces/restarts the
+recursive residual every 1,000 iterations.  The old recursive residual could
+look converged while the true residual was about three decades larger.  With
+the corrected contract the 40k trial solves require more iterations but still
+finish in tens of seconds.  `tests/test_isochronous_topopt.py` independently
+applies the assembled operator and locks the final relative true residual.
+
+An NGSolve `MultiVector` batch was measured and retired: it did not fuse the
+custom H-matrix or PARDISO applications, added locking/restart overhead, and
+was slower than independent NGSolve CG at 6.7k DOFs.  A future multi-right-hand
+side implementation belongs in the C++ H-matrix/PARDISO kernel, not in Python
+FE plumbing.
+
+Remaining levers, in order:
+
+1. **Warm starts across design iterates**, already active.
+2. **Native multi-right-hand-side PCG / Krylov recycling** in C++, sharing
+   cluster traversal and converged subspaces without materializing the matrix.
+3. **Cluster-tree coarse/deflation preconditioning** for the 5k-class true
+   residual iteration count.
+4. **CUDA lane** (staged): the hot kernel is the HACApK H-matrix
    matvec (batched low-rank GEMM -- higher arithmetic intensity than FEM
    SpMV, i.e. GPU-friendlier than the FEM alternative). Measured GPU facts
    (2026-07-28): LAB Quadro RTX 5000 FP64 0.15 / FP32 2.49 TFLOPS (dev box
@@ -237,7 +279,7 @@ sides (state + adjoint). Levers, in order of cost:
    interface design; Phase 1 = CuPy block-matvec prototype on real ACA block
    distributions -> the "CG seconds on A100" prediction table that decides
    waking the A100; Phase 2 = opt-in C++ CUDA build (PyPI wheel stays
-   CPU-only); Phase 3 = production on the woken A100. CPU levers 1-4 compose
+   CPU-only); Phase 3 = production on the woken A100. CPU levers compose
    multiplicatively with the GPU and stay in the plan.
 
 ## 9. Known limits and recorded negatives (do not re-walk)

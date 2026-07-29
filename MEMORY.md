@@ -3,3 +3,4 @@
 - [Unsafe extruded constructors retired](memory/retired_unsafe_extruded_constructors.md): delete Python, MATLAB, and C ABI surfaces; never reintroduce ObjMltExtPgn/Rtg/Tri.
 - [IH Simulink native-only contract](memory/docs_cruft_prune_2026_06_28.md#ih-simulink-native-only-contract-2026-07-23): retire LUT/lumped IH paths; test distributed MEX S-Functions directly.
 - [MATLAB Optuna MOTPE Parzen migration](memory/matlab_optuna_motpe_parzen.md): use weighted shared Parzen mixtures and retire the scalar KDE candidate path.
+- [HDiv-MMM topopt native CG](memory/hdiv_mmm_topopt_native_cg.md): use native Jacobi-PCG, verify true residuals, and do not restore the slower Python MultiVector attempt.
