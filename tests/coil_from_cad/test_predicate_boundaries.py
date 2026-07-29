@@ -839,7 +839,11 @@ def test_topology_spine_walks_true_closed_spine(tmp_path):
     path_m, w_m, h_m = extract_centerline_from_step(
         step_path, n_segments=60, cad_units_per_meter=1000.0)
 
-    assert path_m.shape == (61, 3)
+    # Walked stations are returned AS-IS (adaptive density; n_segments
+    # is signature-parity only), so assert count and per-segment
+    # widths length instead of an exact resample count.
+    assert path_m.shape[0] > 20
+    assert len(w_m) == path_m.shape[0] - 1
     radii = np.linalg.norm(path_m[:, :2], axis=1)
     np.testing.assert_allclose(radii, 0.030, atol=2e-4)
     assert float(np.max(np.abs(path_m[:, 2]))) < 1e-4

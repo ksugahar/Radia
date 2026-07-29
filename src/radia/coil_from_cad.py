@@ -1237,6 +1237,84 @@ def _centerline_from_cross_sections(solid,
     return ordered * scale, widths_cad * scale, heights_cad * scale
 
 
+def _walked_stations_to_path_cad(res, ng_solid, predicate_name: str):
+    """Walker ``CenterlineResult`` -> ``(path_cad, widths_cad)``.
+
+    The walked stations are used AS-IS (no uniform resampling): the
+    march is already adaptively dense -- uniform steps on straight or
+    smooth stretches, halved steps through bends -- and resampling
+    would destroy exactly that density.  Per-vertex bend angles stay
+    small through bends as a result, which keeps the downstream
+    ``_check_spine_no_singular_corner`` semantics sound (a bend
+    cluster is short-but-shallow; a corner-turn jump is sharp-but-
+    long; neither trips the sharp-AND-short condition).
+
+    Widths: per-segment equivalent-square side.  The RELATIVE
+    structure comes from the walker's per-station slab areas (clamped
+    to [0.5, 2] x median so an oblique bend cut or a fused boss cannot
+    leak a wildly wrong local value), but the ABSOLUTE scale is pinned
+    to the exact global truth ``ng_solid.mass / walked_length``:
+    OCC thin-slab booleans are numerically fragile on BSPLINE-loft
+    laterals (measured 2026-07-29 on keiko_outsideline: a uniform
+    ~0.65x area deficit at the working slab thickness, while the
+    NEIGHBOURING thicknesses return EMPTY intersections and a
+    build123d planar section at the same point gives the true
+    26.6 mm^2).  ``.mass`` of the full solid is reliable, so
+    mass / length recovers the exact arclength-mean section area.
+    """
+    pts = np.asarray(res.polyline, dtype=float)
+    if pts.shape[0] < 4:
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): the walk "
+            f"produced only {pts.shape[0]} stations -- too coarse for "
+            "a spine.")
+    if res.areas is None:
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walker "
+            "result carries no per-station areas.")
+    areas = np.asarray(res.areas, dtype=float)
+    good = np.isfinite(areas) & (areas > 0.0)
+    if not np.any(good):
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): the walk "
+            "recovered no positive cross-section areas; cannot derive "
+            "the conductor cross-section.")
+    med = float(np.median(areas[good]))
+    areas_clamped = np.clip(np.where(good, areas, med),
+                            0.5 * med, 2.0 * med)
+    seg_len = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    length = float(seg_len.sum())
+    if res.closed:
+        length += float(np.linalg.norm(pts[0] - pts[-1]))
+    if length <= 0.0:
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walked "
+            "centerline has zero length.")
+    mean_area_true = float(ng_solid.mass) / length
+    seg_areas = 0.5 * (areas_clamped[:-1] + areas_clamped[1:])
+    walker_mean = float(np.sum(seg_areas * seg_len) / np.sum(seg_len))
+    if walker_mean <= 0.0:
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walker "
+            "mean section area is non-positive.")
+    k = mean_area_true / walker_mean
+    if not (0.4 <= k <= 2.5):
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): slab-"
+            f"area absolute-scale correction k = {k:.3g} outside "
+            "[0.4, 2.5] -- the walked length and the solid volume are "
+            "inconsistent, i.e. the walk did NOT cover the whole "
+            "conductor (e.g. a closed sub-loop short-circuiting a "
+            "lead-pair junction), the solid is multi-body, or a "
+            "boolean broke.  (Empirical bounds: the OCC thin-slab "
+            "boolean under-measures BSPLINE-loft sections by up to "
+            "~0.65x -> k ~1.5; a modest non-wire feature such as a "
+            "boss adds a little more.)  Regenerate the STEP or switch "
+            "to --coil-solver bem-a --coil-vol <pre-meshed.vol>.")
+    widths_cad = np.sqrt(seg_areas * k)
+    return pts, widths_cad
+
+
 def _centerline_from_open_spine(solid, n_segments: int,
                                  cad_units_per_meter: float):
     """Single-loop coil centerline: longest open edge (spine) sampling.
@@ -1646,9 +1724,10 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     caps (regenerate the STEP with clean planar end caps so
     Predicate 4 routes), or the walker halted at a sharp spine corner.
 
-    Cross-section width/height: equivalent-square side from the MEDIAN
-    per-station cross-section area (robust to local features such as a
-    fused boss inflating a few stations).
+    The walked stations are returned AS-IS via
+    ``_walked_stations_to_path_cad`` (adaptive density preserved,
+    per-segment widths from the measured areas).  ``n_segments`` is
+    unused (parameter kept for dispatch signature parity).
     """
     from radia.coil_from_step import extract_centerline, _axis_agnostic_seed
 
@@ -1656,13 +1735,14 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     seed = _axis_agnostic_seed(ng_solid)
     res = extract_centerline(ng_solid, start_hint=seed, verbose=False)
 
-    pts = np.asarray(res.polyline, dtype=float)
     if not res.closed:
-        span = (pts.max(axis=0) - pts.min(axis=0)) if pts.size else None
+        pts_arr = np.asarray(res.polyline, dtype=float)
+        span = ((pts_arr.max(axis=0) - pts_arr.min(axis=0))
+                if pts_arr.size else None)
         raise ValueError(
             "extract_centerline_from_step(topology_spine): the coil was "
             "classified CLOSED (no cap faces detected) but the "
-            f"centerline walk did not close on itself ({pts.shape[0]} "
+            f"centerline walk did not close on itself ({pts_arr.shape[0]} "
             f"stations, walked span {span} CAD units).  Either the coil "
             "is actually OPEN and cap-face detection missed the caps "
             "(regenerate the STEP with clean planar end caps so "
@@ -1670,45 +1750,12 @@ def _centerline_from_topology_spine(solid, n_segments: int,
             "a sharp spine corner (fillet the spine corners, or switch "
             "to --coil-solver bem-a --coil-vol <pre-meshed.vol> which "
             "bypasses spine extraction entirely).")
-    if pts.shape[0] < 4:
-        raise ValueError(
-            "extract_centerline_from_step(topology_spine): the closed "
-            f"walk produced only {pts.shape[0]} stations -- too coarse "
-            "to resample a spine.")
 
-    # Close the loop (append the start point so resampling covers the
-    # final wrap chord), then sample n_segments + 1 points WITHOUT the
-    # wrap duplicate -- the same convention as the retired circle map
-    # (linspace(0, 2*pi, n_segments + 1, endpoint=False)).
-    closed_pts = np.vstack([pts, pts[:1]])
-    seglen = np.linalg.norm(np.diff(closed_pts, axis=0), axis=1)
-    arclen = np.concatenate([[0.0], np.cumsum(seglen)])
-    total = float(arclen[-1])
-    if total <= 0.0:
-        raise ValueError(
-            "extract_centerline_from_step(topology_spine): the closed "
-            "walk has zero total length.")
-    s_new = np.linspace(0.0, total, n_segments + 1, endpoint=False)
-    spine_cad = np.column_stack([
-        np.interp(s_new, arclen, closed_pts[:, k]) for k in range(3)])
-
-    if res.areas is None:
-        raise ValueError(
-            "extract_centerline_from_step(topology_spine): walker "
-            "result carries no per-station areas.")
-    areas = np.asarray(res.areas, dtype=float)
-    areas = areas[np.isfinite(areas) & (areas > 0.0)]
-    if areas.size == 0:
-        raise ValueError(
-            "extract_centerline_from_step(topology_spine): the walk "
-            "recovered no positive cross-section areas; cannot derive "
-            "the conductor cross-section.")
-    side = math.sqrt(float(np.median(areas)))
-    widths_cad = np.full(n_segments, side, dtype=np.float64)
-    heights_cad = np.full(n_segments, side, dtype=np.float64)
-
+    pts, widths_cad = _walked_stations_to_path_cad(
+        res, ng_solid, "topology_spine")
     scale = 1.0 / cad_units_per_meter
-    return spine_cad * scale, widths_cad * scale, heights_cad * scale
+    widths_m = widths_cad * scale
+    return pts * scale, widths_m, widths_m.copy()
 
 
 _MIN_PLAUSIBLE_COIL_EXTENT_M = 1e-5
@@ -1786,19 +1833,41 @@ def extract_centerline_from_step(step_path: str,
                                  cad_units_per_meter: float = 1.0):
     """Auto-extract coil centerline + cross-sections from a STEP file.
 
-    Dispatches on solid topology:
+    ARCHITECTURE (v4.95.x): ONE geometric marching engine + exact
+    CAD-feature fast paths.  The walking-plane march
+    (``coil_from_step.extract_centerline``: axis-agnostic seed,
+    bidirectional, corner-turning) is the geometry-marching engine --
+    Predicate 5 (CLOSED) delegates to it, as does the default
+    ``filaments_from_step`` path.  Predicates 1-4 are NOT alternative
+    engines: they are positive matches on exact CAD features that
+    specific authoring workflows leave in the STEP, read without
+    marching:
 
-    * **Loft of profiles** (multi-turn coil, tight pancake spiral):
-      solid has >= 5 planar end-cap faces of consistent area →
-      chain their centroids via nearest-neighbor + tangent continuity.
-      No section() calls, robust for tight geometries where adjacent
-      turns are close enough to confuse the spine method.
+    * **P1 loft-of-profiles** (>= 5 consistent-area planar station
+      faces, e.g. Cubit station-loft): chain the exact station
+      centroids.  Robust for tight pancakes where adjacent turns are
+      closer than a march step.
+    * **P2 united multi-turn pancake** (>= 5 consistent-radius CIRCLE
+      edges surviving a boolean unite): chain the exact circle
+      centers.  A marching engine risks snapping across turns when
+      the inter-turn pitch is below ~4 march steps, so the exact
+      reader stays canonical for this class.
+    * **P3 revolution sweep** (TORUS/CYLINDER/CONE/REVOLUTION lateral
+      + planar caps): axis + major radius + sweep angle extracted
+      ANALYTICALLY -- exact, no sampling at all.
+    * **P4 OPEN coil** (cap faces detected): sample the longest open
+      LATERAL RIM EDGE (an exact CAD feature), section at midpoints,
+      pin endpoints to the cap centroids.  The rim edge is IMMUNE to
+      lead-pair junction proximity, where a marching engine
+      short-circuits the junction into a closed sub-loop (measured
+      2026-07-29 on D_spline_sharp: the walk 'closed' across leads
+      ~2 wire-diameters apart while the rim extractor traces the true
+      open path) -- so the exact reader stays canonical here too.
 
-    * **Single-loop swept coil** (gapped torus, simple bend):
-      solid has an open boundary edge that traces the coil spine →
-      sample the longest OPEN edge, section at midpoints, centroid
-      of each section gives the true centerline.  Open-edge filter
-      excludes closed circle edges (cross-section boundaries).
+    Everything else marches:
+
+    * **P5 CLOSED loop** (no caps): walk; the walk must close on
+      itself, span the solid, and volume-reconcile (k-guard).
 
     Args:
         step_path: Path to .step file.  Coordinates MUST be in metres
@@ -1887,12 +1956,51 @@ def extract_centerline_from_step(step_path: str,
         # Strong distance check (v4.51.0): wire radius from mean
         # cross-section area (equivalent-circle assumption).
         mean_area_m2 = float(np.mean(widths_m * heights_m))
+        wire_r_m = 0.0
         if mean_area_m2 > 0:
             wire_r_m = float(np.sqrt(mean_area_m2 / np.pi))
             _check_centerline_near_solid_surface(
                 solid, path_m, wire_r_m,
                 f"extract_centerline_from_step({predicate_name})",
                 cad_units_per_meter=cad_units_per_meter)
+        # Coverage check (v4.95.x): the STEP holds ONE solid = the
+        # coil, so the centerline must SPAN the solid bbox to within a
+        # wire-radius-scale slack on every axis.  An under-covering
+        # path means the extractor traced only part of the conductor
+        # -- e.g. a closed walk that short-circuited a lead-pair
+        # junction into a sub-loop -- and would silently hand PEEC a
+        # partial coil (with mass/length width pinning, an INFLATED
+        # cross-section as well).
+        bb = solid.bounding_box()
+        s_min = np.array([float(bb.min.X), float(bb.min.Y),
+                          float(bb.min.Z)]) / cad_units_per_meter
+        s_max = np.array([float(bb.max.X), float(bb.max.Y),
+                          float(bb.max.Z)]) / cad_units_per_meter
+        slack = max(2.5 * wire_r_m, 5e-4)
+        msgs = []
+        for ax, name in enumerate(("x", "y", "z")):
+            if (s_max[ax] - s_min[ax]) < 1e-9:
+                continue
+            gap_lo = float(path_m[:, ax].min() - s_min[ax])
+            gap_hi = float(s_max[ax] - path_m[:, ax].max())
+            for gap, side in ((gap_lo, "min"), (gap_hi, "max")):
+                if gap > slack:
+                    msgs.append(
+                        f"{name}-{side}: centerline stops "
+                        f"{gap * 1e3:.1f} mm short of the solid "
+                        f"(slack {slack * 1e3:.1f} mm)")
+        if msgs:
+            raise ValueError(
+                f"extract_centerline_from_step({predicate_name}): the "
+                "extracted centerline does not span the conductor "
+                "solid -- only part of the coil was traced.\n  "
+                + "\n  ".join(msgs)
+                + "\nCommon cause: a closed walk short-circuited a "
+                "lead-pair junction into a sub-loop.  Regenerate the "
+                "STEP (separate the leads by more than a wire "
+                "diameter), or switch to --coil-solver bem-a "
+                "--coil-vol <pre-meshed.vol> which bypasses spine "
+                "extraction entirely.")
         return result
 
     # Predicate 1: multi-station loft of profiles (NON-united).  When
