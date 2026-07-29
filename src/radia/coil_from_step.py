@@ -95,6 +95,55 @@ class CenterlineResult:
     closed: bool                    # True if returned to start
 
 
+def scale_centerline_result(res: "CenterlineResult",
+                            scale: float) -> "CenterlineResult":
+    """Return ``res`` with every geometric quantity multiplied by ``scale``.
+
+    This is the UNIT BOUNDARY of the walking-plane pipeline: the walker
+    operates in the STEP file's native CAD units (typically mm), while
+    CoilBuilder / PEEC consume metres (CLAUDE.md "Radia always uses
+    meters").  Callers pass ``scale = 1 / cad_units_per_meter``
+    immediately after ``extract_centerline`` and BEFORE
+    ``to_coil_builder``.
+
+    Tangents are direction cosines (scale-free).  Profiles carry
+    cross-section dimensions, so each is rebuilt with scaled dimensions;
+    an unsupported Profile subclass raises so a new walker profile type
+    cannot silently skip the unit conversion.
+    """
+    try:
+        s = float(scale)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"scale_centerline_result: scale must be a finite positive "
+            f"number, got {scale!r}") from exc
+    if not math.isfinite(s) or s <= 0.0:
+        raise ValueError(
+            f"scale_centerline_result: scale must be finite and > 0, "
+            f"got {scale!r}")
+    if s == 1.0:
+        return res
+
+    def _scaled_profile(prof):
+        if isinstance(prof, CircleProfile):
+            return CircleProfile(prof.r * s)
+        if isinstance(prof, RectProfile):
+            return RectProfile(prof.w * s, prof.h * s)
+        raise TypeError(
+            f"scale_centerline_result: unsupported Profile type "
+            f"{type(prof).__name__}; extend the scaling dispatch when "
+            f"the walker learns to emit this profile class.")
+
+    return CenterlineResult(
+        polyline=np.asarray(res.polyline, dtype=float) * s,
+        tangents=np.asarray(res.tangents, dtype=float).copy(),
+        profiles=[_scaled_profile(p) for p in res.profiles],
+        polygons=[np.asarray(p, dtype=float) * s for p in res.polygons],
+        arclen=np.asarray(res.arclen, dtype=float) * s,
+        closed=res.closed,
+    )
+
+
 # ---------- STEP loading ----------------------------------------------------
 
 
