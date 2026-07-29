@@ -273,28 +273,85 @@ def test_check_centerline_inside_solid_slack_accommodates_cap():
                                      cad_units_per_meter=1.0)
 
 
-def test_detect_cap_faces_area_ratio_threshold_accepts_clear_caps():
-    """`detect_cap_faces` accepts 2 small planar faces when the 3rd-smallest
-    planar face area > 2.0 x cap area (the area_ratio_threshold magic
-    at coil_topology.py:107).  Pins the lower boundary.
+def test_detect_cap_faces_accepts_gapped_rect_torus(tmp_path):
+    """`detect_cap_faces` must find the 2 end caps of a 355 deg
+    gapped rect torus via the material-depth signature (the wire runs
+    away from a cap for >= 2 * sqrt(area); every lateral flat exits
+    after one wire thickness).
+
+    Authored with a netgen.occ revolve and imported through the same
+    STEP route as production.  (The previous synthetic built the
+    sweep with build123d's `sweep(profile, arc)` WITHOUT positioning
+    the profile at the path start -- the OCCT result carried
+    zero-area flats and caps whose GProp centroid sat at the ORIGIN,
+    i.e. broken CAD that only the old area-only heuristic could not
+    see.  Per the lab CAD policy, OCC sweep needs
+    `Plane(origin=path@0, z_dir=path%0) * profile`.)
     """
-    import build123d as bd
+    from netgen.occ import Axis, Axes, Pnt, Dir, WorkPlane
+    from radia._b3d_shim import import_step
     from radia.coil_topology import detect_cap_faces
 
-    # Gapped torus: 2 small circular end caps + many larger lateral
-    # planar facets (rect cross section produces top/bottom flats).
-    # Use a simpler synthetic: a 355 deg sweep of a rect profile.
-    # Actually the cleanest test is a known-good Cubit-generated rect
-    # torus fixture; falls back to building one synthetically here.
-    profile = bd.Plane.XZ * bd.Rectangle(0.006, 0.004)
-    arc = bd.JernArc(bd.Vector(0.030, 0, 0), bd.Vector(0, 1, 0),
-                      0.030, 355)
-    swept = bd.sweep(profile, arc)
-    solid = list(swept.solids())[0]
+    R, w, h = 0.030, 0.006, 0.004
+    profile = WorkPlane(Axes(
+        p=Pnt(R, 0, 0), n=Dir(0, 1, 0), h=Dir(0, 0, 1),
+    )).RectangleC(w, h).Face()
+    coil = profile.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 355)
+    step_path = str(tmp_path / "gapped_rect_torus.step")
+    coil.WriteStep(step_path)
+
+    shape = import_step(step_path)
+    solid = (shape.solids() if hasattr(shape, "solids") else [shape])[0]
     caps = detect_cap_faces(solid)
     assert caps is not None, (
-        "expected 2 cap faces on a 355 deg rect sweep (clear "
-        "area_ratio gap between rect end caps and lateral cylinders)")
+        "expected 2 cap faces on a 355 deg gapped rect torus "
+        "(material-depth signature)")
+    for cap in caps:
+        assert abs(float(cap.area) - w * h) < 0.2 * w * h
+        c = cap.center()
+        r_c = math.hypot(float(c.X), float(c.Y))
+        assert abs(r_c - R) < 0.5 * w, (
+            f"cap centroid radius {r_c*1e3:.1f} mm not at the spine "
+            f"radius {R*1e3:.1f} mm")
+
+
+def test_detect_cap_faces_accepts_unequal_end_areas(tmp_path):
+    """Exactly-2-survivor acceptance: the two end caps of a STEPPED
+    bar (10x10 mm thick segment fused to a 6x6 mm thin segment, end
+    areas 2.8x apart) must be accepted WITHOUT any area-pair
+    requirement.
+
+    Regression lock for G_equator_split (2026-07-29): its verified
+    caps measure 1.395 vs 40.867 mm^2 (29x apart -- a split conductor
+    carries different end cross-sections), and a 10% tight-pair rule
+    mis-routed it CLOSED into a 1059 s walker failure.  The depth
+    signature alone is decisive when exactly 2 planar faces survive:
+    here the 4+4 lateral panels exit after one bar thickness and the
+    step-shoulder ring face is sign-ambiguous (material on BOTH sides
+    of its centroid), so the survivors are exactly the 2 end caps.
+    """
+    from netgen.occ import Box, Pnt
+    from radia._b3d_shim import import_step
+    from radia.coil_topology import detect_cap_faces
+
+    thick = Box(Pnt(0, -5, -5), Pnt(40, 5, 5))       # cap 10x10 = 100
+    thin = Box(Pnt(40, -3, -3), Pnt(70, 3, 3))       # cap 6x6  = 36
+    bar = thick + thin
+    step_path = str(tmp_path / "stepped_bar.step")
+    bar.WriteStep(step_path)
+
+    shape = import_step(step_path)
+    solid = (shape.solids() if hasattr(shape, "solids") else [shape])[0]
+    caps = detect_cap_faces(solid)
+    assert caps is not None, (
+        "expected the 2 end caps of a stepped bar despite 2.8x "
+        "different end areas (exactly-2-survivor acceptance)")
+    got = sorted(float(c.area) for c in caps)
+    assert abs(got[0] - 36.0) < 1.0 and abs(got[1] - 100.0) < 1.0, (
+        f"cap areas {got} != the bar end faces [36, 100]")
+    xs = sorted(float(c.center().X) for c in caps)
+    assert abs(xs[0] - 0.0) < 0.5 and abs(xs[1] - 70.0) < 0.5, (
+        f"cap centroids at x={xs}, expected the bar ends x=[0, 70]")
 
 
 def test_R_spine_0_85_factor_at_coil_topology_py_149():

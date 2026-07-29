@@ -77,39 +77,158 @@ class CoilTopology:
 # ----------------------------------------------------------------------
 # Cap detection
 # ----------------------------------------------------------------------
-def detect_cap_faces(solid, area_ratio_threshold: float = 2.0
+def _material_depth_reaches(solid, face, depth: float) -> bool:
+    """True if the solid's material extends at least ``depth`` along
+    the INWARD normal from the face centroid.
+
+    Centroid and normal are computed directly through OCP
+    (``BRepGProp.SurfaceProperties`` + the surface normal at the UV
+    midpoint, orientation-corrected) rather than through the
+    duck-typed Face wrappers: the real build123d ``Face.center()``
+    returned origin / garbage coordinates on an OCCT-swept solid
+    (measured 2026-07-29 on a 355-deg JernArc rect sweep) while the
+    GProp centroid is exact for both wrapper flavours.
+
+    The inward sign is determined by probing +-0.3 * sqrt(area): the
+    side that is inside the solid is inward (guards against OCC face
+    orientation quirks).  Returns False when neither or both probes
+    are inside (degenerate).
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.BRepGProp import BRepGProp
+    from OCP.BRepTools import BRepTools
+    from OCP.GProp import GProp_GProps
+    from OCP.GeomLProp import GeomLProp_SLProps
+    from OCP.TopAbs import TopAbs_IN, TopAbs_REVERSED
+    from OCP.gp import gp_Pnt
+
+    fw = face.wrapped
+    props = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(fw, props)
+    com = props.CentreOfMass()
+    c0 = np.array([com.X(), com.Y(), com.Z()], dtype=float)
+
+    surf = BRep_Tool.Surface_s(fw)
+    umin, umax, vmin, vmax = BRepTools.UVBounds_s(fw)
+    sl = GeomLProp_SLProps(surf, 0.5 * (umin + umax),
+                           0.5 * (vmin + vmax), 1, 1e-9)
+    if not sl.IsNormalDefined():
+        return False
+    n = sl.Normal()
+    nn = np.array([n.X(), n.Y(), n.Z()], dtype=float)
+    ln = float(np.linalg.norm(nn))
+    if ln < 1e-12:
+        return False
+    nn /= ln
+    if fw.Orientation() == TopAbs_REVERSED:
+        nn = -nn
+    probe0 = 0.3 * math.sqrt(max(float(face.area), 1e-30))
+
+    def _inside(p):
+        cls = BRepClass3d_SolidClassifier(solid.wrapped)
+        cls.Perform(gp_Pnt(float(p[0]), float(p[1]), float(p[2])), 1e-9)
+        return cls.State() == TopAbs_IN
+
+    plus_in = _inside(c0 + probe0 * nn)
+    minus_in = _inside(c0 - probe0 * nn)
+    if plus_in == minus_in:
+        return False
+    inward = -nn if minus_in else nn
+    # Monotone depth: material at half depth AND at full depth.
+    return (_inside(c0 + 0.5 * depth * inward)
+            and _inside(c0 + depth * inward))
+
+
+def detect_cap_faces(solid, depth_factor: float = 2.0
                        ) -> Optional[Tuple[Any, Any]]:
     """Return ``(cap_a, cap_b)`` if the solid has 2 source/sink cap faces.
 
-    Heuristic:
-      - Caps are the 2 SMALLEST PLANE faces.
-      - Caps are accepted iff there are EXACTLY 2 PLANE faces, OR the
-        3rd-smallest PLANE face has area > ``area_ratio_threshold`` x
-        the 2nd-smallest cap (= the 2 caps stand out as distinctly
-        smaller than the rest of the planar lateral panels).
-      - 0 PLANE faces -> CLOSED (returns None).
+    A true end cap has a decisive GEOMETRIC signature: the wire runs
+    AWAY from it, so the solid's material extends several
+    cross-section sizes along the cap's inward normal.  Every other
+    planar face is shallow in its own normal direction: a lateral
+    panel exits after one wire thickness, a fused boss face after the
+    boss height.  Classification:
 
-    Verified 2026-05-02 on:
-      - ``ih_closed_torus_coil.step``: 4 TORUS / 0 PLANE -> None (CLOSED)
-      - ``ih_peec_inductance_coil.step``: 2 PLANE + 4 TORUS -> 2 caps
-      - ``rect_torus_lofted_united.step``: 28 PLANE; 2 smallest are
-        the 8x6mm caps (~4.8e-5 m^2) vs the 26 lateral panels at
-        ~1.4e-4 m^2 (~3x larger) -> 2 caps detected
-      - ``3turnCoil_work_coil_m.step``: 2 PLANE + 617 BSPLINE -> 2 caps
+      1. Every PLANE face is depth-tested: material must reach
+         ``depth_factor * sqrt(area)`` along the inward normal
+         (point-in-solid probes at 0.5x and 1.0x that depth).
+      2. EXACTLY 2 survivors -> those are the caps.  The two end
+         cross-sections need NOT match: a split or tapered conductor
+         has different end areas (measured 2026-07-29 on
+         G_equator_split: verified caps of 1.395 and 40.867 mm^2,
+         29x apart -- an area-pair requirement here mis-routed it
+         CLOSED).  A wire has exactly two places where the material
+         runs away from a planar face, so no disambiguation is
+         needed.
+      3. MORE than 2 survivors -> area disambiguation: the caps must
+         be a UNIQUE tight area pair (within 10%) and every other
+         survivor must differ from it by more than 30% -- e.g. a deep
+         fused-boss top face is allowed as long as its area is
+         clearly different.  Two tight pairs (measured on
+         B_rect_sweep: 63.6/63.9 mm^2 AND 66.52/66.54 mm^2, a
+         butt-jointed multi-segment conductor with four exposed
+         wire-end faces) are ambiguous -> None (refuse; the dispatch
+         treats the coil as CLOSED and the downstream
+         volume-reconciliation guard reports it).
+
+    This replaces the 2026-05-02 area-gap heuristic ("the 2 smallest
+    planes, accepted only when the 3rd is > 2x larger"), which could
+    not see caps on rectangular-wire sweeps whose lateral panel areas
+    are comparable to the cap area (measured 2026-07-29:
+    B_rect_sweep caps 63.6/63.9 mm^2 vs a 65.3 mm^2 lateral facet;
+    J_boss_fused caps 77.1/77.1 mm^2 vs 133-144 mm^2 boss faces --
+    both were refused and mis-routed CLOSED).
+
+    Re-verified fixture behaviour:
+      - closed torus (0 PLANE) -> None (CLOSED)
+      - gapped torus (2 PLANE + revolution lateral) -> 2 caps
+      - rect_torus_lofted_united (28 PLANE) -> the 2 true caps (the
+        26 lateral panels are one wire thickness shallow)
+      - 3turnCoil (2 PLANE + 617 BSPLINE) -> 2 caps
     """
     from radia._b3d_shim import GeomType
     plane_faces = [f for f in solid.faces() if f.geom_type == GeomType.PLANE]
     if len(plane_faces) < 2:
         return None
-    plane_faces.sort(key=lambda f: f.area)
-    cap_a, cap_b = plane_faces[0], plane_faces[1]
-    if len(plane_faces) >= 3:
-        if plane_faces[2].area <= area_ratio_threshold * cap_b.area:
-            # 3rd-smallest plane is comparable to the cap candidates --
-            # heuristic doesn't apply (e.g. polygon-cross-section coil
-            # with many small lateral facets).  Refuse to classify.
+
+    survivors = []
+    for f in plane_faces:
+        area = float(f.area)
+        if area <= 0:
+            continue
+        if _material_depth_reaches(solid, f,
+                                   depth_factor * math.sqrt(area)):
+            survivors.append(f)
+        if len(survivors) > 8:
+            return None  # degenerate: many deep planar faces
+
+    if len(survivors) < 2:
+        return None
+    survivors.sort(key=lambda f: float(f.area))
+    if len(survivors) == 2:
+        # Depth signature alone is decisive (docstring point 2); the
+        # end areas may legitimately differ (G_equator_split: 29x).
+        return (survivors[0], survivors[1])
+    areas = [float(f.area) for f in survivors]
+
+    # Tight pairs (within 10%).
+    pairs = [(i, j)
+             for i in range(len(survivors))
+             for j in range(i + 1, len(survivors))
+             if areas[j] <= 1.10 * areas[i]]
+    if len(pairs) != 1:
+        return None  # no pair, or ambiguous multiple pairs
+    i, j = pairs[0]
+    # Every OTHER survivor must be clearly different from the pair.
+    pair_mean = 0.5 * (areas[i] + areas[j])
+    for k in range(len(survivors)):
+        if k in (i, j):
+            continue
+        if 0.77 * pair_mean <= areas[k] <= 1.30 * pair_mean:
             return None
-    return (cap_a, cap_b)
+    return (survivors[i], survivors[j])
 
 
 # ----------------------------------------------------------------------

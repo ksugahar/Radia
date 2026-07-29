@@ -514,10 +514,11 @@ class Face(_ShapeBase):
         from OCP.gp import gp_Pnt, gp_Vec
         from OCP.GeomLProp import GeomLProp_SLProps
         from OCP.BRep import BRep_Tool
+        from OCP.BRepTools import BRepTools
         from OCP.TopAbs import TopAbs_REVERSED
 
         surf = BRep_Tool.Surface_s(self.wrapped)
-        umin, umax, vmin, vmax = BRep_Tool.UVBounds_s(self.wrapped)
+        umin, umax, vmin, vmax = BRepTools.UVBounds_s(self.wrapped)
         if point is None:
             u = 0.5 * (umin + umax)
             v = 0.5 * (vmin + vmax)
