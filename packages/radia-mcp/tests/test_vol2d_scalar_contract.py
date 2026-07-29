@@ -87,7 +87,7 @@ def test_robin_is_heat_only_and_disjoint_from_dirichlet() -> None:
     request["robin_boundaries"] = {
         "top": {"transfer_w_per_m2_k": 5.0, "ambient_k": 300.0}
     }
-    with pytest.raises(ValueError, match="only for steady_heat"):
+    with pytest.raises(ValueError, match="only for heat studies"):
         _prepare(request)
     request = _request("steady_heat")
     request["robin_boundaries"] = {

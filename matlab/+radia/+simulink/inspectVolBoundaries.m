@@ -26,13 +26,30 @@ for k=1:count
     end
     ids(k)=uint32(str2double(tokens{1})); names(k)=string(tokens{2});
 end
-if any(ids<1) || numel(unique(ids))~=count || numel(unique(names))~=count || ...
-        numel(unique(lower(names)))~=count
+if any(ids<1) || numel(unique(ids))~=count || any(strlength(names)==0)
     error("radia:simulink:VolBoundaries", ...
-        "Boundary ids and case-insensitive names must be unique.");
+        "Boundary ids must be unique and names must be nonempty.");
 end
 [ids,order]=sort(ids); names=names(order);
+uniqueIds=zeros(0,1,"uint32");uniqueNames=strings(0,1);idGroups=cell(0,1);
+for k=1:count
+    index=find(strcmpi(uniqueNames,names(k)),1);
+    if isempty(index)
+        uniqueIds(end+1,1)=ids(k); %#ok<AGROW>
+        uniqueNames(end+1,1)=names(k); %#ok<AGROW>
+        idGroups{end+1,1}=ids(k); %#ok<AGROW>
+    else
+        if uniqueNames(index)~=names(k)
+            error("radia:simulink:VolBoundaries", ...
+                "Boundary names that differ only by case are ambiguous.");
+        end
+        idGroups{index}(end+1,1)=ids(k);
+    end
+end
 inventory=struct("schema","radia.simulink.vol-boundaries.v1", ...
-    "mesh_file",meshFile,"boundary_ids",ids,"boundary_names",names, ...
-    "boundary_count",uint16(count));
+    "mesh_file",meshFile,"boundary_ids",uniqueIds, ...
+    "boundary_names",uniqueNames,"boundary_id_groups",{idGroups}, ...
+    "raw_boundary_ids",ids,"raw_boundary_names",names, ...
+    "boundary_count",uint16(numel(uniqueNames)), ...
+    "raw_boundary_id_count",uint16(count));
 end
