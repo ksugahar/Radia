@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.25 - Isochronous topology optimization and conducting-sphere reference
+
+Released 2026-07-29.
+
+- Added a staged HDiv-MMM density-adjoint topology workflow for isochronous
+  magnets, including feasibility restoration, SIMP continuation, exact-void
+  cleanup, an executed WebGUI notebook, and a compute-validation lane.
+- Added the conducting-sphere complex polarizability reference and strengthened
+  coupled VIM frequency handling and eddy-current hybrid checks.
+- Added a named MATLAB fallback for the topology API and hardened finite-value,
+  move-limit, volume-budget, and passive-sign validation at the release surface.
+
 ## 4.95.24 - Passive URN ladder identification and multi-region VIM
 
 Released 2026-07-28.

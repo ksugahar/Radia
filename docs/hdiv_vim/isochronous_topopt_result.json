@@ -1,41 +1,43 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-28T15:33:11Z",
+  "generated_at_utc": "2026-07-29T00:37:25Z",
   "notebook": "isochronous_topopt.ipynb",
-  "notebook_sha256": "943ea128132bcf55897c20ff4e90ed83bb9a4eda7760ec6ecda10529a9bf8ce3",
+  "notebook_sha256": "d7ad3632f92037942760dd3ecfc5a0215046d1cb6c13f912dfbed241b4465b9a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.20",
-    "radia_version": "4.95.24"
+    "radia_mcp_version": "1.4.21",
+    "radia_version": "4.95.25"
   },
   "summary": {
     "path": "isochronous_topopt.ipynb",
-    "cells": 10,
-    "code_cells": 4,
-    "executed_code_cells": 4,
-    "code_cells_with_outputs": 4,
-    "output_count": 5,
+    "cells": 11,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 8,
     "error_output_count": 0,
     "result_saved": true,
-    "notebook_role": "",
-    "webgui_required": false,
-    "webgui_field_required": false,
-    "webgui_import_present": false,
-    "webgui_draw_present": false,
-    "webgui_draw_cell_count": 0,
-    "executed_webgui_draw_cell_count": 0,
-    "webgui_draw_cells_with_rich_outputs": 0,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 1,
+    "executed_webgui_draw_cell_count": 1,
+    "webgui_draw_cells_with_rich_outputs": 1,
     "webgui_ready": true,
-    "parameterized_field_draw_present": false,
-    "parameterized_field_draw_cell_count": 0,
-    "executed_parameterized_field_draw_cell_count": 0,
-    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 1,
+    "executed_parameterized_field_draw_cell_count": 1,
+    "parameterized_field_draw_cells_with_rich_outputs": 1,
     "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
-      "language_info"
+      "language_info",
+      "radia",
+      "widgets"
     ]
   },
   "outputs": [
@@ -49,8 +51,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 106,
-          "text_sha256": "847c6552cc05d1a35d72a231aff0336162bd244677a52d83c83cd33c847b2185",
-          "text_preview": "ne=270  ndof=1977\ndirectional adjoint vs FD : rel = 1.352e-08\nreciprocity vs C++ charges: rel = 1.099e-10\n",
+          "text_sha256": "0af9cb8b8bc2f834c00ad2f18130ee5c823ce521fed00992e7c2a123e9db0600",
+          "text_preview": "ne=270  ndof=1977\ndirectional adjoint vs FD : rel = 1.784e-07\nreciprocity vs C++ charges: rel = 1.099e-10\n",
           "text_truncated": false
         }
       ]
@@ -65,8 +67,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 170,
-          "text_sha256": "8cc09a1b8b9c15f201cc530f33434e68558de7a647e89b3295090342f6e01dfa",
-          "text_preview": "ne=194  iterations=30  solves=49  wall=3.3s\nJ: +2.758902e-02 -> +3.202970e-02  (+16.10%)  monotone=True\nmax violation / band = 1.062  (cap 1.25)   median t_iter = 101 ms\n",
+          "text_sha256": "68f593cd18f084e2c16965a3a37208657f6aa252da835f03a5aa47cd399a5fdf",
+          "text_preview": "ne=194  iterations=30  solves=49  wall=3.8s\nJ: +2.758902e-02 -> +3.202970e-02  (+16.10%)  monotone=True\nmax violation / band = 1.062  (cap 1.25)   median t_iter = 115 ms\n",
           "text_truncated": false
         }
       ]
@@ -97,8 +99,48 @@
       ]
     },
     {
-      "cell_index": 8,
+      "cell_index": 6,
       "execution_count": 4,
+      "source_sha256": "3de77a1825e73d34e49383af0e8d43bf26ef92e4582b5511f5111b245112d495",
+      "source_preview": "from ngsolve import GridFunction, L2, Norm\nfrom ngsolve.webgui import Draw\n\nrho_view = GridFunction(L2(mesh, order=0))\nrho_view.vec.FV().NumPy()[:] = rho_f\nwith TaskManager():\n    gfM_view, _ = sector.solve(\n        density_to_s(rho_f, CHI_IRON), f_state, tol=1e-10)\n\nmesh_scene = Draw(\n    mesh,\n    name=\"isochronous_design_mesh\",\n    draw_vol=True,\n    draw_surf=True,\n    width=\"100%\",\n    height=\"420px\",\n)\nfield_scene = Draw(\n    Norm(gfM_view),\n    mesh,\n    name=\"magnetization_magnitude\",\n    draw_vol=True,\n    draw_surf=True,\n    autoscale=True,\n    width=\"100%\",\n    height=\"500px\",\n)\nfield_scene\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 111,
+          "text_plain_sha256": "78f4a038fbc1d2a67c2844ef368f3978f839709bc9d3c62722401c4a7a95e759",
+          "text_plain_preview": "WebGuiWidget(layout=Layout(height='420px', width='100%'), value={'gui_settings': {}, 'ngsolve_version': '6.2.2…",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 111,
+          "text_plain_sha256": "c1a50180e80dd67b4427382128cb0af3f02ca0939bcf38d0e2650e87cd49ed9c",
+          "text_plain_preview": "WebGuiWidget(layout=Layout(height='500px', width='100%'), value={'gui_settings': {}, 'ngsolve_version': '6.2.2…",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 15,
+          "text_plain_sha256": "afb6eccc907512ad9e107ffffad3b07bc4fe745b1e7fa29c206f362e876ae3eb",
+          "text_plain_preview": "BaseWebGuiScene",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
       "source_sha256": "40d473bf0a8e9144fdafb0ad0917ad477156e94e966918ea4053d86e6d42f417",
       "source_preview": "with TaskManager():\n    ver = verify_design_iron_only(sector, result.density, state_builder,\n                                  [objective_builder] + con_builders,\n                                  chi_iron=CHI_IRON, density_filter=filt,\n                                  gram_kwargs=dict(eps=1e-7))\nJ_bin, J_iron = ver.values_embedded[0], ver.values_iron_only[0]\ngap = (hist[-1]['objective'] - J_bin) / abs(J_bin)\nsummary['verification'] = dict(\n    n_iron=int(ver.keep.sum()), J_embedded_bin=float(J_bin), J_iron_only=float(J_iron),\n    ersatz_band=float(ver.bands[0]), gray_gap=float(gap),\n    constraint_bands=[float(b) for b in ver.bands[1:]])\nprint(f\"iron elements after threshold: {int(ver.keep.sum())}/{sector.n_el}\")\nprint(f\"J embedded 0/1      = {J_bin:+.6e}\")\nprint(f\"J iron-only exact   = {J_iron:+.6e}\")\nprint(f\"ERSATZ band         = {ver.bands[0]*100:+.2f}%   (constraints: \"\n      + ', '.join(f'{b*100:+.2f}%' for b in ver.bands[1:]) + ')')\nprint(f\"gray-design gap (continuous vs 0/1) =",
       "outputs": [
@@ -115,9 +157,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 671,
-          "text_plain_sha256": "539c60cab33643c57a8a57978473b4e9b5c5e2c20e26e66291c9baffb97ce6a6",
-          "text_plain_preview": "{'adjoint_gate': {'ne': 270,\n  'ndof': 1977,\n  'directional_fd_rel': 1.352160205966751e-08,\n  'reciprocity_rel': 1.0987868338074598e-10},\n 'design_loop': {'ne': 194,\n  'iterations': 30,\n  'solves': 49,\n  'J_first': 0.027589021192293693,\n  'J_last': 0.032029702032231655,\n  'gain': 0.16095825977249079,\n  'viol_over_band_max': 1.0620757431357255,\n  't_iter_median_s': 0.1010233000270091,\n  't_loop_s': 3.3306665000272915},\n 'verification': {'n_iron': 66,\n  'J_embedded_bin': 0.782979884237477,\n  'J_iron_only': 0.7776454036123537,\n  'ersatz_band': 0.006859785450210785,\n  'gray_gap': -0.959092560770671,\n  'constraint_bands': [-0.04905366093688734, -0.47089787539375605]}}",
+          "text_plain_chars": 674,
+          "text_plain_sha256": "9097718db6d206487fa2ecb9707420e7faecce509b6d818de5c4f716dac967b5",
+          "text_plain_preview": "{'adjoint_gate': {'ne': 270,\n  'ndof': 1977,\n  'directional_fd_rel': 1.7836724836686516e-07,\n  'reciprocity_rel': 1.0987465601726383e-10},\n 'design_loop': {'ne': 194,\n  'iterations': 30,\n  'solves': 49,\n  'J_first': 0.02758902119229375,\n  'J_last': 0.03202970203227957,\n  'gain': 0.16095825977422518,\n  'viol_over_band_max': 1.0620757431165846,\n  't_iter_median_s': 0.11488845001440495,\n  't_loop_s': 3.7822066000080667},\n 'verification': {'n_iron': 66,\n  'J_embedded_bin': 0.7829798842374768,\n  'J_iron_only': 0.7776454036123537,\n  'ersatz_band': 0.006859785450210499,\n  'gray_gap': -0.9590925607706097,\n  'constraint_bands': [-0.049053660936887546, -0.47089787539375605]}}",
           "text_plain_truncated": false
         }
       ]

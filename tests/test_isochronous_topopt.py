@@ -4,8 +4,8 @@ Stage-1 gate of docs/hdiv_vim/TOPOLOGY_OPTIMIZATION_ISOCHRONOUS.md: the
 per-element density adjoint gradient must match central finite differences to
 the 1e-6 class, and the dipole-array reciprocity load must reproduce the
 independent C++ analytic charge evaluator.  Bands are set from measured values
-with 2-3 decades of margin (research run 2026-07-28,
-C:/temp/vim_topopt/stage1_adjoint_gate.py: directional 8.1e-10, per-element
+with 2-3 decades of margin (promoted research run 2026-07-28:
+directional 8.1e-10, per-element
 worst 3.9e-7 at the FD noise floor, reciprocity 1.1e-10 at bonus_intorder=10).
 """
 from math import pi
@@ -249,6 +249,46 @@ def test_optimize_density_validation_errors(problem):
     with pytest.raises(ValueError, match="volume_fraction"):
         optimize_density(problem.prob, problem.f_state, problem.f_adj,
                          chi_iron=100.0, volume_fraction=0.0)
+    with pytest.raises(ValueError, match="move_min"):
+        optimize_density(problem.prob, problem.f_state, problem.f_adj,
+                         chi_iron=100.0, volume_fraction=0.5,
+                         move_limit=-0.1)
+    with pytest.raises(ValueError, match="volume budget"):
+        optimize_density(problem.prob, problem.f_state, problem.f_adj,
+                         chi_iron=100.0, volume_fraction=0.5,
+                         initial_density=np.ones(problem.prob.n_el))
+
+
+def test_optimize_density_deep_restoration_prioritizes_feasibility():
+    """An infeasible functional start must improve even when J must decrease."""
+    chi_iron = 100.0
+
+    class LinearProblem:
+        n_el = 2
+        element_volumes = np.ones(2)
+
+        def linearize(self, s, state_load, loads, **kwargs):
+            chi = 1.0 / np.asarray(s, dtype=float)
+            rho = (chi - CHI_MIN) / (chi_iron - CHI_MIN)
+            # Objective and constraint both increase with rho[0].  Reaching
+            # the target therefore requires a deliberate objective decrease.
+            grad_s = np.zeros(2)
+            grad_s[0] = -(chi[0] ** 2) / (chi_iron - CHI_MIN)
+            return SimpleNamespace(
+                values=np.array([rho[0], rho[0]]),
+                jacobians=np.stack([grad_s, grad_s]),
+                gfM=None, gfLambdas=(None, None), state_iterations=0,
+                adjoint_iterations=(0, 0))
+
+    result = optimize_density(
+        LinearProblem(), object(), object(), [object()], [0.2],
+        chi_iron=chi_iron, volume_fraction=1.0,
+        initial_density=np.array([0.9, 0.1]), band_floor=0.01,
+        move_limit=0.2, max_iterations=2)
+    assert len(result.history) == 2
+    assert all(entry["band_mode"] == "deep" for entry in result.history)
+    assert result.history[1]["objective"] < result.history[0]["objective"]
+    assert result.history[1]["violation"][0] < result.history[0]["violation"][0]
 
 
 # ---------------------------------------------------------------- Stage 3

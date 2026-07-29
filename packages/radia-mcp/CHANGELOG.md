@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.21] - 2026-07-29
+
+- Published the isochronous HDiv-MMM topology-optimization contract, including
+  staged feasibility restoration, exact-void/SIMP promotion, and measured
+  machine-level interpretation without machine-local provenance.
+- Added the conducting-sphere analytical reference and the named MATLAB
+  fallback ownership required by the checked Python-to-MATLAB parity surface.
+
 ## [1.4.20] - 2026-07-28
 
 - Added executable URN guidance for Y-admittance, Cauer-ladder, and CLN-peeling

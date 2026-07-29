@@ -26,8 +26,8 @@ evaluation points.  The dense magnetization-to-field matrix ``F`` is never
 formed; derivative functionals enter as +/- point pairs
 (:func:`gradient_pair_points`).
 
-Verified 2026-07-28 (research run ``C:/temp/vim_topopt/stage1_adjoint_gate.py``,
-unit ball, 270 tets, log-uniform ``s`` in [1e-2, 1]): adjoint gradient matches
+Verified 2026-07-28 on the promoted unit-ball gate (270 tets, log-uniform
+``s`` in [1e-2, 1]): adjoint gradient matches
 central finite differences to 8.1e-10 (directional, all elements) and 3.9e-7
 worst-case per element (the smallest-gradient element, FD noise floor); the
 reciprocity load matches the independent C++ analytic charge evaluator
@@ -82,12 +82,18 @@ def density_to_s(density, chi_iron, chi_min=CHI_MIN, penalty=1.0):
     validated ersatz floor :data:`CHI_MIN`.
     """
     rho = np.asarray(density, dtype=float)
-    if not chi_iron > chi_min > 0.0:
+    chi_iron = float(chi_iron)
+    chi_min = float(chi_min)
+    penalty = float(penalty)
+    if not (np.isfinite(chi_iron) and np.isfinite(chi_min)
+            and chi_iron > chi_min > 0.0):
         raise ValueError(
             "density_to_s: need chi_iron > chi_min > 0 (got chi_iron=%r, chi_min=%r)"
             % (chi_iron, chi_min))
-    if not penalty >= 1.0:
+    if not np.isfinite(penalty) or penalty < 1.0:
         raise ValueError("density_to_s: penalty must be >= 1")
+    if not np.all(np.isfinite(rho)):
+        raise ValueError("density_to_s: density must be finite")
     if np.any(rho < -1e-9) or np.any(rho > 1.0 + 1e-9):
         raise ValueError(
             "density_to_s: density must lie in [0, 1] (got min=%r, max=%r)"
@@ -102,13 +108,24 @@ def density_gradient_from_s_gradient(density, s_gradient, chi_iron,
 
     ``ds/drho = -(chi_iron - chi_min) penalty rho^(penalty-1) / chi(rho)^2``.
     """
-    rho = np.clip(np.asarray(density, dtype=float), 0.0, 1.0)
+    rho = np.asarray(density, dtype=float)
     grad_s = np.asarray(s_gradient, dtype=float)
     if rho.shape != grad_s.shape:
         raise ValueError("density_gradient_from_s_gradient: shape mismatch %r vs %r"
                          % (rho.shape, grad_s.shape))
-    if not penalty >= 1.0:
+    chi_iron = float(chi_iron)
+    chi_min = float(chi_min)
+    penalty = float(penalty)
+    if not (np.isfinite(chi_iron) and np.isfinite(chi_min)
+            and chi_iron > chi_min > 0.0):
+        raise ValueError("density_gradient_from_s_gradient: need "
+                         "chi_iron > chi_min > 0")
+    if not np.isfinite(penalty) or penalty < 1.0:
         raise ValueError("density_gradient_from_s_gradient: penalty must be >= 1")
+    if (not np.all(np.isfinite(rho)) or not np.all(np.isfinite(grad_s))
+            or np.any(rho < 0.0) or np.any(rho > 1.0)):
+        raise ValueError("density_gradient_from_s_gradient: density and "
+                         "gradient must be finite, with density in [0, 1]")
     chi = chi_min + (chi_iron - chi_min) * rho ** penalty
     dchi = ((chi_iron - chi_min) * penalty * rho ** (penalty - 1.0)
             if penalty != 1.0 else (chi_iron - chi_min) * np.ones_like(rho))
@@ -606,6 +623,20 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                          % (len(constraint_loads), targets.size))
     if not 0.0 < volume_fraction <= 1.0:
         raise ValueError("optimize_density: volume_fraction must be in (0, 1]")
+    move_limit = float(move_limit)
+    move_min = float(move_min)
+    if (not np.isfinite(move_limit) or not np.isfinite(move_min)
+            or not 0.0 < move_min <= move_limit <= 1.0):
+        raise ValueError("optimize_density: need 0 < move_min <= "
+                         "move_limit <= 1")
+    max_iterations_i = int(max_iterations)
+    if max_iterations_i < 1 or max_iterations_i != max_iterations:
+        raise ValueError("optimize_density: max_iterations must be a positive integer")
+    objective_slack = float(objective_slack)
+    if not np.isfinite(objective_slack) or objective_slack < 0.0:
+        raise ValueError("optimize_density: objective_slack must be non-negative")
+    if not np.all(np.isfinite(targets)):
+        raise ValueError("optimize_density: targets must be finite")
     volumes = problem.element_volumes
     volume_max = float(volume_fraction * volumes.sum())
     if initial_density is None:
@@ -615,7 +646,17 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         if rho.shape != (problem.n_el,):
             raise ValueError("optimize_density: initial_density shape %r != "
                              "(%d,)" % (rho.shape, problem.n_el))
+    if (not np.all(np.isfinite(rho)) or np.any(rho < 0.0)
+            or np.any(rho > 1.0)):
+        raise ValueError("optimize_density: initial_density must be finite "
+                         "and lie in [0, 1]")
+    initial_volume = float(volumes @ rho)
+    if initial_volume > volume_max + 1e-12 * max(1.0, abs(volume_max)):
+        raise ValueError("optimize_density: initial_density exceeds the "
+                         "iron volume budget")
     if band_floor is None:
+        if not np.isfinite(band_relative) or band_relative <= 0.0:
+            raise ValueError("optimize_density: band_relative must be positive")
         band = float(band_relative) * np.maximum(np.abs(targets), 1e-300)
     else:
         band = np.broadcast_to(np.asarray(band_floor, dtype=float),
@@ -655,9 +696,9 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     lin, gJ, gks = evaluate(rho, None)
     n_solves = 1
     history = []
-    move = float(move_limit)
+    move = move_limit
     converged = False
-    for iteration in range(int(max_iterations)):
+    for iteration in range(max_iterations_i):
         t_iter = time.perf_counter()
         J = float(lin.values[0])
         viol = lin.values[1:] - targets
