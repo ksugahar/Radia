@@ -896,11 +896,16 @@ def test_topology_spine_walks_true_closed_spine(tmp_path):
     path_m, w_m, h_m = extract_centerline_from_step(
         step_path, n_segments=60, cad_units_per_meter=1000.0)
 
-    # Walked stations are returned AS-IS (adaptive density; n_segments
-    # is signature-parity only), so assert count and per-segment
-    # widths length instead of an exact resample count.
+    # Walked stations retain their adaptive density (n_segments is
+    # signature-parity only); only the omitted wrap edge is normalized
+    # to one local step for a stable PEEC excitation port.
     assert path_m.shape[0] > 20
     assert len(w_m) == path_m.shape[0] - 1
+    seg_len = np.linalg.norm(np.diff(path_m, axis=0), axis=1)
+    port_gap = float(np.linalg.norm(path_m[0] - path_m[-1]))
+    gap_ratio = port_gap / float(np.median(seg_len))
+    assert 0.5 <= gap_ratio <= 1.5, (
+        f"closed-path PEEC port gap is {gap_ratio:.3f} local steps")
     radii = np.linalg.norm(path_m[:, :2], axis=1)
     np.testing.assert_allclose(radii, 0.030, atol=2e-4)
     assert float(np.max(np.abs(path_m[:, 2]))) < 1e-4
@@ -909,3 +914,55 @@ def test_topology_spine_walks_true_closed_spine(tmp_path):
     assert 0.0025 < r_equiv < 0.0035, (
         f"recovered wire radius {r_equiv*1e3:.2f} mm out of band "
         "[2.5, 3.5] mm")
+
+
+def test_walked_station_volume_scale_includes_closed_wrap_edge():
+    """Closed-loop area calibration must integrate the omitted port edge.
+
+    The PEEC path omits that edge intentionally, but the solid volume used
+    to calibrate the slab measurements covers the complete conductor.
+    Excluding the wrap edge biases every returned width when section area
+    varies near the walker seed.
+    """
+    from types import SimpleNamespace
+
+    from radia.coil_from_cad import _walked_stations_to_path_cad
+
+    pts = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ])
+    measured = np.array([1.0, 2.0, 1.0, 1.0])
+    solid = SimpleNamespace(mass=8.0)  # true mean area 2 over length 4
+    result = SimpleNamespace(polyline=pts, areas=measured, closed=True)
+
+    path, widths = _walked_stations_to_path_cad(
+        result, solid, "test_closed_volume")
+
+    seg_len = np.linalg.norm(np.diff(path, axis=0), axis=1)
+    close_len = float(np.linalg.norm(path[0] - path[-1]))
+    seg_measured = 0.5 * (measured[:-1] + measured[1:])
+    k = float(widths[0] ** 2 / seg_measured[0])
+    reconstructed_volume = (
+        float(np.sum(k * seg_measured * seg_len))
+        + k * 0.5 * (measured[-1] + measured[0]) * close_len
+    )
+    assert reconstructed_volume == pytest.approx(solid.mass)
+
+
+def test_walked_station_area_count_must_match_polyline():
+    """Malformed walker output must fail with an explicit contract error."""
+    from types import SimpleNamespace
+
+    from radia.coil_from_cad import _walked_stations_to_path_cad
+
+    result = SimpleNamespace(
+        polyline=np.zeros((4, 3)),
+        areas=np.ones(3),
+        closed=True,
+    )
+    with pytest.raises(ValueError, match="one cross-section area per station"):
+        _walked_stations_to_path_cad(
+            result, SimpleNamespace(mass=1.0), "test_area_count")
