@@ -41,6 +41,7 @@ def _evidence() -> dict:
             "temporary_storage": False,
         },
         "dependency_scan": {
+            "executed_at_utc": "2026-07-29T00:00:00Z",
             "scopes": [
                 {
                     "category": category,
@@ -125,6 +126,17 @@ def test_rejects_unplanned_root_mismatch_and_stale_payload() -> None:
     assert result["checks"]["root_mismatch_has_explicit_plan"] is False
     assert result["checks"]["evidence_payload_sha256"] is False
     assert stale == payload["evidence_payload_sha256"]
+
+
+def test_rejects_dependency_scan_from_another_execution() -> None:
+    payload = _evidence()
+    payload["dependency_scan"]["executed_at_utc"] = "2026-07-28T00:00:00Z"
+    payload["evidence_payload_sha256"] = _sha(payload)
+
+    result = validate_solver_uninstall_safety_evidence(payload)
+
+    assert result["status"] == "rejected"
+    assert result["checks"]["dependency_scan_timestamp_matches_evidence"] is False
 
 
 def test_rejects_claim_that_uninstall_already_ran() -> None:
