@@ -1,0 +1,155 @@
+{
+  "radia_version": "4.95.27",
+  "schema_version": "radia-motor-validation-artifact/v1",
+  "timestamp_utc": "2026-07-29T19:37:25.363595+00:00",
+  "motor_validation_lane": "ngsolve_age",
+  "reference_source_class": "independent_public_solver_lane",
+  "observable_family": "torque",
+  "case_count": 8,
+  "status": "pass",
+  "coupling_design_status": "validated_solver_path",
+  "tolerances": {
+    "torque_closure_relative_error_max": 1e-08,
+    "centered_normalized_correlation_min": 0.95
+  },
+  "metrics": {
+    "quantity_specific_residual": 9.67719430026613e-17,
+    "torque_relative_error": 0.09745842283119847,
+    "centered_normalized_correlation": 0.9620074232770214,
+    "torque_peak_to_peak_nm": 163.68827953956983
+  },
+  "timing_breakdown_s": {
+    "prepare": 0.00506120000500232,
+    "assemble_and_factor": 0.007808399968780577,
+    "angle_sweep_and_postprocess": 0.018209200003184378,
+    "total": 0.06512859999202192
+  },
+  "artifact_feedback": {
+    "status": "promoted",
+    "public_lesson": "A fixed AGE operator and factorization can sweep a complete rotor-angle grid without remeshing and provide an independent torque waveform."
+  },
+  "shared_mesh_material_identity": {
+    "geometry_sha256": "c5ad6c6c3b4c4888f6745ef6df7bb1e4f2546a82e083eaed8646309ba0b368d0",
+    "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
+    "excitation_sha256": "27e2deab2fc6df07f85b503e2b838ef8ddf7ed39872a1dfc395ecb6308cf5485",
+    "aggregate_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83"
+  },
+  "solver_ready_artifact": {
+    "artifact_id": "annular_motor_ngsolve_age_v1",
+    "verification": [
+      {
+        "command": "python validation_test/radia_mcp/generate_annular_motor_dual_lane.py",
+        "result": "solved 8 angles with reused mesh/operator/factorization"
+      }
+    ],
+    "result_output_sha256": "3a5eb58e88ca9b723854c8eea406e5e8890f2148eb7a13ce98ede1b10106f2e2"
+  },
+  "age_gate_ids": [
+    "mesh_reused_all_angles",
+    "operator_reused_all_angles",
+    "factorization_reused_all_angles",
+    "torque_closes_over_period"
+  ],
+  "pytest_targets": [
+    "packages/radia-mcp/tests/test_age_retirement_validation.py"
+  ],
+  "execution": {
+    "solver_status": "solved",
+    "operation": "solve",
+    "rotation_method": "rotor_harmonic_phase_only_no_remesh",
+    "mesh_reused_all_angles": true,
+    "operator_reused_all_angles": true,
+    "factorization_reused_all_angles": true,
+    "torque_rows": [
+      {
+        "rotor_angle_rad": 0.0,
+        "torque_nm": -66.63773050239959,
+        "field_state_sha256": "cb995eb59b31d1b6c9c91f6cb19edf7ebd349f1ee0cce1d694791996a92dc810",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 0.7853981633974483,
+        "torque_nm": -124.03167608376258,
+        "field_state_sha256": "382bc4a2ac7a85a49ab5e672409695f6b626905b0f5c27e3fec894799a9b5873",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 1.5707963267948966,
+        "torque_nm": -146.84891378910513,
+        "field_state_sha256": "4b17a0dbbb6e09955c4ad7de81c0e4a8575c7c2804aa0834ae0aa23ed42b6333",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 2.356194490192345,
+        "torque_nm": -121.72447524790155,
+        "field_state_sha256": "4d200ec1a580c3502f7e0cefc83b8ea69564f6eb0da1c0035dcfb957c8233443",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 3.141592653589793,
+        "torque_nm": -63.37483919590932,
+        "field_state_sha256": "ee32c735a80e2ea2078d6d06b033d6da90a3104dae0fb500b56041d374712237",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 3.9269908169872414,
+        "torque_nm": -5.979371051479328,
+        "field_state_sha256": "08412368d620f007bed2dea0710cace1685021c9f9e652cd5bd22fb98fdf3c44",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 4.71238898038469,
+        "torque_nm": 16.839365750464705,
+        "field_state_sha256": "3d59843b4b20a0d8ffe51cb8019b24761c539fb3713e223423647d2726c6c0bc",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      },
+      {
+        "rotor_angle_rad": 5.497787143782138,
+        "torque_nm": -8.286595353806208,
+        "field_state_sha256": "8a56b006a3004b8d6333df40c06a51b65172053428f922fb970117792f922b34",
+        "mesh_contract_sha256": "128443568cf3bba55c53ec042bf081f28f013d7f01f8be8a2f38ffe35a0da635",
+        "material_contract_sha256": "e05e3f4704bb6059c8d78b3b4781ce4b686da215bbf3ec75abf403995625c2db",
+        "operator_sha256": "895e1c80def0a27936f9fda2061365bd93bf85e4d0c6c49782a7ff4e2b5debc8",
+        "age_factorization_sha256": "ec69b02f577046701d5f2cf03afe50ba58f15b0737c85ba27be000405943dee5",
+        "excitation_sha256": "2bbb91827fa208065f621ba1e0ac7dd2cdc7a64acd2736af23874dad2ad9e0a5"
+      }
+    ],
+    "torque_summary": {
+      "minimum_nm": -146.84891378910513,
+      "maximum_nm": 16.839365750464705,
+      "peak_to_peak_nm": 163.68827953956983,
+      "closure_relative_error": 9.67719430026613e-17,
+      "phase_sign_reversal_observed": true,
+      "phase_sign_reversal_required": false,
+      "full_machine_scope": true
+    }
+  }
+}

@@ -417,6 +417,43 @@ clear cleanupFile
 deleteIfExists(fileName);
 end
 
+function testNativePeriodicMotorAngleFamilyBlock(testCase)
+grid = [0; pi];
+A = reshape([1.0, 0.5], 1, 1, 2);
+B = reshape([1.0, 3.0], 1, 1, 2);
+C = reshape([1.0, 3.0], 1, 1, 2);
+D = zeros(1, 1, 2);
+Q = reshape([2.0, 4.0], 1, 1, 2);
+R = reshape([1.0, 2.0], 1, 1, 2);
+S = reshape([0.0, 2.0], 1, 1, 2);
+family = radia.simulink.makeMotorAngleFamily( ...
+    grid, A, B, C, D, Q, R, S, 2.0, ...
+    Period_rad=2*pi, SampleTime_s=0.01);
+verifyEqual(testCase, family.schema, "radia.motor.periodic-angle-family.v1");
+verifyEqual(testCase, family.backend, "native-mex-periodic-interpolation");
+verifyEqual(testCase, family.output_count, 2);
+
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    return
+end
+modelName = "radia_motor_angle_family_test";
+cleanup = onCleanup(@() closeIfLoaded(modelName));
+radia.simulink.buildMotorAngleFamilyModel(modelName, family, ...
+    StopTime_s=0.02, Save=false, Open=false);
+set_param(modelName, "SimulationCommand", "update");
+block = modelName + "/MotorAngleFamily";
+verifyEqual(testCase, string(get_param(block, "FunctionName")), ...
+    "radia_motor_angle_family_mex_sfunction");
+workspace = get_param(modelName, "ModelWorkspace");
+contract = getVariable(workspace, "radia_motor_angle_family_contract");
+verifyFalse(testCase, contract.python_per_step);
+verifyFalse(testCase, contract.matlab_matrix_algebra_per_step);
+clear cleanup
+closeIfLoaded(modelName);
+end
+
 function testRadiaLibraryBrowserArtifact(testCase)
 output="C:\temp\radia_simulink_library_test";
 library=radia.simulink.buildLibrary(OutputDirectory=output);

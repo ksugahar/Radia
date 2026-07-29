@@ -594,6 +594,50 @@ catch
 end
 end
 
+function testNativePeriodicMotorAngleFamilyHandle(testCase)
+before = radia.apiInfo();
+grid = [0; pi];
+period = 2*pi;
+A = reshape([1.0, 0.5], 1, 1, 2);
+B = reshape([1.0, 3.0], 1, 1, 2);
+C = reshape([1.0, 3.0], 1, 1, 2);
+D = zeros(1, 1, 2);
+Q = reshape([2.0, 4.0], 1, 1, 2);
+R = reshape([1.0, 2.0], 1, 1, 2);
+S = reshape([0.0, 2.0], 1, 1, 2);
+handle = radia.internal.callMex( ...
+    'simulink.state_space.create', grid, period, A, B, C, D, Q, R, S, 2.0);
+cleanup = onCleanup(@() destroyNativeStateSpace(handle));
+
+info = radia.internal.callMex('simulink.state_space.info', handle);
+verifyEqual(testCase, string(info.model_kind), "periodic_angle_family");
+verifyEqual(testCase, info.snapshot_count, 2);
+verifyEqual(testCase, info.state_size, 1);
+verifyEqual(testCase, info.input_size, 1);
+verifyEqual(testCase, info.linear_output_size, 1);
+verifyEqual(testCase, info.output_size, 2);
+verifyEqual(testCase, info.period, period, "AbsTol", 0);
+
+first = radia.internal.callMex( ...
+    'simulink.state_space.step', handle, pi/2, 3.0);
+verifyEqual(testCase, first, [4.0; 19.5], "AbsTol", 1e-12);
+second = radia.internal.callMex( ...
+    'simulink.state_space.step', handle, pi/2, 3.0);
+verifyEqual(testCase, second, [15.0; 122.625], "AbsTol", 1e-12);
+info = radia.internal.callMex('simulink.state_space.info', handle);
+verifyEqual(testCase, info.step_count, 2);
+verifyEqual(testCase, info.last_coordinate, pi/2, "AbsTol", 1e-12);
+
+radia.internal.callMex('simulink.state_space.reset', handle);
+wrapped = radia.internal.callMex( ...
+    'simulink.state_space.step', handle, 2*pi + pi/2, 3.0);
+verifyEqual(testCase, wrapped, first, "AbsTol", 1e-12);
+clear cleanup
+destroyNativeStateSpace(handle);
+after = radia.apiInfo();
+verifyEqual(testCase, after.handle_count, before.handle_count);
+end
+
 function testComplexMixedGalerkinKernels(testCase)
 Kkk = [4 + 1i, 0.3 - 0.2i; 0.3 + 0.2i, 3 - 0.5i];
 Kke = [0.2 + 0.1i; 0.4 - 0.3i];

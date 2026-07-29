@@ -7945,7 +7945,18 @@ class CoupledHDivHybridVIMSystem:
         dtype = np.dtype(op.dtype) if _is_matrix_free_operator(op) else op.dtype
         m_rhs, e_rhs = self._resolved_rhs(magnetic_rhs, eddy_rhs, dtype)
         rhs = np.vstack([m_rhs, e_rhs]).astype(dtype, copy=False)
-        if _is_matrix_free_operator(op):
+        solver = str(solver).lower()
+        if solver not in {"gmres", "cocr", "dense"}:
+            raise ValueError("solver must be 'gmres', 'cocr', or 'dense'")
+        if _is_matrix_free_operator(op) and solver == "dense":
+            sol = _solve_reduced_linear(op.to_dense(), rhs)
+            solver_diagnostics = {
+                "backend": "native-dense-reduced-lu",
+                "iterations": 0,
+                "relative_residual_max": 0.0,
+                "materialized_from_matrix_free": True,
+            }
+        elif _is_matrix_free_operator(op):
             sol, solver_diagnostics = _solve_native_reduced_operator(
                 op,
                 rhs,
@@ -7987,6 +7998,10 @@ class CoupledHDivHybridVIMSystem:
         adjoint_coupling_scale=None,
         mixed_galerkin_keep_blocks=None,
         mixed_galerkin_eliminate_blocks=None,
+        solver: str = "gmres",
+        tolerance: float = 1.0e-10,
+        max_iterations: int | None = None,
+        restart: int | None = None,
     ) -> HCurlVIMHDivMMMSolution:
         """Solve one harmonic excitation and reconstruct all retained fields.
 
@@ -8097,6 +8112,10 @@ class CoupledHDivHybridVIMSystem:
                 surface_impedance=surface_impedance,
                 coupling_scale=coupling_scale,
                 adjoint_coupling_scale=adjoint_coupling_scale,
+                solver=solver,
+                tolerance=tolerance,
+                max_iterations=max_iterations,
+                restart=restart,
                 return_operator=True,
             )
             op = solved["operator"]

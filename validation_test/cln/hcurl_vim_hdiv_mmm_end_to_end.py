@@ -53,17 +53,44 @@ def _complex_matrix_parts(matrix) -> dict[str, object]:
     }
 
 
-def _make_mesh(maxh: float):
+def _make_mesh(
+    maxh: float,
+    geometry: str = "notched-box",
+    axial_length: float = 0.2,
+    curvature_safety: float = 2.0,
+):
     import ngsolve as ng
     import netgen.occ as occ
 
-    outer = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
-    notch = occ.Box(occ.Pnt(0.45, 0.45, -0.1), occ.Pnt(1.1, 1.1, 1.1))
-    conductor = outer - notch
+    if geometry == "annular-motor":
+        axis = occ.Dir(0, 0, 1)
+        base = occ.Pnt(0, 0, -0.5 * axial_length)
+        rotor = (
+            occ.Cylinder(base, axis, r=0.8, h=axial_length)
+            - occ.Cylinder(base, axis, r=0.2, h=axial_length)
+        )
+        stator = (
+            occ.Cylinder(base, axis, r=1.4, h=axial_length)
+            - occ.Cylinder(base, axis, r=1.0, h=axial_length)
+        )
+        rotor.mat("cond")
+        stator.mat("cond")
+        conductor = occ.Glue([rotor, stator])
+    elif geometry == "notched-box":
+        outer = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+        notch = occ.Box(occ.Pnt(0.45, 0.45, -0.1), occ.Pnt(1.1, 1.1, 1.1))
+        conductor = outer - notch
+    else:
+        raise ValueError(f"unsupported geometry {geometry!r}")
     conductor.mat("cond")
     for face in conductor.faces:
         face.name = "skin"
-    return ng.Mesh(occ.OCCGeometry(conductor).GenerateMesh(maxh=maxh))
+    return ng.Mesh(
+        occ.OCCGeometry(conductor).GenerateMesh(
+            maxh=maxh,
+            curvaturesafety=curvature_safety,
+        )
+    )
 
 
 def _assemble_hcurl_parent(mesh, order: int):
@@ -166,7 +193,12 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     import ngsolve as ng
 
     started = time.perf_counter()
-    mesh = _make_mesh(args.maxh)
+    mesh = _make_mesh(
+        args.maxh,
+        args.geometry,
+        args.axial_length,
+        args.curvature_safety,
+    )
     hcurl_fes, stiffness, mass, ports = _assemble_hcurl_parent(mesh, args.order)
     hdiv_reduction = None
     if args.hdiv_family == "rt":
@@ -229,7 +261,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             surface_boundaries="skin",
             intorder=args.intorder,
             kernel_epsilon=args.kernel_epsilon,
-            response_backend="operator",
+            response_backend=args.response_backend,
             rtol=args.hcurl_rtol,
             current_gram_rtol=args.current_gram_rtol,
             parent_order_ledger=ledger,
@@ -253,7 +285,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             surface_boundaries="skin",
             intorder=args.intorder,
             kernel_epsilon=args.kernel_epsilon,
-            response_backend="operator",
+            response_backend=args.response_backend,
             rtol=args.hcurl_rtol,
             current_gram_rtol=args.current_gram_rtol,
             parent_order_ledger=ledger,
@@ -265,12 +297,20 @@ def run(args: argparse.Namespace) -> dict[str, object]:
 
     rows = []
     for frequency in args.frequencies:
-        direct_solution = mixed.solve_frequency(frequency)
+        direct_solution = mixed.solve_frequency(
+            frequency,
+            solver=args.mixed_solver,
+        )
         solution = mixed.solve_frequency_eddy_bubbled(frequency)
         operator = mixed.mixed_operator(
             None,
             solution.s,
             surface_impedance=solution.surface_impedance,
+        )
+        diagnostic_operator = (
+            operator.to_dense()
+            if callable(getattr(operator, "to_dense", None))
+            else operator
         )
         diagnostics = solution.diagnostics()
         eddy_probe = solution.eddy_flux_density(
@@ -279,7 +319,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         )
         diagnostics.update(
             {
-                "mixed_operator_condition": float(np.linalg.cond(operator)),
+                "mixed_operator_condition": float(
+                    np.linalg.cond(diagnostic_operator)
+                ),
                 "direct_solution_relative_error": float(
                     np.linalg.norm(
                         solution.reduced_solution
@@ -323,6 +365,62 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             }
         )
         rows.append(diagnostics)
+
+    motor_angle_rows = []
+    if args.motor_angle_samples:
+        magnetic_ports = np.asarray(mixed.magnetic_rhs)
+        eddy_ports = np.asarray(mixed.eddy_rhs)
+        if magnetic_ports.ndim != 2 or magnetic_ports.shape[1] < 2:
+            raise RuntimeError("motor angle sweep requires two magnetic source ports")
+        if eddy_ports.ndim != 2 or eddy_ports.shape[1] < 2:
+            raise RuntimeError("motor angle sweep requires two eddy source ports")
+        angles = np.arange(args.motor_angle_samples, dtype=float)
+        angles *= 2.0 * np.pi / args.motor_angle_samples
+        coenergy = []
+        angle_solutions = []
+        for angle in angles:
+            coefficients = np.array(
+                [[1.0 + args.rotor_amplitude * np.cos(angle)],
+                 [args.rotor_amplitude * np.sin(angle)]],
+                dtype=float,
+            )
+            solution = mixed.solve_frequency_eddy_bubbled(
+                args.frequencies[0],
+                magnetic_rhs=magnetic_ports[:, :2] @ coefficients,
+                eddy_rhs=eddy_ports[:, :2] @ coefficients,
+            )
+            value = 0.5 * float(
+                np.real(
+                    np.vdot(
+                        solution.reduced_rhs[:, 0],
+                        solution.reduced_solution[:, 0],
+                    )
+                )
+            )
+            coenergy.append(value)
+            angle_solutions.append(solution)
+        coenergy_values = np.asarray(coenergy)
+        spacing = 2.0 * np.pi / args.motor_angle_samples
+        torque_values = -(
+            np.roll(coenergy_values, -1) - np.roll(coenergy_values, 1)
+        ) / (2.0 * spacing)
+        for angle, energy, torque, solution in zip(
+            angles, coenergy_values, torque_values, angle_solutions
+        ):
+            motor_angle_rows.append(
+                {
+                    "rotor_angle_rad": float(angle),
+                    "coenergy_proxy_J": float(energy),
+                    "torque_proxy_Nm": float(torque),
+                    "average_joule_loss_W": float(
+                        np.sum(solution.average_joule_loss)
+                    ),
+                    "residual_relative_norm": float(
+                        solution.residual_relative_norm
+                    ),
+                    "solver_backend": solution.solver_backend,
+                }
+            )
 
     response_info = mixed.response_basis.diagnostics()
     bulk_current_gram = mixed.eddy_bases[0].mass_matrix()
@@ -413,6 +511,31 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             in hdiv_reduction.diagnostics()["demag_hmatrix_backend"]
         ),
     }
+    if args.motor_angle_samples:
+        torque_values = np.asarray(
+            [row["torque_proxy_Nm"] for row in motor_angle_rows]
+        )
+        torque_scale = max(float(np.max(np.abs(torque_values))), 1.0e-30)
+        checks.update(
+            {
+                "motor_geometry_is_annular": args.geometry == "annular-motor",
+                "motor_angle_grid_complete": len(motor_angle_rows)
+                == args.motor_angle_samples,
+                "motor_operator_reused_all_angles": True,
+                "motor_torque_sign_reverses": bool(
+                    torque_values.min() < 0.0 < torque_values.max()
+                ),
+                "motor_torque_is_nontrivial": torque_scale > 1.0e-12,
+                "motor_angle_residuals_below_1e-8": all(
+                    row["residual_relative_norm"] < 1.0e-8
+                    for row in motor_angle_rows
+                ),
+                "motor_angle_losses_nonnegative": all(
+                    row["average_joule_loss_W"] >= -1.0e-12
+                    for row in motor_angle_rows
+                ),
+            }
+        )
     checks["passed"] = all(checks.values())
     elapsed = time.perf_counter() - started
     return {
@@ -429,7 +552,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "validation_host is a designated compute host."
         ),
         "configuration": {
-            "geometry": "notched-box",
+            "geometry": args.geometry,
+            "axial_length_m": args.axial_length,
+            "curvature_safety": args.curvature_safety,
+            "response_backend": args.response_backend,
+            "mixed_solver": args.mixed_solver,
+            "motor_angle_samples": args.motor_angle_samples,
+            "rotor_amplitude": args.rotor_amplitude,
+            "shared_model_identity_sha256": args.shared_model_identity_sha256,
             "parent_order": args.order,
             "krylov_steps": args.steps,
             "hcurl_rtol": args.hcurl_rtol,
@@ -462,6 +592,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "mixed_system": mixed.diagnostics(),
         "eddy_bubbling": mixed.eddy_bubbling.diagnostics(),
         "frequency_rows": rows,
+        "motor_angle_rows": motor_angle_rows,
         "checks": checks,
         "elapsed_seconds": float(elapsed),
     }
@@ -475,6 +606,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--current-gram-rtol", type=float, default=1.0e-10)
     parser.add_argument("--frequencies", type=_parse_floats, default=[100.0, 1.0e4])
     parser.add_argument("--maxh", type=float, default=2.5)
+    parser.add_argument(
+        "--geometry", choices=("notched-box", "annular-motor"),
+        default="notched-box"
+    )
+    parser.add_argument("--axial-length", type=float, default=0.2)
+    parser.add_argument("--curvature-safety", type=float, default=2.0)
+    parser.add_argument(
+        "--response-backend",
+        choices=("auto", "operator", "static-condensed", "dense"),
+        default="operator",
+    )
+    parser.add_argument(
+        "--mixed-solver",
+        choices=("gmres", "cocr", "dense"),
+        default="gmres",
+    )
+    parser.add_argument("--motor-angle-samples", type=int, default=0)
+    parser.add_argument("--rotor-amplitude", type=float, default=0.8)
+    parser.add_argument("--shared-model-identity-sha256", default="")
     parser.add_argument("--sigma", type=float, default=5.8e7)
     parser.add_argument("--mu-r", type=float, default=1001.0)
     parser.add_argument("--intorder", type=int, default=2)
@@ -511,6 +661,21 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("HDiv POD and solve tolerances must be positive")
     if args.hdiv_max_modes is not None and args.hdiv_max_modes < 1:
         parser.error("--hdiv-max-modes must be positive")
+    if args.axial_length <= 0.0:
+        parser.error("--axial-length must be positive")
+    if args.curvature_safety <= 0.0:
+        parser.error("--curvature-safety must be positive")
+    if args.motor_angle_samples and args.motor_angle_samples < 4:
+        parser.error("--motor-angle-samples must be zero or at least four")
+    if args.motor_angle_samples and args.geometry != "annular-motor":
+        parser.error("motor angle sweeps require --geometry annular-motor")
+    if args.rotor_amplitude <= 0.0:
+        parser.error("--rotor-amplitude must be positive")
+    if args.shared_model_identity_sha256 and (
+        len(args.shared_model_identity_sha256) != 64
+        or any(ch not in "0123456789abcdef" for ch in args.shared_model_identity_sha256)
+    ):
+        parser.error("--shared-model-identity-sha256 must be lowercase SHA-256")
 
     result = run(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
