@@ -1715,6 +1715,21 @@ _MIN_PLAUSIBLE_COIL_EXTENT_M = 1e-5
 _MAX_PLAUSIBLE_COIL_EXTENT_M = 5.0
 
 
+def _normalize_cad_units_per_meter(cad_units_per_meter, source_tag):
+    """Return a finite positive CAD-units-per-metre value as ``float``."""
+    try:
+        scale = float(cad_units_per_meter)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{source_tag}: cad_units_per_meter must be finite and > 0, "
+            f"got {cad_units_per_meter!r}.") from exc
+    if not math.isfinite(scale) or scale <= 0:
+        raise ValueError(
+            f"{source_tag}: cad_units_per_meter must be finite and > 0, got "
+            f"{cad_units_per_meter!r}.")
+    return scale
+
+
 def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
     """Fail-loud guard against a units mismatch (CLAUDE.md "Fail Fast,
     Fail Loud" -- no silent auto-correction).
@@ -1729,16 +1744,7 @@ def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
     plausible range [0.01 mm, 5 m] and names the cad_units_per_meter
     that WOULD make it plausible.
     """
-    try:
-        scale = float(cad_units_per_meter)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{source_tag}: cad_units_per_meter must be finite and > 0, "
-            f"got {cad_units_per_meter!r}.") from exc
-    if not math.isfinite(scale) or scale <= 0:
-        raise ValueError(
-            f"{source_tag}: cad_units_per_meter must be finite and > 0, got "
-            f"{cad_units_per_meter!r}.")
+    scale = _normalize_cad_units_per_meter(cad_units_per_meter, source_tag)
     bb = solid.bounding_box()
     extents_cad = (
         float(bb.max.X - bb.min.X),
@@ -1756,7 +1762,7 @@ def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
     # The lower bound stays very permissive (10 um) so genuinely small
     # synthetic/test coils are not rejected.
     if _MIN_PLAUSIBLE_COIL_EXTENT_M <= ext_m <= _MAX_PLAUSIBLE_COIL_EXTENT_M:
-        return  # plausible coil size -- pass
+        return scale  # plausible coil size -- pass and normalize
     suggest = None
     for cand in (1.0, 1e3, 1e-3, 1e2, 1e6):
         if (_MIN_PLAUSIBLE_COIL_EXTENT_M
@@ -1847,7 +1853,7 @@ def extract_centerline_from_step(step_path: str,
 
     # Units sanity: fail-loud on a mm-as-metres mismatch (silent
     # ~1000x-wrong L otherwise; No-Fallbacks / Fail-Loud).
-    _check_solid_extent_plausible(
+    cad_units_per_meter = _check_solid_extent_plausible(
         solid, cad_units_per_meter, "extract_centerline_from_step")
 
     # Classification-based dispatch (No-Fallback policy, CLAUDE.md
@@ -2321,8 +2327,11 @@ def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
               "which bypasses spine extraction entirely.")
 
 
+_PEEC_CACHE_FORMAT_VERSION = 2
+
+
 def _peec_cache_path(step_path: str, n_peri, sigma, nwinc, nhinc,
-                       cad_units_per_meter, use_coil_builder):
+                     n_slices, cad_units_per_meter, use_coil_builder):
     """Disk-cache filename for filaments_from_step output.
 
     One cache file per (step_path, params) combination so different
@@ -2337,7 +2346,9 @@ def _peec_cache_path(step_path: str, n_peri, sigma, nwinc, nhinc,
         flavour = f"grid{int(nwinc)}x{int(nhinc)}"
     else:
         flavour = f"legacy{int(nwinc)}x{int(nhinc)}"
-    return f"{base}.peec_{flavour}_sigma{sigma:.2e}_u{cad_units_per_meter:g}.json"
+    return (f"{base}.peec_v{_PEEC_CACHE_FORMAT_VERSION}_{flavour}"
+            f"_n{int(n_slices)}_sigma{sigma:.2e}"
+            f"_u{cad_units_per_meter:g}.json")
 
 
 def _peec_cache_step_sha256(step_path: str) -> str:
@@ -2365,6 +2376,12 @@ def _peec_cache_load(cache_path: str, expected_sha: str, sigma: float):
         with open(cache_path, encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
+        return None
+    # Format 1 predates the default-walker CAD-unit boundary and may
+    # contain millimetre coordinates cached as metres.  Never rebuild a
+    # solver from those silently-wrong paths; force one checked extraction
+    # and rewrite the cache in the current format.
+    if data.get("_format_version") != _PEEC_CACHE_FORMAT_VERSION:
         return None
     if data.get("step_sha256") != expected_sha:
         return None
@@ -2426,7 +2443,7 @@ def _peec_cache_save(cache_path: str, topo: dict, step_sha: str,
             continue  # skip non-serialisable extras
         aux[k] = v
     data = {
-        "_format_version": 1,
+        "_format_version": _PEEC_CACHE_FORMAT_VERSION,
         "step_sha256": step_sha,
         "params": params,
         "filament_paths": fil,
@@ -2453,7 +2470,8 @@ def filaments_from_step(step_path: str,
     """End-to-end STEP -> PEEC topology, with on-disk cache.
 
     Set RADIA_PEEC_CACHE_DISABLE=1 to bypass the cache entirely.
-    The cache file is ``<step>.peec_<flavour>_sigma<S>_u<U>.json``
+    The cache file is
+    ``<step>.peec_v<format>_<flavour>_n<N>_sigma<S>_u<U>.json``
     next to the .step.  Keyed by the SHA256 of the .step file's
     bytes plus the parameter set, so any edit to the CAD invalidates
     the cache automatically.  Cache hit rebuilds the PEEC solver
@@ -2463,13 +2481,18 @@ def filaments_from_step(step_path: str,
     logic and arguments documentation.
     """
     import os
+    # Normalize before formatting the cache key.  Geometry plausibility is
+    # checked on cache creation in _filaments_from_step_compute; a current-
+    # format hit is tied to the exact STEP SHA and normalized unit scale.
+    cad_units_per_meter = _normalize_cad_units_per_meter(
+        cad_units_per_meter, "filaments_from_step")
     cache_disabled = os.environ.get("RADIA_PEEC_CACHE_DISABLE", "0") != "0"
     cache_path = None
     step_sha = None
     if not cache_disabled and os.path.isfile(step_path):
         cache_path = _peec_cache_path(
             step_path, n_peri, sigma, nwinc, nhinc,
-            cad_units_per_meter, use_coil_builder)
+            n_slices, cad_units_per_meter, use_coil_builder)
         step_sha = _peec_cache_step_sha256(step_path)
         cached = _peec_cache_load(cache_path, step_sha, sigma)
         if cached is not None:
@@ -2492,6 +2515,7 @@ def filaments_from_step(step_path: str,
             "sigma": sigma,
             "nwinc": nwinc,
             "nhinc": nhinc,
+            "n_slices": n_slices,
             "cad_units_per_meter": cad_units_per_meter,
             "use_coil_builder": use_coil_builder,
         })
@@ -2571,7 +2595,7 @@ def _filaments_from_step_compute(step_path: str,
     # ~1000x-wrong L otherwise; No-Fallbacks / Fail-Loud).  Covers BOTH
     # filament paths (coil-builder walker and n_peri UV tiers).
     from radia._b3d_shim import import_step as _import_step_units_chk
-    _check_solid_extent_plausible(
+    cad_units_per_meter = _check_solid_extent_plausible(
         _import_step_units_chk(step_path), cad_units_per_meter,
         "filaments_from_step")
 
@@ -2871,6 +2895,13 @@ def filaments_from_shape(shape,
         dict compatible with `filaments_from_step` CoilBuilder result.
     """
     from radia.coil_from_step import _axis_agnostic_seed
+
+    # Validate and normalize before BRep conversion or walking.  The STEP
+    # entry point has the same guard; the in-memory path must not turn an
+    # invalid zero scale into a late ZeroDivisionError or accept a unit
+    # mismatch that silently rescales PEEC geometry.
+    cad_units_per_meter = _check_solid_extent_plausible(
+        shape, cad_units_per_meter, "filaments_from_shape")
 
     # --- 1. Resolve start_hint (CAD units) ---
     start_hint = None

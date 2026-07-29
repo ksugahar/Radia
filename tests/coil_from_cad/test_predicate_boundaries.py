@@ -706,6 +706,16 @@ def test_extent_plausibility_guard_accepts_inclusive_boundaries(extent_m):
         _ExtentOnlySolid(extent_m), 1.0, "test_extent")
 
 
+def test_extent_plausibility_guard_normalizes_numeric_scale():
+    """A float-compatible public value is normalized for later arithmetic."""
+    from radia.coil_from_cad import _check_solid_extent_plausible
+
+    scale = _check_solid_extent_plausible(
+        _ExtentOnlySolid(50.0), "1000", "test_extent")
+    assert scale == 1000.0
+    assert isinstance(scale, float)
+
+
 @pytest.mark.parametrize("extent_m", [9.999e-6, 5.000001])
 def test_extent_plausibility_guard_rejects_outside_boundaries(extent_m):
     """A value immediately outside either documented boundary fails loud."""

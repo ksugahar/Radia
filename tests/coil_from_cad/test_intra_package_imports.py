@@ -169,7 +169,7 @@ def test_to_coil_builder_import_resolves():
 
 
 @pytest.mark.slow
-def test_filaments_from_step_runs_only_src_on_path():
+def test_filaments_from_step_runs_only_src_on_path(monkeypatch):
     """End-to-end: filaments_from_step on a real STEP under only-src config.
 
     The conftest deliberately keeps src/radia OFF sys.path, so any bare
@@ -186,6 +186,8 @@ def test_filaments_from_step_runs_only_src_on_path():
 
     from radia.coil_from_cad import filaments_from_step
 
+    # A cache hit would skip the imports this test is meant to exercise.
+    monkeypatch.setenv("RADIA_PEEC_CACHE_DISABLE", "1")
     res = filaments_from_step(
         KEIKO_STEP, nwinc=2, nhinc=2, cad_units_per_meter=1000.0,
     )
