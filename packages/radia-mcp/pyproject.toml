@@ -19,7 +19,7 @@ authors = [{name = "Kengo Sugahara"}]
 # need Cubit integration can `pip install radia-mcp` without pulling in
 # the full radia wheel.
 dependencies = [
-    "mcp>=1.0",
+    "mcp>=1.0,<2",
 ]
 
 [project.optional-dependencies]
@@ -90,7 +90,7 @@ full = [
 Repository = "https://github.com/ksugahar/Radia"
 
 [project.scripts]
-# Public MCP servers. All load standalone (mcp>=1.0 only). The
+# Public MCP servers. All load standalone on the MCP Python SDK 1.x. The
 # "radia-coupled" ones reference radia from inside example snippets in
 # their knowledge modules, but importing the server does not require
 # radia to be installed.
