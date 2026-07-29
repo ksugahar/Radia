@@ -1,0 +1,62 @@
+{
+  "case": "Field Study Q1 frozen production artifact",
+  "checks": {
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "semi_discrete_residual": true,
+    "uniform_heating_exact": true,
+    "validation_passed": true
+  },
+  "created_at_utc": "2026-07-29T14:13:34.213358+00:00",
+  "errors": {
+    "max_abs": 2.2737367544323206e-13,
+    "max_rel": 7.569030474142213e-16
+  },
+  "pass": true,
+  "production_contract": {
+    "curved_geometry": false,
+    "element_family": "Q1",
+    "generated_vol_git_required": false,
+    "mesh_contract_sha256": "6ad66fc6b13dd1ae73e0844b5b15927229a70fa65f215e31fd48bc2e3cc97a52",
+    "quadrilaterals": 42,
+    "triangles": 0
+  },
+  "result_files": [
+    "validation_test/radia_mcp/artifacts/field_study_production_v1/q1.json",
+    "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
+  ],
+  "result_summary": {
+    "exact_temperature_k": 300.4,
+    "field_state_history_sha256": "f1d1f7ffcd230b0a17d5f5465dd7340b1a799ca6df6438e3b0a370ac7a23346f",
+    "final_temperature_k": 300.4000000000001,
+    "maximum_step_residual_inf": 1.8963997039378455e-13,
+    "operation": "transient_heat",
+    "request_contract_sha256": "f47cdcf3e269e7794ff288d2b38dc374639e81a23103146c378bdb922c86c678"
+  },
+  "run": {
+    "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
+    "duration_s": 0.019649600028060377,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "timing_breakdown_s": {
+    "factorize_and_solve": 0.0005407000426203012,
+    "postprocess_and_export": 0.015053299954161048,
+    "prepare_and_assemble": 0.0040556000312790275
+  },
+  "tolerances": {
+    "max_abs": 1e-09,
+    "max_rel": 1e-06
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.22"
+  },
+  "verification": {
+    "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+    "method": "analytic identity plus residual, reciprocity, passivity, or power closure gate"
+  }
+}
