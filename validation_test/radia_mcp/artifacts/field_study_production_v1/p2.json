@@ -1,0 +1,71 @@
+{
+  "case": "Field Study P2 frozen production artifact",
+  "checks": {
+    "charge_neutral_under_common_mode": true,
+    "closed_system_force_balance": true,
+    "matrix_field_energy": true,
+    "nonpositive_mutual_capacitance": true,
+    "positive_self_capacitance": true,
+    "positive_semidefinite": true,
+    "ran_to_completion": true,
+    "reciprocal": true,
+    "result_files_exist": true,
+    "validation_passed": true
+  },
+  "created_at_utc": "2026-07-29T14:13:44.129561+00:00",
+  "errors": {
+    "max_abs": 4.9308596274228555e-14,
+    "max_rel": 0.019006649678863466
+  },
+  "pass": true,
+  "production_contract": {
+    "curved_geometry": false,
+    "element_family": "P2",
+    "generated_vol_git_required": false,
+    "mesh_contract_sha256": "a22029f9d19a9a6fa31d15537d1a8b489f8e3ce6e7d6e73160948d587f4d1b69",
+    "quadrilaterals": 0,
+    "triangles": 658
+  },
+  "result_files": [
+    "validation_test/radia_mcp/artifacts/field_study_production_v1/p2.json",
+    "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
+  ],
+  "result_summary": {
+    "capacitance_matrix_sha256": "6e7a0f88ac707cc24bbe67189559bcb54c61cedea39c1cb3baa10c2be1a63885",
+    "conductor_order": [
+      "left_conductor",
+      "right_conductor",
+      "outer"
+    ],
+    "energy_relative_error": 5.054203443745921e-15,
+    "force_closure_relative_error": 0.019006649678863466,
+    "loaded_field_state_sha256": "aea8aaa57ffb462339d5874a95024760d116ed67642b270838de2b68e221126e",
+    "operation": "electrostatic_system",
+    "request_contract_sha256": "48256956ea0ee3ecfe1357e2944dc5c6bba84b765a357b03c7b5a53198ad6a23"
+  },
+  "run": {
+    "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
+    "duration_s": 9.861115899984725,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "timing_breakdown_s": {
+    "basis_and_loaded_solves": 9.859479899983853,
+    "contract_and_export": 0.001636000000871718
+  },
+  "tolerances": {
+    "max_abs": 1e-09,
+    "max_rel": 1e-06
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.22"
+  },
+  "verification": {
+    "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+    "method": "analytic identity plus residual, reciprocity, passivity, or power closure gate"
+  }
+}

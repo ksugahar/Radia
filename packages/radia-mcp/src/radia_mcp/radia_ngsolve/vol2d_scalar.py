@@ -37,7 +37,7 @@ from .vol2d_postprocess import (
 
 SCALAR_SCHEMA = "radia.vol2d-scalar-analysis.v1"
 REPLAY_SCHEMA = "radia.vol2d-scalar-replay.v1"
-_PHYSICS = {"electrostatic", "current_flow", "steady_heat"}
+_PHYSICS = {"electrostatic", "current_flow", "steady_heat", "transient_heat"}
 _FORMULATIONS = {"planar", "axisymmetric"}
 _EPS0 = 8.8541878128e-12
 
@@ -127,6 +127,7 @@ def _material_contract(
         "electrostatic": ("F/m", "C/m^3"),
         "current_flow": ("S/m", "A/m^3"),
         "steady_heat": ("W/(m K)", "W/m^3"),
+        "transient_heat": ("W/(m K)", "W/m^3"),
     }[physics]
     normalized: dict[str, Any] = {}
     for name in material_names:
@@ -134,6 +135,8 @@ def _material_contract(
         if not isinstance(row, Mapping):
             raise ValueError(f"materials[{name}] must be an object")
         allowed = {"coefficient_si", "volumetric_source_si"}
+        if physics == "transient_heat":
+            allowed.add("volumetric_heat_capacity_j_per_m3_k")
         if physics == "current_flow":
             allowed.add("relative_permittivity")
         extra = sorted({str(key) for key in row} - allowed)
@@ -172,6 +175,11 @@ def _material_contract(
             "source_unit": units[1],
             "relative_permittivity": list(relative_permittivity),
         }
+        if physics == "transient_heat":
+            normalized[name]["volumetric_heat_capacity_j_per_m3_k"] = _positive(
+                row.get("volumetric_heat_capacity_j_per_m3_k"),
+                f"materials[{name}].volumetric_heat_capacity_j_per_m3_k",
+            )
     contract = {
         "schema": "radia.vol2d-scalar-materials.v1",
         "physics": physics,
@@ -203,8 +211,8 @@ def _boundary_contract(
     raw_robin = request.get("robin_boundaries", {})
     if not isinstance(raw_robin, Mapping):
         raise ValueError("robin_boundaries must be an object")
-    if physics != "steady_heat" and raw_robin:
-        raise ValueError("Robin convection is available only for steady_heat")
+    if physics not in {"steady_heat", "transient_heat"} and raw_robin:
+        raise ValueError("Robin convection is available only for heat studies")
     robin: dict[str, dict[str, float]] = {}
     for name, raw in raw_robin.items():
         key = str(name)
@@ -225,9 +233,9 @@ def _boundary_contract(
             ),
             "ambient_k": _finite(raw.get("ambient_k"), f"robin_boundaries[{key}].ambient_k"),
         }
-    if not dirichlet and not robin:
+    if physics != "transient_heat" and not dirichlet and not robin:
         raise ValueError("unconstrained scalar nullspace: specify Dirichlet or positive Robin data")
-    unit = "V" if physics != "steady_heat" else "K"
+    unit = "K" if physics in {"steady_heat", "transient_heat"} else "V"
     contract = {
         "schema": "radia.vol2d-scalar-boundaries.v1",
         "dirichlet_values": {name: _pair(value) for name, value in sorted(dirichlet.items())},
@@ -306,6 +314,94 @@ def _csv_export(observables: Mapping[str, Any]) -> str:
     return output.getvalue()
 
 
+def _electrostatic_boundary_force(
+    mesh_view: Any,
+    mesh: Any,
+    electric_field: Any,
+    materials: Mapping[str, Any],
+    boundary_name: str,
+    *,
+    formulation: str,
+    model_depth_m: float | None,
+) -> list[float]:
+    """Integrate dielectric-side Maxwell traction on one boundary.
+
+    NGSolve's boundary trace of ``grad(H1)`` is tangential and therefore loses
+    the conductor-normal electric field.  Sample from the adjacent volume
+    element instead, with a three-point Gauss rule on every boundary edge.
+    """
+
+    boundary_numbers = {
+        number
+        for number, name in mesh_view.boundary_names.items()
+        if name == boundary_name
+    }
+    gauss = (
+        (0.5 - math.sqrt(15.0) / 10.0, 5.0 / 18.0),
+        (0.5, 8.0 / 18.0),
+        (0.5 + math.sqrt(15.0) / 10.0, 5.0 / 18.0),
+    )
+    force = np.zeros(2, dtype=float)
+    matched = 0
+    for edge in mesh_view.boundary_edges:
+        if edge.boundary_number not in boundary_numbers:
+            continue
+        edge_nodes = set(edge.nodes)
+        adjacent_cells = [
+            cell for cell in mesh_view.cells if edge_nodes.issubset(cell.nodes)
+        ]
+        if len(adjacent_cells) != 1:
+            raise ValueError(
+                f"force boundary {boundary_name} edge must have one adjacent material cell"
+            )
+        cell = adjacent_cells[0]
+        material = materials["materials"][mesh_view.material_name(cell.material_number)]
+        eps_x, eps_y = material["coefficient_si"]
+        p0 = np.asarray(mesh_view.points[edge.nodes[0] - 1][:2], dtype=float)
+        p1 = np.asarray(mesh_view.points[edge.nodes[1] - 1][:2], dtype=float)
+        tangent = p1 - p0
+        length = float(np.linalg.norm(tangent))
+        if length <= 0.0:
+            raise ValueError(f"force boundary {boundary_name} contains a zero-length edge")
+        midpoint = 0.5 * (p0 + p1)
+        centroid = np.mean(
+            [np.asarray(mesh_view.points[node - 1][:2], dtype=float) for node in cell.nodes],
+            axis=0,
+        )
+        normal = np.asarray((tangent[1], -tangent[0]), dtype=float) / length
+        if float(np.dot(normal, midpoint - centroid)) < 0.0:
+            normal = -normal
+        inward = centroid - midpoint
+        inward_norm = float(np.linalg.norm(inward))
+        if inward_norm <= 0.0:
+            raise ValueError(f"force boundary {boundary_name} has an invalid adjacent cell")
+        inward /= inward_norm
+        offset = 1.0e-8 * max(length, math.sqrt(mesh_view.cell_area(cell)))
+        for coordinate, weight in gauss:
+            point = (1.0 - coordinate) * p0 + coordinate * p1 + offset * inward
+            value = electric_field(mesh(float(point[0]), float(point[1])))
+            electric = np.asarray((float(value[0]), float(value[1])), dtype=float)
+            displacement = np.asarray(
+                (eps_x * electric[0], eps_y * electric[1]), dtype=float
+            )
+            traction = (
+                displacement * float(np.dot(electric, normal))
+                - 0.5 * float(np.dot(electric, displacement)) * normal
+            )
+            measure = length * weight
+            if formulation == "planar":
+                measure *= float(model_depth_m)
+            else:
+                measure *= 2.0 * math.pi * float(point[0])
+            force += traction * measure
+        matched += 1
+    if matched == 0:
+        raise ValueError(f"force boundary {boundary_name} has no boundary edges")
+    if formulation == "axisymmetric":
+        return [0.0, float(force[1])]
+    return [float(force[0]), float(force[1])]
+
+
 def _prepare(request: Mapping[str, Any]) -> tuple[dict[str, Any], Any, dict[str, Any], dict[str, Any]]:
     physics = str(request.get("physics", ""))
     if physics not in _PHYSICS:
@@ -363,6 +459,8 @@ def solve_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("request must be an object")
     prepare_started = time.perf_counter()
     prepared, mesh_view, materials, boundaries = _prepare(request)
+    if prepared["physics"] == "transient_heat":
+        raise ValueError("transient_heat requires operation='transient_heat'")
     basename = str(request.get("export_basename", "vol2d_scalar")).strip()
     if not _SAFE_NAME.fullmatch(basename):
         raise ValueError("export_basename must be a portable filename stem")
@@ -377,6 +475,7 @@ def solve_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
         "boundary_contract": boundaries,
         "boundary_contract_sha256": boundaries["contract_sha256"],
         "terminal_pair": request.get("terminal_pair"),
+        "force_boundaries": request.get("force_boundaries", []),
         "export_basename": basename,
     }
     request_sha = _sha(request_contract)
@@ -505,6 +604,18 @@ def solve_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
 
     observable_started = time.perf_counter()
     field = -grad(gfu)
+    boundary_reactions: dict[str, list[float]] = {}
+    boundary_reaction_values: dict[str, complex] = {}
+    for name in dirichlet_names:
+        indicator = GridFunction(fes)
+        indicator.Set(1.0, definedon=mesh.Boundaries(name))
+        indicator_vector = np.asarray(
+            indicator.vec.FV().NumPy(), dtype=complex if complex_field else float
+        )
+        reaction = complex(np.dot(indicator_vector, residual))
+        boundary_reaction_values[name] = reaction
+        boundary_reactions[name] = _pair(reaction)
+
     terminal_pair = request.get("terminal_pair")
     terminal: dict[str, Any] | None = None
     if terminal_pair is not None:
@@ -514,10 +625,8 @@ def solve_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
         negative = str(terminal_pair.get("negative_boundary", ""))
         if positive == negative or positive not in dirichlet_pairs or negative not in dirichlet_pairs:
             raise ValueError("terminal_pair must name two distinct Dirichlet boundaries")
-        positive_dofs = _dof_indices(fes.GetDofs(mesh.Boundaries(positive)))
-        negative_dofs = _dof_indices(fes.GetDofs(mesh.Boundaries(negative)))
-        response_positive = complex(np.sum(residual[positive_dofs]))
-        response_negative = complex(np.sum(residual[negative_dofs]))
+        response_positive = boundary_reaction_values[positive]
+        response_negative = boundary_reaction_values[negative]
         voltage = complex(*dirichlet_pairs[positive]) - complex(*dirichlet_pairs[negative])
         if abs(voltage) == 0.0:
             raise ValueError("terminal_pair requires a nonzero value difference")
@@ -560,6 +669,7 @@ def solve_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
         "field_gradient_quadratic_half": gradient_quadratic,
         "volumetric_source_total": source_total,
         "residual_inf": float(np.linalg.norm(residual[free], ord=np.inf)),
+        "boundary_reactions": boundary_reactions,
     }
     if physics == "electrostatic":
         observables["electric_energy_j"] = gradient_quadratic
@@ -567,6 +677,31 @@ def solve_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
             dv = abs(complex(*terminal["value_difference"]))
             observables["capacitance_f"] = 2.0 * gradient_quadratic / (dv * dv)
             observables["terminal_charge_c"] = terminal["positive_reaction"]
+        force_names = request.get("force_boundaries", [])
+        if isinstance(force_names, str):
+            force_names = [force_names]
+        if not isinstance(force_names, Sequence) or isinstance(force_names, (bytes, str)):
+            raise ValueError("force_boundaries must be a sequence of boundary names")
+        unknown_force = sorted({str(name) for name in force_names} - set(mesh_view.contract()["boundary_names"]))
+        if unknown_force:
+            raise ValueError(f"unknown force boundaries: {unknown_force}")
+        if force_names:
+            electric = field
+            force_rows: dict[str, list[float]] = {}
+            for name in force_names:
+                force_rows[str(name)] = _electrostatic_boundary_force(
+                    mesh_view,
+                    mesh,
+                    electric,
+                    materials,
+                    str(name),
+                    formulation=prepared["formulation"],
+                    model_depth_m=prepared["model_depth_m"],
+                )
+            observables["electrostatic_force_by_boundary_n"] = force_rows
+            observables["electrostatic_force_convention"] = (
+                "integral of dielectric Maxwell traction T*n_domain; negate for force on an excluded conductor"
+            )
     elif physics == "current_flow":
         if terminal:
             voltage = complex(*terminal["value_difference"])
@@ -750,6 +885,16 @@ def analyze_vol2d_scalar(request: Mapping[str, Any]) -> dict[str, Any]:
     operation = str(request.get("operation", "solve"))
     if operation == "solve":
         return solve_vol2d_scalar(request)
+    if operation == "transient_heat":
+        from .vol2d_thermal import solve_vol2d_transient_heat
+
+        return solve_vol2d_transient_heat(request)
+    if operation == "electrostatic_system":
+        from .vol2d_electrostatic import solve_vol2d_electrostatic_system
+
+        return solve_vol2d_electrostatic_system(request)
     if operation == "replay_gate":
         return scalar_replay_gate(request.get("replay_artifact"))
-    raise ValueError("operation must be solve or replay_gate")
+    raise ValueError(
+        "operation must be solve, transient_heat, electrostatic_system, or replay_gate"
+    )

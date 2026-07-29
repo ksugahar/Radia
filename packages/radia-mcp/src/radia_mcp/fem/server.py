@@ -222,12 +222,13 @@ def fem_axifem_signature_execution_gate(evidence_json: str) -> str:
 async def fem_vol2d_scalar_analysis(analysis_json: str) -> str:
     """Solve or replay a portable 2-D scalar-PDE ``.vol`` artifact.
 
-    The closed-world physics choices are electrostatics, current flow (DC or
-    harmonic lossy dielectric), and steady heat conduction.  Planar models
-    carry an explicit depth; axisymmetric models use the full ``2*pi*r``
-    measure.  One owned worker returns terminal/balance observables and exact
-    JSON/CSV/Gmsh sidecars without touching a shared CAE session or a
-    caller-selected output path.
+    The closed-world operations cover single-state electrostatics/current
+    flow/steady heat, multi-conductor electrostatics with Maxwell force, and
+    transient heat with sampled sources and prescribed temperatures.  Planar
+    models carry an explicit depth; axisymmetric models use the full
+    ``2*pi*r`` measure.  One owned worker returns terminal/balance observables
+    and exact JSON/CSV/Gmsh sidecars without touching a shared CAE session or
+    a caller-selected output path.
     """
 
     process = None

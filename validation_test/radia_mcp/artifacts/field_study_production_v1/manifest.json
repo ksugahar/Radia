@@ -1,0 +1,56 @@
+{
+  "all_passed": true,
+  "created_at_utc": "2026-07-29T14:13:46.569266+00:00",
+  "element_families": [
+    {
+      "artifact": "p1.json",
+      "duration_s": 0.7218421000288799,
+      "element_family": "P1",
+      "pass": true,
+      "sha256": "d5595ed9bb50f5dc792024e05a63b89c00248befa2f3ce54bdc94756815c867f"
+    },
+    {
+      "artifact": "q1.json",
+      "duration_s": 0.042468799976632,
+      "element_family": "Q1",
+      "pass": true,
+      "sha256": "a3c22f6e476ab830f387e7e3e6c3d67a83305ac1e3dcb94a14fa4b77fe4c98d1"
+    },
+    {
+      "artifact": "p2.json",
+      "duration_s": 9.915294000064023,
+      "element_family": "P2",
+      "pass": true,
+      "sha256": "54ac0c244b9b6d5c4ff833390d8d3753a49cfbdd10d10cec8ce743acf6b2f406"
+    },
+    {
+      "artifact": "q2.json",
+      "duration_s": 0.061853600083850324,
+      "element_family": "Q2",
+      "pass": true,
+      "sha256": "75dfc8dcafbe9cf316cdcea0a26835580b2a7400046460b0635838fdae110aa0"
+    },
+    {
+      "artifact": "p2_curved.json",
+      "duration_s": 0.6810168999945745,
+      "element_family": "P2_curved",
+      "pass": true,
+      "sha256": "2d8dd1cf345e2dced24ae4093e3eb57cf76feb8e9453c729869118d4d186d07a"
+    },
+    {
+      "artifact": "q2_curved.json",
+      "duration_s": 1.6870558999944478,
+      "element_family": "Q2_curved",
+      "pass": true,
+      "sha256": "867e77ad14ae0c46c24ea24c311f63a50406ab67e5b287a0e536c7528f4cfd45"
+    }
+  ],
+  "execution_version": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.22"
+  },
+  "generator": "validation_test/radia_mcp/generate_field_study_production_artifacts.py",
+  "generator_sha256": "b320d52f42e1b42a6855cae766b8c56876c3dff03ff73554ceff5dfa26c0584b",
+  "schema": "radia.field-study-production-manifest.v1"
+}

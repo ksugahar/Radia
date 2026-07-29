@@ -11,7 +11,13 @@ from .vol2d_dynamics import analyze_vol2d_dynamics
 from .vol2d_scalar import analyze_vol2d_scalar
 
 
-SCALAR_PHYSICS = {"electrostatic", "current_flow", "steady_heat"}
+SCALAR_PHYSICS = {
+    "electrostatic",
+    "electrostatic_system",
+    "current_flow",
+    "steady_heat",
+    "transient_heat",
+}
 
 
 def _content(exports: Mapping[str, Any], name: str) -> str:
@@ -38,13 +44,18 @@ def run(request: Mapping[str, Any], *, msh_output: Path) -> dict[str, Any]:
     prepared["export_basename"] = msh_output.stem
     if physics in SCALAR_PHYSICS:
         prepared["operation"] = "solve"
+        if physics == "transient_heat":
+            prepared["operation"] = "transient_heat"
+        elif physics == "electrostatic_system":
+            prepared["operation"] = "electrostatic_system"
         result = analyze_vol2d_scalar(prepared)
     elif physics == "harmonic_eddy":
         prepared["operation"] = "harmonic"
         result = analyze_vol2d_dynamics(prepared)
     else:
         raise ValueError(
-            "physics must be electrostatic, current_flow, steady_heat, or harmonic_eddy"
+            "physics must be electrostatic, electrostatic_system, current_flow, "
+            "steady_heat, transient_heat, or harmonic_eddy"
         )
 
     exports = _exports(result, physics)

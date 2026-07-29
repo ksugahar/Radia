@@ -341,14 +341,42 @@ def _piecewise_h_of_b(bmag: Any, rows: Sequence[Mapping[str, float]]) -> Any:
     return IfPos(bmag - rows[last]["b_t"], tail, value)
 
 
-def _constitutive_cf(mesh: Any, gfu: Any, materials: Mapping[str, Any], formulation: str) -> Any:
+def _constitutive_cf(
+    mesh: Any,
+    gfu: Any,
+    materials: Mapping[str, Any],
+    formulation: str,
+    *,
+    phasor_peak: bool = False,
+) -> Any:
     from ngsolve import CoefficientFunction, InnerProduct, IfPos, grad, sqrt, x  # type: ignore
 
-    if formulation == "planar":
-        field = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
+    def field_of(value: Any) -> Any:
+        if formulation == "planar":
+            return CoefficientFunction((grad(value)[1], -grad(value)[0]))
+        return CoefficientFunction((grad(value)[0] + value / x, -grad(value)[1]))
+
+    if phasor_peak:
+        field_complex = field_of(gfu)
+        field_real = CoefficientFunction(
+            (field_complex[0].real, field_complex[1].real)
+        )
+        field_imag = CoefficientFunction(
+            (field_complex[0].imag, field_complex[1].imag)
+        )
+        # Input currents are RMS phasors.  The B-H curve is evaluated at the
+        # sinusoidal peak magnitude, including both phasor quadratures.
+        bmag = sqrt(
+            2.0
+            * (
+                InnerProduct(field_real, field_real)
+                + InnerProduct(field_imag, field_imag)
+            )
+            + 1.0e-30
+        )
     else:
-        field = CoefficientFunction((grad(gfu)[0] + gfu / x, -grad(gfu)[1]))
-    bmag = sqrt(InnerProduct(field, field) + 1.0e-30)
+        field = field_of(gfu)
+        bmag = sqrt(InnerProduct(field, field) + 1.0e-30)
     coefficient = 0.0
     for name, material in materials["materials"].items():
         indicator = mesh.MaterialCF({name: 1.0}, default=0.0)
@@ -366,11 +394,23 @@ def _constitutive_cf(mesh: Any, gfu: Any, materials: Mapping[str, Any], formulat
 
 
 def _assemble_nonlinear_stiffness(
-    prepared: Mapping[str, Any], mesh: Any, fes: Any, gfu: Any, materials: Mapping[str, Any]
+    prepared: Mapping[str, Any],
+    mesh: Any,
+    fes: Any,
+    gfu: Any,
+    materials: Mapping[str, Any],
+    *,
+    phasor_peak: bool = False,
 ) -> np.ndarray:
     from ngsolve import BilinearForm, dx, grad  # type: ignore
 
-    coefficient = _constitutive_cf(mesh, gfu, materials, prepared["formulation"])
+    coefficient = _constitutive_cf(
+        mesh,
+        gfu,
+        materials,
+        prepared["formulation"],
+        phasor_peak=phasor_peak,
+    )
     stiffness = BilinearForm(fes, symmetric=True)
     if prepared["formulation"] == "planar":
         trial, test = fes.TnT()
@@ -381,7 +421,18 @@ def _assemble_nonlinear_stiffness(
         stiffness += AxiHenrotteStiffnessBFI(coefficient)
     stiffness.Assemble()
     free = np.flatnonzero(np.asarray(fes.FreeDofs(), dtype=bool))
-    matrix = _dense_matrix(stiffness.mat)[np.ix_(free, free)]
+    rows, columns, values = stiffness.mat.COO()
+    complex_values = np.asarray(values, dtype=complex)
+    scale = max(1.0, float(np.max(np.abs(complex_values))))
+    if float(np.max(np.abs(complex_values.imag))) > 1.0e-12 * scale:
+        raise ValueError("nonlinear secant stiffness unexpectedly became complex")
+    full = np.zeros((stiffness.mat.height, stiffness.mat.width), dtype=float)
+    np.add.at(
+        full,
+        (np.asarray(rows, dtype=int), np.asarray(columns, dtype=int)),
+        complex_values.real,
+    )
+    matrix = full[np.ix_(free, free)]
     return 0.5 * (matrix + matrix.T)
 
 
@@ -538,6 +589,144 @@ def _solve_harmonic_matrices(
         "power_error": power_error,
         "residual": residual,
         "solve_s": solve_s,
+        "stiffness": stiffness,
+        "nonlinear": False,
+    }
+
+
+def _solve_nonlinear_harmonic_state(
+    request: Mapping[str, Any], operators: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Peak-secant single-frequency B-H fixed point for RMS phasors."""
+
+    frequency_hz = _positive(request.get("frequency_hz"), "frequency_hz")
+    omega = 2.0 * math.pi * frequency_hz
+    sources = np.asarray(operators["assembly"]["source_matrix"], dtype=float)
+    mass = np.asarray(operators["conductivity_mass_matrix"], dtype=float)
+    raw_currents = request.get("branch_current_a")
+    if not isinstance(raw_currents, Sequence) or isinstance(raw_currents, (str, bytes)):
+        raise ValueError("branch_current_a must contain one phasor per branch")
+    currents = np.asarray(
+        [
+            _complex_value(value, f"branch_current_a[{index}]")
+            for index, value in enumerate(raw_currents)
+        ],
+        dtype=complex,
+    )
+    if currents.shape != (sources.shape[1],) or not np.any(np.abs(currents) > 0.0):
+        raise ValueError("branch_current_a must contain one nonzero phasor per branch")
+    relaxation = _positive(request.get("relaxation", 0.45), "relaxation")
+    if relaxation > 1.0:
+        raise ValueError("relaxation must not exceed one")
+    tolerance = _positive(request.get("relative_tolerance", 1.0e-8), "relative_tolerance")
+    maximum_iterations = int(request.get("maximum_iterations", 100))
+    if maximum_iterations < 3 or maximum_iterations > 500:
+        raise ValueError("maximum_iterations must be in [3, 500]")
+
+    prepared, mesh_view, materials = _prepare_request(request)
+    mesh, fes, _ = _open_space(prepared, mesh_view, complex_space=True)
+    from ngsolve import GridFunction  # type: ignore
+
+    free = np.asarray(operators["assembly"]["free_dof_indices_0based"], dtype=int)
+    gfu = GridFunction(fes)
+    stiffness = np.asarray(operators["assembly"]["field_matrix"], dtype=float)
+    initial_stiffness = stiffness.copy()
+    rhs = sources @ currents
+    state = np.linalg.solve(stiffness.astype(complex) + 1j * omega * mass, rhs)
+    history: list[dict[str, float]] = []
+    converged = False
+    started = time.perf_counter()
+    previous_stiffness = stiffness
+    for iteration in range(1, maximum_iterations + 1):
+        vector = gfu.vec.FV().NumPy()
+        vector[:] = 0.0
+        vector[free] = state
+        stiffness = _assemble_nonlinear_stiffness(
+            prepared, mesh, fes, gfu, materials, phasor_peak=True
+        )
+        try:
+            candidate = np.linalg.solve(
+                stiffness.astype(complex) + 1j * omega * mass, rhs
+            )
+        except np.linalg.LinAlgError as exc:
+            raise ValueError("nonlinear harmonic operator is singular") from exc
+        updated = (1.0 - relaxation) * state + relaxation * candidate
+        vector[:] = 0.0
+        vector[free] = updated
+        updated_stiffness = _assemble_nonlinear_stiffness(
+            prepared, mesh, fes, gfu, materials, phasor_peak=True
+        )
+        residual = (
+            updated_stiffness.astype(complex) + 1j * omega * mass
+        ) @ updated - rhs
+        relative_change = float(
+            np.linalg.norm(updated - state) / max(np.linalg.norm(updated), 1.0e-30)
+        )
+        relative_residual = float(
+            np.linalg.norm(residual)
+            / max(np.linalg.norm(rhs), np.linalg.norm(updated), 1.0e-30)
+        )
+        operator_change = float(
+            np.linalg.norm(updated_stiffness - previous_stiffness)
+            / max(np.linalg.norm(updated_stiffness), 1.0e-30)
+        )
+        history.append(
+            {
+                "iteration": float(iteration),
+                "relative_state_change": relative_change,
+                "relative_field_residual": relative_residual,
+                "relative_operator_change": operator_change,
+            }
+        )
+        state = updated
+        stiffness = updated_stiffness
+        previous_stiffness = updated_stiffness
+        if iteration >= 3 and relative_change <= tolerance and relative_residual <= tolerance:
+            converged = True
+            break
+    if not converged:
+        raise ValueError(
+            "nonlinear harmonic peak-secant iteration did not converge in "
+            f"{maximum_iterations} iterations"
+        )
+    solve_s = time.perf_counter() - started
+    residual = (stiffness.astype(complex) + 1j * omega * mass) @ state - rhs
+    flux_linkage = sources.T @ state
+    branch_voltage = 1j * omega * flux_linkage
+    apparent_power = 0.5 * np.vdot(currents, branch_voltage)
+    energy_proxy = 0.25 * float(np.real(np.vdot(state, stiffness @ state)))
+    eddy_loss = 0.5 * omega * omega * float(np.real(np.vdot(state, mass @ state)))
+    power_error = float(np.real(apparent_power) - eddy_loss)
+    power_scale = max(1.0, abs(eddy_loss), abs(float(np.real(apparent_power))))
+    if abs(power_error) > 1.0e-7 * power_scale:
+        raise ValueError(
+            "nonlinear harmonic branch power does not close conductivity loss: "
+            f"error={power_error:.6e} W"
+        )
+    return {
+        "frequency_hz": frequency_hz,
+        "angular_frequency_rad_s": omega,
+        "currents": currents,
+        "state": state,
+        "flux_linkage": flux_linkage,
+        "branch_voltage": branch_voltage,
+        "apparent_power": apparent_power,
+        "magnetic_energy": energy_proxy,
+        "eddy_loss": eddy_loss,
+        "power_error": power_error,
+        "residual": residual,
+        "solve_s": solve_s,
+        "stiffness": stiffness,
+        "nonlinear": True,
+        "iterations": len(history),
+        "iteration_history": history,
+        "relative_tolerance": tolerance,
+        "relaxation": relaxation,
+        "model": "single_frequency_peak_secant_BH_fixed_point",
+        "nonlinear_operator_relative_change_from_initial": float(
+            np.linalg.norm(stiffness - initial_stiffness)
+            / max(np.linalg.norm(stiffness), 1.0e-30)
+        ),
     }
 
 
@@ -557,21 +746,19 @@ def solve_vol2d_harmonic(request: Mapping[str, Any]) -> dict[str, Any]:
         for name, material in operators["material_contract"]["materials"].items()
         if material["kind"] != "linear"
     ]
-    if nonlinear:
-        raise ValueError(
-            "harmonic eddy currently requires linear permeability; nonlinear "
-            f"materials={nonlinear} need a separately validated harmonic iteration"
-        )
     stiffness = np.asarray(operators["assembly"]["field_matrix"], dtype=float)
     mass = np.asarray(operators["conductivity_mass_matrix"], dtype=float)
     sources = np.asarray(operators["assembly"]["source_matrix"], dtype=float)
-    solved = _solve_harmonic_matrices(
-        stiffness,
-        mass,
-        sources,
-        frequency_hz=request.get("frequency_hz"),
-        branch_current_a=request.get("branch_current_a"),
-    )
+    if nonlinear:
+        solved = _solve_nonlinear_harmonic_state(request, operators)
+    else:
+        solved = _solve_harmonic_matrices(
+            stiffness,
+            mass,
+            sources,
+            frequency_hz=request.get("frequency_hz"),
+            branch_current_a=request.get("branch_current_a"),
+        )
     frequency_hz = solved["frequency_hz"]
     omega = solved["angular_frequency_rad_s"]
     currents = solved["currents"]
@@ -632,7 +819,6 @@ def solve_vol2d_harmonic(request: Mapping[str, Any]) -> dict[str, Any]:
         "flux_linkage_wb_turn": [_complex_pair(value) for value in flux_linkage],
         "branch_voltage_v": [_complex_pair(value) for value in branch_voltage],
         "apparent_power_va": _complex_pair(apparent_power),
-        "magnetic_energy_j": magnetic_energy,
         "eddy_loss_w": eddy_loss,
         "power_closure_error_w": power_error,
         "residual_inf": float(np.linalg.norm(residual, ord=np.inf)),
@@ -647,6 +833,35 @@ def solve_vol2d_harmonic(request: Mapping[str, Any]) -> dict[str, Any]:
         },
         "exports": exports,
     }
+    if solved["nonlinear"]:
+        result.update(
+            {
+                "material_model": solved["model"],
+                "nonlinear_materials": nonlinear,
+                "converged": True,
+                "iterations": solved["iterations"],
+                "iteration_history": solved["iteration_history"],
+                "relative_tolerance": solved["relative_tolerance"],
+                "relaxation": solved["relaxation"],
+                "cycle_secant_energy_proxy_j": magnetic_energy,
+                "harmonics_resolved": [1],
+                "hysteresis_resolved": False,
+                "nonlinear_operator_relative_change_from_initial": solved[
+                    "nonlinear_operator_relative_change_from_initial"
+                ],
+                "nonlinear_operator_sha256": _matrix_sha256(
+                    solved["stiffness"],
+                    metadata={
+                        "materials": operators["material_contract"]["contract_sha256"],
+                        "field_state": [_complex_pair(value) for value in state],
+                        "model": solved["model"],
+                    },
+                ),
+            }
+        )
+    else:
+        result["material_model"] = "linear_permeability"
+        result["magnetic_energy_j"] = magnetic_energy
     return result
 
 

@@ -1,0 +1,70 @@
+{
+  "case": "Field Study P2_curved frozen production artifact",
+  "checks": {
+    "branch_power_closure": true,
+    "curved_geometry_loaded": true,
+    "field_residual": true,
+    "nonlinear_convergence": true,
+    "nonlinear_law_activated": true,
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "validation_passed": true
+  },
+  "created_at_utc": "2026-07-29T14:13:44.872589+00:00",
+  "errors": {
+    "max_abs": 2.721637429203838e-06,
+    "max_rel": 6.9897103821849114e-09
+  },
+  "pass": true,
+  "production_contract": {
+    "curved_geometry": true,
+    "element_family": "P2_curved",
+    "generated_vol_git_required": false,
+    "mesh_contract_sha256": "a742b325d431cef3d2d78fda244456fb6a0fbd31d8fdc761136117d0213ffdff",
+    "quadrilaterals": 0,
+    "triangles": 58
+  },
+  "result_files": [
+    "validation_test/radia_mcp/artifacts/field_study_production_v1/p2_curved.json",
+    "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
+  ],
+  "result_summary": {
+    "hysteresis_resolved": false,
+    "iterations": 88,
+    "material_contract_sha256": "2cb2340b82ef5e670a04345707995c202d36cc54135c94ef40abd1f18e6109c4",
+    "material_model": "single_frequency_peak_secant_BH_fixed_point",
+    "mesh_contract_sha256": "a742b325d431cef3d2d78fda244456fb6a0fbd31d8fdc761136117d0213ffdff",
+    "nonlinear_operator_relative_change_from_initial": 0.15129816182961497,
+    "nonlinear_operator_sha256": "ce6e223228348e77603632bd0c9e316dce9c9131c3c6ab3cadd8b177f68c1056",
+    "operation": "harmonic_eddy",
+    "operator_sha256": "ef9330361ae918dc21ec2c424d9aae63e2760d0f39c077f056fd74994b5e8145",
+    "power_closure_error_w": 2.721637429203838e-06,
+    "residual_inf": 6.9897103821849114e-09
+  },
+  "run": {
+    "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
+    "duration_s": 0.6514922998612747,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "timing_breakdown_s": {
+    "export": 0.030875899945385754,
+    "factorize_and_solve": 0.6129515999928117,
+    "prepare_and_assemble": 0.007664799923077226
+  },
+  "tolerances": {
+    "max_abs": 1e-09,
+    "max_rel": 1e-06
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.22"
+  },
+  "verification": {
+    "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+    "method": "analytic identity plus residual, reciprocity, passivity, or power closure gate"
+  }
+}
