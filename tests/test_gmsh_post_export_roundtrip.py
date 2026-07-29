@@ -19,7 +19,16 @@ from ngsolve.meshes import MakeStructured3DMesh
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from radia.gmsh_post_export import GmshPostExport
+from radia.gmsh_post_export import GmshPostExport, _get_gmsh_ref_points
+
+
+def test_gmsh_reference_points_use_element_dimension_stride():
+    trig_type, trig = _get_gmsh_ref_points("TRIG", 2)
+    quad_type, quad = _get_gmsh_ref_points("QUAD", 2)
+
+    assert trig_type is not None and len(trig) == 6
+    assert quad_type is not None and len(quad) == 9
+    assert all(len(point) == 3 for point in trig + quad)
 
 _TMP = os.environ.get("TEMP", "C:\\temp")
 
