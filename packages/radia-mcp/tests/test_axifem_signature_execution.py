@@ -254,7 +254,9 @@ def test_rejects_dual_average_identity_drift() -> None:
 
 
 def test_fem_server_registers_axifem_signature_execution_gate() -> None:
+    from radia_mcp import __version__
     from radia_mcp.fem.server import mcp
 
     names = {tool.name for tool in mcp._tool_manager.list_tools()}
     assert "fem_axifem_signature_execution_gate" in names
+    assert mcp._mcp_server.version == __version__
