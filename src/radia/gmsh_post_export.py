@@ -44,6 +44,16 @@ import numpy as np
 MU_0 = 4.0 * np.pi * 1e-7
 
 
+def _point3(point):
+    """Return an NGSolve 1-D/2-D/3-D point as an explicit 3-D tuple."""
+    dimension = len(point)
+    return (
+        float(point[0]),
+        float(point[1]) if dimension >= 2 else 0.0,
+        float(point[2]) if dimension >= 3 else 0.0,
+    )
+
+
 # ============================================================
 # Unified GMSH v4.1 payload model (Phase E.1, 2026-04-15)
 # ============================================================
@@ -277,7 +287,7 @@ def _get_gmsh_ref_points(et_name, order):
         need_init = not gmsh.isInitialized()
         if need_init:
             gmsh.initialize()
-        _, _, _, nn, ref_pts, _ = gmsh.model.mesh.getElementProperties(gmsh_type)
+        _, dimension, _, nn, ref_pts, _ = gmsh.model.mesh.getElementProperties(gmsh_type)
         if need_init:
             gmsh.finalize()
     except Exception:
@@ -286,7 +296,10 @@ def _get_gmsh_ref_points(et_name, order):
     # Convert GMSH ref -> NGSolve ref
     ng_pts = []
     for i in range(nn):
-        gx, gy, gz = ref_pts[3*i], ref_pts[3*i+1], ref_pts[3*i+2]
+        offset = dimension * i
+        gx = ref_pts[offset]
+        gy = ref_pts[offset + 1] if dimension >= 2 else 0.0
+        gz = ref_pts[offset + 2] if dimension >= 3 else 0.0
         ng_pts.append(_gmsh_ref_to_ngsolve_ref(et_name, gx, gy, gz))
 
     return gmsh_type, ng_pts
@@ -812,9 +825,9 @@ def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
             from ngsolve import IntegrationRule
             ir = IntegrationRule([ref_mid], [1.0])
             mip = trafo(ir[0])
-            phys = mip.point
+            phys = _point3(mip.point)
             mid_node_idx = len(nodes)
-            nodes.append((float(phys[0]), float(phys[1]), float(phys[2])))
+            nodes.append(phys)
             cache[edge_key] = mid_node_idx
             conn.append(mid_node_idx)
 
@@ -876,8 +889,7 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
         # Evaluate physical coordinates
         ir = IntegrationRule([ref_pt], [1.0])
         mip = trafo(ir[0])
-        phys = (float(mip.point[0]), float(mip.point[1]),
-                float(mip.point[2]))
+        phys = _point3(mip.point)
 
         # Round for deduplication (shared edges/faces between elements)
         key = (round(phys[0], 12), round(phys[1], 12),
