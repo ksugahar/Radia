@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.23] - 2026-07-30
+
+- Added executable MCP contracts for scalar, thermal, harmonic magnetic,
+  circuit, force, transient, post-processing, and periodic air-gap field
+  studies, including owned workers and checked production artifacts.
+- Added reversible FEMM/AGE and axisymmetric-signature migration evidence,
+  uninstall-safety checks, and protocol-level validation without making a
+  legacy solver installation part of the production contract.
+- Published the typed MATLAB/Simulink material, winding, and Field Study
+  interfaces, with strict `.vol` boundary ranges, portable region labels, and
+  a collision-free Simulink library knowledge index.
+- Corrected harmonic-study observables to the documented RMS-phasor convention
+  and expanded numerical power-closure coverage.
+
 ## [1.4.22] - 2026-07-29
 
 - Added the verified hodograph free-boundary design guidance for saturable
