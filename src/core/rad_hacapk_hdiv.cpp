@@ -6453,19 +6453,48 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     double rz = dot(r, z);
     double bnorm = dot(rhs_projected, rhs_projected);
     bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
+    constexpr int residual_refresh_period = 1000;
+    auto recomputeResidual = [&]() {
+        applyA(x, Ap);
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+            r[f] = rhs_projected[f] - Ap[f];
+        });
+        project(r);
+    };
     int it = 0;
     for (; it < maxit; ++it) {
         double rnorm = dot(r, r);
-        if (std::sqrt(rnorm) <= tol * bnorm) break;
+        if (std::sqrt(rnorm) <= tol * bnorm) {
+            // Never accept convergence from the recursive residual alone.
+            // Long Jacobi-PCG runs on compressed charge-Gram operators have
+            // exhibited a three-decade drift after ~2000 iterations.  Check
+            // the true residual and restart from it if the recurrence was
+            // optimistic.  This keeps finite differences out of production
+            // while making the linear tolerance an actual solver contract.
+            recomputeResidual();
+            rnorm = dot(r, r);
+            if (std::sqrt(rnorm) <= tol * bnorm) break;
+            applyPrec(r, z);
+            p = z;
+            rz = dot(r, z);
+            continue;
+        }
         applyA(p, Ap);
         double pAp = dot(p, Ap);
         double alpha = rz / pAp;
         const auto tu0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
+        const bool refresh = ((it + 1) % residual_refresh_period) == 0;
+        if (refresh) recomputeResidual();
         applyPrec(r, z);
         double rz_new = dot(r, z);
-        double beta = rz_new / rz;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
+        if (refresh) {
+            p = z;
+        }
+        else {
+            double beta = rz_new / rz;
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
+        }
         project(x); project(r); project(p);
         m_lastSolveTiming.pcg_update_s += elapsed(tu0, Clock::now());
         rz = rz_new;
