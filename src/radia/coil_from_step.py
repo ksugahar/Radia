@@ -93,6 +93,11 @@ class CenterlineResult:
     polygons: list                  # M (N_k,2) outlines in local UV
     arclen: np.ndarray              # (M,) cumulative arclength
     closed: bool                    # True if returned to start
+    # (M,) measured cross-section areas (piece.mass / slab thickness --
+    # the volume-based TRUE section area, unlike Profile.total_area()
+    # which inherits the world-AABB inflation of _piece_bbox_uv on
+    # tilted sections).  None only for hand-built results.
+    areas: np.ndarray = None
 
 
 def scale_centerline_result(res: "CenterlineResult",
@@ -141,6 +146,8 @@ def scale_centerline_result(res: "CenterlineResult",
         polygons=[np.asarray(p, dtype=float) * s for p in res.polygons],
         arclen=np.asarray(res.arclen, dtype=float) * s,
         closed=res.closed,
+        areas=(None if res.areas is None
+               else np.asarray(res.areas, dtype=float) * (s * s)),
     )
 
 
@@ -596,6 +603,7 @@ def extract_centerline(step_path_or_solid, *,
         polygons=polygons,
         arclen=arclen,
         closed=locals().get('closed', False),
+        areas=np.asarray(areas, dtype=float),
     )
 
 
