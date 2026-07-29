@@ -738,10 +738,11 @@ def _filaments_from_circle_edges_per_station(solid,
         cap_a -> cap_b along the LONG arc.  R_spine is refined from
         the actual mean of the cross-section centroids around the
         rotation axis (more accurate than the bbox 0.85 default).
-        NOTE: ``generate_spine`` assumes the z rotation axis; a
-        non-z coil mis-seeds here, its sectioning then fails the
-        counted station gate, and the dispatch declines to the next
-        tier (which is orientation-agnostic).
+        NOTE: ``generate_spine`` supports only the z rotation axis. If
+        non-z geometry reaches this tier, the caller's bbox, inside-
+        solid, and near-surface checks reject the mis-seeded topology;
+        there is no automatic alternative extraction after that
+        positive classification.
       * MULTI-TURN HELIX (z-extent of the cross-section centroids
         > 2x the wire radius) -> ``_chain_centroids_nn_index`` with
         tangent continuity, which walks the spiral correctly; the
@@ -1188,14 +1189,15 @@ def _centerline_from_cross_sections(solid,
 def _walked_stations_to_path_cad(res, ng_solid, predicate_name: str):
     """Walker ``CenterlineResult`` -> ``(path_cad, widths_cad)``.
 
-    The walked stations are used AS-IS (no uniform resampling): the
-    march is already adaptively dense -- uniform steps on straight or
-    smooth stretches, halved steps through bends -- and resampling
-    would destroy exactly that density.  Per-vertex bend angles stay
-    small through bends as a result, which keeps the downstream
-    ``_check_spine_no_singular_corner`` semantics sound (a bend
-    cluster is short-but-shallow; a corner-turn jump is sharp-but-
-    long; neither trips the sharp-AND-short condition).
+    The walked stations are kept at their adaptive density: uniform
+    steps on straight or smooth stretches and halved steps through
+    bends.  Only the omitted wrap edge of a closed path is normalized
+    to roughly one local step so the PEEC excitation port cannot become
+    vanishingly small or span several cells.  Per-vertex bend angles
+    stay small through bends as a result, which keeps the downstream
+    ``_check_spine_no_singular_corner`` semantics sound (a bend cluster
+    is short-but-shallow; a corner-turn jump is sharp-but-long; neither
+    trips the sharp-AND-short condition).
 
     Widths: per-segment equivalent-square side.  The RELATIVE
     structure comes from the walker's per-station slab areas (clamped
@@ -1210,7 +1212,15 @@ def _walked_stations_to_path_cad(res, ng_solid, predicate_name: str):
     26.6 mm^2).  ``.mass`` of the full solid is reliable, so
     mass / length recovers the exact arclength-mean section area.
     """
-    pts = np.asarray(res.polyline, dtype=float)
+    pts = np.asarray(res.polyline, dtype=float).copy()
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walker "
+            f"polyline must have shape (N, 3), got {pts.shape}.")
+    if not np.all(np.isfinite(pts)):
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walker "
+            "polyline contains non-finite coordinates.")
     if pts.shape[0] < 4:
         raise ValueError(
             f"extract_centerline_from_step({predicate_name}): the walk "
@@ -1220,7 +1230,12 @@ def _walked_stations_to_path_cad(res, ng_solid, predicate_name: str):
         raise ValueError(
             f"extract_centerline_from_step({predicate_name}): walker "
             "result carries no per-station areas.")
-    areas = np.asarray(res.areas, dtype=float)
+    areas = np.asarray(res.areas, dtype=float).copy()
+    if areas.shape != (pts.shape[0],):
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walker "
+            "must provide one cross-section area per station; got "
+            f"{areas.shape} for {pts.shape[0]} stations.")
     good = np.isfinite(areas) & (areas > 0.0)
     if not np.any(good):
         raise ValueError(
@@ -1228,20 +1243,71 @@ def _walked_stations_to_path_cad(res, ng_solid, predicate_name: str):
             "recovered no positive cross-section areas; cannot derive "
             "the conductor cross-section.")
     med = float(np.median(areas[good]))
-    areas_clamped = np.clip(np.where(good, areas, med),
-                            0.5 * med, 2.0 * med)
+    areas = np.where(good, areas, med)
     seg_len = np.linalg.norm(np.diff(pts, axis=0), axis=1)
-    length = float(seg_len.sum())
+    if not np.all(np.isfinite(seg_len)) or np.any(seg_len <= 0.0):
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): walker "
+            "polyline contains a non-finite or zero-length segment.")
+
+    # A closed PEEC path deliberately leaves the final wrap edge out of
+    # the conductor segments and places the excitation port across it.
+    # The walker stops anywhere inside close_tol, so that edge can range
+    # from almost zero to about two regular steps.  Preserve every
+    # interior adaptive station, but trim a near-duplicate closure point
+    # or split an oversized wrap chord so the omitted port edge stays at
+    # a stable local-cell scale.
     if res.closed:
-        length += float(np.linalg.norm(pts[0] - pts[-1]))
+        step_ref = float(np.median(seg_len))
+        close_len = float(np.linalg.norm(pts[0] - pts[-1]))
+        while (pts.shape[0] > 4
+               and close_len < 0.5 * step_ref):
+            pts = pts[:-1]
+            areas = areas[:-1]
+            seg_len = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+            step_ref = float(np.median(seg_len))
+            close_len = float(np.linalg.norm(pts[0] - pts[-1]))
+        if close_len <= 0.0 or not math.isfinite(close_len):
+            raise ValueError(
+                f"extract_centerline_from_step({predicate_name}): "
+                "closed walker path has a zero or non-finite port gap.")
+        if close_len < 0.5 * step_ref:
+            raise ValueError(
+                f"extract_centerline_from_step({predicate_name}): "
+                "closed walker path has too few distinct stations to "
+                "form a stable PEEC port gap.")
+        if close_len > 1.5 * step_ref:
+            n_parts = max(2, int(math.ceil(close_len / step_ref)))
+            frac = np.arange(1, n_parts, dtype=float) / n_parts
+            inserts = (pts[-1][None, :]
+                       + frac[:, None] * (pts[0] - pts[-1])[None, :])
+            area_inserts = areas[-1] + frac * (areas[0] - areas[-1])
+            pts = np.vstack([pts, inserts])
+            areas = np.concatenate([areas, area_inserts])
+            seg_len = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+
+    areas_clamped = np.clip(areas, 0.5 * med, 2.0 * med)
+    seg_areas = 0.5 * (areas_clamped[:-1] + areas_clamped[1:])
+    full_len = seg_len
+    full_areas = seg_areas
+    if res.closed:
+        close_len = float(np.linalg.norm(pts[0] - pts[-1]))
+        close_area = 0.5 * (areas_clamped[-1] + areas_clamped[0])
+        full_len = np.append(seg_len, close_len)
+        full_areas = np.append(seg_areas, close_area)
+    length = float(np.sum(full_len))
     if length <= 0.0:
         raise ValueError(
             f"extract_centerline_from_step({predicate_name}): walked "
             "centerline has zero length.")
-    mean_area_true = float(ng_solid.mass) / length
-    seg_areas = 0.5 * (areas_clamped[:-1] + areas_clamped[1:])
-    walker_mean = float(np.sum(seg_areas * seg_len) / np.sum(seg_len))
-    if walker_mean <= 0.0:
+    mass = float(ng_solid.mass)
+    if not math.isfinite(mass) or mass <= 0.0:
+        raise ValueError(
+            f"extract_centerline_from_step({predicate_name}): conductor "
+            f"solid has non-positive or non-finite volume {mass!r}.")
+    mean_area_true = mass / length
+    walker_mean = float(np.sum(full_areas * full_len) / length)
+    if not math.isfinite(walker_mean) or walker_mean <= 0.0:
         raise ValueError(
             f"extract_centerline_from_step({predicate_name}): walker "
             "mean section area is non-positive.")
@@ -1672,10 +1738,10 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     caps (regenerate the STEP with clean planar end caps so
     Predicate 4 routes), or the walker halted at a sharp spine corner.
 
-    The walked stations are returned AS-IS via
-    ``_walked_stations_to_path_cad`` (adaptive density preserved,
-    per-segment widths from the measured areas).  ``n_segments`` is
-    unused (parameter kept for dispatch signature parity).
+    ``_walked_stations_to_path_cad`` preserves the walker's adaptive
+    interior density, normalizes only the omitted PEEC port edge, and
+    derives per-segment widths from the measured areas.  ``n_segments``
+    is unused (parameter kept for dispatch signature parity).
     """
     from radia.coil_from_step import extract_centerline, _axis_agnostic_seed
 
