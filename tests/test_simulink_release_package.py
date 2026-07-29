@@ -66,6 +66,34 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     assert "matlab/radia_simulink_library.slx" not in names
 
 
+def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
+    package_module = load_module(
+        "package_simulink_release_encoding",
+        ROOT / "tools" / "package_simulink_release.py",
+    )
+    verify_module = load_module(
+        "verify_simulink_release_encoding",
+        ROOT / "tools" / "verify_simulink_release.py",
+    )
+    mex_dir = tmp_path / "mex"
+    mex_dir.mkdir()
+    for name in package_module.REQUIRED_MEX:
+        (mex_dir / name).write_bytes(fake_x64_pe())
+    archive, _ = package_module.build_package(mex_dir, tmp_path / "out")
+    matlab = tmp_path / "matlab.exe"
+    matlab.write_bytes(b"MZ")
+
+    class Result:
+        returncode = 0
+        stdout = "\u691c\u8a3c\u5b8c\u4e86 RADIA_IH_RELEASE_OK\n".encode("utf-8")
+        stderr = b""
+
+    monkeypatch.setattr(verify_module.subprocess, "run", lambda *args, **kwargs: Result())
+    output = verify_module.run_matlab_smoke(archive, matlab)
+    assert "RADIA_IH_RELEASE_OK" in output
+    assert verify_module._console_safe("bad:\ufffd", "cp932") == "bad:\\ufffd"
+
+
 def load_module(name, path):
     import importlib.util
 
