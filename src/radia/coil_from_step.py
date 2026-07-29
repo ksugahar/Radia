@@ -376,6 +376,67 @@ def _initial_seed(solid, start_hint=None):
     return p, t
 
 
+def _axis_agnostic_seed(solid):
+    """Orientation-agnostic (point, tangent) walk seed for a coil solid.
+
+    Replaces the legacy z-axis-torus heuristic (start on +x, tangent +y)
+    that the default filament path forced -- overriding ``_initial_seed``'s
+    own axis-agnostic smallest-face seed -- and so broke on x/y-axis coils.
+
+    Strategy = the minimum-cross-section-area principle.  A thin slab taken
+    PERPENDICULAR to the local wire direction yields the smallest single
+    connected cross-section, so the section normal that minimises the piece
+    area at a point on the coil IS the wire tangent there, and the winning
+    piece centroid is a point on the wire.  Works for ANY orientation and
+    for open OR closed loops (no port-cap face required).
+    """
+    bb = solid.bounding_box
+    lo = np.array([bb[0][0], bb[0][1], bb[0][2]], dtype=float)
+    hi = np.array([bb[1][0], bb[1][1], bb[1][2]], dtype=float)
+    center = 0.5 * (lo + hi)
+    ext = hi - lo
+    diag = float(np.linalg.norm(ext))
+    slab_r = max(diag, 1e-3)
+    thick = max(diag / 5000.0, 1e-7)
+    axes = np.eye(3)
+
+    # Step 1: a point ON the wire.  Section through the bbox centre with the
+    # longest-extent axis as the plane normal (that plane crosses the loop
+    # for any orientation); take the first connected piece centroid.
+    p_on = None
+    for ai in list(np.argsort(-ext)):
+        if ext[ai] <= 0:
+            continue
+        pieces = cross_section_pieces(solid, center, axes[ai],
+                                      in_plane_radius=slab_r, thickness=thick)
+        if pieces:
+            p_on = np.asarray(pieces[0][0], dtype=float)
+            break
+    if p_on is None:
+        raise RuntimeError(
+            "_axis_agnostic_seed: no cross-section through the bbox centre "
+            "along any axis; the solid may not be a coil -- supply "
+            "start_hint explicitly.")
+
+    # Step 2: wire tangent at p_on = the axis normal that MINIMISES the
+    # single-piece section area (smallest cut == perpendicular to the wire).
+    best = None  # (area, centroid, normal)
+    for ti in range(3):
+        pieces = cross_section_pieces(solid, p_on, axes[ti],
+                                      in_plane_radius=slab_r, thickness=thick)
+        c, area, _sub = pick_local_piece(pieces, p_on, max_dist=slab_r)
+        if c is None or area is None or area <= 0:
+            continue
+        if best is None or area < best[0]:
+            best = (area, np.asarray(c, dtype=float), axes[ti].copy())
+    if best is None:
+        raise RuntimeError(
+            "_axis_agnostic_seed: no valid tangent section at the wire "
+            "point; supply start_hint explicitly.")
+    _area, p, t = best
+    return p, t
+
+
 def extract_centerline(step_path_or_solid, *,
                        start_hint=None,
                        step_size=None,
