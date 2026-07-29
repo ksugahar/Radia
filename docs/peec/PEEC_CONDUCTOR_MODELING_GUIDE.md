@@ -391,9 +391,9 @@ STEP solid by perpendicular cross-sectioning along the coil centerline.
 #### Pipeline
 
 ```
-STEP solid -> section_solid_along_path() -> per-segment (center, w, h)
-           -> build_peec_from_path()     -> PEECBuilder topology
-           -> PEECCircuitSolver          -> Z, L, R
+STEP solid -> extract_centerline_from_step() -> path + per-segment (w, h)
+           -> build_peec_from_path()          -> PEECBuilder topology
+           -> PEECCircuitSolver               -> Z, L, R
 ```
 
 #### Key Functions (`radia.coil_from_cad`)
@@ -401,9 +401,8 @@ STEP solid -> section_solid_along_path() -> per-segment (center, w, h)
 | Function | Description |
 |----------|-------------|
 | `helix_path(radius, pitch, n_turns, n_points)` | Generate discrete helix centerline |
-| `section_solid_along_path(step, midpoints, tangents)` | Section STEP solid perpendicular to path |
 | `build_peec_from_path(path, widths, heights, sigma)` | Build PEECBuilder topology from path + cross-sections |
-| `extract_centerline_from_step(step_path, n_segments)` | Auto-extract centerline via z-slicing |
+| `extract_centerline_from_step(step_path, n_segments)` | Auto-extract centerline (marching engine + CAD-feature fast paths) |
 | `filaments_from_step(step_path, ...)` | End-to-end: STEP solid -> PEEC topology |
 
 ### 3.5 Example End-to-End Workflow
@@ -519,7 +518,6 @@ topo = build_peec_from_path(path, widths, heights, sigma=5.8e7)
 | `build_peec_from_path(path, widths, heights, sigma)` | Path + cross-sections -> topology |
 | `extract_centerline_from_step(step_path, n_segments)` | Auto-extract centerline from STEP |
 | `helix_path(radius, pitch, n_turns, n_points)` | Generate helix centerline |
-| `section_solid_along_path(step, midpoints, tangents)` | Section STEP solid for cross-sections |
 
 ### Build Output
 
