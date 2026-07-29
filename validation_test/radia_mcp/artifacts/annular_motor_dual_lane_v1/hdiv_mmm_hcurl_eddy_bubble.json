@@ -1,0 +1,311 @@
+{
+  "radia_version": "4.95.27",
+  "schema_version": "radia-motor-validation-artifact/v1",
+  "timestamp_utc": "2026-07-29T19:37:25.363595+00:00",
+  "motor_validation_lane": "hdiv_mmm_hcurl_eddy_bubble",
+  "reference_source_class": "independent_public_solver_lane",
+  "observable_family": "force_or_torque_trend",
+  "case_count": 8,
+  "status": "pass",
+  "coupling_design_status": "validated_solver_path",
+  "tolerances": {
+    "mixed_block_residual_max": 1e-08,
+    "energy_response_relative_error_max": 1e-08,
+    "centered_normalized_correlation_min": 0.95
+  },
+  "metrics": {
+    "mixed_block_residual": 3.1677612589756556e-13,
+    "magnetic_energy_closure": 3.7163174331140123e-11,
+    "eddy_power_nonnegative": true,
+    "signed_agreement_count": 8,
+    "mean_abs_relative_error": 0.07910443803791443,
+    "rms_abs_relative_error": 0.09745842283119847,
+    "max_abs_relative_error": 0.16960459397630853,
+    "centered_normalized_correlation": 0.9620074232770214,
+    "direct_solution_relative_error": 6.978284550640649e-13
+  },
+  "timing_breakdown_s": {
+    "mesh_basis_and_reduction": 13.195171599974856,
+    "angle_sweep_and_postprocess": 0.0,
+    "artifact_transport": 1.7026331000961363,
+    "total": 14.897804700070992
+  },
+  "artifact_feedback": {
+    "status": "promoted",
+    "public_lesson": "HDiv-MMM and HCurl eddy-bubble share one curved 3D mesh/material identity and recover a periodic coenergy-torque waveform."
+  },
+  "shared_mesh_material_identity": {
+    "geometry_sha256": "c5ad6c6c3b4c4888f6745ef6df7bb1e4f2546a82e083eaed8646309ba0b368d0",
+    "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
+    "excitation_sha256": "27e2deab2fc6df07f85b503e2b838ef8ddf7ed39872a1dfc395ecb6308cf5485",
+    "aggregate_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83"
+  },
+  "solver_ready_artifact": {
+    "artifact_id": "annular_motor_hdiv_mmm_hcurl_eddy_bubble_v1",
+    "verification": [
+      {
+        "command": "python validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py --geometry annular-motor --axial-length 0.2 --curvature-safety 0.2 --motor-angle-samples 8 --rotor-amplitude 0.8 --frequencies 100 --maxh 0.8 --order 1 --steps 4 --bulk-degree 1 --surface-current-degree 1 --response-backend dense --mixed-solver dense --shared-model-identity-sha256 436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83 --output <temporary-output>",
+        "result": "all end-to-end and 8-angle motor checks passed"
+      }
+    ],
+    "source_sha256": "356700fb3f59bc614c308771ca74019fbbae5be067f818e52bca19aa47379239"
+  },
+  "hdiv_mmm_operator_contract": {
+    "parent_family": "BDM",
+    "parent_order": 1,
+    "parent_ndof": 1146,
+    "reduced_modes": 8,
+    "demag_hmatrix_backend": "_ChargeGramHMatrix"
+  },
+  "hcurl_eddy_bubble_contract": {
+    "parent_ndof": 326,
+    "reduced_modes": 66,
+    "eddy_block_roles": {
+      "volume": "bulk",
+      "volume1": "bridge",
+      "surface": "sibc"
+    },
+    "solver_backend": "radia-cpp-dense-mixed-galerkin"
+  },
+  "coupling_operator_contract": {
+    "rows": 8,
+    "columns": 66,
+    "frobenius_norm": 2.9533177617483245e-06,
+    "full_coupled_mixed_galerkin_is_exact": true
+  },
+  "execution": {
+    "checks": {
+      "parent_order_admissible": true,
+      "hdiv_parent_order_admissible": true,
+      "all_rhs_scaled_residuals_below_1e-8": true,
+      "all_backward_errors_below_1e-12": true,
+      "all_losses_nonnegative": true,
+      "all_eddy_flux_density_probes_finite": true,
+      "parent_t_reconstructed": true,
+      "parent_hdiv_reconstructed": true,
+      "demag_operator_is_active": true,
+      "reduced_magnetic_operator_is_positive": true,
+      "hdiv_response_snapshots_converged": true,
+      "hdiv_training_responses_preserved": true,
+      "production_bdm_family_locked": true,
+      "physical_hdiv_responses_are_protected": true,
+      "all_three_eddy_blocks_reconstructed": true,
+      "current_gram_rank_is_consistent": true,
+      "bulk_current_gram_is_identity": true,
+      "adjacency_roles_drive_reduction": true,
+      "full_coupled_mixed_galerkin_is_exact": true,
+      "hdiv_hacapk_charge_gram_is_active": true,
+      "motor_geometry_is_annular": true,
+      "motor_angle_grid_complete": true,
+      "motor_operator_reused_all_angles": true,
+      "motor_torque_sign_reverses": true,
+      "motor_torque_is_nontrivial": true,
+      "motor_angle_residuals_below_1e-8": true,
+      "motor_angle_losses_nonnegative": true,
+      "passed": true
+    },
+    "frequency_rows": [
+      {
+        "frequency_Hz": 100.0,
+        "s": {
+          "real": 0.0,
+          "imag": 628.3185307179587
+        },
+        "surface_impedance": {
+          "kind": "uniform",
+          "real": 2.6089506942234867e-06,
+          "imag": 2.6089506942234867e-06
+        },
+        "n_excitations": 2,
+        "magnetization_modes": 8,
+        "eddy_modes": 66,
+        "parent_t_dofs": 326,
+        "parent_hdiv_dofs": 1146,
+        "eddy_blocks": [
+          "volume",
+          "volume1",
+          "surface"
+        ],
+        "eddy_block_roles": [
+          "bulk",
+          "bridge",
+          "sibc"
+        ],
+        "eddy_block_sample_counts": [
+          584,
+          202,
+          540
+        ],
+        "sampled_magnetization_norm": 162593.44890456513,
+        "sampled_eddy_current_norms": [
+          422724.20370881853,
+          309733.66479103395,
+          119615.97425085929
+        ],
+        "average_joule_loss": [
+          311.25015081975414,
+          17.921595800008728
+        ],
+        "residual_relative_norm": 1.6775028046697621e-13,
+        "residual_backward_error": 8.38751402334881e-14,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin",
+        "solver_diagnostics": null,
+        "orthogonalized_modes": 69,
+        "mixed_galerkin": {
+          "full_modes": 74,
+          "retained_modes": 69,
+          "eliminated_modes": 5,
+          "trial_orthogonality_relative_defect": 3.5093387097188615e-21,
+          "test_orthogonality_relative_defect": 3.7608376254900725e-18,
+          "schur_relative_error": 6.013688987546562e-17,
+          "trial_test_relative_difference": 300.6834059369753,
+          "full_operator_condition": 345284848.54795074,
+          "reduced_operator_condition": 350425545.9931111,
+          "kind": "mixed-galerkin-hdiv-hcurl",
+          "full_coupled_schur": true,
+          "hdiv_retained_modes": 8,
+          "hcurl_retained_modes": 61,
+          "hcurl_eliminated_modes": 5,
+          "keep_eddy_blocks": [
+            "volume1",
+            "surface"
+          ],
+          "eliminate_eddy_blocks": [
+            "volume"
+          ],
+          "hdiv_demag_backend": "DemagOperator",
+          "hdiv_demag_hmatrix_backend": "_ChargeGramHMatrix"
+        },
+        "mixed_operator_condition": 178262330.73196855,
+        "direct_solution_relative_error": 6.978284550640649e-13,
+        "direct_port_response_relative_error": 7.414948856164469e-16,
+        "direct_joule_loss_relative_error": 5.3423326397848355e-15,
+        "parent_t_coefficient_norm": 13804.696214185418,
+        "parent_hdiv_coefficient_norm": 11419.781806999683,
+        "eddy_flux_density_probe_T": {
+          "shape": [
+            2,
+            3
+          ],
+          "real": [
+            [
+              1.3751578250580668e-06,
+              7.817236654770463e-07,
+              -2.4811985242895476e-07
+            ],
+            [
+              4.3683369239080486e-08,
+              3.243830806515914e-08,
+              -4.15505385179454e-09
+            ]
+          ],
+          "imag": [
+            [
+              -3.915307979781443e-05,
+              -5.190215329795336e-05,
+              -1.602060151633432e-05
+            ],
+            [
+              4.694626252989157e-06,
+              5.667152481006297e-07,
+              -1.7407251737951066e-05
+            ]
+          ]
+        },
+        "eddy_flux_density_probe_norm_T": 6.936423166588627e-05,
+        "port_response": {
+          "shape": [
+            2,
+            2
+          ],
+          "real": [
+            [
+              620.7624770478634,
+              67.94671748914065
+            ],
+            [
+              1.1143886562625545,
+              25.196461388259177
+            ]
+          ],
+          "imag": [
+            [
+              -40238.09248682801,
+              -4467.975373125216
+            ],
+            [
+              -412.30524009360147,
+              -7124.825162961723
+            ]
+          ]
+        }
+      }
+    ],
+    "motor_angle_rows": [
+      {
+        "rotor_angle_rad": 0.0,
+        "coenergy_proxy_J": 1005.635212817541,
+        "torque_proxy_Nm": -38.93974928542111,
+        "average_joule_loss_W": 1008.4504886560068,
+        "residual_relative_norm": 7.911712416380334e-14,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 0.7853981633974483,
+        "coenergy_proxy_J": 795.4741618670027,
+        "torque_proxy_Nm": 419.89317961864964,
+        "average_joule_loss_W": 775.3863480161617,
+        "residual_relative_norm": 9.284614700949073e-14,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 1.5707963267948966,
+        "coenergy_proxy_J": 346.06854862633634,
+        "torque_proxy_Nm": 461.17508225103154,
+        "average_joule_loss_W": 328.7373597291586,
+        "residual_relative_norm": 9.138700044207534e-14,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 2.356194490192345,
+        "coenergy_proxy_J": 71.06203665774812,
+        "torque_proxy_Nm": 212.41028731342655,
+        "average_joule_loss_W": 66.29374261029372,
+        "residual_relative_norm": 1.449730690711226e-13,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 3.141592653589793,
+        "coenergy_proxy_J": 12.415249540957317,
+        "torque_proxy_Nm": 10.801723254229033,
+        "average_joule_loss_W": 12.450006032790215,
+        "residual_relative_norm": 8.194367731384555e-14,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 3.9269908169872414,
+        "coenergy_proxy_J": 54.09472944695014,
+        "torque_proxy_Nm": -177.23775477443544,
+        "average_joule_loss_W": 62.5977815379151,
+        "residual_relative_norm": 1.4036343651775254e-13,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 4.71238898038469,
+        "coenergy_proxy_J": 290.8196637100151,
+        "torque_proxy_Nm": -433.0370562198394,
+        "average_joule_loss_W": 316.7025845343632,
+        "residual_relative_norm": 1.276838159629008e-13,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      },
+      {
+        "rotor_angle_rad": 5.497787143782138,
+        "coenergy_proxy_J": 734.3077467231491,
+        "torque_proxy_Nm": -455.0657121576408,
+        "average_joule_loss_W": 762.0625667879491,
+        "residual_relative_norm": 3.1677612589756556e-13,
+        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+      }
+    ]
+  }
+}

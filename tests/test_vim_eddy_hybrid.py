@@ -218,6 +218,62 @@ def test_coupled_hdiv_hcurl_keeps_two_independent_native_hmatrices():
     assert result["solver_diagnostics"]["backend"] == "ngsolve-base-matrix-gmres"
 
 
+def test_coupled_hdiv_hcurl_can_materialize_small_system_for_dense_lu():
+    points = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+    )
+    weights = np.ones(3) / 3.0
+    modes = np.array(
+        [
+            [[1.0, 0.0, 0.0], [0.5, 0.0, 0.0], [-0.2, 0.0, 0.0]],
+            [[0.0, 1.0, 0.0], [0.0, -0.3, 0.0], [0.0, 0.4, 0.0]],
+        ]
+    )
+    current = vim.VolumeCurrentBasis(points, weights, modes, names=("e0", "e1"))
+    magnetization = vim.MagnetizationBasis(
+        points, weights, modes, names=("m0", "m1")
+    )
+
+    def hmatrix_system():
+        return vim.AssembleHybridVIM(
+            current,
+            sigma=2.0,
+            interaction=vim.HACApKSampledLaplaceInteraction(
+                kernel_epsilon=0.1,
+                cross_only=False,
+                leaf_size=2,
+            ),
+        )
+
+    eddy = hmatrix_system()
+    magnetic = hmatrix_system().impedance_operator(0.75)
+    coupled = vim.CoupledHDivHybridVIMSystem(
+        magnetization,
+        eddy,
+        (current,),
+        np.array([[0.02, 0.01], [-0.01, 0.03]]),
+        magnetic_operator=magnetic,
+    )
+    operator = coupled.mixed_operator(s=2j)
+    expected = np.array([1.0 + 0.2j, -0.4j, 0.3 + 0.1j, -0.2 + 0.5j])
+    rhs = operator.matvec(expected)
+
+    result = coupled.solve(
+        s=2j,
+        magnetic_rhs=rhs[:2],
+        eddy_rhs=rhs[2:],
+        solver="dense",
+    )
+
+    np.testing.assert_allclose(result["solution"][:, 0], expected)
+    assert result["solver_diagnostics"] == {
+        "backend": "native-dense-reduced-lu",
+        "iterations": 0,
+        "relative_residual_max": 0.0,
+        "materialized_from_matrix_free": True,
+    }
+
+
 def test_ngsolve_bem_laplace_sl_projection_stays_as_base_matrix():
     ng = pytest.importorskip("ngsolve")
     occ = pytest.importorskip("netgen.occ")

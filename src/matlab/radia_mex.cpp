@@ -191,13 +191,24 @@ struct NGSolveSolverHandle {
 };
 
 struct NativeStateSpaceHandle {
+    enum class Kind { Static, PeriodicAngleFamily };
+
+    Kind kind = Kind::Static;
     std::size_t state_size = 0;
     std::size_t input_size = 0;
     std::size_t output_size = 0;
+    std::size_t linear_output_size = 0;
+    std::size_t snapshot_count = 1;
+    double period = 0.0;
+    double last_coordinate = std::numeric_limits<double>::quiet_NaN();
+    std::vector<double> grid;
     std::vector<double> A;
     std::vector<double> B;
     std::vector<double> C;
     std::vector<double> D;
+    std::vector<double> Q;
+    std::vector<double> R;
+    std::vector<double> S;
     std::vector<double> initial_state;
     std::vector<double> state;
     std::size_t step_count = 0;
@@ -3990,8 +4001,110 @@ bool AllFinite(const std::vector<double>& values) {
 
 void SimulinkStateSpaceCreate(int nlhs, mxArray* plhs[], int nrhs,
                               const mxArray* prhs[]) {
-    CheckArity(nrhs, 6, nlhs, 1,
-               "h = radia_mex('simulink.state_space.create', A, B, C, D, x0)");
+    if (nlhs != 1 || (nrhs != 6 && nrhs != 11))
+        BadArgument(
+            "usage: h = radia_mex('simulink.state_space.create', A, B, C, D, x0) "
+            "or h = radia_mex('simulink.state_space.create', grid, period, "
+            "A_family, B_family, C_family, D_family, Q_family, R_family, "
+            "S_family, x0)");
+
+    if (nrhs == 11) {
+        const auto grid = RealVector(prhs[1], "grid");
+        const double period = Scalar(prhs[2], "period");
+        std::size_t a_rows = 0, a_cols = 0, a_snapshots = 0;
+        std::size_t b_rows = 0, b_cols = 0, b_snapshots = 0;
+        std::size_t c_rows = 0, c_cols = 0, c_snapshots = 0;
+        std::size_t d_rows = 0, d_cols = 0, d_snapshots = 0;
+        std::size_t q_rows = 0, q_cols = 0, q_snapshots = 0;
+        std::size_t r_rows = 0, r_cols = 0, r_snapshots = 0;
+        std::size_t s_rows = 0, s_cols = 0, s_snapshots = 0;
+        auto A = RealTensor3(prhs[3], a_rows, a_cols, a_snapshots, "A_family");
+        auto B = RealTensor3(prhs[4], b_rows, b_cols, b_snapshots, "B_family");
+        auto C = RealTensor3(prhs[5], c_rows, c_cols, c_snapshots, "C_family");
+        auto D = RealTensor3(prhs[6], d_rows, d_cols, d_snapshots, "D_family");
+        auto Q = RealTensor3(prhs[7], q_rows, q_cols, q_snapshots, "Q_family");
+        auto R = RealTensor3(prhs[8], r_rows, r_cols, r_snapshots, "R_family");
+        auto S = RealTensor3(prhs[9], s_rows, s_cols, s_snapshots, "S_family");
+        auto initial = RealVector(prhs[10], "x0");
+        const std::size_t snapshots = grid.size();
+        if (snapshots < 2)
+            BadArgument("grid must contain at least two periodic snapshots");
+        if (!std::isfinite(period) || period <= 0.0)
+            BadArgument("period must be finite and positive");
+        if (!AllFinite(grid) ||
+            !std::is_sorted(grid.begin(), grid.end(), std::less<double>()) ||
+            std::adjacent_find(grid.begin(), grid.end()) != grid.end())
+            BadArgument("grid must be finite and strictly increasing");
+        if (grid.back() - grid.front() >= period)
+            BadArgument("period must exceed the span of the non-repeated grid");
+        if (a_rows == 0 || a_rows != a_cols)
+            BadArgument("A_family must contain non-empty square matrices");
+        if (b_rows != a_rows || c_cols != a_rows ||
+            d_rows != c_rows || d_cols != b_cols)
+            BadArgument("A/B/C/D family dimensions are inconsistent");
+        if (q_rows != a_rows || q_cols != a_rows ||
+            r_rows != a_rows || r_cols != b_cols ||
+            s_rows != b_cols || s_cols != b_cols)
+            BadArgument("Q/R/S torque-family dimensions are inconsistent");
+        if (a_snapshots != snapshots || b_snapshots != snapshots ||
+            c_snapshots != snapshots || d_snapshots != snapshots ||
+            q_snapshots != snapshots || r_snapshots != snapshots ||
+            s_snapshots != snapshots)
+            BadArgument("every family tensor must have one page per grid snapshot");
+        if (initial.size() != a_rows)
+            BadArgument("x0 must contain exactly the family state dimension");
+        if (!AllFinite(A) || !AllFinite(B) || !AllFinite(C) || !AllFinite(D) ||
+            !AllFinite(Q) || !AllFinite(R) || !AllFinite(S) || !AllFinite(initial))
+            BadArgument("angle-family tensors and x0 must contain finite values");
+
+        const auto tensor_value = [snapshots](const std::vector<double>& values,
+                                               std::size_t cols,
+                                               std::size_t row,
+                                               std::size_t col,
+                                               std::size_t snapshot) {
+            return values[(row * cols + col) * snapshots + snapshot];
+        };
+        for (std::size_t snapshot = 0; snapshot < snapshots; ++snapshot) {
+            for (std::size_t row = 0; row < q_rows; ++row)
+                for (std::size_t col = row + 1; col < q_cols; ++col) {
+                    const double left = tensor_value(Q, q_cols, row, col, snapshot);
+                    const double right = tensor_value(Q, q_cols, col, row, snapshot);
+                    if (std::abs(left - right) >
+                        1e-12 * std::max({1.0, std::abs(left), std::abs(right)}))
+                        BadArgument("each Q_family page must be symmetric");
+                }
+            for (std::size_t row = 0; row < s_rows; ++row)
+                for (std::size_t col = row + 1; col < s_cols; ++col) {
+                    const double left = tensor_value(S, s_cols, row, col, snapshot);
+                    const double right = tensor_value(S, s_cols, col, row, snapshot);
+                    if (std::abs(left - right) >
+                        1e-12 * std::max({1.0, std::abs(left), std::abs(right)}))
+                        BadArgument("each S_family page must be symmetric");
+                }
+        }
+
+        auto holder = std::make_unique<NativeStateSpaceHandle>();
+        holder->kind = NativeStateSpaceHandle::Kind::PeriodicAngleFamily;
+        holder->state_size = a_rows;
+        holder->input_size = b_cols;
+        holder->linear_output_size = c_rows;
+        holder->output_size = c_rows + 1;
+        holder->snapshot_count = snapshots;
+        holder->period = period;
+        holder->grid = grid;
+        holder->A = std::move(A);
+        holder->B = std::move(B);
+        holder->C = std::move(C);
+        holder->D = std::move(D);
+        holder->Q = std::move(Q);
+        holder->R = std::move(R);
+        holder->S = std::move(S);
+        holder->initial_state = std::move(initial);
+        holder->state = holder->initial_state;
+        plhs[0] = Uint64Output(RegisterStateSpace(std::move(holder)));
+        return;
+    }
+
     std::size_t a_rows = 0;
     std::size_t a_cols = 0;
     std::size_t b_rows = 0;
@@ -4023,6 +4136,7 @@ void SimulinkStateSpaceCreate(int nlhs, mxArray* plhs[], int nrhs,
     holder->state_size = a_rows;
     holder->input_size = b_cols;
     holder->output_size = c_rows;
+    holder->linear_output_size = c_rows;
     holder->A = std::move(A);
     holder->B = std::move(B);
     holder->C = std::move(C);
@@ -4037,50 +4151,161 @@ void SimulinkStateSpaceInfo(int nlhs, mxArray* plhs[], int nrhs,
     CheckArity(nrhs, 2, nlhs, 1,
                "info = radia_mex('simulink.state_space.info', handle)");
     const auto& holder = StateSpace(Handle(prhs[1]));
-    const char* fields[] = {"state_size", "input_size", "output_size",
-                            "step_count"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 4, fields);
+    const char* fields[] = {"model_kind", "state_size", "input_size",
+                            "output_size", "linear_output_size",
+                            "snapshot_count", "period", "step_count",
+                            "last_coordinate"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 9, fields);
+    mxSetField(
+        plhs[0], 0, "model_kind",
+        mxCreateString(holder.kind == NativeStateSpaceHandle::Kind::Static
+                           ? "static"
+                           : "periodic_angle_family"));
     mxSetField(plhs[0], 0, "state_size",
                mxCreateDoubleScalar(static_cast<double>(holder.state_size)));
     mxSetField(plhs[0], 0, "input_size",
                mxCreateDoubleScalar(static_cast<double>(holder.input_size)));
     mxSetField(plhs[0], 0, "output_size",
                mxCreateDoubleScalar(static_cast<double>(holder.output_size)));
+    mxSetField(plhs[0], 0, "linear_output_size",
+               mxCreateDoubleScalar(static_cast<double>(holder.linear_output_size)));
+    mxSetField(plhs[0], 0, "snapshot_count",
+               mxCreateDoubleScalar(static_cast<double>(holder.snapshot_count)));
+    mxSetField(plhs[0], 0, "period", mxCreateDoubleScalar(holder.period));
     mxSetField(plhs[0], 0, "step_count",
                mxCreateDoubleScalar(static_cast<double>(holder.step_count)));
+    mxSetField(plhs[0], 0, "last_coordinate",
+               mxCreateDoubleScalar(holder.last_coordinate));
+}
+
+struct PeriodicInterpolation {
+    std::size_t lower = 0;
+    std::size_t upper = 0;
+    double alpha = 0.0;
+    double coordinate = 0.0;
+};
+
+PeriodicInterpolation StateSpaceFamilyInterpolation(
+    const NativeStateSpaceHandle& holder, double coordinate) {
+    if (!std::isfinite(coordinate))
+        BadArgument("coordinate must be finite");
+    const double origin = holder.grid.front();
+    double offset = std::fmod(coordinate - origin, holder.period);
+    if (offset < 0.0)
+        offset += holder.period;
+    const double wrapped = origin + offset;
+    const auto upper_it = std::upper_bound(
+        holder.grid.begin(), holder.grid.end(), wrapped);
+    if (upper_it == holder.grid.end()) {
+        const std::size_t lower = holder.snapshot_count - 1;
+        const double width = origin + holder.period - holder.grid[lower];
+        return {lower, 0, (wrapped - holder.grid[lower]) / width, wrapped};
+    }
+    const std::size_t upper = static_cast<std::size_t>(
+        std::distance(holder.grid.begin(), upper_it));
+    if (upper == 0)
+        return {0, 1, 0.0, wrapped};
+    const std::size_t lower = upper - 1;
+    const double width = holder.grid[upper] - holder.grid[lower];
+    return {lower, upper, (wrapped - holder.grid[lower]) / width, wrapped};
+}
+
+double StateSpaceFamilyValue(const NativeStateSpaceHandle& holder,
+                             const std::vector<double>& values,
+                             std::size_t columns, std::size_t row,
+                             std::size_t column,
+                             const PeriodicInterpolation& interpolation) {
+    const auto index = [&](std::size_t snapshot) {
+        return (row * columns + column) * holder.snapshot_count + snapshot;
+    };
+    return (1.0 - interpolation.alpha) * values[index(interpolation.lower)] +
+           interpolation.alpha * values[index(interpolation.upper)];
 }
 
 void SimulinkStateSpaceStep(int nlhs, mxArray* plhs[], int nrhs,
                             const mxArray* prhs[]) {
-    CheckArity(nrhs, 3, nlhs, 1,
-               "y = radia_mex('simulink.state_space.step', handle, u)");
+    if (nlhs != 1 || (nrhs != 3 && nrhs != 4))
+        BadArgument(
+            "usage: y = radia_mex('simulink.state_space.step', handle, u) "
+            "or y_tau = radia_mex('simulink.state_space.step', handle, "
+            "coordinate, u)");
     auto& holder = StateSpace(Handle(prhs[1]));
-    const auto input = RealVector(prhs[2], "u");
+    const bool family =
+        holder.kind == NativeStateSpaceHandle::Kind::PeriodicAngleFamily;
+    if ((family && nrhs != 4) || (!family && nrhs != 3))
+        BadArgument(family
+                        ? "periodic angle-family step requires coordinate and u"
+                        : "static state-space step requires only u");
+    const double coordinate = family ? Scalar(prhs[2], "coordinate") : 0.0;
+    const auto input = RealVector(prhs[family ? 3 : 2], "u");
     if (input.size() != holder.input_size)
         BadArgument("u must contain exactly the state-space input dimension");
     if (!AllFinite(input))
         BadArgument("u must contain finite values");
 
     std::vector<double> output(holder.output_size, 0.0);
-    for (std::size_t row = 0; row < holder.output_size; ++row) {
-        for (std::size_t col = 0; col < holder.state_size; ++col)
-            output[row] += holder.C[row * holder.state_size + col] *
-                           holder.state[col];
-        for (std::size_t col = 0; col < holder.input_size; ++col)
-            output[row] += holder.D[row * holder.input_size + col] *
-                           input[col];
+    PeriodicInterpolation interpolation;
+    if (family)
+        interpolation = StateSpaceFamilyInterpolation(holder, coordinate);
+    for (std::size_t row = 0; row < holder.linear_output_size; ++row) {
+        for (std::size_t col = 0; col < holder.state_size; ++col) {
+            const double value = family
+                ? StateSpaceFamilyValue(holder, holder.C, holder.state_size,
+                                        row, col, interpolation)
+                : holder.C[row * holder.state_size + col];
+            output[row] += value * holder.state[col];
+        }
+        for (std::size_t col = 0; col < holder.input_size; ++col) {
+            const double value = family
+                ? StateSpaceFamilyValue(holder, holder.D, holder.input_size,
+                                        row, col, interpolation)
+                : holder.D[row * holder.input_size + col];
+            output[row] += value * input[col];
+        }
+    }
+    if (family) {
+        double torque = 0.0;
+        for (std::size_t row = 0; row < holder.state_size; ++row) {
+            for (std::size_t col = 0; col < holder.state_size; ++col)
+                torque += 0.5 * holder.state[row] *
+                    StateSpaceFamilyValue(holder, holder.Q, holder.state_size,
+                                          row, col, interpolation) *
+                    holder.state[col];
+            for (std::size_t col = 0; col < holder.input_size; ++col)
+                torque += holder.state[row] *
+                    StateSpaceFamilyValue(holder, holder.R, holder.input_size,
+                                          row, col, interpolation) * input[col];
+        }
+        for (std::size_t row = 0; row < holder.input_size; ++row)
+            for (std::size_t col = 0; col < holder.input_size; ++col)
+                torque += 0.5 * input[row] *
+                    StateSpaceFamilyValue(holder, holder.S, holder.input_size,
+                                          row, col, interpolation) * input[col];
+        output[holder.linear_output_size] = torque;
     }
 
     std::vector<double> next_state(holder.state_size, 0.0);
     for (std::size_t row = 0; row < holder.state_size; ++row) {
         for (std::size_t col = 0; col < holder.state_size; ++col)
-            next_state[row] += holder.A[row * holder.state_size + col] *
-                               holder.state[col];
+            next_state[row] +=
+                (family
+                     ? StateSpaceFamilyValue(holder, holder.A,
+                                             holder.state_size, row, col,
+                                             interpolation)
+                     : holder.A[row * holder.state_size + col]) *
+                holder.state[col];
         for (std::size_t col = 0; col < holder.input_size; ++col)
-            next_state[row] += holder.B[row * holder.input_size + col] *
-                               input[col];
+            next_state[row] +=
+                (family
+                     ? StateSpaceFamilyValue(holder, holder.B,
+                                             holder.input_size, row, col,
+                                             interpolation)
+                     : holder.B[row * holder.input_size + col]) *
+                input[col];
     }
     holder.state = std::move(next_state);
+    holder.last_coordinate = family ? interpolation.coordinate
+                                    : std::numeric_limits<double>::quiet_NaN();
     ++holder.step_count;
     plhs[0] = RealColumn(output);
 }
@@ -4092,6 +4317,7 @@ void SimulinkStateSpaceReset(int nlhs, mxArray* plhs[], int nrhs,
     auto& holder = StateSpace(Handle(prhs[1]));
     holder.state = holder.initial_state;
     holder.step_count = 0;
+    holder.last_coordinate = std::numeric_limits<double>::quiet_NaN();
 }
 
 void EnergyCreate(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {

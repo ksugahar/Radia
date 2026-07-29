@@ -1,0 +1,51 @@
+{
+  "radia_version": "4.95.27",
+  "generated_at_utc": "2026-07-29T19:37:25.363595+00:00",
+  "schema_version": "radia-motor-triple-check-artifact-gate/v1",
+  "status": "pass",
+  "primary_required_lanes": [
+    "ngsolve_age",
+    "hdiv_mmm_hcurl_eddy_bubble"
+  ],
+  "optional_auxiliary_lanes": [],
+  "research_triple_check_ready": true,
+  "validated_supported_solver_check": true,
+  "validated_dual_solver_check": true,
+  "shared_model_identity_matches": true,
+  "accepted_for_supported_mcp_learning": true,
+  "accepted_for_mcp_rfc_learning": false,
+  "accepted_for_primary_dual_learning": true,
+  "accepted_for_mcp_learning": true,
+  "errors": [],
+  "warnings": [],
+  "lane_results": {
+    "ngsolve_age": {
+      "schema_version": "radia-motor-validation-artifact-gate/v1",
+      "status": "pass",
+      "lane": "ngsolve_age",
+      "support_status": "supported_validation_path",
+      "validated_solver_path": true,
+      "validated_experimental_solver_path": false,
+      "validated_required_solver_path": false,
+      "validated_supported_path": true,
+      "accepted_for_mcp_learning": true,
+      "accepted_for_mcp_rfc_learning": false,
+      "errors": [],
+      "warnings": []
+    },
+    "hdiv_mmm_hcurl_eddy_bubble": {
+      "schema_version": "radia-motor-validation-artifact-gate/v1",
+      "status": "pass",
+      "lane": "hdiv_mmm_hcurl_eddy_bubble",
+      "support_status": "required_validation_path",
+      "validated_solver_path": false,
+      "validated_experimental_solver_path": false,
+      "validated_required_solver_path": true,
+      "validated_supported_path": false,
+      "accepted_for_mcp_learning": true,
+      "accepted_for_mcp_rfc_learning": false,
+      "errors": [],
+      "warnings": []
+    }
+  }
+}

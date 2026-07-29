@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 
 from radia_mcp.fem.uninstall_safety import (
     REQUIRED_SCAN_SCOPES,
@@ -12,7 +14,7 @@ from radia_mcp.fem.uninstall_safety import (
 def _evidence() -> dict:
     digest = "a" * 64
     payload = {
-        "schema": "radia.solver-uninstall-safety-evidence.v2",
+        "schema": "radia.solver-uninstall-safety-evidence.v3",
         "executed_at_utc": "2026-07-29T00:00:00Z",
         "execution_version": {
             "producer": "test",
@@ -74,10 +76,58 @@ def _evidence() -> dict:
             "missing_capabilities": [],
             "evidence_bundle_sha256": "d" * 64,
         },
+        "production_replacement_proof": _production_proof(),
         "solver_uninstall_performed": False,
     }
     payload["evidence_payload_sha256"] = _sha(payload)
     return payload
+
+
+def _production_proof() -> dict:
+    digest = "e" * 64
+    artifact = {
+        "schema": "radia.validation.production-replacement-proof.v1",
+        "executed_at_utc": "2026-07-29T00:00:00Z",
+        "execution_version": {
+            "radia": "1.0",
+            "matlab": "R2026a",
+            "simulink": "R2026a",
+        },
+        "proofs": {
+            "motor_dual_lane": {
+                "status": "pass",
+                "artifact_sha256_by_role": {"gate": digest, "manifest": digest},
+                "checks": {
+                    "both_lanes_solved": True,
+                    "shared_identity_matches": True,
+                    "angle_grids_complete": True,
+                    "torque_waveforms_nonconstant": True,
+                    "correlation_gate_pass": True,
+                    "dual_mcp_gate_pass": True,
+                },
+            },
+            "native_motor_angle_family": {
+                "status": "pass",
+                "artifact_sha256_by_role": {"matlab": digest},
+                "checks": {
+                    "standalone_batch": True,
+                    "all_tests_passed": True,
+                    "mex_and_sources_hashed": True,
+                    "periodic_motor_handle_tested": True,
+                    "simulink_compile_tested": True,
+                    "foreign_openmp_runtime_isolated": True,
+                },
+            },
+        },
+        "status": "pass",
+        "pass": True,
+    }
+    artifact["proof_payload_sha256"] = _sha(artifact)
+    raw = json.dumps(artifact, ensure_ascii=True, sort_keys=True)
+    return {
+        "artifact_json": raw,
+        "artifact_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+    }
 
 
 def test_accepts_complete_reversible_uninstall_evidence() -> None:
@@ -88,6 +138,7 @@ def test_accepts_complete_reversible_uninstall_evidence() -> None:
     assert result["retirement_capabilities"] == [
         "archive_snapshot",
         "replacement_capability_bundle",
+        "production_replacement_proof",
         "live_dependency_scan_clean",
         "rollback_installer_preserved",
     ]
@@ -165,3 +216,34 @@ def test_rejects_archive_only_evidence_without_complete_replacement_bundle() -> 
     assert result["status"] == "rejected"
     assert result["ready_for_explicit_uninstall_approval"] is False
     assert result["checks"]["replacement_capabilities_complete"] is False
+
+
+def test_rejects_missing_or_tampered_production_replacement_proof() -> None:
+    payload = _evidence()
+    payload["production_replacement_proof"]["artifact_sha256"] = "0" * 64
+    payload["evidence_payload_sha256"] = _sha(payload)
+
+    result = validate_solver_uninstall_safety_evidence(payload)
+
+    assert result["status"] == "rejected"
+    assert result["checks"]["production_replacement_proof_complete"] is False
+
+
+def test_rejects_production_proof_with_a_false_required_check() -> None:
+    payload = _evidence()
+    record = payload["production_replacement_proof"]
+    artifact = json.loads(record["artifact_json"])
+    artifact["proofs"]["motor_dual_lane"]["checks"]["correlation_gate_pass"] = False
+    artifact["proof_payload_sha256"] = _sha(
+        {key: value for key, value in artifact.items() if key != "proof_payload_sha256"}
+    )
+    record["artifact_json"] = json.dumps(artifact, ensure_ascii=True, sort_keys=True)
+    record["artifact_sha256"] = hashlib.sha256(
+        record["artifact_json"].encode("utf-8")
+    ).hexdigest()
+    payload["evidence_payload_sha256"] = _sha(payload)
+
+    result = validate_solver_uninstall_safety_evidence(payload)
+
+    assert result["status"] == "rejected"
+    assert result["checks"]["production_replacement_proof_complete"] is False

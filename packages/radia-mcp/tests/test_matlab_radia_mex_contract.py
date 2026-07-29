@@ -67,6 +67,18 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["topology_two_level_gate"] == (
         "runtests('tests/matlab/test_topology_optimization.m')"
     )
+    assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
+        "native_motor_angle_family.json"
+    )
+    assert "libiomp5md.dll" in contract["verified_contract"][
+        "openmp_runtime_policy"
+    ]
+    all_contract = matlab_radia_mex_contract("all")
+    family = all_contract["topic_data"]["sections"]["simulink"][
+        "native_state_space_overloads"
+    ]["periodic_motor_family"]
+    assert "mechanical_angle" in family
+    assert "torque" in family
 
 
 def test_optuna_simulink_contract_is_table_backed():
@@ -91,6 +103,12 @@ def test_optuna_simulink_contract_is_table_backed():
     assert contract["team28"]["frequency_hz"] == 50
     assert contract["hcurl_eddy_cln"]["mex_kernel"] == "hybrid_vim.solve"
     assert contract["hcurl_eddy_cln"]["moving_family"].startswith("ExportHCurlEddyCLNFamilyJSON")
+    native_family = contract["hcurl_eddy_cln"]["native_motor_angle_family"]
+    assert native_family["matlab_factory"] == "radia.simulink.makeMotorAngleFamily"
+    assert native_family["simulink_builder"] == (
+        "radia.simulink.buildMotorAngleFamilyModel"
+    )
+    assert native_family["verified_tests"] == 74
     assert contract["reinforcement_learning_workflow"]
     topology = contract["cad_topology_optimization"]
     assert topology["sensitivity_policy"].startswith("No cell-wise finite differences")
