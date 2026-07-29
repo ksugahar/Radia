@@ -5,6 +5,27 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.29 - Production field studies and reversible solver retirement
+
+Released 2026-07-30.
+
+- Added a typed Simulink Field Study workflow for electrostatic, current-flow,
+  steady and transient heat, linear and nonlinear harmonic-eddy, circuit, and
+  multi-conductor force studies, with checked material, winding, boundary, and
+  fixed-width bus contracts.
+- Added reproducible NGSolve field-study workers, post-processing artifacts,
+  circuit excitation, periodic air-gap motion, and reversible FEMM/AGE
+  retirement gates instead of silently depending on legacy solver installs.
+- Completed native axisymmetric Q2 element and Simulink MEX paths, including
+  curved-element regression coverage, nonlinear permanent-magnet loading, and
+  corrected high-order Gmsh reference coordinates.
+- Hardened HDiv-MMM isochronous topology optimization so filtered and projected
+  iron volume, rather than raw design density, is the enforced material budget.
+- Corrected harmonic magnetic power, energy, and eddy-loss accounting to use
+  one RMS-phasor convention throughout the Python and validation contracts.
+- Regenerated the Radia Simulink library with distinct Field Study execution
+  and configuration blocks and a refreshed agent library index.
+
 ## 4.95.28 - Hodograph free boundaries, exact axisymmetric sources, and PEEC hardening
 
 Released 2026-07-29.
