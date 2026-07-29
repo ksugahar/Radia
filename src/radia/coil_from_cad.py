@@ -1711,6 +1711,47 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     return spine_cad * scale, widths_cad * scale, heights_cad * scale
 
 
+def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
+    """Fail-loud guard against a units mismatch (CLAUDE.md "Fail Fast,
+    Fail Loud" -- no silent auto-correction).
+
+    The extractor scales CAD coordinates to METRES via
+    ``cad_units_per_meter``.  If the caller leaves the default 1.0
+    (STEP assumed in metres) but the STEP is actually in millimetres,
+    every downstream length is 1000x too large and the inductance is
+    ~1000x wrong SILENTLY (observed on the I_wrong_units variant:
+    L=114109 nH instead of ~114 nH).  This does NOT guess the unit; it
+    raises when the implied physical coil size falls outside the
+    plausible range [0.5 mm, 5 m] and names the cad_units_per_meter
+    that WOULD make it plausible.
+    """
+    if cad_units_per_meter <= 0:
+        raise ValueError(
+            f"{source_tag}: cad_units_per_meter must be > 0, got "
+            f"{cad_units_per_meter!r}.")
+    bb = solid.bounding_box()
+    ext_cad = max(float(bb.max.X - bb.min.X),
+                  float(bb.max.Y - bb.min.Y),
+                  float(bb.max.Z - bb.min.Z))
+    ext_m = ext_cad / cad_units_per_meter
+    if 5e-4 <= ext_m <= 5.0:
+        return  # plausible coil size -- pass
+    suggest = None
+    for cand in (1.0, 1e3, 1e-3, 1e2, 1e6):
+        if 5e-4 <= ext_cad / cand <= 5.0:
+            suggest = cand
+            break
+    raise ValueError(
+        f"{source_tag}: implied coil extent {ext_m:.3g} m is implausible "
+        f"(expected 0.5 mm .. 5 m).  The STEP bbox spans {ext_cad:.3g} "
+        f"CAD units and cad_units_per_meter={cad_units_per_meter:g}.  "
+        f"This is almost certainly a UNIT mismatch: a millimetre STEP "
+        f"read as metres yields a 1000x-too-large coil and a ~1000x-wrong "
+        f"inductance." +
+        (f"  Pass cad_units_per_meter={suggest:g} for this STEP."
+         if suggest else "  Verify the STEP's export units."))
+
+
 def extract_centerline_from_step(step_path: str,
                                  n_segments: int = 100,
                                  cad_units_per_meter: float = 1.0):
@@ -1780,6 +1821,11 @@ def extract_centerline_from_step(step_path: str,
             solid = sub_solids[0]
         # else: solid stays the Compound; downstream predicates will
         # likely raise on empty faces -- that is fine, hard error.
+
+    # Units sanity: fail-loud on a mm-as-metres mismatch (silent
+    # ~1000x-wrong L otherwise; No-Fallbacks / Fail-Loud).
+    _check_solid_extent_plausible(
+        solid, cad_units_per_meter, "extract_centerline_from_step")
 
     # Classification-based dispatch (No-Fallback policy, CLAUDE.md
     # "No Fallbacks - Fail Fast, Fail Loud"): inspect the solid's
@@ -2497,6 +2543,14 @@ def _filaments_from_step_compute(step_path: str,
     Returns:
         topology_dict from PEECBuilder.build_topology().
     """
+    # Units sanity: fail-loud on a mm-as-metres mismatch (silent
+    # ~1000x-wrong L otherwise; No-Fallbacks / Fail-Loud).  Covers BOTH
+    # filament paths (coil-builder walker and n_peri UV tiers).
+    from radia._b3d_shim import import_step as _import_step_units_chk
+    _check_solid_extent_plausible(
+        _import_step_units_chk(step_path), cad_units_per_meter,
+        "filaments_from_step")
+
     if use_coil_builder and n_peri is None:
         # Volume-grid placement (nwinc/nhinc) needs the profile-aware
         # walker path.  Only the walker knows per-segment (w, h).
