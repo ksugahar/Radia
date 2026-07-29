@@ -692,8 +692,9 @@ def _march(solid, p0, t0, *, step_size, max_stations, close_tol,
     t = np.asarray(t0, dtype=float)
     t = t / np.linalg.norm(t)
 
-    guard_extra = (np.asarray(list(extra_guard_pts), dtype=float)
-                   if len(list(extra_guard_pts)) else None)
+    extra_guard_pts = list(extra_guard_pts)
+    guard_extra = (np.asarray(extra_guard_pts, dtype=float)
+                   if extra_guard_pts else None)
 
     def _revisits(c_cand):
         """True if c_cand lands on a NON-recent already-walked station.
@@ -822,11 +823,13 @@ def extract_centerline(step_path_or_solid, *,
     Args:
         step_path_or_solid: STEP filepath, or a netgen.occ Solid.
         start_hint: optional ((px,py,pz), (tx,ty,tz)) seed.
-        step_size: walking step [m]. Defaults to the cube root of
+        step_size: walking step in the solid's native CAD units. Defaults
+            to the cube root of
             (solid.mass / 100), giving ~100 stations for a typical coil.
         max_stations: hard cap (per direction) to prevent runaway loops.
-        close_tol: distance below which the walk is considered to have
-            closed back to its start point. Defaults to 2*step_size.
+        close_tol: distance in native CAD units below which the walk is
+            considered to have closed back to its start point. Defaults
+            to 2*step_size.
         verbose: print per-step progress.
 
     Returns:

@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.27 - Complete STEP coil walking and cache safety
+
+Released 2026-07-29.
+
+- Added true-spine walking for closed coils, sharp-corner turning,
+  bidirectional completion for open coils, and fail-loud overlap and coverage
+  guards for STEP-to-PEEC filament extraction.
+- Applied the CAD-unit boundary consistently to STEP and in-memory shapes,
+  invalidated pre-fix filament caches, and included extraction resolution in
+  versioned cache keys so stale or differently discretized paths cannot be
+  reused silently.
+
 ## 4.95.26 - Robust STEP filament extraction
 
 Released 2026-07-29.
