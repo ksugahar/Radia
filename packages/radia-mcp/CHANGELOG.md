@@ -9,6 +9,9 @@ crystallized as its own package.
 
 ## [1.4.21] - 2026-07-29
 
+- Constrained the MCP Python SDK to the supported 1.x FastMCP contract after
+  the incompatible 2.0 package removed `mcp.server.fastmcp`; the minimal CI
+  matrix now installs the same declared dependency range.
 - Published the isochronous HDiv-MMM topology-optimization contract, including
   staged feasibility restoration, exact-void/SIMP promotion, and measured
   machine-level interpretation without machine-local provenance.
