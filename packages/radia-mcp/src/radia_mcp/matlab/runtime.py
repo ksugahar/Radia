@@ -658,7 +658,7 @@ def matlab_optuna_simulink_contract():
 def matlab_simulink_library_contract():
     """Return the installation and compatibility contract for Radia blocks."""
     return {
-        "schema": "radia-mcp.matlab-simulink-library/v2",
+        "schema": "radia-mcp.matlab-simulink-library/v3",
         "status": "ready",
         "library": "radia_simulink_library",
         "browser_name": "Radia",
@@ -673,8 +673,10 @@ def matlab_simulink_library_contract():
             "Applications/Motor",
             "Applications/Stream Function",
             "Applications/Induction Heating",
+            "Applications/Field Study",
             "Material Models/Material Dictionary",
             "Coupling/Winding Dictionary",
+            "Coupling/Field Study",
             "LTspice/LTspice Circuit",
             "LTspice/Hysteretic LTspice Plant",
             "Optimization/Optuna Optimization",
@@ -740,6 +742,41 @@ def matlab_simulink_library_contract():
                 "density, specific heat, and thermal conductivity",
                 "B-input energy hysteresis parameters",
             ],
+        },
+        "field_study": {
+            "application_block": "Applications/Field Study",
+            "configuration_block": "Coupling/Field Study",
+            "study_constructor": "radia.simulink.makeFieldStudySpec",
+            "study_compiler": "radia.simulink.compileFieldStudy",
+            "request_writer": "radia.simulink.writeFieldStudyRequest",
+            "runtime_bus": "RadiaStudyBus",
+            "mesh_format": "Netgen .vol",
+            "physics": [
+                "electrostatic",
+                "current_flow (DC or harmonic lossy dielectric)",
+                "steady_heat",
+                "harmonic_eddy",
+            ],
+            "formulations": ["planar", "axisymmetric"],
+            "harmonic_eddy_operator": "(K + j*omega*M_sigma) a = S i",
+            "harmonic_eddy_gates": [
+                "frequency_hz > 0",
+                "linear non-hysteretic permeability",
+                "one nonzero current per compiled winding identity",
+                "branch real power closes 0.5*omega^2*a^H*M_sigma*a",
+            ],
+            "scalar_gates": [
+                "complete material-region coverage",
+                "Dirichlet or positive thermal Robin constraint",
+                "terminal reaction and energy/power balance",
+            ],
+            "execution": "one owned Python/NGSolve batch worker per rising trigger",
+            "per_step_python": False,
+            "artifacts": ["versioned JSON", "timing breakdown", "Gmsh .msh v4.1", ".geo/.opt companions"],
+            "retirement_claim": (
+                "FEMM physics are exposed through the default Simulink interface; "
+                "full retirement still requires frozen live solver artifacts for every lane"
+            ),
         },
         "circuit_field_coupling": {
             "native_backend": "exact-ZOH reduced field/circuit MEX S-Function",

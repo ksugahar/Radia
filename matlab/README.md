@@ -718,6 +718,40 @@ backends behind the same winding terminal identity. This allows a controller,
 power converter, rotating mechanical plant, and magnetic model to be composed
 as ordinary Simulink subsystems while LTspice remains available for detailed
 switching-circuit cross-checks.
+
+## Field Study: completing the FEMM physics surface
+
+Magnetics alone is not a FEMM replacement. The default Simulink interface also
+exposes electrostatics, DC or harmonic current flow, steady heat conduction,
+and time-harmonic magnetic eddy current through `Applications/Field Study`.
+Geometry and region/boundary names come from one checked Netgen `.vol` file;
+the existing material and winding dictionaries remain the only property and
+coil identities.
+
+```matlab
+study = radia.simulink.makeFieldStudySpec( ...
+    Physics="steady_heat",Formulation="axisymmetric",ElementFamily="P2", ...
+    DirichletValues=struct("cooled",293.15), ...
+    RobinBoundaries=struct("outer",struct( ...
+        "transfer_w_per_m2_k",20,"ambient_k",293.15)), ...
+    VolumetricSources=struct("workpiece",2.5e6));
+contract = radia.simulink.compileFieldStudy(study,radia_material_contract);
+requestFile = radia.simulink.writeFieldStudyRequest( ...
+    contract,"C:\temp\radia_field_study\heat.json");
+radia.simulink.writeApplicationConfig("field", ...
+    struct("request_file",requestFile), ...
+    "C:\temp\radia_field_study\run.json");
+```
+
+`harmonic_eddy` uses `(K+j*omega*M_sigma)a=S*i` and accepts complex RMS
+winding-current phasors. It reports flux linkage, induced branch voltage,
+magnetic energy, Joule loss, residual, and the independent real-power closure.
+The current implementation deliberately rejects nonlinear or hysteretic
+harmonic permeability instead of silently using an initial slope. Every field
+study writes versioned JSON, four-part timing, Gmsh `.msh v4.1`, and `.geo/.opt`
+launch companions. These lanes establish the default interface; final FEMM
+retirement still requires frozen live artifacts for each physics/formulation
+combination.
 On Windows, the launcher uses `pwsh Start-Process -WindowStyle Hidden` rather
 than the `CREATE_NO_WINDOW` process flag: LTspice 26 can fail with
 `0xC0000409` under an SSH session when that flag is used. This hidden-window

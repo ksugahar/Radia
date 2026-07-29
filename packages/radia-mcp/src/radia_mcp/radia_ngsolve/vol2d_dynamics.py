@@ -9,8 +9,10 @@ artifacts identified by digest; they are not package fixtures.
 from __future__ import annotations
 
 import hashlib
+from importlib import metadata
 import json
 import math
+import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -30,7 +32,20 @@ from .vol2d_circuit import (
 
 MATERIAL_SCHEMA = "radia.vol2d-material-contract.v1"
 DYNAMIC_SCHEMA = "radia.vol2d-dynamic-analysis.v1"
-_OPERATIONS = {"assemble", "nonlinear_static", "transient", "state_space"}
+_OPERATIONS = {
+    "assemble",
+    "nonlinear_static",
+    "harmonic",
+    "transient",
+    "state_space",
+}
+
+
+def _package_version() -> str:
+    try:
+        return metadata.version("radia-mcp")
+    except metadata.PackageNotFoundError:
+        return "unknown"
 
 
 def _finite(value: Any, label: str) -> float:
@@ -48,6 +63,23 @@ def _positive(value: Any, label: str) -> float:
     if result <= 0.0:
         raise ValueError(f"{label} must be positive")
     return result
+
+
+def _complex_value(value: Any, label: str) -> complex:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if len(value) != 2:
+            raise ValueError(f"{label} complex pair must contain [real, imag]")
+        result = complex(_finite(value[0], label), _finite(value[1], label))
+    else:
+        result = complex(_finite(value, label), 0.0)
+    if not (math.isfinite(result.real) and math.isfinite(result.imag)):
+        raise ValueError(f"{label} must be finite")
+    return result
+
+
+def _complex_pair(value: complex | float) -> list[float]:
+    parsed = complex(value)
+    return [float(parsed.real), float(parsed.imag)]
 
 
 def _sha256_json(value: Any) -> str:
@@ -187,7 +219,12 @@ def _prepare_request(request: Mapping[str, Any]) -> tuple[dict[str, Any], Any, d
     return prepared, mesh_view, material_contract
 
 
-def _open_space(prepared: Mapping[str, Any], mesh_view: Any) -> tuple[Any, Any, dict[str, Any]]:
+def _open_space(
+    prepared: Mapping[str, Any],
+    mesh_view: Any,
+    *,
+    complex_space: bool = False,
+) -> tuple[Any, Any, dict[str, Any]]:
     try:
         from ngsolve import H1, Mesh  # type: ignore
     except ImportError as exc:
@@ -202,7 +239,12 @@ def _open_space(prepared: Mapping[str, Any], mesh_view: Any) -> tuple[Any, Any, 
     path = _runtime_vol_path(prepared["vol_text"], mesh_view.content_sha256)
     mesh = Mesh(str(path))
     if formulation == "planar":
-        fes = H1(mesh, order=options["order"], dirichlet=dirichlet)
+        fes = H1(
+            mesh,
+            order=options["order"],
+            dirichlet=dirichlet,
+            complex=complex_space,
+        )
     elif formulation == "axisymmetric_henrotte":
         try:
             from radia.axifem import H1Henrotte
@@ -213,6 +255,7 @@ def _open_space(prepared: Mapping[str, Any], mesh_view: Any) -> tuple[Any, Any, 
             order=options["order"],
             dirichlet=dirichlet,
             curvedquad=options["curvedquad"],
+            complex=complex_space,
         )
     else:
         raise ValueError("formulation must be planar or axisymmetric_henrotte")
@@ -422,6 +465,191 @@ def solve_vol2d_nonlinear_static(request: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _solve_harmonic_matrices(
+    stiffness: np.ndarray,
+    mass: np.ndarray,
+    sources: np.ndarray,
+    *,
+    frequency_hz: float,
+    branch_current_a: Sequence[Any],
+) -> dict[str, Any]:
+    """Pure matrix kernel for one ``exp(+j*omega*t)`` eddy-current solve."""
+
+    frequency_hz = _positive(frequency_hz, "frequency_hz")
+    stiffness = np.asarray(stiffness, dtype=float)
+    mass = np.asarray(mass, dtype=float)
+    sources = np.asarray(sources, dtype=float)
+    if stiffness.ndim != 2 or stiffness.shape[0] != stiffness.shape[1]:
+        raise ValueError("stiffness must be square")
+    if mass.shape != stiffness.shape:
+        raise ValueError("mass must match stiffness")
+    if sources.ndim != 2 or sources.shape[0] != stiffness.shape[0]:
+        raise ValueError("sources row count must match stiffness")
+    omega = 2.0 * math.pi * frequency_hz
+    raw_currents = branch_current_a
+    if (
+        not isinstance(raw_currents, Sequence)
+        or isinstance(raw_currents, (str, bytes))
+    ):
+        raise ValueError("branch_current_a must contain one phasor per branch")
+    currents = np.asarray(
+        [
+            _complex_value(value, f"branch_current_a[{index}]")
+            for index, value in enumerate(raw_currents)
+        ],
+        dtype=complex,
+    )
+    if currents.shape != (sources.shape[1],):
+        raise ValueError("branch_current_a must contain one phasor per branch")
+    if not np.any(np.abs(currents) > 0.0):
+        raise ValueError("harmonic branch_current_a must contain a nonzero excitation")
+
+    operator = stiffness.astype(complex) + 1j * omega * mass
+    rhs = sources @ currents
+    solve_started = time.perf_counter()
+    try:
+        state = np.linalg.solve(operator, rhs)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError("harmonic eddy operator is singular") from exc
+    solve_s = time.perf_counter() - solve_started
+    residual = operator @ state - rhs
+    flux_linkage = sources.T @ state
+    branch_voltage = 1j * omega * flux_linkage
+    apparent_power = 0.5 * np.vdot(currents, branch_voltage)
+    magnetic_energy = 0.25 * float(np.real(np.vdot(state, stiffness @ state)))
+    eddy_loss = 0.5 * omega * omega * float(np.real(np.vdot(state, mass @ state)))
+    power_error = float(np.real(apparent_power) - eddy_loss)
+    power_scale = max(1.0, abs(eddy_loss), abs(float(np.real(apparent_power))))
+    if abs(power_error) > 1.0e-9 * power_scale:
+        raise ValueError(
+            "harmonic branch power does not close the conductivity loss: "
+            f"error={power_error:.6e} W"
+        )
+    return {
+        "frequency_hz": frequency_hz,
+        "angular_frequency_rad_s": omega,
+        "currents": currents,
+        "state": state,
+        "flux_linkage": flux_linkage,
+        "branch_voltage": branch_voltage,
+        "apparent_power": apparent_power,
+        "magnetic_energy": magnetic_energy,
+        "eddy_loss": eddy_loss,
+        "power_error": power_error,
+        "residual": residual,
+        "solve_s": solve_s,
+    }
+
+
+def solve_vol2d_harmonic(request: Mapping[str, Any]) -> dict[str, Any]:
+    """Solve ``(K + j*omega*M) a = S i`` at one steady AC frequency.
+
+    ``M`` is the conductivity mass matrix, so ``0.5*omega^2*a^H*M*a``
+    is the time-average eddy-current loss.  The branch voltage convention is
+    ``v = j*omega*S^T*a`` for ``exp(+j*omega*t)`` phasors.
+    """
+
+    started = time.perf_counter()
+    operators = assemble_vol2d_dynamics(request)
+    assembly_s = time.perf_counter() - started
+    nonlinear = [
+        name
+        for name, material in operators["material_contract"]["materials"].items()
+        if material["kind"] != "linear"
+    ]
+    if nonlinear:
+        raise ValueError(
+            "harmonic eddy currently requires linear permeability; nonlinear "
+            f"materials={nonlinear} need a separately validated harmonic iteration"
+        )
+    stiffness = np.asarray(operators["assembly"]["field_matrix"], dtype=float)
+    mass = np.asarray(operators["conductivity_mass_matrix"], dtype=float)
+    sources = np.asarray(operators["assembly"]["source_matrix"], dtype=float)
+    solved = _solve_harmonic_matrices(
+        stiffness,
+        mass,
+        sources,
+        frequency_hz=request.get("frequency_hz"),
+        branch_current_a=request.get("branch_current_a"),
+    )
+    frequency_hz = solved["frequency_hz"]
+    omega = solved["angular_frequency_rad_s"]
+    currents = solved["currents"]
+    state = solved["state"]
+    flux_linkage = solved["flux_linkage"]
+    branch_voltage = solved["branch_voltage"]
+    apparent_power = solved["apparent_power"]
+    magnetic_energy = solved["magnetic_energy"]
+    eddy_loss = solved["eddy_loss"]
+    power_error = solved["power_error"]
+    residual = solved["residual"]
+    solve_s = solved["solve_s"]
+
+    export_started = time.perf_counter()
+    prepared, mesh_view, _materials = _prepare_request(request)
+    mesh, fes, _options = _open_space(prepared, mesh_view, complex_space=True)
+    from ngsolve import CoefficientFunction, GridFunction, grad, x  # type: ignore
+    from .vol2d_scalar import _export_entry, _gmsh_export
+
+    gfu = GridFunction(fes)
+    free = np.asarray(operators["assembly"]["free_dof_indices_0based"], dtype=int)
+    vector = gfu.vec.FV().NumPy()
+    vector[:] = 0.0
+    vector[free] = state
+    if prepared["formulation"] == "planar":
+        field = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
+    else:
+        field = CoefficientFunction((grad(gfu)[0] + gfu / x, -grad(gfu)[1]))
+    basename = str(request.get("export_basename", "vol2d_harmonic_eddy")).strip()
+    gmsh = _gmsh_export(
+        mesh,
+        gfu,
+        field,
+        basename=basename,
+        request_sha256=operators["operator_sha256"],
+        complex_field=True,
+    )
+    exports = {
+        "gmsh_msh": _export_entry(gmsh["gmsh_msh"], f"{basename}.msh", "model/mesh"),
+        "gmsh_geo": _export_entry(gmsh["gmsh_geo"], f"{basename}.geo", "text/plain"),
+        "gmsh_geo_opt": _export_entry(
+            gmsh["gmsh_geo_opt"], f"{basename}.geo.opt", "text/plain"
+        ),
+        "gmsh_msh_opt": _export_entry(
+            gmsh["gmsh_msh_opt"], f"{basename}.msh.opt", "text/plain"
+        ),
+    }
+    export_s = time.perf_counter() - export_started
+    result = {
+        "schema": DYNAMIC_SCHEMA,
+        "status": "solved",
+        "operation": "harmonic",
+        "phasor_convention": "exp(+j*omega*t), RMS branch current",
+        "frequency_hz": frequency_hz,
+        "angular_frequency_rad_s": omega,
+        "branch_current_a": [_complex_pair(value) for value in currents],
+        "field_state": [_complex_pair(value) for value in state],
+        "flux_linkage_wb_turn": [_complex_pair(value) for value in flux_linkage],
+        "branch_voltage_v": [_complex_pair(value) for value in branch_voltage],
+        "apparent_power_va": _complex_pair(apparent_power),
+        "magnetic_energy_j": magnetic_energy,
+        "eddy_loss_w": eddy_loss,
+        "power_closure_error_w": power_error,
+        "residual_inf": float(np.linalg.norm(residual, ord=np.inf)),
+        "mesh_contract_sha256": operators["assembly"]["mesh_contract"]["contract_sha256"],
+        "material_contract_sha256": operators["material_contract"]["contract_sha256"],
+        "operator_sha256": operators["operator_sha256"],
+        "timing_s": {
+            "prepare_and_assemble": assembly_s,
+            "factorize_and_solve": solve_s,
+            "export": export_s,
+            "total": assembly_s + solve_s + export_s,
+        },
+        "exports": exports,
+    }
+    return result
+
+
 def _time_axis(value: Any) -> np.ndarray:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or len(value) < 2:
         raise ValueError("time_s must contain at least two samples")
@@ -555,12 +783,18 @@ def analyze_vol2d_dynamics(request: Mapping[str, Any]) -> dict[str, Any]:
         result = assemble_vol2d_dynamics(request)
     elif operation == "nonlinear_static":
         result = solve_vol2d_nonlinear_static(request)
+    elif operation == "harmonic":
+        result = solve_vol2d_harmonic(request)
     elif operation == "transient":
         result = solve_vol2d_transient(request)
     else:
         result = compile_vol2d_state_space(request)
     return {
         "executed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "execution_version": {
+            "radia_mcp": _package_version(),
+            "ngsolve": getattr(__import__("ngsolve"), "__version__", "unknown"),
+        },
         "schema": DYNAMIC_SCHEMA,
         "status": result["status"],
         "operation": operation,
