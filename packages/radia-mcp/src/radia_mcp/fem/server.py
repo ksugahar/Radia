@@ -26,6 +26,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+from .. import __version__
 from ..common import register_status_tool
 from ..common.mcp_contract import apply_tool_contract
 
@@ -861,7 +862,7 @@ register_status_tool(
 apply_tool_contract(
     mcp,
     server_name="mcp-server-fem",
-    version="1.4.19",
+    version=__version__,
 )
 
 
