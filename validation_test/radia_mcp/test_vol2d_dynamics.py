@@ -11,6 +11,7 @@ from radia_mcp.radia_ngsolve.vol2d_circuit import write_structured_rect_vol
 from radia_mcp.radia_ngsolve.vol2d_dynamics import (
     assemble_vol2d_dynamics,
     compile_vol2d_state_space,
+    solve_vol2d_harmonic,
     solve_vol2d_nonlinear_static,
     solve_vol2d_transient,
 )
@@ -124,6 +125,42 @@ def test_backward_euler_passive_decay_and_static_limit(tmp_path: Path) -> None:
         np.asarray(assemble_vol2d_dynamics(static_request)["assembly"]["source_matrix"])[:, 0],
     )
     assert np.allclose(static["field_state_history"][-1], expected, rtol=1.0e-11, atol=1.0e-12)
+
+
+@pytest.mark.parametrize(
+    "quads,family,formulation",
+    [
+        (False, "P1", "planar"),
+        (True, "Q1", "planar"),
+        (False, "P2", "axisymmetric_henrotte"),
+        (True, "Q2", "axisymmetric_henrotte"),
+    ],
+)
+def test_harmonic_eddy_current_closes_power_and_exports_artifacts(
+    tmp_path: Path, quads: bool, family: str, formulation: str
+) -> None:
+    request = _request(
+        tmp_path, quads=quads, family=family, formulation=formulation
+    )
+    request.update(
+        {
+            "frequency_hz": 400.0,
+            "branch_current_a": [[1.0, -0.25]],
+            "export_basename": f"harmonic_{family.lower()}",
+        }
+    )
+    result = solve_vol2d_harmonic(request)
+
+    assert result["status"] == "solved"
+    assert result["eddy_loss_w"] > 0.0
+    assert result["magnetic_energy_j"] > 0.0
+    assert abs(result["power_closure_error_w"]) < 1.0e-9 * max(
+        1.0, result["eddy_loss_w"]
+    )
+    assert result["residual_inf"] < 1.0e-8
+    assert result["timing_s"]["total"] > 0.0
+    assert result["exports"]["gmsh_msh"]["content"].startswith("$MeshFormat")
+    assert 'Merge "harmonic_' in result["exports"]["gmsh_geo"]["content"]
 
 
 def test_vol_identity_reaches_native_mex_state_space_contract(tmp_path: Path) -> None:

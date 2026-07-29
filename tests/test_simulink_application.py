@@ -138,6 +138,7 @@ def test_application_cli_returns_nonzero_but_keeps_result(tmp_path: Path):
         ("motor", {"vol": "motor.vol"}),
         ("streamfunction", {"coil_vol": "coil.vol", "eval_vol": "eval.vol"}),
         ("ih", {"peec_step": "coil.step"}),
+        ("field", {"request_file": "field-study.json"}),
     ],
 )
 def test_production_design_specs_expose_runner_output_contract(

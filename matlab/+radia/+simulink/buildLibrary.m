@@ -30,6 +30,15 @@ assignin("base","radia_winding_bus",defaultWindingContract.runtime);
 radia.simulink.makeWindingBusObject(defaultWindingContract.runtime, ...
     Name="RadiaWindingBus");
 radia.simulink.makeElectromechanicalBusObjects();
+defaultStudyRuntime=struct("schema_version",uint16(1), ...
+    "physics_code",uint16(0),"formulation_code",uint16(0), ...
+    "element_order",uint16(1),"frequency_Hz",0,"model_depth_m",1, ...
+    "boundary_count",uint16(0),"boundary_id",zeros(64,1,"uint32"), ...
+    "boundary_kind",zeros(64,1,"uint16"), ...
+    "boundary_value_real",zeros(64,1),"boundary_value_imag",zeros(64,1), ...
+    "robin_transfer_W_per_m2K",zeros(64,1),"robin_ambient_K",zeros(64,1));
+assignin("base","radia_field_study_bus",defaultStudyRuntime);
+radia.simulink.makeFieldStudyBusObject(defaultStudyRuntime,Name="RadiaStudyBus");
 assignin("base","radia_adjoint_runner", ...
     radia.topopt.makeAdjointDemoRunner());
 assignin("base","radia_streamfunction_adjoint_runner", ...
@@ -41,6 +50,7 @@ addApplicationBlock(applications,"PCB PEEC","pcb",[45 100 345 150]);
 addApplicationBlock(applications,"Motor","motor",[45 170 345 220]);
 addApplicationBlock(applications,"Stream Function","streamfunction",[45 240 345 290]);
 addIHNativeBlock(applications,"Induction Heating",[45 310 345 360]);
+addApplicationBlock(applications,"Field Study","field",[45 500 345 550]);
 radia.simulink.addStreamFunctionOptimizationSubsystem(applications, ...
     "Stream Function Optimization",[45 380 345 470]);
 
@@ -56,6 +66,7 @@ add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",name+"/LTs
  "FunctionName","radia_hysteretic_ltspice_sfun","Parameters","'', 1e-3, 'C:\temp\radia_hysteretic_ltspice_block'",Position=[45 105 200 155]);
 coupling=addEmptySubsystem(name,"Coupling",[470 305 730 405]);
 addWindingDictionaryBlock(coupling,"Winding Dictionary",[45 35 285 105]);
+addFieldStudyBlock(coupling,"Field Study",[45 125 285 195]);
 optimization=addEmptySubsystem(name,"Optimization",[70 435 430 560]);
 addOptunaLibraryBlock(optimization,"Optuna Optimization",[45 35 240 105]);
 addSheetMetalLibraryBlock(optimization,"Sheet Metal Optimization", ...
@@ -267,6 +278,20 @@ add_block("simulink/Ports & Subsystems/Out1",path+"/windings", ...
     "Port","1","Position",[250 55 280 75]);
 add_line(path,"Compiled Winding Bus/1","windings/1");
 radia.simulink.configureWindingDictionaryBlock(path);
+end
+
+function addFieldStudyBlock(parent,label,position)
+path=parent+"/"+label;
+add_block("simulink/Ports & Subsystems/Subsystem",path,Position=position);
+delete_line(path,"In1/1","Out1/1");
+delete_block(path+"/In1"); delete_block(path+"/Out1");
+add_block("simulink/Sources/Constant",path+"/Compiled Study Bus", ...
+    "Value","radia_field_study_bus","OutDataTypeStr","Bus: RadiaStudyBus", ...
+    "SampleTime","inf","Position",[45 45 190 85]);
+add_block("simulink/Ports & Subsystems/Out1",path+"/study", ...
+    "Port","1","Position",[250 55 280 75]);
+add_line(path,"Compiled Study Bus/1","study/1");
+radia.simulink.configureFieldStudyBlock(path);
 end
 
 function addIHNativeBlock(parent,label,position)

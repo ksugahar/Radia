@@ -39,6 +39,16 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   field/circuit state-space MEX path or an LTspice interval block. Switching
   circuit backends must not change the `.vol`, material dictionary, winding
   polarity, series/parallel identity, or mechanical state convention.
+- FEMM replacement is a multiphysics contract, not a magnetics-only claim.
+  `Coupling/Field Study` compiles electrostatic, DC/AC current-flow,
+  steady-heat, and time-harmonic eddy-current settings to `RadiaStudyBus`.
+  The corresponding `Applications/Field Study` worker runs once on an
+  explicit trigger and writes versioned JSON, timing, Gmsh v4.1, and launch
+  companions. A solver callback is never invoked once per Simulink step.
+- Harmonic eddy current uses `(K+j*omega*M_sigma)a=S*i` and is accepted only
+  when frequency, linear material law, winding identity, residual, and branch
+  real-power/Joule-loss closure pass. Nonlinear harmonic permeability remains
+  rejected until a separately validated iteration is available.
 
 ## Simulink Library
 
@@ -50,8 +60,10 @@ Applications/PCB PEEC
 Applications/Motor
 Applications/Stream Function
 Applications/Induction Heating
+Applications/Field Study
 Material Models/Material Dictionary
 Coupling/Winding Dictionary
+Coupling/Field Study
 LTspice/LTspice Circuit
 LTspice/Hysteretic LTspice Plant
 ```
