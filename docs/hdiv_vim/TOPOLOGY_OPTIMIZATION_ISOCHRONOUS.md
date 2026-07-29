@@ -203,6 +203,20 @@ In parallel: the design-scale timing of the Python assembled route runs on
 idle mdx (the same job doubles as the CUDA-lane baseline), and the CUDA lane
 proceeds through its Phase 0-1 (Sec. 8).
 
+**Sec.-6.2 study infrastructure note (2026-07-29):** the first study-scale
+run (isochronous gamma-profile targets) exposed that an INFEASIBLE-start
+profile dead-ends the Stage-2 acceptance (zero accepted iterates: shrink
+demands in the constraint ROWS go LP-infeasible as the move box shrinks,
+and monotone-J acceptance blocks feasibility restoration).
+`optimize_density` is now a THREE-TIER SLP: inside the 1.25-band acceptance
+cap the tested Stage-2 behavior is unchanged (monotone J, pull-back rows,
+hold fallback); beyond the cap a DEEP-RESTORATION phase puts the steepest
+band-weighted violation descent in the LP OBJECTIVE (rows become the
+always-feasible non-worsening guard, J free) and accepts on total-violation
+decrease with per-constraint blow-up caps.  Physically, deep restoration IS
+the isochronization step: it shapes the iron until `<B_z>(r)` matches the
+gamma profile, after which the J-polish phase engages.
+
 ## 8. Performance plan
 
 Per-iterate cost = mass reweight (ms) + one SPD solve with two right-hand
