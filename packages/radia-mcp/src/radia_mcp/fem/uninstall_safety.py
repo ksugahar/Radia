@@ -127,6 +127,11 @@ def validate_solver_uninstall_safety_evidence(
         is False,
         "dependency_scan_complete": dependencies.get("scan_complete") is True
         and bool(_SHA256_RE.fullmatch(str(dependencies.get("scan_sha256", "")).lower())),
+        "dependency_scan_timestamp_matches_evidence": bool(
+            str(evidence.get("executed_at_utc", "")).strip()
+        )
+        and str(dependencies.get("executed_at_utc", "")).strip()
+        == str(evidence.get("executed_at_utc", "")).strip(),
         "installation_roots_accounted_for": int(
             install_roots.get("discovered_root_count", 0) or 0
         )
