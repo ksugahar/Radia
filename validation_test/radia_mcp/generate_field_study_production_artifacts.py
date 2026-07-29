@@ -51,6 +51,13 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write canonical JSON bytes so manifest hashes are cross-platform."""
+
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
 def _mesh_rect(root: Path, family: str) -> Path:
     path = root / f"{family.lower()}_rectangle.vol"
     write_structured_rect_vol(
@@ -346,7 +353,7 @@ def _write_artifact(
     if not artifact["pass"]:
         raise RuntimeError(f"{family} production checks failed: {artifact['checks']}")
     path = output_dir / f"{family.lower()}.json"
-    path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_json(path, artifact)
     return path
 
 
@@ -402,9 +409,7 @@ def main() -> int:
         "element_families": rows,
         "all_passed": all(row["pass"] for row in rows),
     }
-    (args.output_dir / "manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    _write_json(args.output_dir / "manifest.json", manifest)
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0
 
