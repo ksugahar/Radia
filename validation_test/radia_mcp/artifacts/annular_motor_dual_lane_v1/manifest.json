@@ -1,0 +1,57 @@
+{
+  "radia_version": "4.95.27",
+  "schema": "radia.validation.annular-motor-dual-lane-manifest.v1",
+  "generated_at_utc": "2026-07-29T19:37:25.363595+00:00",
+  "physical_identity": {
+    "geometry": {
+      "family": "concentric_annular_rotor_stator",
+      "rotor_inner_radius_m": 0.2,
+      "rotor_outer_radius_m": 0.8,
+      "stator_inner_radius_m": 1.0,
+      "stator_outer_radius_m": 1.4,
+      "axial_length_m": 0.2,
+      "slots": 12,
+      "poles": 4,
+      "sector_count": 4
+    },
+    "material": {
+      "rotor": {
+        "relative_permeability": 1001.0,
+        "conductivity_s_per_m": 58000000.0
+      },
+      "stator": {
+        "relative_permeability": 1001.0,
+        "conductivity_s_per_m": 58000000.0
+      },
+      "frequency_hz": 100.0
+    },
+    "excitation": {
+      "harmonic": 1,
+      "rotor_amplitude": 0.8,
+      "stator_amplitude": 1.0,
+      "angle_samples": 8,
+      "angle_basis": "mechanical_rad",
+      "endpoint_policy": "exclude_repeated_period_endpoint"
+    }
+  },
+  "shared_mesh_material_identity": {
+    "geometry_sha256": "c5ad6c6c3b4c4888f6745ef6df7bb1e4f2546a82e083eaed8646309ba0b368d0",
+    "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
+    "excitation_sha256": "27e2deab2fc6df07f85b503e2b838ef8ddf7ed39872a1dfc395ecb6308cf5485",
+    "aggregate_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83"
+  },
+  "artifact_files": {
+    "ngsolve_age": "ngsolve_age.json",
+    "hdiv_mmm_hcurl_eddy_bubble": "hdiv_mmm_hcurl_eddy_bubble.json",
+    "native_motor_angle_family": "native_motor_angle_family.json",
+    "dual_lane": "dual_lane.json",
+    "gate_result": "gate_result.json"
+  },
+  "timing_breakdown_s": {
+    "ngsolve_age": 0.06512859999202192,
+    "hdiv_mmm_hcurl_eddy_bubble": 14.897804700070992,
+    "packaging_and_gate": 0.0014563999138772488,
+    "total": 14.964390699984506
+  },
+  "status": "pass"
+}

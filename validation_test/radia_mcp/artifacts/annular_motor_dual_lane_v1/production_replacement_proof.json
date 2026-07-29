@@ -1,0 +1,49 @@
+{
+  "radia_version": "4.95.27",
+  "schema": "radia.validation.production-replacement-proof.v1",
+  "executed_at_utc": "2026-07-29T19:37:32.052567+00:00",
+  "execution_version": {
+    "radia": "4.95.27",
+    "matlab": "(R2026a)",
+    "simulink": "(R2026a)"
+  },
+  "proofs": {
+    "motor_dual_lane": {
+      "status": "pass",
+      "shared_model_identity_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83",
+      "artifact_sha256_by_role": {
+        "manifest": "4e25646bdab933435e13c543d025891194e9ead298e54e873648f17d0ff869e1",
+        "gate": "1fd73cf4bf7075cf3bfb0ffba8443a5f92edb566f3c9ecd50cb517c5db4e6e52",
+        "ngsolve_age": "674deaa36f7b6caef7a3a822a7687007b46f9745f2881e7c76494563ac29168a",
+        "hdiv_mmm_hcurl_eddy_bubble": "180a248b815234a3e70b0d10122b612eaefcf4401a61e1a84326be3413bc7444",
+        "dual_lane": "2b17ea441f4d2328c9c262ba1670840c15aaa17b5323750f7301301f228ad532"
+      },
+      "checks": {
+        "both_lanes_solved": true,
+        "shared_identity_matches": true,
+        "angle_grids_complete": true,
+        "torque_waveforms_nonconstant": true,
+        "correlation_gate_pass": true,
+        "dual_mcp_gate_pass": true
+      }
+    },
+    "native_motor_angle_family": {
+      "status": "pass",
+      "test_count": 74,
+      "artifact_sha256_by_role": {
+        "matlab": "521ba53ab27e8222127a0f067fdc7b6da26549b4ea2a721caadce62441d377bc"
+      },
+      "checks": {
+        "standalone_batch": true,
+        "all_tests_passed": true,
+        "mex_and_sources_hashed": true,
+        "periodic_motor_handle_tested": true,
+        "simulink_compile_tested": true,
+        "foreign_openmp_runtime_isolated": true
+      }
+    }
+  },
+  "status": "pass",
+  "pass": true,
+  "proof_payload_sha256": "fa1454608a1433d555ab44c9e1766cf1bb5089d9f2e7f8328b1cb2c2ac249628"
+}
