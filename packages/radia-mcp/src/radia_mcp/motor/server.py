@@ -38,7 +38,6 @@ from .age_quality_knowledge import (
     route_age_validation_plan,
 )
 from ..radia_ngsolve.circuit_excitation import compile_circuit_age_application
-from ..radia_ngsolve.circuit_system import analyze_circuit_field
 from .validation_lanes_knowledge import (
     format_artifact_gate_result,
     format_motor_validation_lanes,
@@ -746,6 +745,8 @@ def motor_circuit_field_analysis(analysis_json: str) -> str:
     """
 
     try:
+        from ..radia_ngsolve.circuit_system import analyze_circuit_field
+
         result = analyze_circuit_field(json.loads(analysis_json))
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {

@@ -1,56 +1,56 @@
 {
   "all_passed": true,
-  "created_at_utc": "2026-07-29T14:13:46.569266+00:00",
+  "created_at_utc": "2026-07-29T16:00:15.887973+00:00",
   "element_families": [
     {
       "artifact": "p1.json",
-      "duration_s": 0.7218421000288799,
+      "duration_s": 0.8884427999728359,
       "element_family": "P1",
       "pass": true,
-      "sha256": "d5595ed9bb50f5dc792024e05a63b89c00248befa2f3ce54bdc94756815c867f"
+      "sha256": "5600fb402bddcb262caa3b58d5c0645e1066e24d1ea295b7dae6a8723a7872fd"
     },
     {
       "artifact": "q1.json",
-      "duration_s": 0.042468799976632,
+      "duration_s": 0.07645630004117265,
       "element_family": "Q1",
       "pass": true,
-      "sha256": "a3c22f6e476ab830f387e7e3e6c3d67a83305ac1e3dcb94a14fa4b77fe4c98d1"
+      "sha256": "dde4eaa9ba609f0fd4aee85aa4774953944f0b13b79c5c61f0c94997bce92e93"
     },
     {
       "artifact": "p2.json",
-      "duration_s": 9.915294000064023,
+      "duration_s": 9.921047100040596,
       "element_family": "P2",
       "pass": true,
-      "sha256": "54ac0c244b9b6d5c4ff833390d8d3753a49cfbdd10d10cec8ce743acf6b2f406"
+      "sha256": "766c54bbde09af8bc7099ebe701f5aa68042cff3de01848f660bc797461ae050"
     },
     {
       "artifact": "q2.json",
-      "duration_s": 0.061853600083850324,
+      "duration_s": 0.12437720003072172,
       "element_family": "Q2",
       "pass": true,
-      "sha256": "75dfc8dcafbe9cf316cdcea0a26835580b2a7400046460b0635838fdae110aa0"
+      "sha256": "017c45e8235118172cf1e088f0af2b9b6c2d57b9844ec7371a3b5124bffd82a6"
     },
     {
       "artifact": "p2_curved.json",
-      "duration_s": 0.6810168999945745,
+      "duration_s": 0.6930316999787465,
       "element_family": "P2_curved",
       "pass": true,
-      "sha256": "2d8dd1cf345e2dced24ae4093e3eb57cf76feb8e9453c729869118d4d186d07a"
+      "sha256": "000865489a2e5e5fd8c822e63000147e1a9a0fac5fb085f727cf0b82ad6d10dd"
     },
     {
       "artifact": "q2_curved.json",
-      "duration_s": 1.6870558999944478,
+      "duration_s": 2.234712600009516,
       "element_family": "Q2_curved",
       "pass": true,
-      "sha256": "867e77ad14ae0c46c24ea24c311f63a50406ab67e5b287a0e536c7528f4cfd45"
+      "sha256": "4482a8d39e6677a4f06c4cc0c7f349a871538e192e076e8ece479aa9fb5a3bce"
     }
   ],
   "execution_version": {
     "ngsolve": "6.2.2604",
     "python": "3.12.10",
-    "radia_mcp": "1.4.22"
+    "radia_mcp": "1.4.23"
   },
   "generator": "validation_test/radia_mcp/generate_field_study_production_artifacts.py",
-  "generator_sha256": "b320d52f42e1b42a6855cae766b8c56876c3dff03ff73554ceff5dfa26c0584b",
+  "generator_sha256": "517269021637282f69df47fb29bb310f65c1830f5cfab35e3be6f4fccf5e586e",
   "schema": "radia.field-study-production-manifest.v1"
 }

@@ -16,7 +16,9 @@ FAMILIES = {"P1", "Q1", "P2", "Q2", "P2_curved", "Q2_curved"}
 
 
 def test_manifest_freezes_all_six_verified_element_families() -> None:
-    manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
+    manifest_bytes = (ROOT / "manifest.json").read_bytes()
+    assert b"\r\n" not in manifest_bytes
+    manifest = json.loads(manifest_bytes)
     assert manifest["schema"] == "radia.field-study-production-manifest.v1"
     assert manifest["all_passed"] is True
     assert manifest["execution_version"]["radia_mcp"]
@@ -25,7 +27,9 @@ def test_manifest_freezes_all_six_verified_element_families() -> None:
     assert set(rows) == FAMILIES
     for family, row in rows.items():
         path = ROOT / row["artifact"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == row["sha256"]
+        artifact_bytes = path.read_bytes()
+        assert b"\r\n" not in artifact_bytes
+        assert hashlib.sha256(artifact_bytes).hexdigest() == row["sha256"]
         artifact = json.loads(path.read_text(encoding="utf-8"))
         assert artifact["schema"] == "cae-ai-lab.solver-run.v1"
         assert artifact["pass"] is True

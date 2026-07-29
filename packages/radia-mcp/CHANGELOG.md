@@ -20,6 +20,8 @@ crystallized as its own package.
   a collision-free Simulink library knowledge index.
 - Corrected harmonic-study observables to the documented RMS-phasor convention
   and expanded numerical power-closure coverage.
+- Made production-evidence hashes independent of platform line endings and
+  restored dependency-light FEM/Motor server imports through lazy solver loads.
 
 ## [1.4.22] - 2026-07-29
 
