@@ -14,8 +14,9 @@ curvilinear quadrilateral, ALL-Dirichlet in A:
     face      : B = B_face, A = ramp 0 -> Phi/2, theta in [0, TH_C]
     wall      : A = Phi/2,  prescribed C1 profile (B_face,TH_C)->(B_tip,TH_T)
     tip       : B = B_tip,  A = ramp 0 -> Phi/2, theta in [0, TH_T]
-One LINEAR solve; the recovered wall curve IS the horn profile.  The wall
-tilt theta is the local taper angle, so the prescription "theta unwinds from
+One LINEAR hodograph field solve plus linear coordinate recovery yields the
+wall curve, which IS the horn profile.  The wall tilt theta is the local taper
+angle, so the prescription "theta unwinds from
 TH_C to TH_T while B climbs to the cap" is literally "taper aggressively
 while the iron is cheap, straighten out as the cap approaches".
 
@@ -33,9 +34,10 @@ STRAIGHT TAPER with the same face width, tip width, and length:
     ladder         gap field shifts < 1 % at a 1.6x box
 
 Honest framing: +5 % gain at identical footprint directly multiplies sensor
-sensitivity and comes from ONE linear solve with the internal |B| controlled
-by construction; a hand-tuned bulged spline could plausibly match the shape
--- the hodograph's edge is the constructive cap, not exclusivity.
+sensitivity and comes without nonlinear shape iteration, with the internal
+|B| controlled by construction; a hand-tuned bulged spline could plausibly
+match the shape -- the hodograph's edge is the constructive cap, not
+exclusivity.
 
 Run:  python verify_concentrator_horn.py
 Writes results_concentrator_horn.json + concentrator_horn_verify.png.
@@ -48,6 +50,7 @@ import os
 import platform
 import sys
 
+import ngsolve
 import numpy as np
 from ngsolve import (
     BND, BilinearForm, CoefficientFunction, GridFunction, H1, Mesh,
@@ -352,6 +355,8 @@ def measure(mesh, gfA, poly, B0):
     ys = np.linspace(poly[:, 1].min(), poly[:, 1].max(), 90)
     pth = Path(poly)
     pk = 0.0
+    sampled = 0
+    failures = []
     ind = mesh.MaterialCF({"iron": 1.0}, default=0.0)
     for px in xs:
         for py in ys:
@@ -359,12 +364,23 @@ def measure(mesh, gfA, poly, B0):
                 try:
                     if ind(mesh(float(px), float(py))) > 0.5:
                         pk = max(pk, float(Bmag(mesh(float(px), float(py)))))
-                except Exception:               # noqa: BLE001
-                    pass
+                        sampled += 1
+                except Exception as exc:        # noqa: BLE001
+                    failures.append((float(px), float(py), str(exc)))
+    if failures:
+        px, py, msg = failures[0]
+        raise RuntimeError(
+            f"iron peak sampling failed at ({px:.6e}, {py:.6e}): {msg} "
+            f"({len(failures)} failed point(s))")
+    if sampled == 0 or not math.isfinite(pk) or pk <= 0.0:
+        raise RuntimeError(
+            f"iron peak sampling produced no valid samples at B0={B0:.6e}")
+    if not math.isfinite(b_gap):
+        raise RuntimeError(f"gap-field sampling is not finite at B0={B0:.6e}")
     return b_gap, pk
 
 
-# ---------------- golden bands (locked 2026-07-29, LAB) ----------------
+# ---------------- golden bands (locked 2026-07-29) ----------------
 GOLD = {
     "geometric_gain": (8.0, 9.6),           # measured 8.79
     "length_mm": (0.80, 1.05),              # measured 0.916
@@ -390,14 +406,19 @@ def main():
     global BOX_X, BOX_Y
     SetNumThreads(4)
     here = os.path.dirname(os.path.abspath(__file__))
-    report = {"case": {
-        "gap_um": 2e6 * GAP_HALF, "box_mm": [1e3 * BOX_X, 1e3 * BOX_Y],
-        "cap_T": CAP,
-        "material": f"permalloy-like MUR0={MUR0:.0f} BK={BK} NEXP={NEXP}",
-        "B_face_T": B_F, "B_tip_cap_T": B_T,
-        "taper_deg_face_to_tip": [math.degrees(TH_C), math.degrees(TH_T)],
-        "phi_half_Wb_per_m": PHI2,
-    }}
+    report = {
+        "schema": "radia.validation.clebsch-concentrator-horn.v1",
+        "case": {
+            "gap_um": 2e6 * GAP_HALF,
+            "box_mm": [1e3 * BOX_X, 1e3 * BOX_Y],
+            "cap_T": CAP,
+            "material": f"permalloy-like MUR0={MUR0:.0f} BK={BK} NEXP={NEXP}",
+            "B_face_T": B_F,
+            "B_tip_cap_T": B_T,
+            "taper_deg_face_to_tip": [math.degrees(TH_C), math.degrees(TH_T)],
+            "phi_half_Wb_per_m": PHI2,
+        },
+    }
     with TaskManager():
         print("step (1) hodograph design of the horn")
         curves = design_horn(report)
@@ -522,7 +543,6 @@ def main():
     ax[0].legend(fontsize=7)
     ax[0].set_xlabel("x [mm]")
     ax[0].set_ylabel("y [mm]")
-    ax[0].set_title("designed horn outline")
     for name, col in (("horn", "tab:red"), ("straight", "tab:blue")):
         rows = results[name]
         ax[1].plot([r["B0_mT"] for r in rows], [r["gain"] for r in rows],
@@ -546,6 +566,9 @@ def main():
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
         "hostname": platform.node(),
+        "python_version": platform.python_version(),
+        "ngsolve_version": ngsolve.__version__,
+        "numpy_version": np.__version__,
         "purpose": "correctness validation only (no timing claims)",
     }
     out = os.path.join(here, "results_concentrator_horn.json")

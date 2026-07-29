@@ -311,7 +311,8 @@ field-geometry solver**: minimises `W = Int (phi_x^2+phi_y^2+D^2)/z_psi` over
 ```
 python solve_clebsch_legendre_3d.py
 ```
-Manufactured-solution verified (golden `tests/feec/test_clebsch_legendre_3d.py`):
+Manufactured-solution verified (golden
+`validation_test/feec/test_clebsch_legendre_3d.py`):
 the polynomial vacuum case (uniform field) is recovered to machine precision and
 the non-polynomial case (hyperbolic field `B=(y,x,B0)`) at the FE convergence
 rate (order ~3 in `h`) -- confirming the energy minimiser on Clebsch fields is
@@ -521,7 +522,7 @@ impossible) and `dA/ds = -B0 cos(alpha)` pointwise (the uniform-B0 support
 is exact regardless of the solve).  The tube scales exactly with `PHI`
 (the problem is linear), verified numerically.
 
-| check (lab hard-tail steel, `mu_r = 1 + 6999/(1+B^6)`) | measured |
+| check (hard-tail steel model, `mu_r = 1 + 6999/(1+B^6)`) | measured |
 |---|---|
 | B0 = 1.5 T control | **collapses to the flat pole** (90 % of the width below alpha = 6.8e-4: below the knee the fringe-free optimum IS the flat face) |
 | B0 = 2.0 T design | 0.33 mm bump TOWARD the gap (classical shim direction), width identity 4.8e-5, dA/ds identity med 9.8e-4 |
@@ -531,8 +532,9 @@ is exact regardless of the solve).  The tube scales exactly with `PHI`
 
 Honest verdict (program-wide): the hodograph is NOT an optimizer -- it
 translates boundary prescriptions (wall curve, `theta_e`, `alpha_max`, set
-a priori here, not tuned) into saturation-exact shapes in one linear
-solve.  Its unique value is the constructive cap/interface guarantee, not
+a priori here, not tuned) into saturation-exact shapes through one linear
+hodograph field solve followed by linear coordinate recovery.  Its unique
+value is the constructive cap/interface guarantee, not
 performance exclusivity; a hand-tuned shim could plausibly match the
 static geometry share.  Open v2: couple the AIR hodograph (conformal --
 Rogowski's own plane) to the iron hodograph along the shared free boundary
@@ -553,9 +555,9 @@ everywhere in the iron at rated ambient.  The half-horn is the cleanest
 hodograph domain in this program -- an all-Dirichlet curvilinear
 quadrilateral (centerline `theta=0, A=0`; face `B=B_F` with an A-ramp;
 wall `A=Phi/2` with a C1 `(B,theta)` profile; tip `B=B_T` with an
-A-ramp).  One linear solve; the recovered wall IS the horn profile, with
-the wall-tilt prescription literally reading "taper aggressively while the
-iron is cheap, straighten as the cap approaches".
+A-ramp).  One linear hodograph field solve plus linear coordinate recovery
+yields the wall, with the wall-tilt prescription literally reading "taper
+aggressively while the iron is cheap, straighten as the cap approaches".
 
 | check (permalloy-like, cap 1.0 T, gap 40 um) | measured |
 |---|---|
@@ -568,7 +570,7 @@ iron is cheap, straighten as the cap approaches".
 Honest framing: +5 % at identical footprint directly multiplies sensor
 sensitivity and comes with the internal `|B|` controlled by construction;
 a hand-tuned bulged spline could plausibly match the shape -- the edge is
-the constructive cap plus zero nonlinear iteration, not exclusivity.
+the constructive cap plus zero nonlinear design iteration, not exclusivity.
 
 ## References
 

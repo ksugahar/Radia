@@ -5,6 +5,41 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.28 - Hodograph free boundaries, exact axisymmetric sources, and PEEC hardening
+
+Released 2026-07-29.
+
+- Added constructive hodograph designs for a saturable pole face and a flux
+  concentrator horn, with nonlinear FEM comparisons, collapse and truncation
+  controls, and golden-banded result artifacts.
+- Documented the method's practical scope in the electromagnet MCP knowledge:
+  it supplies saturation-aware shapes and cap guarantees without nonlinear
+  shape iteration, while remaining a construction rather than a general
+  optimizer.
+- Versioned the committed validation artifacts, recorded their numerical
+  runtime, removed in-figure titles, and made iron-peak sampling fail loudly
+  instead of silently underestimating a field maximum.
+- Added exact mesh-vertex azimuthal ring-current loads and prescribed
+  `A_phi` point constraints to the linear and nonlinear axisymmetric
+  H1Henrotte solvers, including nonlinear permanent-magnet sources.
+- Preserved the nonlinear solver's positional API, accepted NumPy source
+  tables without ambiguous truth tests, retained generator-backed sources
+  across Picard iterations, and rejected conflicting Dirichlet constraints.
+- Added sparse signed-DOF reductions, mixed Robin/natural boundary terms, and
+  a dual-boundary averaging helper for axisymmetric H1Henrotte models.
+- Kept signed constraints active across nonlinear Picard and dual solves,
+  accepted NumPy/generator inputs, and rejected non-finite phases and lossy
+  fractional DOF indices before assembly.
+- Preserved the STEP walker's adaptive station density for closed coils while
+  reconciling local section widths against the exact conductor volume and
+  rejecting partial-path coverage.
+- Included the closed wrap edge in variable-section volume calibration,
+  normalized the omitted PEEC excitation edge to a local cell length, and
+  added fail-loud station/area contract checks.
+- Replaced area-ranked STEP end-cap guessing with an OCC material-depth
+  classifier, so unequal terminal sections remain open while ambiguous
+  multi-segment conductors fail closed instead of being silently misrouted.
+
 ## 4.95.27 - Complete STEP coil walking and cache safety
 
 Released 2026-07-29.

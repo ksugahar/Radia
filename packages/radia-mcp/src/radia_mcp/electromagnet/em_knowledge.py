@@ -921,9 +921,10 @@ point sits along it is unknown.  Two verified applications:
 
 **Verdict framing (use these words, do not oversell)**: the hodograph is
 NOT an optimizer.  It translates boundary prescriptions into
-saturation-exact shapes in ONE linear solve.  Its unique value is the
-constructive cap/interface guarantee (|B| <= B_sat built into the
-boundary data) plus zero nonlinear iteration -- not performance
+saturation-exact shapes through one linear hodograph field solve followed
+by linear coordinate recovery.  Its unique value is the constructive
+cap/interface guarantee (|B| <= B_sat built into the boundary data) plus
+zero nonlinear design iteration -- not performance
 exclusivity (a hand-tuned shim/spline can plausibly match the static
 geometry).  It earns its keep only when (a) the iron works at/above the
 knee, (b) the deliverable is the channel/face itself rather than a
@@ -944,7 +945,7 @@ Repository anchors:
 - `docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`
 - `docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md`
 - `docs/clebsch_hodograph/demos/` (runnable companion set)
-- `tests/feec/test_clebsch_hodograph_research.py`
+- `validation_test/feec/test_clebsch_hodograph_research.py`
 - `validation_test/clebsch_legendre/verify_chaplygin_bend_design.py`
   (field-plane design -> shape -> independent nonlinear FEM, golden-banded)
 - `validation_test/clebsch_legendre/verify_chi_modesum_solver.py`

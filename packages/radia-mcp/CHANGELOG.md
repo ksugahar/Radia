@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.22] - 2026-07-29
+
+- Added the verified hodograph free-boundary design guidance for saturable
+  pole faces and flux-concentrator horns, including the constructive cap
+  guarantee, practical applicability conditions, and explicit limits against
+  treating the construction as a general optimizer.
+- Added exact axisymmetric ring-current and point-potential source contracts,
+  with fail-loud vertex and Dirichlet checks, NumPy/generator normalization,
+  preserved nonlinear positional compatibility, and linear/nonlinear
+  constant-reluctivity validation.
+- Added signed-DOF reduction, mixed-boundary, residual, and dual-boundary
+  helpers for axisymmetric models, with persistent nonlinear constraints and
+  strict finite/integer input validation.
+
 ## [1.4.21] - 2026-07-29
 
 - Constrained the MCP Python SDK to the supported 1.x FastMCP contract after

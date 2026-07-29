@@ -7,15 +7,16 @@ uniform-B0 air gap pins its image to a known curve Gamma(alpha) (alpha =
 local face tilt), exactly as Kirchhoff's free-streamline theory pins the
 free jet boundary to q = const.  On Gamma the exact oblique condition
 dA/dPsi = mu0 cot(alpha) holds and enters the weak form as a tangential-
-derivative boundary term.  One LINEAR hodograph solve recovers the face
-shape; two formulation identities are proven and locked here:
+derivative boundary term.  One LINEAR hodograph field solve followed by
+linear coordinate recovery yields the face shape; two formulation identities
+are proven and locked here:
 
     J = -(b A_theta^2 + a A_B^2)/(q B) <= 0   (folding impossible), and
     dA/ds = -B0 cos(alpha) pointwise           (uniform-B0 support exact),
 
 plus the exact width identity (transverse extent == PHI/B0, any solve).
 
-Stage 1 (design battery, one linear solve):
+Stage 1 (design battery, no nonlinear shape iteration):
   - B0 = 1.5 T control: the solve COLLAPSES to the flat pole (90 % of the
     width lands below alpha ~ 1e-3) -- below the knee the fringe-free
     optimum IS the flat face and the formulation returns it.
@@ -44,6 +45,7 @@ import platform
 import sys
 import time
 
+import ngsolve
 import numpy as np
 from scipy.optimize import brentq
 from ngsolve import (
@@ -58,7 +60,7 @@ from verify_ipm_bridge_free_boundary import (            # noqa: E402
     MU0, recover_potential, polygon_area, _self_intersections, log,
 )
 
-# ---------------- material: lab hard-tail steel ----------------
+# ---------------- material: hard-tail steel model ----------------
 MUR0 = 7000.0
 BK = 1.0
 NEXP = 6
@@ -546,7 +548,7 @@ def run_pole(face_emb, designed, report, NI_start):
     return NI, mesh
 
 
-# ---------------- golden bands (locked 2026-07-29, LAB) ----------------
+# ---------------- golden bands (locked 2026-07-29) ----------------
 GOLD = {
     "collapse_station90_max": 1.5e-3,       # measured 6.8e-4 at B0=1.5
     "design_station90": (2.0e-3, 7.0e-3),   # measured 3.63e-3 at B0=2.0
@@ -577,16 +579,31 @@ def _band(name, val, lo, hi):
 def main():
     SetNumThreads(4)
     here = os.path.dirname(os.path.abspath(__file__))
-    report = {"case": {
-        "material": f"mu_r(B)=1+({MUR0:.0f}-1)/(1+(B/{BK})^{NEXP})",
-        "design": {"B0_T": 2.0, "half_width_m": 0.055, "alpha_max_rad":
-                   ALPHA_MAX, "B_entry_T": B_E, "theta_entry_rad": TH_E},
-        "collapse_control": {"B0_T": 1.5, "half_width_m": 0.040},
-        "fem": {"half_gap_m": GAP, "gfr_halfwidth_m": X_GFR, "order": ORDER,
-                "H_POLE": H_POLE, "T_YOKE": T_YOKE, "R_T": R_T,
-                "PHI_END_deg": math.degrees(PHI_END), "COIL": COIL,
-                "NI_LIN_A": NI_LIN},
-    }}
+    report = {
+        "schema": "radia.validation.clebsch-poleface-design.v1",
+        "case": {
+            "material": f"mu_r(B)=1+({MUR0:.0f}-1)/(1+(B/{BK})^{NEXP})",
+            "design": {
+                "B0_T": 2.0,
+                "half_width_m": 0.055,
+                "alpha_max_rad": ALPHA_MAX,
+                "B_entry_T": B_E,
+                "theta_entry_rad": TH_E,
+            },
+            "collapse_control": {"B0_T": 1.5, "half_width_m": 0.040},
+            "fem": {
+                "half_gap_m": GAP,
+                "gfr_halfwidth_m": X_GFR,
+                "order": ORDER,
+                "H_POLE": H_POLE,
+                "T_YOKE": T_YOKE,
+                "R_T": R_T,
+                "PHI_END_deg": math.degrees(PHI_END),
+                "COIL": COIL,
+                "NI_LIN_A": NI_LIN,
+            },
+        },
+    }
     with TaskManager():
         print("step (1) collapse control at B0 = 1.5 T (below the knee)")
         _, st15, _ = run_design(report, 1.5, 0.040, battery=False)
@@ -680,7 +697,6 @@ def main():
             color="0.4", label="sym (A=0)")
     ax.set_xlabel("B [T]")
     ax.set_ylabel("theta [deg]")
-    ax.set_title("hodograph domain (B0 = 2 T)")
     ax.legend(fontsize=7)
     ax = axs[0, 1]
     for k, col in (("face", "tab:red"), ("wall", "tab:blue"),
@@ -693,14 +709,12 @@ def main():
     ax.set_aspect("equal")
     ax.set_xlabel("x [mm]")
     ax.set_ylabel("y [mm]")
-    ax.set_title("recovered tube (midplane y=0)")
     ax.legend(fontsize=7)
     ax = axs[0, 2]
     fm = emb["face"]
     ax.plot(1e3 * fm[:, 0], 1e3 * (GAP - fm[:, 1]), "r-", lw=1.5)
     ax.set_xlabel("x [mm]")
     ax.set_ylabel("bump toward the gap [mm]")
-    ax.set_title("designed face profile")
     ax = axs[1, 0]
     for tag, col, lsty in (("designed", "tab:red", "-"),
                            ("flat", "tab:blue", "-"),
@@ -714,7 +728,6 @@ def main():
     ax.axvline(1e3 * X_GFR, color="k", lw=0.7, ls="--")
     ax.set_xlabel("x [mm]")
     ax.set_ylabel("(By/By0 - 1) x 1e4")
-    ax.set_title("midgap flatness (dashed: linear ctrl)")
     ax.legend(fontsize=7)
     ax = axs[1, 1]
     for tag, col in (("designed", "tab:red"), ("flat", "tab:blue")):
@@ -724,7 +737,6 @@ def main():
     ax.axhline(B0, color="k", lw=0.7, ls="--")
     ax.set_xlabel("x [mm]")
     ax.set_ylabel("By below the face [T]")
-    ax.set_title("air-side face field")
     ax.legend(fontsize=7)
     ax = axs[1, 2]
     xg = 1e3 * XS[gfr]
@@ -733,7 +745,6 @@ def main():
     ax.plot(xg, 1e4 * dF_sat, "m-", lw=1.2, label="saturation share")
     ax.set_xlabel("x [mm]")
     ax.set_ylabel("dF x 1e4")
-    ax.set_title("bump effect decomposition (GFR)")
     ax.legend(fontsize=7)
     fig.tight_layout()
     png = os.path.join(here, "poleface_design_fem.png")
@@ -744,6 +755,9 @@ def main():
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
         "hostname": platform.node(),
+        "python_version": platform.python_version(),
+        "ngsolve_version": ngsolve.__version__,
+        "numpy_version": np.__version__,
         "purpose": "correctness validation only (no timing claims)",
     }
     out = os.path.join(here, "results_poleface_design.json")
