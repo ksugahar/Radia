@@ -25,6 +25,9 @@ Released 2026-07-30.
   one RMS-phasor convention throughout the Python and validation contracts.
 - Regenerated the Radia Simulink library with distinct Field Study execution
   and configuration blocks and a refreshed agent library index.
+- Hardened extracted Simulink-package verification against MATLAB's mixed
+  UTF-8/Windows console output so four-machine release diagnostics cannot fail
+  during locale decoding or log emission.
 
 ## 4.95.28 - Hodograph free boundaries, exact axisymmetric sources, and PEEC hardening
 

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -26,6 +27,11 @@ REQUIRED_MEMBERS = {
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _console_safe(value: str, encoding: str | None = None) -> str:
+    target = encoding or sys.stdout.encoding or "utf-8"
+    return value.encode(target, errors="backslashreplace").decode(target)
 
 
 def _safe_member(name: str) -> bool:
@@ -93,10 +99,14 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
         result = subprocess.run(
             [str(matlab), "-batch", expression],
             capture_output=True,
-            text=True,
             timeout=timeout,
         )
-        output = (result.stdout or "") + (result.stderr or "")
+        # MATLAB emits UTF-8 in batch mode even when the Windows process
+        # locale is cp932.  Keep subprocess in binary mode so Python never
+        # starts a locale-decoding reader thread that can fail before the
+        # ASCII release marker is inspected.
+        output = (result.stdout or b"").decode("utf-8", errors="backslashreplace") + \
+            (result.stderr or b"").decode("utf-8", errors="backslashreplace")
         if result.returncode != 0:
             raise RuntimeError(
                 f"Extracted IH MATLAB smoke failed with exit {result.returncode}:\n{output}"
@@ -120,7 +130,7 @@ def main() -> int:
             parser.error("--matlab is required unless --manifest-only is used")
         matlab_output = run_matlab_smoke(
             archive, args.matlab.resolve(), args.timeout)
-        print(matlab_output.rstrip())
+        print(_console_safe(matlab_output.rstrip()))
     print(json.dumps({
         "status": "passed",
         "package": manifest["package"],
