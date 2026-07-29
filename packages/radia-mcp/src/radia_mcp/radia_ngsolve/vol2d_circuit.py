@@ -335,8 +335,9 @@ def _runtime_vol_path(text: str, digest: str) -> Path:
     root = Path(os.environ.get("RADIA_MCP_TEMP", r"C:\temp")) / "radia_mcp_vol2d"
     root.mkdir(parents=True, exist_ok=True)
     path = root / f"{digest}.vol"
-    if not path.exists() or path.read_text(encoding="utf-8") != text:
-        path.write_text(text, encoding="utf-8")
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    if not path.exists() or path.read_text(encoding="utf-8") != normalized:
+        path.write_text(normalized, encoding="utf-8", newline="\n")
     return path
 
 

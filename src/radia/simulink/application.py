@@ -36,6 +36,17 @@ class ApplicationDefinition:
 
 
 APPLICATIONS: dict[str, ApplicationDefinition] = {
+    "field": ApplicationDefinition(
+        "radia.field_study_design",
+        "FieldStudyDesignSpec",
+        (
+            "eddy_loss_w",
+            "capacitance_f",
+            "resistance_ohm",
+            "generated_heat_w",
+            "electric_energy_j",
+        ),
+    ),
     "em": ApplicationDefinition(
         "radia.em_design",
         "EMDesignSpec",

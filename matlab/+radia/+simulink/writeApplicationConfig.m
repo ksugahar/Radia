@@ -3,7 +3,7 @@ function configPath = writeApplicationConfig(application, settings, configPath, 
 
 arguments
     application (1,1) string {mustBeMember(application, ...
-        ["em", "pcb", "motor", "streamfunction", "ih"])}
+        ["field", "em", "pcb", "motor", "streamfunction", "ih"])}
     settings (1,1) struct
     configPath (1,1) string
     options.PrimaryKey (1,1) string = ""

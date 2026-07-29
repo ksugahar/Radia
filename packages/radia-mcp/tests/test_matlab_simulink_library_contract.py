@@ -4,7 +4,7 @@ from radia_mcp.matlab import matlab_simulink_library_contract
 def test_simulink_library_registration_and_ltspice_scope():
     contract = matlab_simulink_library_contract()
     assert contract["status"] == "ready"
-    assert contract["schema"] == "radia-mcp.matlab-simulink-library/v2"
+    assert contract["schema"] == "radia-mcp.matlab-simulink-library/v3"
     assert contract["registration_code"] == [
         "radia.simulink.buildLibrary",
         "sl_refresh_customizations",
@@ -29,6 +29,8 @@ def test_simulink_library_registration_and_ltspice_scope():
     assert contract["ltspice"]["legacy_ltc_versions"] == "not supported"
     assert "Material Models/Material Dictionary" in contract["blocks"]
     assert "Coupling/Winding Dictionary" in contract["blocks"]
+    assert "Applications/Field Study" in contract["blocks"]
+    assert "Coupling/Field Study" in contract["blocks"]
     materials = contract["material_dictionary"]
     assert materials["mesh_format"] == "Netgen .vol"
     assert materials["runtime_bus"] == "RadiaMaterialBus"
@@ -41,3 +43,10 @@ def test_simulink_library_registration_and_ltspice_scope():
     assert coupling["command_bus"] == "RadiaMachineCommandBus"
     assert coupling["response_bus"] == "RadiaMachineResponseBus"
     assert coupling["mechanical_owner"] == "Simulink or Simscape"
+    study = contract["field_study"]
+    assert study["runtime_bus"] == "RadiaStudyBus"
+    assert study["mesh_format"] == "Netgen .vol"
+    assert study["per_step_python"] is False
+    assert "steady_heat" in study["physics"]
+    assert "harmonic_eddy" in study["physics"]
+    assert study["harmonic_eddy_operator"].startswith("(K + j*omega")

@@ -6,7 +6,7 @@ function result = runApplication(application, configFile, options)
 
 arguments
     application (1,1) string {mustBeMember(application, ...
-        ["em", "pcb", "motor", "streamfunction", "ih"])}
+        ["field", "em", "pcb", "motor", "streamfunction", "ih"])}
     configFile (1,1) string
     options.RunRoot (1,1) string = "C:\temp\radia_simulink"
     options.Timeout_s (1,1) double {mustBeNonnegative} = 3600
