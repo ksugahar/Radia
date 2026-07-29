@@ -494,6 +494,316 @@ def _axis_agnostic_seed(solid):
     return p, t
 
 
+def _fan_directions(t_in, polar_degs=(45.0, 90.0, 135.0), n_azimuth=8):
+    """Unit directions on cones around ``t_in`` (gentlest polar first)."""
+    t_in = np.asarray(t_in, dtype=float)
+    t_in = t_in / np.linalg.norm(t_in)
+    u = _pick_helper(t_in)
+    v = np.cross(t_in, u)
+    out = []
+    for polar_deg in polar_degs:
+        ct = math.cos(math.radians(polar_deg))
+        st = math.sin(math.radians(polar_deg))
+        for j in range(n_azimuth):
+            phi = 2.0 * math.pi * j / n_azimuth
+            d = ct * t_in + st * (math.cos(phi) * u + math.sin(phi) * v)
+            out.append(d / np.linalg.norm(d))
+    return out
+
+
+def _turn_search(solid, p_last, t_in, recent_points, recent_areas,
+                 recent_wh_max, *, step_size, slab_radius,
+                 slab_thickness, extra_guard_pts=()):
+    """Search for the outgoing wire direction at a sharp spine corner.
+
+    Called when the march exhausts its step-halving without finding a
+    section: the Frenet tangent cannot bend around a corner sharper
+    than the halving can follow (e.g. the 90-deg legs of a rectangular
+    racetrack).  Near such a corner, sections through the corner
+    region MERGE with the orthogonal member (an L-shaped or full-width
+    cut whose centroid is far / whose area is discontinuous), so a
+    single coupled probe ``p_last + s * d`` cannot both clear the
+    corner block AND cut the outgoing member cleanly.  Two decoupled
+    stages instead:
+
+    1. ANCHOR: a point on/near the outgoing member.
+       (a) PRIMARY: the centroid of the very merged section that
+           halted the march (global slab perpendicular to the incoming
+           tangent, one step ahead).  The corner cut is CONNECTED to
+           the outgoing member, so its centroid is pulled onto it (for
+           a plate frame it lands exactly on the outgoing member's
+           mid-plane).  Verified to be material by a local-disk probe.
+       (b) FALLBACK GRID: a fan of directions (cones at 45/90/135 deg,
+           gentlest first) at reaches 1..3 x max(step, wire size),
+           each gated by the area-continuity window so an off-solid
+           disk snagging an outer-edge sliver cannot become an anchor.
+    2. TANGENT AT THE ANCHOR: minimum-section-area direction fan AT
+       the anchor -- the ``_axis_agnostic_seed`` principle: the true
+       wire tangent minimises the local section area.  The sign is
+       resolved toward progress from ``p_last``.
+
+    A straight outgoing member may be entered mid-member (the (a)
+    anchor is the merged-cut centroid): the polyline then represents
+    the skipped stretch by its chord, which coincides with the
+    centerline for straight members; the following march covers the
+    rest.
+
+    Guards (all fail-closed; no survivor = genuine end, walk halts):
+      * area continuity: the wire cross-section is continuous through
+        a corner -- accepted area must be 0.6..1.8x the recent median
+        (rejects slivers and merged cuts);
+      * anti-revisit: the new station must not land on the
+        already-walked centerline (within 0.7 * step of ANY station of
+        this march except the seed region and the last two, plus any
+        ``extra_guard_pts`` from a sibling march) -- rejects
+        back-turns into the incoming wire at a true open end AND
+        wrong-branch turns at a junction onto an already-walked leg
+        (which would multi-lap a closed circuit).  The first 3
+        stations are exempt so the FINAL corner of a closed loop may
+        legitimately turn back toward the seed and let the closure
+        check fire;
+      * midpoint continuity: local material must exist halfway from
+        ``p_last`` to the new station (rejects hops across an air gap
+        onto a nearby but disconnected passage, e.g. an adjacent
+        turn of a tight winding);
+      * minimum motion: |c* - p_last| >= 0.3 * step.
+
+    A ZERO-RADIUS 180-deg hairpin remains out of scope: its re-entry
+    lands on the walked centerline and anti-revisit rejects it -- the
+    walk halts and the caller's coverage checks fail loud.
+
+    Returns ``(centroid, area, sub_solid, direction)`` or
+    ``(None, None, None, None)``.
+    """
+    t_in = np.asarray(t_in, dtype=float)
+    t_in = t_in / np.linalg.norm(t_in)
+    p_last = np.asarray(p_last, dtype=float)
+
+    med_area = float(np.median(np.asarray(recent_areas, dtype=float)))
+    guard_pts = [np.asarray(q, dtype=float)
+                 for q in list(recent_points[3:-2]) + list(extra_guard_pts)]
+
+    reach_unit = max(float(step_size), float(recent_wh_max))
+    rho = 2.0 * max(float(recent_wh_max), float(step_size))
+
+    def _local_piece(point, normal, radius):
+        pieces = cross_section_pieces(
+            solid, point, normal,
+            in_plane_radius=radius, thickness=slab_thickness)
+        return pick_local_piece(pieces, point, max_dist=0.8 * radius)
+
+    def _anchors():
+        # (a) merged-forward-section centroid: the corner cut that
+        # halted the march is connected to the outgoing member and its
+        # centroid is pulled onto it.  Verify it is material.
+        p_fwd = p_last + step_size * t_in
+        pieces = cross_section_pieces(
+            solid, p_fwd, t_in,
+            in_plane_radius=slab_radius, thickness=slab_thickness)
+        c_a, _a_a, _s_a = pick_local_piece(pieces, p_fwd, max_dist=None)
+        if c_a is not None:
+            c_a = np.asarray(c_a, dtype=float)
+            c_chk, _chk_a, _chk_s = _local_piece(c_a, t_in, rho)
+            if c_chk is not None:
+                yield c_a
+        # (b) direction-fan grid, gated by the area-continuity window
+        # so an off-solid disk snagging an outer-edge sliver cannot
+        # become an anchor.
+        for d1 in _fan_directions(t_in):
+            for reach in (1.0, 2.0, 3.0):
+                q = p_last + reach * reach_unit * d1
+                c_q, a_q, _sub_q = _local_piece(q, d1, rho)
+                if c_q is None or a_q is None or a_q <= 0:
+                    continue
+                if med_area > 0 and not (0.6 * med_area <= a_q
+                                          <= 1.8 * med_area):
+                    continue
+                yield np.asarray(c_q, dtype=float)
+                break  # one anchor per direction
+
+    stage2_budget = 6
+    for anchor in _anchors():
+        if stage2_budget <= 0:
+            break
+        stage2_budget -= 1
+
+        # Stage 2: min-area tangent at the anchor.
+        best = None  # (area, centroid, sub, direction)
+        for d2 in _fan_directions(t_in):
+            c2, a2, sub2 = _local_piece(anchor, d2, 1.25 * rho)
+            if c2 is None or a2 is None or a2 <= 0:
+                continue
+            if med_area > 0 and not (0.6 * med_area <= a2
+                                      <= 1.8 * med_area):
+                continue
+            if best is None or a2 < best[0]:
+                best = (a2, c2, sub2, d2)
+                # Early accept only for a near-perfect section: an
+                # oblique cut at 30 deg is already 1.15x, so 1.05x
+                # admits only the true perpendicular (a
+                # 22.5-deg-misaligned-azimuth worst case falls through
+                # to the full-fan minimum).
+                if a2 <= 1.05 * med_area:
+                    break
+        if best is None:
+            continue  # material anchor, but no clean section here
+        a_star, c_star, sub_star, d_star = best
+
+        # Resolve tangent sign toward progress from p_last.
+        if float(np.dot(c_star - p_last, d_star)) < 0:
+            d_star = -d_star
+        if float(np.linalg.norm(c_star - p_last)) < 0.3 * step_size:
+            continue
+        if any(np.linalg.norm(c_star - g) < 0.7 * step_size
+               for g in guard_pts):
+            continue  # lands on the already-walked centerline
+        d_mid = c_star - p_last
+        c_m, _a_m, _s_m = _local_piece(
+            0.5 * (p_last + c_star),
+            d_mid / np.linalg.norm(d_mid), rho)
+        if c_m is None:
+            continue  # air gap mid-bend: disconnected passage
+        return c_star, a_star, sub_star, d_star
+    return None, None, None, None
+
+
+def _march(solid, p0, t0, *, step_size, max_stations, close_tol,
+           slab_radius, slab_thickness, verbose=False, max_turns=64,
+           extra_guard_pts=()):
+    """One directional walking-plane march from seed ``(p0, t0)``.
+
+    The first station is the seed section itself.  Sharp spine corners
+    are turned via ``_turn_search`` (from step 2 on -- a halt on the
+    very first step means the seed tangent points off the wire end,
+    which the caller's BACKWARD march covers; a turn there would
+    re-walk the same wire and double-cover it).
+
+    Returns ``(points, tangents, profiles, polygons, areas, closed,
+    turns)``.  Raises ``RuntimeError`` if the seed plane has no usable
+    section.
+    """
+    def _try_at(p_try, t_try, max_dist):
+        pieces = cross_section_pieces(
+            solid, p_try, t_try,
+            in_plane_radius=slab_radius, thickness=slab_thickness)
+        return pick_local_piece(pieces, p_try, max_dist=max_dist)
+
+    p = np.asarray(p0, dtype=float)
+    t = np.asarray(t0, dtype=float)
+    t = t / np.linalg.norm(t)
+
+    guard_extra = (np.asarray(list(extra_guard_pts), dtype=float)
+                   if len(list(extra_guard_pts)) else None)
+
+    def _revisits(c_cand):
+        """True if c_cand lands on a NON-recent already-walked station.
+
+        pick_local_piece can snap a normal step across a nearby
+        parallel passage (max_dist = 4 * step easily exceeds the gap
+        between hairpin legs), silently re-walking a traced leg /
+        starting a second lap of a closed circuit.  The seed region
+        (first 3) stays exempt so a lap closure can approach the
+        start; the last 10 stay exempt for dense halved-step clusters
+        at bends.
+        """
+        own = points[3:-10]
+        for grp in (np.asarray(own, dtype=float) if own else None,
+                    guard_extra):
+            if grp is not None and grp.size:
+                if float(np.min(np.linalg.norm(
+                        grp - c_cand, axis=1))) < 0.7 * step_size:
+                    return True
+        return False
+
+    points, tangents, profiles, polygons, areas = [], [], [], [], []
+    closed = False
+    turns = 0
+
+    # Initial probe at the seed point
+    c, area, sub = _try_at(p, t, max_dist=10 * step_size)
+    if c is None:
+        raise RuntimeError("seed plane has no usable cross-section")
+    bbox = _piece_bbox_uv(sub, c, t)
+    prof = classify_profile(area, bbox)
+    points.append(c); tangents.append(t.copy())
+    profiles.append(prof); polygons.append(np.array(bbox)); areas.append(area)
+
+    for k in range(1, max_stations):
+        # Adaptive step: try full step, on miss halve up to 6 times.
+        # A degenerate sliver cut (< 0.3x the recent median area --
+        # e.g. the disk grazing the outer edge of a sharp bend) is
+        # treated as a miss, not a station.
+        success = False
+        turned = False
+        s = step_size
+        med_recent = float(np.median(np.asarray(areas[-10:], dtype=float)))
+        for retry in range(7):
+            p_try = points[-1] + s * t
+            c, area, sub = _try_at(p_try, t, max_dist=4 * s)
+            if (c is not None and area is not None
+                    and (med_recent <= 0 or area >= 0.3 * med_recent)
+                    and not _revisits(c)):
+                success = True
+                break
+            s *= 0.5
+        if not success and k >= 2 and turns < max_turns:
+            # Sharp-corner turn (v4.95.x): the halving cannot bend the
+            # Frenet tangent around a corner sharper than the local
+            # curvature it can follow -- probe a direction fan instead.
+            wh_max = max(max(pf.bounding_wh()) for pf in profiles[-5:])
+            c, area, sub, d = _turn_search(
+                solid, points[-1], t, points, areas, wh_max,
+                step_size=step_size, slab_radius=slab_radius,
+                slab_thickness=slab_thickness,
+                extra_guard_pts=extra_guard_pts)
+            if c is not None:
+                success = True
+                turned = True
+                turns += 1
+                t = d
+                if verbose:
+                    print(f"  step {k}: corner turn #{turns}, "
+                          f"new tangent {d}")
+        if not success:
+            if verbose:
+                print(f"  step {k}: walk halted (no valid section)")
+            break
+
+        bbox = _piece_bbox_uv(sub, c, t)
+        prof = classify_profile(area, bbox)
+        points.append(c); tangents.append(t.copy())
+        profiles.append(prof)
+        polygons.append(np.array(bbox)); areas.append(area)
+
+        # Update tangent from last 2 centroids (Frenet first-derivative).
+        # Skip right after a corner turn: the centroid difference mixes
+        # the incoming and outgoing legs (corner diagonal); the
+        # min-area direction from the turn search is the better
+        # outgoing-tangent estimate.
+        if not turned:
+            t_new = points[-1] - points[-2]
+            nrm = np.linalg.norm(t_new)
+            if nrm > 1e-12:
+                t = t_new / nrm
+
+        # Closure check (after a few steps to avoid trivial closure).
+        # Position AND direction must both match: a parallel return leg
+        # passing within close_tol of the seed (e.g. the two legs of a
+        # hairpin 12 mm apart) must NOT close the loop -- at a true
+        # closure the walk re-enters the start ALONG the start tangent.
+        if (k > 5 and np.linalg.norm(c - points[0]) < close_tol
+                and float(np.dot(t, tangents[0])) > 0.5):
+            if verbose:
+                print(f"  step {k}: closed loop")
+            closed = True
+            break
+
+        if verbose and k % 10 == 0:
+            print(f"  step {k:3d}: p={c}, area={area:.4e}, used s={s:.4e}")
+
+    return points, tangents, profiles, polygons, areas, closed, turns
+
+
 def extract_centerline(step_path_or_solid, *,
                        start_hint=None,
                        step_size=None,
@@ -502,12 +812,19 @@ def extract_centerline(step_path_or_solid, *,
                        verbose=False):
     """Walk a coil solid and return its centerline + per-station profiles.
 
+    The march turns sharp spine corners (see ``_turn_search``) and is
+    BIDIRECTIONAL: when the forward march does not close on itself,
+    the other direction is marched from the same seed and the two
+    open chains are stitched.  This makes a mid-wire seed (the
+    axis-agnostic seed sections through the bbox centre) cover BOTH
+    sides of an open coil instead of only the forward side.
+
     Args:
         step_path_or_solid: STEP filepath, or a netgen.occ Solid.
         start_hint: optional ((px,py,pz), (tx,ty,tz)) seed.
         step_size: walking step [m]. Defaults to the cube root of
             (solid.mass / 100), giving ~100 stations for a typical coil.
-        max_stations: hard cap to prevent runaway loops.
+        max_stations: hard cap (per direction) to prevent runaway loops.
         close_tol: distance below which the walk is considered to have
             closed back to its start point. Defaults to 2*step_size.
         verbose: print per-step progress.
@@ -526,66 +843,49 @@ def extract_centerline(step_path_or_solid, *,
         close_tol = 2.0 * step_size
 
     p, t = _initial_seed(solid, start_hint)
-    points, tangents, profiles, polygons, areas = [], [], [], [], []
-    closed = False
 
     bb = solid.bounding_box
     diag = math.sqrt(sum((bb[1][i] - bb[0][i]) ** 2 for i in range(3)))
     slab_radius = max(diag, 1e-3)
     slab_thickness = max(step_size / 50.0, 1e-7)
 
-    def _try_at(p_try, t_try, max_dist):
-        pieces = cross_section_pieces(
-            solid, p_try, t_try,
-            in_plane_radius=slab_radius, thickness=slab_thickness)
-        return pick_local_piece(pieces, p_try, max_dist=max_dist)
+    march_kw = dict(step_size=step_size, max_stations=max_stations,
+                    close_tol=close_tol, slab_radius=slab_radius,
+                    slab_thickness=slab_thickness, verbose=verbose)
+    points, tangents, profiles, polygons, areas, closed, turns = _march(
+        solid, p, t, **march_kw)
 
-    # Initial probe at the seed point
-    c, area, sub = _try_at(p, t, max_dist=10 * step_size)
-    if c is None:
-        raise RuntimeError("seed plane has no usable cross-section")
-    bbox = _piece_bbox_uv(sub, c, t)
-    prof = classify_profile(area, bbox)
-    points.append(c); tangents.append(t.copy())
-    profiles.append(prof); polygons.append(np.array(bbox)); areas.append(area)
-
-    for k in range(1, max_stations):
-        # Adaptive step: try full step, on miss halve up to 6 times
-        success = False
-        s = step_size
-        for retry in range(7):
-            p_try = points[-1] + s * t
-            c, area, sub = _try_at(p_try, t, max_dist=4 * s)
-            if c is not None:
-                success = True
-                break
-            s *= 0.5
-        if not success:
-            if verbose:
-                print(f"  step {k}: walk halted (no valid section)")
-            break
-
-        bbox = _piece_bbox_uv(sub, c, t)
-        prof = classify_profile(area, bbox)
-        points.append(c); tangents.append(t.copy())
-        profiles.append(prof)
-        polygons.append(np.array(bbox)); areas.append(area)
-
-        # Update tangent from last 2 centroids (Frenet first-derivative)
-        t_new = points[-1] - points[-2]
-        nrm = np.linalg.norm(t_new)
-        if nrm > 1e-12:
-            t = t_new / nrm
-
-        # Closure check (after a few steps to avoid trivial closure)
-        if k > 5 and np.linalg.norm(c - points[0]) < close_tol:
-            if verbose:
-                print(f"  step {k}: closed loop")
+    if not closed:
+        # Bidirectional completion: march the opposite direction from
+        # the same seed.  Backward station 0 re-probes the seed section
+        # (identical slab, opposite normal sign) -- dropped from the
+        # stitch.  If the backward march CLOSES (the forward march was
+        # blocked immediately, e.g. seed tangent pointing off a corner
+        # the turn search could not resolve from that side), the
+        # backward loop IS the complete trace.
+        # The forward stations (minus the shared seed region) guard the
+        # backward march's steps and turns: at a junction the backward
+        # march must not walk onto a leg the forward march already
+        # traced (which would double-cover it in the stitched chain).
+        (b_points, b_tangents, b_profiles, b_polygons, b_areas,
+         b_closed, b_turns) = _march(solid, p, -t,
+                                     extra_guard_pts=points[3:],
+                                     **march_kw)
+        turns += b_turns
+        if b_closed:
+            points, tangents = b_points, b_tangents
+            profiles, polygons = b_profiles, b_polygons
+            areas = b_areas
             closed = True
-            break
-
-        if verbose and k % 10 == 0:
-            print(f"  step {k:3d}: p={c}, area={area:.4e}, used s={s:.4e}")
+        elif len(b_points) > 1:
+            # Backward stations traverse along -t; flip their tangents
+            # so the stitched polyline is consistently forward-oriented.
+            points = list(reversed(b_points[1:])) + points
+            tangents = ([-bt for bt in reversed(b_tangents[1:])]
+                        + tangents)
+            profiles = list(reversed(b_profiles[1:])) + profiles
+            polygons = list(reversed(b_polygons[1:])) + polygons
+            areas = list(reversed(b_areas[1:])) + areas
 
     if not points:
         raise RuntimeError("no stations extracted")
@@ -596,13 +896,49 @@ def extract_centerline(step_path_or_solid, *,
     for i in range(1, len(pts)):
         arclen[i] = arclen[i - 1] + np.linalg.norm(pts[i] - pts[i - 1])
 
+    # Self-overlap net (fail-loud): a walk that TURNED at least once
+    # may still have multi-lapped or leg-snapped despite the guards
+    # (junction geometries are adversarial).  A silently self-
+    # overlapping polyline would double-count the circuit in PEEC.
+    # A pair counts as an overlap when the stations are CLOSE IN SPACE
+    # but FAR ALONG THE WALK (arclength separation > 2 steps) -- dense
+    # halved-step clusters at a corner are near in arclength and do
+    # not count.  Only checked when turns fired: a smooth tightly-
+    # wound multi-turn helix legitimately has spatially-close stations
+    # a full turn apart and never turns.
+    n_sta = len(pts)
+    if turns > 0 and n_sta > 12:
+        total = float(arclen[-1])
+        if closed:
+            total += float(np.linalg.norm(pts[0] - pts[-1]))
+        overlap = 0
+        for i in range(n_sta):
+            d = np.linalg.norm(pts - pts[i], axis=1)
+            ds = np.abs(arclen - arclen[i])
+            if closed and total > 0:
+                ds = np.minimum(ds, total - ds)
+            if bool(np.any((ds > 2.0 * step_size)
+                           & (d < 0.7 * step_size))):
+                overlap += 1
+        if overlap > max(4, 0.1 * n_sta):
+            raise RuntimeError(
+                f"extract_centerline: self-overlapping walk -- "
+                f"{overlap}/{n_sta} stations lie within "
+                f"{0.7 * step_size:.3g} of a station more than 2 steps "
+                f"away along the walk, after {turns} corner turn(s).  "
+                "The walk likely multi-lapped a closed circuit or "
+                "snapped across parallel legs at a junction.  If this "
+                "geometry is a tightly-wound coil with sharp corners, "
+                "extract via the n_peri UV path or --coil-solver bem-a "
+                "instead.")
+
     return CenterlineResult(
         polyline=pts,
         tangents=tans,
         profiles=profiles,
         polygons=polygons,
         arclen=arclen,
-        closed=locals().get('closed', False),
+        closed=closed,
         areas=np.asarray(areas, dtype=float),
     )
 
