@@ -1,0 +1,63 @@
+function material = makeMaterialSpec(options)
+%MAKEMATERIALSPEC Construct one validated material dictionary value.
+%   Material names belong to the MATLAB dictionary key. This function keeps
+%   every dictionary value structurally identical while allowing one material
+%   to combine magnetic, conducting, dielectric, permanent-magnet, thermal,
+%   and hysteretic behavior.
+
+arguments
+    options.MuR (1,1) double {mustBeFinite, mustBePositive} = 1
+    options.Conductivity_S_per_m (1,1) double {mustBeFinite, mustBeNonnegative} = 0
+    options.RelativePermittivity (1,1) double {mustBeFinite, mustBePositive} = 1
+    options.Remanence_T (1,3) double {mustBeFinite} = [0 0 0]
+    options.Density_kg_per_m3 (1,1) double {mustBeFinite, mustBeNonnegative} = 0
+    options.SpecificHeat_J_per_kgK (1,1) double {mustBeFinite, mustBeNonnegative} = 0
+    options.ThermalConductivity_W_per_mK (1,1) double {mustBeFinite, mustBeNonnegative} = 0
+    options.BH_B_T (:,1) double {mustBeFinite} = zeros(0,1)
+    options.BH_H_A_per_m (:,1) double {mustBeFinite} = zeros(0,1)
+    options.HysteresisModel (1,1) string {mustBeMember(options.HysteresisModel,["none","energy"])} = "none"
+    options.HysteresisParameters (:,1) double {mustBeFinite} = zeros(0,1)
+    options.Description (1,1) string = ""
+end
+
+B = double(options.BH_B_T(:));
+H = double(options.BH_H_A_per_m(:));
+if xor(isempty(B),isempty(H)) || numel(B) ~= numel(H)
+    error("radia:simulink:MaterialBHSize", ...
+        "BH_B_T and BH_H_A_per_m must contain the same number of points.");
+end
+if ~isempty(B) && (numel(B) < 2 || any(B < 0) || any(H < 0) || ...
+        any(diff(B) <= 0) || any(diff(H) <= 0))
+    error("radia:simulink:MaterialBHMonotonic", ...
+        "B-H samples must contain at least two finite, nonnegative, strictly increasing points.");
+end
+if options.HysteresisModel == "energy" && isempty(options.HysteresisParameters)
+    error("radia:simulink:MaterialHysteresisParameters", ...
+        "The energy hysteresis model requires fixed numeric parameters.");
+end
+if options.HysteresisModel == "none" && ~isempty(options.HysteresisParameters)
+    error("radia:simulink:MaterialHysteresisParameters", ...
+        "HysteresisParameters require HysteresisModel='energy'.");
+end
+
+thermal = [options.Density_kg_per_m3, options.SpecificHeat_J_per_kgK, ...
+    options.ThermalConductivity_W_per_mK];
+if any(thermal > 0) && any(thermal <= 0)
+    error("radia:simulink:MaterialThermalTuple", ...
+        "Density, specific heat, and thermal conductivity must be supplied together.");
+end
+
+material = struct( ...
+    "mu_r",double(options.MuR), ...
+    "conductivity_S_per_m",double(options.Conductivity_S_per_m), ...
+    "relative_permittivity",double(options.RelativePermittivity), ...
+    "remanence_T",double(options.Remanence_T), ...
+    "density_kg_per_m3",double(options.Density_kg_per_m3), ...
+    "specific_heat_J_per_kgK",double(options.SpecificHeat_J_per_kgK), ...
+    "thermal_conductivity_W_per_mK",double(options.ThermalConductivity_W_per_mK), ...
+    "bh_B_T",B, ...
+    "bh_H_A_per_m",H, ...
+    "hysteresis_model",options.HysteresisModel, ...
+    "hysteresis_parameters",double(options.HysteresisParameters(:)), ...
+    "description",options.Description);
+end

@@ -30,6 +30,15 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   post-processing artifact in its run directory and records it in
   `result.json`. A scalar/circuit-only mode records GMSH as not applicable; it
   does not create a dummy field.
+- A Simulink user may treat the checked `.vol` as the complete geometry and
+  region-label input. Materials are authored as a MATLAB `dictionary`, mapped
+  explicitly to those `.vol` region names, and compiled once during model
+  initialization to the fixed-width numeric `RadiaMaterialBus`. MEX
+  S-Functions never perform string or dictionary lookup per simulation step.
+- The same typed winding-terminal contract feeds either the native reduced
+  field/circuit state-space MEX path or an LTspice interval block. Switching
+  circuit backends must not change the `.vol`, material dictionary, winding
+  polarity, series/parallel identity, or mechanical state convention.
 
 ## Simulink Library
 
@@ -41,12 +50,27 @@ Applications/PCB PEEC
 Applications/Motor
 Applications/Stream Function
 Applications/Induction Heating
+Material Models/Material Dictionary
+Coupling/Winding Dictionary
+LTspice/LTspice Circuit
+LTspice/Hysteretic LTspice Plant
 ```
 
 The standard batch block has one boolean rising-trigger input and three
 outputs: `int32 status`, `double primary`, and `double elapsed_s`. Status is
 `0` idle, `2` passed, or `-1` failed. Full results stay in the configured run
 artifact root.
+
+`Coupling/Winding Dictionary` binds winding names to exact `.vol` regions,
+including one signed polarity per coil-side region, turn count, parallel paths,
+resistance, and positive/negative terminal names. Initialization compiles names
+to integer ids in `RadiaWindingBus`.
+
+Dynamic electromechanical coupling uses `RadiaMachineCommandBus` and
+`RadiaMachineResponseBus`. Simulink or Simscape owns angle, speed, position,
+load, controller, and mechanical integration; the field backend returns
+currents, flux linkage, back EMF, torque, force, and losses. A field backend
+must not hide its own incompatible motion convention.
 
 ## Samples
 
