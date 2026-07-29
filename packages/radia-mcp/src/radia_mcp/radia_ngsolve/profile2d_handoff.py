@@ -256,11 +256,16 @@ def profile2d_handoff_gate(packet: Mapping[str, Any]) -> dict[str, Any]:
     material_ids = _id_list(semantics.get("material_ids"), "semantics.material_ids")
     boundary_ids = _id_list(semantics.get("boundary_ids"), "semantics.boundary_ids")
     conductor_ids = _id_list(semantics.get("conductor_ids"), "semantics.conductor_ids")
+    point_property_ids = _id_list(
+        semantics.get("point_property_ids", []), "semantics.point_property_ids"
+    )
     semantic_contract = {
         "material_ids": material_ids,
         "boundary_ids": boundary_ids,
         "conductor_ids": conductor_ids,
     }
+    if "point_property_ids" in semantics:
+        semantic_contract["point_property_ids"] = point_property_ids
     semantic_sha = _sha(semantic_contract)
 
     raw_nodes = profile.get("nodes")
@@ -286,7 +291,19 @@ def profile2d_handoff_gate(packet: Mapping[str, Any]) -> dict[str, Any]:
             raise ValueError("node ids must be unique nonnegative integers")
         point = (_finite(row.get("x_m"), f"nodes[{index}].x_m"), _finite(row.get("y_m"), f"nodes[{index}].y_m"))
         nodes[node_id] = point
-        normalized_nodes.append({"id": node_id, "x_m": point[0], "y_m": point[1]})
+        normalized = {"id": node_id, "x_m": point[0], "y_m": point[1]}
+        point_property = _identifier(
+            row.get("point_property_id"),
+            f"nodes[{index}].point_property_id",
+            allow_empty=True,
+        )
+        if point_property and point_property not in point_property_ids:
+            raise ValueError(
+                f"nodes[{index}] references unknown point_property_id {point_property!r}"
+            )
+        if point_property:
+            normalized["point_property_id"] = point_property
+        normalized_nodes.append(normalized)
 
     degree: Counter[int] = Counter()
     edge_keys: set[tuple[Any, ...]] = set()
@@ -346,9 +363,22 @@ def profile2d_handoff_gate(packet: Mapping[str, Any]) -> dict[str, Any]:
         perimeter += length
         normalized_arcs.append({"id": edge_id, "start": start, "end": end, "sweep_deg": sweep, "max_segment_deg": max_segment, "boundary_id": boundary, "conductor_id": conductor})
 
-    if set(degree) != set(nodes) or any(value < 2 for value in degree.values()):
+    point_property_by_node = {
+        row["id"]: row.get("point_property_id", "") for row in normalized_nodes
+    }
+    invalid_degree = [
+        node_id
+        for node_id in nodes
+        if degree[node_id] == 1
+        or (degree[node_id] == 0 and not point_property_by_node[node_id])
+    ]
+    if invalid_degree:
         raise ValueError("profile topology contains an unused node or dangling edge")
-    degree_two_loops = all(value == 2 for value in degree.values())
+    degree_two_loops = all(
+        degree[node_id] == 2
+        for node_id in nodes
+        if not point_property_by_node[node_id]
+    )
 
     normalized_regions = []
     for index, row in enumerate(raw_regions):
@@ -387,6 +417,7 @@ def profile2d_handoff_gate(packet: Mapping[str, Any]) -> dict[str, Any]:
     abi, abi_checks = _abi_contract(packet.get("execution_abi"))
     checks = {
         "closed_topology_without_dangling_edges": True,
+        "isolated_nodes_have_point_semantics": True,
         "positive_perimeter": perimeter > 0.0,
         "nonzero_green_area": abs(signed_area) > 0.0,
         "semantic_references_resolved": True,

@@ -134,6 +134,26 @@ def test_open_profile_is_rejected() -> None:
         profile2d_handoff_gate(packet)
 
 
+def test_isolated_point_property_is_allowed_but_untyped_unused_node_is_rejected() -> None:
+    packet = _square()
+    packet["semantics"]["point_property_ids"] = ["ring_current"]
+    packet["profile"]["nodes"].append(
+        {
+            "id": 4,
+            "x_m": 1.0,
+            "y_m": 0.5,
+            "point_property_id": "ring_current",
+        }
+    )
+    result = profile2d_handoff_gate(packet)
+    assert result["status"] == "verified"
+    assert result["checks"]["isolated_nodes_have_point_semantics"] is True
+
+    packet["profile"]["nodes"][-1].pop("point_property_id")
+    with pytest.raises(ValueError, match="unused node"):
+        profile2d_handoff_gate(packet)
+
+
 def test_invalid_arc_is_rejected() -> None:
     packet = _square()
     packet["profile"] = {
