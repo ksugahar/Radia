@@ -674,3 +674,128 @@ def test_extract_centerline_rejects_multi_solid_step():
             os.unlink(step_path)
         except OSError:
             pass
+
+
+class _ExtentOnlySolid:
+    """Minimal solid double for exact unit-guard boundary tests."""
+
+    def __init__(self, extent):
+        class _Point:
+            pass
+
+        class _BBox:
+            pass
+
+        self._bbox = _BBox()
+        self._bbox.min = _Point()
+        self._bbox.max = _Point()
+        self._bbox.min.X = self._bbox.min.Y = self._bbox.min.Z = 0.0
+        self._bbox.max.X = extent
+        self._bbox.max.Y = self._bbox.max.Z = 0.0
+
+    def bounding_box(self):
+        return self._bbox
+
+
+@pytest.mark.parametrize("extent_m", [1e-5, 5.0])
+def test_extent_plausibility_guard_accepts_inclusive_boundaries(extent_m):
+    """The documented 0.01 mm and 5 m boundaries are inclusive."""
+    from radia.coil_from_cad import _check_solid_extent_plausible
+
+    _check_solid_extent_plausible(
+        _ExtentOnlySolid(extent_m), 1.0, "test_extent")
+
+
+@pytest.mark.parametrize("extent_m", [9.999e-6, 5.000001])
+def test_extent_plausibility_guard_rejects_outside_boundaries(extent_m):
+    """A value immediately outside either documented boundary fails loud."""
+    from radia.coil_from_cad import _check_solid_extent_plausible
+
+    with pytest.raises(ValueError, match="implied coil extent"):
+        _check_solid_extent_plausible(
+            _ExtentOnlySolid(extent_m), 1.0, "test_extent")
+
+
+@pytest.mark.parametrize("scale", [0.0, -1.0, math.inf, math.nan, "bad"])
+def test_extent_plausibility_guard_rejects_invalid_scale(scale):
+    """Invalid scale values must fail before bounding-box arithmetic."""
+    from radia.coil_from_cad import _check_solid_extent_plausible
+
+    with pytest.raises(ValueError, match="must be finite and > 0"):
+        _check_solid_extent_plausible(
+            _ExtentOnlySolid(0.05), scale, "test_extent")
+
+
+def test_extent_plausibility_guard_names_mm_scale_for_oversize_input():
+    """A common mm-as-m overshoot reports the explicit corrective scale."""
+    from radia.coil_from_cad import _check_solid_extent_plausible
+
+    with pytest.raises(ValueError, match="cad_units_per_meter=1000"):
+        _check_solid_extent_plausible(
+            _ExtentOnlySolid(50.0), 1.0, "test_extent")
+
+
+def test_axis_agnostic_seed_walks_oblique_closed_coil():
+    """The default seed must close a coil whose axis is not Cartesian."""
+    from netgen.occ import Axis, Axes, Dir, Pnt, WorkPlane
+    from radia.coil_from_step import _axis_agnostic_seed, extract_centerline
+
+    radius = 0.030
+    wire_radius = 0.003
+    profile = WorkPlane(Axes(
+        p=Pnt(radius, 0, 0), n=Dir(0, 1, 0), h=Dir(0, 0, 1),
+    )).Circle(wire_radius).Face()
+    coil = profile.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360)
+    coil = coil.Rotate(Axis(Pnt(0, 0, 0), Dir(1, 0, 0)), 37)
+    coil = coil.Rotate(Axis(Pnt(0, 0, 0), Dir(0, 1, 0)), 23)
+
+    point, tangent = _axis_agnostic_seed(coil)
+    result = extract_centerline(
+        coil,
+        start_hint=(point, tangent),
+        step_size=0.004,
+        max_stations=250,
+    )
+
+    assert result.closed
+    assert len(result.polyline) > 20
+    assert np.all(np.isfinite(result.polyline))
+    radii = np.linalg.norm(result.polyline, axis=1)
+    assert np.allclose(radii, radius, atol=2e-5)
+
+
+def test_default_filament_path_handles_oblique_step(tmp_path, monkeypatch):
+    """The public default path must carry the oblique seed into PEEC."""
+    from netgen.occ import Axis, Axes, Dir, Pnt, WorkPlane
+    from radia.coil_from_cad import filaments_from_step
+
+    radius = 0.030
+    wire_radius = 0.003
+    profile = WorkPlane(Axes(
+        p=Pnt(radius, 0, 0), n=Dir(0, 1, 0), h=Dir(0, 0, 1),
+    )).Circle(wire_radius).Face()
+    coil = profile.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360)
+    coil = coil.Rotate(Axis(Pnt(0, 0, 0), Dir(1, 0, 0)), 37)
+    coil = coil.Rotate(Axis(Pnt(0, 0, 0), Dir(0, 1, 0)), 23)
+    step_path = str(tmp_path / "oblique_coil.step")
+    coil.WriteStep(step_path)
+
+    monkeypatch.setenv("RADIA_PEEC_CACHE_DISABLE", "1")
+    topology = filaments_from_step(
+        step_path,
+        nwinc=1,
+        nhinc=1,
+        cad_units_per_meter=1.0,
+    )
+
+    paths = topology.get("filament_paths") or []
+    assert len(paths) == 1
+    points = np.asarray([
+        point
+        for path in paths
+        for segment in path
+        for point in segment
+    ], dtype=float)
+    assert points.shape[0] > 20
+    assert np.all(np.isfinite(points))
+    assert np.all(np.ptp(points, axis=0) > 0.02)

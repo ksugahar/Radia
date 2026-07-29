@@ -387,8 +387,9 @@ def _axis_agnostic_seed(solid):
     PERPENDICULAR to the local wire direction yields the smallest single
     connected cross-section, so the section normal that minimises the piece
     area at a point on the coil IS the wire tangent there, and the winning
-    piece centroid is a point on the wire.  Works for ANY orientation and
-    for open OR closed loops (no port-cap face required).
+    piece centroid is a point on the wire.  This is independent of the
+    model's principal orientation and works for open or closed loops
+    (no port-cap face required).
     """
     bb = solid.bounding_box
     lo = np.array([bb[0][0], bb[0][1], bb[0][2]], dtype=float)

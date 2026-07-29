@@ -1711,6 +1711,10 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     return spine_cad * scale, widths_cad * scale, heights_cad * scale
 
 
+_MIN_PLAUSIBLE_COIL_EXTENT_M = 1e-5
+_MAX_PLAUSIBLE_COIL_EXTENT_M = 5.0
+
+
 def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
     """Fail-loud guard against a units mismatch (CLAUDE.md "Fail Fast,
     Fail Loud" -- no silent auto-correction).
@@ -1722,33 +1726,48 @@ def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
     ~1000x wrong SILENTLY (observed on the I_wrong_units variant:
     L=114109 nH instead of ~114 nH).  This does NOT guess the unit; it
     raises when the implied physical coil size falls outside the
-    plausible range [0.5 mm, 5 m] and names the cad_units_per_meter
+    plausible range [0.01 mm, 5 m] and names the cad_units_per_meter
     that WOULD make it plausible.
     """
-    if cad_units_per_meter <= 0:
+    try:
+        scale = float(cad_units_per_meter)
+    except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"{source_tag}: cad_units_per_meter must be > 0, got "
+            f"{source_tag}: cad_units_per_meter must be finite and > 0, "
+            f"got {cad_units_per_meter!r}.") from exc
+    if not math.isfinite(scale) or scale <= 0:
+        raise ValueError(
+            f"{source_tag}: cad_units_per_meter must be finite and > 0, got "
             f"{cad_units_per_meter!r}.")
     bb = solid.bounding_box()
-    ext_cad = max(float(bb.max.X - bb.min.X),
-                  float(bb.max.Y - bb.min.Y),
-                  float(bb.max.Z - bb.min.Z))
-    ext_m = ext_cad / cad_units_per_meter
+    extents_cad = (
+        float(bb.max.X - bb.min.X),
+        float(bb.max.Y - bb.min.Y),
+        float(bb.max.Z - bb.min.Z),
+    )
+    ext_cad = max(extents_cad)
+    if not all(math.isfinite(value) for value in extents_cad) or ext_cad <= 0:
+        raise ValueError(
+            f"{source_tag}: STEP bounding-box extents must be finite and "
+            f"non-zero, got {extents_cad!r} CAD units.")
+    ext_m = ext_cad / scale
     # Plausible coil size window.  The MAIN mistake this guards is
     # mm-read-as-metres, which inflates the coil ~1000x (upper bound).
     # The lower bound stays very permissive (10 um) so genuinely small
     # synthetic/test coils are not rejected.
-    if 1e-5 <= ext_m <= 5.0:
+    if _MIN_PLAUSIBLE_COIL_EXTENT_M <= ext_m <= _MAX_PLAUSIBLE_COIL_EXTENT_M:
         return  # plausible coil size -- pass
     suggest = None
     for cand in (1.0, 1e3, 1e-3, 1e2, 1e6):
-        if 1e-5 <= ext_cad / cand <= 5.0:
+        if (_MIN_PLAUSIBLE_COIL_EXTENT_M
+                <= ext_cad / cand
+                <= _MAX_PLAUSIBLE_COIL_EXTENT_M):
             suggest = cand
             break
     raise ValueError(
         f"{source_tag}: implied coil extent {ext_m:.3g} m is implausible "
         f"(expected 0.01 mm .. 5 m).  The STEP bbox spans {ext_cad:.3g} "
-        f"CAD units and cad_units_per_meter={cad_units_per_meter:g}.  "
+        f"CAD units and cad_units_per_meter={scale:g}.  "
         f"This is almost certainly a UNIT mismatch: a millimetre STEP "
         f"read as metres yields a 1000x-too-large coil and a ~1000x-wrong "
         f"inductance." +
