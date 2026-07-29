@@ -1,0 +1,79 @@
+{
+  "case": "Field Study current_flow_dc frozen production artifact",
+  "checks": {
+    "analytic_terminal_admittance": true,
+    "joule_power": true,
+    "ran_to_completion": true,
+    "replay_gate_accepted": true,
+    "result_files_exist": true,
+    "terminal_reaction_closure": true,
+    "validation_passed": true
+  },
+  "created_at_utc": "2026-07-31T05:39:56.138901+00:00",
+  "errors": {
+    "max_abs": 0.0,
+    "max_rel": 0.0
+  },
+  "pass": true,
+  "production_contract": {
+    "element_family": "P1",
+    "generated_vol_git_required": false,
+    "mesh_contract_sha256": "5cc16057425cac1dc1ac72dc16ddd4a2458a05e9b71686899df0d8cf2e55266c",
+    "physics_case": "current_flow_dc"
+  },
+  "result_files": [
+    "validation_test/radia_mcp/artifacts/field_study_production_v1/current_flow_dc.json",
+    "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
+  ],
+  "result_summary": {
+    "admittance_s": [
+      1.0,
+      0.0
+    ],
+    "complex_power_va_rms": [
+      100.0,
+      0.0
+    ],
+    "expected_admittance_s": [
+      1.0,
+      0.0
+    ],
+    "field_state_sha256": "0d574c8f27eb24e0e23b0330cf93ad869600a2f143b4f7d67e247be32cc81df6",
+    "frequency_hz": 0.0,
+    "observables_sha256": "2695e0e550a05433c675bf70d9f97246cc826e6495ea502297eafc521e339b47",
+    "operation": "current_flow_dc",
+    "operator_sha256": "b69cc93556f451d72a7f8654a2bcf6dcf68f5c2ea1f1f0559370a4fc09f9f4a4",
+    "request_contract_sha256": "c89b8b9c40439e97f1280ba0197caa130c156046c48117ee0f6fba454c092480",
+    "terminal_reaction_closure_a": [
+      3.552713678800501e-15,
+      0.0
+    ]
+  },
+  "run": {
+    "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
+    "duration_s": 0.027965700021013618,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "timing_breakdown_s": {
+    "export": 0.02170119999209419,
+    "factorize_and_solve": 0.0004535000189207494,
+    "observables": 0.000457199988886714,
+    "prepare_and_assemble": 0.005353800021111965
+  },
+  "tolerances": {
+    "max_abs": 1e-09,
+    "max_rel": 1e-09
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.23"
+  },
+  "verification": {
+    "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+    "method": "closed-form solution plus conservation and replay-identity gates"
+  }
+}

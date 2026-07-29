@@ -749,9 +749,10 @@ magnetic energy, Joule loss, residual, and the independent real-power closure.
 The current implementation deliberately rejects nonlinear or hysteretic
 harmonic permeability instead of silently using an initial slope. Every field
 study writes versioned JSON, four-part timing, Gmsh `.msh v4.1`, and `.geo/.opt`
-launch companions. These lanes establish the default interface; final FEMM
-retirement still requires frozen live artifacts for each physics/formulation
-combination.
+launch companions. The production gate freezes all six supported element
+families together with separate steady-heat, DC-current-flow, and AC-current-
+flow solver artifacts. Full solver retirement remains conditional on the
+independent motor and native Simulink execution gates.
 On Windows, the launcher uses `pwsh Start-Process -WindowStyle Hidden` rather
 than the `CREATE_NO_WINDOW` process flag: LTspice 26 can fail with
 `0xC0000409` under an SSH session when that flag is used. This hidden-window

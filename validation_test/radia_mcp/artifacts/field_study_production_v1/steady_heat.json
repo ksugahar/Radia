@@ -1,0 +1,64 @@
+{
+  "case": "Field Study steady_heat frozen production artifact",
+  "checks": {
+    "analytic_conduction_convection": true,
+    "heat_balance": true,
+    "ran_to_completion": true,
+    "replay_gate_accepted": true,
+    "result_files_exist": true,
+    "validation_passed": true
+  },
+  "created_at_utc": "2026-07-31T05:39:56.090037+00:00",
+  "errors": {
+    "max_abs": 1.7621459846850485e-12,
+    "max_rel": 2.6432189770275725e-14
+  },
+  "pass": true,
+  "production_contract": {
+    "element_family": "P1",
+    "generated_vol_git_required": false,
+    "mesh_contract_sha256": "5cc16057425cac1dc1ac72dc16ddd4a2458a05e9b71686899df0d8cf2e55266c",
+    "physics_case": "steady_heat"
+  },
+  "result_files": [
+    "validation_test/radia_mcp/artifacts/field_study_production_v1/steady_heat.json",
+    "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
+  ],
+  "result_summary": {
+    "expected_heat_outflow_w": 66.66666666666667,
+    "field_state_sha256": "0810739589c2f61ba84371ffbd46ad0b6fff63b14eb02a293994e7cf48b653cc",
+    "heat_balance_residual_w": 1.7621459846850485e-12,
+    "heat_outflow_w": 66.66666666666612,
+    "observables_sha256": "aa7f83cee823e91b0f77d7b62d5c0d4e2331fedfa6d36a3835a41b86d5f5e925",
+    "operation": "steady_heat",
+    "operator_sha256": "43b34e58a3ae849052088a0c7061d0225189dcb86d87860cb95039ee112791c2",
+    "request_contract_sha256": "f7a7779aa88c40dd0de9a56a8699b44d6b00483066cdf893ee7f962dcc8654a7"
+  },
+  "run": {
+    "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
+    "duration_s": 0.028493800025898963,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "timing_breakdown_s": {
+    "export": 0.021653200034052134,
+    "factorize_and_solve": 0.0005765999667346478,
+    "observables": 0.0005494999932125211,
+    "prepare_and_assemble": 0.005714500031899661
+  },
+  "tolerances": {
+    "max_abs": 1e-09,
+    "max_rel": 1e-09
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.23"
+  },
+  "verification": {
+    "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+    "method": "closed-form solution plus conservation and replay-identity gates"
+  }
+}

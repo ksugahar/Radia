@@ -87,6 +87,72 @@ def test_uniform_transient_heat_matches_exact_energy_ramp(tmp_path: Path) -> Non
     assert result["exports"]["gmsh_msh"]["content"].startswith("$MeshFormat")
 
 
+def test_steady_heat_conduction_convection_closes(tmp_path: Path) -> None:
+    depth = 0.2
+    result = solve_vol2d_scalar(
+        {
+            "physics": "steady_heat",
+            "vol_text": _rectangle(tmp_path),
+            "source_name": "generated_steady_heat.vol",
+            "element_family": "P1",
+            "formulation": "planar",
+            "model_depth_m": depth,
+            "dirichlet_values": {"left": 400.0},
+            "robin_boundaries": {
+                "right": {"transfer_w_per_m2_k": 10.0, "ambient_k": 300.0}
+            },
+            "materials": {
+                "domain": {"coefficient_si": 5.0, "volumetric_source_si": 0.0}
+            },
+            "export_basename": "steady_heat_production_gate",
+        }
+    )
+    observables = result["result_contract"]["observables"]
+    expected = 100.0 / (1.0 / (5.0 * depth) + 1.0 / (10.0 * depth))
+    assert observables["convection_outflow_w"] == pytest.approx(expected, rel=1.0e-10)
+    assert observables["heat_balance_residual_w"] == pytest.approx(0.0, abs=1.0e-9)
+
+
+@pytest.mark.parametrize("frequency_hz", [0.0, 1000.0])
+def test_current_flow_terminal_admittance_and_power_close(
+    tmp_path: Path, frequency_hz: float
+) -> None:
+    depth = 0.2
+    material = {"coefficient_si": 5.0, "volumetric_source_si": 0.0}
+    if frequency_hz:
+        material["relative_permittivity"] = 3.0
+    result = solve_vol2d_scalar(
+        {
+            "physics": "current_flow",
+            "frequency_hz": frequency_hz,
+            "vol_text": _rectangle(tmp_path),
+            "source_name": "generated_current_flow.vol",
+            "element_family": "P1",
+            "formulation": "planar",
+            "model_depth_m": depth,
+            "dirichlet_values": {"left": 0.0, "right": 10.0},
+            "terminal_pair": {
+                "positive_boundary": "right",
+                "negative_boundary": "left",
+            },
+            "materials": {"domain": material},
+            "export_basename": "current_flow_production_gate",
+        }
+    )
+    contract = result["result_contract"]
+    observables = contract["observables"]
+    actual = complex(*observables["admittance_s"])
+    expected = 5.0 * depth
+    if frequency_hz:
+        expected += 1j * 2.0 * math.pi * frequency_hz * EPS0 * 3.0 * depth
+    assert actual == pytest.approx(expected, rel=1.0e-10)
+    assert complex(*contract["terminal"]["reaction_closure"]) == pytest.approx(
+        0.0, abs=1.0e-9
+    )
+    if frequency_hz == 0.0:
+        assert observables["conduction_power_w"] == pytest.approx(100.0, rel=1.0e-10)
+
+
 def test_three_conductor_capacitance_force_and_energy_close(tmp_path: Path) -> None:
     result = solve_vol2d_electrostatic_system(
         {
