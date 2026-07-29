@@ -351,6 +351,22 @@ def test_optimize_density_applies_projection_and_reports_discreteness():
     np.testing.assert_allclose(checkpoints[0][1],result.density)
 
 
+def test_optimize_density_rejects_projected_volume_over_budget():
+    class LinearProblem:
+        n_el = 2
+        element_volumes = np.ones(2)
+
+        def linearize(self, s, state_load, loads, **kwargs):
+            raise AssertionError("an infeasible projected design must fail before solve")
+
+    with pytest.raises(ValueError, match="projected iron volume budget"):
+        optimize_density(
+            LinearProblem(), object(), object(), chi_iron=100.0,
+            volume_fraction=0.5, initial_density=np.full(2, 0.5),
+            density_projection=HeavisideProjection(beta=4.0, eta=0.3),
+            max_iterations=1)
+
+
 # ---------------------------------------------------------------- Stage 3
 def test_iron_only_extraction_and_ersatz_band(problem):
     """Hemisphere extraction: exact volume, sane demag physics (surface

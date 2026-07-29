@@ -676,7 +676,7 @@ def matlab_simulink_library_contract():
             "Applications/Field Study",
             "Material Models/Material Dictionary",
             "Coupling/Winding Dictionary",
-            "Coupling/Field Study",
+            "Coupling/Field Study Configuration",
             "LTspice/LTspice Circuit",
             "LTspice/Hysteretic LTspice Plant",
             "Optimization/Optuna Optimization",
@@ -745,7 +745,7 @@ def matlab_simulink_library_contract():
         },
         "field_study": {
             "application_block": "Applications/Field Study",
-            "configuration_block": "Coupling/Field Study",
+            "configuration_block": "Coupling/Field Study Configuration",
             "study_constructor": "radia.simulink.makeFieldStudySpec",
             "study_compiler": "radia.simulink.compileFieldStudy",
             "request_writer": "radia.simulink.writeFieldStudyRequest",

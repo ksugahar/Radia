@@ -12,16 +12,22 @@ from radia_mcp.radia_ngsolve.vol2d_dynamics import _solve_harmonic_matrices
 
 
 def test_harmonic_matrix_kernel_closes_branch_power_and_joule_loss() -> None:
+    frequency_hz = 50.0
+    omega = 2.0 * np.pi * frequency_hz
     solved = _solve_harmonic_matrices(
         np.array([[4.0]]),
         np.array([[3.0]]),
         np.array([[2.0]]),
-        frequency_hz=50.0,
+        frequency_hz=frequency_hz,
         branch_current_a=[[1.0, -0.25]],
     )
 
-    assert solved["eddy_loss"] > 0.0
-    assert solved["magnetic_energy"] > 0.0
+    state = complex(solved["state"][0])
+    expected_loss = omega**2 * 3.0 * abs(state) ** 2
+    expected_energy = 0.5 * 4.0 * abs(state) ** 2
+    assert solved["eddy_loss"] == pytest.approx(expected_loss)
+    assert solved["magnetic_energy"] == pytest.approx(expected_energy)
+    assert solved["apparent_power"].real == pytest.approx(expected_loss)
     assert solved["power_error"] == pytest.approx(0.0, abs=1.0e-12)
     assert np.linalg.norm(solved["residual"], ord=np.inf) < 1.0e-12
 

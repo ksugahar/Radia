@@ -40,7 +40,7 @@ under `docs/` explain and reproduce methods; they are not production GUIs.
   circuit backends must not change the `.vol`, material dictionary, winding
   polarity, series/parallel identity, or mechanical state convention.
 - FEMM replacement is a multiphysics contract, not a magnetics-only claim.
-  `Coupling/Field Study` compiles electrostatic, DC/AC current-flow,
+  `Coupling/Field Study Configuration` compiles electrostatic, DC/AC current-flow,
   steady-heat, and time-harmonic eddy-current settings to `RadiaStudyBus`.
   The corresponding `Applications/Field Study` worker runs once on an
   explicit trigger and writes versioned JSON, timing, Gmsh v4.1, and launch
@@ -63,7 +63,7 @@ Applications/Induction Heating
 Applications/Field Study
 Material Models/Material Dictionary
 Coupling/Winding Dictionary
-Coupling/Field Study
+Coupling/Field Study Configuration
 LTspice/LTspice Circuit
 LTspice/Hysteretic LTspice Plant
 ```

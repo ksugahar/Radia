@@ -18,6 +18,7 @@ if ~isfield(materialContract,"schema") || ...
         "materialContract must be compiled against a MeshFile.");
 end
 meshFile=string(materialContract.mesh.mesh_file);
+assertPortableNames(string(materialContract.region_names(:)),".vol region");
 boundaries=radia.simulink.inspectVolBoundaries(meshFile);
 if double(boundaries.raw_boundary_id_count)>options.MaxBoundaries
     error("radia:simulink:FieldStudyBoundaryCapacity", ...
@@ -167,6 +168,10 @@ end
 
 function names=portableFields(value,label)
 names=string(fieldnames(value)); names=names(:);
+assertPortableNames(names,label);
+end
+
+function assertPortableNames(names,label)
 portable=cellfun(@(name)~isempty(regexp(name, ...
     "^[A-Za-z][A-Za-z0-9_]*$","once")),cellstr(names));
 if any(~portable)

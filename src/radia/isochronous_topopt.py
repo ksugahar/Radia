@@ -813,10 +813,28 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
             or np.any(rho > 1.0)):
         raise ValueError("optimize_density: initial_density must be finite "
                          "and lie in [0, 1]")
-    initial_volume = float(volumes @ rho)
+
+    def transform_density(rho_vec):
+        if density_filter is not None:
+            rho_f_raw = density_filter.apply(rho_vec)
+            rho_f = np.clip(rho_f_raw, 0.0, 1.0)
+            unclipped = (rho_f_raw > 0.0) & (rho_f_raw < 1.0)
+        else:
+            rho_f = rho_vec
+            unclipped = None
+        if density_projection is not None:
+            rho_material = density_projection.apply(rho_f)
+        else:
+            rho_material = rho_f
+        return rho_f, rho_material, unclipped
+
+    _rho_f_initial, rho_material_initial, _unclipped_initial = (
+        transform_density(rho))
+    initial_volume = float(volumes @ rho_material_initial)
     if initial_volume > volume_max + 1e-12 * max(1.0, abs(volume_max)):
-        raise ValueError("optimize_density: initial_density exceeds the "
-                         "iron volume budget")
+        raise ValueError(
+            "optimize_density: initial_density exceeds the projected "
+            "iron volume budget")
     if band_floor is None:
         if not np.isfinite(band_relative) or band_relative <= 0.0:
             raise ValueError("optimize_density: band_relative must be positive")
@@ -829,6 +847,9 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     loads = [objective_load] + constraint_loads
 
     evaluation_index = 0
+    transformed_volume = (density_filter is not None
+                          or density_projection is not None)
+    raw_volume_max = float(volumes.sum())
 
     def evaluate(rho_vec, warm):
         nonlocal evaluation_index
@@ -837,35 +858,30 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         # (measured -1.2e-2 on a coarse ball); clip the FILTERED density to
         # [0, 1] with the exact piecewise chain rule (zero derivative on
         # clipped elements) before the material map.
-        if density_filter is not None:
-            rho_f_raw = density_filter.apply(rho_vec)
-            rho_f = np.clip(rho_f_raw, 0.0, 1.0)
-            unclipped = (rho_f_raw > 0.0) & (rho_f_raw < 1.0)
-        else:
-            rho_f = rho_vec
-            unclipped = None
-        if density_projection is not None:
-            rho_material = density_projection.apply(rho_f)
-        else:
-            rho_material = rho_f
+        rho_f, rho_material, unclipped = transform_density(rho_vec)
         lin = problem.linearize(density_to_s(
             rho_material, chi_iron, penalty=penalty),
                                 state_load, loads, tol=tol,
                                 maxiter=cg_maxiter, warm=warm,
                                 solver=linear_solver)
 
-        def to_rho(g_s):
-            g_rf = density_gradient_from_s_gradient(
-                rho_material, g_s, chi_iron, penalty=penalty)
+        def to_raw(g_material):
+            g_rf = np.asarray(g_material, dtype=float)
             if density_projection is not None:
                 g_rf = density_projection.chain(rho_f, g_rf)
             if density_filter is None:
                 return g_rf
             return density_filter.chain(np.where(unclipped, g_rf, 0.0))
 
+        def to_rho(g_s):
+            return to_raw(density_gradient_from_s_gradient(
+                rho_material, g_s, chi_iron, penalty=penalty))
+
         gJ = to_rho(lin.jacobians[0])
         gks = [to_rho(lin.jacobians[1 + k])
                for k in range(len(constraint_loads))]
+        material_volume = float(volumes @ rho_material)
+        volume_gradient = to_raw(volumes)
         if evaluation_callback is not None:
             evaluation_callback(dict(
                 evaluation=evaluation_index,
@@ -873,11 +889,13 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 warm_start=warm is not None,
                 state_iterations=int(lin.state_iterations),
                 adjoint_iterations=[int(v) for v in lin.adjoint_iterations],
-                values=np.asarray(lin.values, dtype=float).tolist()))
+                values=np.asarray(lin.values, dtype=float).tolist(),
+                iron_volume=material_volume))
         evaluation_index += 1
-        return lin, gJ, gks
+        return lin, gJ, gks, material_volume, volume_gradient
 
-    lin, gJ, gks = evaluate(rho, initial_warm)
+    lin, gJ, gks, material_volume, volume_gradient = evaluate(
+        rho, initial_warm)
     n_solves = 1
     history = []
     move = move_limit
@@ -909,6 +927,11 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 b_ub.append((b - v + base) * scale)
                 A_ub.append(-G * scale)
                 b_ub.append((b + v - base) * scale)
+            if transformed_volume:
+                scale = 1.0 / max(np.abs(volume_gradient).max(), 1e-300)
+                A_ub.append(volume_gradient * scale)
+                b_ub.append((volume_max - material_volume
+                             + float(volume_gradient @ rho)) * scale)
             if not A_ub:
                 return None, None
             return np.array(A_ub), np.array(b_ub)
@@ -931,7 +954,8 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 bands_eff = np.maximum(band, np.abs(viol))  # always feasible
                 A_ub, b_ub = lp_rows(bands_eff)
                 update = solve_lp_update(rho, lp_objective, volumes,
-                                         volume_max, move_limit=move,
+                                         raw_volume_max if transformed_volume
+                                         else volume_max, move_limit=move,
                                          A_ub=A_ub, b_ub=b_ub)
             else:
                 bands_eff = np.where(np.abs(viol) > band,
@@ -942,26 +966,31 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 A_ub, b_ub = lp_rows(bands_eff)
                 try:
                     update = solve_lp_update(rho, lp_objective, volumes,
-                                             volume_max, move_limit=move,
+                                             raw_volume_max if transformed_volume
+                                             else volume_max, move_limit=move,
                                              A_ub=A_ub, b_ub=b_ub)
                 except RuntimeError:
                     bands_eff = np.maximum(band, np.abs(viol))
                     band_mode = "hold"
                     A_ub, b_ub = lp_rows(bands_eff)
                     update = solve_lp_update(rho, lp_objective, volumes,
-                                             volume_max, move_limit=move,
+                                             raw_volume_max if transformed_volume
+                                             else volume_max, move_limit=move,
                                              A_ub=A_ub, b_ub=b_ub)
-            lin_new, gJ_new, gks_new = evaluate(update.density, warm=lin)
+            (lin_new, gJ_new, gks_new, material_volume_new,
+             volume_gradient_new) = evaluate(update.density, warm=lin)
             n_solves += 1
             J_new = float(lin_new.values[0])
             viol_new = np.abs(lin_new.values[1:] - targets)
+            volume_ok = material_volume_new <= (
+                volume_max + 1e-10 * max(1.0, abs(volume_max)))
             if deep:
                 # accept on feasibility progress: the band-weighted total
                 # violation decreases, or full cap entry; individual
                 # violations must not blow up while others improve.
                 total = float(np.sum(np.abs(viol) / band))
                 total_new = float(np.sum(viol_new / band))
-                ok = ((total_new < 0.995 * total
+                ok = (volume_ok and (total_new < 0.995 * total
                        or bool(np.all(viol_new <= 1.25 * band)))
                       and bool(np.all(viol_new
                                       <= np.maximum(1.25 * band,
@@ -972,7 +1001,7 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 # decrease while outside -- no ratchet path exists.
                 ok_g = np.all((viol_new <= 1.25 * band)
                               | (viol_new <= 0.97 * np.abs(viol)))
-                ok = ok_J and bool(ok_g)
+                ok = volume_ok and ok_J and bool(ok_g)
             if ok:
                 accepted = True
                 break
@@ -982,11 +1011,15 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
             break
         change = float(np.max(np.abs(update.delta)))
         rho, lin, gJ, gks = update.density, lin_new, gJ_new, gks_new
+        material_volume, volume_gradient = (
+            material_volume_new, volume_gradient_new)
         move = min(float(move_limit), 1.5 * move)
         entry = dict(iteration=iteration, objective=float(lin.values[0]),
                      constraints=lin.values[1:].tolist(),
                      violation=viol_new.tolist(), band=band.tolist(),
-                     volume=float(volumes @ rho), max_density_change=change,
+                     volume=material_volume,
+                     design_volume=float(volumes @ rho),
+                     max_density_change=change,
                      move=move, trials=trials, band_mode=band_mode,
                      t_iter_s=time.perf_counter() - t_iter,
                      state_iterations=lin.state_iterations,
