@@ -28,6 +28,8 @@ Released 2026-07-30.
 - Hardened extracted Simulink-package verification against MATLAB's mixed
   UTF-8/Windows console output so four-machine release diagnostics cannot fail
   during locale decoding or log emission.
+- Made Field Study evidence hashes byte-stable across Windows and Linux, and
+  kept lightweight FEM/Motor MCP startup independent of solver-only NumPy code.
 
 ## 4.95.28 - Hodograph free boundaries, exact axisymmetric sources, and PEEC hardening
 

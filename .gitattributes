@@ -17,3 +17,7 @@ docs/clebsch_hodograph/hodograph_bending_sy.ipynb text eol=lf
 docs/clebsch_hodograph/hodograph_bending_sy.json text eol=lf
 docs/clebsch_hodograph/edge_focusing_tracking.ipynb text eol=lf
 docs/clebsch_hodograph/edge_focusing_tracking.json text eol=lf
+
+# Field Study artifacts are hashed by the production manifest. Keep their
+# checkout bytes identical on Windows and Linux.
+validation_test/radia_mcp/artifacts/field_study_production_v1/*.json text eol=lf

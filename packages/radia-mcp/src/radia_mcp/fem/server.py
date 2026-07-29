@@ -53,7 +53,6 @@ from .equivalence_source_knowledge import (
     get_equivalence_source_knowledge,
 )
 from ..radia_ngsolve.profile2d_handoff import profile2d_handoff_gate
-from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
 from ..radia_ngsolve.validation_evidence import validate_evidence_bundle
 from .uninstall_safety import validate_solver_uninstall_safety_evidence
 from .axifem_retirement import validate_axifem_element_evidence
@@ -484,6 +483,8 @@ def fem_vol2d_transient_runtime(packet_json: str) -> str:
         packet = json.loads(packet_json)
         if not isinstance(packet, dict):
             raise ValueError("packet_json must decode to an object")
+        from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
+
         result = execute_transient_runtime(packet)
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
