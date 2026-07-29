@@ -406,8 +406,8 @@ directly thicker barriers.
 
 ### Machine-level embedding: MEASURED 2026-07-28 -- marginal, read carefully
 
-Full 2-D current-sheet machine harness (calibration isotropy 5e-9), scratch
-`C:\\temp\\synrm_rotor\\` (not promoted; results JSONs there).
+Full 2-D current-sheet machine harness (calibration isotropy 5e-9).  These are
+method-study observations, not release-golden machine claims.
 
 - SINGLE barrier per pole (channel low wall virtual): NO benefit.  Saliency
   hodograph 1.243 vs hand-U 1.253-1.255 (same corners; both same-area and

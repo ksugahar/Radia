@@ -31,6 +31,14 @@ verifyEqual(testCase, result.value, 1.25, "AbsTol", 0);
 verifyClass(testCase, result.value, "double");
 end
 
+function testIsochronousTopoptHasNamedFallback(testCase)
+result = radia.python.isochronousTopopt( ...
+    "density_to_s", {[0, 1], 100});
+verifyEqual(testCase, result.value, [1e6, 0.01], "RelTol", 1e-14);
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.python.execution_mode, "InProcess");
+end
+
 function testExternalPythonUsesChildSafeDllPathAndRestoresMatlabPath(testCase)
 if ~ispc
     return

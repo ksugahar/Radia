@@ -40,6 +40,8 @@ def test_shielding_limit(mu_r, band):
 def test_low_frequency_scalings_mu1():
     a1 = sphere_complex_polarizability(0.5, A, SIGMA, 1.0)
     a2 = sphere_complex_polarizability(1.0, A, SIGMA, 1.0)
+    assert a1.imag < 0.0 and a2.imag < 0.0  # e^{+jwt}: passive response lags
+    assert a1.real < 0.0 and a2.real < 0.0
     np.testing.assert_allclose(a2.imag / a1.imag, 2.0, rtol=2e-3)
     np.testing.assert_allclose(a2.real / a1.real, 4.0, rtol=2e-3)
 
@@ -75,3 +77,12 @@ def test_invalid_arguments_raise():
         sphere_complex_polarizability(1.0, A, SIGMA, 0.5)
     with pytest.raises(ValueError):
         sphere_complex_polarizability(-1.0, A, SIGMA, 1.0)
+    for value in (np.nan, np.inf):
+        with pytest.raises(ValueError, match="finite"):
+            sphere_complex_polarizability(value, A, SIGMA, 1.0)
+        with pytest.raises(ValueError, match="radius"):
+            sphere_complex_polarizability(1.0, value, SIGMA, 1.0)
+        with pytest.raises(ValueError, match="sigma"):
+            sphere_complex_polarizability(1.0, A, value, 1.0)
+        with pytest.raises(ValueError, match="mu_r"):
+            sphere_complex_polarizability(1.0, A, SIGMA, value)

@@ -98,7 +98,7 @@
       "patterns": ["isochronous_topopt.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
-      "matlab": ["matlab/+radia/+python/machines.m"],
+      "matlab": ["matlab/+radia/+python/isochronousTopopt.m"],
       "notes": "Density-adjoint HDiv-MMM topology optimization for isochronous magnets: NGSolve CG/adjoint composition above the native charge-Gram kernels; design-loop promotion decides any later native surface."
     },
     {
