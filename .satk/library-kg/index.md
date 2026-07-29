@@ -20,18 +20,18 @@ The active policy mode is defined in `.satk/block-policy.json`.
 
 ## Commonly Used Blocks
 
-Showing 7 of 15 blocks — see category pages for the full catalog.
+Showing 7 of 17 blocks — see category pages for the full catalog.
 
 - [[blocks/Hysteretic_LTspice_Plant]] — Hysteretic LTspice Plant from radia_simulink_library
 - [[blocks/Motor]] — Motor batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the valid... from radia_simulink_library
+- [[blocks/Field_Study_Configuration]] — Compile electrostatic, multi-conductor force, current-flow, steady/transient-heat, or linear/nonlinear harmonic-eddy ... from radia_simulink_library
+- [[blocks/Winding_Dictionary]] — Compile winding names, .vol regions, turns, polarity, parallel paths, resistance, and circuit terminals to a fixed-wi... from radia_simulink_library
 - [[blocks/Material_Dictionary]] — Compile MATLAB material and region dictionaries against a Netgen .vol mesh. The output is a fixed-width numeric Bus f... from radia_simulink_library
 - [[blocks/Electromagnet]] — Electromagnet batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes t... from radia_simulink_library
-- [[blocks/PCB_PEEC]] — PCB PEEC batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the va... from radia_simulink_library
-- [[blocks/Stream_Function]] — Stream Function batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes... from radia_simulink_library
-- [[blocks/LTspice_Circuit]] — LTspice Circuit from radia_simulink_library
+- [[blocks/Field_Study]] — Field Study batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the... from radia_simulink_library
 
 ## Categories
 
 - [[plant-models]] (2 blocks) — physical dynamics, thermal, mechanical models
-- [[uncategorized]] (12 blocks) — blocks with insufficient metadata for confident categorization
+- [[uncategorized]] (14 blocks) — blocks with insufficient metadata for confident categorization
 - [[power]] (1 blocks) — inverters, converters, motors, power stage components

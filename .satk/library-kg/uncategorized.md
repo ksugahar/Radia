@@ -4,6 +4,26 @@ Use these blocks for uncategorized blocks.
 
 ## Recommended Blocks
 
+### Field Study Configuration
+
+- Block: [[blocks/Field_Study_Configuration]]
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Coupling/Field Study Configuration
+- Description: Compile electrostatic, multi-conductor force, current-flow, steady/transient-heat, or linear/nonlinear harmonic-eddy ...
+- Use when: user needs compile electrostatic, multi-conductor force, current-flow, steady/transient-heat, or linear/nonlinear har...
+- Avoid when: user asks only for a primitive field study configuration experiment.
+- Metadata quality: high
+
+### Winding Dictionary
+
+- Block: [[blocks/Winding_Dictionary]]
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Coupling/Winding Dictionary
+- Description: Compile winding names, .vol regions, turns, polarity, parallel paths, resistance, and circuit terminals to a fixed-wi...
+- Use when: user needs compile winding names, .vol regions, turns, polarity, parallel paths, resistance, and circuit terminals to...
+- Avoid when: user asks only for a primitive winding dictionary experiment.
+- Metadata quality: high
+
 ### Material Dictionary
 
 - Block: [[blocks/Material_Dictionary]]
@@ -21,6 +41,15 @@ Use these blocks for uncategorized blocks.
 - ReferenceBlock: radia_simulink_library/Applications/Electromagnet
 - Description: Electromagnet batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes t...
 - Use when: user needs electromagnet batch analysis. create settings with radia.simulink.writeapplicationconfig; a rising trigger...
+- Metadata quality: medium
+
+### Field Study
+
+- Block: [[blocks/Field_Study]]
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Applications/Field Study
+- Description: Field Study batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the...
+- Use when: user needs field study batch analysis. create settings with radia.simulink.writeapplicationconfig; a rising trigger e...
 - Metadata quality: medium
 
 ### PCB PEEC
@@ -91,13 +120,6 @@ Use these blocks for uncategorized blocks.
 
 - Library: radia_simulink_library
 - ReferenceBlock: radia_simulink_library/Applications/Stream Function Optimization
-- Metadata quality: low
-- Guidance: Available from customer library. Select when intent matches.
-
-### Winding Dictionary
-
-- Library: radia_simulink_library
-- ReferenceBlock: radia_simulink_library/Coupling/Winding Dictionary
 - Metadata quality: low
 - Guidance: Available from customer library. Select when intent matches.
 
