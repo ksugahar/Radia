@@ -7,7 +7,7 @@
     "uniform_heating_exact": true,
     "validation_passed": true
   },
-  "created_at_utc": "2026-07-29T16:00:02.829444+00:00",
+  "created_at_utc": "2026-07-31T05:39:42.861508+00:00",
   "errors": {
     "max_abs": 5.115907697472721e-13,
     "max_rel": 1.7030318566819978e-15
@@ -35,16 +35,16 @@
   },
   "run": {
     "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
-    "duration_s": 0.8482349999831058,
+    "duration_s": 0.8606766000739299,
     "exit_code": 0,
     "workdir": "."
   },
   "schema": "cae-ai-lab.solver-run.v1",
   "solver": "radia-ngsolve",
   "timing_breakdown_s": {
-    "factorize_and_solve": 0.0006463000318035483,
-    "postprocess_and_export": 0.8412327999831177,
-    "prepare_and_assemble": 0.006355899968184531
+    "factorize_and_solve": 0.0006424000021070242,
+    "postprocess_and_export": 0.8543334000278264,
+    "prepare_and_assemble": 0.0057008000439964235
   },
   "tolerances": {
     "max_abs": 1e-09,

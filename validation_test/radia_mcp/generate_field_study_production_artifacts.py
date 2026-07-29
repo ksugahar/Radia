@@ -31,6 +31,7 @@ from radia_mcp.radia_ngsolve.vol2d_electrostatic import (
     solve_vol2d_electrostatic_system,
 )
 from radia_mcp.radia_ngsolve.vol2d_thermal import solve_vol2d_transient_heat
+from radia_mcp.radia_ngsolve.vol2d_scalar import analyze_vol2d_scalar
 
 
 MU0 = 4.0e-7 * math.pi
@@ -161,6 +162,135 @@ def _thermal_case(root: Path, family: str) -> tuple[dict[str, Any], dict[str, An
         "exact_temperature_k": exact,
     }
     return result, {"checks": checks, "errors": {"max_abs": error, "max_rel": error / exact}, "summary": summary}
+
+
+def _scalar_physics_case(
+    root: Path,
+    case_id: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    mesh_path = _mesh_rect(root, "P1")
+    depth = 0.2
+    if case_id == "steady_heat":
+        coefficient = 5.0
+        request: dict[str, Any] = {
+            "operation": "solve",
+            "physics": "steady_heat",
+            "vol_text": mesh_path.read_text(encoding="utf-8"),
+            "source_name": mesh_path.name,
+            "element_family": "P1",
+            "formulation": "planar",
+            "model_depth_m": depth,
+            "dirichlet_values": {"left": 400.0},
+            "robin_boundaries": {
+                "right": {
+                    "transfer_w_per_m2_k": 10.0,
+                    "ambient_k": 300.0,
+                }
+            },
+            "materials": {
+                "domain": {
+                    "coefficient_si": coefficient,
+                    "volumetric_source_si": 0.0,
+                }
+            },
+            "export_basename": "production_steady_heat",
+        }
+        result = analyze_vol2d_scalar(request)
+        observables = result["result_contract"]["observables"]
+        expected = 100.0 / (1.0 / (coefficient * depth) + 1.0 / (10.0 * depth))
+        max_abs = max(
+            abs(float(observables["convection_outflow_w"]) - expected),
+            abs(float(observables["heat_balance_residual_w"])),
+        )
+        max_rel = max_abs / expected
+        physics_checks = {
+            "analytic_conduction_convection": max_rel <= 1.0e-9,
+            "heat_balance": abs(float(observables["heat_balance_residual_w"])) <= 1.0e-9,
+        }
+        expected_summary: dict[str, Any] = {
+            "expected_heat_outflow_w": expected,
+            "heat_outflow_w": observables["convection_outflow_w"],
+            "heat_balance_residual_w": observables["heat_balance_residual_w"],
+        }
+    elif case_id in {"current_flow_dc", "current_flow_ac"}:
+        frequency_hz = 0.0 if case_id.endswith("dc") else 1000.0
+        coefficient = 5.0
+        material: dict[str, Any] = {
+            "coefficient_si": coefficient,
+            "volumetric_source_si": 0.0,
+        }
+        if frequency_hz > 0.0:
+            material["relative_permittivity"] = 3.0
+        request = {
+            "operation": "solve",
+            "physics": "current_flow",
+            "frequency_hz": frequency_hz,
+            "vol_text": mesh_path.read_text(encoding="utf-8"),
+            "source_name": mesh_path.name,
+            "element_family": "P1",
+            "formulation": "planar",
+            "model_depth_m": depth,
+            "dirichlet_values": {"left": 0.0, "right": 10.0},
+            "terminal_pair": {
+                "positive_boundary": "right",
+                "negative_boundary": "left",
+            },
+            "materials": {"domain": material},
+            "export_basename": f"production_{case_id}",
+        }
+        result = analyze_vol2d_scalar(request)
+        observables = result["result_contract"]["observables"]
+        actual = complex(*observables["admittance_s"])
+        expected = coefficient * depth
+        if frequency_hz > 0.0:
+            expected += 1j * 2.0 * math.pi * frequency_hz * EPS0 * 3.0 * depth
+        max_abs = abs(actual - expected)
+        max_rel = max_abs / abs(expected)
+        terminal = result["result_contract"]["terminal"]
+        closure = abs(complex(*terminal["reaction_closure"]))
+        physics_checks = {
+            "analytic_terminal_admittance": max_rel <= 1.0e-9,
+            "terminal_reaction_closure": closure <= 1.0e-9,
+        }
+        if frequency_hz == 0.0:
+            physics_checks["joule_power"] = abs(
+                float(observables["conduction_power_w"]) - 100.0
+            ) <= 1.0e-9
+        expected_summary = {
+            "frequency_hz": frequency_hz,
+            "expected_admittance_s": [expected.real, expected.imag],
+            "admittance_s": observables["admittance_s"],
+            "terminal_reaction_closure_a": terminal["reaction_closure"],
+            "complex_power_va_rms": observables["complex_power_va_rms"],
+        }
+    else:
+        raise ValueError(f"unknown scalar production case: {case_id}")
+
+    replay = analyze_vol2d_scalar({"operation": "replay_gate", "replay_artifact": result})
+    checks = {
+        "ran_to_completion": True,
+        "result_files_exist": True,
+        "replay_gate_accepted": replay["status"] == "accepted",
+        **physics_checks,
+    }
+    checks["validation_passed"] = all(checks.values())
+    summary = {
+        "operation": case_id,
+        "request_contract_sha256": result["result_contract"]["request_contract_sha256"],
+        "operator_sha256": result["result_contract"]["operator_sha256"],
+        "field_state_sha256": result["result_contract"]["field_state_sha256"],
+        "observables_sha256": result["result_contract"]["observables_sha256"],
+        **expected_summary,
+    }
+    evidence = {
+        "checks": checks,
+        "errors": {"max_abs": max_abs, "max_rel": max_rel},
+        "summary": summary,
+    }
+    mesh_contract = parse_netgen_2d_vol(
+        mesh_path.read_text(encoding="utf-8"), source_name=mesh_path.name
+    ).contract()
+    return result, evidence, mesh_contract
 
 
 def _electrostatic_case(root: Path, family: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -357,6 +487,55 @@ def _write_artifact(
     return path
 
 
+def _write_physics_artifact(
+    output_dir: Path,
+    case_id: str,
+    result: dict[str, Any],
+    evidence: dict[str, Any],
+    mesh_contract: dict[str, Any],
+) -> Path:
+    relative = f"{ARTIFACT_ROOT}/{case_id}.json"
+    artifact = {
+        "schema": ARTIFACT_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "case": f"Field Study {case_id} frozen production artifact",
+        "solver": "radia-ngsolve",
+        "pass": bool(evidence["checks"]["validation_passed"]),
+        "run": {
+            "command": f"python {GENERATOR} --output-dir {ARTIFACT_ROOT}",
+            "workdir": ".",
+            "exit_code": 0,
+            "duration_s": float(result.get("timing_s", {}).get("total", 0.0)),
+        },
+        "result_files": [relative, GENERATOR],
+        "checks": evidence["checks"],
+        "tolerances": {"max_rel": 1.0e-9, "max_abs": 1.0e-9},
+        "errors": evidence["errors"],
+        "tool_versions": {
+            "python": platform.python_version(),
+            "radia_mcp": _version("radia-mcp"),
+            "ngsolve": _version("ngsolve"),
+        },
+        "timing_breakdown_s": _timing(result),
+        "verification": {
+            "method": "closed-form solution plus conservation and replay-identity gates",
+            "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+        },
+        "production_contract": {
+            "physics_case": case_id,
+            "element_family": "P1",
+            "mesh_contract_sha256": mesh_contract["contract_sha256"],
+            "generated_vol_git_required": False,
+        },
+        "result_summary": evidence["summary"],
+    }
+    if not artifact["pass"]:
+        raise RuntimeError(f"{case_id} production checks failed: {artifact['checks']}")
+    path = output_dir / f"{case_id}.json"
+    _write_json(path, artifact)
+    return path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -396,6 +575,22 @@ def main() -> int:
                 "pass": True,
             }
         )
+    physics_rows: list[dict[str, Any]] = []
+    for case_id in ("steady_heat", "current_flow_dc", "current_flow_ac"):
+        case_started = time.perf_counter()
+        result, evidence, mesh_contract = _scalar_physics_case(args.run_root, case_id)
+        path = _write_physics_artifact(
+            args.output_dir, case_id, result, evidence, mesh_contract
+        )
+        physics_rows.append(
+            {
+                "physics_case": case_id,
+                "artifact": path.name,
+                "sha256": _sha(path),
+                "duration_s": time.perf_counter() - case_started,
+                "pass": True,
+            }
+        )
     manifest = {
         "schema": "radia.field-study-production-manifest.v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -407,7 +602,8 @@ def main() -> int:
         "generator": GENERATOR,
         "generator_sha256": _sha(Path(__file__)),
         "element_families": rows,
-        "all_passed": all(row["pass"] for row in rows),
+        "physics_cases": physics_rows,
+        "all_passed": all(row["pass"] for row in rows + physics_rows),
     }
     _write_json(args.output_dir / "manifest.json", manifest)
     print(json.dumps(manifest, indent=2, sort_keys=True))

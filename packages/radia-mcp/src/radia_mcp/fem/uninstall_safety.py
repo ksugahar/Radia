@@ -9,8 +9,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
-SCHEMA = "radia.solver-uninstall-safety-evidence.v1"
-GATE_SCHEMA = "radia.solver-uninstall-safety-gate.v1"
+SCHEMA = "radia.solver-uninstall-safety-evidence.v2"
+GATE_SCHEMA = "radia.solver-uninstall-safety-gate.v2"
+REPLACEMENT_SCHEMA = "radia.validation-evidence-bundle.v1"
 REQUIRED_SCAN_SCOPES = {
     "active_processes",
     "automation_scripts",
@@ -55,6 +56,7 @@ def validate_solver_uninstall_safety_evidence(
     rollback = evidence.get("rollback_installer")
     install_roots = evidence.get("installation_roots")
     versions = evidence.get("execution_version")
+    replacement = evidence.get("replacement_evidence_bundle")
     if not isinstance(dependencies, Mapping):
         dependencies = {}
     if not isinstance(rollback, Mapping):
@@ -63,6 +65,8 @@ def validate_solver_uninstall_safety_evidence(
         install_roots = {}
     if not isinstance(versions, Mapping):
         versions = {}
+    if not isinstance(replacement, Mapping):
+        replacement = {}
 
     archive_roles = [str(row.get("role", "")).strip() for row in archives]
     archive_checks = [
@@ -133,6 +137,22 @@ def validate_solver_uninstall_safety_evidence(
             install_roots.get("mismatch_detected") is False
             or install_roots.get("mismatch_plan_complete") is True
         ),
+        "replacement_capabilities_complete": bool(
+            replacement.get("schema") == REPLACEMENT_SCHEMA
+            and replacement.get("status") == "complete"
+            and replacement.get("contract_valid") is True
+            and replacement.get("retirement_ready") is True
+            and replacement.get("solver_uninstall_performed") is False
+            and isinstance(replacement.get("required_capabilities"), Sequence)
+            and not isinstance(replacement.get("required_capabilities"), (str, bytes))
+            and bool(replacement.get("required_capabilities"))
+            and sorted(replacement.get("accepted_capabilities", []))
+            == sorted(replacement.get("required_capabilities", []))
+            and replacement.get("missing_capabilities") == []
+            and _SHA256_RE.fullmatch(
+                str(replacement.get("evidence_bundle_sha256", "")).lower()
+            )
+        ),
         "uninstall_not_performed": evidence.get("solver_uninstall_performed") is False,
         "evidence_payload_sha256": str(
             evidence.get("evidence_payload_sha256", "")
@@ -152,6 +172,7 @@ def validate_solver_uninstall_safety_evidence(
         "evidence_payload_sha256": evidence.get("evidence_payload_sha256"),
         "retirement_capabilities": [
             "archive_snapshot",
+            "replacement_capability_bundle",
             "live_dependency_scan_clean",
             "rollback_installer_preserved",
         ]
