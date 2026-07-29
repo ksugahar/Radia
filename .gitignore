@@ -471,6 +471,11 @@ cubit[0-9]*.jou
 *.slxc
 slprj/
 
+# Simulink Agentic Toolkit machine-local scan cache. The portable policy and
+# generated knowledge index under .satk remain version-controlled.
+.satk/library-cache/
+.satk/library-kg/.meta.json
+
 # Build/install logs
 aqtinstall.log
 *.egg-info/

@@ -10,6 +10,26 @@ if bdIsLoaded(name),close_system(name,0);end
 assignin("base","radia_ih_config",radia.simulink.makeIHNativeSmokeConfig());
 assignin("base","radia_bh_config",struct("mode","formula", ...
     "reference_temperature_K",293.15,"mu_r_ref",1,"mu_r_temperature_slope",0));
+defaultMaterials=struct("air",radia.simulink.makeMaterialSpec());
+defaultRegions=struct("air","air");
+defaultMaterialContract=radia.simulink.compileMaterialDictionary( ...
+    defaultMaterials,RegionMaterials=defaultRegions);
+assignin("base","radia_materials",defaultMaterials);
+assignin("base","radia_region_materials",defaultRegions);
+assignin("base","radia_material_contract",defaultMaterialContract);
+assignin("base","radia_material_bus",defaultMaterialContract.runtime);
+radia.simulink.makeMaterialBusObject(defaultMaterialContract.runtime, ...
+    Name="RadiaMaterialBus");
+defaultWindings=struct("winding",radia.simulink.makeWindingSpec( ...
+    Regions="air",Turns=1));
+defaultWindingContract=radia.simulink.compileWindingDictionary( ...
+    defaultWindings,defaultMaterialContract);
+assignin("base","radia_windings",defaultWindings);
+assignin("base","radia_winding_contract",defaultWindingContract);
+assignin("base","radia_winding_bus",defaultWindingContract.runtime);
+radia.simulink.makeWindingBusObject(defaultWindingContract.runtime, ...
+    Name="RadiaWindingBus");
+radia.simulink.makeElectromechanicalBusObjects();
 assignin("base","radia_adjoint_runner", ...
     radia.topopt.makeAdjointDemoRunner());
 assignin("base","radia_streamfunction_adjoint_runner", ...
@@ -27,12 +47,15 @@ radia.simulink.addStreamFunctionOptimizationSubsystem(applications, ...
 materials=addEmptySubsystem(name,"Material Models",[70 570 330 660]);
 addBHBlock(materials,"Temperature-Dependent BH",[45 35 285 105]);
 addMaterialDatabaseBlock(materials,"Material Database",[45 125 285 195]);
+addMaterialDictionaryBlock(materials,"Material Dictionary",[45 215 285 285]);
 
 addEmptySubsystem(name,"LTspice",[70 305 310 405]);
 add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",name+"/LTspice/LTspice Circuit", ...
  "FunctionName","radia_ltspice_sfun","Parameters","'', {'control'}, {'V(out)'}, 1e-3, 'C:\temp\radia_ltspice_block', inf, 300, ''",Position=[45 35 200 85]);
 add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",name+"/LTspice/Hysteretic LTspice Plant", ...
  "FunctionName","radia_hysteretic_ltspice_sfun","Parameters","'', 1e-3, 'C:\temp\radia_hysteretic_ltspice_block'",Position=[45 105 200 155]);
+coupling=addEmptySubsystem(name,"Coupling",[470 305 730 405]);
+addWindingDictionaryBlock(coupling,"Winding Dictionary",[45 35 285 105]);
 optimization=addEmptySubsystem(name,"Optimization",[70 435 430 560]);
 addOptunaLibraryBlock(optimization,"Optuna Optimization",[45 35 240 105]);
 addSheetMetalLibraryBlock(optimization,"Sheet Metal Optimization", ...
@@ -216,6 +239,34 @@ mask.Display="disp('Material Database');";
 set_param(path,"UserData",struct("schema","radia.material.database.v1", ...
     "coordinate_system","workpiece","shared_variable","radia_material_database", ...
     "wired_ports",false),"UserDataPersistent","on");
+end
+
+function addMaterialDictionaryBlock(parent,label,position)
+path=parent+"/"+label;
+add_block("simulink/Ports & Subsystems/Subsystem",path,Position=position);
+delete_line(path,"In1/1","Out1/1");
+delete_block(path+"/In1"); delete_block(path+"/Out1");
+add_block("simulink/Sources/Constant",path+"/Compiled Material Bus", ...
+    "Value","radia_material_bus","OutDataTypeStr","Bus: RadiaMaterialBus", ...
+    "SampleTime","inf","Position",[45 45 190 85]);
+add_block("simulink/Ports & Subsystems/Out1",path+"/materials", ...
+    "Port","1","Position",[250 55 280 75]);
+add_line(path,"Compiled Material Bus/1","materials/1");
+radia.simulink.configureMaterialDictionaryBlock(path);
+end
+
+function addWindingDictionaryBlock(parent,label,position)
+path=parent+"/"+label;
+add_block("simulink/Ports & Subsystems/Subsystem",path,Position=position);
+delete_line(path,"In1/1","Out1/1");
+delete_block(path+"/In1"); delete_block(path+"/Out1");
+add_block("simulink/Sources/Constant",path+"/Compiled Winding Bus", ...
+    "Value","radia_winding_bus","OutDataTypeStr","Bus: RadiaWindingBus", ...
+    "SampleTime","inf","Position",[45 45 190 85]);
+add_block("simulink/Ports & Subsystems/Out1",path+"/windings", ...
+    "Port","1","Position",[250 55 280 75]);
+add_line(path,"Compiled Winding Bus/1","windings/1");
+radia.simulink.configureWindingDictionaryBlock(path);
 end
 
 function addIHNativeBlock(parent,label,position)

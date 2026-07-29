@@ -1,0 +1,9 @@
+{
+  "libraries": [
+    {
+      "name": "radia_simulink_library",
+      "path": "matlab/radia_simulink_library.slx",
+      "description": "Radia-NGSolve solver, circuit, and Simulink integration blocks."
+    }
+  ]
+}

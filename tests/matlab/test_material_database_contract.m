@@ -37,6 +37,10 @@ verifyEqual(testCase,get_param(block,"BlockType"),'SubSystem');
 verifyNotEmpty(testCase,Simulink.Mask.get(block));
 data = get_param(block,"UserData");
 verifyEqual(testCase,data.schema,"radia.material.database.v1");
+dictionaryBlock = "radia_simulink_library/Material Models/Material Dictionary";
+verifyEqual(testCase,get_param(dictionaryBlock,"BlockType"),'SubSystem');
+verifyEqual(testCase,get_param(dictionaryBlock+"/Compiled Material Bus", ...
+    "OutDataTypeStr"),'Bus: RadiaMaterialBus');
 end
 
 function db = fixtureDatabase()

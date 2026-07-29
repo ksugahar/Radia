@@ -27,3 +27,17 @@ def test_simulink_library_registration_and_ltspice_scope():
     assert preflight["report_schema"] == "cubit-mesh-export.vol-check.v1"
     assert contract["ltspice"]["executable"] == "LTspice.exe"
     assert contract["ltspice"]["legacy_ltc_versions"] == "not supported"
+    assert "Material Models/Material Dictionary" in contract["blocks"]
+    assert "Coupling/Winding Dictionary" in contract["blocks"]
+    materials = contract["material_dictionary"]
+    assert materials["mesh_format"] == "Netgen .vol"
+    assert materials["runtime_bus"] == "RadiaMaterialBus"
+    assert materials["per_step_dictionary_lookup"] is False
+    assert materials["per_step_strings"] is False
+    coupling = contract["circuit_field_coupling"]
+    assert coupling["native_backend"].startswith("exact-ZOH")
+    assert coupling["detailed_circuit_backend"] == "LTspice interval coupling"
+    assert coupling["winding_bus"] == "RadiaWindingBus"
+    assert coupling["command_bus"] == "RadiaMachineCommandBus"
+    assert coupling["response_bus"] == "RadiaMachineResponseBus"
+    assert coupling["mechanical_owner"] == "Simulink or Simscape"
