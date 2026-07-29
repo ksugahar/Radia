@@ -3527,9 +3527,195 @@ def solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=None, order=3,
     return gfu
 
 
-def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
-                              dirichlet="axis|outer"):
-    """Axisymmetric A_phi magnetostatics via H1Henrotte FESpace (FEMM prob3big axi).
+def axisymmetric_ring_current_load_contract(mesh, ring_currents, tolerance=None):
+    """Map ideal azimuthal ring currents to exact meridional mesh vertices.
+
+    Each input row is ``(radius_m, axial_m, current_a)``.  In the axisymmetric
+    ``A_phi`` weak form used here, an ideal off-axis ring current contributes
+    ``I * r0 * v(r0, z0)`` after the common ``2*pi`` factor is cancelled.
+    Requiring an existing mesh vertex keeps this a genuine Dirac point load;
+    callers must embed the source point during mesh generation rather than
+    silently replacing it with a mesh-dependent Gaussian.  At ``r0=0`` the
+    same identity annihilates the load exactly; this is recorded explicitly.
+    """
+    rows = [tuple(float(value) for value in row) for row in (ring_currents or [])]
+    if not rows:
+        return []
+    vertices = [
+        (int(vertex.nr), float(vertex.point[0]), float(vertex.point[1]))
+        for vertex in mesh.vertices
+    ]
+    if not vertices:
+        raise ValueError("ring-current load requires a non-empty 2D mesh")
+    radial_span = max(value[1] for value in vertices) - min(value[1] for value in vertices)
+    axial_span = max(value[2] for value in vertices) - min(value[2] for value in vertices)
+    scale = max(radial_span, axial_span, 1.0)
+    limit = float(tolerance) if tolerance is not None else 1.0e-10 * scale
+    if not math.isfinite(limit) or limit <= 0.0:
+        raise ValueError("ring-current vertex tolerance must be finite and positive")
+
+    evidence = []
+    for radius, axial, current in rows:
+        if not all(math.isfinite(value) for value in (radius, axial, current)):
+            raise ValueError("ring-current coordinates and current must be finite")
+        if radius < 0.0:
+            raise ValueError("an axisymmetric point current requires radius_m >= 0")
+        nearest = min(
+            vertices,
+            key=lambda row: (row[1] - radius) ** 2 + (row[2] - axial) ** 2,
+        )
+        distance = math.hypot(nearest[1] - radius, nearest[2] - axial)
+        if distance > limit:
+            raise ValueError(
+                "ring-current source is not an embedded mesh vertex: "
+                f"distance={distance:.6e} m, tolerance={limit:.6e} m"
+            )
+        evidence.append(
+            {
+                "radius_m": radius,
+                "axial_m": axial,
+                "current_a": current,
+                "vertex_index": nearest[0],
+                "vertex_distance_m": distance,
+                "vertex_tolerance_m": limit,
+                "weak_load_amplitude_a_m": current * radius,
+                "axis_annihilated": radius == 0.0,
+            }
+        )
+    return evidence
+
+
+def add_axisymmetric_ring_current_loads(
+    fes, mesh, vector, ring_currents, *, angular_factor=1.0, tolerance=None
+):
+    """Add exact ideal-ring loads to an assembled H1Henrotte RHS vector."""
+    from ngsolve import NodeId, VERTEX
+
+    evidence = axisymmetric_ring_current_load_contract(
+        mesh, ring_currents, tolerance=tolerance
+    )
+    free = fes.FreeDofs()
+    for row in evidence:
+        if row["axis_annihilated"]:
+            continue
+        dofs = tuple(fes.GetDofNrs(NodeId(VERTEX, row["vertex_index"])))
+        active = [dof for dof in dofs if dof >= 0]
+        if len(active) != 1:
+            raise ValueError(
+                "ring-current vertex must own exactly one H1Henrotte vertex DOF"
+            )
+        dof = active[0]
+        if not free[dof]:
+            raise ValueError("ring-current vertex lies on a constrained DOF")
+        vector[dof] += float(angular_factor) * row["weak_load_amplitude_a_m"]
+    return evidence
+
+
+def axisymmetric_point_potential_constraint_contract(
+    fes, mesh, point_potentials, tolerance=None
+):
+    """Resolve prescribed ``A_phi`` values to exact mesh-vertex DOFs.
+
+    Each row is ``(radius_m, axial_m, a_phi_wb_per_m)``.  The point must be an
+    embedded vertex.  A nonzero value on the symmetry axis is rejected because
+    regular axisymmetric ``A_phi`` vanishes there.
+    """
+    from ngsolve import NodeId, VERTEX
+
+    rows = [tuple(float(value) for value in row) for row in (point_potentials or [])]
+    if not rows:
+        return []
+    vertices = [
+        (int(vertex.nr), float(vertex.point[0]), float(vertex.point[1]))
+        for vertex in mesh.vertices
+    ]
+    if not vertices:
+        raise ValueError("point-potential constraint requires a non-empty 2D mesh")
+    radial_span = max(row[1] for row in vertices) - min(row[1] for row in vertices)
+    axial_span = max(row[2] for row in vertices) - min(row[2] for row in vertices)
+    scale = max(radial_span, axial_span, 1.0)
+    limit = float(tolerance) if tolerance is not None else 1.0e-10 * scale
+    if not math.isfinite(limit) or limit <= 0.0:
+        raise ValueError("point-potential vertex tolerance must be finite and positive")
+
+    evidence = []
+    constrained_values = {}
+    for radius, axial, value in rows:
+        if not all(math.isfinite(item) for item in (radius, axial, value)):
+            raise ValueError("point-potential coordinates and value must be finite")
+        if radius < 0.0:
+            raise ValueError("an axisymmetric point potential requires radius_m >= 0")
+        if radius == 0.0 and value != 0.0:
+            raise ValueError("regular axisymmetric A_phi must vanish on the symmetry axis")
+        nearest = min(
+            vertices,
+            key=lambda row: (row[1] - radius) ** 2 + (row[2] - axial) ** 2,
+        )
+        distance = math.hypot(nearest[1] - radius, nearest[2] - axial)
+        if distance > limit:
+            raise ValueError(
+                "point-potential source is not an embedded mesh vertex: "
+                f"distance={distance:.6e} m, tolerance={limit:.6e} m"
+            )
+        dofs = tuple(fes.GetDofNrs(NodeId(VERTEX, nearest[0])))
+        active = [dof for dof in dofs if dof >= 0]
+        if len(active) != 1:
+            raise ValueError(
+                "point-potential vertex must own exactly one H1Henrotte vertex DOF"
+            )
+        dof = active[0]
+        previous = constrained_values.get(dof)
+        if previous is not None and previous != value:
+            raise ValueError("conflicting point-potential values share one vertex DOF")
+        constrained_values[dof] = value
+        evidence.append(
+            {
+                "radius_m": radius,
+                "axial_m": axial,
+                "a_phi_wb_per_m": value,
+                "vertex_index": nearest[0],
+                "dof_index": dof,
+                "vertex_distance_m": distance,
+                "vertex_tolerance_m": limit,
+            }
+        )
+    return evidence
+
+
+def _solve_with_axisymmetric_point_potentials(
+    fes, mesh, matrix, rhs, point_potentials, *, inverse
+):
+    """Solve a linear system after exact elimination of interior point values."""
+    from ngsolve import BitArray
+
+    evidence = axisymmetric_point_potential_constraint_contract(
+        fes, mesh, point_potentials
+    )
+    if not evidence:
+        return matrix.Inverse(fes.FreeDofs(), inverse=inverse) * rhs
+
+    free_default = fes.FreeDofs()
+    free = BitArray(fes.ndof)
+    for dof in range(fes.ndof):
+        free[dof] = bool(free_default[dof])
+    known = matrix.CreateColVector()
+    known.FV().NumPy()[:] = 0.0
+    for row in evidence:
+        known[row["dof_index"]] = row["a_phi_wb_per_m"]
+        free[row["dof_index"]] = False
+    adjusted = rhs.CreateVector()
+    adjusted.data = rhs - matrix * known
+    solution = known.CreateVector()
+    solution.data = known
+    solution.data += matrix.Inverse(free, inverse=inverse) * adjusted
+    return solution
+
+
+def solve_axi_magnetostatic(
+    mesh, nu, Jr=None, magnets=None, order=2, dirichlet="axis|outer",
+    ring_currents=None, point_potentials=None,
+):
+    """Axisymmetric A_phi magnetostatics via the H1Henrotte FESpace.
 
     Weak form in the meridional (r,z) plane (r = NGSolve x, dx = dr dz):
         K += nu*(1/r)*(r*dA/dr+A)*(r*dv/dr+v)*dx + nu*r*dA/dz*dv/dz*dx
@@ -3541,16 +3727,22 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
     nu        : reluctivity CF (NU0/mu_r per material).
     Jr        : phi-direction current density [A/m^2] CF or None.
     magnets   : {material: (Hc, theta_deg)} where theta is from the r-axis [deg].
-                theta=90 => axial (+z) magnetization (FEMM MagDir convention).
+                theta=90 => axial (+z) magnetization.
     order     : H1Henrotte order.  order>=2 (P2/Q2) uses the symbolic A=psi weak
                 form below.  order=1 (P1/Q1) is dispatched to the V-DOF custom-BFI
                 path (:func:`_solve_axi_magnetostatic_vdof_order1`): the {1,r^2,z}
                 A=psi reconstruction B_z=dA/dr+A/r cannot represent a uniform axial
                 B_z at order 1, but the V-DOF stiffness K_ij=2pi/mu r_i r_j INT
-                grad(psi_i).grad(psi_j)/r CAN (the flux-function / FEMM linear-
-                element formulation), so order 1 now converges (sphere O(h):
-                -1.8% -> -0.6%, FEMM-P1-like).  Default 2.
+                grad(psi_i).grad(psi_j)/r CAN (the linear flux-function
+                formulation), so order 1 recovers the expected O(h) sphere
+                convergence. Default 2.
     dirichlet : boundary tag for A_phi = 0 (must include the r=0 axis).
+    ring_currents : iterable of ``(radius_m, axial_m, current_a)`` ideal
+                azimuthal rings.  The source coordinate must be an embedded
+                mesh vertex; the exact weak load is ``I*r0*v(r0,z0)``.
+    point_potentials : iterable of ``(radius_m, axial_m, a_phi_wb_per_m)``
+                exact vertex constraints. Supported on the order>=2 linear
+                lane; nonzero values on the symmetry axis are invalid.
 
     Returns the H1Henrotte GridFunction ``gfu`` (A_phi at DOFs). Validated:
     magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 % at order 2
@@ -3558,7 +3750,13 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
     the average flux density is :func:`axi_vdof_magnet_bz_average`.
     """
     if order < 2:
-        return _solve_axi_magnetostatic_vdof_order1(mesh, nu, Jr, magnets, dirichlet)
+        if point_potentials:
+            raise NotImplementedError(
+                "point-potential constraints are not implemented for order-1 V-DOF"
+            )
+        return _solve_axi_magnetostatic_vdof_order1(
+            mesh, nu, Jr, magnets, ring_currents, dirichlet
+        )
     from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
     u, v = fes.TnT()
@@ -3577,17 +3775,27 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
             f += -reg * Hc * math.cos(th) * r * grad(v)[1] * dx
     a.Assemble()
     f.Assemble()
+    add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_currents)
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    gfu.vec.data = _solve_with_axisymmetric_point_potentials(
+        fes,
+        mesh,
+        a.mat,
+        f.vec,
+        point_potentials,
+        inverse="sparsecholesky",
+    )
     return gfu
 
 
-def _solve_axi_magnetostatic_vdof_order1(mesh, nu, Jr, magnets, dirichlet):
+def _solve_axi_magnetostatic_vdof_order1(
+    mesh, nu, Jr, magnets, ring_currents, dirichlet
+):
     """Order-1 (P1/Q1) axisymmetric magnetostatics via the V-DOF custom-BFI path.
 
     The order-1 {1,r^2,z} A=psi reconstruction B_z=dA/dr+A/r cannot represent a
     uniform axial B_z, but the V-DOF stiffness  K_ij = 2pi/mu r_i r_j INT
-    grad(psi_i).grad(psi_j)/r  (the flux-function / FEMM linear-element form, =
+    grad(psi_i).grad(psi_j)/r  (the linear flux-function form, =
     AxiHenrotteStiffnessBFI on the V-DOF P1/Q1 elements) CAN.  The magnet source is
     built GRAD-FREE as  f = K_magnet . V_M, where V_M is the magnetization
     potential nodal vector (curl A_M = Hc M_hat); choosing mu=1 inside the magnet
@@ -3624,6 +3832,9 @@ def _solve_axi_magnetostatic_vdof_order1(mesh, nu, Jr, magnets, dirichlet):
             VM.vec.FV().NumPy()[:] = Hc * (math.sin(th) * r_node / 2.0 - math.cos(th) * z_node)
             tmp.data = aKm.mat * VM.vec
             fvec.data += tmp
+    add_axisymmetric_ring_current_loads(
+        fes, mesh, fvec, ring_currents, angular_factor=2.0 * math.pi
+    )
 
     free = fes.FreeDofs()
     freeb = BitArray(nv)
@@ -3662,7 +3873,7 @@ def axi_vdof_magnet_bz_average(mesh, nu, magnets, gfu):
 
 def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=None,
                     applied_Vc=None, Jr=None, order=3, dirichlet="axis|outer"):
-    """Axisymmetric time-harmonic eddy currents via H1Henrotte (FEMM prob2big axi).
+    """Axisymmetric time-harmonic eddy currents via H1Henrotte.
 
     Solves (K + j*w*M) A_phi = f where K is the H1Henrotte stiffness and
     M = sigma*r (r-weighted sigma-mass for the 3D volume element 2*pi*r dr dz).
@@ -3728,9 +3939,20 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     return gfu
 
 
-def solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=None, order=2,
-                                        dirichlet="axis|outer", relax=0.5,
-                                        max_iter=80, tol=1e-5, min_iter=3):
+def solve_axi_magnetostatic_nonlinear(
+    mesh,
+    nu_of_B,
+    Jr=None,
+    magnets=None,
+    order=2,
+    dirichlet="axis|outer",
+    relax=0.5,
+    max_iter=80,
+    tol=1e-5,
+    min_iter=3,
+    ring_currents=None,
+    point_potentials=None,
+):
     """Axisymmetric A_phi magnetostatics with SATURATING B-H via Picard.
 
     Same iteration as ``solve_planar_magnetostatic_nonlinear`` but for the
@@ -3738,6 +3960,16 @@ def solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=None, order=2,
 
     ``nu_of_B`` : callable(B_cf) -> nu_cf where
         B_cf = CF((grad(u)[0]+u/r, -grad(u)[1]))  is the current (Bz, Br) field.
+    ``magnets`` : optional ``{material: (Hc, theta_deg)}``, using the same
+        axisymmetric magnetization load and angle convention as
+        :func:`solve_axi_magnetostatic`.  Keeping this load inside every Picard
+        step is required for nonlinear permanent-magnet/iron models.
+    ``ring_currents`` : optional ideal azimuthal rings
+        ``(radius_m, axial_m, current_a)``.  Their exact vertex-Dirac load is
+        re-applied at every Picard step.
+    ``point_potentials`` : optional exact vertex ``A_phi`` constraints.  The
+        elimination is repeated for each Picard matrix and the relaxed iterate
+        is projected back to the prescribed values.
 
     Example Froehlich/Kennelly curve (no gradient-recovery issue in axi since we
     sample away from the axis)::
@@ -3755,6 +3987,11 @@ def solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=None, order=2,
     r = x
     gfu = GridFunction(fes)
     gfu.vec[:] = 0.0
+    potential_evidence = axisymmetric_point_potential_constraint_contract(
+        fes, mesh, point_potentials
+    )
+    for row in potential_evidence:
+        gfu.vec[row["dof_index"]] = row["a_phi_wb_per_m"]
     prev = None
     for it in range(max_iter):
         B = CoefficientFunction((grad(gfu)[0] + gfu / r, -grad(gfu)[1]))
@@ -3765,11 +4002,27 @@ def solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=None, order=2,
         f = LinearForm(fes)
         if Jr is not None:
             f += Jr * r * v * dx
+        if magnets is not None:
+            for mat, (Hc, theta_deg) in magnets.items():
+                th = math.radians(theta_deg)
+                reg = mesh.MaterialCF({mat: 1.0}, default=0.0)
+                f += reg * Hc * math.sin(th) * (r * grad(v)[0] + v) * dx
+                f += -reg * Hc * math.cos(th) * r * grad(v)[1] * dx
         a.Assemble()
         f.Assemble()
+        add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_currents)
         gnew = GridFunction(fes)
-        gnew.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        gnew.vec.data = _solve_with_axisymmetric_point_potentials(
+            fes,
+            mesh,
+            a.mat,
+            f.vec,
+            point_potentials,
+            inverse="sparsecholesky",
+        )
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
+        for row in potential_evidence:
+            gfu.vec[row["dof_index"]] = row["a_phi_wb_per_m"]
         B_cur = CoefficientFunction((grad(gfu)[0] + gfu / r, -grad(gfu)[1]))
         cur = Integrate(InnerProduct(B_cur, B_cur) * dx, mesh)
         if prev is not None and it + 1 >= min_iter and abs(cur - prev) < tol * max(abs(cur), 1e-30):
