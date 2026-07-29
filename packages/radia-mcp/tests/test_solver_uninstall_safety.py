@@ -12,7 +12,7 @@ from radia_mcp.fem.uninstall_safety import (
 def _evidence() -> dict:
     digest = "a" * 64
     payload = {
-        "schema": "radia.solver-uninstall-safety-evidence.v1",
+        "schema": "radia.solver-uninstall-safety-evidence.v2",
         "executed_at_utc": "2026-07-29T00:00:00Z",
         "execution_version": {
             "producer": "test",
@@ -62,6 +62,17 @@ def _evidence() -> dict:
             "mismatch_detected": True,
             "mismatch_plan_complete": True,
         },
+        "replacement_evidence_bundle": {
+            "schema": "radia.validation-evidence-bundle.v1",
+            "status": "complete",
+            "contract_valid": True,
+            "retirement_ready": True,
+            "solver_uninstall_performed": False,
+            "required_capabilities": ["planar_dc", "axisymmetric_dc"],
+            "accepted_capabilities": ["axisymmetric_dc", "planar_dc"],
+            "missing_capabilities": [],
+            "evidence_bundle_sha256": "d" * 64,
+        },
         "solver_uninstall_performed": False,
     }
     payload["evidence_payload_sha256"] = _sha(payload)
@@ -75,6 +86,7 @@ def test_accepts_complete_reversible_uninstall_evidence() -> None:
     assert result["solver_uninstall_performed"] is False
     assert result["retirement_capabilities"] == [
         "archive_snapshot",
+        "replacement_capability_bundle",
         "live_dependency_scan_clean",
         "rollback_installer_preserved",
     ]
@@ -122,3 +134,22 @@ def test_rejects_claim_that_uninstall_already_ran() -> None:
     result = validate_solver_uninstall_safety_evidence(payload)
     assert result["checks"]["uninstall_not_performed"] is False
     assert result["solver_uninstall_performed"] is False
+
+
+def test_rejects_archive_only_evidence_without_complete_replacement_bundle() -> None:
+    payload = _evidence()
+    payload["replacement_evidence_bundle"]["status"] = "incomplete"
+    payload["replacement_evidence_bundle"]["retirement_ready"] = False
+    payload["replacement_evidence_bundle"]["accepted_capabilities"] = [
+        "planar_dc"
+    ]
+    payload["replacement_evidence_bundle"]["missing_capabilities"] = [
+        "axisymmetric_dc"
+    ]
+    payload["evidence_payload_sha256"] = _sha(payload)
+
+    result = validate_solver_uninstall_safety_evidence(payload)
+
+    assert result["status"] == "rejected"
+    assert result["ready_for_explicit_uninstall_approval"] is False
+    assert result["checks"]["replacement_capabilities_complete"] is False

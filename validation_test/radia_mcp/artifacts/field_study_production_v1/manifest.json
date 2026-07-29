@@ -1,48 +1,48 @@
 {
   "all_passed": true,
-  "created_at_utc": "2026-07-29T16:00:15.887973+00:00",
+  "created_at_utc": "2026-07-31T05:39:56.203729+00:00",
   "element_families": [
     {
       "artifact": "p1.json",
-      "duration_s": 0.8884427999728359,
+      "duration_s": 0.8820589000242762,
       "element_family": "P1",
       "pass": true,
-      "sha256": "5600fb402bddcb262caa3b58d5c0645e1066e24d1ea295b7dae6a8723a7872fd"
+      "sha256": "391e4ad4f4104045135b7a23cf54ed10f40b1d2f4921603f6346cd15d5f6b6cd"
     },
     {
       "artifact": "q1.json",
-      "duration_s": 0.07645630004117265,
+      "duration_s": 0.05341200000839308,
       "element_family": "Q1",
       "pass": true,
-      "sha256": "dde4eaa9ba609f0fd4aee85aa4774953944f0b13b79c5c61f0c94997bce92e93"
+      "sha256": "c92e2e4376dd7e84a72e971dd99618e8e0d9e891c8c93c60ddfcda8de1b02cf5"
     },
     {
       "artifact": "p2.json",
-      "duration_s": 9.921047100040596,
+      "duration_s": 9.705839400005061,
       "element_family": "P2",
       "pass": true,
-      "sha256": "766c54bbde09af8bc7099ebe701f5aa68042cff3de01848f660bc797461ae050"
+      "sha256": "356e9cf6df901f36fc08fc00a6775b1c1fc2965c29ac82743a93ed16d3de7a7c"
     },
     {
       "artifact": "q2.json",
-      "duration_s": 0.12437720003072172,
+      "duration_s": 0.1525757000199519,
       "element_family": "Q2",
       "pass": true,
-      "sha256": "017c45e8235118172cf1e088f0af2b9b6c2d57b9844ec7371a3b5124bffd82a6"
+      "sha256": "b0065e4282ac7f5f95a8fd45a99cfc9541271269f09b787a18b8fe4dc29ff260"
     },
     {
       "artifact": "p2_curved.json",
-      "duration_s": 0.6930316999787465,
+      "duration_s": 0.7138928999775089,
       "element_family": "P2_curved",
       "pass": true,
-      "sha256": "000865489a2e5e5fd8c822e63000147e1a9a0fac5fb085f727cf0b82ad6d10dd"
+      "sha256": "64e158c45637a35a283a0c04125c94d1e31752b760aded5e022821288c536a96"
     },
     {
       "artifact": "q2_curved.json",
-      "duration_s": 2.234712600009516,
+      "duration_s": 2.5525723999598995,
       "element_family": "Q2_curved",
       "pass": true,
-      "sha256": "4482a8d39e6677a4f06c4cc0c7f349a871538e192e076e8ece479aa9fb5a3bce"
+      "sha256": "a40d427468ff88d0d9133d14ae429b9a499c72553657a5384e3c808ba20eb480"
     }
   ],
   "execution_version": {
@@ -51,6 +51,29 @@
     "radia_mcp": "1.4.23"
   },
   "generator": "validation_test/radia_mcp/generate_field_study_production_artifacts.py",
-  "generator_sha256": "517269021637282f69df47fb29bb310f65c1830f5cfab35e3be6f4fccf5e586e",
+  "generator_sha256": "7b67cf97b0decf695ce413ab7a8e1d28d68dd40a6017ee5ac0bcb9587c45ac08",
+  "physics_cases": [
+    {
+      "artifact": "steady_heat.json",
+      "duration_s": 0.049613600014708936,
+      "pass": true,
+      "physics_case": "steady_heat",
+      "sha256": "1c8e2ab1cf07ef6cfd493534757873be40a2cfab68261bf2f02b5531b705b92b"
+    },
+    {
+      "artifact": "current_flow_dc.json",
+      "duration_s": 0.04912450001575053,
+      "pass": true,
+      "physics_case": "current_flow_dc",
+      "sha256": "7f7ff71178c6aad3168a9608537ad1553cfc8c0f475cd3fea7676a4a90a75ed1"
+    },
+    {
+      "artifact": "current_flow_ac.json",
+      "duration_s": 0.05544029996963218,
+      "pass": true,
+      "physics_case": "current_flow_ac",
+      "sha256": "132f97dd33d6e727198bb7acd22c848d99a77ebe37d31cd9a926afe2bffba19d"
+    }
+  ],
   "schema": "radia.field-study-production-manifest.v1"
 }

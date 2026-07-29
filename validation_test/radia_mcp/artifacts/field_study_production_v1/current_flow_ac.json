@@ -1,0 +1,78 @@
+{
+  "case": "Field Study current_flow_ac frozen production artifact",
+  "checks": {
+    "analytic_terminal_admittance": true,
+    "ran_to_completion": true,
+    "replay_gate_accepted": true,
+    "result_files_exist": true,
+    "terminal_reaction_closure": true,
+    "validation_passed": true
+  },
+  "created_at_utc": "2026-07-31T05:39:56.194750+00:00",
+  "errors": {
+    "max_abs": 3.7747582837255496e-15,
+    "max_rel": 3.774758283725548e-15
+  },
+  "pass": true,
+  "production_contract": {
+    "element_family": "P1",
+    "generated_vol_git_required": false,
+    "mesh_contract_sha256": "5cc16057425cac1dc1ac72dc16ddd4a2458a05e9b71686899df0d8cf2e55266c",
+    "physics_case": "current_flow_ac"
+  },
+  "result_files": [
+    "validation_test/radia_mcp/artifacts/field_study_production_v1/current_flow_ac.json",
+    "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
+  ],
+  "result_summary": {
+    "admittance_s": [
+      0.9999999999999962,
+      3.337950166343575e-08
+    ],
+    "complex_power_va_rms": [
+      99.99999999999963,
+      -3.337950166343575e-06
+    ],
+    "expected_admittance_s": [
+      1.0,
+      3.337950166343611e-08
+    ],
+    "field_state_sha256": "7257e356be997b554b1982872a88e350f6da459ccbe8bc0d34584009ecb54709",
+    "frequency_hz": 1000.0,
+    "observables_sha256": "ad6082916f2e85b522dd081c01f2bf0d1c2f3ed8f3e96aad2c56c858105a6eb8",
+    "operation": "current_flow_ac",
+    "operator_sha256": "5662db0dc1ebf1e3c2871f95a7df83ac5921b88ef897ec3c798b63d810fee2c0",
+    "request_contract_sha256": "aa9ccb69d27e76f840a5d503b3f0896ff832c346c7d31649430127d330534af6",
+    "terminal_reaction_closure_a": [
+      -4.796163466380676e-14,
+      -5.4527745979495584e-21
+    ]
+  },
+  "run": {
+    "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
+    "duration_s": 0.03350389999104664,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-run.v1",
+  "solver": "radia-ngsolve",
+  "timing_breakdown_s": {
+    "export": 0.022596599999815226,
+    "factorize_and_solve": 0.0043901000171899796,
+    "observables": 0.0006827999604865909,
+    "prepare_and_assemble": 0.005834400013554841
+  },
+  "tolerances": {
+    "max_abs": 1e-09,
+    "max_rel": 1e-09
+  },
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "radia_mcp": "1.4.23"
+  },
+  "verification": {
+    "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",
+    "method": "closed-form solution plus conservation and replay-identity gates"
+  }
+}
