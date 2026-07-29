@@ -1734,16 +1734,20 @@ def _check_solid_extent_plausible(solid, cad_units_per_meter, source_tag):
                   float(bb.max.Y - bb.min.Y),
                   float(bb.max.Z - bb.min.Z))
     ext_m = ext_cad / cad_units_per_meter
-    if 5e-4 <= ext_m <= 5.0:
+    # Plausible coil size window.  The MAIN mistake this guards is
+    # mm-read-as-metres, which inflates the coil ~1000x (upper bound).
+    # The lower bound stays very permissive (10 um) so genuinely small
+    # synthetic/test coils are not rejected.
+    if 1e-5 <= ext_m <= 5.0:
         return  # plausible coil size -- pass
     suggest = None
     for cand in (1.0, 1e3, 1e-3, 1e2, 1e6):
-        if 5e-4 <= ext_cad / cand <= 5.0:
+        if 1e-5 <= ext_cad / cand <= 5.0:
             suggest = cand
             break
     raise ValueError(
         f"{source_tag}: implied coil extent {ext_m:.3g} m is implausible "
-        f"(expected 0.5 mm .. 5 m).  The STEP bbox spans {ext_cad:.3g} "
+        f"(expected 0.01 mm .. 5 m).  The STEP bbox spans {ext_cad:.3g} "
         f"CAD units and cad_units_per_meter={cad_units_per_meter:g}.  "
         f"This is almost certainly a UNIT mismatch: a millimetre STEP "
         f"read as metres yields a 1000x-too-large coil and a ~1000x-wrong "
@@ -3019,14 +3023,14 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
     if start_hint is None:
         start_hint = _start_hint_from_step_labels(step_path)
     if start_hint is None:
-        from radia.coil_from_step import load_step_solid
+        # Orientation-agnostic seed (v4.95.x): the legacy z-axis-torus
+        # heuristic (start +x, tangent +y) forced a z-axis assumption and
+        # broke on x/y-axis coils.  ``_axis_agnostic_seed`` probes the wire
+        # tangent by minimum cross-section area, so any coil orientation
+        # (and open OR closed loops) seeds correctly.
+        from radia.coil_from_step import load_step_solid, _axis_agnostic_seed
         solid = load_step_solid(step_path)
-        bb = solid.bounding_box
-        cx = 0.5 * (bb[0][0] + bb[1][0])
-        cy = 0.5 * (bb[0][1] + bb[1][1])
-        rx = 0.5 * (bb[1][0] - bb[0][0])
-        start_hint = (np.array([cx + rx * 0.5, cy, 0.5 * (bb[0][2] + bb[1][2])]),
-                      np.array([0, 1, 0]))
+        start_hint = _axis_agnostic_seed(solid)
 
     res = extract_centerline(step_path, start_hint=start_hint, verbose=False)
 
