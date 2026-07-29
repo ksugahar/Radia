@@ -558,7 +558,7 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      targets=(), *, chi_iron, volume_fraction,
                      density_filter=None, initial_density=None, penalty=1.0,
                      move_limit=0.1, max_iterations=30,
-                     band_relative=5e-3, band_floor=None, restore_shrink=0.1,
+                     band_relative=5e-3, band_floor=None,
                      move_min=1e-3, objective_slack=1e-6,
                      tol=1e-10, cg_maxiter=5000, callback=None):
     """MAXIMIZE ``J = objective_load^T m`` under linear-functional equality
@@ -574,15 +574,23 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     rows in its ``A_ub`` slot, normalized to O(1) -- Tesla-scale rows sit
     below HiGHS's absolute feasibility tolerance and read as noise).
 
-    Trust-region acceptance makes the ascent MONOTONE and the violations
-    BOUNDED: a trial is accepted only if J does not decrease (beyond
-    ``objective_slack`` relative) and every violation is either under the
-    absolute cap ``1.25 * band`` or in strict geometric decrease (outside
-    the band); rejected trials halve the move limit against the SAME
-    linearization.  When a constraint is active at the optimum the design
-    rides its band edge; measured behavior on the verification cases
-    (2026-07-28): strictly monotone J (+1.3 % ball / +19 % sector surrogate),
-    violations peaking at 1.24 x band and riding at ~1.05 x band.
+    Two-phase trust-region SLP.  While every violation is inside its band,
+    the LP maximizes J and acceptance keeps the ascent MONOTONE and the
+    violations BOUNDED: a trial is accepted only if J does not decrease
+    (beyond ``objective_slack`` relative) and every violation is either
+    under the absolute cap ``1.25 * band`` or in strict geometric decrease.
+    While any violation sits OUTSIDE its band (e.g. an infeasible profile
+    start), the loop switches to RESTORATION: the LP objective becomes the
+    steepest combined violation descent (J free), the rows hold the
+    non-worsening guard ``max(band, |viol|)`` (always feasible at the
+    current point -- the LP can never be infeasible), and acceptance
+    requires the band-weighted total violation to decrease (individual
+    violations may not blow up while others improve).  Rejected trials
+    halve the move limit against the SAME linearization.  When a constraint
+    is active at the optimum the design rides its band edge; measured
+    behavior on the verification cases (2026-07-28): strictly monotone J
+    (+1.3 % ball / +19 % sector surrogate), violations peaking at 1.24 x
+    band and riding at ~1.05 x band.
 
     ``callback(entry)`` receives each accepted history dict.  The caller
     wraps the whole call in ``with TaskManager():``.  Informal per-iterate
@@ -598,8 +606,6 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                          % (len(constraint_loads), targets.size))
     if not 0.0 < volume_fraction <= 1.0:
         raise ValueError("optimize_density: volume_fraction must be in (0, 1]")
-    if not 0.0 < restore_shrink < 1.0:
-        raise ValueError("optimize_density: restore_shrink must be in (0, 1)")
     volumes = problem.element_volumes
     volume_max = float(volume_fraction * volumes.sum())
     if initial_density is None:
@@ -655,10 +661,21 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         t_iter = time.perf_counter()
         J = float(lin.values[0])
         viol = lin.values[1:] - targets
-        gJ_lp = -gJ / max(np.abs(gJ).max(), 1e-300)
+        # Three-tier SLP.  DEEP RESTORATION (any violation beyond the 1.25*
+        # band acceptance cap, e.g. an infeasible profile start): the LP
+        # OBJECTIVE becomes the steepest combined violation descent and J is
+        # free -- putting the shrink demand in the constraint ROWS instead
+        # goes infeasible once the move box shrinks and dead-ends (measured:
+        # zero accepted iterates on an isochronous-profile start).  Inside
+        # the cap, the LP maximizes J with the tested band rows: violations
+        # in the (band, 1.25 band] transition zone get a geometric pull-back
+        # row (fall back to a non-worsening hold row when that is
+        # unreachable in the move box), and acceptance keeps J MONOTONE.
+        deep = bool(targets.size) and bool(np.any(np.abs(viol)
+                                                  > 1.25 * band))
 
         def lp_rows(bands_eff):
-            # normalized to O(1) for HiGHS's absolute tolerances
+            # rows normalized to O(1) for HiGHS's absolute tolerances
             A_ub, b_ub = [], []
             for G, v, b in zip(gks, viol, bands_eff):
                 scale = 1.0 / max(np.abs(G).max(), 1e-300)
@@ -671,39 +688,67 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 return None, None
             return np.array(A_ub), np.array(b_ub)
 
+        if deep:
+            direction = np.zeros_like(gJ)
+            for G, v, b in zip(gks, viol, band):
+                if abs(v) > 1.25 * b:
+                    direction += (np.sign(v) / max(np.abs(G).max(), 1e-300)) * G
+            lp_objective = direction / max(np.abs(direction).max(), 1e-300)
+        else:
+            lp_objective = -gJ / max(np.abs(gJ).max(), 1e-300)
+
         accepted = False
         trials = 0
-        band_mode = "band"
+        band_mode = "deep" if deep else "band"
         while move >= move_min:
             trials += 1
-            # absolute band; RESTORE (geometric shrink back) when a violation
-            # sits outside it; HOLD (non-worsening, feasible at x = rho by
-            # construction) when restoration is unreachable in this move box.
-            bands_eff = np.where(
-                np.abs(viol) > band,
-                np.maximum(band, (1.0 - restore_shrink) * np.abs(viol)), band)
-            band_mode = ("band" if not targets.size
-                         or np.all(np.abs(viol) <= band) else "restore")
-            A_ub, b_ub = lp_rows(bands_eff)
-            try:
-                update = solve_lp_update(rho, gJ_lp, volumes, volume_max,
-                                         move_limit=move, A_ub=A_ub, b_ub=b_ub)
-            except RuntimeError:
-                bands_eff = np.maximum(band, np.abs(viol))
-                band_mode = "hold"
+            if deep:
+                bands_eff = np.maximum(band, np.abs(viol))  # always feasible
                 A_ub, b_ub = lp_rows(bands_eff)
-                update = solve_lp_update(rho, gJ_lp, volumes, volume_max,
-                                         move_limit=move, A_ub=A_ub, b_ub=b_ub)
+                update = solve_lp_update(rho, lp_objective, volumes,
+                                         volume_max, move_limit=move,
+                                         A_ub=A_ub, b_ub=b_ub)
+            else:
+                bands_eff = np.where(np.abs(viol) > band,
+                                     np.maximum(band, 0.9 * np.abs(viol)),
+                                     band)
+                band_mode = ("band" if not targets.size
+                             or np.all(np.abs(viol) <= band) else "restore")
+                A_ub, b_ub = lp_rows(bands_eff)
+                try:
+                    update = solve_lp_update(rho, lp_objective, volumes,
+                                             volume_max, move_limit=move,
+                                             A_ub=A_ub, b_ub=b_ub)
+                except RuntimeError:
+                    bands_eff = np.maximum(band, np.abs(viol))
+                    band_mode = "hold"
+                    A_ub, b_ub = lp_rows(bands_eff)
+                    update = solve_lp_update(rho, lp_objective, volumes,
+                                             volume_max, move_limit=move,
+                                             A_ub=A_ub, b_ub=b_ub)
             lin_new, gJ_new, gks_new = evaluate(update.density, warm=lin)
             n_solves += 1
             J_new = float(lin_new.values[0])
             viol_new = np.abs(lin_new.values[1:] - targets)
-            ok_J = J_new >= J - objective_slack * abs(J)
-            # absolute cap 1.25*band at all times OR strict geometric decrease
-            # while outside the band -- no ratchet path exists.
-            ok_g = np.all((viol_new <= 1.25 * band)
-                          | (viol_new <= 0.97 * np.abs(viol)))
-            if ok_J and ok_g:
+            if deep:
+                # accept on feasibility progress: the band-weighted total
+                # violation decreases, or full cap entry; individual
+                # violations must not blow up while others improve.
+                total = float(np.sum(np.abs(viol) / band))
+                total_new = float(np.sum(viol_new / band))
+                ok = ((total_new < 0.995 * total
+                       or bool(np.all(viol_new <= 1.25 * band)))
+                      and bool(np.all(viol_new
+                                      <= np.maximum(1.25 * band,
+                                                    1.05 * np.abs(viol)))))
+            else:
+                ok_J = J_new >= J - objective_slack * abs(J)
+                # absolute cap 1.25*band at all times OR strict geometric
+                # decrease while outside -- no ratchet path exists.
+                ok_g = np.all((viol_new <= 1.25 * band)
+                              | (viol_new <= 0.97 * np.abs(viol)))
+                ok = ok_J and bool(ok_g)
+            if ok:
                 accepted = True
                 break
             move *= 0.5
