@@ -83,7 +83,7 @@ def test_keiko_outsideline_centerline_covers_lead():
         f"recovered wire radius {r_equiv*1e3:.2f} mm out of band [2.5, 3.5] mm")
 
 
-def test_keiko_outsideline_succeeds_with_adaptive_resampling():
+def test_keiko_outsideline_succeeds_with_adaptive_resampling(monkeypatch):
     """v4.53.0: adaptive resampling in `_centerline_from_open_spine`
     chooses n_segments such that segment_length >= 1.10 * wire_radius,
     which prevents the singular-corner check from firing on the
@@ -101,6 +101,9 @@ def test_keiko_outsideline_succeeds_with_adaptive_resampling():
     import numpy as np
 
     assert os.path.exists(KEIKO_STEP), KEIKO_STEP
+    # Exercise the current extractor.  Historical format-1 caches predate
+    # the default-walker unit boundary and are intentionally rejected.
+    monkeypatch.setenv("RADIA_PEEC_CACHE_DISABLE", "1")
     topo = filaments_from_step(KEIKO_STEP, sigma=5.8e7, n_peri=16)
     L = np.asarray(topo["solver"].L)
     assert np.isfinite(L).all(), (
