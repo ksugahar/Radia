@@ -56,6 +56,11 @@ from ..radia_ngsolve.vol2d_transient_runtime import execute_transient_runtime
 from ..radia_ngsolve.validation_evidence import validate_evidence_bundle
 from .uninstall_safety import validate_solver_uninstall_safety_evidence
 from .axifem_retirement import validate_axifem_element_evidence
+from .legacy_corpus_absorption import validate_legacy_corpus_evidence
+from .legacy_signature_migration import (
+    validate_legacy_signature_migration_evidence,
+)
+from .axifem_signature_execution import validate_axifem_signature_execution
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -125,6 +130,81 @@ def fem_solver_uninstall_safety_gate(evidence_json: str) -> str:
             "pass": False,
             "ready_for_explicit_uninstall_approval": False,
             "solver_uninstall_performed": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+def fem_legacy_corpus_absorption_gate(evidence_json: str) -> str:
+    """Gate solver-neutral model, automation, document, and topic coverage."""
+
+    try:
+        evidence = json.loads(evidence_json)
+        result = validate_legacy_corpus_evidence(evidence)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.legacy-solver-corpus-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "live_dependency_required": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+def fem_legacy_signature_migration_gate(evidence_json: str) -> str:
+    """Gate solver-neutral signature routing and false-ready rejection evidence."""
+
+    try:
+        evidence = json.loads(evidence_json)
+        result = validate_legacy_signature_migration_evidence(evidence)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.legacy-signature-migration-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "live_dependency_required": False,
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+def fem_axifem_signature_execution_gate(evidence_json: str) -> str:
+    """Gate axisymmetric Henrotte executions separately from retirement readiness."""
+
+    try:
+        evidence = json.loads(evidence_json)
+        result = validate_axifem_signature_execution(evidence)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "schema": "radia.axifem-signature-execution-gate.v1",
+            "status": "invalid_input",
+            "pass": False,
+            "retirement_ready": False,
             "error": str(exc),
         }
     return json.dumps(result, indent=2, sort_keys=True)
