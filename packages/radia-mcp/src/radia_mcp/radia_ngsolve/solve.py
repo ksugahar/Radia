@@ -19,7 +19,7 @@ from .air_gap import (
 from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      LinearForm, GridFunction, CoefficientFunction, InnerProduct,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
-                     x, y, sqrt, BND)
+                     x, y, sqrt, ds, BND)
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
@@ -3683,9 +3683,20 @@ def axisymmetric_point_potential_constraint_contract(
 
 
 def _solve_with_axisymmetric_point_potentials(
-    fes, mesh, matrix, rhs, point_potentials, *, inverse
+    fes, mesh, matrix, rhs, point_potentials, *, inverse, dof_constraints=None
 ):
-    """Solve a linear system after exact elimination of interior point values."""
+    """Solve after eliminating prescribed values and signed DOF identifications."""
+    if dof_constraints:
+        solution, _ = _solve_axisymmetric_reduced_system(
+            fes,
+            mesh,
+            matrix,
+            rhs,
+            point_potentials,
+            dof_constraints,
+        )
+        return solution
+
     from ngsolve import BitArray
 
     evidence = axisymmetric_point_potential_constraint_contract(
@@ -3711,9 +3722,250 @@ def _solve_with_axisymmetric_point_potentials(
     return solution
 
 
+def _axisymmetric_reduction(
+    fes, mesh, point_potentials=None, dof_constraints=None, *, consistency_tolerance=1e-10
+):
+    """Build ``x = known + P*y`` for point values and signed identifications."""
+    import numpy as np
+    from scipy import sparse
+
+    ndof = int(fes.ndof)
+    rows = []
+    adjacency = {}
+    self_zero = set()
+    for raw in dof_constraints or []:
+        if len(raw) != 3:
+            raise ValueError("each DOF constraint must be (master, slave, phase)")
+        master, slave = int(raw[0]), int(raw[1])
+        phase = float(raw[2])
+        if not (0 <= master < ndof and 0 <= slave < ndof):
+            raise ValueError("DOF constraint index is outside the finite-element space")
+        if master == slave:
+            if abs(phase - 1.0) > consistency_tolerance:
+                rows.append((master, slave, phase))
+                self_zero.add(master)
+            continue
+        if not math.isfinite(phase) or abs(phase) <= consistency_tolerance:
+            raise ValueError("DOF constraint phase must be finite and nonzero")
+        rows.append((master, slave, phase))
+        adjacency.setdefault(master, []).append((slave, phase))
+        adjacency.setdefault(slave, []).append((master, 1.0 / phase))
+
+    point_evidence = axisymmetric_point_potential_constraint_contract(
+        fes, mesh, point_potentials
+    )
+    prescribed = {row["dof_index"]: row["a_phi_wb_per_m"] for row in point_evidence}
+    free = fes.FreeDofs()
+    known = np.zeros(ndof, dtype=float)
+    is_known = np.array([not bool(free[i]) for i in range(ndof)], dtype=bool)
+    for dof, value in prescribed.items():
+        if is_known[dof] and abs(value) > consistency_tolerance:
+            raise ValueError("a nonzero point value conflicts with an essential boundary")
+        known[dof] = value
+        is_known[dof] = True
+    for dof in self_zero:
+        if is_known[dof] and abs(known[dof]) > consistency_tolerance:
+            raise ValueError("a signed self-identification requires a zero value")
+        known[dof] = 0.0
+        is_known[dof] = True
+
+    component = {}
+    coefficient = {}
+    components = []
+    for seed in adjacency:
+        if seed in component:
+            continue
+        index = len(components)
+        component[seed] = index
+        coefficient[seed] = 1.0
+        stack = [seed]
+        members = []
+        while stack:
+            current = stack.pop()
+            members.append(current)
+            for neighbor, ratio in adjacency[current]:
+                expected = coefficient[current] * ratio
+                if neighbor in component:
+                    if component[neighbor] != index or abs(
+                        coefficient[neighbor] - expected
+                    ) > consistency_tolerance * max(1.0, abs(expected)):
+                        raise ValueError("inconsistent signed DOF-identification cycle")
+                    continue
+                component[neighbor] = index
+                coefficient[neighbor] = expected
+                stack.append(neighbor)
+        components.append(members)
+
+    reduced_rows = []
+    reduced_cols = []
+    reduced_data = []
+    column = 0
+    covered = set()
+    for members in components:
+        covered.update(members)
+        root_values = [
+            known[dof] / coefficient[dof] for dof in members if is_known[dof]
+        ]
+        if root_values:
+            root_value = root_values[0]
+            if any(
+                abs(value - root_value)
+                > consistency_tolerance * max(1.0, abs(root_value))
+                for value in root_values[1:]
+            ):
+                raise ValueError("identified DOFs carry conflicting prescribed values")
+            for dof in members:
+                known[dof] = coefficient[dof] * root_value
+                is_known[dof] = True
+        else:
+            for dof in members:
+                reduced_rows.append(dof)
+                reduced_cols.append(column)
+                reduced_data.append(coefficient[dof])
+            column += 1
+
+    for dof in range(ndof):
+        if dof not in covered and not is_known[dof]:
+            reduced_rows.append(dof)
+            reduced_cols.append(column)
+            reduced_data.append(1.0)
+            column += 1
+    prolongation = sparse.csr_matrix(
+        (reduced_data, (reduced_rows, reduced_cols)), shape=(ndof, column)
+    )
+    return {
+        "known": known,
+        "prolongation": prolongation,
+        "constraints": rows,
+        "point_evidence": point_evidence,
+        "component_count": len(components),
+    }
+
+
+def _solve_axisymmetric_reduced_system(
+    fes, mesh, matrix, rhs, point_potentials=None, dof_constraints=None
+):
+    """Solve an H1Henrotte system through a sparse signed prolongation."""
+    import numpy as np
+    from scipy import sparse
+    from scipy.sparse.linalg import spsolve
+
+    reduction = _axisymmetric_reduction(
+        fes, mesh, point_potentials, dof_constraints
+    )
+    matrix_rows, matrix_cols, matrix_values = matrix.COO()
+    assembled = sparse.csr_matrix(
+        (
+            np.asarray(matrix_values, dtype=float),
+            (np.asarray(matrix_rows), np.asarray(matrix_cols)),
+        ),
+        shape=(fes.ndof, fes.ndof),
+    )
+    load = np.asarray(rhs.FV().NumPy(), dtype=float).copy()
+    prolongation = reduction["prolongation"]
+    adjusted = load - assembled @ reduction["known"]
+    reduced_matrix = (prolongation.T @ assembled @ prolongation).tocsc()
+    reduced_load = np.asarray(prolongation.T @ adjusted).reshape(-1)
+    if reduced_matrix.shape[0]:
+        reduced_solution = spsolve(reduced_matrix, reduced_load)
+        if not np.all(np.isfinite(reduced_solution)):
+            raise RuntimeError("signed-constraint reduction produced a singular system")
+        values = reduction["known"] + prolongation @ reduced_solution
+    else:
+        values = reduction["known"]
+    solution = matrix.CreateColVector()
+    solution.FV().NumPy()[:] = values
+    reduction.update(
+        {
+            "assembled": assembled,
+            "load": load,
+            "reduced_matrix": reduced_matrix,
+            "reduced_load": reduced_load,
+        }
+    )
+    return solution, reduction
+
+
+def axisymmetric_constraint_residual_contract(
+    fes,
+    mesh,
+    matrix,
+    rhs,
+    solution,
+    *,
+    point_potentials=None,
+    dof_constraints=None,
+):
+    """Verify signed identifications and the algebraic residual in reduced space."""
+    import numpy as np
+    from scipy import sparse
+
+    reduction = _axisymmetric_reduction(
+        fes, mesh, point_potentials, dof_constraints
+    )
+    matrix_rows, matrix_cols, matrix_values = matrix.COO()
+    assembled = sparse.csr_matrix(
+        (
+            np.asarray(matrix_values, dtype=float),
+            (np.asarray(matrix_rows), np.asarray(matrix_cols)),
+        ),
+        shape=(fes.ndof, fes.ndof),
+    )
+    values = np.asarray(solution.FV().NumPy(), dtype=float)
+    load = np.asarray(rhs.FV().NumPy(), dtype=float)
+    projected_residual = np.asarray(
+        reduction["prolongation"].T @ (assembled @ values - load)
+    ).reshape(-1)
+    projected_load = np.asarray(reduction["prolongation"].T @ load).reshape(-1)
+    pair_errors = [
+        abs(values[slave] - phase * values[master])
+        for master, slave, phase in reduction["constraints"]
+    ]
+    point_errors = [
+        abs(values[row["dof_index"]] - row["a_phi_wb_per_m"])
+        for row in reduction["point_evidence"]
+    ]
+    return {
+        "constraint_count": len(reduction["constraints"]),
+        "constraint_component_count": reduction["component_count"],
+        "point_constraint_count": len(reduction["point_evidence"]),
+        "reduced_dof_count": int(reduction["prolongation"].shape[1]),
+        "max_identification_abs_error": float(max(pair_errors, default=0.0)),
+        "max_point_constraint_abs_error": float(max(point_errors, default=0.0)),
+        "relative_reduced_residual": float(np.linalg.norm(projected_residual))
+        / max(float(np.linalg.norm(projected_load)), 1.0e-30),
+    }
+
+
+def add_axisymmetric_mixed_boundary_terms(
+    bilinear_form, linear_form, trial, test, mixed_boundaries
+):
+    """Add ``c0*r*u*v`` and ``c1*r*v`` terms on named meridional boundaries.
+
+    ``mixed_boundaries`` maps a boundary regex/name to ``(c0, c1)`` in SI
+    units.  ``c0 == c1 == 0`` is the natural boundary and adds no term.
+    """
+    evidence = []
+    for boundary, values in (mixed_boundaries or {}).items():
+        if len(values) != 2:
+            raise ValueError("mixed boundary values must be (c0, c1)")
+        c0, c1 = (float(values[0]), float(values[1]))
+        if not all(math.isfinite(value) for value in (c0, c1)):
+            raise ValueError("mixed boundary coefficients must be finite")
+        if c0:
+            bilinear_form += (
+                c0 * x * trial.Trace() * test.Trace() * ds(str(boundary))
+            )
+        if c1:
+            linear_form += c1 * x * test.Trace() * ds(str(boundary))
+        evidence.append({"boundary": str(boundary), "c0": c0, "c1": c1})
+    return evidence
+
+
 def solve_axi_magnetostatic(
     mesh, nu, Jr=None, magnets=None, order=2, dirichlet="axis|outer",
-    ring_currents=None, point_potentials=None,
+    ring_currents=None, point_potentials=None, dof_constraints=None,
+    mixed_boundaries=None,
 ):
     """Axisymmetric A_phi magnetostatics via the H1Henrotte FESpace.
 
@@ -3743,6 +3995,10 @@ def solve_axi_magnetostatic(
     point_potentials : iterable of ``(radius_m, axial_m, a_phi_wb_per_m)``
                 exact vertex constraints. Supported on the order>=2 linear
                 lane; nonzero values on the symmetry axis are invalid.
+    dof_constraints : iterable of ``(master_dof, slave_dof, phase)`` signed
+                identifications enforcing ``slave = phase*master``.
+    mixed_boundaries : mapping ``boundary_name -> (c0, c1)`` for Robin or
+                natural meridional boundary terms.
 
     Returns the H1Henrotte GridFunction ``gfu`` (A_phi at DOFs). Validated:
     magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 % at order 2
@@ -3750,9 +4006,9 @@ def solve_axi_magnetostatic(
     the average flux density is :func:`axi_vdof_magnet_bz_average`.
     """
     if order < 2:
-        if point_potentials:
+        if point_potentials or dof_constraints or mixed_boundaries:
             raise NotImplementedError(
-                "point-potential constraints are not implemented for order-1 V-DOF"
+                "point, signed-DOF and mixed-boundary constraints require order>=2"
             )
         return _solve_axi_magnetostatic_vdof_order1(
             mesh, nu, Jr, magnets, ring_currents, dirichlet
@@ -3773,6 +4029,7 @@ def solve_axi_magnetostatic(
             reg = mesh.MaterialCF({mat: 1.0}, default=0.0)
             f += reg * Hc * math.sin(th) * (r * grad(v)[0] + v) * dx
             f += -reg * Hc * math.cos(th) * r * grad(v)[1] * dx
+    add_axisymmetric_mixed_boundary_terms(a, f, u, v, mixed_boundaries)
     a.Assemble()
     f.Assemble()
     add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_currents)
@@ -3784,8 +4041,53 @@ def solve_axi_magnetostatic(
         f.vec,
         point_potentials,
         inverse="sparsecholesky",
+        dof_constraints=dof_constraints,
     )
     return gfu
+
+
+def solve_axi_magnetostatic_dual_boundary_average(
+    mesh,
+    nu,
+    *,
+    dual_boundary,
+    Jr=None,
+    magnets=None,
+    order=2,
+    dirichlet="axis",
+    ring_currents=None,
+    point_potentials=None,
+    dof_constraints=None,
+    mixed_boundaries=None,
+):
+    """Average natural- and essential-truncation axisymmetric solutions.
+
+    Both component fields are returned with the average so callers can verify
+    the construction without applying either component residual to the average.
+    """
+    common = {
+        "Jr": Jr,
+        "magnets": magnets,
+        "order": order,
+        "ring_currents": ring_currents,
+        "point_potentials": point_potentials,
+        "dof_constraints": dof_constraints,
+        "mixed_boundaries": mixed_boundaries,
+    }
+    natural = solve_axi_magnetostatic(
+        mesh, nu, dirichlet=dirichlet, **common
+    )
+    essential_tags = "|".join(
+        part
+        for part in (str(dirichlet).strip("|"), str(dual_boundary).strip("|"))
+        if part
+    )
+    essential = solve_axi_magnetostatic(
+        mesh, nu, dirichlet=essential_tags, **common
+    )
+    averaged = GridFunction(natural.space)
+    averaged.vec.data = 0.5 * (natural.vec + essential.vec)
+    return averaged, natural, essential
 
 
 def _solve_axi_magnetostatic_vdof_order1(
@@ -3952,6 +4254,8 @@ def solve_axi_magnetostatic_nonlinear(
     min_iter=3,
     ring_currents=None,
     point_potentials=None,
+    dof_constraints=None,
+    mixed_boundaries=None,
 ):
     """Axisymmetric A_phi magnetostatics with SATURATING B-H via Picard.
 
@@ -3970,6 +4274,9 @@ def solve_axi_magnetostatic_nonlinear(
     ``point_potentials`` : optional exact vertex ``A_phi`` constraints.  The
         elimination is repeated for each Picard matrix and the relaxed iterate
         is projected back to the prescribed values.
+    ``dof_constraints`` : optional signed trace identifications, eliminated at
+        every Picard iteration.
+    ``mixed_boundaries`` : optional Robin/natural boundary coefficient mapping.
 
     Example Froehlich/Kennelly curve (no gradient-recovery issue in axi since we
     sample away from the axis)::
@@ -3990,8 +4297,10 @@ def solve_axi_magnetostatic_nonlinear(
     potential_evidence = axisymmetric_point_potential_constraint_contract(
         fes, mesh, point_potentials
     )
-    for row in potential_evidence:
-        gfu.vec[row["dof_index"]] = row["a_phi_wb_per_m"]
+    initial_reduction = _axisymmetric_reduction(
+        fes, mesh, point_potentials, dof_constraints
+    )
+    gfu.vec.FV().NumPy()[:] = initial_reduction["known"]
     prev = None
     for it in range(max_iter):
         B = CoefficientFunction((grad(gfu)[0] + gfu / r, -grad(gfu)[1]))
@@ -4008,6 +4317,9 @@ def solve_axi_magnetostatic_nonlinear(
                 reg = mesh.MaterialCF({mat: 1.0}, default=0.0)
                 f += reg * Hc * math.sin(th) * (r * grad(v)[0] + v) * dx
                 f += -reg * Hc * math.cos(th) * r * grad(v)[1] * dx
+        add_axisymmetric_mixed_boundary_terms(
+            a, f, u_trial, v, mixed_boundaries
+        )
         a.Assemble()
         f.Assemble()
         add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_currents)
@@ -4019,6 +4331,7 @@ def solve_axi_magnetostatic_nonlinear(
             f.vec,
             point_potentials,
             inverse="sparsecholesky",
+            dof_constraints=dof_constraints,
         )
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
         for row in potential_evidence:
