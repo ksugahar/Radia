@@ -20,7 +20,7 @@ Limits (locked by ``tests/analytical_formulas/test_sphere_eddy.py``):
 
     w -> 0   :  alpha -> 4 pi a^3 (mu_r - 1) / (mu_r + 2)
     w -> oo  :  alpha -> -2 pi a^3          (perfect shielding)
-    mu_r = 1, low w :  Im(alpha) prop. +w,  Re(alpha) prop. -w^2
+    mu_r = 1, low w :  Im(alpha) prop. -w,  Re(alpha) prop. -w^2
 
 The dipole convention is SI with the ``1/(4 pi)`` in the field expression:
 ``H_dip = (m / 4 pi) (2 cos(th)/r^3 r-hat + sin(th)/r^3 th-hat)``, i.e.
@@ -82,14 +82,16 @@ def sphere_complex_polarizability(freq_hz, radius, sigma, mu_r=1.0):
     a = float(radius)
     sigma = float(sigma)
     mu_r = float(mu_r)
-    if a <= 0.0:
+    if not np.isfinite(a) or a <= 0.0:
         raise ValueError("radius must be positive")
-    if sigma <= 0.0:
+    if not np.isfinite(sigma) or sigma <= 0.0:
         raise ValueError("sigma must be positive")
-    if mu_r < 1.0:
+    if not np.isfinite(mu_r) or mu_r < 1.0:
         raise ValueError("mu_r must be >= 1")
     mu = mu_r * MU_0
     freq = np.atleast_1d(np.asarray(freq_hz, dtype=float))
+    if not np.all(np.isfinite(freq)):
+        raise ValueError("freq_hz must be finite")
     if np.any(freq < 0.0):
         raise ValueError("freq_hz must be non-negative")
     out = np.empty(freq.shape, dtype=complex)
