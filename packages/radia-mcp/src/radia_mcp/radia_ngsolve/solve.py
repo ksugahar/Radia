@@ -3527,6 +3527,34 @@ def solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=None, order=3,
     return gfu
 
 
+def _axisymmetric_triplet_rows(values, name):
+    """Normalize an iterable of numeric triplets without truth-testing arrays."""
+    if values is None:
+        return []
+    try:
+        raw_rows = list(values)
+    except TypeError as exc:
+        raise TypeError(f"{name} must be an iterable of three-value rows") from exc
+
+    rows = []
+    for index, row in enumerate(raw_rows):
+        if isinstance(row, (str, bytes)):
+            raise ValueError(f"{name}[{index}] must contain exactly three numeric values")
+        try:
+            raw_values = tuple(row)
+        except TypeError as exc:
+            raise ValueError(
+                f"{name}[{index}] must contain exactly three numeric values"
+            ) from exc
+        if len(raw_values) != 3:
+            raise ValueError(f"{name}[{index}] must contain exactly three numeric values")
+        try:
+            rows.append(tuple(float(value) for value in raw_values))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name}[{index}] must contain only numeric values") from exc
+    return rows
+
+
 def axisymmetric_ring_current_load_contract(mesh, ring_currents, tolerance=None):
     """Map ideal azimuthal ring currents to exact meridional mesh vertices.
 
@@ -3538,7 +3566,7 @@ def axisymmetric_ring_current_load_contract(mesh, ring_currents, tolerance=None)
     silently replacing it with a mesh-dependent Gaussian.  At ``r0=0`` the
     same identity annihilates the load exactly; this is recorded explicitly.
     """
-    rows = [tuple(float(value) for value in row) for row in (ring_currents or [])]
+    rows = _axisymmetric_triplet_rows(ring_currents, "ring_currents")
     if not rows:
         return []
     vertices = [
@@ -3594,6 +3622,9 @@ def add_axisymmetric_ring_current_loads(
     evidence = axisymmetric_ring_current_load_contract(
         mesh, ring_currents, tolerance=tolerance
     )
+    factor = float(angular_factor)
+    if evidence and not math.isfinite(factor):
+        raise ValueError("ring-current angular factor must be finite")
     free = fes.FreeDofs()
     for row in evidence:
         if row["axis_annihilated"]:
@@ -3607,7 +3638,7 @@ def add_axisymmetric_ring_current_loads(
         dof = active[0]
         if not free[dof]:
             raise ValueError("ring-current vertex lies on a constrained DOF")
-        vector[dof] += float(angular_factor) * row["weak_load_amplitude_a_m"]
+        vector[dof] += factor * row["weak_load_amplitude_a_m"]
     return evidence
 
 
@@ -3622,7 +3653,7 @@ def axisymmetric_point_potential_constraint_contract(
     """
     from ngsolve import NodeId, VERTEX
 
-    rows = [tuple(float(value) for value in row) for row in (point_potentials or [])]
+    rows = _axisymmetric_triplet_rows(point_potentials, "point_potentials")
     if not rows:
         return []
     vertices = [
@@ -3640,6 +3671,7 @@ def axisymmetric_point_potential_constraint_contract(
 
     evidence = []
     constrained_values = {}
+    free = fes.FreeDofs()
     for radius, axial, value in rows:
         if not all(math.isfinite(item) for item in (radius, axial, value)):
             raise ValueError("point-potential coordinates and value must be finite")
@@ -3664,6 +3696,12 @@ def axisymmetric_point_potential_constraint_contract(
                 "point-potential vertex must own exactly one H1Henrotte vertex DOF"
             )
         dof = active[0]
+        already_dirichlet = not bool(free[dof])
+        if already_dirichlet and value != 0.0:
+            raise ValueError(
+                "point-potential vertex lies on an existing Dirichlet DOF; "
+                "only the compatible zero value is allowed"
+            )
         previous = constrained_values.get(dof)
         if previous is not None and previous != value:
             raise ValueError("conflicting point-potential values share one vertex DOF")
@@ -3675,6 +3713,7 @@ def axisymmetric_point_potential_constraint_contract(
                 "a_phi_wb_per_m": value,
                 "vertex_index": nearest[0],
                 "dof_index": dof,
+                "already_dirichlet": already_dirichlet,
                 "vertex_distance_m": distance,
                 "vertex_tolerance_m": limit,
             }
@@ -4005,13 +4044,17 @@ def solve_axi_magnetostatic(
     (validation_test/radia_mcp/test_axi_magnetostatic.py).  For order=1 the gfu is in the V-DOF basis;
     the average flux density is :func:`axi_vdof_magnet_bz_average`.
     """
+    ring_rows = _axisymmetric_triplet_rows(ring_currents, "ring_currents")
+    potential_rows = _axisymmetric_triplet_rows(
+        point_potentials, "point_potentials"
+    )
     if order < 2:
-        if point_potentials or dof_constraints or mixed_boundaries:
+        if potential_rows or dof_constraints or mixed_boundaries:
             raise NotImplementedError(
                 "point, signed-DOF and mixed-boundary constraints require order>=2"
             )
         return _solve_axi_magnetostatic_vdof_order1(
-            mesh, nu, Jr, magnets, ring_currents, dirichlet
+            mesh, nu, Jr, magnets, ring_rows, dirichlet
         )
     from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
@@ -4032,14 +4075,14 @@ def solve_axi_magnetostatic(
     add_axisymmetric_mixed_boundary_terms(a, f, u, v, mixed_boundaries)
     a.Assemble()
     f.Assemble()
-    add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_currents)
+    add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_rows)
     gfu = GridFunction(fes)
     gfu.vec.data = _solve_with_axisymmetric_point_potentials(
         fes,
         mesh,
         a.mat,
         f.vec,
-        point_potentials,
+        potential_rows,
         inverse="sparsecholesky",
         dof_constraints=dof_constraints,
     )
@@ -4245,13 +4288,13 @@ def solve_axi_magnetostatic_nonlinear(
     mesh,
     nu_of_B,
     Jr=None,
-    magnets=None,
     order=2,
     dirichlet="axis|outer",
     relax=0.5,
     max_iter=80,
     tol=1e-5,
     min_iter=3,
+    magnets=None,
     ring_currents=None,
     point_potentials=None,
     dof_constraints=None,
@@ -4288,6 +4331,15 @@ def solve_axi_magnetostatic_nonlinear(
 
     Returns the converged H1Henrotte GridFunction A_phi.
     """
+    ring_rows = _axisymmetric_triplet_rows(ring_currents, "ring_currents")
+    potential_rows = _axisymmetric_triplet_rows(
+        point_potentials, "point_potentials"
+    )
+    if order < 2 and potential_rows:
+        raise NotImplementedError(
+            "point-potential constraints are not implemented for order-1 H1Henrotte"
+        )
+
     from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
     u_trial, v = fes.TnT()
@@ -4295,7 +4347,7 @@ def solve_axi_magnetostatic_nonlinear(
     gfu = GridFunction(fes)
     gfu.vec[:] = 0.0
     potential_evidence = axisymmetric_point_potential_constraint_contract(
-        fes, mesh, point_potentials
+        fes, mesh, potential_rows
     )
     initial_reduction = _axisymmetric_reduction(
         fes, mesh, point_potentials, dof_constraints
@@ -4322,14 +4374,14 @@ def solve_axi_magnetostatic_nonlinear(
         )
         a.Assemble()
         f.Assemble()
-        add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_currents)
+        add_axisymmetric_ring_current_loads(fes, mesh, f.vec, ring_rows)
         gnew = GridFunction(fes)
         gnew.vec.data = _solve_with_axisymmetric_point_potentials(
             fes,
             mesh,
             a.mat,
             f.vec,
-            point_potentials,
+            potential_rows,
             inverse="sparsecholesky",
             dof_constraints=dof_constraints,
         )
