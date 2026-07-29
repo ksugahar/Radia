@@ -56,7 +56,7 @@ jobs:
           python -m pip install --upgrade pip
           # tomli: tomllib backport for Python 3.10 (tools/policy_lint.py reads pyproject.toml;
           # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
-          python -m pip install pytest pytest-rerunfailures "mcp>=1.0" "tomli; python_version < '3.11'"
+          python -m pip install pytest pytest-rerunfailures "mcp>=1.0,<2" "tomli; python_version < '3.11'"
           python -m pip install -e packages/radia-mcp --no-deps
 
       - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})

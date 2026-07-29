@@ -36,7 +36,7 @@ _FORCE_MINIMAL = os.environ.get("RADIA_MCP_FORCE_MINIMAL") == "1"
 _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
     "mcp", "pytest", "_pytest", "pluggy", "iniconfig", "packaging",
     "anyio", "attr", "attrs", "typing_extensions", "radia_mcp", "__future__",
-    # Transitive dependencies installed by the workflow's `mcp>=1.0` line.
+    # Transitive dependencies installed by the workflow's `mcp>=1.0,<2` line.
     "annotated_types", "certifi", "click", "cffi", "cryptography", "dotenv",
     "h11", "httpcore", "httpx", "httpx_sse", "idna", "jsonschema", "jwt",
     "multipart", "pydantic", "pydantic_core", "pydantic_settings", "referencing",
