@@ -659,6 +659,49 @@ exception described above. Notebook workbenches are retired for all
 applications, including IH.
 
 The remaining library blocks delegate to the same tested MATLAB APIs.
+The `Material Dictionary` block is the normal material entry point for a
+`.vol`-based model. Define `radia_materials` as a MATLAB `dictionary` whose
+keys are reusable material names and whose scalar-cell values come from
+`radia.simulink.makeMaterialSpec`. Define `radia_region_materials` as a second
+dictionary from exact `.vol` region names to material names. Model
+initialization runs `check-vol`, verifies complete region coverage and the
+optional mesh SHA-256, then compiles the variable-size setup data to a
+fixed-width numeric `RadiaMaterialBus`. No string lookup, dictionary lookup,
+Python call, or finite-element factorization occurs per Simulink step.
+
+```matlab
+air = radia.simulink.makeMaterialSpec();
+steel = radia.simulink.makeMaterialSpec( ...
+    BH_B_T=[0; 1.0; 1.5], BH_H_A_per_m=[0; 250; 1200]);
+copper = radia.simulink.makeMaterialSpec( ...
+    Conductivity_S_per_m=5.8e7, Density_kg_per_m3=8960, ...
+    SpecificHeat_J_per_kgK=385, ThermalConductivity_W_per_mK=401);
+radia_materials = dictionary(["air","steel","copper"], ...
+    {air,steel,copper});
+radia_region_materials = dictionary( ...
+    ["air_domain","stator","phase_a"], ...
+    ["air","steel","copper"]);
+```
+
+This keeps the human workflow at the Simulink level: geometry and labels come
+from `.vol`; materials, windings, circuits, excitation, motion, control, and
+requested outputs are composed in the model. Radia-NGSolve-specific Python or
+finite-element-space construction is not required for normal use.
+
+Define windings with `radia.simulink.makeWindingSpec` and a second MATLAB
+dictionary. `Regions` selects exact `.vol` coil-side regions and
+`RegionPolarity` records the signed current direction of every side. Turns,
+parallel paths, resistance, and positive/negative circuit terminals compile to
+`RadiaWindingBus`. The same terminal identity is consumed by the native
+field/circuit MEX route and the LTspice interval route.
+
+`RadiaMachineCommandBus` carries voltage/current excitation, rotor angle and
+speed, translational position/velocity, load torque, and load force.
+`RadiaMachineResponseBus` returns current, flux linkage, back EMF,
+electromagnetic torque/force, and losses. Consequently Simulink or Simscape
+Multibody owns the mechanical equations and controller; the electromagnetic
+solver does not hide motion in a private application loop.
+
 The `LTspice Circuit` block accepts vector `InputNames` and `OutputTraces`.
 Each sample advances one reset-time LTspice interval and hands saved node
 voltages and inductor currents to the next interval. Block state is isolated
@@ -670,6 +713,11 @@ inside every sample interval: LTspice supplies coil current, the Radia
 Play/Energy material advances flux, and differentiated flux linkage returns as
 a PWL back-EMF source. Circuit and hysteresis states are committed only after
 the coupled residual converges.
+The native reduced field/circuit MEX path and LTspice are alternate circuit
+backends behind the same winding terminal identity. This allows a controller,
+power converter, rotating mechanical plant, and magnetic model to be composed
+as ordinary Simulink subsystems while LTspice remains available for detailed
+switching-circuit cross-checks.
 On Windows, the launcher uses `pwsh Start-Process -WindowStyle Hidden` rather
 than the `CREATE_NO_WINDOW` process flag: LTspice 26 can fail with
 `0xC0000409` under an SSH session when that flag is used. This hidden-window
