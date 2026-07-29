@@ -21,12 +21,31 @@ from netgen.occ import OCCGeometry, Pnt, Sphere  # noqa: E402
 from ngsolve import HDiv, InnerProduct, Mesh, SetNumThreads, TaskManager  # noqa: E402
 
 from radia.isochronous_topopt import (  # noqa: E402
-    CHI_MIN, MU0, DensityAdjointVIM, HelmholtzFilter,
+    CHI_MIN, MU0, DensityAdjointVIM, HelmholtzFilter, HeavisideProjection,
     demag_field_from_solution, density_gradient_from_s_gradient,
-    density_to_s, field_functional_load, gradient_pair_points,
+    density_discreteness, density_to_s, field_functional_load,
+    gradient_pair_points, iron_only_verification_ready,
     iron_only_mesh, optimize_density, orbit_arc_points, uniform_field_load,
     verify_design_iron_only,
 )
+
+
+def test_heaviside_projection_chain_and_grayness_gate():
+    projection = HeavisideProjection(beta=4.0, eta=0.45)
+    rho = np.array([0.05, 0.3, 0.45, 0.7, 0.95])
+    gradient = np.array([1.0, -2.0, 0.5, 0.3, -0.7])
+    step = 1e-7
+    direction = np.array([0.2, -0.1, 0.3, -0.2, 0.1])
+    analytic = projection.chain(rho, gradient)@direction
+    fd = gradient@(projection.apply(rho+step*direction)
+                   - projection.apply(rho-step*direction))/(2*step)
+    np.testing.assert_allclose(analytic, fd, rtol=2e-8, atol=2e-10)
+    projected = projection.apply(rho)
+    assert np.all(np.diff(projected)>0) and np.all((projected>=0)&(projected<=1))
+    ready, metrics = iron_only_verification_ready([0., 0.02, .98, 1.])
+    assert ready and metrics["intermediate_fraction"] == 0.0
+    ready, metrics = iron_only_verification_ready(np.full(20, .5))
+    assert not ready and metrics == density_discreteness(np.full(20, .5))
 
 
 @pytest.fixture(scope="module")
@@ -111,6 +130,19 @@ def test_warm_start_reproduces_and_saves_iterations(problem):
     assert again.state_iterations <= max(3, problem.base.state_iterations // 5)
 
 
+def test_native_jacobi_solver_satisfies_true_residual(problem):
+    """Native convergence is checked against b-Ax, not its CG recurrence."""
+    with TaskManager():
+        gf, _ = problem.prob.solve(
+            problem.s0, problem.f_state, tol=1e-10,
+            solver="native-jacobi")
+        _, operator, _ = problem.prob._system(problem.s0)
+        residual = problem.f_state.vec.CreateVector()
+        residual.data = problem.f_state.vec - operator * gf.vec
+        relative = ng.Norm(residual) / ng.Norm(problem.f_state.vec)
+    assert relative < 1.1e-10
+
+
 def test_dipole_point_inside_mesh_raises(problem):
     with pytest.raises(ValueError, match="INSIDE"):
         field_functional_load(problem.fes, [[0.0, 0.0, 0.0]], [1.0])
@@ -182,7 +214,7 @@ def test_helmholtz_filter_transpose_and_invariants(problem):
         assert smoothed.max() < 0.9 and smoothed.min() > -5e-3
 
 
-def test_linearize_block_matches_single_adjoint(problem):
+def test_native_linearize_matches_ngsolve_reference(problem):
     with TaskManager():
         cpts, _ = orbit_arc_points(1.4, -0.3, 6)
         f_con = field_functional_load(problem.fes, cpts,
@@ -191,7 +223,8 @@ def test_linearize_block_matches_single_adjoint(problem):
         s = problem.s0
         lin = problem.prob.linearize(s, problem.f_state,
                                      [problem.f_adj, f_con])
-        single = problem.prob.objective_and_gradient(s, problem.f_state, f_con)
+        single = problem.prob.objective_and_gradient(
+            s, problem.f_state, f_con, solver="ngsolve-cg")
     assert lin.values[0] == pytest.approx(problem.base.objective, rel=1e-10)
     np.testing.assert_allclose(lin.jacobians[0], problem.base.gradient,
                                rtol=1e-8, atol=1e-18)
@@ -289,6 +322,33 @@ def test_optimize_density_deep_restoration_prioritizes_feasibility():
     assert all(entry["band_mode"] == "deep" for entry in result.history)
     assert result.history[1]["objective"] < result.history[0]["objective"]
     assert result.history[1]["violation"][0] < result.history[0]["violation"][0]
+
+
+def test_optimize_density_applies_projection_and_reports_discreteness():
+    chi_iron = 100.0
+
+    class LinearProblem:
+        n_el = 2
+        element_volumes = np.ones(2)
+
+        def linearize(self, s, state_load, loads, **kwargs):
+            chi = 1.0/np.asarray(s, dtype=float)
+            material_rho = (chi-CHI_MIN)/(chi_iron-CHI_MIN)
+            grad_s = np.array([-(chi[0]**2)/(chi_iron-CHI_MIN), 0.0])
+            return SimpleNamespace(values=np.array([material_rho[0]]),
+                jacobians=grad_s[None,:],gfM=None,gfLambdas=(None,),
+                state_iterations=0,adjoint_iterations=(0,))
+
+    checkpoints=[]
+    result = optimize_density(LinearProblem(),object(),object(),
+        chi_iron=chi_iron,volume_fraction=.5,
+        initial_density=np.array([.4,.6]),density_projection=HeavisideProjection(2.),
+        move_limit=.1,max_iterations=1,
+        checkpoint_callback=lambda entry,rho:checkpoints.append((entry,rho)))
+    assert len(result.history)==1 and result.density[0]>.4
+    assert "intermediate_fraction" in result.history[0]
+    assert len(checkpoints)==1
+    np.testing.assert_allclose(checkpoints[0][1],result.density)
 
 
 # ---------------------------------------------------------------- Stage 3
