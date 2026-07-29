@@ -1627,83 +1627,83 @@ _centerline_from_torus_sweep = _centerline_from_revolution_sweep
 
 def _centerline_from_topology_spine(solid, n_segments: int,
                                      cad_units_per_meter: float):
-    """CLOSED full-revolution coil spine via ``coil_topology``.
+    """CLOSED coil spine by walking the actual solid (slab marching).
 
-    Restricted to CLOSED coils (no cap faces) by the
-    ``extract_centerline_from_step`` classification dispatch.  OPEN
-    coils with cap faces (gapped torus, arc + leads, ...) route to
-    ``_centerline_from_open_spine`` instead -- ``generate_spine``
-    produces a planar arc at the bbox-derived R_spine which is wrong
-    for "arc + lead extensions" geometries where caps sit far from
-    the swept arc (verified 2026-05-15 on keiko's
-    1turn_coil_loft_outsideline.step: R_spine = 0.85 * 50 mm = 42.5 mm
-    while the actual arc is at ~30 mm + 20 mm straight leads).
+    v4.95.x: replaces the retired ``coil_topology.generate_spine``
+    bbox-circle map, which assumed BOTH a z rotation axis AND a
+    circular planar spine at 0.85 * bbox outer radius.  Any closed
+    NON-circular or non-z-axis coil received a geometrically-unrelated
+    circle -- observed on B_rect_sweep.step / J_boss_fused.step (a
+    127.5 mm circle for a 103 x 214 mm racetrack, caught only
+    afterwards by the bbox checks) -- and even a TRUE circular torus
+    got the wrong radius (0.85 * (R + r) instead of R).  The walker
+    marches cross-sections of the true solid, so ANY orientation and
+    ANY closed spine shape is traced.
 
-    The function raises ``ValueError`` if it is called on an OPEN
-    coil -- this is a programming-error indicator, NOT a soft-fallback
-    signal; the dispatcher should never route OPEN coils here per the
-    No-Fallback policy (CLAUDE.md).
+    Restricted to CLOSED coils by the ``extract_centerline_from_step``
+    dispatch.  If the walk does not close on itself this raises:
+    either the coil is actually OPEN and cap-face detection missed the
+    caps (regenerate the STEP with clean planar end caps so
+    Predicate 4 routes), or the walker halted at a sharp spine corner.
 
-    Cross-section width/height come from a single sectioning at the
-    spine midpoint -- equivalent-square side from the section area.
+    Cross-section width/height: equivalent-square side from the MEDIAN
+    per-station cross-section area (robust to local features such as a
+    fused boss inflating a few stations).
     """
-    from radia._b3d_shim import section, Plane, Vector
-    try:
-        from radia.coil_topology import (
-            extract_coil_topology as _extract_topo,
-            generate_spine as _gen_spine,
-        )
-    except Exception as exc:
+    from radia.coil_from_step import extract_centerline, _axis_agnostic_seed
+
+    ng_solid = _bd_shape_to_netgen_solid(solid)
+    seed = _axis_agnostic_seed(ng_solid)
+    res = extract_centerline(ng_solid, start_hint=seed, verbose=False)
+
+    pts = np.asarray(res.polyline, dtype=float)
+    if not res.closed:
+        span = (pts.max(axis=0) - pts.min(axis=0)) if pts.size else None
         raise ValueError(
-            f"coil_topology import failed: {exc}") from exc
-    try:
-        topo = _extract_topo(solid)
-    except Exception as exc:
+            "extract_centerline_from_step(topology_spine): the coil was "
+            "classified CLOSED (no cap faces detected) but the "
+            f"centerline walk did not close on itself ({pts.shape[0]} "
+            f"stations, walked span {span} CAD units).  Either the coil "
+            "is actually OPEN and cap-face detection missed the caps "
+            "(regenerate the STEP with clean planar end caps so "
+            "Predicate 4 (open_spine) routes), or the walker halted at "
+            "a sharp spine corner (fillet the spine corners, or switch "
+            "to --coil-solver bem-a --coil-vol <pre-meshed.vol> which "
+            "bypasses spine extraction entirely).")
+    if pts.shape[0] < 4:
         raise ValueError(
-            f"extract_coil_topology failed: {exc}") from exc
+            "extract_centerline_from_step(topology_spine): the closed "
+            f"walk produced only {pts.shape[0]} stations -- too coarse "
+            "to resample a spine.")
 
-    if topo.is_open:
+    # Close the loop (append the start point so resampling covers the
+    # final wrap chord), then sample n_segments + 1 points WITHOUT the
+    # wrap duplicate -- the same convention as the retired circle map
+    # (linspace(0, 2*pi, n_segments + 1, endpoint=False)).
+    closed_pts = np.vstack([pts, pts[:1]])
+    seglen = np.linalg.norm(np.diff(closed_pts, axis=0), axis=1)
+    arclen = np.concatenate([[0.0], np.cumsum(seglen)])
+    total = float(arclen[-1])
+    if total <= 0.0:
         raise ValueError(
-            "_centerline_from_topology_spine is CLOSED-only; OPEN "
-            "coils (cap faces detected) must route to "
-            "_centerline_from_open_spine via the classification "
-            "dispatch in extract_centerline_from_step.")
+            "extract_centerline_from_step(topology_spine): the closed "
+            "walk has zero total length.")
+    s_new = np.linspace(0.0, total, n_segments + 1, endpoint=False)
+    spine_cad = np.column_stack([
+        np.interp(s_new, arclen, closed_pts[:, k]) for k in range(3)])
 
-    spine_cad = _gen_spine(topo, n_segments + 1)
-    n_path = spine_cad.shape[0]
-
-    # Section at the polyline midpoint to get a representative
-    # cross-section area.  For a uniform sweep this is the only
-    # information we need; tapered sweeps would degrade gracefully
-    # to the median area, which is a sound default for the
-    # equivalent-circle filaments_from_polyline.
-    mid = n_path // 2
-    if 0 < mid < n_path - 1:
-        c = 0.5 * (spine_cad[mid] + spine_cad[mid + 1])
-        t = spine_cad[mid + 1] - spine_cad[mid]
-    else:
-        c = spine_cad[0]
-        t = spine_cad[1] - spine_cad[0] if n_path > 1 else np.array(
-            [1.0, 0.0, 0.0])
-    t_n = float(np.linalg.norm(t))
-    if t_n < 1e-30:
-        raise ValueError("topology spine has zero-length midpoint tangent")
-    t = t / t_n
-    origin = Vector(float(c[0]), float(c[1]), float(c[2]))
-    z_dir = Vector(float(t[0]), float(t[1]), float(t[2]))
-    sec_plane = Plane(origin=origin, z_dir=z_dir)
-    try:
-        cross = section(solid, section_by=sec_plane)
-    except Exception as exc:
+    if res.areas is None:
         raise ValueError(
-            f"midpoint sectioning failed: {exc}") from exc
-    faces = cross.faces() if cross is not None else []
-    if not faces:
-        raise ValueError("midpoint sectioning produced no face")
-
-    best = min(faces, key=lambda f: (f.center() - origin).length)
-    side = math.sqrt(float(best.area))
-
+            "extract_centerline_from_step(topology_spine): walker "
+            "result carries no per-station areas.")
+    areas = np.asarray(res.areas, dtype=float)
+    areas = areas[np.isfinite(areas) & (areas > 0.0)]
+    if areas.size == 0:
+        raise ValueError(
+            "extract_centerline_from_step(topology_spine): the walk "
+            "recovered no positive cross-section areas; cannot derive "
+            "the conductor cross-section.")
+    side = math.sqrt(float(np.median(areas)))
     widths_cad = np.full(n_segments, side, dtype=np.float64)
     heights_cad = np.full(n_segments, side, dtype=np.float64)
 
@@ -1946,11 +1946,12 @@ def extract_centerline_from_step(step_path: str,
             "open_spine",
             solid, n_segments, cad_units_per_meter)
 
-    # Predicate 5: CLOSED full-revolution (no caps, no revolution
-    # surfaces with planar end-caps -- e.g. CLOSED bspline-lofted
-    # torus).  ``_centerline_from_topology_spine`` uses the topology-
-    # aware ``generate_spine`` for a full 360deg arc.  Sectioning at
-    # the midpoint recovers the cross-section area.  This path is
+    # Predicate 5: CLOSED loop (no caps, no revolution surface with
+    # planar end-caps -- e.g. CLOSED bspline-lofted torus, racetrack
+    # sweep).  ``_centerline_from_topology_spine`` walks the actual
+    # solid (slab marching from the axis-agnostic seed), so any
+    # orientation and any closed spine shape is traced; the median
+    # station area recovers the cross-section.  This path is
     # CLOSED-only; OPEN coils route to predicate 4 above.
     return _dispatch_and_verify(
         _centerline_from_topology_spine,

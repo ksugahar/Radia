@@ -799,3 +799,42 @@ def test_default_filament_path_handles_oblique_step(tmp_path, monkeypatch):
     assert points.shape[0] > 20
     assert np.all(np.isfinite(points))
     assert np.all(np.ptp(points, axis=0) > 0.02)
+
+
+def test_topology_spine_walks_true_closed_spine(tmp_path):
+    """Predicate 5 (CLOSED, no caps) must trace the TRUE spine by
+    walking the solid.
+
+    The retired ``coil_topology.generate_spine`` bbox-circle map put
+    this torus's spine at R = 0.85 * (R + r) = 28.05 mm (wrong even on
+    a true circle) and emitted a z-plane circle regardless of the
+    coil's actual shape (racetrack sweeps received a geometrically-
+    unrelated circle).  The walker-backed Predicate 5 must recover
+    R = 30 mm and the 3 mm wire from a full-revolution torus, which
+    reaches Predicate 5 because it has a TORUS lateral face but no
+    planar caps (P1: no loft planes; P2: only 1 seam circle < 5;
+    P3: revolution face but no plane face; P4: not open).
+    """
+    from netgen.occ import Axis, Axes, Dir, Pnt, WorkPlane
+    from radia.coil_from_cad import extract_centerline_from_step
+
+    R, r = 30.0, 3.0                      # mm-authored
+    profile = WorkPlane(Axes(
+        p=Pnt(R, 0, 0), n=Dir(0, 1, 0), h=Dir(0, 0, 1),
+    )).Circle(r).Face()
+    coil = profile.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360)
+    step_path = str(tmp_path / "closed_torus_mm.step")
+    coil.WriteStep(step_path)
+
+    path_m, w_m, h_m = extract_centerline_from_step(
+        step_path, n_segments=60, cad_units_per_meter=1000.0)
+
+    assert path_m.shape == (61, 3)
+    radii = np.linalg.norm(path_m[:, :2], axis=1)
+    np.testing.assert_allclose(radii, 0.030, atol=2e-4)
+    assert float(np.max(np.abs(path_m[:, 2]))) < 1e-4
+    # Median-of-station-areas equivalent-circle radius recovers the wire.
+    r_equiv = float(np.sqrt(np.mean(w_m * h_m) / np.pi))
+    assert 0.0025 < r_equiv < 0.0035, (
+        f"recovered wire radius {r_equiv*1e3:.2f} mm out of band "
+        "[2.5, 3.5] mm")
