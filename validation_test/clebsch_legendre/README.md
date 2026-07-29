@@ -505,6 +505,71 @@ a near-uniform gap loading, reported, but matching a specific stator MMF
 harmonic content is future work); the baseline is one compass construction;
 embedding in a full rotor and measuring L_d/L_q is the open next rung.
 
+## Pole face: free boundary with a KNOWN hodograph image
+([`verify_poleface_design.py`](verify_poleface_design.py), results JSON committed)
+
+The saturable pole face of a high-field dipole is the exact magnetostatic
+analogue of Kirchhoff's free-streamline problem: interface continuity
+against a uniform-B0 air gap pins the face's hodograph image to a known
+curve `Gamma(alpha)` (`|B|^2 = B0^2 cos^2 a + m(|B|)^2 B0^2 sin^2 a`,
+unique transversal root), and along it the exact oblique condition
+`dA/dPsi = mu0 cot(alpha)` holds -- a tangential-derivative boundary term
+in the weak form (`grad(u).Trace()*tau` on H1; the tangential orientation
+is MEASURED by an integral probe, never assumed).  Two identities are
+proven and locked: `J = -(b A_t^2 + a A_B^2)/(qB) <= 0` (folding
+impossible) and `dA/ds = -B0 cos(alpha)` pointwise (the uniform-B0 support
+is exact regardless of the solve).  The tube scales exactly with `PHI`
+(the problem is linear), verified numerically.
+
+| check (lab hard-tail steel, `mu_r = 1 + 6999/(1+B^6)`) | measured |
+|---|---|
+| B0 = 1.5 T control | **collapses to the flat pole** (90 % of the width below alpha = 6.8e-4: below the knee the fringe-free optimum IS the flat face) |
+| B0 = 2.0 T design | 0.33 mm bump TOWARD the gap (classical shim direction), width identity 4.8e-5, dA/ds identity med 9.8e-4 |
+| independent nonlinear FEM (half H-dipole, coil + yoke + leg, SAME termination, each pole at By(0) = 2.000 T) | good-field flatness **1.12e-3 vs flat 4.73e-3 (x4.2)**, iron near the face 2.26 T, +1.4 % NI |
+| low-field control (0.6 T, linear iron) | designed pole OVERSHOOTS +0.78e-3 = field-specific optimum, as a saturable design should |
+| mechanism decomposition | bump effect = **geometry share 3.8e-3 + saturation-DIFFERENTIAL share only 2e-4**: the benefit is delivered as static shim-like geometry; the fringe-free idealization leaves the 1.1e-3 residual |
+
+Honest verdict (program-wide): the hodograph is NOT an optimizer -- it
+translates boundary prescriptions (wall curve, `theta_e`, `alpha_max`, set
+a priori here, not tuned) into saturation-exact shapes in one linear
+solve.  Its unique value is the constructive cap/interface guarantee, not
+performance exclusivity; a hand-tuned shim could plausibly match the
+static geometry share.  Open v2: couple the AIR hodograph (conformal --
+Rogowski's own plane) to the iron hodograph along the shared free boundary
+via the pointwise refraction map (the exact 2-domain Kirchhoff structure),
+which would fold the fringe into the design.
+
+Pitfall (bug-pattern class): the hodograph corner degeneracy maps many
+small-alpha stations to nearly the same physical point; exporting that
+polyline gives 1e-12 m segments which CRASH netgen with no traceback --
+dedup at the mesh scale before meshing.
+
+## Flux-concentrator horn (all-Dirichlet hodograph quadrilateral)
+([`verify_concentrator_horn.py`](verify_concentrator_horn.py), results JSON committed)
+
+A planar sensor concentrator: collect ambient flux over a wide face,
+funnel it into a narrow tip, subject to a linearity cap `|B| <= 1 T`
+everywhere in the iron at rated ambient.  The half-horn is the cleanest
+hodograph domain in this program -- an all-Dirichlet curvilinear
+quadrilateral (centerline `theta=0, A=0`; face `B=B_F` with an A-ramp;
+wall `A=Phi/2` with a C1 `(B,theta)` profile; tip `B=B_T` with an
+A-ramp).  One linear solve; the recovered wall IS the horn profile, with
+the wall-tilt prescription literally reading "taper aggressively while the
+iron is cheap, straighten as the cap approaches".
+
+| check (permalloy-like, cap 1.0 T, gap 40 um) | measured |
+|---|---|
+| designed horn | 0.92 mm long, face 0.98 mm -> tip 0.11 mm (geometric gain 8.8), J single-signed |
+| vs straight taper, SAME face/tip/length, uniform ambient FEM | gain 10.7 vs 10.2 (**horn +5.1 %** at the identical footprint) |
+| iron peak at rated ambient | horn 0.964 T vs straight 0.994 T (the designed wall spreads the load; the straight taper concentrates at the tip corner) |
+| absolute gain at 3x rated | horn still above the straight taper |
+| truncation ladder (1.6x box) | gap field shifts 0.33 % |
+
+Honest framing: +5 % at identical footprint directly multiplies sensor
+sensitivity and comes with the internal `|B|` controlled by construction;
+a hand-tuned bulged spline could plausibly match the shape -- the edge is
+the constructive cap plus zero nonlinear iteration, not exclusivity.
+
 ## References
 
 - A. Clebsch, "Ueber die Integration der hydrodynamischen
