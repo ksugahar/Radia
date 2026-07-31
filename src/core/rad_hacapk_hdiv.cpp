@@ -4192,8 +4192,14 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
     const auto* control=static_cast<const st_cHACApK_lcontrol_t*>(m_control);
     const bool useTree=IsValid()&&leaves&&control&&control->lod;
     std::vector<double> result((size_t)nDirections,0.0);
-    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-    ngcore::ParallelFor(ngcore::IntRange(nDirections),[&](size_t kk){
+    // Stream one direction at a time.  The derivative objects are independent,
+    // but their exact-entry kernels read through the same parent ChargeGram
+    // and its native quadrature/cache state.  Concurrent mode traversal is not
+    // reentrant on Windows and intermittently corrupts the process heap after
+    // an earlier NGSolve TaskManager region has closed.  Serial streaming keeps
+    // peak storage at one derivative and leaves parallelism to the surrounding
+    // FE/H-matrix operations.
+    for(int kk=0;kk<nDirections;++kk){
         std::vector<double> cv(cellVelocity.begin()+kk*cellStride,cellVelocity.begin()+(kk+1)*cellStride);
         std::vector<double> fv(faceVelocity.begin()+kk*faceStride,faceVelocity.begin()+(kk+1)*faceStride);
         auto hostActive=[](const std::vector<double>& velocity,size_t offset,size_t count){
@@ -4206,7 +4212,7 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
         long double sum=0.0L;
         if(!useTree){
             for(int i=0;i<m_n;++i){sum+=(long double)left[i]*derivative.GetInteractionMatrixElement(i,i)*right[i];for(int j=i+1;j<m_n;++j){const double a=derivative.GetInteractionMatrixElement(i,j);sum+=(long double)a*((long double)left[i]*right[j]+(long double)left[j]*right[i]);}}
-            result[kk]=(double)sum;return;
+            result[kk]=(double)sum;continue;
         }
         for(int ip=1;ip<=leaves->nlf;++ip){
             const st_cHACApK_leafmtx_t* leaf=leaves->st_lf[ip];
@@ -4262,7 +4268,7 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
             }
         }
         result[kk]=(double)sum;
-    });
+    }
     return result;
 }
 

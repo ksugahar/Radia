@@ -210,6 +210,50 @@ jobs:
           Write-Host "::error::Cancellation request did not stop the duplicate tag run in time."
           exit 1
 
+      # Release workflows consume this artifact from the exact triggering CI
+      # run.  Looking up tags by SHA alone is racy: a successful main CI can
+      # finish, then tags can be added to that SHA before workflow_run inspects
+      # the repository.  The immutable per-run context proves whether CI itself
+      # was launched from a tag ref.
+      - name: Record exact CI ref context
+        shell: pwsh
+        run: |
+          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*')
+          $releaseTags = @()
+          foreach ($line in (git ls-remote --tags origin @patterns)) {
+            $parts = $line -split '\s+'
+            if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
+              continue
+            }
+            $ref = $parts[1] -replace '\^\{\}$', ''
+            if ($ref -like 'refs/tags/*') {
+              $releaseTags += $ref.Substring('refs/tags/'.Length)
+            }
+          }
+          $context = [ordered]@{
+            schema = 'radia.ci-release-context.v1'
+            ref = $env:GITHUB_REF
+            ref_name = $env:GITHUB_REF_NAME
+            ref_type = $env:GITHUB_REF_TYPE
+            sha = $env:GITHUB_SHA
+            run_id = [string]$env:GITHUB_RUN_ID
+            event_name = $env:GITHUB_EVENT_NAME
+            release_tags = @($releaseTags | Sort-Object -Unique)
+          }
+          $json = $context | ConvertTo-Json
+          [IO.File]::WriteAllText(
+            (Join-Path $env:GITHUB_WORKSPACE 'ci-release-context.json'),
+            $json,
+            [Text.UTF8Encoding]::new($false))
+          Write-Host $json
+
+      - name: Upload exact CI ref context
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-release-context
+          path: ci-release-context.json
+          retention-days: 30
+
       # ----------------------------------------------------------------
       # Guard (2026-05-28): a self-hosted job must NOT pip-install a lab
       # package into LAB's shared system Python -- it rewrites LAB's editable

@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.31 - Native streaming lifecycle fix
+
+Released 2026-07-31.
+
+- Serialized directional ChargeGram contraction streaming across deformation
+  modes so one native parent instance is never reentered concurrently. This
+  removes an intermittent Windows heap corruption after successive NGSolve
+  TaskManager regions while preserving one-direction-at-a-time memory use and
+  numerical parity with dense production gradients.
+
 ## 4.95.30 - Native Motor lifecycle and full Simulink distribution
 
 Released 2026-07-31.
