@@ -13,6 +13,11 @@ def test_ci_records_exact_ref_context_before_release():
     workflow=(ROOT/".github"/"workflows"/"build-test.yml").read_text(
         encoding="utf-8")
     assert "schema = 'radia.ci-release-context.v1'" in workflow
+    assert "if ($env:GITHUB_REF_TYPE -eq 'tag')" in workflow
+    assert 'git ls-remote --tags $repoUrl @patterns' in workflow
+    context=workflow[workflow.index("- name: Record exact CI ref context"):]
+    context=context[:context.index("- name: Upload exact CI ref context")]
+    assert "ls-remote --tags origin" not in context
     assert "ref_type = $env:GITHUB_REF_TYPE" in workflow
     assert "sha = $env:GITHUB_SHA" in workflow
     assert "run_id = [string]$env:GITHUB_RUN_ID" in workflow
