@@ -132,8 +132,9 @@ except ImportError:
 # Use the PEEC topology solver for conductor-only PEEC. Magnetic-material
 # coupling is handled through the HDiv-VIM / reduced-FEM route.
 
-# NOTE: FldVTS() and beam_tracking removed (2026-03-22).
-# Use NGSolve + GmshPostExport for visualization, CERN Xsuite for tracking.
+# NOTE: FldVTS() and the old in-tree beam_tracking engine were removed
+# (2026-03-22). Use NGSolve + GmshPostExport for visualization and the thin
+# radia.xsuite_bridge adapter to CERN Xsuite for magnetic-field tracking.
 
 # Analysis Framework: Static, Frequency Response, Transient (CLN)
 # Unified interface for electromagnetic analysis
