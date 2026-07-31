@@ -1,0 +1,119 @@
+{
+  "schema": "radia.validation.magnetostatics.low-chi-prism-hdiv-mmm.v1",
+  "executed_at_utc": "2026-07-31T12:55:04.399795+00:00",
+  "execution_version": {
+    "producer": "validation_low_susceptibility_prism_hdiv_mmm.py",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2604",
+    "radia_solver_source_head": "327ce4aa8905089c2c0dccf2576d0f6815ea7b98",
+    "analytic_formula_sha256": "4a4612c0849a24f02149a89fd9a7a6cc480c31a068701c8734e33b2d79cb1d4c"
+  },
+  "physics_identity_digest": "b7eeea892c986330a2c4f5a718424fdc34671413e37f54de1ce2d247441fa6c7",
+  "identity": {
+    "geometry": "rectangular_prism",
+    "side_lengths_m": [
+      0.011,
+      0.009,
+      0.027
+    ],
+    "material": {
+      "law": "linear_isotropic",
+      "mu_r": 1.04
+    },
+    "applied_field_A_per_m": [
+      125000.0,
+      0.0,
+      0.0
+    ]
+  },
+  "discretization": "BDM1 HDiv-MMM on flat tetrahedra",
+  "levels": [
+    {
+      "maxh_m": 0.006,
+      "tetrahedra": 80,
+      "vertices": 45,
+      "ndof": 609,
+      "iterations": 5,
+      "M_avg_A_per_m": [
+        4924.561765817912,
+        0.00015783850788302306,
+        2.0957058777328774e-05
+      ],
+      "B_avg_T": [
+        0.16089805748268426,
+        5.156988686916347e-09,
+        6.847208357153374e-10
+      ],
+      "timing_s": {
+        "mesh": 0.015586800000164658,
+        "solve": 0.29398240000591613
+      }
+    },
+    {
+      "maxh_m": 0.003,
+      "tetrahedra": 496,
+      "vertices": 174,
+      "ndof": 3420,
+      "iterations": 4,
+      "M_avg_A_per_m": [
+        4924.598245113795,
+        0.0003558135702039856,
+        0.00020754472577131982
+      ],
+      "B_avg_T": [
+        0.16089924935479902,
+        1.1625341501284123e-08,
+        6.781018252054655e-09
+      ],
+      "timing_s": {
+        "mesh": 0.03747450000082608,
+        "solve": 0.8353819000039948
+      }
+    },
+    {
+      "maxh_m": 0.0015,
+      "tetrahedra": 4024,
+      "vertices": 1027,
+      "ndof": 26025,
+      "iterations": 6,
+      "M_avg_A_per_m": [
+        4924.649975358902,
+        0.007363049333359745,
+        -0.015050474072488182
+      ],
+      "B_avg_T": [
+        0.16090093951452217,
+        2.4056969761450266e-07,
+        -4.917375713033939e-07
+      ],
+      "timing_s": {
+        "mesh": 0.18355180000071414,
+        "solve": 5.491331600002013
+      }
+    }
+  ],
+  "analytic_reference": {
+    "name": "Aharoni magnetometric rectangular-prism factor",
+    "Nx": 0.38365893740576007,
+    "B_avg_x_T": 0.1608936859629949,
+    "scope": "low-susceptibility convergence reference"
+  },
+  "metrics": {
+    "last_relative_refinement_change": 1.0504349621883114e-05,
+    "analytic_relative_error": 4.508288491165034e-05,
+    "transverse_to_axial_average_ratio": 3.4022797754951344e-06
+  },
+  "timing_breakdown_s": {
+    "solve_maxh_0.0015": 5.491331600002013,
+    "solve_maxh_0.003": 0.8353819000039948,
+    "solve_maxh_0.006": 0.29398240000591613
+  },
+  "checks": {
+    "tet_mesh_refines_monotonically": true,
+    "last_refinement_change_below_1e-4": true,
+    "aharoni_low_susceptibility_error_below_1e-3": true,
+    "transverse_average_below_1e-5": true,
+    "all_linear_solves_converged": true
+  },
+  "pass": true
+}
