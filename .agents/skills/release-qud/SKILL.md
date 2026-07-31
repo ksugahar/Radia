@@ -41,9 +41,10 @@ comparison.
 - Do not publish any GitHub Release containing the Radia Simulink library,
   MATLAB support files, or MEX assets until the complete four-machine gate
   passes for LAB, 100号機, mdx, and hibino.
-- The Simulink gate hashes the exact ZIP, extracts it independently on each
-  machine, and runs `verify_radia_ih_release`. Rebuilding the ZIP invalidates
-  the recorded gate state and requires all four checks again.
+- The Simulink gate hashes the exact ZIP and extracts it independently on each
+  machine. A full library runs `verify_radia_simulink_release`; an IH preview
+  runs `verify_radia_ih_release`. Rebuilding the ZIP invalidates the recorded
+  gate state and requires all four checks again.
 - The `done` result is the authoritative publication gate; partial, failed,
   or manually waived machine checks do not authorize publication.
 - Assemble and test the versioned Simulink package before publication. A full
