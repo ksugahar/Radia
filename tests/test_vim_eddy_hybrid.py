@@ -274,6 +274,74 @@ def test_coupled_hdiv_hcurl_can_materialize_small_system_for_dense_lu():
     }
 
 
+def _single_mode_hdiv_hcurl_system(*, eddy_rhs_contract="raw"):
+    points = np.array([[0.0, 0.0, 0.0]])
+    weights = np.array([1.0])
+    mode = np.array([[[1.0, 0.0, 0.0]]])
+    current = vim.VolumeCurrentBasis(points, weights, mode, names=("j0",))
+    magnetization = vim.MagnetizationBasis(points, weights, mode, names=("m0",))
+    eddy = vim.HybridVIMSystem(
+        resistance=np.array([[2.0]]),
+        inductance=np.array([[0.4]]),
+        surface_mass=np.zeros((1, 1)),
+        basis_names=("j0",),
+        blocks={"volume": (0, 1)},
+    )
+    return vim.CoupledHDivHybridVIMSystem(
+        magnetization_basis=magnetization,
+        eddy_system=eddy,
+        eddy_bases=(current,),
+        coupling=np.zeros((1, 1)),
+        magnetic_operator=np.array([[3.0]]),
+        magnetic_rhs=np.array([1.5]),
+        eddy_rhs=np.array([0.75]),
+        eddy_rhs_contract=eddy_rhs_contract,
+    )
+
+
+def test_frequency_solve_applies_faraday_scale_to_stored_vector_potential_rhs():
+    coupled = _single_mode_hdiv_hcurl_system(
+        eddy_rhs_contract="vector_potential"
+    )
+    frequency = 25.0
+    s = 2j * np.pi * frequency
+    expected_rhs = np.array([[1.5], [-s * 0.75]], dtype=complex)
+    expected_operator = coupled.mixed_operator(
+        s=s,
+        surface_impedance=0.0,
+        coupling_scale=-1.0 / vim.MU0,
+        adjoint_coupling_scale=s,
+    )
+
+    solved = coupled.solve_frequency(frequency, surface_impedance=0.0)
+
+    np.testing.assert_allclose(solved.reduced_rhs, expected_rhs)
+    np.testing.assert_allclose(
+        solved.reduced_solution,
+        np.linalg.solve(expected_operator, expected_rhs),
+    )
+    assert coupled.diagnostics()["eddy_rhs_contract"] == "vector_potential"
+
+
+def test_frequency_solve_preserves_raw_and_explicit_eddy_rhs():
+    raw = _single_mode_hdiv_hcurl_system(eddy_rhs_contract="raw")
+    vector_potential = _single_mode_hdiv_hcurl_system(
+        eddy_rhs_contract="vector_potential"
+    )
+
+    raw_solved = raw.solve_frequency(25.0, surface_impedance=0.0)
+    explicit_solved = vector_potential.solve_frequency(
+        25.0,
+        eddy_rhs=np.array([2.25]),
+        surface_impedance=0.0,
+    )
+
+    np.testing.assert_allclose(raw_solved.reduced_rhs[1], [0.75])
+    np.testing.assert_allclose(explicit_solved.reduced_rhs[1], [2.25])
+    with pytest.raises(ValueError, match="eddy_rhs_contract"):
+        _single_mode_hdiv_hcurl_system(eddy_rhs_contract="electric_field")
+
+
 def test_ngsolve_bem_laplace_sl_projection_stays_as_base_matrix():
     ng = pytest.importorskip("ngsolve")
     occ = pytest.importorskip("netgen.occ")
@@ -2050,6 +2118,7 @@ def test_hybrid_vim_public_names_are_exported():
         "NgsolveEddyBubbleHybridVIM",
         "NgsolveHCurlVIMHDivMMM",
         "NgsolveBDMEddyBubbleVIM",
+        "NgsolveHCurlVectorPotentialPort",
         "SkinImpedance",
         "SIBCAdmittanceTail",
         "SIBCSchurTerminationImpedance",
@@ -2817,6 +2886,7 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
     op = mixed.mixed_operator(None, 1j * 100.0, surface_impedance=0.1)
     assert op.shape == (1 + hybrid.system.n_modes, 1 + hybrid.system.n_modes)
     assert mixed.diagnostics()["has_eddy_rhs"] is True
+    assert mixed.diagnostics()["eddy_rhs_contract"] == "vector_potential"
     assert mixed.diagnostics()["has_response_basis"] is True
     assert mixed.diagnostics()["response_basis"]["current_gram_rank"] == (
         mixed.eddy_bases[0].n_modes
@@ -3109,6 +3179,37 @@ def test_ngsolve_hcurl_curl_basis_samples_t_method_current():
     assert basis.kind == "volume"
     assert basis.n_modes == 1
     assert basis.mass_matrix()[0, 0].real > 0.0
+
+
+def test_ngsolve_hcurl_vector_potential_port_uses_current_curl_trace():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("cond")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=1.0))
+    fes = ng.HCurl(mesh, order=1, nograds=True)
+    potential = ng.CoefficientFunction((0.0, 0.0, ng.y))
+
+    physical = vim.NgsolveHCurlVectorPotentialPort(
+        fes,
+        potential,
+        materials="cond",
+    )
+    manual = ng.LinearForm(fes)
+    manual += (
+        potential
+        * ng.curl(fes.TestFunction())
+        * ng.dx(definedon=mesh.Materials("cond"))
+    )
+    with ng.TaskManager():
+        physical.Assemble()
+        manual.Assemble()
+
+    physical_values = np.asarray(physical.vec.FV().NumPy()).copy()
+    manual_values = np.asarray(manual.vec.FV().NumPy()).copy()
+    np.testing.assert_allclose(physical_values, manual_values)
+    assert np.linalg.norm(physical_values) > 0.0
 
 
 def test_ngsolve_hdiv_magnetization_basis_couples_to_hcurl_current_basis():

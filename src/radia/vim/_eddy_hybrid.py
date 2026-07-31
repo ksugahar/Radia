@@ -1974,6 +1974,41 @@ def NgsolveVolumeCurrentBasis(
     return VolumeCurrentBasis(points, weights, modes, names=names)
 
 
+def NgsolveHCurlVectorPotentialPort(
+    fes,
+    vector_potential,
+    *,
+    materials=None,
+):
+    """Build the physical HCurl ``T``-method vector-potential port.
+
+    The parent field represents current as ``J = curl(T)``, so external work
+    is ``int A_ext . curl(v) dV``.  The returned NGSolve ``LinearForm`` is left
+    unassembled so callers can assemble all parent forms in one task region.
+    """
+
+    import ngsolve as ng
+
+    mesh = getattr(fes, "mesh", None)
+    if mesh is None:
+        raise TypeError("fes must be an NGSolve finite-element space")
+    if int(mesh.dim) != 3:
+        raise ValueError("vector-potential HCurl ports currently require a 3-D mesh")
+    potential = (
+        vector_potential
+        if hasattr(vector_potential, "dim")
+        else ng.CoefficientFunction(vector_potential)
+    )
+    if int(getattr(potential, "dim", 0)) != 3:
+        raise ValueError("vector_potential must be a three-component field")
+    form = ng.LinearForm(fes)
+    measure = ng.dx
+    if materials is not None:
+        measure = ng.dx(definedon=mesh.Materials(materials))
+    form += potential * ng.curl(fes.TestFunction()) * measure
+    return form
+
+
 def NgsolveMagnetizationBasis(
     mesh,
     magnetization_modes,
@@ -7657,6 +7692,7 @@ class CoupledHDivHybridVIMSystem:
     hdiv_reduction: HDivMMMReducedModel | None = None
     conductivity: float | None = None
     eddy_block_roles: dict[str, str] | None = None
+    eddy_rhs_contract: str = "raw"
 
     def __post_init__(self) -> None:
         if not isinstance(self.magnetization_basis, SampledMagnetizationBasis):
@@ -7723,6 +7759,11 @@ class CoupledHDivHybridVIMSystem:
             )
         if self.conductivity is not None and self.conductivity <= 0.0:
             raise ValueError("conductivity must be positive")
+        eddy_rhs_contract = str(self.eddy_rhs_contract)
+        if eddy_rhs_contract not in {"raw", "vector_potential"}:
+            raise ValueError(
+                "eddy_rhs_contract must be 'raw' or 'vector_potential'"
+            )
         roles = None
         if self.eddy_block_roles is not None:
             roles = {str(name): str(role) for name, role in self.eddy_block_roles.items()}
@@ -7742,6 +7783,7 @@ class CoupledHDivHybridVIMSystem:
         object.__setattr__(self, "magnetic_rhs", magnetic_rhs)
         object.__setattr__(self, "eddy_rhs", eddy_rhs)
         object.__setattr__(self, "eddy_block_roles", roles)
+        object.__setattr__(self, "eddy_rhs_contract", eddy_rhs_contract)
 
     @property
     def n_hdiv_modes(self) -> int:
@@ -8120,6 +8162,10 @@ class CoupledHDivHybridVIMSystem:
             magnetic_rhs = self.magnetic_rhs
         if eddy_rhs is None:
             eddy_rhs = self.eddy_rhs
+            if eddy_rhs is not None and self.eddy_rhs_contract == "vector_potential":
+                # Faraday's law turns a stored A_ext projection into the
+                # harmonic electric-field work term -s * <J, A_ext>.
+                eddy_rhs = -s * eddy_rhs
         self._resolved_rhs(
             magnetic_rhs,
             eddy_rhs,
@@ -8440,6 +8486,7 @@ class CoupledHDivHybridVIMSystem:
             "has_magnetic_operator": self.magnetic_operator is not None,
             "has_magnetic_rhs": self.magnetic_rhs is not None,
             "has_eddy_rhs": self.eddy_rhs is not None,
+            "eddy_rhs_contract": self.eddy_rhs_contract,
             "has_response_basis": self.response_basis is not None,
             "response_basis": (
                 None
@@ -8687,6 +8734,7 @@ def CoupleHybridVIMWithHDivMMM(
     hdiv_reduction: HDivMMMReducedModel | None = None,
     conductivity: float | None = None,
     eddy_block_roles: dict[str, str] | None = None,
+    eddy_rhs_contract: str = "raw",
     mu: float = MU0,
     kernel_epsilon: float = 0.0,
 ) -> CoupledHDivHybridVIMSystem:
@@ -8719,6 +8767,7 @@ def CoupleHybridVIMWithHDivMMM(
         hdiv_reduction=hdiv_reduction,
         conductivity=conductivity,
         eddy_block_roles=eddy_block_roles,
+        eddy_rhs_contract=eddy_rhs_contract,
     )
 
 
@@ -10130,6 +10179,9 @@ class TopologyAwareHybridVIM:
                 "volume1": "bridge",
                 "surface": "sibc",
             },
+            eddy_rhs_contract=(
+                "vector_potential" if self.rhs is not None else "raw"
+            ),
             mu=mu,
             kernel_epsilon=kernel_epsilon,
         )
@@ -10846,6 +10898,7 @@ __all__ = [
     "NgsolveBridgeCycleCurrentBasis",
     "SampleNgsolveVectorCFs",
     "NgsolveVolumeCurrentBasis",
+    "NgsolveHCurlVectorPotentialPort",
     "NgsolveMagnetizationBasis",
     "NgsolveHDivMagnetizationBasis",
     "HDivMultipolePortSet",
