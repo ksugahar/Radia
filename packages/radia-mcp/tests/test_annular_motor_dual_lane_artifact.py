@@ -27,14 +27,10 @@ def _load(name: str) -> dict:
     return data
 
 
-def _text_sha256_candidates(path: Path) -> set[str]:
+def _text_sha256(path: Path) -> str:
     data = path.read_bytes()
     canonical = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-    return {
-        hashlib.sha256(data).hexdigest(),
-        hashlib.sha256(canonical).hexdigest(),
-        hashlib.sha256(canonical.replace(b"\n", b"\r\n")).hexdigest(),
-    }
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def test_annular_motor_artifacts_keep_one_honest_harmonic_fixture_identity():
@@ -116,6 +112,7 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
     assert len(native["source_sha256"]) == 64
     assert len(native["setup_sha256"]) == 64
     assert len(native["generator_sha256"]) == 64
+    assert native["text_sha256_normalization"] == "newline-lf"
     assert "periodic_angle_family_native_interpolation" in native[
         "validated_capabilities"
     ]
@@ -129,7 +126,7 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
         ("generator_relative_path", "generator_sha256"),
     ):
         path = root / native[path_key]
-        assert native[sha_key] in _text_sha256_candidates(path)
+        assert native[sha_key] == _text_sha256(path)
     assert ":\\" not in artifact_text
     assert manifest["artifact_files"]["native_motor_angle_family"] == (
         "native_motor_angle_family.json"
