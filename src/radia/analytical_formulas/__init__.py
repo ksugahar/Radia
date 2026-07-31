@@ -70,6 +70,9 @@ induction_heating     Canonical AC eddy-current Joule-loss formulas
                       from textbook references (Smythe, Landau-
                       Lifshitz, Jackson) -- not the Stafl 1967
                       transcription, see commit history (v4.23.0+)
+
+rectangular_prism     Aharoni magnetometric demagnetization factors
+                      and low-susceptibility average internal flux
 """
 
 from .ellipsoid import (
@@ -148,6 +151,10 @@ from .induction_heating import (
     cylinder_axial_eddy_loss_small_ka,
     cylinder_axial_eddy_loss_thin_skin,
 )
+from .rectangular_prism import (
+    rectangular_prism_demag_factors,
+    linear_prism_average_flux_density,
+)
 
 __all__ = [
     # ellipsoid
@@ -217,4 +224,7 @@ __all__ = [
     "cylinder_axial_eddy_loss",
     "cylinder_axial_eddy_loss_small_ka",
     "cylinder_axial_eddy_loss_thin_skin",
+    # rectangular_prism (Aharoni magnetometric reference)
+    "rectangular_prism_demag_factors",
+    "linear_prism_average_flux_density",
 ]
