@@ -116,7 +116,7 @@ The following APIs have been removed from Radia. Calling them will raise an erro
 | `ObjDrwVTK()`, `exportGeometryToVTK()` | — | NGSolve WebGUI / `GmshPostExport` | Old VTK visualization removed |
 | `ObjDivMag()`, `ObjDivMagPln()`, `ObjCutMag()` | — | Netgen / Cubit | Mesh operations use external tools |
 | `FldVTS()` | 2026-03-22 | NGSolve + `GmshPostExport` | Field visualization removed |
-| `beam_tracking` module | 2026-03-22 | CERN Xsuite | Beam tracking removed |
+| `beam_tracking` module | 2026-03-22 | `radia.xsuite_bridge` + CERN Xsuite | Old in-tree engine removed; Radia field maps feed Xsuite's spatial Boris integrator through the optional `beam` extra. |
 | `radia_pyvista_viewer.py` | — | NGSolve WebGUI | Visualization removed |
 
 ### Removed Libraries
