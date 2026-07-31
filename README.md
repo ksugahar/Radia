@@ -90,7 +90,8 @@ sl_refresh_customizations
 
 The Simulink Library Browser then shows one **Radia** library containing the
 Electromagnet, PCB PEEC, Motor, Stream Function, Induction Heating, LTspice,
-Optuna, and Sheet Metal Optimization blocks. For the machine-readable setup and compatibility contract, ask the
+Optuna, Sheet Metal Optimization, and native Motor Angle Family blocks. For
+the machine-readable setup and compatibility contract, ask the
 `mcp-server-radia-matlab` tool `matlab_simulink_library_contract`.
 
 ## The central idea
@@ -499,6 +500,14 @@ to the same `DesignSpec` and headless calculation used by Python/MCP. Induction
 Heating is the native exception: its Eddy and Thermal blocks are C/C++ MEX
 S-Functions with no Python fallback in the simulation loop.
 
+The **Reduced Models / Motor Angle Family** block owns a persistent native MEX
+handle for periodic angle interpolation, discrete state update, and quadratic
+torque evaluation. Simulink `Outputs` reads the current state without changing
+it, `Update` advances exactly once per accepted sample, and Custom SimState
+uses native snapshot/restore commands. The standalone `radia_mex` commands are
+kept as the independent debugging and numerical-probe surface for the same C++
+kernel.
+
 The four batch blocks write `run.log` and `result.json`; field-producing runs
 also write a checked GMSH `.msh v4.1` artifact in the run directory. The IH
 preview currently exposes its field vectors directly in Simulink and does not
@@ -507,6 +516,12 @@ claim that batch artifact contract.
     addpath("matlab")
     radia.setup()
     radia.simulink.buildLibrary()
+
+An extracted full release can instead be registered and opened with
+`install_radia_simulink()`. Its ZIP contains the complete `.slx` library,
+MATLAB support files, native MEX assets, runtime DLLs, `manifest.json`, and
+`SHA256SUMS.txt`; publication is allowed only after the exact ZIP passes the
+four-machine `release-qud done` gate.
 
 The four batch application blocks launch the validated Python CLI only on a
 rising trigger; they do not start Python every simulation step. Promoting those

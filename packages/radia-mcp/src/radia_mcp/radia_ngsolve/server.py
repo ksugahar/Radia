@@ -2327,8 +2327,8 @@ def install_deploy(topic: str = "") -> str:
 @mcp.tool()
 def release_workflow(topic: str = "") -> str:
     """
-    Release-QUD workflow for the Radia monorepo
-    (3 packages / 4 machines: LAB, 100号機, mdx, hibino). Documents the 9-phase
+    Release-QUD workflow for PyPI and the MEX + SLX GitHub Release.
+    Covers 3 packages / 4 machines (LAB, 100号機, mdx, hibino), the 9-phase
     pipeline, the 4 pre-flight gates added 2026-05-03, the historical
     CI failure modes + their root causes, and the patch-bump recovery
     protocol when a tag CI fails.
@@ -2344,6 +2344,7 @@ def release_workflow(topic: str = "") -> str:
     Topics:
       overview               -- what gets released and why atomically
       phases                 -- the 9-phase pipeline (table)
+      simulink_candidate     -- exact-ZIP four-machine publication gate
       preflight_gates        -- Phase 2.5 4-gate pre-push validation
       ci_failure_modes       -- known CI failures + cause + fix table
       recovery               -- when CI on a tag fails AFTER push

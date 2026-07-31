@@ -57,9 +57,10 @@ if ispc
 
     current = split(string(getenv("PATH")), pathsep);
     current(current == "") = [];
+    managedRuntimeDirs = [runtimeDirs; excludedOpenMPRuntimeDirs];
     keep = true(size(current));
     for i = 1:numel(current)
-        keep(i) = ~any(strcmpi(current(i), runtimeDirs));
+        keep(i) = ~any(strcmpi(current(i), managedRuntimeDirs));
     end
     setenv("PATH", char(strjoin([runtimeDirs; current(keep)], pathsep)));
 end

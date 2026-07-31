@@ -30,7 +30,7 @@ Usage:
         Cross-machine consistency probe. Final gate.
 
     python tools/release_qud.py simulink-candidate --package <zip> --target all
-        Extract and execute the exact IH package on all four MATLAB machines.
+        Extract and execute the exact Simulink package on all four MATLAB machines.
 
     python tools/release_qud.py all
         phase8 -> phase8e -> phase9 with all preconditions enforced.
@@ -215,7 +215,8 @@ def _write_simulink_state(path: Path, state: dict) -> None:
 
 
 def _run_simulink_candidate_target(
-        key: str, package: Path, package_sha256: str) -> tuple[bool, str]:
+        key: str, package: Path, package_sha256: str,
+        success_marker: str) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
     verifier = REPO / "tools/verify_simulink_release.py"
     if host is None:
@@ -257,13 +258,13 @@ def _run_simulink_candidate_target(
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     if result.returncode != 0:
         return False, output
-    if "RADIA_IH_RELEASE_OK" not in output or '"status": "passed"' not in output:
+    if success_marker not in output or '"status": "passed"' not in output:
         return False, f"{label} did not emit both release success markers:\n{output}"
     return True, output
 
 
 def cmd_simulink_candidate(args):
-    """Verify one extracted IH archive on the requested MATLAB machines."""
+    """Verify one extracted Simulink archive on the requested MATLAB machines."""
     package = Path(args.package).resolve()
     step("Simulink candidate gate (LAB / 100号機 / mdx / hibino)")
     try:
@@ -272,6 +273,12 @@ def cmd_simulink_candidate(args):
         fail(f"invalid Simulink candidate: {error}")
         return 2
     package_sha256 = _sha256_file(package)
+    success_marker = (
+        "RADIA_SIMULINK_RELEASE_OK"
+        if manifest.get("schema")
+        == "radia.simulink.library-release-manifest.v1"
+        else "RADIA_IH_RELEASE_OK"
+    )
     state_path = _simulink_state_path(package_sha256)
     state = {
         "schema": "radia.release-qud.simulink-candidate.v1",
@@ -299,7 +306,7 @@ def cmd_simulink_candidate(args):
         label = SIMULINK_TARGETS[key][0]
         info(f"verifying extracted package on {label}")
         passed, output = _run_simulink_candidate_target(
-            key, package, package_sha256)
+            key, package, package_sha256, success_marker)
         state["targets"][key] = {
             "label": label,
             "status": "passed" if passed else "failed",
@@ -308,10 +315,10 @@ def cmd_simulink_candidate(args):
         }
         _write_simulink_state(state_path, state)
         if passed:
-            ok(f"IH package passed on {label}")
+            ok(f"Simulink package passed on {label}")
         else:
             failed += 1
-            fail(f"IH package failed on {label}")
+            fail(f"Simulink package failed on {label}")
             if output:
                 print(output[-4000:])
     if failed:
@@ -1406,9 +1413,9 @@ def main():
                     help="cross-machine consistency probe")
     ss = sub.add_parser(
         "simulink-candidate",
-        help="verify one extracted IH Simulink package on four MATLAB machines")
+        help="verify one extracted Simulink package on four MATLAB machines")
     ss.add_argument("--package", required=True,
-                    help="path to radia-ih-simulink ZIP")
+                    help="path to an IH preview or full Radia Simulink ZIP")
     ss.add_argument("--target", default="all",
                     help="comma list: lab, 100, mdx, hibino, all")
     sub.add_parser("all",

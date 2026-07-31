@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import subprocess
 import sys
 import time
@@ -53,7 +54,8 @@ def _sha_file(path: Path) -> str:
 
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(value, indent=2) + "\n")
 
 
 def _public_command(command: list[str]) -> list[str]:
@@ -74,15 +76,20 @@ def _public_command(command: list[str]) -> list[str]:
 
 def _identity() -> tuple[dict[str, object], dict[str, str]]:
     geometry = {
-        "family": "concentric_annular_rotor_stator",
+        "family": "concentric_annular_harmonic_fixture",
+        "resolved_geometry": "smooth_concentric_annuli",
+        "slot_geometry_resolved": False,
         "rotor_inner_radius_m": 0.2,
         "rotor_outer_radius_m": 0.8,
         "stator_inner_radius_m": 1.0,
         "stator_outer_radius_m": 1.4,
         "axial_length_m": 0.2,
+    }
+    periodicity = {
         "slots": 12,
         "poles": 4,
         "sector_count": 4,
+        "role": "nominal_symmetry_contract_not_resolved_slot_geometry",
     }
     material = {
         "rotor": {
@@ -102,19 +109,104 @@ def _identity() -> tuple[dict[str, object], dict[str, str]]:
         "angle_samples": 8,
         "angle_basis": "mechanical_rad",
         "endpoint_policy": "exclude_repeated_period_endpoint",
+        "rotation_representation": "first_spatial_harmonic_phase_only",
+        "magnetic_basis": ["uniform_transverse_x", "uniform_transverse_y"],
     }
     physical = {
         "geometry": geometry,
+        "periodicity": periodicity,
         "material": material,
         "excitation": excitation,
     }
     digests = {
-        "geometry_sha256": _sha_json(geometry),
+        "geometry_sha256": _sha_json(
+            {"geometry": geometry, "periodicity": periodicity}
+        ),
         "material_sha256": _sha_json(material),
         "excitation_sha256": _sha_json(excitation),
     }
     digests["aggregate_sha256"] = _sha_json(digests)
     return physical, digests
+
+
+def _same_harmonic_fixture_identity(
+    physical: dict[str, object],
+    identity: dict[str, str],
+    age: dict[str, object],
+    hdiv: dict[str, object],
+) -> bool:
+    geometry = physical["geometry"]
+    material = physical["material"]
+    excitation = physical["excitation"]
+    assert isinstance(geometry, dict)
+    assert isinstance(material, dict)
+    assert isinstance(excitation, dict)
+
+    age_gap = age.get("gap_contract", {})
+    age_material = age.get("material_contract", {}).get("materials", {})
+    age_excitation = age.get("excitation_contract", {})
+    age_grid = age.get("angle_grid", {})
+    hdiv_config = hdiv.get("configuration", {})
+    hdiv_fixture = hdiv_config.get("motor_fixture_contract", {})
+    hdiv_checks = hdiv.get("checks", {})
+    expected_materials = {
+        name: {
+            "relative_permeability": row["relative_permeability"],
+            "conductivity_s_per_m": row["conductivity_s_per_m"],
+        }
+        for name, row in material.items()
+        if isinstance(row, dict)
+    }
+    return all(
+        (
+            geometry.get("family") == "concentric_annular_harmonic_fixture",
+            geometry.get("slot_geometry_resolved") is False,
+            math.isclose(age_gap.get("inner_radius_m", math.nan), 0.8),
+            math.isclose(age_gap.get("outer_radius_m", math.nan), 1.0),
+            age_gap.get("harmonics") == [1],
+            age_material == expected_materials,
+            math.isclose(
+                age.get("frequency_hz", math.nan), material["frequency_hz"]
+            ),
+            math.isclose(
+                age.get("axial_length_m", math.nan), geometry["axial_length_m"]
+            ),
+            age.get("rotation_method")
+            == "rotor_harmonic_phase_only_no_remesh",
+            age_excitation.get("rotation") == "rotor_harmonic_phase_only",
+            age_excitation.get("harmonics", {}).get("1")
+            == {
+                "rotor_amplitude": excitation["rotor_amplitude"],
+                "stator_amplitude": excitation["stator_amplitude"],
+            },
+            len(age_grid.get("angles_rad", []))
+            == excitation["angle_samples"],
+            hdiv_config.get("geometry") == "annular-motor",
+            math.isclose(
+                hdiv_config.get("axial_length_m", math.nan),
+                geometry["axial_length_m"],
+            ),
+            math.isclose(hdiv_config.get("sigma", math.nan), 58_000_000.0),
+            math.isclose(hdiv_config.get("mu_r", math.nan), 1001.0),
+            hdiv_config.get("frequencies_Hz") == [100.0],
+            hdiv_config.get("motor_angle_samples")
+            == excitation["angle_samples"],
+            math.isclose(
+                hdiv_config.get("rotor_amplitude", math.nan),
+                excitation["rotor_amplitude"],
+            ),
+            hdiv_fixture.get("family") == geometry["family"],
+            hdiv_fixture.get("slot_geometry_resolved") is False,
+            hdiv_fixture.get("magnetic_basis")
+            == excitation["magnetic_basis"],
+            hdiv_checks.get(
+                "motor_hcurl_ports_match_hdiv_transverse_xy_basis"
+            )
+            is True,
+            hdiv_config.get("shared_model_identity_sha256")
+            == identity["aggregate_sha256"],
+        )
+    )
 
 
 def _run_age() -> dict[str, object]:
@@ -237,6 +329,18 @@ def _centered_waveform(values: list[float]) -> np.ndarray:
 
 def main() -> int:
     started = time.perf_counter()
+    host_role = os.environ.get(
+        "RADIA_VALIDATION_HOST_ROLE", "developer-smoke"
+    ).strip().lower()
+    if host_role not in {"compute", "developer-smoke"}:
+        raise ValueError(
+            "RADIA_VALIDATION_HOST_ROLE must be 'compute' or 'developer-smoke'"
+        )
+    execution_environment = {
+        "host_role": host_role,
+        "hostname": platform.node(),
+        "python": platform.python_version(),
+    }
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     physical_identity, identity = _identity()
@@ -252,6 +356,8 @@ def main() -> int:
         raise RuntimeError("AGE production lane did not solve")
     if not hdiv["checks"]["passed"]:
         raise RuntimeError("HDiv-MMM/HCurl production lane did not pass")
+    if hdiv["validation_host"] != execution_environment["hostname"]:
+        raise RuntimeError("HDiv validation host does not match the artifact host")
     if (
         hdiv["configuration"]["shared_model_identity_sha256"]
         != identity["aggregate_sha256"]
@@ -271,7 +377,14 @@ def main() -> int:
     normalized_rms = float(np.sqrt(np.mean((age_wave - aligned_hdiv_wave) ** 2)))
     normalized_max = float(np.max(np.abs(age_wave - aligned_hdiv_wave)))
     comparison_checks = {
-        "same_geometry_material_excitation_identity": True,
+        "same_smooth_annular_harmonic_fixture_identity": (
+            _same_harmonic_fixture_identity(
+                physical_identity,
+                identity,
+                age,
+                hdiv,
+            )
+        ),
         "both_angle_grids_complete": len(age_torque) == len(hdiv_torque) == 8,
         "both_torque_waveforms_nonconstant": True,
         "both_torque_waveforms_reverse_sign": (
@@ -298,6 +411,7 @@ def main() -> int:
         "radia_version": radia_version,
         "schema_version": "radia-motor-validation-artifact/v1",
         "timestamp_utc": timestamp,
+        "execution_environment": execution_environment,
         "motor_validation_lane": "ngsolve_age",
         "reference_source_class": "independent_public_solver_lane",
         "observable_family": "torque",
@@ -331,8 +445,9 @@ def main() -> int:
         "artifact_feedback": {
             "status": "promoted",
             "public_lesson": (
-                "A fixed AGE operator and factorization can sweep a complete rotor-angle "
-                "grid without remeshing and provide an independent torque waveform."
+                "A fixed AGE operator and factorization can sweep a complete first-"
+                "harmonic phase grid without remeshing and provide an independent "
+                "torque waveform for the smooth annular fixture."
             ),
         },
         "shared_mesh_material_identity": shared_identity,
@@ -374,6 +489,7 @@ def main() -> int:
         "radia_version": radia_version,
         "schema_version": "radia-motor-validation-artifact/v1",
         "timestamp_utc": timestamp,
+        "execution_environment": execution_environment,
         "motor_validation_lane": "hdiv_mmm_hcurl_eddy_bubble",
         "reference_source_class": "independent_public_solver_lane",
         "observable_family": "force_or_torque_trend",
@@ -420,8 +536,9 @@ def main() -> int:
         "artifact_feedback": {
             "status": "promoted",
             "public_lesson": (
-                "HDiv-MMM and HCurl eddy-bubble share one curved 3D mesh/material "
-                "identity and recover a periodic coenergy-torque waveform."
+                "HDiv-MMM and HCurl eddy-bubble share one smooth annular 3D "
+                "mesh/material identity and recover its first-harmonic periodic "
+                "coenergy-torque waveform."
             ),
         },
         "shared_mesh_material_identity": shared_identity,
@@ -476,6 +593,7 @@ def main() -> int:
         "radia_version": radia_version,
         "schema_version": "radia-motor-triple-check-artifact/v1",
         "timestamp_utc": timestamp,
+        "execution_environment": execution_environment,
         "source_mcp_seed": {
             "representative_public_decks": [
                 "generated_concentric_annular_harmonic_fixture"
@@ -502,8 +620,10 @@ def main() -> int:
         "mcp_feedback": {
             "public_status": "verified",
             "public_summary": (
-                "Both mandatory radia-motor lanes executed on one physical identity; "
-                "their centered torque waveforms agree after an explicit sign convention map."
+                "Both mandatory radia-motor lanes executed on one smooth annular "
+                "first-harmonic fixture; their centered torque waveforms agree after "
+                "an explicit sign convention map. This fixture does not resolve slot "
+                "geometry."
             ),
             "learning_targets": [
                 "radia_mcp.motor.validation_lanes_knowledge",
@@ -524,6 +644,7 @@ def main() -> int:
         "radia_version": radia_version,
         "schema": "radia.validation.annular-motor-dual-lane-manifest.v1",
         "generated_at_utc": timestamp,
+        "execution_environment": execution_environment,
         "physical_identity": physical_identity,
         "shared_mesh_material_identity": shared_identity,
         "artifact_files": {

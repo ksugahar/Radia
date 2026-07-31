@@ -23,13 +23,16 @@ block.OutputPort(1).Dimensions = family.output_count;
 block.OutputPort(1).DatatypeID = 0;
 block.OutputPort(1).Complexity = "Real";
 block.SampleTimes = [family.sample_time_s, 0];
-block.SimStateCompliance = "DefaultSimState";
+block.SimStateCompliance = "CustomSimState";
 
 block.RegBlockMethod("PostPropagationSetup", @postPropagationSetup);
 block.RegBlockMethod("Start", @start);
 block.RegBlockMethod("InitializeConditions", @initializeConditions);
 block.RegBlockMethod("Outputs", @outputs);
+block.RegBlockMethod("Update", @update);
 block.RegBlockMethod("Terminate", @terminate);
+block.RegBlockMethod("GetSimState", @getSimState);
+block.RegBlockMethod("SetSimState", @setSimState);
 end
 
 function postPropagationSetup(block)
@@ -66,7 +69,14 @@ if nativeHandle == 0
 end
 input = double(block.InputPort(1).Data(:));
 block.OutputPort(1).Data = radia_mex( ...
-    'simulink.state_space.step', nativeHandle, input(1), input(2:end));
+    'simulink.state_space.output', nativeHandle, input(1), input(2:end));
+end
+
+function update(block)
+nativeHandle = requireNativeHandle(block);
+input = double(block.InputPort(1).Data(:));
+radia_mex('simulink.state_space.update', ...
+    nativeHandle, input(1), input(2:end));
 end
 
 function terminate(block)
@@ -82,6 +92,24 @@ end
 
 function nativeHandle = getNativeHandle(block)
 nativeHandle = uint64(block.Dwork(1).Data);
+end
+
+function nativeHandle = requireNativeHandle(block)
+nativeHandle = getNativeHandle(block);
+if nativeHandle == 0
+    error("radia:simulink:MotorAngleFamilyHandle", ...
+        "The native motor angle-family handle is not initialized.");
+end
+end
+
+function state = getSimState(block)
+nativeHandle = requireNativeHandle(block);
+state = radia_mex('simulink.state_space.snapshot', nativeHandle);
+end
+
+function setSimState(block, state)
+nativeHandle = requireNativeHandle(block);
+radia_mex('simulink.state_space.restore', nativeHandle, state);
 end
 
 function validateFamily(family)

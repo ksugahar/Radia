@@ -2,8 +2,9 @@
 Release-QUD workflow for the Radia monorepo
 (3 packages / 4 deployment-verification machines).
 
-The Radia monorepo ships three independent PyPI packages from one
-git tree.  Releases are checked across LAB, 100号機, mdx, and hibino
+The Radia monorepo ships three independent PyPI packages and one
+versioned Simulink library package from one git tree. Releases are checked
+across LAB, 100号機, mdx, and hibino
 so users never see a mismatched (radia X, radia-mcp Y, cubit-mesh-export
 Z) combination that would silently break the panel <-> MCP <-> Cubit
 pipeline.
@@ -21,7 +22,7 @@ Read this when:
   stuck.
 
 The MCP server exposes this via release_workflow(topic=...). Topics:
-overview, phases, preflight_gates, mcp_quality_review,
+overview, phases, simulink_candidate, preflight_gates, mcp_quality_review,
 ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
 monorepo_lockstep, ci_monitor_skill.
 """
@@ -32,7 +33,7 @@ RELEASE_WORKFLOW = """\
 This document is the AI-readable canonical reference for the Radia
 release flow.  Its canonical local orchestrator is
 `tools/release_qud.py`; the former triple-machine workflow is retired.
-Topics: overview, phases, preflight_gates, mcp_quality_review,
+Topics: overview, phases, simulink_candidate, preflight_gates, mcp_quality_review,
 ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
 monorepo_lockstep, ci_monitor_skill.
 
@@ -49,6 +50,7 @@ to PyPI and verifies the release on four machines:
 | cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.pyd + check-vol CLI            |
 | radia-mcp         | `radia-mcp-v`           | MCP servers (radia-ngsolve, cubit, build123d,     |
 |                   |                         | gmsh, electromagnet, ih, peec, ...)               |
+| Radia Simulink library | Radia GitHub Release asset | `.slx`, MATLAB support, standalone MEX, MEX S-Functions, runtime DLLs, manifest and checksums |
 
 The packages may be released independently when only one changed, but
 the release gate treats the deployment as QUD: two editable machines
@@ -95,7 +97,41 @@ table is the AI-readable summary.
 | 6 | Push main + all tags | always | tag push triggers CI; CI workflow_run gates Release workflows |
 | 7 | Monitor CI propagation to PyPI | always | use ci-monitor skill |
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
+| 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine consistency probe (LAB / 100号機 / mdx / hibino hashes) | always | mdx reports radia-mcp as N/A |
+| DoD | Re-run preflight/editable/Phase 9 and bind the exact ZIP hash to the same HEAD | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication |
+
+## ===
+## simulink_candidate — exact MEX + SLX publication gate
+## ===
+
+The production human interface is released as a full Radia Simulink library
+ZIP. Build it only from the final pushed commit. The package contains
+`radia_simulink_library.slx`, application/support `.m` and `.slx` files,
+standalone `radia_mex`, native IH MEX S-Functions, required runtime DLLs,
+`manifest.json`, and an external `SHA256SUMS.txt`.
+
+```powershell
+python tools/package_simulink_release.py `
+  --full-library --mex-dir matlab --output-dir dist/simulink
+python tools/verify_simulink_release.py `
+  dist/simulink/radia-simulink-library-vX.Y.Z.zip `
+  --matlab "C:\\Program Files\\MATLAB\\R2026a\\bin\\matlab.exe"
+python tools/release_qud.py all
+python tools/release_qud.py simulink-candidate `
+  --package dist/simulink/radia-simulink-library-vX.Y.Z.zip --target all
+python tools/release_qud.py done `
+  --simulink-package dist/simulink/radia-simulink-library-vX.Y.Z.zip
+```
+
+The candidate state is keyed by the ZIP SHA-256. Rebuilding or modifying the
+archive invalidates the four-machine evidence. `done` also requires the
+manifest commit to equal repository `HEAD`, so validation from another commit
+cannot authorize publication. Upload the ZIP, external `manifest.json`, and
+`SHA256SUMS.txt` to the matching Radia GitHub Release only after `done` exits 0.
+
+The standalone IH preview remains supported by the same packager without
+`--full-library`; it does not replace the production full-library gate.
 
 ## ===
 ## preflight_gates — Phase 2.5 4-gate pre-push validation (2026-05-03)
@@ -354,6 +390,7 @@ the monitor exits 0.
 _TOPICS = (
     "overview",
     "phases",
+    "simulink_candidate",
     "preflight_gates",
     "mcp_quality_review",
     "ci_failure_modes",

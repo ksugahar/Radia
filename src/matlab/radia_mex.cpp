@@ -1397,7 +1397,11 @@ mxArray* Commands() {
         "ngsolve.vector.destroy",
         "simulink.state_space.create",
         "simulink.state_space.info",
+        "simulink.state_space.output",
+        "simulink.state_space.update",
         "simulink.state_space.step",
+        "simulink.state_space.snapshot",
+        "simulink.state_space.restore",
         "simulink.state_space.reset",
         "simulink.state_space.destroy",
         "hcurl.eddy_cln.native_basis",
@@ -4185,6 +4189,11 @@ struct PeriodicInterpolation {
     double coordinate = 0.0;
 };
 
+struct StateSpaceEvaluation {
+    std::vector<double> input;
+    PeriodicInterpolation interpolation;
+};
+
 PeriodicInterpolation StateSpaceFamilyInterpolation(
     const NativeStateSpaceHandle& holder, double coordinate) {
     if (!std::isfinite(coordinate))
@@ -4222,31 +4231,36 @@ double StateSpaceFamilyValue(const NativeStateSpaceHandle& holder,
            interpolation.alpha * values[index(interpolation.upper)];
 }
 
-void SimulinkStateSpaceStep(int nlhs, mxArray* plhs[], int nrhs,
-                            const mxArray* prhs[]) {
-    if (nlhs != 1 || (nrhs != 3 && nrhs != 4))
-        BadArgument(
-            "usage: y = radia_mex('simulink.state_space.step', handle, u) "
-            "or y_tau = radia_mex('simulink.state_space.step', handle, "
-            "coordinate, u)");
-    auto& holder = StateSpace(Handle(prhs[1]));
+StateSpaceEvaluation ReadStateSpaceEvaluation(
+    const NativeStateSpaceHandle& holder, int nrhs, const mxArray* prhs[]) {
     const bool family =
         holder.kind == NativeStateSpaceHandle::Kind::PeriodicAngleFamily;
     if ((family && nrhs != 4) || (!family && nrhs != 3))
         BadArgument(family
-                        ? "periodic angle-family step requires coordinate and u"
-                        : "static state-space step requires only u");
+                        ? "periodic angle-family evaluation requires coordinate and u"
+                        : "static state-space evaluation requires only u");
     const double coordinate = family ? Scalar(prhs[2], "coordinate") : 0.0;
-    const auto input = RealVector(prhs[family ? 3 : 2], "u");
+    auto input = RealVector(prhs[family ? 3 : 2], "u");
     if (input.size() != holder.input_size)
         BadArgument("u must contain exactly the state-space input dimension");
     if (!AllFinite(input))
         BadArgument("u must contain finite values");
-
-    std::vector<double> output(holder.output_size, 0.0);
-    PeriodicInterpolation interpolation;
+    StateSpaceEvaluation evaluation;
+    evaluation.input = std::move(input);
     if (family)
-        interpolation = StateSpaceFamilyInterpolation(holder, coordinate);
+        evaluation.interpolation =
+            StateSpaceFamilyInterpolation(holder, coordinate);
+    return evaluation;
+}
+
+std::vector<double> StateSpaceOutput(
+    const NativeStateSpaceHandle& holder,
+    const StateSpaceEvaluation& evaluation) {
+    const bool family =
+        holder.kind == NativeStateSpaceHandle::Kind::PeriodicAngleFamily;
+    const auto& input = evaluation.input;
+    const auto& interpolation = evaluation.interpolation;
+    std::vector<double> output(holder.output_size, 0.0);
     for (std::size_t row = 0; row < holder.linear_output_size; ++row) {
         for (std::size_t col = 0; col < holder.state_size; ++col) {
             const double value = family
@@ -4263,27 +4277,36 @@ void SimulinkStateSpaceStep(int nlhs, mxArray* plhs[], int nrhs,
             output[row] += value * input[col];
         }
     }
-    if (family) {
-        double torque = 0.0;
-        for (std::size_t row = 0; row < holder.state_size; ++row) {
-            for (std::size_t col = 0; col < holder.state_size; ++col)
-                torque += 0.5 * holder.state[row] *
-                    StateSpaceFamilyValue(holder, holder.Q, holder.state_size,
-                                          row, col, interpolation) *
-                    holder.state[col];
-            for (std::size_t col = 0; col < holder.input_size; ++col)
-                torque += holder.state[row] *
-                    StateSpaceFamilyValue(holder, holder.R, holder.input_size,
-                                          row, col, interpolation) * input[col];
-        }
-        for (std::size_t row = 0; row < holder.input_size; ++row)
-            for (std::size_t col = 0; col < holder.input_size; ++col)
-                torque += 0.5 * input[row] *
-                    StateSpaceFamilyValue(holder, holder.S, holder.input_size,
-                                          row, col, interpolation) * input[col];
-        output[holder.linear_output_size] = torque;
-    }
+    if (!family)
+        return output;
 
+    double torque = 0.0;
+    for (std::size_t row = 0; row < holder.state_size; ++row) {
+        for (std::size_t col = 0; col < holder.state_size; ++col)
+            torque += 0.5 * holder.state[row] *
+                StateSpaceFamilyValue(holder, holder.Q, holder.state_size,
+                                      row, col, interpolation) *
+                holder.state[col];
+        for (std::size_t col = 0; col < holder.input_size; ++col)
+            torque += holder.state[row] *
+                StateSpaceFamilyValue(holder, holder.R, holder.input_size,
+                                      row, col, interpolation) * input[col];
+    }
+    for (std::size_t row = 0; row < holder.input_size; ++row)
+        for (std::size_t col = 0; col < holder.input_size; ++col)
+            torque += 0.5 * input[row] *
+                StateSpaceFamilyValue(holder, holder.S, holder.input_size,
+                                      row, col, interpolation) * input[col];
+    output[holder.linear_output_size] = torque;
+    return output;
+}
+
+void StateSpaceUpdate(NativeStateSpaceHandle& holder,
+                      const StateSpaceEvaluation& evaluation) {
+    const bool family =
+        holder.kind == NativeStateSpaceHandle::Kind::PeriodicAngleFamily;
+    const auto& input = evaluation.input;
+    const auto& interpolation = evaluation.interpolation;
     std::vector<double> next_state(holder.state_size, 0.0);
     for (std::size_t row = 0; row < holder.state_size; ++row) {
         for (std::size_t col = 0; col < holder.state_size; ++col)
@@ -4304,10 +4327,116 @@ void SimulinkStateSpaceStep(int nlhs, mxArray* plhs[], int nrhs,
                 input[col];
     }
     holder.state = std::move(next_state);
-    holder.last_coordinate = family ? interpolation.coordinate
-                                    : std::numeric_limits<double>::quiet_NaN();
+    holder.last_coordinate = family
+        ? interpolation.coordinate
+        : std::numeric_limits<double>::quiet_NaN();
     ++holder.step_count;
+}
+
+void SimulinkStateSpaceOutput(int nlhs, mxArray* plhs[], int nrhs,
+                              const mxArray* prhs[]) {
+    if (nlhs != 1 || (nrhs != 3 && nrhs != 4))
+        BadArgument(
+            "usage: y = radia_mex('simulink.state_space.output', handle, u) "
+            "or y_tau = radia_mex('simulink.state_space.output', handle, "
+            "coordinate, u)");
+    const auto& holder = StateSpace(Handle(prhs[1]));
+    const auto evaluation = ReadStateSpaceEvaluation(holder, nrhs, prhs);
+    plhs[0] = RealColumn(StateSpaceOutput(holder, evaluation));
+}
+
+void SimulinkStateSpaceUpdate(int nlhs, mxArray*[], int nrhs,
+                              const mxArray* prhs[]) {
+    if (nlhs != 0 || (nrhs != 3 && nrhs != 4))
+        BadArgument(
+            "usage: radia_mex('simulink.state_space.update', handle, u) "
+            "or radia_mex('simulink.state_space.update', handle, coordinate, u)");
+    auto& holder = StateSpace(Handle(prhs[1]));
+    const auto evaluation = ReadStateSpaceEvaluation(holder, nrhs, prhs);
+    StateSpaceUpdate(holder, evaluation);
+}
+
+void SimulinkStateSpaceStep(int nlhs, mxArray* plhs[], int nrhs,
+                            const mxArray* prhs[]) {
+    if (nlhs != 1 || (nrhs != 3 && nrhs != 4))
+        BadArgument(
+            "usage: y = radia_mex('simulink.state_space.step', handle, u) "
+            "or y_tau = radia_mex('simulink.state_space.step', handle, "
+            "coordinate, u)");
+    auto& holder = StateSpace(Handle(prhs[1]));
+    const auto evaluation = ReadStateSpaceEvaluation(holder, nrhs, prhs);
+    auto output = StateSpaceOutput(holder, evaluation);
+    StateSpaceUpdate(holder, evaluation);
     plhs[0] = RealColumn(output);
+}
+
+void SimulinkStateSpaceSnapshot(int nlhs, mxArray* plhs[], int nrhs,
+                                const mxArray* prhs[]) {
+    CheckArity(nrhs, 2, nlhs, 1,
+               "snapshot = radia_mex('simulink.state_space.snapshot', handle)");
+    const auto& holder = StateSpace(Handle(prhs[1]));
+    const char* fields[] = {
+        "schema", "model_kind", "state", "step_count", "last_coordinate"
+    };
+    plhs[0] = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(plhs[0], 0, "schema",
+               mxCreateString("radia.simulink.native-state-space-snapshot.v1"));
+    mxSetField(
+        plhs[0], 0, "model_kind",
+        mxCreateString(holder.kind == NativeStateSpaceHandle::Kind::Static
+                           ? "static"
+                           : "periodic_angle_family"));
+    mxSetField(plhs[0], 0, "state", RealColumn(holder.state));
+    mxSetField(plhs[0], 0, "step_count",
+               mxCreateDoubleScalar(static_cast<double>(holder.step_count)));
+    mxSetField(plhs[0], 0, "last_coordinate",
+               mxCreateDoubleScalar(holder.last_coordinate));
+}
+
+void SimulinkStateSpaceRestore(int nlhs, mxArray*[], int nrhs,
+                               const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 0,
+               "radia_mex('simulink.state_space.restore', handle, snapshot)");
+    auto& holder = StateSpace(Handle(prhs[1]));
+    const mxArray* snapshot = prhs[2];
+    if (!mxIsStruct(snapshot) || mxGetNumberOfElements(snapshot) != 1)
+        BadArgument("snapshot must be a scalar struct returned by snapshot");
+    const auto field = [&](const char* name) {
+        const mxArray* value = mxGetField(snapshot, 0, name);
+        if (value == nullptr)
+            BadArgument(std::string("snapshot is missing ") + name);
+        return value;
+    };
+    if (Text(field("schema"), "snapshot.schema") !=
+        "radia.simulink.native-state-space-snapshot.v1")
+        BadArgument("snapshot schema is not supported");
+    const std::string expected_kind =
+        holder.kind == NativeStateSpaceHandle::Kind::Static
+            ? "static"
+            : "periodic_angle_family";
+    if (Text(field("model_kind"), "snapshot.model_kind") != expected_kind)
+        BadArgument("snapshot model kind does not match the native handle");
+    auto state = RealVector(field("state"), "snapshot.state");
+    if (state.size() != holder.state_size || !AllFinite(state))
+        BadArgument("snapshot.state has invalid dimensions or values");
+    const double raw_step = Scalar(field("step_count"), "snapshot.step_count");
+    constexpr double max_exact_integer = 9007199254740991.0;
+    if (raw_step < 0.0 || raw_step != std::floor(raw_step) ||
+        raw_step > max_exact_integer)
+        BadArgument("snapshot.step_count must be a nonnegative exact integer");
+    const mxArray* coordinate_value = field("last_coordinate");
+    if (!mxIsDouble(coordinate_value) || mxIsComplex(coordinate_value) ||
+        mxGetNumberOfElements(coordinate_value) != 1)
+        BadArgument("snapshot.last_coordinate must be a real double scalar");
+    const double last_coordinate = mxGetScalar(coordinate_value);
+    if (!std::isfinite(last_coordinate) && !std::isnan(last_coordinate))
+        BadArgument("snapshot.last_coordinate must be finite or NaN");
+    if (holder.kind == NativeStateSpaceHandle::Kind::Static &&
+        !std::isnan(last_coordinate))
+        BadArgument("a static state-space snapshot must use NaN last_coordinate");
+    holder.state = std::move(state);
+    holder.step_count = static_cast<std::size_t>(raw_step);
+    holder.last_coordinate = last_coordinate;
 }
 
 void SimulinkStateSpaceReset(int nlhs, mxArray* plhs[], int nrhs,
@@ -9530,8 +9659,24 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         SimulinkStateSpaceInfo(nlhs, plhs, nrhs, prhs);
         return;
     }
+    if (command == "simulink.state_space.output") {
+        SimulinkStateSpaceOutput(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "simulink.state_space.update") {
+        SimulinkStateSpaceUpdate(nlhs, plhs, nrhs, prhs);
+        return;
+    }
     if (command == "simulink.state_space.step") {
         SimulinkStateSpaceStep(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "simulink.state_space.snapshot") {
+        SimulinkStateSpaceSnapshot(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "simulink.state_space.restore") {
+        SimulinkStateSpaceRestore(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "simulink.state_space.reset") {

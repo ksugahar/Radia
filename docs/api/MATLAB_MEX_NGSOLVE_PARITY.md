@@ -21,7 +21,7 @@ silently dropped from the count.
 | Covered mapped MEX names | 94 |
 | Underscore numerical kernels | 27 / 27 covered |
 | Stateful pybind11 class surface | 111 / 111 covered |
-| MEX gateway commands | 311 |
+| MEX gateway commands | 316 |
 | MATLAB Optuna classes | 12 |
 | MATLAB Optuna factory functions | 2 |
 
@@ -189,8 +189,11 @@ Cubit rebuild is followed by exactly one H-matrix reconstruction; the inner
 loop never rebuilds the H-matrix.
 
 For Simulink, `simulink.state_space.create` stores `A`, `B`, `C`, `D`, and the
-initial state in a checked native handle. `step` computes `y=C*x+D*u` and then
-updates `x=A*x+B*u`; `reset`, `info`, and `destroy` manage the handle lifecycle.
+initial state in a checked native handle. `output` computes `y=C*x+D*u`
+without mutation, while `update` advances `x=A*x+B*u` exactly once per sample.
+`snapshot` and `restore` back the Level-2 S-Function `CustomSimState`; `step`
+retains the atomic output-plus-update behavior for standalone diagnosis.
+`reset`, `info`, and `destroy` complete the handle lifecycle.
 `radia.simulink.buildHCurlEddyCLNModel(..., Block="radia-mex")` uses this path.
 Induction heating does not: its distributed Eddy and Thermal fields are owned
 by `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun`, respectively. The former

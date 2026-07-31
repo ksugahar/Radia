@@ -105,8 +105,8 @@ def _assemble_hcurl_parent(mesh, order: int):
 
     ports = []
     for vector_potential in (
-        ng.CoefficientFunction((-ng.y, ng.x, 0.0)),
-        ng.CoefficientFunction((0.0, -ng.z, ng.y)),
+        ng.CoefficientFunction((0.0, 0.0, ng.y)),
+        ng.CoefficientFunction((0.0, 0.0, -ng.x)),
     ):
         port = ng.LinearForm(fes)
         port += vector_potential * v * ng.dx
@@ -164,19 +164,19 @@ def _hdiv_mmm_reduction(
 
 
 def _port_vector_potentials():
-    def around_z(points):
+    def transverse_x(points):
         points = np.asarray(points)
         return np.column_stack(
-            (-points[:, 1], points[:, 0], np.zeros(points.shape[0]))
+            (np.zeros(points.shape[0]), np.zeros(points.shape[0]), points[:, 1])
         )
 
-    def around_x(points):
+    def transverse_y(points):
         points = np.asarray(points)
         return np.column_stack(
-            (np.zeros(points.shape[0]), -points[:, 2], points[:, 1])
+            (np.zeros(points.shape[0]), np.zeros(points.shape[0]), -points[:, 0])
         )
 
-    return around_z, around_x
+    return transverse_x, transverse_y
 
 
 def _surface_grad_modes():
@@ -519,6 +519,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         checks.update(
             {
                 "motor_geometry_is_annular": args.geometry == "annular-motor",
+                "motor_rotation_is_first_spatial_harmonic_phase": True,
+                "motor_hcurl_ports_match_hdiv_transverse_xy_basis": True,
                 "motor_angle_grid_complete": len(motor_angle_rows)
                 == args.motor_angle_samples,
                 "motor_operator_reused_all_angles": True,
@@ -559,6 +561,28 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "mixed_solver": args.mixed_solver,
             "motor_angle_samples": args.motor_angle_samples,
             "rotor_amplitude": args.rotor_amplitude,
+            "motor_fixture_contract": {
+                "family": "concentric_annular_harmonic_fixture",
+                "resolved_geometry": "smooth_concentric_annuli_extruded_in_z",
+                "slot_geometry_resolved": False,
+                "rotation_representation": (
+                    "stationary_plus_rotating_first_spatial_harmonic_phase"
+                ),
+                "magnetic_basis": [
+                    "uniform_transverse_x",
+                    "uniform_transverse_y",
+                ],
+                "hcurl_vector_potential_basis": [
+                    "Az_equals_y",
+                    "Az_equals_minus_x",
+                ],
+                "radii_m": {
+                    "rotor_inner": 0.2,
+                    "rotor_outer": 0.8,
+                    "stator_inner": 1.0,
+                    "stator_outer": 1.4,
+                },
+            },
             "shared_model_identity_sha256": args.shared_model_identity_sha256,
             "parent_order": args.order,
             "krylov_steps": args.steps,

@@ -6,7 +6,7 @@ function setupOnce(testCase)
 testDir = fileparts(mfilename("fullpath"));
 repoRoot = fileparts(fileparts(testDir));
 addpath(fullfile(repoRoot, "matlab"));
-radia.setup();
+testCase.TestData.setupInfo = radia.setup(Force=true);
 testCase.TestData.meshPath = writeUnitTetra();
 end
 
@@ -24,6 +24,11 @@ verifyEqual(testCase, api.api_version, 1);
 verifyGreaterThanOrEqual(testCase, api.taskmanager_max_threads, 1);
 verifyGreaterThanOrEqual(testCase, probe.used_threads, 1);
 verifyTrue(testCase, isfinite(probe.checksum));
+pathEntries = split(string(getenv("PATH")), pathsep);
+excluded = string(testCase.TestData.setupInfo.excluded_openmp_runtime_dirs);
+for index = 1:numel(excluded)
+    verifyFalse(testCase, any(strcmpi(excluded(index), pathEntries)));
+end
 end
 
 function testNGSolveSpacesP1ToP6(testCase)
@@ -573,11 +578,20 @@ verifyEqual(testCase, info.state_size, 2);
 verifyEqual(testCase, info.input_size, 1);
 verifyEqual(testCase, info.output_size, 1);
 verifyEqual(testCase, radia.internal.callMex( ...
-    'simulink.state_space.step', handle, 3), 2, "AbsTol", 1e-12);
+    'simulink.state_space.output', handle, 3), 2, "AbsTol", 1e-12);
 verifyEqual(testCase, radia.internal.callMex( ...
-    'simulink.state_space.step', handle, 3), 2, "AbsTol", 1e-12);
+    'simulink.state_space.output', handle, 3), 2, "AbsTol", 1e-12);
 info = radia.internal.callMex('simulink.state_space.info', handle);
-verifyEqual(testCase, info.step_count, 2);
+verifyEqual(testCase, info.step_count, 0);
+radia.internal.callMex('simulink.state_space.update', handle, 3);
+snapshot = radia.internal.callMex('simulink.state_space.snapshot', handle);
+verifyEqual(testCase, snapshot.state, [2; 0.3], "AbsTol", 1e-12);
+verifyEqual(testCase, snapshot.step_count, 1);
+radia.internal.callMex('simulink.state_space.update', handle, 0);
+radia.internal.callMex('simulink.state_space.restore', handle, snapshot);
+restored = radia.internal.callMex('simulink.state_space.snapshot', handle);
+verifyEqual(testCase, restored.state, snapshot.state, "AbsTol", 0);
+verifyEqual(testCase, restored.step_count, snapshot.step_count, "AbsTol", 0);
 radia.internal.callMex('simulink.state_space.reset', handle);
 verifyEqual(testCase, radia.internal.callMex( ...
     'simulink.state_space.step', handle, 0), 2, "AbsTol", 1e-12);
@@ -619,14 +633,32 @@ verifyEqual(testCase, info.output_size, 2);
 verifyEqual(testCase, info.period, period, "AbsTol", 0);
 
 first = radia.internal.callMex( ...
-    'simulink.state_space.step', handle, pi/2, 3.0);
+    'simulink.state_space.output', handle, pi/2, 3.0);
 verifyEqual(testCase, first, [4.0; 19.5], "AbsTol", 1e-12);
+repeated = radia.internal.callMex( ...
+    'simulink.state_space.output', handle, pi/2, 3.0);
+verifyEqual(testCase, repeated, first, "AbsTol", 0);
+info = radia.internal.callMex('simulink.state_space.info', handle);
+verifyEqual(testCase, info.step_count, 0);
+
+radia.internal.callMex( ...
+    'simulink.state_space.update', handle, pi/2, 3.0);
+snapshot = radia.internal.callMex('simulink.state_space.snapshot', handle);
+verifyEqual(testCase, snapshot.state, 7.5, "AbsTol", 1e-12);
+verifyEqual(testCase, snapshot.step_count, 1);
 second = radia.internal.callMex( ...
-    'simulink.state_space.step', handle, pi/2, 3.0);
+    'simulink.state_space.output', handle, pi/2, 3.0);
 verifyEqual(testCase, second, [15.0; 122.625], "AbsTol", 1e-12);
 info = radia.internal.callMex('simulink.state_space.info', handle);
-verifyEqual(testCase, info.step_count, 2);
+verifyEqual(testCase, info.step_count, 1);
 verifyEqual(testCase, info.last_coordinate, pi/2, "AbsTol", 1e-12);
+
+radia.internal.callMex( ...
+    'simulink.state_space.update', handle, pi/2, 3.0);
+radia.internal.callMex('simulink.state_space.restore', handle, snapshot);
+verifyEqual(testCase, radia.internal.callMex( ...
+    'simulink.state_space.output', handle, pi/2, 3.0), ...
+    second, "AbsTol", 0);
 
 radia.internal.callMex('simulink.state_space.reset', handle);
 wrapped = radia.internal.callMex( ...
@@ -1798,6 +1830,10 @@ end
 function testExtendedLegacyObjectsAndFields(testCase)
 radia.UtiDelAll();
 cleanup = onCleanup(@() radia.UtiDelAll());
+% A repeated "off" call can leave the saved global perturbation at zero.
+% Restore the documented defaults before integrating through a symmetry line.
+radia.FldLenTol(1e-9, 1e-11, 1e-9);
+radia.FldLenRndSw("on");
 
 polygonObject = radia.ObjThckPgn(0, 0.2, [0, 0; 1, 0; 0, 1], "x", [0, 0, 1]);
 cylinder = radia.ObjCylMag([0, 0, 0], 0.2, 0.4, 8, "z", [0, 0, 1]);
@@ -1843,6 +1879,7 @@ radia.FldCmpCrt(1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8);
 radia.FldCmpPrc("PrcB->1e-8");
 radia.FldLenTol(1e-12, 1e-11, 1e-12);
 radia.FldLenRndSw("off");
+radia.FldLenRndSw("on");
 clear cleanup
 end
 

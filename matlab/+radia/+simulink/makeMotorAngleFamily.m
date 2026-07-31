@@ -16,8 +16,8 @@ arguments
     R double
     S double
     x0 (:,1) double
-    options.Period_rad (1,1) double {mustBePositive} = 2*pi
-    options.SampleTime_s (1,1) double {mustBePositive} = 1.0e-4
+    options.Period_rad (1,1) double {mustBeFinite, mustBePositive} = 2*pi
+    options.SampleTime_s (1,1) double {mustBeFinite, mustBePositive} = 1.0e-4
 end
 
 snapshotCount = numel(angleGrid_rad);
@@ -46,7 +46,8 @@ if nState < 1 || nInput < 1 || nLinearOutput < 1 || ...
         size(C, 2) ~= nState || ~isequal(size(D, 1:2), [nLinearOutput, nInput]) || ...
         ~isequal(size(Q, 1:2), [nState, nState]) || ...
         ~isequal(size(R, 1:2), [nState, nInput]) || ...
-        ~isequal(size(S, 1:2), [nInput, nInput]) || numel(x0) ~= nState
+        ~isequal(size(S, 1:2), [nInput, nInput]) || numel(x0) ~= nState || ...
+        any(~isfinite(x0), "all")
     error("radia:simulink:MotorAngleFamily", ...
         "The A/B/C/D/Q/R/S and x0 dimensions are inconsistent.");
 end

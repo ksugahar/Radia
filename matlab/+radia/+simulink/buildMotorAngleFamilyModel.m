@@ -4,7 +4,7 @@ function modelPath = buildMotorAngleFamilyModel(modelName, family, options)
 arguments
     modelName (1,1) string
     family (1,1) struct
-    options.StopTime_s (1,1) double {mustBePositive} = 1.0e-2
+    options.StopTime_s (1,1) double {mustBeFinite, mustBePositive} = 1.0e-2
     options.Save (1,1) logical = true
     options.Open (1,1) logical = false
 end

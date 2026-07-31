@@ -370,7 +370,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radial_bearing_force_symmetry_gate` | Gate magnetic-body force with equal and mirrored excitation controls. |
 | `reciprocal_two_port_power_sweep_gate` | Gate complex two-port reciprocity, symmetry, passivity, and power closure. |
 | `regularized_trace_inverse_path_gate` | Gate a P1 trace Tikhonov path, L-curve, Morozov, and replay. |
-| `release_workflow` | Release-QUD workflow for the Radia monorepo |
+| `release_workflow` | Release-QUD workflow for PyPI and the MEX + SLX GitHub Release. |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
 | `rotating_conductor_transient_gate` | Gate moving-axis migration, rotational kinematics, and loss partition. |
 | `rotational_eddy_brake_energy_gate` | Gate free rotational braking with angular impulse and field energy. |

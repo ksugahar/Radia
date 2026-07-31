@@ -17,6 +17,8 @@ REQUIRED_NATIVE_CAPABILITIES = {
     "periodic_angle_family_native_interpolation",
     "quadratic_torque_output",
     "persistent_native_state",
+    "split_output_update_lifecycle",
+    "custom_sim_state_roundtrip",
     "simulink_s_function_compile",
     "foreign_openmp_runtime_isolation",
 }
@@ -96,6 +98,7 @@ def main() -> int:
         str(native.get("mex_sha256", "")),
         str(native.get("source_sha256", "")),
         str(native.get("setup_sha256", "")),
+        str(native.get("generator_sha256", "")),
     ]
     native_checks = {
         "standalone_batch": native.get("execution_mode") == "standalone_matlab_batch",
@@ -119,7 +122,12 @@ def main() -> int:
             for name in test_names
         ),
         "foreign_openmp_runtime_isolated": (
-            int(native.get("foreign_openmp_runtime_dirs_excluded_count", 0)) >= 1
+            int(
+                native.get(
+                    "foreign_openmp_runtime_dirs_remaining_on_path_count", -1
+                )
+            )
+            == 0
             and "foreign_openmp_runtime_isolation"
             in set(native.get("validated_capabilities", []))
         ),
@@ -168,7 +176,8 @@ def main() -> int:
         "pass": True,
     }
     artifact["proof_payload_sha256"] = _sha_json(artifact)
-    OUTPUT.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
+    with OUTPUT.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(artifact, indent=2) + "\n")
     print(
         json.dumps(
             {

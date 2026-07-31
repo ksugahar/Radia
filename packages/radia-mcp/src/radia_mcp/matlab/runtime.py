@@ -463,7 +463,7 @@ def matlab_radia_mex_contract(topic="all"):
             "runtime_probe": "radia.quickCheck()",
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
             "native_motor_family_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
-            "native_motor_family_gate": "generate_motor_angle_family_mex_artifact",
+            "native_motor_family_gate": "run('validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m')",
             "openmp_runtime_policy": "radia.setup excludes foreign libiomp5md.dll directories from the MATLAB process PATH",
         },
         "limitations": [
@@ -479,7 +479,7 @@ def matlab_radia_mex_contract(topic="all"):
         "mex": {"command_count": len(commands), "command_groups": dict(sorted(groups.items())), "command_names": commands, "pybind_missing": pybind_missing, "pybind_internal_missing": internal_missing, "pybind_class_missing_commands": class_missing, "pybind_class_unmapped": class_unmapped},
         "ngsolve": {"owner": "NGSolve", "matlab_boundary": "ngsolve.space_info, ngsolve.matrix_dump, persistent Mesh/FESpace/BilinearForm/Matrix/LinearForm handles, native CoefficientFunction/GridFunction handles, native HCurl response projection, and numeric HDiv field evaluators", "policy": "Use NGSolve for FE plumbing; exchange typed native handles, numeric matrices, vectors, fields, and metadata. Persistent forms expose built-in real/complex volume integrators, scalar CoefficientFunction-weighted volume and trace matrices, native CoefficientFunction volume and boundary RHS assembly in real/complex H1/HCurl/HDiv, and native sparse matvec/inverse operations; arbitrary callbacks and tensor-valued forms remain explicit gaps."},
         "optimization": {"package": "radia.optuna", "classes": optuna_classes, "factory_functions": optuna_functions, "storage": "MAT-file containing MATLAB tables", "mcp_tool": "matlab_optuna_simulink_contract"},
-        "simulink": {"class": "radia.optuna.SimulinkRunner", "workflow": "SimulationInput -> sim -> score -> Study.tell", "blocks": ["Radia/Applications/Induction Heating: native distributed Eddy and Thermal MEX S-Functions", "radia.simulink.buildTeam28CLNModel", "radia.simulink.buildHCurlEddyCLNModel Block=radia-mex", "radia.simulink.buildMotorAngleFamilyModel"], "native_state_space_commands": ["simulink.state_space.create", "simulink.state_space.info", "simulink.state_space.step", "simulink.state_space.reset", "simulink.state_space.destroy"], "native_state_space_overloads": {"static": "create(A,B,C,D,x0); step(handle,u)", "periodic_motor_family": "create(grid,period,A,B,C,D,Q,R,S,x0); step(handle,mechanical_angle,u) -> [linear_outputs; torque]"}, "mcp_tool": "matlab_optuna_simulink_contract"},
+        "simulink": {"class": "radia.optuna.SimulinkRunner", "workflow": "SimulationInput -> sim -> score -> Study.tell", "blocks": ["Radia/Applications/Induction Heating: native distributed Eddy and Thermal MEX S-Functions", "radia.simulink.buildTeam28CLNModel", "radia.simulink.buildHCurlEddyCLNModel Block=radia-mex", "radia.simulink.buildMotorAngleFamilyModel"], "native_state_space_commands": ["simulink.state_space.create", "simulink.state_space.info", "simulink.state_space.output", "simulink.state_space.update", "simulink.state_space.step", "simulink.state_space.snapshot", "simulink.state_space.restore", "simulink.state_space.reset", "simulink.state_space.destroy"], "native_state_space_overloads": {"static": "create(A,B,C,D,x0); output(handle,u); update(handle,u)", "periodic_motor_family": "create(grid,period,A,B,C,D,Q,R,S,x0); output(handle,mechanical_angle,u) -> [linear_outputs; torque]; update(handle,mechanical_angle,u)", "standalone_debug": "step is the atomic output-plus-update probe", "sim_state": "snapshot/restore preserve native state for Simulink CustomSimState"}, "mcp_tool": "matlab_optuna_simulink_contract"},
         "reinforcement_learning": {"package": "radia.rl", "workflow": "reset -> MEX/Radia step -> reward -> next observation", "adapter": "rlFunctionEnv when Reinforcement Learning Toolbox is installed"},
         "limitations": {"items": base["limitations"]},
     }
@@ -537,7 +537,7 @@ def matlab_optuna_simulink_contract():
                 "matlab_factory": "radia.simulink.makeMotorAngleFamily",
                 "simulink_builder": "radia.simulink.buildMotorAngleFamilyModel",
                 "s_function": "radia_motor_angle_family_mex_sfunction",
-                "state": "persistent C++ handle with reset and destroy lifecycle",
+                "state": "persistent C++ handle with separated output/update, CustomSimState snapshot/restore, reset, and destroy lifecycle",
                 "interpolation": "periodic linear interpolation over one mechanical-angle period",
                 "torque": "0.5*x'*Q*x + x'*R*u + 0.5*u'*S*u",
                 "validation_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
