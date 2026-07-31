@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.25] - 2026-07-31
+
+- Aligned the release with Radia 4.95.31's native ChargeGram streaming
+  lifecycle fix, preventing concurrent deformation modes from reentering one
+  native parent after successive NGSolve TaskManager regions.
+
 ## [1.4.24] - 2026-07-31
 
 - Published the native Motor angle-family MEX/Simulink lifecycle contract,

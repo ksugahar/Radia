@@ -94,7 +94,7 @@ table is the AI-readable summary.
 | 3 | Stage exactly the release files | always | NO `git add -A`; user has WIP |
 | 4 | Composite commit (HEREDOC, all packages in title) | always | Co-Authored-By trailer required |
 | 5 | Three (or two) annotated tags | always | only bump packages with changes |
-| 6 | Push main + all tags | always | tag push triggers CI; CI workflow_run gates Release workflows |
+| 6 | Push main + all tags | always | tag push triggers CI; the exact tag CI uploads `ci-release-context`, and only that run may gate Release workflows |
 | 7 | Monitor CI propagation to PyPI | always | use ci-monitor skill |
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
@@ -258,21 +258,27 @@ Machine-readable public-safe evidence lives under
 | `gh release download ... no assets match the file pattern`              | binaries-release upload race vs tag-CI start                     | (CI has 6-attempt retry as of v4.26)| v4.25.1, v4.27.0|
 | `Basic tests failed` w/ collected 0 tests                               | pytest config conflict (pyproject.toml vs pytest.ini)            | Gate 2 (collect-only sweep)    | (rare)       |
 | `_radia_pybind import failure: DLL load failed`                         | Cubit plugin .pyd / cubit-mesh-export .pyd built against wrong Python ABI | Phase 0 clean rebuild | release-qud Phase 0 |
+| PyPI version appears although its release-tag CI did not pass           | an earlier successful main CI looked up tags by SHA after tags were added | exact per-run `ci-release-context` artifact + workflow contract tests | 4.95.30 / 1.4.24 |
 
 ## ===
 ## recovery — when CI on a tag fails AFTER push
 ## ===
 
 CI on a tag ref running on a broken commit cannot be rescued by
-pushing a fix to main.  The `Release` workflow is gated on
-`workflow_run` of CI ON THE TAG REF, and the tag still points at
-the broken commit.
+pushing a fix to main.  Each CI run uploads an immutable
+`ci-release-context` artifact containing its ref type, ref name, SHA, run ID,
+and the release tags present on that SHA when CI started. The `Release`
+workflows reject a successful branch CI or a package tag added after CI began;
+manual/PR CI events are ineligible. Publication is gated on `workflow_run` of
+an exact push-triggered tag-ref CI, and the tag still points at the broken
+commit.
 
 **The only path forward is patch bump and re-tag**, per the skill's
 "PyPI is immutable" policy.  Do NOT delete + recreate a pushed tag
 unless the user explicitly authorizes it (and even then, only if
-the version has not gone to PyPI -- which it hasn't, since CI
-failed; PyPI never sees it).
+the version has not gone to PyPI. Always check PyPI before choosing the next
+version: releases predating the exact ref-context gate could publish from a
+racing successful branch CI even when a sibling tag CI later failed.
 
 The 2026-05-03 v4.27.x round-trip went:
   v4.27.0 (CI fail: stale elf imports)

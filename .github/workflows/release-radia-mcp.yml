@@ -7,6 +7,7 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
@@ -16,14 +17,54 @@ jobs:
     # NOTE: workflow_run.head_branch returns 'main' (not the tag name) when the
     # triggering commit is on both a branch and a tag (GitHub Actions quirk).
     # Use git ls-remote to reliably detect the tag regardless of head_branch.
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pypi
 
     steps:
+      - name: Download exact CI ref context
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-release-context
+          path: ci-release-context
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify triggering CI ran on a tag ref
+        id: ref_check
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          TAG_PREFIX: radia-mcp-v
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+          path = pathlib.Path("ci-release-context/ci-release-context.json")
+          context = json.loads(path.read_text(encoding="utf-8"))
+          if context.get("schema") != "radia.ci-release-context.v1":
+              print("::error::Unknown CI release-context schema")
+              sys.exit(1)
+          if context.get("sha") != os.environ["SHA"] or str(context.get("run_id")) != os.environ["RUN_ID"]:
+              print("::error::CI release-context does not match triggering workflow_run")
+              sys.exit(1)
+          tags = context.get("release_tags")
+          if not isinstance(tags, list):
+              print("::error::CI release-context has no release-tag snapshot")
+              sys.exit(1)
+          is_tag = context.get("ref_type") == "tag"
+          eligible = is_tag and any(tag.startswith(os.environ["TAG_PREFIX"]) for tag in tags)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"is_tag={str(is_tag).lower()}\n")
+              output.write(f"eligible={str(eligible).lower()}\n")
+          print(f"CI ref context: {context.get('ref')} (tag={is_tag}, release_tags={tags})")
+          PY
+
       - name: Check if a radia-mcp-v* tag points at this commit
         id: tag_check
+        if: steps.ref_check.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.event.workflow_run.head_sha }}
