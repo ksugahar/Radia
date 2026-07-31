@@ -2504,6 +2504,18 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     assert built.system.blocks.keys() == {"volume", "volume1", "surface"}
     assert built.volume_basis.n_modes == 2
     assert built.bridge_cycle_basis.n_modes == built.conductor_graph.cycle_rank
+    np.testing.assert_allclose(
+        np.diag(built.bridge_cycle_basis.mass_matrix()),
+        np.ones(built.bridge_cycle_basis.n_modes),
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(
+        np.diag(built.surface_basis.mass_matrix()),
+        np.ones(built.surface_basis.n_modes),
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
     assert built.surface_basis.n_modes == 2
     assert built.system.n_modes == 2 + built.conductor_graph.cycle_rank + 2
     assert built.rhs.shape == (built.system.n_modes, 2)
@@ -2529,6 +2541,31 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     assert isinstance(coupled, vim.CoupledHDivHybridVIMSystem)
     assert coupled.n_hcurl_vim_modes == built.system.n_modes
     assert coupled.diagnostics()["eddy_basis_count"] == 3
+
+
+def test_hybrid_vim_dense_solve_is_invariant_to_reduced_basis_scale():
+    scale = 1.0e-14
+    correlation = 0.1 * np.sqrt(scale)
+    resistance = np.array(
+        [[1.0, correlation], [correlation, scale]],
+        dtype=complex,
+    )
+    system = vim.HybridVIMSystem(
+        resistance=resistance,
+        inductance=np.zeros((2, 2), dtype=complex),
+        surface_mass=np.zeros((2, 2), dtype=complex),
+        basis_names=("magnetic_scale", "small_dual_volume_scale"),
+        blocks={"volume": (0, 2)},
+        interaction_backend="dense-scale-invariance-test",
+    )
+    expected = np.array([1.25 - 0.5j, -2.0 + 0.75j])
+    rhs = resistance @ expected
+
+    solved = system.solve(0.0, rhs)
+
+    np.testing.assert_allclose(solved, expected, rtol=1.0e-9, atol=1.0e-11)
+    relative_residual = np.linalg.norm(resistance @ solved - rhs) / np.linalg.norm(rhs)
+    assert relative_residual < 1.0e-14
 
 
 def test_ngsolve_topology_aware_planar_builder_uses_log_hacapk_by_default():

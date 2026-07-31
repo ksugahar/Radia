@@ -2431,6 +2431,38 @@ def CompressHCurlResponseInCurrentGram(
     return response, current
 
 
+def _normalize_sampled_current_modes(
+    current_basis: SampledCurrentBasis,
+) -> SampledCurrentBasis:
+    """Normalize each retained current mode without changing its identity.
+
+    Reduced current coordinates are arbitrary: a graph-cycle mode sampled on
+    a small dual volume can have a Gram diagonal many orders below an EVRS
+    mode even though both describe valid currents.  Unit current-Gram diagonal
+    keeps the named modes intact while removing that mesh-size-dependent
+    coordinate scale from the coupled VIM system.
+    """
+
+    if not isinstance(current_basis, SampledCurrentBasis):
+        raise TypeError("current_basis must be a SampledCurrentBasis")
+    if current_basis.n_modes == 0:
+        return current_basis
+    gram = current_basis.mass_matrix()
+    diagonal = np.real(np.diag(0.5 * (gram + gram.conj().T)))
+    scale = max(float(np.max(np.abs(diagonal))), 0.0)
+    tolerance = 100.0 * max(current_basis.n_modes, 1) * np.finfo(float).eps * scale
+    if np.any(diagonal <= tolerance):
+        raise ValueError("current basis contains a zero-energy mode")
+    modes = current_basis.modes / np.sqrt(diagonal)[:, np.newaxis, np.newaxis]
+    return SampledCurrentBasis(
+        points=current_basis.points,
+        weights=current_basis.weights,
+        modes=modes,
+        kind=current_basis.kind,
+        names=current_basis.names,
+    )
+
+
 def _active_indices(free_dofs, n: int) -> np.ndarray:
     if free_dofs is None:
         return np.arange(n, dtype=int)
@@ -6044,7 +6076,14 @@ def _square_matrix(matrix, n: int, name: str) -> np.ndarray:
 
 
 def _solve_reduced_linear(operator, rhs) -> np.ndarray:
-    """Solve a small reduced system through the native kernel when available."""
+    """Solve a small reduced system after symmetric coordinate equilibration.
+
+    The reduced blocks may use unrelated physical coordinate scales (for
+    example unit magnetization beside small-volume current-cycle modes).
+    Symmetric diagonal equilibration is an exactly equivalent basis change;
+    it avoids declaring a full-rank mixed system singular solely because its
+    unscaled entries span many orders of magnitude.
+    """
 
     matrix = np.asarray(operator)
     values = np.asarray(rhs)
@@ -6058,15 +6097,38 @@ def _solve_reduced_linear(operator, rhs) -> np.ndarray:
     if not np.all(np.isfinite(matrix)) or not np.all(np.isfinite(values)):
         raise ValueError("operator and rhs must contain only finite values")
 
+    diagonal_metric = np.abs(np.diag(matrix)).astype(float, copy=False)
+    row_norm = np.linalg.norm(matrix, axis=1)
+    column_norm = np.linalg.norm(matrix, axis=0)
+    fallback_metric = np.sqrt(row_norm * column_norm)
+    reference = max(
+        float(np.max(diagonal_metric, initial=0.0)),
+        float(np.max(fallback_metric, initial=0.0)),
+        np.finfo(float).tiny,
+    )
+    weak_diagonal = diagonal_metric <= np.finfo(float).eps * reference
+    metric = np.where(weak_diagonal, fallback_metric, diagonal_metric)
+    if np.any(metric <= np.finfo(float).tiny):
+        raise np.linalg.LinAlgError(
+            "reduced operator has an unscalable zero row or column"
+        )
+    coordinate_scale = np.sqrt(metric)
+    equilibrated_matrix = (
+        matrix / coordinate_scale[:, np.newaxis] / coordinate_scale[np.newaxis, :]
+    )
+    equilibrated_values = values / coordinate_scale[:, np.newaxis]
+
     func = _radia_cpp_kernel("_HybridVIMSolve")
-    if func is not None and (np.iscomplexobj(matrix) or np.iscomplexobj(values)):
+    if func is not None and (
+        np.iscomplexobj(equilibrated_matrix) or np.iscomplexobj(equilibrated_values)
+    ):
         solution = func(
-            np.ascontiguousarray(matrix, dtype=np.complex128),
-            np.ascontiguousarray(values, dtype=np.complex128),
+            np.ascontiguousarray(equilibrated_matrix, dtype=np.complex128),
+            np.ascontiguousarray(equilibrated_values, dtype=np.complex128),
         )
     else:
-        solution = np.linalg.solve(matrix, values)
-    solution = np.asarray(solution)
+        solution = np.linalg.solve(equilibrated_matrix, equilibrated_values)
+    solution = np.asarray(solution) / coordinate_scale[:, np.newaxis]
     return solution[:, 0] if vector_rhs else solution
 
 
@@ -10160,6 +10222,7 @@ def NgsolveTopologyAwareHybridVIM(
         geometry_intorder=geometry_intorder,
         names=bridge_names,
     )
+    bridge = _normalize_sampled_current_modes(bridge)
     surface = NgsolveSurfaceOmegaBasis(
         mesh,
         surface_grad_modes,
@@ -10167,6 +10230,7 @@ def NgsolveTopologyAwareHybridVIM(
         boundaries=surface_boundaries,
         names=surface_names,
     )
+    surface = _normalize_sampled_current_modes(surface)
     if interaction is None:
         sampled_epsilon = (
             _default_kernel_epsilon((volume, bridge, surface))
