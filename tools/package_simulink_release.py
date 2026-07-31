@@ -115,6 +115,8 @@ def release_matlab_files() -> tuple[Path, ...]:
     result = subprocess.run(
         [
             "git",
+            "-c",
+            f"safe.directory={ROOT.as_posix()}",
             "ls-files",
             "--cached",
             "--",
