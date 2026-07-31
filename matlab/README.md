@@ -16,6 +16,11 @@ vectors for XY Graph display. Python is not launched from an optimization
 sample step; the headless design/Pareto lane and analytic-adjoint lane have
 separate explicit triggers.
 
+MATLAB and Simulink are required for the library. The adjoint topology and
+stream-function topology optimization features additionally require
+Optimization Toolbox; machines without it retain the rest of the library and
+report a failed optimization trigger instead of substituting another solver.
+
 The tracked standalone composition is `radia_streamfunction_optimization.slx`.
 Regenerate it with `radia.simulink.buildStreamFunctionOptimizationModel`; the
 `.m` generator, rather than manual SLX editing, owns its block layout and mask

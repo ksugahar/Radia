@@ -1,7 +1,12 @@
 {
-  "radia_version": "4.95.27",
+  "radia_version": "4.95.30",
   "schema_version": "radia-motor-validation-artifact/v1",
-  "timestamp_utc": "2026-07-29T19:37:25.363595+00:00",
+  "timestamp_utc": "2026-07-31T07:55:16.561253+00:00",
+  "execution_environment": {
+    "host_role": "compute",
+    "hostname": "Hibino",
+    "python": "3.12.10"
+  },
   "motor_validation_lane": "ngsolve_age",
   "reference_source_class": "independent_public_solver_lane",
   "observable_family": "torque",
@@ -14,25 +19,25 @@
   },
   "metrics": {
     "quantity_specific_residual": 9.67719430026613e-17,
-    "torque_relative_error": 0.09745842283119847,
-    "centered_normalized_correlation": 0.9620074232770214,
+    "torque_relative_error": 0.06645055566414082,
+    "centered_normalized_correlation": 0.9823372946077075,
     "torque_peak_to_peak_nm": 163.68827953956983
   },
   "timing_breakdown_s": {
-    "prepare": 0.00506120000500232,
-    "assemble_and_factor": 0.007808399968780577,
-    "angle_sweep_and_postprocess": 0.018209200003184378,
-    "total": 0.06512859999202192
+    "prepare": 0.007537699770182371,
+    "assemble_and_factor": 0.03711340017616749,
+    "angle_sweep_and_postprocess": 0.037788799963891506,
+    "total": 0.1446409998461604
   },
   "artifact_feedback": {
     "status": "promoted",
-    "public_lesson": "A fixed AGE operator and factorization can sweep a complete rotor-angle grid without remeshing and provide an independent torque waveform."
+    "public_lesson": "A fixed AGE operator and factorization can sweep a complete first-harmonic phase grid without remeshing and provide an independent torque waveform for the smooth annular fixture."
   },
   "shared_mesh_material_identity": {
-    "geometry_sha256": "c5ad6c6c3b4c4888f6745ef6df7bb1e4f2546a82e083eaed8646309ba0b368d0",
+    "geometry_sha256": "5b535b3aeba6bb5c6a23fd716300b4089618c81b6252f8aed209ee98fee8a77e",
     "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
-    "excitation_sha256": "27e2deab2fc6df07f85b503e2b838ef8ddf7ed39872a1dfc395ecb6308cf5485",
-    "aggregate_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83"
+    "excitation_sha256": "9760cbc356bcdcedb407d06f7f5fce043016ac04794687757daf51f5d478928b",
+    "aggregate_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9"
   },
   "solver_ready_artifact": {
     "artifact_id": "annular_motor_ngsolve_age_v1",

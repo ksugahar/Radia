@@ -83,6 +83,8 @@ def verify_archive(archive: Path) -> dict:
                 manifest.get("platform") != "win64" or \
                 manifest.get("mex_extension") != "mexw64":
             raise RuntimeError("Simulink release runtime compatibility is invalid")
+        if manifest.get("required_matlab_products") != ["MATLAB", "Simulink"]:
+            raise RuntimeError("Simulink release product requirements are invalid")
         if schema == "radia.simulink.ih-release-manifest.v1":
             if manifest.get("release_channel") != "preview":
                 raise RuntimeError("The first IH release must declare preview channel")
@@ -109,6 +111,14 @@ def verify_archive(archive: Path) -> dict:
                 "matlab/radia_ih_thermal_sfun.mexw64",
             }:
                 raise RuntimeError("The full library MEX inventory is invalid")
+            toolbox_requirements = manifest.get("feature_toolbox_requirements", {})
+            if toolbox_requirements != {
+                "adjoint_topology_optimization": ["Optimization Toolbox"],
+                "stream_function_topology_optimization": [
+                    "Optimization Toolbox"
+                ],
+            }:
+                raise RuntimeError("The full library toolbox contract is invalid")
 
         declared = set()
         for item in manifest.get("files", []):
