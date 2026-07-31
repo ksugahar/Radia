@@ -218,6 +218,13 @@ from ._matlab_bridge import (  # noqa: F401
     ExportHCurlEddyCLNJSON,
     ExportHCurlEddyCLNFamilyJSON,
 )
+from ._slab_eddy import (  # noqa: F401  (exact 1-D HDiv-MMM/HCurl-eddy validation reduction)
+    ConductiveSlab,
+    parallel_slab_exact_response,
+    refine_parallel_slab_reduced,
+    slab_surface_model,
+    solve_parallel_slab_reduced,
+)
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
     """
@@ -387,5 +394,8 @@ __all__ = [
     "SkinImpedance", "SIBCAdmittanceTail",
     "SIBCSchurTerminationImpedance", "SIBCSchurTerminationAdmittance",
     "ExternalVectorPotentialRHS",
+    "ConductiveSlab", "parallel_slab_exact_response",
+    "slab_surface_model", "solve_parallel_slab_reduced",
+    "refine_parallel_slab_reduced",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]
