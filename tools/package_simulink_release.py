@@ -117,8 +117,6 @@ def release_matlab_files() -> tuple[Path, ...]:
             "git",
             "ls-files",
             "--cached",
-            "--others",
-            "--exclude-standard",
             "--",
             "matlab",
         ],
