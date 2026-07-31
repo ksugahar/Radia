@@ -9,7 +9,7 @@
     "terminal_reaction_closure": true,
     "validation_passed": true
   },
-  "created_at_utc": "2026-07-31T05:39:56.138901+00:00",
+  "created_at_utc": "2026-07-31T07:37:40.209589+00:00",
   "errors": {
     "max_abs": 0.0,
     "max_rel": 0.0
@@ -38,9 +38,9 @@
       1.0,
       0.0
     ],
-    "field_state_sha256": "0d574c8f27eb24e0e23b0330cf93ad869600a2f143b4f7d67e247be32cc81df6",
+    "field_state_sha256": "a165c145929ab6b9200b05fbb16ab996014cb0a41ee058670e96952e9b13d8c8",
     "frequency_hz": 0.0,
-    "observables_sha256": "2695e0e550a05433c675bf70d9f97246cc826e6495ea502297eafc521e339b47",
+    "observables_sha256": "e20eed17a781e1a44b33e79be34e21cef01515b5d3d17e5f8531783077046e27",
     "operation": "current_flow_dc",
     "operator_sha256": "b69cc93556f451d72a7f8654a2bcf6dcf68f5c2ea1f1f0559370a4fc09f9f4a4",
     "request_contract_sha256": "c89b8b9c40439e97f1280ba0197caa130c156046c48117ee0f6fba454c092480",
@@ -51,17 +51,17 @@
   },
   "run": {
     "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
-    "duration_s": 0.027965700021013618,
+    "duration_s": 0.036639800295233727,
     "exit_code": 0,
     "workdir": "."
   },
   "schema": "cae-ai-lab.solver-run.v1",
   "solver": "radia-ngsolve",
   "timing_breakdown_s": {
-    "export": 0.02170119999209419,
-    "factorize_and_solve": 0.0004535000189207494,
-    "observables": 0.000457199988886714,
-    "prepare_and_assemble": 0.005353800021111965
+    "export": 0.026808000169694424,
+    "factorize_and_solve": 0.0007035001181066036,
+    "observables": 0.0008221999742090702,
+    "prepare_and_assemble": 0.008306100033223629
   },
   "tolerances": {
     "max_abs": 1e-09,
@@ -70,7 +70,7 @@
   "tool_versions": {
     "ngsolve": "6.2.2604",
     "python": "3.12.10",
-    "radia_mcp": "1.4.23"
+    "radia_mcp": "1.4.24"
   },
   "verification": {
     "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",

@@ -1,78 +1,83 @@
 {
   "all_passed": true,
-  "created_at_utc": "2026-07-31T05:39:56.203729+00:00",
+  "created_at_utc": "2026-07-31T07:37:40.287696+00:00",
   "element_families": [
     {
       "artifact": "p1.json",
-      "duration_s": 0.8820589000242762,
+      "duration_s": 1.0972636002115905,
       "element_family": "P1",
       "pass": true,
-      "sha256": "391e4ad4f4104045135b7a23cf54ed10f40b1d2f4921603f6346cd15d5f6b6cd"
+      "sha256": "ea3bab1e934d4234b207a80bad335b1fb6e24ff8d69f53365a165079e018ec88"
     },
     {
       "artifact": "q1.json",
-      "duration_s": 0.05341200000839308,
+      "duration_s": 0.08700740011408925,
       "element_family": "Q1",
       "pass": true,
-      "sha256": "c92e2e4376dd7e84a72e971dd99618e8e0d9e891c8c93c60ddfcda8de1b02cf5"
+      "sha256": "8d3070b21cfb16f9db8b5468df07093ec021cebc598ffc3966f45cc697ea8a02"
     },
     {
       "artifact": "p2.json",
-      "duration_s": 9.705839400005061,
+      "duration_s": 16.24719849973917,
       "element_family": "P2",
       "pass": true,
-      "sha256": "356e9cf6df901f36fc08fc00a6775b1c1fc2965c29ac82743a93ed16d3de7a7c"
+      "sha256": "6057dd99df00996fe35b02463892d7c74f0af4fde7445d165f1db0d4a26e899f"
     },
     {
       "artifact": "q2.json",
-      "duration_s": 0.1525757000199519,
+      "duration_s": 0.21078239986672997,
       "element_family": "Q2",
       "pass": true,
-      "sha256": "b0065e4282ac7f5f95a8fd45a99cfc9541271269f09b787a18b8fe4dc29ff260"
+      "sha256": "dc7d56ccbf7b313512c888d1ba81b0eb3cafd7c414ada565ea38da99cd0b5314"
     },
     {
       "artifact": "p2_curved.json",
-      "duration_s": 0.7138928999775089,
+      "duration_s": 1.6092823003418744,
       "element_family": "P2_curved",
       "pass": true,
-      "sha256": "64e158c45637a35a283a0c04125c94d1e31752b760aded5e022821288c536a96"
+      "sha256": "44aa5a29d2e8d5aa8d787d1362c0830964fb5d147bd6cd147ceb34b373b62f37"
     },
     {
       "artifact": "q2_curved.json",
-      "duration_s": 2.5525723999598995,
+      "duration_s": 8.072371899615973,
       "element_family": "Q2_curved",
       "pass": true,
-      "sha256": "a40d427468ff88d0d9133d14ae429b9a499c72553657a5384e3c808ba20eb480"
+      "sha256": "228e6cfbdb048621cc9188f91d8995139638a78fa22f06ccbfdf4f1ae97b4136"
     }
   ],
+  "execution_environment": {
+    "host_role": "compute",
+    "hostname": "Hibino",
+    "platform": "Windows-11-10.0.22000-SP0"
+  },
   "execution_version": {
     "ngsolve": "6.2.2604",
     "python": "3.12.10",
-    "radia_mcp": "1.4.23"
+    "radia_mcp": "1.4.24"
   },
   "generator": "validation_test/radia_mcp/generate_field_study_production_artifacts.py",
-  "generator_sha256": "7b67cf97b0decf695ce413ab7a8e1d28d68dd40a6017ee5ac0bcb9587c45ac08",
+  "generator_sha256": "fa6fe5f57d5e4299456f414396bf01e9c75e52aa2ac3057f105c55a8df6e5652",
   "physics_cases": [
     {
       "artifact": "steady_heat.json",
-      "duration_s": 0.049613600014708936,
+      "duration_s": 0.08208750002086163,
       "pass": true,
       "physics_case": "steady_heat",
-      "sha256": "1c8e2ab1cf07ef6cfd493534757873be40a2cfab68261bf2f02b5531b705b92b"
+      "sha256": "aa6faa7073f3df2e17585011025303d9f432744c2baa4c92e2ebf2c0b2d1f3bb"
     },
     {
       "artifact": "current_flow_dc.json",
-      "duration_s": 0.04912450001575053,
+      "duration_s": 0.06533309957012534,
       "pass": true,
       "physics_case": "current_flow_dc",
-      "sha256": "7f7ff71178c6aad3168a9608537ad1553cfc8c0f475cd3fea7676a4a90a75ed1"
+      "sha256": "dfc9a83ede07df76f39244d652dfebdc1d70f5f29f64bccffa63ffb270067f1f"
     },
     {
       "artifact": "current_flow_ac.json",
-      "duration_s": 0.05544029996963218,
+      "duration_s": 0.06967410026118159,
       "pass": true,
       "physics_case": "current_flow_ac",
-      "sha256": "132f97dd33d6e727198bb7acd22c848d99a77ebe37d31cd9a926afe2bffba19d"
+      "sha256": "997f0d61af747cd7d9b99eb35c5dafaa13677bd074eb2698133b714171ea43c9"
     }
   ],
   "schema": "radia.field-study-production-manifest.v1"

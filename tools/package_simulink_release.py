@@ -207,6 +207,7 @@ def build_package(
             "matlab_release": "R2026a",
             "platform": "win64",
             "mex_extension": "mexw64",
+            "required_matlab_products": ["MATLAB", "Simulink"],
             "backend": (
                 "native-mex-sfunction-and-mex-handle"
                 if full_library
@@ -247,6 +248,12 @@ def build_package(
             manifest["verification_entry"] = (
                 "matlab/verify_radia_simulink_release.m"
             )
+            manifest["feature_toolbox_requirements"] = {
+                "adjoint_topology_optimization": ["Optimization Toolbox"],
+                "stream_function_topology_optimization": [
+                    "Optimization Toolbox"
+                ],
+            }
         else:
             manifest["python_fallback"] = False
         manifest_text = json.dumps(manifest, indent=2) + "\n"

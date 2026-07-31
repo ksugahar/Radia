@@ -1,7 +1,12 @@
 {
-  "radia_version": "4.95.27",
+  "radia_version": "4.95.30",
   "schema_version": "radia-motor-triple-check-artifact/v1",
-  "timestamp_utc": "2026-07-29T19:37:25.363595+00:00",
+  "timestamp_utc": "2026-07-31T07:55:16.561253+00:00",
+  "execution_environment": {
+    "host_role": "compute",
+    "hostname": "Hibino",
+    "python": "3.12.10"
+  },
   "source_mcp_seed": {
     "representative_public_decks": [
       "generated_concentric_annular_harmonic_fixture"
@@ -13,9 +18,14 @@
   },
   "lane_artifacts": {
     "ngsolve_age": {
-      "radia_version": "4.95.27",
+      "radia_version": "4.95.30",
       "schema_version": "radia-motor-validation-artifact/v1",
-      "timestamp_utc": "2026-07-29T19:37:25.363595+00:00",
+      "timestamp_utc": "2026-07-31T07:55:16.561253+00:00",
+      "execution_environment": {
+        "host_role": "compute",
+        "hostname": "Hibino",
+        "python": "3.12.10"
+      },
       "motor_validation_lane": "ngsolve_age",
       "reference_source_class": "independent_public_solver_lane",
       "observable_family": "torque",
@@ -28,25 +38,25 @@
       },
       "metrics": {
         "quantity_specific_residual": 9.67719430026613e-17,
-        "torque_relative_error": 0.09745842283119847,
-        "centered_normalized_correlation": 0.9620074232770214,
+        "torque_relative_error": 0.06645055566414082,
+        "centered_normalized_correlation": 0.9823372946077075,
         "torque_peak_to_peak_nm": 163.68827953956983
       },
       "timing_breakdown_s": {
-        "prepare": 0.00506120000500232,
-        "assemble_and_factor": 0.007808399968780577,
-        "angle_sweep_and_postprocess": 0.018209200003184378,
-        "total": 0.06512859999202192
+        "prepare": 0.007537699770182371,
+        "assemble_and_factor": 0.03711340017616749,
+        "angle_sweep_and_postprocess": 0.037788799963891506,
+        "total": 0.1446409998461604
       },
       "artifact_feedback": {
         "status": "promoted",
-        "public_lesson": "A fixed AGE operator and factorization can sweep a complete rotor-angle grid without remeshing and provide an independent torque waveform."
+        "public_lesson": "A fixed AGE operator and factorization can sweep a complete first-harmonic phase grid without remeshing and provide an independent torque waveform for the smooth annular fixture."
       },
       "shared_mesh_material_identity": {
-        "geometry_sha256": "c5ad6c6c3b4c4888f6745ef6df7bb1e4f2546a82e083eaed8646309ba0b368d0",
+        "geometry_sha256": "5b535b3aeba6bb5c6a23fd716300b4089618c81b6252f8aed209ee98fee8a77e",
         "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
-        "excitation_sha256": "27e2deab2fc6df07f85b503e2b838ef8ddf7ed39872a1dfc395ecb6308cf5485",
-        "aggregate_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83"
+        "excitation_sha256": "9760cbc356bcdcedb407d06f7f5fce043016ac04794687757daf51f5d478928b",
+        "aggregate_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9"
       },
       "solver_ready_artifact": {
         "artifact_id": "annular_motor_ngsolve_age_v1",
@@ -168,9 +178,14 @@
       }
     },
     "hdiv_mmm_hcurl_eddy_bubble": {
-      "radia_version": "4.95.27",
+      "radia_version": "4.95.30",
       "schema_version": "radia-motor-validation-artifact/v1",
-      "timestamp_utc": "2026-07-29T19:37:25.363595+00:00",
+      "timestamp_utc": "2026-07-31T07:55:16.561253+00:00",
+      "execution_environment": {
+        "host_role": "compute",
+        "hostname": "Hibino",
+        "python": "3.12.10"
+      },
       "motor_validation_lane": "hdiv_mmm_hcurl_eddy_bubble",
       "reference_source_class": "independent_public_solver_lane",
       "observable_family": "force_or_torque_trend",
@@ -183,41 +198,41 @@
         "centered_normalized_correlation_min": 0.95
       },
       "metrics": {
-        "mixed_block_residual": 3.1677612589756556e-13,
-        "magnetic_energy_closure": 3.7163174331140123e-11,
+        "mixed_block_residual": 1.9980768634407541e-13,
+        "magnetic_energy_closure": 3.7162651262381984e-11,
         "eddy_power_nonnegative": true,
         "signed_agreement_count": 8,
-        "mean_abs_relative_error": 0.07910443803791443,
-        "rms_abs_relative_error": 0.09745842283119847,
-        "max_abs_relative_error": 0.16960459397630853,
-        "centered_normalized_correlation": 0.9620074232770214,
-        "direct_solution_relative_error": 6.978284550640649e-13
+        "mean_abs_relative_error": 0.05440352570944003,
+        "rms_abs_relative_error": 0.06645055566414082,
+        "max_abs_relative_error": 0.10847170544761492,
+        "centered_normalized_correlation": 0.9823372946077075,
+        "direct_solution_relative_error": 1.0535110005727189e-13
       },
       "timing_breakdown_s": {
-        "mesh_basis_and_reduction": 13.195171599974856,
+        "mesh_basis_and_reduction": 52.836437799967825,
         "angle_sweep_and_postprocess": 0.0,
-        "artifact_transport": 1.7026331000961363,
-        "total": 14.897804700070992
+        "artifact_transport": 6.14900689991191,
+        "total": 58.985444699879736
       },
       "artifact_feedback": {
         "status": "promoted",
-        "public_lesson": "HDiv-MMM and HCurl eddy-bubble share one curved 3D mesh/material identity and recover a periodic coenergy-torque waveform."
+        "public_lesson": "HDiv-MMM and HCurl eddy-bubble share one smooth annular 3D mesh/material identity and recover its first-harmonic periodic coenergy-torque waveform."
       },
       "shared_mesh_material_identity": {
-        "geometry_sha256": "c5ad6c6c3b4c4888f6745ef6df7bb1e4f2546a82e083eaed8646309ba0b368d0",
+        "geometry_sha256": "5b535b3aeba6bb5c6a23fd716300b4089618c81b6252f8aed209ee98fee8a77e",
         "material_sha256": "2bd30bc2ca31450f6a818103c3d5e6470628b0a75daa1af248a29a160fb46cd4",
-        "excitation_sha256": "27e2deab2fc6df07f85b503e2b838ef8ddf7ed39872a1dfc395ecb6308cf5485",
-        "aggregate_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83"
+        "excitation_sha256": "9760cbc356bcdcedb407d06f7f5fce043016ac04794687757daf51f5d478928b",
+        "aggregate_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9"
       },
       "solver_ready_artifact": {
         "artifact_id": "annular_motor_hdiv_mmm_hcurl_eddy_bubble_v1",
         "verification": [
           {
-            "command": "python validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py --geometry annular-motor --axial-length 0.2 --curvature-safety 0.2 --motor-angle-samples 8 --rotor-amplitude 0.8 --frequencies 100 --maxh 0.8 --order 1 --steps 4 --bulk-degree 1 --surface-current-degree 1 --response-backend dense --mixed-solver dense --shared-model-identity-sha256 436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83 --output <temporary-output>",
+            "command": "python validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py --geometry annular-motor --axial-length 0.2 --curvature-safety 0.2 --motor-angle-samples 8 --rotor-amplitude 0.8 --frequencies 100 --maxh 0.8 --order 1 --steps 4 --bulk-degree 1 --surface-current-degree 1 --response-backend dense --mixed-solver dense --shared-model-identity-sha256 64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9 --output <temporary-output>",
             "result": "all end-to-end and 8-angle motor checks passed"
           }
         ],
-        "source_sha256": "356700fb3f59bc614c308771ca74019fbbae5be067f818e52bca19aa47379239"
+        "source_sha256": "87a20a254c2c5b0dc9edbe9521fd497f53372697359c90d8727347539ebae39d"
       },
       "hdiv_mmm_operator_contract": {
         "parent_family": "BDM",
@@ -228,18 +243,18 @@
       },
       "hcurl_eddy_bubble_contract": {
         "parent_ndof": 326,
-        "reduced_modes": 66,
+        "reduced_modes": 65,
         "eddy_block_roles": {
           "volume": "bulk",
           "volume1": "bridge",
           "surface": "sibc"
         },
-        "solver_backend": "radia-cpp-dense-mixed-galerkin"
+        "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
       },
       "coupling_operator_contract": {
         "rows": 8,
-        "columns": 66,
-        "frobenius_norm": 2.9533177617483245e-06,
+        "columns": 65,
+        "frobenius_norm": 2.9538633046302735e-06,
         "full_coupled_mixed_galerkin_is_exact": true
       },
       "execution": {
@@ -265,6 +280,8 @@
           "full_coupled_mixed_galerkin_is_exact": true,
           "hdiv_hacapk_charge_gram_is_active": true,
           "motor_geometry_is_annular": true,
+          "motor_rotation_is_first_spatial_harmonic_phase": true,
+          "motor_hcurl_ports_match_hdiv_transverse_xy_basis": true,
           "motor_angle_grid_complete": true,
           "motor_operator_reused_all_angles": true,
           "motor_torque_sign_reverses": true,
@@ -287,7 +304,7 @@
             },
             "n_excitations": 2,
             "magnetization_modes": 8,
-            "eddy_modes": 66,
+            "eddy_modes": 65,
             "parent_t_dofs": 326,
             "parent_hdiv_dofs": 1146,
             "eddy_blocks": [
@@ -305,36 +322,40 @@
               202,
               540
             ],
-            "sampled_magnetization_norm": 162593.44890456513,
+            "sampled_magnetization_norm": 109771.91182312297,
             "sampled_eddy_current_norms": [
-              422724.20370881853,
-              309733.66479103395,
-              119615.97425085929
+              457981.5629450181,
+              295621.2789723679,
+              10043.213600144403
             ],
             "average_joule_loss": [
-              311.25015081975414,
-              17.921595800008728
+              7.477697327021056,
+              5.70897102172278
             ],
-            "residual_relative_norm": 1.6775028046697621e-13,
-            "residual_backward_error": 8.38751402334881e-14,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin",
-            "solver_diagnostics": null,
+            "residual_relative_norm": 1.2008961473453497e-13,
+            "residual_backward_error": 6.004480736726752e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin",
+            "solver_diagnostics": {
+              "backend": "native-dense-reduced-lu",
+              "iterations": 0,
+              "relative_residual_max": 1.650544239526603e-15
+            },
             "orthogonalized_modes": 69,
             "mixed_galerkin": {
-              "full_modes": 74,
+              "full_modes": 73,
               "retained_modes": 69,
-              "eliminated_modes": 5,
-              "trial_orthogonality_relative_defect": 3.5093387097188615e-21,
-              "test_orthogonality_relative_defect": 3.7608376254900725e-18,
-              "schur_relative_error": 6.013688987546562e-17,
-              "trial_test_relative_difference": 300.6834059369753,
-              "full_operator_condition": 345284848.54795074,
-              "reduced_operator_condition": 350425545.9931111,
+              "eliminated_modes": 4,
+              "trial_orthogonality_relative_defect": 1.7795731538543294e-21,
+              "test_orthogonality_relative_defect": 3.0063340070117292e-18,
+              "schur_relative_error": 2.254069377657817e-18,
+              "trial_test_relative_difference": 405.35732828240316,
+              "full_operator_condition": 346165909.0073946,
+              "reduced_operator_condition": 355447221.4689725,
               "kind": "mixed-galerkin-hdiv-hcurl",
               "full_coupled_schur": true,
               "hdiv_retained_modes": 8,
               "hcurl_retained_modes": 61,
-              "hcurl_eliminated_modes": 5,
+              "hcurl_eliminated_modes": 4,
               "keep_eddy_blocks": [
                 "volume1",
                 "surface"
@@ -345,12 +366,12 @@
               "hdiv_demag_backend": "DemagOperator",
               "hdiv_demag_hmatrix_backend": "_ChargeGramHMatrix"
             },
-            "mixed_operator_condition": 178262330.73196855,
-            "direct_solution_relative_error": 6.978284550640649e-13,
-            "direct_port_response_relative_error": 7.414948856164469e-16,
-            "direct_joule_loss_relative_error": 5.3423326397848355e-15,
-            "parent_t_coefficient_norm": 13804.696214185418,
-            "parent_hdiv_coefficient_norm": 11419.781806999683,
+            "mixed_operator_condition": 178723628.24590847,
+            "direct_solution_relative_error": 1.0535110005727189e-13,
+            "direct_port_response_relative_error": 1.3857829555121607e-15,
+            "direct_joule_loss_relative_error": 4.703369380277411e-15,
+            "parent_t_coefficient_norm": 16597.39940243637,
+            "parent_hdiv_coefficient_norm": 5513.329757770958,
             "eddy_flux_density_probe_T": {
               "shape": [
                 2,
@@ -358,30 +379,30 @@
               ],
               "real": [
                 [
-                  1.3751578250580668e-06,
-                  7.817236654770463e-07,
-                  -2.4811985242895476e-07
+                  -3.2362165933223574e-09,
+                  3.0308324911697e-09,
+                  1.952483761772006e-08
                 ],
                 [
-                  4.3683369239080486e-08,
-                  3.243830806515914e-08,
-                  -4.15505385179454e-09
+                  5.434370035144261e-08,
+                  3.8042714965869665e-08,
+                  1.1294267311115285e-09
                 ]
               ],
               "imag": [
                 [
-                  -3.915307979781443e-05,
-                  -5.190215329795336e-05,
-                  -1.602060151633432e-05
+                  3.6431388598460906e-06,
+                  6.693847219104195e-07,
+                  -1.283270271955765e-05
                 ],
                 [
-                  4.694626252989157e-06,
-                  5.667152481006297e-07,
-                  -1.7407251737951066e-05
+                  -5.503284353434548e-06,
+                  -5.770427315764943e-06,
+                  3.4746170057292783e-06
                 ]
               ]
             },
-            "eddy_flux_density_probe_norm_T": 6.936423166588627e-05,
+            "eddy_flux_density_probe_norm_T": 1.593927638897823e-05,
             "port_response": {
               "shape": [
                 2,
@@ -389,22 +410,22 @@
               ],
               "real": [
                 [
-                  620.7624770478634,
-                  67.94671748914065
+                  43.83663725321478,
+                  -5.916509537999523
                 ],
                 [
-                  1.1143886562625545,
-                  25.196461388259177
+                  -6.800169082056297,
+                  25.431913647505937
                 ]
               ],
               "imag": [
                 [
-                  -40238.09248682801,
-                  -4467.975373125216
+                  -7631.7902111582525,
+                  1151.3133022193867
                 ],
                 [
-                  -412.30524009360147,
-                  -7124.825162961723
+                  1236.187244101689,
+                  -4677.283735591626
                 ]
               ]
             }
@@ -413,67 +434,67 @@
         "motor_angle_rows": [
           {
             "rotor_angle_rad": 0.0,
-            "coenergy_proxy_J": 1005.635212817541,
-            "torque_proxy_Nm": -38.93974928542111,
-            "average_joule_loss_W": 1008.4504886560068,
-            "residual_relative_norm": 7.911712416380334e-14,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 71.01535235020799,
+            "torque_proxy_Nm": 7.170233795063829,
+            "average_joule_loss_W": 24.227739339548144,
+            "residual_relative_norm": 9.085822300131578e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 0.7853981633974483,
-            "coenergy_proxy_J": 795.4741618670027,
-            "torque_proxy_Nm": 419.89317961864964,
-            "average_joule_loss_W": 775.3863480161617,
-            "residual_relative_norm": 9.284614700949073e-14,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 52.167545089879695,
+            "torque_proxy_Nm": 29.313471147703577,
+            "average_joule_loss_W": 17.549909147651885,
+            "residual_relative_norm": 4.727878878333208e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 1.5707963267948966,
-            "coenergy_proxy_J": 346.06854862633634,
-            "torque_proxy_Nm": 461.17508225103154,
-            "average_joule_loss_W": 328.7373597291586,
-            "residual_relative_norm": 9.138700044207534e-14,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 24.969859545787028,
+            "torque_proxy_Nm": 28.982851316144878,
+            "average_joule_loss_W": 8.776136767211948,
+            "residual_relative_norm": 8.684668198721366e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 2.356194490192345,
-            "coenergy_proxy_J": 71.06203665774812,
-            "torque_proxy_Nm": 212.41028731342655,
-            "average_joule_loss_W": 66.29374261029372,
-            "residual_relative_norm": 1.449730690711226e-13,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 6.641388702436682,
+            "torque_proxy_Nm": 15.33816089949938,
+            "average_joule_loss_W": 2.5140531983105223,
+            "residual_relative_norm": 9.343308364820346e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 3.141592653589793,
-            "coenergy_proxy_J": 12.415249540957317,
-            "torque_proxy_Nm": 10.801723254229033,
-            "average_joule_loss_W": 12.450006032790215,
-            "residual_relative_norm": 8.194367731384555e-14,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 0.876732745064295,
+            "torque_proxy_Nm": -1.9889928041060525,
+            "average_joule_loss_W": 0.2991078930808408,
+            "residual_relative_norm": 8.788779496655026e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 3.9269908169872414,
-            "coenergy_proxy_J": 54.09472944695014,
-            "torque_proxy_Nm": -177.23775477443544,
-            "average_joule_loss_W": 62.5977815379151,
-            "residual_relative_norm": 1.4036343651775254e-13,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 9.76569129314795,
+            "torque_proxy_Nm": -21.81471213819663,
+            "average_joule_loss_W": 3.9607116386169148,
+            "residual_relative_norm": 1.9980768634407541e-13,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 4.71238898038469,
-            "coenergy_proxy_J": 290.8196637100151,
-            "torque_proxy_Nm": -433.0370562198394,
-            "average_joule_loss_W": 316.7025845343632,
-            "residual_relative_norm": 1.276838159629008e-13,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 35.143202441831605,
+            "torque_proxy_Nm": -34.164092307102656,
+            "average_joule_loss_W": 13.486740794635436,
+            "residual_relative_norm": 1.428177215550679e-13,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           },
           {
             "rotor_angle_rad": 5.497787143782138,
-            "coenergy_proxy_J": 734.3077467231491,
-            "torque_proxy_Nm": -455.0657121576408,
-            "average_joule_loss_W": 762.0625667879491,
-            "residual_relative_norm": 3.1677612589756556e-13,
-            "solver_backend": "radia-cpp-dense-mixed-galerkin"
+            "coenergy_proxy_J": 63.43052199742659,
+            "torque_proxy_Nm": -22.83691990900633,
+            "average_joule_loss_W": 22.76505080989705,
+            "residual_relative_norm": 9.143129328214854e-14,
+            "solver_backend": "native-dense-reduced-lu-mixed-galerkin"
           }
         ]
       }
@@ -482,11 +503,11 @@
   "dual_lane_comparison": {
     "torque_sign_mapping_age_from_hdiv": -1.0,
     "sign_mapping_reason": "The lanes use opposite positive rotation/virtual-work torque conventions.",
-    "centered_normalized_correlation": 0.9620074232770214,
-    "centered_normalized_rms": 0.09745842283119847,
-    "centered_normalized_max": 0.16960459397630853,
+    "centered_normalized_correlation": 0.9823372946077075,
+    "centered_normalized_rms": 0.06645055566414082,
+    "centered_normalized_max": 0.10847170544761492,
     "checks": {
-      "same_geometry_material_excitation_identity": true,
+      "same_smooth_annular_harmonic_fixture_identity": true,
       "both_angle_grids_complete": true,
       "both_torque_waveforms_nonconstant": true,
       "both_torque_waveforms_reverse_sign": true,
@@ -497,7 +518,7 @@
   },
   "mcp_feedback": {
     "public_status": "verified",
-    "public_summary": "Both mandatory radia-motor lanes executed on one physical identity; their centered torque waveforms agree after an explicit sign convention map.",
+    "public_summary": "Both mandatory radia-motor lanes executed on one smooth annular first-harmonic fixture; their centered torque waveforms agree after an explicit sign convention map. This fixture does not resolve slot geometry.",
     "learning_targets": [
       "radia_mcp.motor.validation_lanes_knowledge",
       "radia_mcp.motor.triple_check_knowledge"

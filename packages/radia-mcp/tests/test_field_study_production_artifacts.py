@@ -22,6 +22,8 @@ def test_manifest_freezes_all_six_verified_element_families() -> None:
     manifest = json.loads(manifest_bytes)
     assert manifest["schema"] == "radia.field-study-production-manifest.v1"
     assert manifest["all_passed"] is True
+    assert manifest["execution_environment"]["host_role"] == "compute"
+    assert manifest["execution_environment"]["hostname"]
     assert manifest["execution_version"]["radia_mcp"]
     assert manifest["execution_version"]["ngsolve"]
     rows = {row["element_family"]: row for row in manifest["element_families"]}

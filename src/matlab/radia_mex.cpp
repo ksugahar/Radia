@@ -1810,6 +1810,16 @@ MakeNGSolveBoundaryCoefficientBilinearIntegrator(
         integrand, ngfem::BND, false);
 }
 
+std::size_t NGSolveAssemblyHeapBytes(std::size_t minimum_total_bytes) {
+    constexpr std::size_t per_thread_bytes = 1u << 22;
+    const auto thread_count = static_cast<std::size_t>(
+        std::max(1, ngcore::TaskManager::GetNumThreads()));
+    if (thread_count >
+        std::numeric_limits<std::size_t>::max() / per_thread_bytes)
+        BadArgument("NGSolve assembly thread count is too large");
+    return std::max(minimum_total_bytes, thread_count * per_thread_bytes);
+}
+
 void NGSolveMatrixDump(int nlhs, mxArray* plhs[], int nrhs,
                        const mxArray* prhs[]) {
     if ((nrhs != 5 && nrhs != 6) || nlhs != 1)
@@ -1845,7 +1855,8 @@ void NGSolveMatrixDump(int nlhs, mxArray* plhs[], int nrhs,
     // more local scratch space during mapped element integration than the
     // old p<=2 default.  Keep this aligned with the native HCurl reduction
     // path so matrix_dump remains a valid independent verification route.
-    ngstd::LocalHeap local_heap(1 << 26, "radia_matlab_matrix_dump");
+    ngstd::LocalHeap local_heap(
+        NGSolveAssemblyHeapBytes(1 << 26), "radia_matlab_matrix_dump");
     biform->Assemble(local_heap);
 
     auto matrix = biform->GetMatrixPtr();
@@ -2294,7 +2305,9 @@ void NGSolveBilinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension(), nullptr, true));
-            ngstd::LocalHeap local_heap(1 << 20, "radia_matlab_persistent_complex_form");
+            ngstd::LocalHeap local_heap(
+                NGSolveAssemblyHeapBytes(1 << 20),
+                "radia_matlab_persistent_complex_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
             holder->form = std::move(form);
@@ -2303,7 +2316,9 @@ void NGSolveBilinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension()));
-            ngstd::LocalHeap local_heap(1 << 20, "radia_matlab_persistent_form");
+            ngstd::LocalHeap local_heap(
+                NGSolveAssemblyHeapBytes(1 << 20),
+                "radia_matlab_persistent_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
             holder->form = std::move(form);
@@ -2346,7 +2361,7 @@ void NGSolveBilinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrh
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension(), coefficient, true));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_coefficient_complex_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -2356,7 +2371,7 @@ void NGSolveBilinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrh
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension(), coefficient));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_coefficient_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -2399,7 +2414,7 @@ void NGSolveBilinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientBilinearIntegrator(
                 holder->fespace, coefficient, true));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_boundary_complex_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -2409,7 +2424,7 @@ void NGSolveBilinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientBilinearIntegrator(
                 holder->fespace, coefficient));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_boundary_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -2921,7 +2936,8 @@ void HCurlEddyCLNNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
     if (port_rows != static_cast<std::size_t>(ndof))
         BadArgument("ports row count must equal the HCurl DoF count");
 
-    ngstd::LocalHeap local_heap(1 << 26, "radia_matlab_hcurl_eddy_cln");
+    ngstd::LocalHeap local_heap(
+        NGSolveAssemblyHeapBytes(1 << 26), "radia_matlab_hcurl_eddy_cln");
     auto mass_assembly = AssembleNGSolveSparse(
         fespace, "hcurl", "mass", "radia_hcurl_eddy_mass", local_heap);
     auto mass = mass_assembly.matrix;
@@ -3603,7 +3619,7 @@ void NGSolveLinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
             form->AddIntegrator(MakeNGSolveLinearIntegrator(
                 holder->space, source_name, holder->mesh->GetDimension(),
                 source_value, true));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_persistent_complex_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -3614,7 +3630,9 @@ void NGSolveLinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
             form->AddIntegrator(MakeNGSolveLinearIntegrator(
                 holder->space, source_name, holder->mesh->GetDimension(),
                 source_value));
-            ngstd::LocalHeap local_heap(1 << 20, "radia_matlab_persistent_linear_form");
+            ngstd::LocalHeap local_heap(
+                NGSolveAssemblyHeapBytes(1 << 20),
+                "radia_matlab_persistent_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
             holder->form = std::move(form);
@@ -3654,7 +3672,7 @@ void NGSolveLinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrhs,
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveCoefficientLinearIntegrator(
                 holder->fespace, coefficient, holder->mesh->GetDimension(), true));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_coefficient_complex_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -3664,7 +3682,7 @@ void NGSolveLinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrhs,
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveCoefficientLinearIntegrator(
                 holder->fespace, coefficient, holder->mesh->GetDimension()));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_coefficient_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -3705,7 +3723,7 @@ void NGSolveLinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientLinearIntegrator(
                 holder->fespace, coefficient, true));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_boundary_complex_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -3715,7 +3733,7 @@ void NGSolveLinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientLinearIntegrator(
                 holder->fespace, coefficient));
-            ngstd::LocalHeap local_heap(1 << 20,
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
                                         "radia_matlab_boundary_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -6975,7 +6993,8 @@ std::vector<double> HCurlTopologyResistanceShapeTangentsValues(
         BadArgument("conductivity must be positive and finite");
     const int ndof = space.fespace->GetNDof();
     auto mask = HCurlTopologyElementMask(space.mesh, elements);
-    ngstd::LocalHeap local_heap(1 << 26, "radia_hcurl_topopt_resistance");
+    ngstd::LocalHeap local_heap(
+        NGSolveAssemblyHeapBytes(1 << 26), "radia_hcurl_topopt_resistance");
     ngcore::Flags flags;
     auto base = std::make_shared<ngcomp::T_BilinearForm<double>>(
         space.fespace, "radia_hcurl_topopt_resistance", flags);

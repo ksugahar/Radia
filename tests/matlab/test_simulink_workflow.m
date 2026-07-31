@@ -57,15 +57,23 @@ verifyEqual(testCase,size(objectiveSignal,2),1);
 verifyEqual(testCase,size(statusSignal,2),1);
 verifyEqual(testCase,size(iterationsSignal,2),1);
 verifyEqual(testCase,size(designSignal,2),2);
-verifyEqual(testCase,statusSignal(end),2);
-verifyTrue(testCase,runner.Result.converged,runner.Result.output.message);
-verifyLessThan(testCase,runner.Result.objective,0.006);
-verifyLessThanOrEqual(testCase,max(runner.Result.constraints),1e-6);
-verifyEqual(testCase,objectiveSignal(end),runner.Result.objective, ...
-    "AbsTol",1e-12);
-verifyEqual(testCase,designSignal(end,:).',runner.Result.design, ...
-    "AbsTol",1e-12);
-verifyEqual(testCase,iterationsSignal(end),height(runner.Result.history)-1);
+if hasOptimizationToolbox()
+    verifyEqual(testCase,statusSignal(end),2);
+    verifyTrue(testCase,runner.Result.converged,runner.Result.output.message);
+    verifyLessThan(testCase,runner.Result.objective,0.006);
+    verifyLessThanOrEqual(testCase,max(runner.Result.constraints),1e-6);
+    verifyEqual(testCase,objectiveSignal(end),runner.Result.objective, ...
+        "AbsTol",1e-12);
+    verifyEqual(testCase,designSignal(end,:).',runner.Result.design, ...
+        "AbsTol",1e-12);
+    verifyEqual(testCase,iterationsSignal(end),height(runner.Result.history)-1);
+else
+    verifyEqual(testCase,statusSignal(end),-1);
+    verifyTrue(testCase,isnan(objectiveSignal(end)));
+    verifyEqual(testCase,iterationsSignal(end),0);
+    verifyEqual(testCase,designSignal(end,:).',runner.InitialDesign, ...
+        "AbsTol",0);
+end
 verifyEqual(testCase,string(get_param(blockPath,"FunctionName")), ...
     "radia_adjoint_optimization_sfun");
 clear cleanup
@@ -148,16 +156,23 @@ historyIteration = simulation.get("sf_history_iteration");
 historyObjective = simulation.get("sf_history_objective");
 historyConstraint = simulation.get("sf_history_constraint");
 count = historyCount(end);
-verifyEqual(testCase,status(end),2);
-verifyLessThan(testCase,objective(end),0.003);
-verifyGreaterThan(testCase,iterations(end),1);
 verifyEqual(testCase,size(design,2),2);
-verifyGreaterThan(testCase,count,2);
 verifyEqual(testCase,size(historyIteration,2),64);
 verifyEqual(testCase,size(historyObjective,2),64);
 verifyEqual(testCase,size(historyConstraint,2),64);
-verifyTrue(testCase,all(isfinite(historyObjective(end,1:count))));
-verifyLessThanOrEqual(testCase,historyConstraint(end,count),1e-6);
+if hasOptimizationToolbox()
+    verifyEqual(testCase,status(end),2);
+    verifyLessThan(testCase,objective(end),0.003);
+    verifyGreaterThan(testCase,iterations(end),1);
+    verifyGreaterThan(testCase,count,2);
+    verifyTrue(testCase,all(isfinite(historyObjective(end,1:count))));
+    verifyLessThanOrEqual(testCase,historyConstraint(end,count),1e-6);
+else
+    verifyEqual(testCase,status(end),-1);
+    verifyTrue(testCase,isnan(objective(end)));
+    verifyEqual(testCase,iterations(end),0);
+    verifyEqual(testCase,count,0);
+end
 blockPath = modelName + "/Stream Function Optimization";
 contract = get_param(blockPath,"UserData");
 verifyFalse(testCase,contract.python_per_step);
@@ -173,6 +188,12 @@ verifyEqual(testCase,string(get_param( ...
     "radia_streamfunction_custom_runner,0.10000000000000001,64");
 clear cleanup
 cleanupStreamFunctionModel(modelName,modelPath);
+end
+
+function available = hasOptimizationToolbox()
+available = ~isempty(ver("optim")) && ...
+    license("test","Optimization_Toolbox") && ...
+    exist("fmincon","file") == 2;
 end
 
 function testTrackedStreamFunctionOptimizationArtifact(testCase)

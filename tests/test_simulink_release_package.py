@@ -95,6 +95,11 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert manifest["entry_model"] == "matlab/radia_simulink_library.slx"
     assert manifest["python_per_step"] is False
     assert manifest["python_fallback_per_step"] is False
+    assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
+    assert manifest["feature_toolbox_requirements"] == {
+        "adjoint_topology_optimization": ["Optimization Toolbox"],
+        "stream_function_topology_optimization": ["Optimization Toolbox"],
+    }
     assert manifest["application_batch_backend"] == (
         "python-headless-or-native-as-declared-by-block"
     )

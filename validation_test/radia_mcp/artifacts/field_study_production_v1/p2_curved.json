@@ -10,10 +10,10 @@
     "result_files_exist": true,
     "validation_passed": true
   },
-  "created_at_utc": "2026-07-31T05:39:53.488240+00:00",
+  "created_at_utc": "2026-07-31T07:37:31.990300+00:00",
   "errors": {
-    "max_abs": 5.443318514153361e-06,
-    "max_rel": 6.989683591294559e-09
+    "max_abs": 5.443274858407676e-06,
+    "max_rel": 6.9897103821849114e-09
   },
   "pass": true,
   "production_contract": {
@@ -34,25 +34,25 @@
     "material_contract_sha256": "2cb2340b82ef5e670a04345707995c202d36cc54135c94ef40abd1f18e6109c4",
     "material_model": "single_frequency_peak_secant_BH_fixed_point",
     "mesh_contract_sha256": "a742b325d431cef3d2d78fda244456fb6a0fbd31d8fdc761136117d0213ffdff",
-    "nonlinear_operator_relative_change_from_initial": 0.15129816182961495,
-    "nonlinear_operator_sha256": "368d385cdbfda89e619d02a071690e2338f695b3024f12d5656fcf3f2d9e6506",
+    "nonlinear_operator_relative_change_from_initial": 0.15129816182961497,
+    "nonlinear_operator_sha256": "ce6e223228348e77603632bd0c9e316dce9c9131c3c6ab3cadd8b177f68c1056",
     "operation": "harmonic_eddy",
     "operator_sha256": "ef9330361ae918dc21ec2c424d9aae63e2760d0f39c077f056fd74994b5e8145",
-    "power_closure_error_w": 5.443318514153361e-06,
-    "residual_inf": 6.989683591294559e-09
+    "power_closure_error_w": 5.443274858407676e-06,
+    "residual_inf": 6.9897103821849114e-09
   },
   "run": {
     "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
-    "duration_s": 0.6854593000607565,
+    "duration_s": 1.554296899586916,
     "exit_code": 0,
     "workdir": "."
   },
   "schema": "cae-ai-lab.solver-run.v1",
   "solver": "radia-ngsolve",
   "timing_breakdown_s": {
-    "export": 0.0424568000016734,
-    "factorize_and_solve": 0.6263700000126846,
-    "prepare_and_assemble": 0.01663250004639849
+    "export": 0.04845889983698726,
+    "factorize_and_solve": 1.4728017998859286,
+    "prepare_and_assemble": 0.03303619986400008
   },
   "tolerances": {
     "max_abs": 1e-09,
@@ -61,7 +61,7 @@
   "tool_versions": {
     "ngsolve": "6.2.2604",
     "python": "3.12.10",
-    "radia_mcp": "1.4.23"
+    "radia_mcp": "1.4.24"
   },
   "verification": {
     "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",

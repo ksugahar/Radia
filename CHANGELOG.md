@@ -23,7 +23,9 @@ Released 2026-07-31.
   requested for the currently dense reduced Schur path, instead of silently
   ignoring the requested backend.
 - Hardened MATLAB OpenMP runtime isolation, finite Motor family/model settings,
-  MEX source provenance, and fresh solver-uninstall dependency scans.
+  MEX source provenance, per-TaskManager-thread NGSolve assembly scratch,
+  feature-level MATLAB toolbox declarations, and fresh solver-uninstall
+  dependency scans.
 
 ## 4.95.29 - Production field studies and reversible solver retirement
 
