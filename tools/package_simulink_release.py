@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build a self-verifying Radia IH Simulink release candidate."""
+"""Build a self-verifying IH preview or full Radia Simulink release."""
 
 from __future__ import annotations
 
@@ -19,6 +19,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_MEX = ("radia_ih_eddy_sfun.mexw64", "radia_ih_thermal_sfun.mexw64")
 REQUIRED_MODELS = ("radia_ih.slx",)
+FULL_REQUIRED_MEX = (*REQUIRED_MEX, "radia_mex.mexw64")
+FULL_REQUIRED_MODELS = (
+    "radia_simulink_library.slx",
+    "radia_ih.slx",
+    "radia_streamfunction_optimization.slx",
+)
+FULL_RUNTIME_DLLS = (
+    "mkl_avx2.2.dll",
+    "mkl_core.2.dll",
+    "mkl_def.2.dll",
+    "mkl_intel_thread.2.dll",
+    "mkl_rt.2.dll",
+)
 PACKAGE_FILES = (
     "IH_RELEASE.md",
     "IH_VERSION",
@@ -82,50 +95,94 @@ def commit() -> str:
 
 def validate_native_binary(path: Path) -> None:
     if not path.is_file():
-        raise FileNotFoundError(f"Required native IH binary is missing: {path}")
+        raise FileNotFoundError(f"Required native release binary is missing: {path}")
     if path.stat().st_size < 1024:
-        raise RuntimeError(f"Native IH binary is unexpectedly small: {path}")
+        raise RuntimeError(f"Native release binary is unexpectedly small: {path}")
     with path.open("rb") as stream:
         header = stream.read(64)
         if header[:2] != b"MZ":
-            raise RuntimeError(f"Native IH binary is not a Windows PE file: {path}")
+            raise RuntimeError(f"Native release binary is not a Windows PE file: {path}")
         pe_offset = int.from_bytes(header[60:64], "little")
         stream.seek(pe_offset)
         if stream.read(4) != b"PE\0\0":
-            raise RuntimeError(f"Native IH binary has no PE signature: {path}")
+            raise RuntimeError(f"Native release binary has no PE signature: {path}")
         machine = int.from_bytes(stream.read(2), "little")
         if machine != 0x8664:
-            raise RuntimeError(f"Native IH binary is not Windows x64: {path}")
+            raise RuntimeError(f"Native release binary is not Windows x64: {path}")
 
 
-def build_package(mex_dir: Path, output_dir: Path) -> tuple[Path, Path]:
+def release_matlab_files() -> tuple[Path, ...]:
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "matlab",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    files = tuple(
+        Path(line.strip())
+        for line in result.stdout.splitlines()
+        if line.strip()
+    )
+    if not files or any(not (ROOT / path).is_file() for path in files):
+        raise RuntimeError("Cannot enumerate the MATLAB release surface")
+    return files
+
+
+def build_package(
+    mex_dir: Path,
+    output_dir: Path,
+    *,
+    full_library: bool = False,
+) -> tuple[Path, Path]:
     matlab_source = ROOT / "matlab"
-    for model in REQUIRED_MODELS:
+    required_models = FULL_REQUIRED_MODELS if full_library else REQUIRED_MODELS
+    required_mex = FULL_REQUIRED_MEX if full_library else REQUIRED_MEX
+    for model in required_models:
         if not (matlab_source / model).is_file():
             raise FileNotFoundError(f"Required Simulink model is missing: {model}")
-    for name in REQUIRED_MEX:
+    for name in required_mex:
         validate_native_binary(mex_dir / name)
+    if full_library:
+        for name in FULL_RUNTIME_DLLS:
+            validate_native_binary(mex_dir / name)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    package_version = version()
-    archive = output_dir / f"radia-ih-simulink-v{package_version}.zip"
+    package_version = radia_version() if full_library else version()
+    package_name = (
+        "radia-simulink-library" if full_library else "radia-ih-simulink"
+    )
+    archive = output_dir / f"{package_name}-v{package_version}.zip"
     sums = output_dir / "SHA256SUMS.txt"
     external_manifest = output_dir / "manifest.json"
 
     with tempfile.TemporaryDirectory(prefix="radia-ih-release-", dir=output_dir) as tmp:
         stage = Path(tmp)
-        for relative in PACKAGE_FILES:
-            source = matlab_source / relative
+        if full_library:
+            source_files = release_matlab_files()
+        else:
+            source_files = tuple(Path("matlab") / path for path in PACKAGE_FILES)
+        for relative in source_files:
+            source = ROOT / relative
             if not source.is_file():
-                raise FileNotFoundError(
-                    f"Required IH release support file is missing: {relative}"
-                )
-            destination = stage / "matlab" / relative
+                raise FileNotFoundError(f"Release support file is missing: {relative}")
+            destination = stage / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
         shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
-        for name in REQUIRED_MEX:
+        for name in required_mex:
             shutil.copy2(mex_dir / name, stage / "matlab" / name)
+        if full_library:
+            for name in FULL_RUNTIME_DLLS:
+                shutil.copy2(mex_dir / name, stage / "matlab" / name)
 
         files = []
         for path in sorted(stage.rglob("*")):
@@ -136,24 +193,62 @@ def build_package(mex_dir: Path, output_dir: Path) -> tuple[Path, Path]:
                     "sha256": sha256(path),
                 })
         manifest = {
-            "schema": "radia.simulink.ih-release-manifest.v1",
-            "package": "radia-ih-simulink",
+            "schema": (
+                "radia.simulink.library-release-manifest.v1"
+                if full_library
+                else "radia.simulink.ih-release-manifest.v1"
+            ),
+            "package": package_name,
             "version": package_version,
             "radia_version": radia_version(),
             "commit": commit(),
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "release_channel": "preview",
+            "release_channel": "production" if full_library else "preview",
             "matlab_release": "R2026a",
             "platform": "win64",
             "mex_extension": "mexw64",
-            "backend": "native-mex-sfunction",
-            "operator_assembly": "preassembled",
-            "entry_model": "matlab/radia_ih.slx",
-            "required_mex": [f"matlab/{name}" for name in REQUIRED_MEX],
-            "python_fallback": False,
+            "backend": (
+                "native-mex-sfunction-and-mex-handle"
+                if full_library
+                else "native-mex-sfunction"
+            ),
+            "operator_assembly": (
+                "application-specific" if full_library else "preassembled"
+            ),
+            "entry_model": (
+                "matlab/radia_simulink_library.slx"
+                if full_library
+                else "matlab/radia_ih.slx"
+            ),
+            "required_mex": [f"matlab/{name}" for name in required_mex],
+            "required_runtime_dll": (
+                [f"matlab/{name}" for name in FULL_RUNTIME_DLLS]
+                if full_library
+                else []
+            ),
+            "python_per_step": False,
+            "python_runtime_required_for_headless_application_blocks": full_library,
             "dt_order": "eddy;transport(theta_prev,theta_now);thermal",
             "files": files,
         }
+        if full_library:
+            manifest["application_batch_backend"] = (
+                "python-headless-or-native-as-declared-by-block"
+            )
+            manifest["python_fallback_per_step"] = False
+            manifest["library_groups"] = [
+                "Applications",
+                "Material Models",
+                "LTspice",
+                "Coupling",
+                "Reduced Models",
+                "Optimization",
+            ]
+            manifest["verification_entry"] = (
+                "matlab/verify_radia_simulink_release.m"
+            )
+        else:
+            manifest["python_fallback"] = False
         manifest_text = json.dumps(manifest, indent=2) + "\n"
         (stage / "manifest.json").write_text(manifest_text, encoding="utf-8")
         external_manifest.write_text(manifest_text, encoding="utf-8")
@@ -165,8 +260,19 @@ def build_package(mex_dir: Path, output_dir: Path) -> tuple[Path, Path]:
 
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
-        required = {"manifest.json", *(f"matlab/{name}" for name in REQUIRED_MEX),
-                    *(f"matlab/{name}" for name in REQUIRED_MODELS)}
+        required = {
+            "manifest.json",
+            *(f"matlab/{name}" for name in required_mex),
+            *(f"matlab/{name}" for name in required_models),
+        }
+        if full_library:
+            required.update(f"matlab/{name}" for name in FULL_RUNTIME_DLLS)
+            required.update(
+                {
+                    "matlab/install_radia_simulink.m",
+                    "matlab/verify_radia_simulink_release.m",
+                }
+            )
         missing = sorted(required - names)
         if missing:
             raise RuntimeError(f"Release archive is incomplete: {', '.join(missing)}")
@@ -182,8 +288,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mex-dir", required=True, type=Path)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
+    parser.add_argument("--full-library", action="store_true")
     args = parser.parse_args()
-    archive, sums = build_package(args.mex_dir.resolve(), args.output_dir.resolve())
+    archive, sums = build_package(
+        args.mex_dir.resolve(),
+        args.output_dir.resolve(),
+        full_library=args.full_library,
+    )
     print(archive)
     print(args.output_dir.resolve() / "manifest.json")
     print(sums)

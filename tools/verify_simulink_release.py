@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-"""Verify a Radia IH Simulink archive and run its extracted MATLAB smoke."""
+"""Verify a Radia Simulink archive and run its extracted MATLAB smoke."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,22 @@ REQUIRED_MEMBERS = {
     "matlab/+radia/+simulink/validateIHNativeConfig.m",
     "matlab/radia_ih_eddy_sfun.mexw64",
     "matlab/radia_ih_thermal_sfun.mexw64",
+}
+FULL_REQUIRED_MEMBERS = {
+    "manifest.json",
+    "matlab/install_radia_simulink.m",
+    "matlab/verify_radia_simulink_release.m",
+    "matlab/radia_simulink_library.slx",
+    "matlab/radia_ih.slx",
+    "matlab/radia_streamfunction_optimization.slx",
+    "matlab/radia_mex.mexw64",
+    "matlab/radia_ih_eddy_sfun.mexw64",
+    "matlab/radia_ih_thermal_sfun.mexw64",
+    "matlab/mkl_avx2.2.dll",
+    "matlab/mkl_core.2.dll",
+    "matlab/mkl_def.2.dll",
+    "matlab/mkl_intel_thread.2.dll",
+    "matlab/mkl_rt.2.dll",
 }
 
 
@@ -41,29 +58,57 @@ def _safe_member(name: str) -> bool:
 
 def verify_archive(archive: Path) -> dict:
     if not archive.is_file():
-        raise FileNotFoundError(f"IH release archive does not exist: {archive}")
+        raise FileNotFoundError(f"Simulink release archive does not exist: {archive}")
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
         unsafe = sorted(name for name in names if not _safe_member(name))
         if unsafe:
             raise RuntimeError(f"Unsafe ZIP members: {', '.join(unsafe)}")
-        missing = sorted(REQUIRED_MEMBERS - names)
-        if missing:
-            raise RuntimeError(f"IH release archive is incomplete: {', '.join(missing)}")
         manifest = json.loads(bundle.read("manifest.json"))
-        if manifest.get("schema") != "radia.simulink.ih-release-manifest.v1":
-            raise RuntimeError("Unsupported IH release manifest schema")
-        if manifest.get("release_channel") != "preview":
-            raise RuntimeError("The first IH release must declare preview channel")
+        schema = manifest.get("schema")
+        if schema == "radia.simulink.ih-release-manifest.v1":
+            required_members = REQUIRED_MEMBERS
+        elif schema == "radia.simulink.library-release-manifest.v1":
+            required_members = FULL_REQUIRED_MEMBERS
+        else:
+            raise RuntimeError("Unsupported Simulink release manifest schema")
+        if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("commit", ""))):
+            raise RuntimeError("Simulink release manifest commit is invalid")
+        missing = sorted(required_members - names)
+        if missing:
+            raise RuntimeError(
+                f"Simulink release archive is incomplete: {', '.join(missing)}"
+            )
         if manifest.get("matlab_release") != "R2026a" or \
                 manifest.get("platform") != "win64" or \
                 manifest.get("mex_extension") != "mexw64":
-            raise RuntimeError("IH release runtime compatibility is invalid")
-        if manifest.get("backend") != "native-mex-sfunction" or \
-                manifest.get("python_fallback") is not False:
-            raise RuntimeError("IH release backend contract is invalid")
-        if manifest.get("operator_assembly") != "preassembled":
-            raise RuntimeError("IH release must declare its assembly boundary")
+            raise RuntimeError("Simulink release runtime compatibility is invalid")
+        if schema == "radia.simulink.ih-release-manifest.v1":
+            if manifest.get("release_channel") != "preview":
+                raise RuntimeError("The first IH release must declare preview channel")
+            if manifest.get("backend") != "native-mex-sfunction" or \
+                    manifest.get("python_fallback") is not False:
+                raise RuntimeError("IH release backend contract is invalid")
+            if manifest.get("operator_assembly") != "preassembled":
+                raise RuntimeError("IH release must declare its assembly boundary")
+        else:
+            if manifest.get("release_channel") != "production":
+                raise RuntimeError("The full library must declare production channel")
+            if manifest.get("package") != "radia-simulink-library" or \
+                    manifest.get("entry_model") != \
+                    "matlab/radia_simulink_library.slx":
+                raise RuntimeError("The full library entry contract is invalid")
+            if manifest.get("backend") != \
+                    "native-mex-sfunction-and-mex-handle" or \
+                    manifest.get("python_per_step") is not False or \
+                    manifest.get("python_fallback_per_step") is not False:
+                raise RuntimeError("The full library backend contract is invalid")
+            if set(manifest.get("required_mex", [])) != {
+                "matlab/radia_mex.mexw64",
+                "matlab/radia_ih_eddy_sfun.mexw64",
+                "matlab/radia_ih_thermal_sfun.mexw64",
+            }:
+                raise RuntimeError("The full library MEX inventory is invalid")
 
         declared = set()
         for item in manifest.get("files", []):
@@ -86,6 +131,18 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
         raise FileNotFoundError(f"MATLAB executable does not exist: {matlab}")
     scratch = Path(r"C:\temp")
     scratch.mkdir(parents=True, exist_ok=True)
+    manifest = verify_archive(archive)
+    full_library = (
+        manifest.get("schema") == "radia.simulink.library-release-manifest.v1"
+    )
+    verification_function = (
+        "verify_radia_simulink_release"
+        if full_library
+        else "verify_radia_ih_release"
+    )
+    success_marker = (
+        "RADIA_SIMULINK_RELEASE_OK" if full_library else "RADIA_IH_RELEASE_OK"
+    )
     with tempfile.TemporaryDirectory(
             prefix="radia-ih-verify-", dir=scratch) as temporary:
         root = Path(temporary)
@@ -94,7 +151,7 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
         matlab_root = str((root / "matlab").resolve()).replace("'", "''")
         expression = (
             f"addpath('{matlab_root}','-begin');"
-            "report=verify_radia_ih_release();assert(report.passed);"
+            f"report={verification_function}();assert(report.passed);"
         )
         result = subprocess.run(
             [str(matlab), "-batch", expression],
@@ -109,10 +166,13 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
             (result.stderr or b"").decode("utf-8", errors="backslashreplace")
         if result.returncode != 0:
             raise RuntimeError(
-                f"Extracted IH MATLAB smoke failed with exit {result.returncode}:\n{output}"
+                f"Extracted Simulink MATLAB smoke failed with exit "
+                f"{result.returncode}:\n{output}"
             )
-        if "RADIA_IH_RELEASE_OK" not in output:
-            raise RuntimeError("MATLAB smoke did not emit RADIA_IH_RELEASE_OK")
+        if success_marker not in output:
+            raise RuntimeError(
+                f"MATLAB smoke did not emit {success_marker}"
+            )
         return output
 
 

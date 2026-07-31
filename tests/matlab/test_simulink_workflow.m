@@ -450,6 +450,24 @@ workspace = get_param(modelName, "ModelWorkspace");
 contract = getVariable(workspace, "radia_motor_angle_family_contract");
 verifyFalse(testCase, contract.python_per_step);
 verifyFalse(testCase, contract.matlab_matrix_algebra_per_step);
+
+time = (0:family.sample_time_s:0.02).';
+inputs = Simulink.SimulationData.Dataset;
+inputs = inputs.addElement(timeseries( ...
+    repmat(pi/2, numel(time), 1), time), "mechanical_angle_rad");
+inputs = inputs.addElement(timeseries( ...
+    repmat(3.0, numel(time), 1), time), "model_inputs");
+simulation = Simulink.SimulationInput(char(modelName));
+simulation = simulation.setExternalInput(inputs);
+simulation = simulation.setModelParameter( ...
+    "SaveOutput", "on", "OutputSaveName", "yout");
+simulationOutput = sim(simulation);
+logged = simulationOutput.get("yout").getElement(1).Values.Data;
+expected = [ ...
+    4.0, 19.5; ...
+    15.0, 122.625; ...
+    23.25, 259.5234375];
+verifyEqual(testCase, logged, expected, "AbsTol", 1e-10);
 clear cleanup
 closeIfLoaded(modelName);
 end
@@ -523,6 +541,19 @@ verifyGreaterThan(testCase,getSimulinkBlockHandle( ...
     sfOptimizationPath + "/Objective History"),0);
 verifyGreaterThan(testCase,getSimulinkBlockHandle( ...
     sfOptimizationPath + "/Constraint History"),0);
+motorFamilyPath = ...
+    "radia_simulink_library/Reduced Models/Motor Angle Family";
+verifyEqual(testCase,string(get_param(motorFamilyPath,"FunctionName")), ...
+    "radia_motor_angle_family_mex_sfunction");
+verifyEqual(testCase,string(get_param(motorFamilyPath,"Mask")),"on");
+verifyEqual(testCase,string(get_param(motorFamilyPath,"Parameters")), ...
+    "family");
+motorFamilyContract=get_param(motorFamilyPath,"UserData");
+verifyEqual(testCase,string(motorFamilyContract.backend), ...
+    "native-mex-periodic-interpolation");
+verifyEqual(testCase,string(motorFamilyContract.state_lifecycle), ...
+    "outputs-read;update-advance");
+verifyFalse(testCase,motorFamilyContract.python_per_step);
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/LTspice Circuit","FunctionName")),"radia_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/LTspice/Hysteretic LTspice Plant","FunctionName")),"radia_hysteretic_ltspice_sfun");
 verifyEqual(testCase,string(get_param("radia_simulink_library/Optimization/Optuna Optimization","FunctionName")),"radia_optuna_sfun");

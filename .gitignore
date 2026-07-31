@@ -271,6 +271,7 @@ file_format_documents/
 *.m
 !matlab/**/*.m
 !tests/matlab/**/*.m
+!validation_test/**/*.m
 !validation_test/acoustics/benchmark_acoustic_mex_matlab.m
 !validation_test/optimization/validate_matlab_optuna_quality.m
 !packages/radia-mcp/src/radia_mcp/mathematica/**/*.m

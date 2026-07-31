@@ -2834,6 +2834,15 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
         ("volume",),
     )
     solved_orthogonalized = mixed.solve_frequency_eddy_bubbled(100.0)
+    assert solved_orthogonalized.solver_backend == (
+        "native-dense-reduced-lu-mixed-galerkin"
+    )
+    assert solved_orthogonalized.solver_diagnostics["iterations"] == 0
+    with pytest.raises(
+        ValueError,
+        match="mixed-Galerkin reduction currently requires solver='dense'",
+    ):
+        mixed.solve_frequency_eddy_bubbled(100.0, solver="gmres")
     np.testing.assert_allclose(
         solved_orthogonalized.magnetization_coefficients,
         solved.magnetization_coefficients,

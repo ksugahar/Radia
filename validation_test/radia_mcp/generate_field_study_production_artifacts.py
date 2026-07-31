@@ -10,8 +10,10 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import platform
 import time
+import tomllib
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
@@ -39,9 +41,15 @@ EPS0 = 8.8541878128e-12
 ARTIFACT_SCHEMA = "cae-ai-lab.solver-run.v1"
 GENERATOR = "validation_test/radia_mcp/generate_field_study_production_artifacts.py"
 ARTIFACT_ROOT = "validation_test/radia_mcp/artifacts/field_study_production_v1"
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _version(name: str) -> str:
+    if name == "radia-mcp":
+        with (ROOT / "packages" / "radia-mcp" / "pyproject.toml").open(
+            "rb"
+        ) as stream:
+            return str(tomllib.load(stream)["project"]["version"])
     try:
         return metadata.version(name)
     except metadata.PackageNotFoundError:
@@ -547,6 +555,13 @@ def main() -> int:
         "--run-root", type=Path, default=Path(r"C:\temp\radia_field_study_production_v1")
     )
     args = parser.parse_args()
+    host_role = os.environ.get(
+        "RADIA_VALIDATION_HOST_ROLE", "developer-smoke"
+    ).strip().lower()
+    if host_role not in {"compute", "developer-smoke"}:
+        raise ValueError(
+            "RADIA_VALIDATION_HOST_ROLE must be 'compute' or 'developer-smoke'"
+        )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.run_root.mkdir(parents=True, exist_ok=True)
     cases: list[tuple[str, Callable[[], tuple[dict[str, Any], dict[str, Any]]], str]] = [
@@ -594,6 +609,11 @@ def main() -> int:
     manifest = {
         "schema": "radia.field-study-production-manifest.v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "execution_environment": {
+            "host_role": host_role,
+            "hostname": platform.node(),
+            "platform": platform.platform(),
+        },
         "execution_version": {
             "python": platform.python_version(),
             "radia_mcp": _version("radia-mcp"),

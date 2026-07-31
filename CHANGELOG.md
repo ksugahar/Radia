@@ -5,6 +5,26 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.30 - Native Motor lifecycle and full Simulink distribution
+
+Released 2026-07-31.
+
+- Added periodic Motor angle-family commands to the standalone NGSolve MEX
+  gateway and registered their Simulink block in the single Radia library.
+  Output evaluation is non-mutating, accepted updates advance once, and native
+  snapshot/restore preserves Custom SimState across repeated simulations.
+- Added a production package mode for the complete Radia Simulink library,
+  MATLAB support surface, MEX assets, and runtime DLLs, with content-addressed
+  manifests and extracted four-machine release verification.
+- Reworked the Motor dual-lane evidence as an explicitly smooth concentric-
+  annular first-harmonic fixture, aligned HCurl and HDiv transverse excitation
+  bases, and removed any implication that the fixture resolves slot geometry.
+- Made mixed-Galerkin HDiv/HCurl solves fail loudly when an iterative solver is
+  requested for the currently dense reduced Schur path, instead of silently
+  ignoring the requested backend.
+- Hardened MATLAB OpenMP runtime isolation, finite Motor family/model settings,
+  MEX source provenance, and fresh solver-uninstall dependency scans.
+
 ## 4.95.29 - Production field studies and reversible solver retirement
 
 Released 2026-07-30.

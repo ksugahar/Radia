@@ -1,7 +1,7 @@
 function stateSpaceMexSFunction(block)
 %STATESPACEMEXSFUNCTION Native MEX-backed discrete state-space block.
 %   The matrices and initial state cross the MATLAB/MEX boundary once at
-%   Start. Each sample then advances the native state and returns only y.
+%   Start. Outputs reads the current state and Update advances it once.
 
 setup(block);
 end
@@ -23,13 +23,16 @@ block.OutputPort(1).Dimensions = size(model.C, 1);
 block.OutputPort(1).DatatypeID = 0;
 block.OutputPort(1).Complexity = "Real";
 block.SampleTimes = [model.sample_time_s, 0];
-block.SimStateCompliance = "DefaultSimState";
+block.SimStateCompliance = "CustomSimState";
 
 block.RegBlockMethod("PostPropagationSetup", @postPropagationSetup);
 block.RegBlockMethod("Start", @start);
 block.RegBlockMethod("InitializeConditions", @initializeConditions);
 block.RegBlockMethod("Outputs", @outputs);
+block.RegBlockMethod("Update", @update);
 block.RegBlockMethod("Terminate", @terminate);
+block.RegBlockMethod("GetSimState", @getSimState);
+block.RegBlockMethod("SetSimState", @setSimState);
 end
 
 function postPropagationSetup(block)
@@ -64,7 +67,13 @@ if nativeHandle == 0
 end
 u = double(block.InputPort(1).Data(:));
 block.OutputPort(1).Data = radia_mex( ...
-    'simulink.state_space.step', nativeHandle, u);
+    'simulink.state_space.output', nativeHandle, u);
+end
+
+function update(block)
+nativeHandle = requireNativeHandle(block);
+u = double(block.InputPort(1).Data(:));
+radia_mex('simulink.state_space.update', nativeHandle, u);
 end
 
 function terminate(block)
@@ -82,6 +91,24 @@ function nativeHandle = getNativeHandle(block)
 nativeHandle = uint64(block.Dwork(1).Data);
 end
 
+function nativeHandle = requireNativeHandle(block)
+nativeHandle = getNativeHandle(block);
+if nativeHandle == 0
+    error("radia:simulink:StateSpaceHandle", ...
+        "The native state-space handle is not initialized.");
+end
+end
+
+function state = getSimState(block)
+nativeHandle = requireNativeHandle(block);
+state = radia_mex('simulink.state_space.snapshot', nativeHandle);
+end
+
+function setSimState(block, state)
+nativeHandle = requireNativeHandle(block);
+radia_mex('simulink.state_space.restore', nativeHandle, state);
+end
+
 function validateModel(model)
 if ~isstruct(model) || ~isfield(model, "A") || ~isfield(model, "B") || ...
         ~isfield(model, "C") || ~isfield(model, "D") || ...
@@ -90,7 +117,7 @@ if ~isstruct(model) || ~isfield(model, "A") || ~isfield(model, "B") || ...
         "The S-function parameter must contain A, B, C, D, x0, and sample_time_s.");
 end
 n = size(model.A, 1);
-if ndims(model.A) ~= 2 || size(model.A, 2) ~= n || n < 1 || ...
+if ~ismatrix(model.A) || size(model.A, 2) ~= n || n < 1 || ...
         size(model.B, 1) ~= n || size(model.C, 2) ~= n || ...
         size(model.D, 1) ~= size(model.C, 1) || ...
         size(model.D, 2) ~= size(model.B, 2) || numel(model.x0) ~= n || ...
