@@ -217,17 +217,22 @@ jobs:
       # was launched from a tag ref.
       - name: Record exact CI ref context
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*')
           $releaseTags = @()
-          foreach ($line in (git ls-remote --tags origin @patterns)) {
-            $parts = $line -split '\s+'
-            if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
-              continue
-            }
-            $ref = $parts[1] -replace '\^\{\}$', ''
-            if ($ref -like 'refs/tags/*') {
-              $releaseTags += $ref.Substring('refs/tags/'.Length)
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
+            foreach ($line in (git ls-remote --tags $repoUrl @patterns)) {
+              $parts = $line -split '\s+'
+              if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
+                continue
+              }
+              $ref = $parts[1] -replace '\^\{\}$', ''
+              if ($ref -like 'refs/tags/*') {
+                $releaseTags += $ref.Substring('refs/tags/'.Length)
+              }
             }
           }
           $context = [ordered]@{
