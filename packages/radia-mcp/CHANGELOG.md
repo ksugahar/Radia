@@ -20,6 +20,8 @@ crystallized as its own package.
   legacy solver can be removed.
 - Raised the MATLAB MEX command inventory to 316 and documented the standalone
   MEX debugging surface alongside the production S-Function path.
+- Recorded compute-host provenance for field and native Motor evidence while
+  keeping optional Optimization Toolbox diagnostics explicit on lean hosts.
 
 ## [1.4.23] - 2026-07-30
 

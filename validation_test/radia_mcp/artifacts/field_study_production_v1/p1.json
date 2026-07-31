@@ -7,10 +7,10 @@
     "uniform_heating_exact": true,
     "validation_passed": true
   },
-  "created_at_utc": "2026-07-31T05:39:42.861508+00:00",
+  "created_at_utc": "2026-07-31T07:37:13.816869+00:00",
   "errors": {
-    "max_abs": 5.115907697472721e-13,
-    "max_rel": 1.7030318566819978e-15
+    "max_abs": 5.684341886080801e-13,
+    "max_rel": 1.8922576185355532e-15
   },
   "pass": true,
   "production_contract": {
@@ -27,24 +27,24 @@
   ],
   "result_summary": {
     "exact_temperature_k": 300.4,
-    "field_state_history_sha256": "ef618be639779c0e2662e5adad37551098342ca2f5ef8ecd8c96c0478d3e3833",
-    "final_temperature_k": 300.4,
-    "maximum_step_residual_inf": 2.9774793741665917e-13,
+    "field_state_history_sha256": "5d2cdbe01e89c900a36db2a04dcab0cb22290694f950aaae7f40d2549b4c62d0",
+    "final_temperature_k": 300.3999999999999,
+    "maximum_step_residual_inf": 2.695552114850841e-13,
     "operation": "transient_heat",
     "request_contract_sha256": "bd9736d46a07eaaed7e1acced9ab0601d2be5ac4af3e4fc4bda02ac1c380be86"
   },
   "run": {
     "command": "python validation_test/radia_mcp/generate_field_study_production_artifacts.py --output-dir validation_test/radia_mcp/artifacts/field_study_production_v1",
-    "duration_s": 0.8606766000739299,
+    "duration_s": 1.0316937994211912,
     "exit_code": 0,
     "workdir": "."
   },
   "schema": "cae-ai-lab.solver-run.v1",
   "solver": "radia-ngsolve",
   "timing_breakdown_s": {
-    "factorize_and_solve": 0.0006424000021070242,
-    "postprocess_and_export": 0.8543334000278264,
-    "prepare_and_assemble": 0.0057008000439964235
+    "factorize_and_solve": 0.0009964997880160809,
+    "postprocess_and_export": 0.992020099889487,
+    "prepare_and_assemble": 0.03867719974368811
   },
   "tolerances": {
     "max_abs": 1e-09,
@@ -53,7 +53,7 @@
   "tool_versions": {
     "ngsolve": "6.2.2604",
     "python": "3.12.10",
-    "radia_mcp": "1.4.23"
+    "radia_mcp": "1.4.24"
   },
   "verification": {
     "command": "python -m pytest validation_test/radia_mcp/test_field_study_final_gates.py -q",

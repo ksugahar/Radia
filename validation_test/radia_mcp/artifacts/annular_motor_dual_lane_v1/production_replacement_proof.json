@@ -1,22 +1,22 @@
 {
-  "radia_version": "4.95.27",
+  "radia_version": "4.95.30",
   "schema": "radia.validation.production-replacement-proof.v1",
-  "executed_at_utc": "2026-07-29T19:37:32.052567+00:00",
+  "executed_at_utc": "2026-07-31T07:55:16.873868+00:00",
   "execution_version": {
-    "radia": "4.95.27",
-    "matlab": "(R2026a)",
-    "simulink": "(R2026a)"
+    "radia": "4.95.30",
+    "matlab": "2026a",
+    "simulink": "2026a"
   },
   "proofs": {
     "motor_dual_lane": {
       "status": "pass",
-      "shared_model_identity_sha256": "436b56e89b1a502961449c8f941a767081a6668bf8a4a48ed427531df8819d83",
+      "shared_model_identity_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9",
       "artifact_sha256_by_role": {
-        "manifest": "4e25646bdab933435e13c543d025891194e9ead298e54e873648f17d0ff869e1",
-        "gate": "1fd73cf4bf7075cf3bfb0ffba8443a5f92edb566f3c9ecd50cb517c5db4e6e52",
-        "ngsolve_age": "674deaa36f7b6caef7a3a822a7687007b46f9745f2881e7c76494563ac29168a",
-        "hdiv_mmm_hcurl_eddy_bubble": "180a248b815234a3e70b0d10122b612eaefcf4401a61e1a84326be3413bc7444",
-        "dual_lane": "2b17ea441f4d2328c9c262ba1670840c15aaa17b5323750f7301301f228ad532"
+        "manifest": "346ba82368d77738e91284f943a248c662b8ec57ea1bdd4a91f2db227363c57e",
+        "gate": "2c805e9d28923b1056e2bb714b3cfd7228d5198e16b941f848dc7a8dd890bc5b",
+        "ngsolve_age": "44759324710cc1817afe47ab24cd7c4176e5d958f969ebb3c3789c4443bd6070",
+        "hdiv_mmm_hcurl_eddy_bubble": "d4a060243ba2464309eb000683943478addebd0045e7f9863e74217d01992b7a",
+        "dual_lane": "817229c05086064b5986509a81a675ec51202257c02b026fb785a3ade031be35"
       },
       "checks": {
         "both_lanes_solved": true,
@@ -31,7 +31,7 @@
       "status": "pass",
       "test_count": 74,
       "artifact_sha256_by_role": {
-        "matlab": "521ba53ab27e8222127a0f067fdc7b6da26549b4ea2a721caadce62441d377bc"
+        "matlab": "6b7d2659c3a14094515cebb0203d172db01a73c33ca045882231182eb736d96a"
       },
       "checks": {
         "standalone_batch": true,
@@ -45,5 +45,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "fa1454608a1433d555ab44c9e1766cf1bb5089d9f2e7f8328b1cb2c2ac249628"
+  "proof_payload_sha256": "aaa8b7b6493599bf00dc16893b02cf8fd4e14c3c024bc4cc77becfed7020f600"
 }
