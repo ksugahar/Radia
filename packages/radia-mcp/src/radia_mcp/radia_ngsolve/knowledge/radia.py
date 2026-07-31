@@ -3484,6 +3484,7 @@ CI (build-test.yml)
   |-> pytest -m basic (quick tests)
   |-> Build_Wheel.ps1 -DryRun (build wheel, verify, no upload)
   |-> Upload artifacts: radia-pyd, radia-wheel, test-results
+  |-> Upload exact ref context: ref type/name + SHA + run ID + tag snapshot
   |
   v
 Release (release.yml) -- triggered by CI success
@@ -3491,7 +3492,8 @@ Release (release.yml) -- triggered by CI success
   +-> [main branch] upload-binaries
   |     Upload .pyd to GitHub Releases (tag: binaries)
   |
-  +-> [v* tag only] publish-pypi
+  +-> [exact tag-ref CI only] verify per-run ref context
+        |-> [v* tag on the same SHA] publish-pypi
         Download wheel artifact
         Publish to PyPI via OIDC Trusted Publishers
         (pypa/gh-action-pypi-publish, no token needed)

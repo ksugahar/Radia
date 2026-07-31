@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import ngsolve as ng
 
@@ -7,6 +9,17 @@ from radia.magnetic_shield_optimization import (MagneticShieldDesign,
     linearize_and_step_shield, linearize_and_step_shield_from_ngsolve,
     linearize_shield_response, rms_response_gradient, solve_shield)
 from radia.topology_optimization import VIMOperatorLinearization
+
+
+def test_streaming_contractions_serialize_shared_charge_gram_modes():
+    """Direction workers must not reenter one native ChargeGram instance."""
+    source=(Path(__file__).resolve().parents[1]/"src"/"core"/
+            "rad_hacapk_hdiv.cpp").read_text(encoding="utf-8")
+    start=source.index("RadHACApKChargeGram::DirectionalDerivativeContractions(")
+    end=source.index("// The whole DIRECTED host-pair block",start)
+    implementation=source[start:end]
+    assert "ParallelFor" not in implementation
+    assert "for(int kk=0;kk<nDirections;++kk)" in implementation
 
 
 def test_parallel_field_shield_improves_with_thickness():
