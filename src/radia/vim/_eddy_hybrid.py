@@ -7998,7 +7998,7 @@ class CoupledHDivHybridVIMSystem:
         adjoint_coupling_scale=None,
         mixed_galerkin_keep_blocks=None,
         mixed_galerkin_eliminate_blocks=None,
-        solver: str = "gmres",
+        solver: str | None = None,
         tolerance: float = 1.0e-10,
         max_iterations: int | None = None,
         restart: int | None = None,
@@ -8023,7 +8023,10 @@ class CoupledHDivHybridVIMSystem:
         When both mixed-Galerkin block arguments are supplied, the elimination
         is performed on the complete HDiv-MMM/HCurl-VIM operator.  This updates
         the magnetic block, both coupling blocks, the RHS, and the HCurl field
-        lift together.
+        lift together.  That reduced Schur system is currently materialized and
+        solved by dense LU; requesting an iterative solver for this path fails
+        explicitly instead of silently ignoring the request.  Without mixed
+        Galerkin reduction the default remains GMRES.
         """
 
         frequency = float(frequency_hz)
@@ -8076,6 +8079,17 @@ class CoupledHDivHybridVIMSystem:
                 "mixed_galerkin_keep_blocks and "
                 "mixed_galerkin_eliminate_blocks must be supplied together"
             )
+        solver_name = None if solver is None else str(solver).lower()
+        if solver_name is not None and solver_name not in {
+            "gmres",
+            "cocr",
+            "dense",
+        }:
+            raise ValueError("solver must be 'gmres', 'cocr', or 'dense'")
+        if use_mixed_galerkin and solver_name not in {None, "dense"}:
+            raise ValueError(
+                "mixed-Galerkin reduction currently requires solver='dense'"
+            )
 
         orthogonalized_rhs = None
         orthogonalized_solution = None
@@ -8103,6 +8117,7 @@ class CoupledHDivHybridVIMSystem:
             orthogonalized_solution = solved["reduced_solution"]
             mixed_galerkin_diagnostics = reduction.diagnostics()
         else:
+            direct_solver = "gmres" if solver_name is None else solver_name
             solved = self.solve(
                 magnetic_operator,
                 s,
@@ -8112,7 +8127,7 @@ class CoupledHDivHybridVIMSystem:
                 surface_impedance=surface_impedance,
                 coupling_scale=coupling_scale,
                 adjoint_coupling_scale=adjoint_coupling_scale,
-                solver=solver,
+                solver=direct_solver,
                 tolerance=tolerance,
                 max_iterations=max_iterations,
                 restart=restart,
@@ -8505,6 +8520,13 @@ class MixedGalerkinHDivHybridVIMSystem:
             "projected_residual_relative_norm": float(
                 np.linalg.norm(projected_residual) / reduced_rhs_norm
             ),
+            "solver_diagnostics": {
+                "backend": "native-dense-reduced-lu",
+                "iterations": 0,
+                "relative_residual_max": float(
+                    np.linalg.norm(projected_residual) / reduced_rhs_norm
+                ),
+            },
         }
         if return_operator:
             result["operator"] = self.full_operator

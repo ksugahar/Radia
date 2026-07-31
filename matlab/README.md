@@ -452,10 +452,13 @@ interfaces.
 ### Reduced state-space MEX blocks
 
 Separate reduced-order blocks use `simulink.state_space.create`, `info`,
-`step`, `reset`, and `destroy`. They are intended for fixed Motor, MagLev, and
-HCurl Eddy Bubble/CLN models, not for the native IH field runtime above. Moving
-height-family interpolation remains a MATLAB S-function because its parameter
-field changes at runtime.
+`output`, `update`, `snapshot`, `restore`, `reset`, and `destroy`. `step`
+remains an atomic standalone debugging probe. The Simulink adapters evaluate
+outputs without mutation, advance native state only in `Update`, and preserve
+that state through `CustomSimState`. They are intended for Motor, MagLev, and
+HCurl Eddy Bubble/CLN models, not for the native IH field runtime above.
+Periodic Motor families interpolate their matrices and quadratic torque form
+inside the same native handle.
 
 The validated TEAM 28 levitation curve is also available as a fixed-50 Hz
 control model. `force_N` follows the benchmark sign convention (negative is
@@ -859,7 +862,7 @@ materialized in the optimization loop.
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 94 public top-level names, 27 underscore-prefixed
 numerical kernels, and 111 stateful class members. All 232 entries are covered
-by the current 311-command gateway. Three internal mesh/test helpers are
+by the current 316-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:

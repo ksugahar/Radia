@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 312
+    assert contract["command_count"] == 316
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -25,6 +25,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "ngsolve.matrix_dump" in contract["command_names"]
     assert "ngsolve.mesh.set_deformation" in contract["command_names"]
     assert "ngsolve.mesh.trafo_quality" in contract["command_names"]
+    assert "simulink.state_space.output" in contract["command_names"]
+    assert "simulink.state_space.update" in contract["command_names"]
+    assert "simulink.state_space.snapshot" in contract["command_names"]
+    assert "simulink.state_space.restore" in contract["command_names"]
     assert "hdiv.field_evaluator.from_cloud" in contract["command_names"]
     assert "hacapk.charge_gram.configure_charge_map" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]
@@ -153,13 +157,13 @@ def test_root_readme_publishes_native_topology_mex_parity():
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
     assert "111 stateful class members" in matlab_readme
-    assert "All 232 entries are covered by the current 311-command gateway" in matlab_readme
+    assert "All 232 entries are covered by the current 316-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
     assert "| Stateful pybind11 class surface | 111 / 111 covered |" in parity_doc
-    assert "| MEX gateway commands | 311 |" in parity_doc
+    assert "| MEX gateway commands | 316 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():

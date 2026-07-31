@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.24] - 2026-07-31
+
+- Published the native Motor angle-family MEX/Simulink lifecycle contract,
+  including split output/update semantics, Custom SimState, source hashes, and
+  live MATLAB evidence.
+- Added content-addressed Motor dual-lane artifacts for an honestly scoped
+  smooth annular first-harmonic fixture, with aligned transverse excitation and
+  fail-loud shared-identity checks.
+- Extended release knowledge and uninstall-safety evidence to bind the Motor
+  solver artifacts, native Simulink tests, and fresh dependency scans before a
+  legacy solver can be removed.
+- Raised the MATLAB MEX command inventory to 316 and documented the standalone
+  MEX debugging surface alongside the production S-Function path.
+
 ## [1.4.23] - 2026-07-30
 
 - Added executable MCP contracts for scalar, thermal, harmonic magnetic,

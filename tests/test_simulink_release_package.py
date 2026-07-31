@@ -25,7 +25,7 @@ def test_package_builder_fails_when_mex_is_missing(tmp_path):
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
-    with pytest.raises(FileNotFoundError, match="Required native IH binary"):
+    with pytest.raises(FileNotFoundError, match="Required native release binary"):
         module.build_package(tmp_path, tmp_path / "out")
 
 
@@ -64,6 +64,47 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     assert "matlab/radia_ih.slx" in names
     assert not any("LUT" in name or "makeIHPlant" in name for name in names)
     assert "matlab/radia_simulink_library.slx" not in names
+
+
+def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
+    package_module = load_module(
+        "package_simulink_full_release",
+        ROOT / "tools" / "package_simulink_release.py",
+    )
+    verify_module = load_module(
+        "verify_simulink_full_release",
+        ROOT / "tools" / "verify_simulink_release.py",
+    )
+    mex_dir = tmp_path / "mex"
+    mex_dir.mkdir()
+    for name in (
+        *package_module.FULL_REQUIRED_MEX,
+        *package_module.FULL_RUNTIME_DLLS,
+    ):
+        (mex_dir / name).write_bytes(fake_x64_pe())
+    archive, sums = package_module.build_package(
+        mex_dir,
+        tmp_path / "out",
+        full_library=True,
+    )
+    manifest = verify_module.verify_archive(archive)
+    assert manifest["schema"] == (
+        "radia.simulink.library-release-manifest.v1"
+    )
+    assert manifest["release_channel"] == "production"
+    assert manifest["entry_model"] == "matlab/radia_simulink_library.slx"
+    assert manifest["python_per_step"] is False
+    assert manifest["python_fallback_per_step"] is False
+    assert manifest["application_batch_backend"] == (
+        "python-headless-or-native-as-declared-by-block"
+    )
+    assert sums.read_text(encoding="ascii").split()[0] == \
+        package_module.sha256(archive)
+    with zipfile.ZipFile(archive) as bundle:
+        names = set(bundle.namelist())
+    assert verify_module.FULL_REQUIRED_MEMBERS <= names
+    assert "matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
+    assert "matlab/python_api_parity_manifest.json" in names
 
 
 def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
