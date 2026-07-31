@@ -138,6 +138,8 @@ def test_full_library_enumerates_only_tracked_matlab_files(monkeypatch, tmp_path
     assert package_module.release_matlab_files() == (Path("matlab/tracked.m"),)
     assert calls[0][0] == [
         "git",
+        "-c",
+        f"safe.directory={tmp_path.as_posix()}",
         "ls-files",
         "--cached",
         "--",
