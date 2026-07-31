@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.electrostatic.parallel-square-plates-p1-bem.v1",
-  "executed_at_utc": "2026-07-31T11:23:32.694818+00:00",
+  "executed_at_utc": "2026-07-31T11:25:45.106290+00:00",
   "execution_version": {
     "producer": "validation_parallel_square_plates_p1_bem.py",
     "python": "3.12.10",
@@ -17,7 +17,7 @@
       "negative_charge_c": -7.680609905202801e-10,
       "charge_balance_c": -1.0339757656912846e-25,
       "capacitance_f": 3.8403049526014e-13,
-      "duration_s": 0.2684501000039745
+      "duration_s": 0.26377360000333283
     },
     {
       "subdivisions_per_side": 8,
@@ -27,7 +27,7 @@
       "negative_charge_c": -7.79082098290338e-10,
       "charge_balance_c": 2.0679515313825692e-25,
       "capacitance_f": 3.8954104914516914e-13,
-      "duration_s": 2.222314800004824
+      "duration_s": 2.263901500002248
     },
     {
       "subdivisions_per_side": 12,
@@ -37,7 +37,7 @@
       "negative_charge_c": -7.831791571950093e-10,
       "charge_balance_c": 0.0,
       "capacitance_f": 3.9158957859750467e-13,
-      "duration_s": 9.006872500001919
+      "duration_s": 9.244878500001505
     }
   ],
   "metrics": {
@@ -45,9 +45,9 @@
     "maximum_charge_imbalance_c": 2.0679515313825692e-25
   },
   "timing_breakdown_s": {
-    "solve_n12": 9.006872500001919,
-    "solve_n8": 2.222314800004824,
-    "solve_n4": 0.2684501000039745
+    "solve_n12": 9.244878500001505,
+    "solve_n8": 2.263901500002248,
+    "solve_n4": 0.26377360000333283
   },
   "checks": {
     "opposite_conductor_charges": true,

@@ -56,7 +56,16 @@ def _identity_digest() -> str:
 
 def _git_head() -> str:
     completed = subprocess.run(
-        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "log",
+            "-1",
+            "--format=%H",
+            "--",
+            "src/radia/bem/electrostatic_p1.py",
+        ],
         check=True,
         capture_output=True,
         text=True,
