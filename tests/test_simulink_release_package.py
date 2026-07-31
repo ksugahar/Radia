@@ -112,6 +112,39 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert "matlab/python_api_parity_manifest.json" in names
 
 
+def test_full_library_enumerates_only_tracked_matlab_files(monkeypatch, tmp_path):
+    package_module = load_module(
+        "package_simulink_tracked_files",
+        ROOT / "tools" / "package_simulink_release.py",
+    )
+    tracked = tmp_path / "matlab" / "tracked.m"
+    tracked.parent.mkdir()
+    tracked.write_text("disp('tracked')\n", encoding="utf-8")
+    (tracked.parent / "untracked.m").write_text(
+        "disp('untracked')\n", encoding="utf-8"
+    )
+    calls = []
+
+    class Result:
+        stdout = "matlab/tracked.m\n"
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return Result()
+
+    monkeypatch.setattr(package_module, "ROOT", tmp_path)
+    monkeypatch.setattr(package_module.subprocess, "run", fake_run)
+
+    assert package_module.release_matlab_files() == (Path("matlab/tracked.m"),)
+    assert calls[0][0] == [
+        "git",
+        "ls-files",
+        "--cached",
+        "--",
+        "matlab",
+    ]
+
+
 def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
     package_module = load_module(
         "package_simulink_release_encoding",
