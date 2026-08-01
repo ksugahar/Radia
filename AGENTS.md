@@ -172,6 +172,32 @@ production interface for Radia applications is a masked block in the single
   MEX S-Functions and must not be a LUT or lumped-state-space surrogate.
 - Blocks must delegate to tested `radia.*` APIs, MEX/ROM handles, or validated
   headless application entry points. They must not reimplement solver logic.
+- Radia follows the same high-level-orchestration / narrow-native-kernel design
+  used by NGSolve's Python / pybind11 boundary. The default Simulink execution
+  layer is a readable Level-2 MATLAB S-Function; Level-1 S-Functions are
+  forbidden. Its `setup`, ports, sample time, state, Outputs/Update separation,
+  termination, and diagnostics remain inspectable MATLAB code. Performance-
+  critical numerical work is exposed through independently callable MEX
+  function ABIs operating on numeric arrays, sparse matrices, structs, files,
+  and checked `uint64` handles. This M-file S-Function plus standalone-MEX
+  composition is the production default for LTspice, NGSolve, Radia solvers,
+  optimization, and other application blocks, not merely a prototype fallback.
+  Promote the complete wrapper to a Level-2 C/C++ MEX S-Function only when the
+  application requires hard/soft real-time determinism, deployable generated
+  code, zero-copy native state, native resource ownership tied directly to the
+  Simulink engine, or reproducible end-to-end measurements demonstrate a
+  material benefit that cannot be obtained through the standalone MEX ABI.
+  IH Eddy/Thermal remains an explicit native MEX S-Function exception. Every
+  block declares its backend and passes lifecycle and numerical-parity tests;
+  MATLAB and C++ implementations must never silently substitute for one another.
+- When conversion or reconstruction of a native solver object would materially
+  affect performance, use an explicit handle ABI: `create` returns an opaque,
+  checked `uint64` handle; `step` / `evaluate` / `update` accept that handle;
+  and `destroy` releases it. The native registry MUST validate type, generation,
+  ownership, and liveness on every call so stale or cross-kernel handles fail
+  loudly. A MATLAB handle class or Level-2 MATLAB S-Function owns the token and
+  guarantees cleanup through `delete` / `Terminate` / `onCleanup`; never expose
+  a raw pointer as the public ABI or rely only on `mexLock` for lifetime safety.
 - IH is an explicit exception to the generic fallback rule: its production
   Eddy and Thermal path is native C/C++ MEX S-Function only. Python fallback
   is not permitted for IH production execution. Lightweight constitutive
@@ -236,16 +262,17 @@ be silently omitted or replaced by a numerically different MATLAB algorithm.
   MATLAB-friendly numeric arrays, structs, sparse matrices, file/path-based
   meshes, and checked `uint64` handles rather than trying to share Python object
   identity.
-- A standalone MEX command remains a deliberate deliverable even when the
-  production path is a native MEX S-Function. It provides a low-level user
-  entry point, a reproducible debugging surface, and an independent numerical
-  probe for diagnosing S-Function lifecycle, port, and state errors. Do not
-  discard it merely because it is not the production block.
-- MEX and MEX S-Function have separate release responsibilities: standalone
-  MEX must pass API, numerical, error-propagation, and performance tests;
-  production S-Functions must additionally pass initialization, step-time,
-  termination, repeated-run, and Simulink integration tests. The two artifacts
-  may share the C++ kernel, but neither test suite substitutes for the other.
+- A standalone MEX function ABI is the standard native deliverable. It provides
+  the numerical kernel used by the Level-2 MATLAB S-Function, a low-level MATLAB
+  entry point, a reproducible debugging surface, and a boundary that can be
+  tested independently of Simulink. Do not bury a reusable numerical kernel
+  exclusively inside a MEX S-Function.
+- Standalone MEX and S-Function layers have separate release responsibilities.
+  Standalone MEX must pass API, numerical, error-propagation, and performance
+  tests; production Level-2 MATLAB S-Functions must pass initialization,
+  step-time, termination, repeated-run, and Simulink integration tests. When an
+  approved native MEX S-Function exception exists, it must pass both categories
+  plus its generated-code, real-time, zero-copy, or native-lifecycle requirement.
 - Use an explicit Python fallback when the capability fundamentally depends on
   Python callbacks, Python-only ecosystem objects, or an NGSolve operation that
   has no stable native C++ boundary. The owning `.m` function may use MATLAB's

@@ -195,7 +195,8 @@ workflow rather than the top-level purpose by itself:
 - real and complex RAW import, stepped analyses, `.noise`, and transient FFT
   APIs;
 - a distributable **Radia / LTspice Circuit** block in the Simulink Library
-  Browser with vector inputs and outputs;
+  Browser with vector inputs and outputs, implemented as a readable Level-2
+  MATLAB S-Function with checked start/output/update/termination lifecycle;
 - sampled-data co-simulation that advances LTspice one interval at a time and
   hands saved node voltages and inductor currents to the next interval;
 - a transactional **Hysteretic LTspice Plant** block that waveform-iterates
@@ -221,12 +222,25 @@ radia.simulink.buildLTspiceBlock("controller_model", ...
     InputNames=["gate"; "reference"], ...
     OutputTraces=["V(out)"; "I(L1)"], ...
     SampleTime_s=1e-4);
+
+% Keep KiCad as the design source, then generate CIR, editable ASC, and a
+% Simulink LTspice plant from the same .kicad_sch file.
+prepared = radia.kicad.prepareLTspice("power_stage.kicad_sch", ...
+    OutputDirectory="generated/ltspice");
+radia.kicad.buildLTspiceBlock("controller_model", ...
+    "power_stage.kicad_sch", ...
+    InputNames=["gate"; "reference"], ...
+    OutputTraces=["V(out)"; "I(L1)"], ...
+    SampleTime_s=1e-4);
 ```
 
 The Python circuit converter remains the source of truth; MATLAB and Simulink
 delegate to it and to the same LTspice execution/RAW contracts. See the
 [MATLAB integration guide](matlab/README.md) and
 [radia-spice-lab documentation](packages/radia-spice-lab/README.md).
+For KiCad operation, `.kicad_sch` remains the editable design and PCB source;
+the generated `.cir` and `.asc` files are analysis artifacts. Changes made to
+the LTspice schematic are intentionally not reverse-synchronized into KiCad.
 
 ### Hodograph
 
