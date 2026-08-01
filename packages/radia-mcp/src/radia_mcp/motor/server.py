@@ -83,6 +83,7 @@ from .variable_magnet_gate import variable_magnet_material_parameter_gate as bui
 from .permanent_magnet_force_pair_gate import permanent_magnet_force_pair_gate as build_permanent_magnet_force_pair_gate
 from .demagnetization_history_gate import permanent_magnet_demagnetization_history_gate as build_permanent_magnet_demagnetization_history_gate
 from .dual_torque_curve_gate import dual_torque_method_curve_gate as build_dual_torque_method_curve_gate
+from .hdiv_hex_torque_gate import hdiv_hex_motor_torque_gate as build_hdiv_hex_motor_torque_gate
 from .virtual_work_width_gate import motor_virtual_work_width_ladder_gate as build_motor_virtual_work_width_ladder_gate
 from .transient_no_load_load_gate import (
     motor_transient_no_load_load_cycle_gate as build_transient_no_load_load_cycle_gate,
@@ -120,6 +121,19 @@ def _decode_owned_worker_json(stdout: bytes) -> dict:
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_hdiv_hex_torque_gate(summary_json: str) -> str:
+    """Gate converged BDM1-lane HDiv-MMM motor torque on HEX meshes."""
+    try:
+        result = build_hdiv_hex_motor_torque_gate(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "hdiv_hex_motor_torque_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_transient_no_load_load_cycle_gate(summary_json: str) -> str:
