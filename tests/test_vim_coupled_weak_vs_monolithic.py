@@ -95,6 +95,10 @@ def _blocks_and_rhs(mixed, s):
     Z = np.asarray(mixed.eddy_impedance(s, surface_impedance=vim.SkinImpedance(s, SIGMA)))
     b_M = np.asarray(mixed.magnetic_rhs).reshape(A_M.shape[0], -1)
     b_J = np.asarray(mixed.eddy_rhs).reshape(Z.shape[0], -1)
+    if mixed.eddy_rhs_contract == "vector_potential":
+        # The stored projection is <J, A_ext>; solve_frequency applies
+        # Faraday's law before solving the physical harmonic system.
+        b_J = -s * b_J
     return A_M, U, L, Z, b_M, b_J
 
 

@@ -151,7 +151,9 @@ def test_hdiv_reduced_cli_round_trip(tmp_path):
     assert result["gram_build_count"] == 1
     assert len(result["angles"]) == 3
     assert max(row["torque_spread_relative"] for row in result["angles"]) < 1e-4
-    assert result["gmsh_file"] == str(msh.resolve())
+    assert os.path.normcase(result["gmsh_file"]) == os.path.normcase(
+        str(msh.resolve())
+    )
     assert msh.read_text(encoding="utf-8").startswith(
         "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
     )
