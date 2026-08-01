@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **892 tools** across 48 MCP servers.
+Total: **895 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -20,7 +20,7 @@ Total: **892 tools** across 48 MCP servers.
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 6 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
-| [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
+| [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 6 |
 | [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 52 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
@@ -580,8 +580,11 @@ Module: `radia_mcp.electromagnet.server`
 
 | Tool | Description |
 |---|---|
+| `electromagnet_accelerator_sources` | Search the curated accelerator textbook source guide. |
+| `electromagnet_coil_field_audit` | Cross-check CoilBuilder solid-current and FE filament field sources. |
+| `electromagnet_coil_yoke_clearance_audit` | Reject coil/yoke overlap and insufficient manufacturing clearance. |
 | `electromagnet_status` | (no description) |
-| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 14 topics. |
+| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 23 topics. |
 | `electromagnet_usage` | Get accelerator electromagnet analysis documentation. |
 
 ## `mcp-server-motor`

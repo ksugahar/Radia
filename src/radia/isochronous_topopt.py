@@ -64,7 +64,14 @@ __all__ = [
     "IronOnlyVerification", "density_to_s",
     "density_gradient_from_s_gradient", "gradient_pair_points",
     "dipole_array_field_cf", "field_functional_load", "uniform_field_load",
-    "demag_field_from_solution", "orbit_arc_points", "optimize_density",
+    "demag_field_from_solution", "demag_field_evaluator",
+    "orbit_arc_points", "optimize_density",
+    "SectorOrbit", "SectorLinearOptics", "track_sector_orbit",
+    "sector_linear_optics", "isochronous_increment_targets",
+    "isochronous_total_field_bands", "isochronous_profile_metrics",
+    "CombinedFunctionLinearOptics", "combined_function_linear_optics",
+    "StraightenedBendValidation", "straightened_bend_validation",
+    "AchromaticGradientDesign", "design_achromatic_gradient_profile",
     "iron_only_mesh", "verify_design_iron_only",
 ]
 
@@ -188,6 +195,497 @@ def orbit_arc_points(radius, z, n, span=(0.0, 2.0 * pi)):
     return pts, radial
 
 
+@dataclass
+class SectorOrbit:
+    """RK4 reference trajectory through one azimuthal magnet sector."""
+    position: np.ndarray
+    tangent: np.ndarray
+    path_length: float
+    exit_radius: float
+    exit_angle: float
+
+
+@dataclass
+class SectorLinearOptics:
+    """Tracked radial/vertical first-order maps about a reference orbit."""
+    reference: SectorOrbit
+    radial_matrix: np.ndarray
+    vertical_matrix: np.ndarray
+    radial_determinant: float
+    vertical_determinant: float
+
+
+@dataclass(frozen=True)
+class CombinedFunctionLinearOptics:
+    """Piecewise-constant combined-function map and analytic sensitivities.
+
+    ``curvature`` is ``h=B/B_rho`` and ``normalized_gradient`` is
+    ``k1=(dB_y/dx)/B_rho``.  The adopted accelerator convention is
+
+    ``eta'' + (h**2+k1) eta = h`` and ``y'' - k1 y = 0``.
+
+    The endpoint Jacobian differentiates with respect to caller-supplied
+    design parameters through exact matrix-exponential Frechet derivatives;
+    no momentum or design finite difference is used.
+    """
+    s: np.ndarray
+    dispersion: np.ndarray
+    radial_matrix: np.ndarray
+    vertical_matrix: np.ndarray
+    endpoint_jacobian: np.ndarray
+    radial_matrix_jacobian: np.ndarray
+    vertical_matrix_jacobian: np.ndarray
+    radial_trace: float
+    vertical_trace: float
+    radial_stable: bool
+    vertical_stable: bool
+
+
+@dataclass(frozen=True)
+class StraightenedBendValidation:
+    """Field-driven reference orbit and optics in a straightened bend frame.
+
+    The electromagnetic mesh uses longitudinal coordinate ``s`` while the
+    returned Cartesian orbit integrates the realized curvature into the
+    physical bend.  This is the standard straightened Frenet representation:
+    it avoids pretending that the straight HEX mesh itself is a curved global
+    geometry while still checking the field, bend angle, transfer maps, and
+    endpoint dispersion produced by that mesh.
+    """
+    s: np.ndarray
+    bz: np.ndarray
+    gradient: np.ndarray
+    bend_angle: float
+    position: np.ndarray
+    tangent: np.ndarray
+    optics: CombinedFunctionLinearOptics
+
+
+@dataclass(frozen=True)
+class AchromaticGradientDesign:
+    """Stable longitudinal gradient target with zero endpoint dispersion."""
+    segment_lengths: np.ndarray
+    curvature: np.ndarray
+    normalized_gradient: np.ndarray
+    optics: CombinedFunctionLinearOptics
+    objective: float
+    iterations: int
+    status: str
+
+
+def _orbit_field_value(field, point):
+    value = np.asarray(field(np.asarray(point, dtype=float)), dtype=float)
+    if value.shape == (1, 3):
+        value = value[0]
+    if value.shape != (3,) or not np.all(np.isfinite(value)):
+        raise ValueError("track_sector_orbit: field must return one finite 3-vector")
+    return value
+
+
+def track_sector_orbit(field, radius, span, inverse_rigidity, *, n_steps=720,
+                       radial_offset=0.0, vertical_offset=0.0,
+                       radial_slope=0.0, vertical_slope=0.0):
+    """Track ``dr/ds=u, du/ds=(q/p) u x B`` through a nominal circular arc.
+
+    ``field(point)`` returns magnetic flux density in tesla and
+    ``inverse_rigidity=q/p`` in inverse tesla-metre, including its sign.
+    The integration length is ``radius * abs(span[1]-span[0])``.  Offsets and
+    slopes are validation perturbations for :func:`sector_linear_optics`; they
+    are not topology sensitivities and never enter the optimization gradient.
+    """
+    radius = float(radius)
+    inverse_rigidity = float(inverse_rigidity)
+    n_steps = int(n_steps)
+    lo, hi = map(float, span)
+    if not radius > 0.0 or not np.isfinite(inverse_rigidity) or n_steps < 4:
+        raise ValueError("track_sector_orbit: need radius>0, finite rigidity, n_steps>=4")
+    direction = 1.0 if hi >= lo else -1.0
+    er = np.array([np.cos(lo), np.sin(lo), 0.0])
+    et = direction * np.array([-np.sin(lo), np.cos(lo), 0.0])
+    ez = np.array([0.0, 0.0, 1.0])
+    position = (radius + float(radial_offset)) * er + float(vertical_offset) * ez
+    tangent = et + float(radial_slope) * er + float(vertical_slope) * ez
+    tangent /= np.linalg.norm(tangent)
+    length = radius * abs(hi - lo)
+    ds = length / n_steps
+    positions = np.empty((n_steps + 1, 3), dtype=float)
+    tangents = np.empty_like(positions)
+    positions[0], tangents[0] = position, tangent
+
+    def rhs(r, u):
+        return u, inverse_rigidity * np.cross(u, _orbit_field_value(field, r))
+
+    for step in range(n_steps):
+        k1r, k1u = rhs(position, tangent)
+        k2r, k2u = rhs(position + 0.5*ds*k1r,
+                       tangent + 0.5*ds*k1u)
+        k3r, k3u = rhs(position + 0.5*ds*k2r,
+                       tangent + 0.5*ds*k2u)
+        k4r, k4u = rhs(position + ds*k3r, tangent + ds*k3u)
+        position = position + ds*(k1r + 2*k2r + 2*k3r + k4r)/6.0
+        tangent = tangent + ds*(k1u + 2*k2u + 2*k3u + k4u)/6.0
+        tangent /= np.linalg.norm(tangent)
+        positions[step+1], tangents[step+1] = position, tangent
+    return SectorOrbit(
+        position=positions, tangent=tangents, path_length=length,
+        exit_radius=float(np.hypot(position[0], position[1])),
+        exit_angle=float(np.arctan2(position[1], position[0])))
+
+
+def sector_linear_optics(field, radius, span, inverse_rigidity, *,
+                         n_steps=720, position_step=1e-5,
+                         slope_step=1e-5):
+    """Track symmetric orbit pencils and return radial/vertical 2x2 maps."""
+    if position_step <= 0.0 or slope_step <= 0.0:
+        raise ValueError("sector_linear_optics: perturbation steps must be positive")
+    kwargs = dict(n_steps=n_steps)
+    reference = track_sector_orbit(field, radius, span, inverse_rigidity, **kwargs)
+    end = reference.position[-1]
+    er = np.array([end[0], end[1], 0.0])
+    er /= np.linalg.norm(er)
+    et = np.array([-er[1], er[0], 0.0])
+
+    def difference(kind, step):
+        plus = track_sector_orbit(
+            field, radius, span, inverse_rigidity, **kwargs, **{kind: step})
+        minus = track_sector_orbit(
+            field, radius, span, inverse_rigidity, **kwargs, **{kind: -step})
+        def exit_plane_state(orbit):
+            r = orbit.position[-1].copy()
+            u = orbit.tangent[-1].copy()
+            correction = -((r-end)@et)/(u@et)
+            r += correction*u
+            u += correction*inverse_rigidity*np.cross(
+                u, _orbit_field_value(field, r))
+            u /= np.linalg.norm(u)
+            return r, u
+        rp, up = exit_plane_state(plus)
+        rm, um = exit_plane_state(minus)
+        dr = (rp-rm)/(2*step)
+        du = (up-um)/(2*step)
+        return dr, du
+
+    drx, dux = difference("radial_offset", position_step)
+    drxp, duxp = difference("radial_slope", slope_step)
+    drz, duz = difference("vertical_offset", position_step)
+    drzp, duzp = difference("vertical_slope", slope_step)
+    radial = np.array([[drx@er, drxp@er], [dux@er, duxp@er]])
+    vertical = np.array([[drz[2], drzp[2]], [duz[2], duzp[2]]])
+    return SectorLinearOptics(
+        reference=reference, radial_matrix=radial, vertical_matrix=vertical,
+        radial_determinant=float(np.linalg.det(radial)),
+        vertical_determinant=float(np.linalg.det(vertical)))
+
+
+def combined_function_linear_optics(curvature, normalized_gradient,
+                                    segment_lengths, *, eta0=0.0,
+                                    eta_prime0=0.0,
+                                    curvature_jacobian=None,
+                                    gradient_jacobian=None,
+                                    stability_tolerance=1e-10):
+    """Propagate dispersion and betatron maps through a combined-function bend.
+
+    Inputs are one constant value per longitudinal segment.  Optional
+    Jacobians have shape ``(n_segment, n_parameter)``.  The propagators and all
+    requested derivatives are evaluated analytically with
+    :func:`scipy.linalg.expm_frechet`.  This provides the optics link used to
+    chain HDiv-MMM field/gradient response Jacobians into an endpoint-
+    dispersion constraint without finite differences in the optimizer.
+    """
+    from scipy.linalg import expm, expm_frechet
+
+    h=np.asarray(curvature,dtype=float).reshape(-1)
+    k=np.asarray(normalized_gradient,dtype=float).reshape(-1)
+    ds=np.asarray(segment_lengths,dtype=float).reshape(-1)
+    if h.size==0 or k.shape!=h.shape or ds.shape!=h.shape:
+        raise ValueError("combined-function optics requires matching non-empty segment arrays")
+    if (np.any(ds<=0.0) or not np.all(np.isfinite(np.r_[h,k,ds,eta0,eta_prime0]))):
+        raise ValueError("combined-function optics inputs must be finite and lengths positive")
+
+    supplied=(curvature_jacobian is not None or gradient_jacobian is not None)
+    if supplied:
+        raw=(curvature_jacobian if curvature_jacobian is not None
+             else gradient_jacobian)
+        raw=np.asarray(raw,dtype=float)
+        if raw.ndim!=2 or raw.shape[0]!=h.size:
+            raise ValueError("combined-function Jacobians need shape (n_segment,n_parameter)")
+        n_parameter=raw.shape[1]
+        dh=(np.zeros((h.size,n_parameter)) if curvature_jacobian is None else
+            np.asarray(curvature_jacobian,dtype=float))
+        dk=(np.zeros((h.size,n_parameter)) if gradient_jacobian is None else
+            np.asarray(gradient_jacobian,dtype=float))
+        if dh.shape!=(h.size,n_parameter) or dk.shape!=(h.size,n_parameter):
+            raise ValueError("curvature and gradient Jacobians must have matching shapes")
+        if not np.all(np.isfinite(np.r_[dh.ravel(),dk.ravel()])):
+            raise ValueError("combined-function Jacobians must be finite")
+    else:
+        n_parameter=0
+        dh=np.zeros((h.size,0));dk=np.zeros((h.size,0))
+
+    z=np.array([float(eta0),float(eta_prime0),1.0])
+    dz=np.zeros((3,n_parameter))
+    radial=np.eye(2); vertical=np.eye(2)
+    dradial=np.zeros((n_parameter,2,2));dvertical=np.zeros_like(dradial)
+    history=[z[:2].copy()];stations=[0.0]
+    for segment,(hi,ki,length) in enumerate(zip(h,k,ds)):
+        kx=hi*hi+ki
+        generator=np.array([[0.0,1.0,0.0],[-kx,0.0,hi],[0.0,0.0,0.0]])
+        scaled=generator*length
+        propagator=expm(scaled)
+        old_z=z; old_dz=dz; old_radial=radial;old_dradial=dradial
+        old_vertical=vertical;old_dvertical=dvertical
+        dprop=[];dvertical_prop=[]
+        vertical_generator=np.array([[0.0,1.0],[ki,0.0]])
+        vertical_propagator=expm(vertical_generator*length)
+        for parameter in range(n_parameter):
+            dhi=dh[segment,parameter];dki=dk[segment,parameter]
+            derivative=np.zeros((3,3))
+            derivative[1,0]=-(2.0*hi*dhi+dki)
+            derivative[1,2]=dhi
+            dprop.append(expm_frechet(
+                scaled,derivative*length,compute_expm=False))
+            vertical_derivative=np.array([[0.0,0.0],[dki,0.0]])
+            dvertical_prop.append(expm_frechet(
+                vertical_generator*length,vertical_derivative*length,
+                compute_expm=False))
+        z=propagator@old_z
+        radial=propagator[:2,:2]@old_radial
+        vertical=vertical_propagator@old_vertical
+        for parameter in range(n_parameter):
+            dz[:,parameter]=(propagator@old_dz[:,parameter]
+                             +dprop[parameter]@old_z)
+            dradial[parameter]=(propagator[:2,:2]@old_dradial[parameter]
+                                +dprop[parameter][:2,:2]@old_radial)
+            dvertical[parameter]=(vertical_propagator@old_dvertical[parameter]
+                                  +dvertical_prop[parameter]@old_vertical)
+        history.append(z[:2].copy());stations.append(stations[-1]+length)
+    radial_trace=float(np.trace(radial));vertical_trace=float(np.trace(vertical))
+    tolerance=float(stability_tolerance)
+    if not np.isfinite(tolerance) or tolerance<0.0:
+        raise ValueError("stability_tolerance must be finite and nonnegative")
+    return CombinedFunctionLinearOptics(
+        np.asarray(stations),np.asarray(history),radial,vertical,dz[:2],
+        dradial,dvertical,radial_trace,vertical_trace,
+        bool(abs(radial_trace)<2.0-tolerance),
+        bool(abs(vertical_trace)<2.0-tolerance))
+
+
+def straightened_bend_validation(s, bz, gradient, magnetic_rigidity, *,
+                                 eta0=0.0, eta_prime0=0.0,
+                                 initial_angle=None):
+    """Reconstruct a physical bend orbit and linear optics from field samples.
+
+    ``s`` is the straightened longitudinal coordinate of the electromagnetic
+    model.  Trapezoidal cell averages of ``bz`` and ``gradient=dBz/dx`` drive
+    the same combined-function equations as :func:`combined_function_linear_optics`.
+    The reference orbit is integrated exactly within every constant-curvature
+    cell.  When ``initial_angle`` is omitted, the orbit is centred about the
+    longitudinal chord by choosing half the realized bend angle on each side.
+
+    This is a post-solve field/optics check.  It does not calculate or
+    approximate a topology or shape derivative.
+    """
+    s=np.asarray(s,dtype=float).reshape(-1)
+    bz=np.asarray(bz,dtype=float).reshape(-1)
+    gradient=np.asarray(gradient,dtype=float).reshape(-1)
+    magnetic_rigidity=float(magnetic_rigidity)
+    if (s.size<2 or bz.shape!=s.shape or gradient.shape!=s.shape
+            or not np.all(np.isfinite(np.r_[s,bz,gradient,magnetic_rigidity]))
+            or magnetic_rigidity==0.0 or np.any(np.diff(s)<=0.0)):
+        raise ValueError("straightened bend inputs must be finite matching "
+                         "arrays, with increasing s and nonzero rigidity")
+    ds=np.diff(s)
+    curvature=0.5*(bz[:-1]+bz[1:])/magnetic_rigidity
+    normalized_gradient=0.5*(gradient[:-1]+gradient[1:])/magnetic_rigidity
+    optics=combined_function_linear_optics(
+        curvature,normalized_gradient,ds,eta0=float(eta0),
+        eta_prime0=float(eta_prime0))
+    increments=curvature*ds
+    bend_angle=float(np.sum(increments))
+    angle=np.empty(s.size,dtype=float)
+    angle[0]=(-0.5*bend_angle if initial_angle is None
+              else float(initial_angle))
+    angle[1:]=angle[0]+np.cumsum(increments)
+    position=np.zeros((s.size,3),dtype=float)
+    for index,(length,h) in enumerate(zip(ds,curvature)):
+        before=angle[index];after=angle[index+1]
+        if abs(h)>1.0e-14:
+            position[index+1,0]=(position[index,0]
+                +(np.cos(before)-np.cos(after))/h)
+            position[index+1,1]=(position[index,1]
+                +(np.sin(after)-np.sin(before))/h)
+        else:
+            position[index+1,0]=position[index,0]+length*np.sin(before)
+            position[index+1,1]=position[index,1]+length*np.cos(before)
+    tangent=np.column_stack((np.sin(angle),np.cos(angle),
+                             np.zeros_like(angle)))
+    return StraightenedBendValidation(
+        s=s,bz=bz,gradient=gradient,bend_angle=bend_angle,
+        position=position,tangent=tangent,optics=optics)
+
+
+def design_achromatic_gradient_profile(*, length, bend_angle,
+        n_segments=4, normalized_gradient_limit=None,
+        stability_margin=0.2, smoothness=2e-3,
+        endpoint_tolerance=1e-10, max_iterations=1000,
+        initial_normalized_gradient=None, gradient_sign_pattern=None):
+    """Design a stable constant-curvature bend with ``eta_in=eta_out=0``.
+
+    The incident dispersion and slope are both zero.  Only ``eta_out`` is
+    constrained, matching the achromatic boundary requested by the design;
+    ``eta'_out`` is reported but left free.  The longitudinal normalized
+    gradient is optimized with analytic endpoint and transfer-map derivatives.
+    The bend-angle integral is exact because the curvature is fixed to
+    ``bend_angle/length`` in every segment.
+    """
+    from scipy.optimize import minimize
+
+    length=float(length);angle=float(bend_angle);n=int(n_segments)
+    margin=float(stability_margin);smooth=float(smoothness)
+    if (not np.isfinite(length) or length<=0.0 or not np.isfinite(angle)
+            or angle==0.0 or n<4 or not 0.0<margin<2.0 or smooth<0.0):
+        raise ValueError("invalid achromatic-gradient design specification")
+    ds=np.full(n,length/n);h=np.full(n,angle/length)
+    # Dimensionless deterministic seed found from the four-cell alternating-
+    # gradient family.  Interpolation keeps the same physical profile for a
+    # finer segmentation; the 1/L^2 scaling follows Hill's equation.
+    seed4=np.array([29.55146698,7.53520068,45.44214309,-36.32797540])
+    centers=(np.arange(n)+0.5)/n
+    if initial_normalized_gradient is None:
+        seed=np.interp(centers,(np.arange(4)+0.5)/4,seed4)/length**2
+    else:
+        seed=np.asarray(initial_normalized_gradient,dtype=float).reshape(-1)
+        if seed.shape!=(n,) or not np.all(np.isfinite(seed)):
+            raise ValueError("initial_normalized_gradient must match n_segments")
+    scale=max(1.0,1.0/length**2)
+    identity=np.eye(n)
+
+    def evaluate(values):
+        return combined_function_linear_optics(
+            h,values,ds,gradient_jacobian=identity)
+
+    difference=np.zeros((max(0,n-1),n))
+    for row in range(n-1):
+        difference[row,row]=-1.0;difference[row,row+1]=1.0
+    def objective(values):
+        return float(0.5*np.dot(values,values)/scale**2
+                     +0.5*smooth*np.dot(difference@values,difference@values)/scale**2)
+    def objective_jacobian(values):
+        return ((values+smooth*difference.T@(difference@values))/scale**2)
+    limit=2.0-margin
+    def equality(values):
+        return np.array([evaluate(values).dispersion[-1,0]])
+    def equality_jacobian(values):
+        return evaluate(values).endpoint_jacobian[0:1]
+    def stability(values):
+        optics=evaluate(values)
+        return np.array([limit-optics.radial_trace,limit+optics.radial_trace,
+                         limit-optics.vertical_trace,limit+optics.vertical_trace])
+    def stability_jacobian(values):
+        optics=evaluate(values)
+        tx=np.trace(optics.radial_matrix_jacobian,axis1=1,axis2=2)
+        ty=np.trace(optics.vertical_matrix_jacobian,axis1=1,axis2=2)
+        return np.vstack((-tx,tx,-ty,ty))
+    bound=(None if normalized_gradient_limit is None else
+           float(normalized_gradient_limit))
+    if bound is not None and (not np.isfinite(bound) or bound<=0.0):
+        raise ValueError("normalized_gradient_limit must be positive and finite")
+    lower=np.full(n,-np.inf if bound is None else -bound)
+    upper=np.full(n,np.inf if bound is None else bound)
+    if gradient_sign_pattern is not None:
+        signs=np.asarray(gradient_sign_pattern,dtype=int).reshape(-1)
+        if signs.shape!=(n,) or np.any(~np.isin(signs,[-1,0,1])):
+            raise ValueError("gradient_sign_pattern entries must be -1, 0, or +1")
+        lower[signs>0]=0.0;upper[signs<0]=0.0
+    seed=np.clip(seed,lower,upper)
+    bounds=[((None if not np.isfinite(lo) else float(lo)),
+             (None if not np.isfinite(hi) else float(hi)))
+            for lo,hi in zip(lower,upper)]
+    result=minimize(objective,seed,jac=objective_jacobian,method="SLSQP",
+        bounds=bounds,constraints=(
+            {"type":"eq","fun":equality,"jac":equality_jacobian},
+            {"type":"ineq","fun":stability,"jac":stability_jacobian}),
+        options={"ftol":1e-12,"maxiter":int(max_iterations),"disp":False})
+    optics=evaluate(result.x)
+    residual=abs(float(optics.dispersion[-1,0]))
+    if (not result.success or residual>float(endpoint_tolerance)
+            or not optics.radial_stable or not optics.vertical_stable):
+        raise RuntimeError(
+            "achromatic gradient design failed: %s; |eta_out|=%.3e, traces=(%.6g,%.6g)"
+            %(result.message,residual,optics.radial_trace,optics.vertical_trace))
+    return AchromaticGradientDesign(ds,h,np.asarray(result.x),optics,
+        float(result.fun),int(result.nit),str(result.message))
+
+
+def isochronous_profile_metrics(radii, bz, gamma):
+    """Relative field-shape and revolution-period errors for ``B~gamma``."""
+    radii = np.asarray(radii, dtype=float).ravel()
+    bz = np.asarray(bz, dtype=float).ravel()
+    gamma = np.asarray(gamma, dtype=float).ravel()
+    if radii.size < 2 or bz.shape != radii.shape or gamma.shape != radii.shape:
+        raise ValueError("isochronous_profile_metrics: matching vectors of length >=2 required")
+    if (not np.all(np.isfinite(radii)) or not np.all(np.isfinite(bz))
+            or not np.all(np.isfinite(gamma)) or np.any(bz == 0.0)
+            or np.any(gamma <= 0.0)):
+        raise ValueError("isochronous_profile_metrics: invalid profile")
+    reference = radii.size//2
+    normalized = (bz/bz[reference])/(gamma/gamma[reference])
+    field_error = normalized-1.0
+    period_error = 1.0/normalized-1.0
+    return dict(
+        normalized_field=normalized, field_error=field_error,
+        period_error=period_error,
+        max_abs_field_error=float(np.max(np.abs(field_error))),
+        rms_field_error=float(np.sqrt(np.mean(field_error**2))),
+        max_abs_period_error=float(np.max(np.abs(period_error))),
+        rms_period_error=float(np.sqrt(np.mean(period_error**2))))
+
+
+def isochronous_increment_targets(gamma, reference_increment, external_bz,
+                                  reference_index=None):
+    """Targets for a design-dependent field increment under a fixed field.
+
+    The isochronous law applies to total ``Bz``.  If the optimizer controls
+    only ``delta_Bz`` while a fixed coil contributes ``external_bz``, the
+    correct target is
+
+    ``(external_bz + reference_increment) * gamma/gamma_ref - external_bz``.
+
+    Applying ``gamma/gamma_ref`` to the increment alone is incorrect because
+    the additive fixed field does not cancel in a ratio.
+    """
+    gamma = np.asarray(gamma, dtype=float).ravel()
+    if gamma.size < 2 or not np.all(np.isfinite(gamma)) or np.any(gamma <= 0.0):
+        raise ValueError("isochronous_increment_targets: gamma must be a "
+                         "positive finite vector of length >=2")
+    reference = gamma.size//2 if reference_index is None else int(reference_index)
+    if reference < 0 or reference >= gamma.size:
+        raise ValueError("isochronous_increment_targets: reference_index out of range")
+    reference_increment = float(reference_increment)
+    external_bz = float(external_bz)
+    if not np.isfinite(reference_increment) or not np.isfinite(external_bz):
+        raise ValueError("isochronous_increment_targets: field values must be finite")
+    return ((external_bz + reference_increment) * gamma / gamma[reference]
+            - external_bz)
+
+
+def isochronous_total_field_bands(increment_targets, external_bz,
+                                  relative_band):
+    """Absolute increment-functional bands defined relative to total ``Bz``."""
+    increments = np.asarray(increment_targets, dtype=float).ravel()
+    external_bz = float(external_bz)
+    relative_band = float(relative_band)
+    if (increments.size < 1 or not np.all(np.isfinite(increments))
+            or not np.isfinite(external_bz)
+            or not np.isfinite(relative_band) or relative_band <= 0.0):
+        raise ValueError("isochronous_total_field_bands: need finite targets, "
+                         "field, and positive relative_band")
+    bands = relative_band * np.abs(external_bz + increments)
+    if np.any(bands == 0.0):
+        raise ValueError("isochronous_total_field_bands: total target is zero")
+    return bands
+
+
 def dipole_array_field_cf(points, moments):
     """Analytic H field CoefficientFunction of a point-dipole array.
 
@@ -299,6 +797,31 @@ def demag_field_from_solution(demag, gfM, points, algorithm="direct"):
     return FieldFromSolution(res, points, algorithm=algorithm)
 
 
+def demag_field_evaluator(demag, gfM, algorithm="direct"):
+    """Return a reusable callable for one solved demagnetizing field.
+
+    The callable retains the immutable native source evaluator after its first
+    query.  Use this for RK4 orbit tracking, which evaluates the same final
+    magnetization thousands of times.
+    """
+    if not isinstance(demag, DemagOperator):
+        raise TypeError("demag_field_evaluator: demag must be a vim.DemagOperator")
+    if gfM.space is not demag.space:
+        raise ValueError("demag_field_evaluator: gfM does not live on the "
+                         "operator's HDiv space")
+    result = {"gfM": gfM, "order": int(demag.space.globalorder),
+              "_charge_gram": demag._G,
+              "_m_coefficients": np.ascontiguousarray(
+                  gfM.vec.FV().NumPy(), dtype=np.float64)}
+
+    def evaluate(points):
+        values = np.asarray(
+            FieldFromSolution(result, points, algorithm=algorithm), dtype=float)
+        return values[0] if np.asarray(points).shape == (3,) else values
+
+    return evaluate
+
+
 # --------------------------------------------------------------------------
 # density filter
 # --------------------------------------------------------------------------
@@ -403,6 +926,116 @@ class HeavisideProjection:
         return gradient*self.derivative(rho)
 
 
+def restore_projected_volume(density, element_volumes, volume_fraction, *,
+                             density_filter=None, density_projection=None,
+                             volume_tolerance=1e-12,
+                             density_tolerance=1e-12,
+                             max_iterations=80):
+    """Make a continuation start feasible after changing its projection.
+
+    Increasing a Heaviside ``beta`` can increase the projected material
+    volume even though the raw design is unchanged.  This routine finds the
+    smallest uniform downward shift
+
+    ``rho_feasible = clip(rho - shift, 0, 1)``
+
+    whose *filtered and projected* volume satisfies ``volume_fraction``.
+    The scalar correction preserves the ordering of all non-clipped design
+    variables, so a continuation phase does not invent a new topology merely
+    to repair feasibility.  It is intended for phase transitions and restart
+    recovery, not as a replacement for the analytic volume row used by
+    :func:`optimize_density` within a phase.
+
+    Returns ``(rho_feasible, diagnostics)``.  ``density_filter`` and
+    ``density_projection`` follow the same contracts as
+    :func:`optimize_density`.
+    """
+    rho = np.asarray(density, dtype=float).copy()
+    volumes = np.asarray(element_volumes, dtype=float).reshape(-1)
+    if rho.ndim != 1 or rho.shape != volumes.shape or rho.size == 0:
+        raise ValueError(
+            "restore_projected_volume: density and element_volumes must "
+            "be non-empty vectors with identical shapes")
+    if (not np.all(np.isfinite(rho)) or np.any(rho < 0.0)
+            or np.any(rho > 1.0)):
+        raise ValueError(
+            "restore_projected_volume: density must be finite in [0, 1]")
+    if (not np.all(np.isfinite(volumes)) or np.any(volumes <= 0.0)):
+        raise ValueError(
+            "restore_projected_volume: element_volumes must be finite and "
+            "positive")
+    volume_fraction = float(volume_fraction)
+    if not np.isfinite(volume_fraction) or not 0.0 < volume_fraction <= 1.0:
+        raise ValueError(
+            "restore_projected_volume: volume_fraction must be in (0, 1]")
+    volume_tolerance = float(volume_tolerance)
+    density_tolerance = float(density_tolerance)
+    max_iterations_i = int(max_iterations)
+    if (not np.isfinite(volume_tolerance) or volume_tolerance <= 0.0
+            or not np.isfinite(density_tolerance)
+            or density_tolerance <= 0.0):
+        raise ValueError(
+            "restore_projected_volume: tolerances must be positive and finite")
+    if max_iterations_i < 1 or max_iterations_i != max_iterations:
+        raise ValueError(
+            "restore_projected_volume: max_iterations must be a positive integer")
+
+    volume_limit = float(volume_fraction * volumes.sum())
+    absolute_tolerance = volume_tolerance * max(1.0, abs(volume_limit))
+
+    def transformed(candidate):
+        if density_filter is None:
+            material = candidate
+        else:
+            material = np.clip(density_filter.apply(candidate), 0.0, 1.0)
+        if density_projection is not None:
+            material = density_projection.apply(material)
+        return np.asarray(material, dtype=float)
+
+    volume_before = float(volumes @ transformed(rho))
+    if volume_before <= volume_limit + absolute_tolerance:
+        return rho, dict(
+            changed=False, shift=0.0, iterations=0,
+            volume_before=volume_before, volume_after=volume_before,
+            volume_limit=volume_limit,
+            relative_excess_before=(volume_before-volume_limit)
+            / max(abs(volume_limit), 1e-300))
+
+    # shift=1 maps every admissible raw density to zero and must therefore
+    # bracket a feasible point for the standard Helmholtz/projection maps.
+    lo, hi = 0.0, 1.0
+    volume_hi = float(volumes @ transformed(np.zeros_like(rho)))
+    if volume_hi > volume_limit + absolute_tolerance:
+        raise RuntimeError(
+            "restore_projected_volume: zero density is not volume-feasible; "
+            "the supplied filter/projection does not preserve void")
+    iterations = 0
+    while iterations < max_iterations_i and hi-lo > density_tolerance:
+        mid = 0.5*(lo+hi)
+        candidate = np.clip(rho-mid, 0.0, 1.0)
+        volume_mid = float(volumes @ transformed(candidate))
+        iterations += 1
+        if volume_mid > volume_limit:
+            lo = mid
+        else:
+            hi, volume_hi = mid, volume_mid
+        if (volume_limit-volume_hi >= 0.0
+                and volume_limit-volume_hi <= absolute_tolerance):
+            break
+    feasible = np.clip(rho-hi, 0.0, 1.0)
+    volume_after = float(volumes @ transformed(feasible))
+    if volume_after > volume_limit + absolute_tolerance:
+        raise RuntimeError(
+            "restore_projected_volume: scalar feasibility search did not "
+            "reach the requested volume budget")
+    return feasible, dict(
+        changed=True, shift=float(hi), iterations=iterations,
+        volume_before=volume_before, volume_after=volume_after,
+        volume_limit=volume_limit,
+        relative_excess_before=(volume_before-volume_limit)
+        / max(abs(volume_limit), 1e-300))
+
+
 def density_discreteness(density, *, lower=0.1, upper=0.9):
     """Return stable grayness diagnostics for a continuous density design."""
     rho = np.asarray(density, dtype=float).reshape(-1)
@@ -463,7 +1096,14 @@ class FunctionalLinearization:
 class DensityAdjointVIM:
     """Build-once HDiv-MMM operator with per-element density adjoint gradients.
 
-    ``fes`` is the HDiv space on the design mesh (order 1 or 2).  The geometry
+    ``fes`` is the HDiv space on the design mesh (order 0, 1, or 2 where the
+    selected element topology supports it).  Material
+    topology with element-wise iron/void interfaces must use
+    ``ng.HDiv(..., discontinuous=True)`` and
+    ``internal_interfaces=True`` so the ChargeGram contains the physical
+    jump of ``M.n`` on every element facet.  A conforming HDiv space is the
+    body-fitted single-material path and cannot create a new internal boundary
+    merely by changing an element's constitutive coefficient.  The geometry
     operator ``N`` is built once (``demag=None``) or shared from an existing
     :class:`radia.vim.DemagOperator`; every design iterate then costs one
     weighted-mass assembly and the state/adjoint CG solves.  The caller
@@ -552,19 +1192,31 @@ class DensityAdjointVIM:
         return iters
 
     def _native_solve_many(self, mass, rhs_vecs, tol, maxiter,
-                           warm_vecs=None, mass_riesz=True):
+                           warm_vecs=None, mass_riesz=True,
+                           cluster_tree=False, cluster_coarse_size=64,
+                           cluster_deflation_size=8, recycle_size=8):
         """Solve shared-matrix VIM systems in the configured C++ kernel.
 
         The weighted HDiv mass is registered once.  H-matrix application,
         Krylov updates, and true-residual stopping tests remain inside C++.
-        ``mass_riesz=False`` uses the inexpensive exact system diagonal and is
-        the study-scale default; ``True`` reuses the persistent PARDISO mass
-        factor.  Python crosses the boundary only once per right-hand side.
+        ``mass_riesz=False`` uses the inexpensive exact system diagonal;
+        ``True`` reuses the persistent PARDISO mass factor and applies it to
+        all right-hand sides in one phase-33 call.  With
+        ``cluster_tree=True``, all right-hand sides cross one
+        row-major native boundary; the preserved H-matrix cluster tree supplies
+        aggregate ``D^-1 B^T`` modes to a balanced two-level preconditioner,
+        and converged columns form a small Ritz recycle space for later columns.
+        The operator and true-residual PCG convergence contract are unchanged.
         """
+        rhs_vecs = list(rhs_vecs)
+        use_many = bool(cluster_tree or (mass_riesz and len(rhs_vecs) > 1))
         gram = getattr(self.demag, "_G", None)
-        solve_name = ("solve_configured_linear_material_mass_riesz"
-                      if mass_riesz else
-                      "solve_configured_linear_material_auto_prec")
+        solve_name = (
+            "solve_configured_linear_material_auto_prec_many"
+            if use_many else
+            ("solve_configured_linear_material_mass_riesz"
+             if mass_riesz else
+             "solve_configured_linear_material_auto_prec"))
         required = ("configure_mass_matrix_ngsolve", solve_name)
         if gram is None or any(not hasattr(gram, name) for name in required):
             raise RuntimeError(
@@ -572,7 +1224,6 @@ class DensityAdjointVIM:
                 "on this DemagOperator; pass solver='ngsolve-cg' only for "
                 "the explicit reference path")
         gram.configure_mass_matrix_ngsolve(mass.mat)
-        rhs_vecs = list(rhs_vecs)
         if warm_vecs is None:
             warm_vecs = [None] * len(rhs_vecs)
         else:
@@ -580,6 +1231,42 @@ class DensityAdjointVIM:
             if len(warm_vecs) != len(rhs_vecs):
                 raise ValueError(
                     "DensityAdjointVIM: native warm-start count mismatch")
+        if use_many:
+            rhs_matrix = np.ascontiguousarray(np.stack([
+                np.asarray(rhs.FV().NumPy(), dtype=float)
+                for rhs in rhs_vecs]), dtype=float)
+            if all(value is None for value in warm_vecs):
+                x0 = None
+            else:
+                x0 = np.ascontiguousarray(np.stack([
+                    np.zeros(rhs_matrix.shape[1], dtype=float)
+                    if value is None else
+                    np.asarray(value.FV().NumPy(), dtype=float)
+                    for value in warm_vecs]), dtype=float)
+            result = gram.solve_configured_linear_material_auto_prec_many(
+                1.0, rhs_matrix, float(tol), int(maxiter),
+                int(cluster_coarse_size if cluster_tree else 0),
+                int(cluster_deflation_size if cluster_tree else 0),
+                int(recycle_size if cluster_tree else 0),
+                mass_riesz=bool(mass_riesz), x0=x0)
+            solution = np.asarray(result["m"], dtype=float)
+            iterations = [int(value) for value in result["iters"]]
+            if solution.shape != rhs_matrix.shape or len(iterations) != len(rhs_vecs):
+                raise RuntimeError(
+                    "DensityAdjointVIM: invalid native multi-RHS result shape")
+            if any(value >= int(maxiter) for value in iterations):
+                raise RuntimeError(
+                    "DensityAdjointVIM: native batched %s CG did not "
+                    "converge within %d iterations (tol=%g)"
+                    % ("mass-Riesz" if mass_riesz else "cluster-tree",
+                       int(maxiter), tol))
+            fields = []
+            for row in solution:
+                gf = ng.GridFunction(self.fes)
+                gf.vec.FV().NumPy()[:] = row
+                fields.append(gf)
+            return fields, iterations
+
         fields, iterations = [], []
         for rhs, warm_vec in zip(rhs_vecs, warm_vecs):
             rhs_array = np.ascontiguousarray(rhs.FV().NumPy(), dtype=float)
@@ -614,16 +1301,19 @@ class DensityAdjointVIM:
         """
         mass, A, pre = self._system(
             s, need_ngsolve_solver=(solver == "ngsolve-cg"))
-        if solver in {"native", "native-jacobi"}:
+        if solver in {"native", "native-jacobi", "native-batch", "native-cluster"}:
             fields, iterations = self._native_solve_many(
                 mass, [load.vec], tol, maxiter,
                 warm_vecs=None if warm is None else [warm.vec],
-                mass_riesz=(solver == "native"))
+                mass_riesz=(solver == "native"),
+                cluster_tree=(solver in {"native-batch", "native-cluster"}),
+                cluster_coarse_size=(64 if solver == "native-cluster" else 0),
+                cluster_deflation_size=(8 if solver == "native-cluster" else 0))
             return fields[0], iterations[0]
         if solver != "ngsolve-cg":
             raise ValueError(
-                "DensityAdjointVIM.solve: solver must be 'native-jacobi', "
-                "'native', or 'ngsolve-cg'")
+                "DensityAdjointVIM.solve: solver must be 'native-batch', 'native-cluster', "
+                "'native-jacobi', 'native', or 'ngsolve-cg'")
         gf = ng.GridFunction(self.fes)
         iters = self._cg(A, pre, load.vec, gf, tol, maxiter,
                          warm_vec=None if warm is None else warm.vec)
@@ -649,13 +1339,16 @@ class DensityAdjointVIM:
                 "for %d loads" % (len(warm.gfLambdas), len(loads)))
         mass, A, pre = self._system(
             s, need_ngsolve_solver=(solver == "ngsolve-cg"))
-        if solver in {"native", "native-jacobi"}:
+        if solver in {"native", "native-jacobi", "native-batch", "native-cluster"}:
             rhs = [state_load.vec] + [load.vec for load in loads]
             warm_vecs = None if warm is None else [warm.gfM.vec] + [
                 value.vec for value in warm.gfLambdas]
             fields, native_iterations = self._native_solve_many(
                 mass, rhs, tol, maxiter, warm_vecs=warm_vecs,
-                mass_riesz=(solver == "native"))
+                mass_riesz=(solver == "native"),
+                cluster_tree=(solver in {"native-batch", "native-cluster"}),
+                cluster_coarse_size=(64 if solver == "native-cluster" else 0),
+                cluster_deflation_size=(8 if solver == "native-cluster" else 0))
             gfm, gfls = fields[0], fields[1:]
             it_m, its = native_iterations[0], native_iterations[1:]
         elif solver == "ngsolve-cg":
@@ -672,7 +1365,7 @@ class DensityAdjointVIM:
         else:
             raise ValueError(
                 "DensityAdjointVIM.linearize: solver must be "
-                "'native-jacobi', 'native', or 'ngsolve-cg'")
+                "'native-batch', 'native-cluster', 'native-jacobi', 'native', or 'ngsolve-cg'")
         values = np.array([float(ng.InnerProduct(load.vec, gfm.vec))
                            for load in loads])
         jacobians = np.stack([
@@ -726,6 +1419,129 @@ class DensityDesignResult:
     solves: int               # linearizations evaluated (incl. rejected trials)
 
 
+def _accept_deep_restoration(violation, violation_new, band, volume_ok):
+    """Chebyshev restoration acceptance for an infeasible SLP iterate.
+
+    A non-worst row may rise while remaining below the new maximum.  Forcing
+    every row to stay within 5 % of its own previous value can deadlock a
+    genuine minimax step when the active worst row changes; only the maximum
+    normalized violation (with an L1 tie-break) defines restoration progress.
+    """
+    if not volume_ok:
+        return False
+    normalized = np.abs(np.asarray(violation, dtype=float)) / band
+    normalized_new = np.abs(np.asarray(violation_new, dtype=float)) / band
+    worst = float(np.max(normalized))
+    worst_new = float(np.max(normalized_new))
+    total = float(np.sum(normalized))
+    total_new = float(np.sum(normalized_new))
+    progress = (worst_new < 0.995 * worst
+                or (worst_new < worst and total_new < 0.995 * total))
+    return bool(progress or np.all(normalized_new <= 1.25))
+
+
+def _solve_minimax_lp_update(density, gradients, violation, band,
+                             cell_volumes, raw_volume_max, *, move_limit,
+                             A_ub=None, b_ub=None):
+    """Solve the exact linearized Chebyshev restoration subproblem.
+
+    The final LP variable is the common normalized violation cap ``t``.
+    Unlike a high-order smooth approximation, this epigraph formulation
+    continues to balance rows when two orbit radii exchange the active-worst
+    role near a minimax point.
+    """
+    from scipy.optimize import linprog
+    from .topology_optimization import LPUpdate
+
+    rho = np.asarray(density, dtype=float).reshape(-1)
+    gradients = np.asarray(gradients, dtype=float)
+    violation = np.asarray(violation, dtype=float).reshape(-1)
+    band = np.asarray(band, dtype=float).reshape(-1)
+    volumes = np.asarray(cell_volumes, dtype=float).reshape(-1)
+    if gradients.shape != (violation.size, rho.size):
+        raise ValueError("minimax gradients must have shape (rows, density)")
+    if band.shape != violation.shape or np.any(band <= 0.0):
+        raise ValueError("minimax bands must be positive and match violations")
+    if volumes.shape != rho.shape or np.any(volumes <= 0.0):
+        raise ValueError("minimax cell volumes must match density and be positive")
+
+    rows, limits = [], []
+
+    def add_row(coeff_density, coeff_t, rhs):
+        row = np.r_[np.asarray(coeff_density, dtype=float), float(coeff_t)]
+        scale = 1.0 / max(float(np.max(np.abs(row))), 1e-300)
+        rows.append(row*scale)
+        limits.append(float(rhs)*scale)
+
+    add_row(volumes, 0.0, raw_volume_max)
+    if A_ub is not None:
+        extra = np.atleast_2d(np.asarray(A_ub, dtype=float))
+        rhs = np.asarray(b_ub, dtype=float).reshape(-1)
+        if extra.shape != (rhs.size, rho.size):
+            raise ValueError("minimax A_ub/b_ub shape mismatch")
+        for row, limit in zip(extra, rhs):
+            add_row(row, 0.0, limit)
+    for gradient, value, width in zip(gradients, violation, band):
+        scaled_gradient = gradient/width
+        base = float(scaled_gradient @ rho)
+        normalized_value = float(value/width)
+        # value + gradient @ (x-rho) <= width*t
+        add_row(scaled_gradient, -1.0, base-normalized_value)
+        # -(value + gradient @ (x-rho)) <= width*t
+        add_row(-scaled_gradient, -1.0, normalized_value-base)
+
+    lower = np.maximum(0.0, rho-move_limit)
+    upper = np.minimum(1.0, rho+move_limit)
+    current_cap = float(np.max(np.abs(violation)/band))
+    bounds = list(zip(lower, upper)) + [(0.0, current_cap)]
+    objective = np.r_[np.zeros(rho.size), 1.0]
+    result = linprog(objective, A_ub=np.asarray(rows),
+                     b_ub=np.asarray(limits), bounds=bounds, method="highs")
+    if not result.success:
+        raise RuntimeError("topology minimax LP failed: %s" % result.message)
+
+    # The minimax epigraph has only a handful of response rows and thousands
+    # of density variables.  A one-stage LP therefore has a huge nullspace;
+    # HiGHS may return an arbitrary bound-saturated topology with the same
+    # predicted t, invalidating the local model.  A second sparse LP fixes t
+    # at its optimum and minimizes the volume-weighted L1 material movement.
+    # This is the lexicographic LP analogue of a proximal trust-region step.
+    from scipy import sparse
+    n = rho.size
+    base = sparse.csr_matrix(np.asarray(rows))
+    zero_base_u = sparse.csr_matrix((base.shape[0], n))
+    stage2_rows = [sparse.hstack([base, zero_base_u], format="csr")]
+    stage2_limits = [np.asarray(limits, dtype=float)]
+    t_tolerance = 1e-8*max(1.0, abs(float(result.x[-1])))
+    t_cap = sparse.csr_matrix((
+        [1.0], ([0], [n])), shape=(1, 2*n+1))
+    stage2_rows.append(t_cap)
+    stage2_limits.append(np.asarray([float(result.x[-1])+t_tolerance]))
+    identity = sparse.identity(n, format="csr")
+    zero_t = sparse.csr_matrix((n, 1))
+    # x-rho <= u and -(x-rho) <= u
+    stage2_rows.append(sparse.hstack(
+        [identity, zero_t, -identity], format="csr"))
+    stage2_limits.append(rho)
+    stage2_rows.append(sparse.hstack(
+        [-identity, zero_t, -identity], format="csr"))
+    stage2_limits.append(-rho)
+    stage2_objective = np.r_[np.zeros(n+1), volumes/volumes.sum()]
+    stage2_bounds = bounds + [(0.0, move_limit)]*n
+    result2 = linprog(
+        stage2_objective,
+        A_ub=sparse.vstack(stage2_rows, format="csr"),
+        b_ub=np.concatenate(stage2_limits), bounds=stage2_bounds,
+        method="highs")
+    if not result2.success:
+        raise RuntimeError(
+            "topology minimax proximal LP failed: %s" % result2.message)
+    new_density = np.asarray(result2.x[:n], dtype=float)
+    return LPUpdate(
+        new_density, new_density-rho, float(result2.x[n]),
+        str(result2.message), int(result.nit)+int(result2.nit))
+
+
 def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      targets=(), *, chi_iron, volume_fraction,
                      density_filter=None, density_projection=None,
@@ -736,7 +1552,7 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      tol=1e-10, cg_maxiter=20000,
                      linear_solver="native-jacobi", callback=None,
                      checkpoint_callback=None, initial_warm=None,
-                     evaluation_callback=None):
+                     evaluation_callback=None, trial_callback=None):
     """MAXIMIZE ``J = objective_load^T m`` under linear-functional equality
     bands, an iron volume budget, and box/move limits (trust-region SLP).
 
@@ -751,29 +1567,22 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     below HiGHS's absolute feasibility tolerance and read as noise).
 
     Two-phase trust-region SLP.  While every violation is inside its band,
-    the LP maximizes J and acceptance keeps the ascent MONOTONE and the
-    violations BOUNDED: a trial is accepted only if J does not decrease
-    (beyond ``objective_slack`` relative) and every violation is either
-    under the absolute cap ``1.25 * band`` or in strict geometric decrease.
-    While any violation sits OUTSIDE its band (e.g. an infeasible profile
-    start), the loop switches to RESTORATION: the LP objective becomes the
-    steepest combined violation descent (J free), the rows hold the
-    non-worsening guard ``max(band, |viol|)`` (always feasible at the
-    current point -- the LP can never be infeasible), and acceptance
-    requires the band-weighted total violation to decrease (individual
-    violations may not blow up while others improve).  Rejected trials
-    halve the move limit against the SAME linearization.  When a constraint
-    is active at the optimum the design rides its band edge; measured
-    behavior on the verification cases (2026-07-28): strictly monotone J
-    (+1.3 % ball / +19 % sector surrogate), violations peaking at 1.24 x
-    band and riding at ~1.05 x band.
+    the LP maximizes J and acceptance keeps the ascent MONOTONE without
+    leaving the engineering bands.  While any violation sits OUTSIDE its
+    band (e.g. an infeasible profile start), the loop switches to
+    RESTORATION: the LP objective becomes the exact linearized minimax band
+    violation (J free), the rows hold a common epigraph cap, and acceptance
+    requires the worst normalized violation to decrease.
+    Rejected trials halve the step along the SAME analytic LP direction.
+    When a constraint is active at the optimum the design rides its band
+    edge rather than cycling between objective ascent and restoration.
 
     ``callback(entry)`` receives each accepted history dict.  The caller
     wraps the whole call in ``with TaskManager():``.  Informal per-iterate
     timings are recorded in the history; benchmark-grade timings belong on
     the quiet compute hosts, per the repository benchmark policy.
     """
-    from .topology_optimization import solve_lp_update
+    from .topology_optimization import LPUpdate, solve_lp_update
 
     constraint_loads = list(constraint_loads)
     targets = np.asarray(targets, dtype=float).ravel()
@@ -796,10 +1605,11 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         raise ValueError("optimize_density: objective_slack must be non-negative")
     if not np.all(np.isfinite(targets)):
         raise ValueError("optimize_density: targets must be finite")
-    if linear_solver not in {"native-jacobi", "native", "ngsolve-cg"}:
+    if linear_solver not in {
+            "native-batch", "native-cluster", "native-jacobi", "native", "ngsolve-cg"}:
         raise ValueError(
-            "optimize_density: linear_solver must be 'native-jacobi', "
-            "'native', or 'ngsolve-cg'")
+            "optimize_density: linear_solver must be 'native-batch', 'native-cluster', "
+            "'native-jacobi', 'native', or 'ngsolve-cg'")
     volumes = problem.element_volumes
     volume_max = float(volume_fraction * volumes.sum())
     if initial_density is None:
@@ -904,18 +1714,12 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         t_iter = time.perf_counter()
         J = float(lin.values[0])
         viol = lin.values[1:] - targets
-        # Three-tier SLP.  DEEP RESTORATION (any violation beyond the 1.25*
-        # band acceptance cap, e.g. an infeasible profile start): the LP
-        # OBJECTIVE becomes the steepest combined violation descent and J is
-        # free -- putting the shrink demand in the constraint ROWS instead
-        # goes infeasible once the move box shrinks and dead-ends (measured:
-        # zero accepted iterates on an isochronous-profile start).  Inside
-        # the cap, the LP maximizes J with the tested band rows: violations
-        # in the (band, 1.25 band] transition zone get a geometric pull-back
-        # row (fall back to a non-worsening hold row when that is
-        # unreachable in the move box), and acceptance keeps J MONOTONE.
-        deep = bool(targets.size) and bool(np.any(np.abs(viol)
-                                                  > 1.25 * band))
+        # Lexicographic SLP.  RESTORATION remains active until every row is
+        # actually inside its engineering band; only then may the objective
+        # compete for material.  Switching to objective ascent in the former
+        # (band, 1.25*band] transition zone stranded the 40k beta=8 study at
+        # 1.235 bands even though the minimax direction was still productive.
+        deep = bool(targets.size) and bool(np.any(np.abs(viol) > band))
 
         def lp_rows(bands_eff):
             # rows normalized to O(1) for HiGHS's absolute tolerances
@@ -937,27 +1741,50 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
             return np.array(A_ub), np.array(b_ub)
 
         if deep:
-            direction = np.zeros_like(gJ)
-            for G, v, b in zip(gks, viol, band):
-                if abs(v) > 1.25 * b:
-                    direction += (np.sign(v) / max(np.abs(G).max(), 1e-300)) * G
-            lp_objective = direction / max(np.abs(direction).max(), 1e-300)
+            lp_objective = None
         else:
             lp_objective = -gJ / max(np.abs(gJ).max(), 1e-300)
 
         accepted = False
         trials = 0
         band_mode = "deep" if deep else "band"
+        deep_full_update = None
+        deep_full_move = None
         while move >= move_min:
             trials += 1
             if deep:
-                bands_eff = np.maximum(band, np.abs(viol))  # always feasible
-                A_ub, b_ub = lp_rows(bands_eff)
-                update = solve_lp_update(rho, lp_objective, volumes,
-                                         raw_volume_max if transformed_volume
-                                         else volume_max, move_limit=move,
-                                         A_ub=A_ub, b_ub=b_ub)
+                if deep_full_update is None:
+                    if transformed_volume:
+                        scale = 1.0 / max(
+                            np.abs(volume_gradient).max(), 1e-300)
+                        A_ub = np.asarray([volume_gradient*scale])
+                        b_ub = np.asarray([(
+                            volume_max-material_volume
+                            + float(volume_gradient @ rho))*scale])
+                    else:
+                        A_ub = b_ub = None
+                    deep_full_update = _solve_minimax_lp_update(
+                        rho, gks, viol, band, volumes,
+                        raw_volume_max if transformed_volume else volume_max,
+                        move_limit=move, A_ub=A_ub, b_ub=b_ub)
+                    deep_full_move = float(move)
+                # Backtrack on one analytic minimax direction.  Re-solving
+                # this highly underdetermined LP at every smaller move changes
+                # the active set and can replace descent by ascent.  The fixed
+                # direction was independently checked against directional FD
+                # on the 40k beta=8 checkpoint (predicted/actual 1.867/1.853
+                # bands at scale 1/4).
+                line_scale = float(move/deep_full_move)
+                delta = line_scale*deep_full_update.delta
+                predicted_cap = float(np.max(
+                    np.abs(viol + np.asarray(gks) @ delta)/band))
+                update = LPUpdate(
+                    density=rho+delta, delta=delta,
+                    predicted_objective=predicted_cap,
+                    status=deep_full_update.status,
+                    iterations=deep_full_update.iterations)
             else:
+                line_scale = 1.0
                 bands_eff = np.where(np.abs(viol) > band,
                                      np.maximum(band, 0.9 * np.abs(viol)),
                                      band)
@@ -977,30 +1804,58 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                                              raw_volume_max if transformed_volume
                                              else volume_max, move_limit=move,
                                              A_ub=A_ub, b_ub=b_ub)
-            (lin_new, gJ_new, gks_new, material_volume_new,
-             volume_gradient_new) = evaluate(update.density, warm=lin)
-            n_solves += 1
+            try:
+                (lin_new, gJ_new, gks_new, material_volume_new,
+                 volume_gradient_new) = evaluate(update.density, warm=lin)
+                n_solves += 1
+            except RuntimeError as exc:
+                if "CG did not converge" not in str(exc):
+                    raise
+                # A large material step can make the trial system much harder
+                # than the accepted state.  This is a trust-region rejection,
+                # not a reason to lose the checkpointed continuation.  Count
+                # the attempted linearization and retry from the same analytic
+                # sensitivity with a smaller move; no finite difference or
+                # approximate accepted state is introduced.
+                n_solves += 1
+                move *= 0.5
+                continue
             J_new = float(lin_new.values[0])
             viol_new = np.abs(lin_new.values[1:] - targets)
             volume_ok = material_volume_new <= (
                 volume_max + 1e-10 * max(1.0, abs(volume_max)))
+            if trial_callback is not None:
+                trial_callback(dict(
+                    move=float(move), trials=int(trials),
+                    predicted_max_violation_over_band=(
+                        float(update.predicted_objective) if deep else None),
+                    line_search_scale=float(line_scale),
+                    current_max_violation_over_band=(
+                        float(np.max(np.abs(viol)/band)) if targets.size
+                        else 0.0),
+                    actual_max_violation_over_band=(
+                        float(np.max(viol_new/band)) if targets.size else 0.0),
+                    max_density_change=float(np.max(np.abs(update.delta))),
+                    weighted_l1_density_change=float(
+                        volumes @ np.abs(update.delta)),
+                    volume_ok=bool(volume_ok)))
             if deep:
-                # accept on feasibility progress: the band-weighted total
-                # violation decreases, or full cap entry; individual
-                # violations must not blow up while others improve.
-                total = float(np.sum(np.abs(viol) / band))
-                total_new = float(np.sum(viol_new / band))
-                ok = (volume_ok and (total_new < 0.995 * total
-                       or bool(np.all(viol_new <= 1.25 * band)))
-                      and bool(np.all(viol_new
-                                      <= np.maximum(1.25 * band,
-                                                    1.05 * np.abs(viol)))))
+                # Accept Chebyshev feasibility progress.  A smaller L1 total
+                # is not sufficient: it can sacrifice the worst orbit radius
+                # while improving easier rows and never reach the all-row cap.
+                # Individual easier rows are allowed to rise below the new
+                # Chebyshev maximum.  A per-row 5 % guard deadlocked the 40k
+                # sector continuation even while the true maximum improved
+                # 8.20 -> 6.91 bands; the active worst row was simply moving
+                # from the outer to the inner orbit radius.
+                ok = _accept_deep_restoration(
+                    viol, viol_new, band, volume_ok)
             else:
                 ok_J = J_new >= J - objective_slack * abs(J)
-                # absolute cap 1.25*band at all times OR strict geometric
-                # decrease while outside -- no ratchet path exists.
-                ok_g = np.all((viol_new <= 1.25 * band)
-                              | (viol_new <= 0.97 * np.abs(viol)))
+                # Objective ascent starts only from a feasible point and may
+                # not leave the engineering band.  Allowing a 1.25-band cap
+                # caused avoidable ascent/restoration cycling near activity.
+                ok_g = np.all(viol_new <= (1.0+1e-6)*band)
                 ok = volume_ok and ok_J and bool(ok_g)
             if ok:
                 accepted = True
@@ -1024,6 +1879,8 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      t_iter_s=time.perf_counter() - t_iter,
                      state_iterations=lin.state_iterations,
                      adjoint_iterations=list(lin.adjoint_iterations))
+        if targets.size:
+            entry["max_violation_over_band"] = float(np.max(viol_new / band))
         if density_filter is not None:
             rho_report = np.clip(density_filter.apply(rho), 0.0, 1.0)
         else:
@@ -1052,15 +1909,17 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
 _TET_BOUNDARY_FACES = ((0, 3, 1), (1, 3, 2), (2, 3, 0), (0, 1, 2))
 
 
-def iron_only_mesh(mesh, keep):
-    """New straight-tet netgen/NGSolve mesh from the kept VOL elements.
+def iron_only_mesh(mesh, keep, *, boundary_classifier=None,
+                   tetrahedralize_hex=False):
+    """New straight TET/HEX/WEDGE mesh from the kept VOL elements.
 
-    Exact void removal: vertices of the kept set are copied, kept tets are
-    re-added as one ``iron`` material, and the boundary facets of the kept
-    set (facets owned by exactly one kept element) become the new exterior
-    surface.  ``keep`` is a boolean mask in NGSolve VOL element numbering;
-    the numbering correspondence with the netgen element list is verified
-    element-by-element (fail loud on mismatch).
+    Exact void removal: vertices of the kept set are copied, kept volume
+    elements are re-added as one ``iron`` material, and facets owned by exactly
+    one kept element become the new exterior surface.  Surface orientation is
+    determined geometrically from the owning cell, avoiding topology-specific
+    Python vertex tables.  ``boundary_classifier(center, outward_normal)`` may
+    return a boundary name such as ``"pole"`` or ``"fixed"`` for the later
+    GetTrafo elasticity solve; its default is ``"outer"``.
     """
     import netgen.meshing as nm
 
@@ -1099,23 +1958,69 @@ def iron_only_mesh(mesh, keep):
             pmap[nr] = new.Add(nm.MeshPoint(nm.Pnt(p[0], p[1], p[2])))
         return pmap[nr]
 
-    facets = {}
+    ng_elements=tuple(mesh.Elements(ng.VOL));facets={}
+    supported={4:"TET",6:"WEDGE",8:"HEX"};family=None
     for index in np.flatnonzero(keep):
-        vs = [v.nr for v in elements[index].vertices]
-        if len(vs) != 4:
-            raise NotImplementedError("iron_only_mesh: TET meshes only")
-        new.Add(nm.Element3D(1, [pid(v) for v in vs]))
-        for fa in _TET_BOUNDARY_FACES:
-            tri = (vs[fa[0]], vs[fa[1]], vs[fa[2]])
-            facets.setdefault(tuple(sorted(tri)), []).append(tri)
-    descriptor = new.Add(nm.FaceDescriptor(surfnr=1, domin=1, domout=0, bc=1))
+        vs=[v.nr for v in elements[index].vertices]
+        current=supported.get(len(vs))
+        if current is None:
+            raise NotImplementedError(
+                "iron_only_mesh: only straight TET/HEX/WEDGE are supported")
+        family=current if family is None else family
+        if family!=current:
+            raise NotImplementedError("iron_only_mesh: mixed element families are not supported")
+        new.Add(nm.Element3D(1,[pid(v) for v in vs]))
+        cell_coordinates=np.asarray([points[v-1].p for v in vs],dtype=float)
+        cell_center=np.mean(cell_coordinates,axis=0)
+        for facet in ng_elements[index].facets:
+            face_vertices=[int(vertex.nr)+1 for vertex in mesh.faces[facet.nr].vertices]
+            face_coordinates=np.asarray([points[v-1].p for v in face_vertices],dtype=float)
+            face_center=np.mean(face_coordinates,axis=0)
+            normal=np.cross(face_coordinates[1]-face_coordinates[0],
+                            face_coordinates[2]-face_coordinates[0])
+            if float(normal@(face_center-cell_center))<0.0:
+                face_vertices=[face_vertices[0]]+list(reversed(face_vertices[1:]))
+                face_coordinates=np.asarray([points[v-1].p for v in face_vertices],dtype=float)
+                normal=np.cross(face_coordinates[1]-face_coordinates[0],
+                                face_coordinates[2]-face_coordinates[0])
+            norm=float(np.linalg.norm(normal))
+            if norm==0.0:
+                raise RuntimeError("iron_only_mesh: degenerate boundary facet")
+            facets.setdefault(tuple(sorted(face_vertices)),[]).append(
+                (tuple(face_vertices),face_center,normal/norm))
+    boundary=[]
     for occurrences in facets.values():
-        if len(occurrences) == 1:
-            new.Add(nm.Element2D(descriptor,
-                                 [pid(v) for v in occurrences[0]]))
-        elif len(occurrences) != 2:
-            raise RuntimeError("iron_only_mesh: facet shared by %d kept "
-                               "elements" % len(occurrences))
+        if len(occurrences)==1:
+            boundary.append(occurrences[0])
+        elif len(occurrences)!=2:
+            raise RuntimeError("iron_only_mesh: facet shared by %d kept elements"
+                               %len(occurrences))
+    classified=[]
+    for vertices,center,normal in boundary:
+        name=("outer" if boundary_classifier is None else
+              str(boundary_classifier(center.copy(),normal.copy())))
+        if not name:
+            raise ValueError("iron_only_mesh: boundary classifier returned an empty name")
+        classified.append((name,vertices))
+    names=sorted({name for name,_ in classified})
+    descriptors={}
+    for bc,name in enumerate(names,start=1):
+        descriptors[name]=new.Add(nm.FaceDescriptor(
+            surfnr=bc,domin=1,domout=0,bc=bc))
+        new.SetBCName(bc-1,name)
+    for name,vertices in classified:
+        new.Add(nm.Element2D(descriptors[name],[pid(v) for v in vertices]))
+    if tetrahedralize_hex:
+        if family != "HEX":
+            raise ValueError(
+                "iron_only_mesh: tetrahedralize_hex requires a pure HEX input")
+        # Netgen owns the conforming HEX -> six-TET split, including the
+        # matching diagonal on every shared/boundary quadrilateral.  Calling
+        # it only after exact-void extraction makes this a one-time handoff
+        # from the fixed-grid Schur/TSVD stage to the topology-fixed Trafo
+        # stage; it is not a design-variable interpolation or finite
+        # difference approximation.
+        new.Split2Tets()
     return ng.Mesh(new)
 
 
@@ -1135,12 +2040,16 @@ class IronOnlyVerification:
     bands: np.ndarray
     embedded_iterations: int
     iron_only_iterations: int
+    embedded_solution: object
+    iron_problem: object
+    iron_solution: object
 
 
 def verify_design_iron_only(problem, density, state_load_builder,
                             functional_builders, *, chi_iron, threshold=0.5,
                             density_filter=None, chi_min=CHI_MIN,
-                            tol=1e-10, cg_maxiter=5000, gram_kwargs=None):
+                            tol=1e-10, cg_maxiter=20000, gram_kwargs=None,
+                            linear_solver="native-jacobi"):
     """Stage-3 final-verification protocol for a converged density design.
 
     Thresholds the (filtered) density at ``threshold``, evaluates every
@@ -1170,16 +2079,29 @@ def verify_design_iron_only(problem, density, state_load_builder,
     loads = [b(problem.fes) for b in functional_builders]
     s_bin = np.where(keep, 1.0 / chi_iron, 1.0 / chi_min)
     gf_emb, it_emb = problem.solve(s_bin, state_load_builder(problem.fes),
-                                   tol=tol, maxiter=cg_maxiter)
+                                   tol=tol, maxiter=cg_maxiter,
+                                   solver=linear_solver)
     values_emb = np.array([float(ng.InnerProduct(load.vec, gf_emb.vec))
                            for load in loads])
     mesh_iron = iron_only_mesh(problem.mesh, keep)
-    fes_iron = ng.HDiv(mesh_iron, order=int(problem.fes.globalorder))
-    problem_iron = DensityAdjointVIM(fes_iron, **(gram_kwargs or {}))
+    internal_interfaces = bool(
+        getattr(problem.demag, "internal_interfaces", False))
+    fes_iron = ng.HDiv(
+        mesh_iron, order=int(problem.fes.globalorder),
+        discontinuous=internal_interfaces)
+    iron_gram_kwargs = dict(gram_kwargs or {})
+    if internal_interfaces:
+        supplied = iron_gram_kwargs.setdefault("internal_interfaces", True)
+        if not supplied:
+            raise ValueError(
+                "verify_design_iron_only: the parent problem uses explicit "
+                "internal interface charges but gram_kwargs disables them")
+    problem_iron = DensityAdjointVIM(fes_iron, **iron_gram_kwargs)
     loads_iron = [b(fes_iron) for b in functional_builders]
     gf_iron, it_iron = problem_iron.solve(
         np.full(problem_iron.n_el, 1.0 / chi_iron),
-        state_load_builder(fes_iron), tol=tol, maxiter=cg_maxiter)
+        state_load_builder(fes_iron), tol=tol, maxiter=cg_maxiter,
+        solver=linear_solver)
     values_iron = np.array([float(ng.InnerProduct(load.vec, gf_iron.vec))
                             for load in loads_iron])
     bands = (values_emb - values_iron) / np.maximum(np.abs(values_iron),
@@ -1187,4 +2109,6 @@ def verify_design_iron_only(problem, density, state_load_builder,
     return IronOnlyVerification(
         keep=keep, iron_mesh=mesh_iron, values_embedded=values_emb,
         values_iron_only=values_iron, bands=bands,
-        embedded_iterations=it_emb, iron_only_iterations=it_iron)
+        embedded_iterations=it_emb, iron_only_iterations=it_iron,
+        embedded_solution=gf_emb, iron_problem=problem_iron,
+        iron_solution=gf_iron)

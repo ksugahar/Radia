@@ -13,6 +13,12 @@ Sources:
   - src/radia/coil_geometry.py
 """
 
+from .accelerator_fundamentals_knowledge import (
+    DOCUMENTS as ACCELERATOR_FOUNDATION_DOCUMENTS,
+)
+from .accelerator_fundamentals_knowledge import (
+    TOPICS as ACCELERATOR_FOUNDATION_TOPICS,
+)
 
 # ============================================================
 # Topic: Overview
@@ -44,6 +50,7 @@ TOPICS: dict[str, str] = {
     "kelvin_benchmark_vs_em": "(alias) Kelvin benchmark vs accelerator EM",
     "all":                  "Concatenated dump of all topics above",
 }
+TOPICS.update(ACCELERATOR_FOUNDATION_TOPICS)
 
 OVERVIEW = """
 # Accelerator Electromagnet Analysis Pipeline
@@ -95,6 +102,15 @@ The coordinate system follows accelerator convention:
 - z = beam direction (longitudinal)
 
 Cubit journal files use the SAME coordinate system. No rotation needed.
+
+For the upstream beam-physics contract, start with:
+
+- `electromagnet_usage("accelerator_fundamentals")` for magnetic rigidity
+  and the lattice-to-magnet handoff;
+- `electromagnet_usage("beam_optics_contract")` for Twiss, dispersion,
+  chromaticity, integrated strengths, and tracking artifacts;
+- `electromagnet_usage("accelerator_magnet_design")` for the complete
+  engineering and acceptance sequence.
 
 ## Electromagnet Simulink block modes
 
@@ -180,7 +196,7 @@ coil = (CoilBuilder(current=2000)
 
 | Method | Returns | Use Case |
 |--------|---------|----------|
-| `to_radia()` | List of Radia objects | Biot-Savart field source |
+| `to_radia()` | List of Radia objects | Audited solid-current comparison source |
 | `to_occ()` | OCC shape | STEP export, visualization |
 | `write_step(path)` | None (writes file) | GMSH overlay |
 | `to_wire_segments()` | (segments, current) | Wire model for panels |
@@ -192,8 +208,8 @@ coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field ma
 ## Dipole Example (C-type magnet)
 
 ```python
-from coil_builder import CoilBuilder
-import radia as rad
+from radia.biot_savart import h_segments_cf
+from radia.coil_builder import CoilBuilder
 
 mm = 1e-3
 NI = 2000
@@ -215,17 +231,53 @@ upper = (CoilBuilder(current=NI)
 # the mirrored circulation reverses as a pseudovector, m -> -M @ m)
 lower = upper.mirror('xz')
 
-# Radia field source
-rad.UtiDelAll()
-objs = upper.to_radia() + lower.to_radia()
-all_coils = rad.ObjCnt(objs)
-
-# Source field CoefficientFunction for NGSolve
-Hs = rad.RadiaField(all_coils, 'h')
+# Canonical NGSolve source: exact finite-filament CoefficientFunctions.
+# NGSolve remains responsible for FE assembly and mapping.
+source_fields = []
+for winding in (upper, lower):
+    segments, current = winding.to_wire_segments(n_arc=400)
+    source_fields.append(h_segments_cf(segments, current=current))
+Hs = source_fields[0] + source_fields[1]
 
 # STEP export for GMSH overlay
 upper.combined_occ([lower]).WriteStep("dipole_coils.step")
 ```
+
+## Mandatory pre-solve audits
+
+Before meshing or solving, reject a design when the swept copper solid
+intersects the yoke or violates the required manufacturing clearance:
+
+```python
+from radia.coil_builder import audit_coil_yoke_clearance
+
+clearance = audit_coil_yoke_clearance(
+    [upper, lower], "dipole_yoke.step", minimum_clearance=2*mm
+)
+if not clearance["passed"]:
+    raise RuntimeError(clearance)
+```
+
+If the optional Radia solid-current representation is used for an independent
+field check, compare it with the canonical filament source at beam-region
+points first. `to_radia()` now chooses arc subdivisions adaptively, but the
+audit remains the acceptance gate:
+
+```python
+from radia.coil_builder import audit_coil_field_consistency
+
+field_audit = audit_coil_field_consistency(
+    [upper, lower], beam_points, n_arc=400, relative_tolerance=0.02
+)
+if not field_audit["passed"]:
+    raise RuntimeError(field_audit)
+```
+
+The same gates are available to AI workflows as
+`electromagnet_coil_yoke_clearance_audit` and
+`electromagnet_coil_field_audit`. Observation points for the field audit must
+be outside the copper; finite cross-section and centerline filament fields are
+not expected to agree inside the conductor.
 
 ## Cubit Panel Integration
 
@@ -233,7 +285,7 @@ For the Accelerator Magnet panel, create a coil script with `build_coil()`:
 
 ```python
 # coil_dipole.py - loaded by the panel
-from coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 
 def build_coil():
     mm = 1e-3
@@ -255,6 +307,7 @@ def build_coil():
 
 - All coordinates in meters (Radia unit policy)
 - Coil is NOT meshed -- it is a Biot-Savart field source only
+- Coil/yoke overlap and minimum clearance are checked before every solve
 - `mirror('xy')` reverses current direction automatically
 - `arc_angle` is in degrees, positive = left turn in current frame
 - `tilt` parameter rotates the bending plane (default 0 = horizontal bend)
@@ -978,6 +1031,7 @@ _TOPICS = {
     "c_yoke_symmetry": SYMMETRY_REDUCTIONS,  # alias
     "kelvin_benchmark_vs_em": SYMMETRY_REDUCTIONS,  # alias
 }
+_TOPICS.update(ACCELERATOR_FOUNDATION_DOCUMENTS)
 
 
 def get_electromagnet_documentation(topic: str = "overview") -> str:
@@ -986,7 +1040,12 @@ def get_electromagnet_documentation(topic: str = "overview") -> str:
     Args:
         topic: One of: overview, coilbuilder, kelvin_workflow, hantila,
                hysteresis, ima, harmonics, clebsch_hodograph,
-               symmetry_reductions, all
+               symmetry_reductions, accelerator_fundamentals,
+               beam_optics_contract, accelerator_magnet_types,
+               accelerator_magnet_design, rapid_cycling_magnets,
+               superconducting_accelerator_magnets,
+               accelerator_magnet_measurement, accelerator_model_boundaries,
+               accelerator_sources, all
 
     Returns:
         Documentation string for the requested topic.

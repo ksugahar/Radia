@@ -17,8 +17,9 @@ if any(~ismember(directions,["minimize","maximize"]))
  error("radia:simulink:OptunaDirection","Directions must contain only minimize or maximize.");
 end
 directionExpression=formatDirections(directions);
-initialParameters=sprintf('''%s'',%d,%s,''%s'',%.17g,%d,''%s''', ...
- options.ObjectiveFcn,options.NumTrials,directionExpression, ...
+objectiveExpression=formatObjective(options.ObjectiveFcn);
+initialParameters=sprintf('%s,%d,%s,''%s'',%.17g,%d,''%s''', ...
+ objectiveExpression,options.NumTrials,directionExpression, ...
  options.StoragePath,options.SampleTime_s,options.LiveVisualization, ...
  options.Sampler);
 add_block('simulink/User-Defined Functions/Level-2 MATLAB S-Function', ...
@@ -28,7 +29,7 @@ set_param(char(blockPath),'Position',[180 90 360 170]);
 mask=Simulink.Mask.create(blockPath);
 mask.Description="Incremental MATLAB Optuna study. One trial executes per sample; connect the live outputs to an Optuna Monitor.";
 mask.addParameter(Type="edit",Name="objective_fcn",Prompt="Objective function", ...
- Value=quoteString(options.ObjectiveFcn),Evaluate="on");
+ Value=objectiveExpression,Evaluate="on");
 mask.addParameter(Type="edit",Name="num_trials",Prompt="Number of trials", ...
  Value=string(options.NumTrials),Evaluate="on");
 mask.addParameter(Type="edit",Name="directions",Prompt="Objective directions", ...
@@ -65,6 +66,15 @@ if isscalar(quoted)
  expression=char(quoted);
 else
  expression=char("["+strjoin(quoted,",")+"]");
+end
+end
+
+function expression=formatObjective(value)
+value=strtrim(string(value));
+if startsWith(value,"@")
+ expression=char(value);
+else
+ expression=char(quoteString(value));
 end
 end
 

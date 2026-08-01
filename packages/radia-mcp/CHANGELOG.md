@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.26] - 2026-08-01
+
+- Added a public-safe accelerator-fundamentals layer to
+  `radia_mcp.electromagnet`, covering magnetic rigidity, Twiss/dispersion and
+  integrated-field handoff, magnet-family selection, normal-conducting and
+  rapid-cycling design, superconducting conductor/quench constraints, field
+  measurement, commissioning, and explicit beam-physics scope boundaries.
+- Added a searchable bibliographic guide for the 12-source, 1,844-page
+  accelerator textbook corpus used by that layer, with topical/page locators
+  and no machine-local paths or redistributed PDF text.
+
 ## [1.4.25] - 2026-07-31
 
 - Aligned the release with Radia 4.95.31's native ChargeGram streaming

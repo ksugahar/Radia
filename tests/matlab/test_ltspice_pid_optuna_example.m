@@ -30,6 +30,26 @@ verifyEqual(testCase,string(get_param( ...
 clear cleanup; closeModels();
 end
 
+function testGeneratorOwnsPlantAndUsesBundledNetlist(testCase)
+outputDirectory=fullfile("C:\temp","radia_ltspice_pid_generator_test");
+files=radia.simulink.buildLTspicePIDOptunaExample( ...
+    OutputDirectory=outputDirectory,NumTrials=2,OpenModel=false);
+cleanup=onCleanup(@() closeModels());
+verifyTrue(testCase,isfile(files.plant));
+verifyTrue(testCase,isfile(files.harness));
+load_system(files.plant);load_system(files.harness);
+netlist=fullfile(testCase.TestData.Root,"matlab","samples", ...
+    "ltspice_pid_rc_plant.cir");
+verifyTrue(testCase,isfile(netlist));
+verifySubstring(testCase,string(get_param( ...
+    "radia_ltspice_pid_plant/LTspice Circuit","Parameters")),netlist);
+objective=string(get_param( ...
+    "radia_ltspice_pid_optuna/Optuna Optimization","objective_fcn"));
+verifySubstring(testCase,objective,"@(trial)");
+verifySubstring(testCase,objective,string(files.plant));
+clear cleanup;closeModels();
+end
+
 function closeModels
 models = ["radia_ltspice_pid_plant","radia_ltspice_pid_optuna"];
 for model = models

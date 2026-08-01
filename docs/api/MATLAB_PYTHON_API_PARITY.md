@@ -16,8 +16,8 @@ The 2026-07-21 audit classifies all 209 Python files under `src/radia`:
 | Explicit Python fallback | 157 |
 | Private or not applicable | 43 |
 
-The MEX gateway currently exposes 316 commands and covers all 94 public
-top-level pybind11 numerical names, 27 internal numerical kernels, and 111
+The MEX gateway currently exposes 324 commands and covers all 94 public
+top-level pybind11 numerical names, 27 internal numerical kernels, and 119
 stateful class members declared by the binding audit. This broad low-level
 coverage is distinct from high-level module parity: many Python modules compose
 NGSolve objects, CAD topology, application settings, and artifact workflows.

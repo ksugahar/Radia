@@ -31,7 +31,7 @@ param(
     [switch]$Verbose,
     [switch]$RadiaOnly,
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
-    [switch]$MatlabMexOnly,        # configure + build ONLY radia_mex
+    [switch]$MatlabMexOnly,        # configure + build MATLAB MEX and native S-Functions
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
 
@@ -397,10 +397,18 @@ try {
             $BuildResult = 1
         }
     }
-    if ($MatlabMexOnly -and
-            -not (Test-Path "$PROJECT_DIR\matlab\radia_mex.mexw64")) {
-        Write-Host "ERROR: MATLAB MEX artifact was not produced" -ForegroundColor Red
-        $BuildResult = 1
+    if ($MatlabMexOnly) {
+        $RequiredMexArtifacts = @(
+            "$PROJECT_DIR\matlab\radia_mex.mexw64",
+            "$PROJECT_DIR\matlab\radia_ih_eddy_sfun.mexw64",
+            "$PROJECT_DIR\matlab\radia_ih_thermal_sfun.mexw64"
+        )
+        $MissingMexArtifacts = $RequiredMexArtifacts | Where-Object { -not (Test-Path $_) }
+        if ($MissingMexArtifacts) {
+            Write-Host "ERROR: MATLAB MEX artifacts were not produced:" -ForegroundColor Red
+            $MissingMexArtifacts | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+            $BuildResult = 1
+        }
     }
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
