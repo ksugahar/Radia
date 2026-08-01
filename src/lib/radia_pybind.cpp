@@ -3597,6 +3597,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  const double*cp=static_cast<const double*>(c.ptr),*qp=static_cast<const double*>(q.ptr);std::vector<double>cv(cp,cp+c.size),fv(qp,qp+q.size);auto left=to_1d_vector<double>(left_a,"left"),right=to_1d_vector<double>(right_a,"right");std::vector<double>out;{py::gil_scoped_release release;out=s.DirectionalDerivativeContractions(f,(int)c.shape[0],cv,fv,left,right);}return to_numpy_1d(out);
              },py::arg("family"),py::arg("cell_velocity"),py::arg("face_velocity"),py::arg("left"),py::arg("right"),
              "Analytic support-pruned batched left.T*dG[k]*right contractions without dense dG or derivative H-matrices.")
+        .def("directional_derivative_contractions_many",
+             [](RadHACApKChargeGram& s,const std::string& family,F64Array ca,F64Array fa,F64Array left_a,F64Array right_a){
+                 ChargeDerivativeFamily f;if(family=="hex")f=ChargeDerivativeFamily::Hex;else if(family=="tet")f=ChargeDerivativeFamily::Tet;else if(family=="wedge")f=ChargeDerivativeFamily::Wedge;else throw std::invalid_argument("family must be 'hex', 'tet', or 'wedge'");
+                 auto c=ca.request(),q=fa.request(),l=left_a.request();if(c.ndim!=4||c.shape[3]!=3||q.ndim!=4||q.shape[3]!=3||c.shape[0]!=q.shape[0])throw std::invalid_argument("batched velocity arrays must have shape (nmode,nhost,nnode,3)");if(l.ndim!=2)throw std::invalid_argument("left must have shape (nleft,ndof)");
+                 const double*cp=static_cast<const double*>(c.ptr),*qp=static_cast<const double*>(q.ptr),*lp=static_cast<const double*>(l.ptr);std::vector<double>cv(cp,cp+c.size),fv(qp,qp+q.size),left(lp,lp+l.size);auto right=to_1d_vector<double>(right_a,"right");std::vector<double>out;{py::gil_scoped_release release;out=s.DirectionalDerivativeContractionsMany(f,(int)c.shape[0],(int)l.shape[0],cv,fv,left,right);}return to_numpy_2d(out,(int)l.shape[0],(int)c.shape[0]);
+             },py::arg("family"),py::arg("cell_velocity"),py::arg("face_velocity"),py::arg("left"),py::arg("right"),
+             "Analytic row-major [left,direction] contractions sharing derivative leaf ACA across all left vectors.")
         .def("tet_volume_self_block_directional_derivative",
              [](RadHACApKChargeGram& s,int host,F64Array a){auto b=a.request();if(b.ndim!=2||b.shape[0]!=4||b.shape[1]!=3)throw std::invalid_argument("vertex_velocity must have shape (4,3)");const double*p=static_cast<const double*>(b.ptr);std::vector<double>v(p,p+12),d;{py::gil_scoped_release release;d=s.TetVolumeSelfBlockDirectionalDerivative(host,v);}const int n=(int)std::sqrt((double)d.size());return to_numpy_2d(d,n,n);},
              py::arg("host"),py::arg("vertex_velocity"),
@@ -3736,6 +3743,16 @@ PYBIND11_MODULE(_radia_pybind, m) {
                         s.HasConfiguredGeometryMassMatrix();
              })
         .def_property_readonly("constraint_count", &RadHACApKChargeGram::ConfiguredConstraintCount)
+        .def("set_configured_constraints",
+             [](RadHACApKChargeGram& s, I32Array dofs_a, bool preserve_existing) {
+                 const auto dofs = array_1d_view<int>(dofs_a, "dofs");
+                 py::gil_scoped_release release;
+                 s.SetConfiguredConstraints(
+                     std::vector<int>(dofs.data, dofs.data + dofs.size),
+                     preserve_existing);
+             },
+             py::arg("dofs"), py::arg("preserve_existing") = false,
+             "Replace or extend the constrained HDiv DOF set used by active-material solves.")
         .def("demag_matrix",
              [](std::shared_ptr<RadHACApKChargeGram> s) {
                  return std::make_shared<radia::ngsolve_bridge::HDivDemagMatrix>(
@@ -3773,6 +3790,98 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return output;
              }, py::arg("x"),
              "Apply the immutable NGSolve HDiv geometry mass in C++ without a SciPy round-trip.")
+        .def("apply_configured_linear_material_operator",
+             [](RadHACApKChargeGram& s, double inv_chi, F64Array x_a,
+                bool respect_constraints) {
+                 const auto input = array_1d_view<double>(x_a, "x");
+                 std::vector<double> y;
+                 {
+                     py::gil_scoped_release release;
+                     y = s.ApplyConfiguredLinearMaterialOperator(
+                         inv_chi,
+                         std::vector<double>(input.data, input.data + input.size),
+                         respect_constraints);
+                 }
+                 return to_numpy_1d(y);
+             }, py::arg("inv_chi"), py::arg("x"),
+             py::arg("respect_constraints") = true,
+             "Apply inv_chi*M+B.T*G*B; ignore active-set constraints when extracting finite insertion columns.")
+        .def("apply_configured_linear_material_operator_many",
+             [](RadHACApKChargeGram& s, double inv_chi, F64Array x_a,
+                bool respect_constraints) {
+                 const auto input = x_a.request();
+                 if (input.ndim != 2 || input.shape[0] < 1 ||
+                     input.shape[1] != s.ConfiguredNFace())
+                     throw std::invalid_argument(
+                         "x must have shape (nrhs, configured_n_face)");
+                 const int nrhs = static_cast<int>(input.shape[0]);
+                 const int nface = static_cast<int>(input.shape[1]);
+                 std::vector<double> y;
+                 {
+                     py::gil_scoped_release release;
+                     const auto* data = static_cast<const double*>(input.ptr);
+                     y = s.ApplyConfiguredLinearMaterialOperatorMany(
+                         inv_chi,
+                         std::vector<double>(data, data+input.size), nrhs,
+                         respect_constraints);
+                 }
+                 return to_numpy_2d(y, nrhs, nface);
+             }, py::arg("inv_chi"), py::arg("x"),
+             py::arg("respect_constraints") = true,
+             "Apply row-major batches of inv_chi*M+B.T*G*B with the native symmetric H-matrix multi-RHS kernel.")
+        .def("reduce_configured_candidate_schur",
+             [](RadHACApKChargeGram& s, double inv_chi,
+                I32Array candidate_a, F64Array rhs_a, F64Array state_a,
+                F64Array response_a, F64Array adjoints_a,
+                double tol, int maxit, int solve_batch_size,
+                bool mass_riesz) {
+                 auto candidates = to_1d_vector<int>(
+                     candidate_a, "candidate_dofs");
+                 auto rhs = to_1d_vector<double>(rhs_a, "rhs");
+                 auto state = to_1d_vector<double>(state_a, "state");
+                 const auto response_view = response_a.request();
+                 const auto adjoint_view = adjoints_a.request();
+                 if (response_view.ndim != 2 || response_view.shape[0] < 1 ||
+                     response_view.shape[1] != s.ConfiguredNFace() ||
+                     adjoint_view.ndim != 2 ||
+                     adjoint_view.shape[0] != response_view.shape[0] ||
+                     adjoint_view.shape[1] != response_view.shape[1])
+                     throw std::invalid_argument(
+                         "response_matrix and adjoints must share shape (n_response, configured_n_face)");
+                 const auto* response_data =
+                     static_cast<const double*>(response_view.ptr);
+                 const auto* adjoint_data =
+                     static_cast<const double*>(adjoint_view.ptr);
+                 std::vector<double> response(
+                     response_data, response_data+response_view.size);
+                 std::vector<double> adjoints(
+                     adjoint_data, adjoint_data+adjoint_view.size);
+                 RadHACApKChargeGram::CandidateSchurReduction reduced;
+                 {
+                     py::gil_scoped_release release;
+                     reduced = s.ReduceConfiguredCandidateSchur(
+                         inv_chi, candidates, rhs, state, response, adjoints,
+                         static_cast<int>(response_view.shape[0]),
+                         tol, maxit, solve_batch_size, mass_riesz);
+                 }
+                 py::dict out;
+                 out["schur"] = to_numpy_2d(
+                     reduced.schur,reduced.n_candidate,reduced.n_candidate);
+                 out["rhs"] = to_numpy_1d(reduced.rhs);
+                 out["response"] = to_numpy_2d(
+                     reduced.response,reduced.n_response,reduced.n_candidate);
+                 out["iters"] = py::cast(reduced.iterations);
+                 out["operator_s"] = reduced.operator_s;
+                 out["solve_s"] = reduced.solve_s;
+                 out["contraction_s"] = reduced.contraction_s;
+                 return out;
+             }, py::arg("inv_chi"), py::arg("candidate_dofs"),
+             py::arg("rhs"), py::arg("state"),
+             py::arg("response_matrix"), py::arg("adjoints"),
+             py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
+             py::arg("solve_batch_size") = 64,
+             py::arg("mass_riesz") = true,
+             "Fuse candidate A*e columns, constrained active solves, and reduced Schur/response contractions.")
         .def("apply_configured_mass_riesz",
              [](RadHACApKChargeGram& s, F64Array rhs_a) {
                  const auto input = array_1d_view<double>(rhs_a, "rhs");
@@ -3854,6 +3963,155 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("inv_chi"), py::arg("rhs"), py::arg("tol") = 1e-9,
              py::arg("maxit") = 5000, py::arg("x0") = py::none(),
              "Build the configured Jacobi preconditioner and solve in C++; only vectors cross Python.")
+        .def("solve_configured_linear_material_auto_prec_many",
+             [](RadHACApKChargeGram& s, double inv_chi, F64Array rhs_a,
+                double tol, int maxit, int cluster_coarse_size,
+                int cluster_deflation_size, int recycle_size,
+                bool mass_riesz,
+                py::object x0_obj) {
+                 const auto rhs_view = rhs_a.request();
+                 if (rhs_view.ndim != 2 || rhs_view.shape[0] < 1 ||
+                     rhs_view.shape[1] != s.ConfiguredNFace())
+                     throw std::invalid_argument(
+                         "rhs must have shape (nrhs, configured_n_face)");
+                 std::optional<F64Array> x0_array;
+                 std::vector<double> x0;
+                 if (!x0_obj.is_none()) {
+                     x0_array.emplace(py::cast<F64Array>(x0_obj));
+                     const auto x0_view = x0_array->request();
+                     if (x0_view.ndim != 2 ||
+                         x0_view.shape[0] != rhs_view.shape[0] ||
+                         x0_view.shape[1] != rhs_view.shape[1])
+                         throw std::invalid_argument(
+                             "x0 must have the same shape as rhs");
+                     const auto* x0_data = static_cast<const double*>(x0_view.ptr);
+                     x0.assign(x0_data, x0_data + x0_view.size);
+                 }
+                 const int nrhs = static_cast<int>(rhs_view.shape[0]);
+                 const int nface = static_cast<int>(rhs_view.shape[1]);
+                 std::vector<int> iters;
+                 double pmin = 0.0, pmax = 0.0;
+                 double coarse_setup_s = 0.0, projection_s = 0.0;
+                 int coarse_dim = 0, recycle_dim = 0;
+                 std::vector<double> m;
+                 {
+                     py::gil_scoped_release release;
+                     const auto* rhs_ptr = static_cast<const double*>(rhs_view.ptr);
+                     std::vector<double> rhs(rhs_ptr, rhs_ptr + rhs_view.size);
+                     const std::vector<double>* x0_ptr = nullptr;
+                     if (x0_array) x0_ptr = &x0;
+                     m = s.SolveConfiguredLinearMaterialAutoPrecMany(
+                         inv_chi, rhs, nrhs, tol, maxit,
+                         cluster_coarse_size, cluster_deflation_size,
+                         recycle_size, iters,
+                         pmin, pmax, coarse_dim, recycle_dim,
+                         coarse_setup_s, projection_s, mass_riesz, x0_ptr);
+                 }
+                 py::dict d;
+                 d["m"] = to_numpy_2d(m, nrhs, nface);
+                 d["iters"] = py::cast(iters);
+                 d["prec_min"] = pmin;
+                 d["prec_max"] = pmax;
+                 d["coarse_dim"] = coarse_dim;
+                 d["recycle_dim"] = recycle_dim;
+                 d["coarse_setup_s"] = coarse_setup_s;
+                 d["projection_s"] = projection_s;
+                 d["last_rhs_timings"] = solve_timings_dict(s);
+                 return d;
+             },
+             py::arg("inv_chi"), py::arg("rhs"), py::arg("tol") = 1e-9,
+             py::arg("maxit") = 5000, py::arg("cluster_coarse_size") = 0,
+             py::arg("cluster_deflation_size") = 0,
+             py::arg("recycle_size") = 0,
+             py::arg("mass_riesz") = false, py::arg("x0") = py::none(),
+             "Solve row-major shared-operator right-hand sides in one native call, "
+             "with optional batched mass-Riesz preconditioning, a bounded shared "
+             "block-Krylov startup, and true-residual scalar "
+             "completion. Cluster deflation is opt-in because it is not a CPU "
+             "speedup on the measured study system.")
+        .def("configured_field_functional_rows",
+             [](const RadHACApKChargeGram& s, F64Array observations_a,
+                F64Array weights_a) {
+                 const auto observations = observations_a.request();
+                 const auto weights = weights_a.request();
+                 if (observations.ndim != 2 || observations.shape[0] < 1 ||
+                     observations.shape[1] != 3)
+                     throw std::invalid_argument(
+                         "observations must have shape (n_observations,3)");
+                 if (weights.ndim != 3 || weights.shape[0] < 1 ||
+                     weights.shape[1] != observations.shape[0] ||
+                     weights.shape[2] != 3)
+                     throw std::invalid_argument(
+                         "weights must have shape (n_rows,n_observations,3)");
+                 const auto* observation_data =
+                     static_cast<const double*>(observations.ptr);
+                 const auto* weight_data =
+                     static_cast<const double*>(weights.ptr);
+                 std::vector<double> rows;
+                 {
+                     py::gil_scoped_release release;
+                     rows = s.ConfiguredFieldFunctionalRows(
+                         std::vector<double>(
+                             observation_data,
+                             observation_data+observations.size),
+                         std::vector<double>(weight_data,
+                                             weight_data+weights.size),
+                         static_cast<int>(weights.shape[0]));
+                 }
+                 return to_numpy_2d(
+                     rows,static_cast<int>(weights.shape[0]),
+                     s.ConfiguredNFace());
+             }, py::arg("observations"), py::arg("weights"),
+             "Build exact row-major flat-TET H-field functionals directly "
+             "from the sparse configured charge map and analytic TET/TRI kernel.")
+        .def("configured_field_functional_rows_directional_derivative",
+             [](const RadHACApKChargeGram& s, F64Array observations_a,
+                F64Array weights_a, F64Array cell_velocity_a,
+                F64Array face_velocity_a) {
+                 const auto observations=observations_a.request();
+                 const auto weights=weights_a.request();
+                 const auto cells=cell_velocity_a.request();
+                 const auto faces=face_velocity_a.request();
+                 if(observations.ndim!=2||observations.shape[0]<1||observations.shape[1]!=3)
+                     throw std::invalid_argument(
+                         "observations must have shape (n_observations,3)");
+                 if(weights.ndim!=3||weights.shape[0]<1
+                    ||weights.shape[1]!=observations.shape[0]||weights.shape[2]!=3)
+                     throw std::invalid_argument(
+                         "weights must have shape (n_rows,n_observations,3)");
+                 if(cells.ndim!=4||cells.shape[0]<1||cells.shape[2]!=4
+                    ||cells.shape[3]!=3)
+                     throw std::invalid_argument(
+                         "cell_vertex_velocity must have shape (n_modes,ncell,4,3)");
+                 if(faces.ndim!=4||faces.shape[0]!=cells.shape[0]
+                    ||faces.shape[2]!=3||faces.shape[3]!=3)
+                     throw std::invalid_argument(
+                         "face_vertex_velocity must have shape (n_modes,nface,3,3)");
+                 const auto* observation_data=static_cast<const double*>(observations.ptr);
+                 const auto* weight_data=static_cast<const double*>(weights.ptr);
+                 const auto* cell_data=static_cast<const double*>(cells.ptr);
+                 const auto* face_data=static_cast<const double*>(faces.ptr);
+                 std::vector<double> derivative;
+                 {
+                     py::gil_scoped_release release;
+                     derivative=s.ConfiguredFieldFunctionalRowsDirectionalDerivative(
+                         std::vector<double>(observation_data,
+                                             observation_data+observations.size),
+                         std::vector<double>(weight_data,weight_data+weights.size),
+                         static_cast<int>(weights.shape[0]),
+                         static_cast<int>(cells.shape[0]),
+                         std::vector<double>(cell_data,cell_data+cells.size),
+                         std::vector<double>(face_data,face_data+faces.size));
+                 }
+                 py::array_t<double> output({cells.shape[0],weights.shape[0],
+                                             static_cast<py::ssize_t>(s.ConfiguredNFace())});
+                 std::memcpy(output.mutable_data(),derivative.data(),
+                             derivative.size()*sizeof(double));
+                 return output;
+             },py::arg("observations"),py::arg("weights"),
+             py::arg("cell_vertex_velocity"),py::arg("face_vertex_velocity"),
+             "Differentiate configured flat-TET H-field rows for a batch of "
+             "GetTrafo velocity modes in the analytic C++ Laplace kernel.")
         .def("create_field_evaluator",
              [](const RadHACApKChargeGram& s, F64Array magnetization_a,
                 int leaf_size, double theta, std::size_t tree_min_sources,

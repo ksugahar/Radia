@@ -1537,6 +1537,185 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
     for (int k=0;k<3;k++) out[k]=inplane[k]+n[k]*nrmscal;
 }
 
+// Forward-mode copy of the exact Wilton/Graglia triangle field.  Keeping the
+// same branch decisions as TriField makes the derivative the tangent of the
+// production closed form, including near-plane targets.
+static void TriFieldDirectionalValue(
+    const ValueDirectional V[3][3], const ValueDirectional r[3],
+    ValueDirectional out[3])
+{
+    ValueDirectional e1[3],e2[3],n[3];
+    for(int k=0;k<3;++k){e1[k]=V[1][k]-V[0][k];e2[k]=V[2][k]-V[0][k];}
+    vd_cross(e1,e2,n);const auto nl=vd_norm(n);if(nl.value<1e-300)return;
+    for(auto& x:n)x=x/nl;
+    ValueDirectional rmv0[3];for(int k=0;k<3;++k)rmv0[k]=r[k]-V[0][k];
+    const auto d=vd_dot(rmv0,n);
+    ValueDirectional p[3];for(int k=0;k<3;++k)p[k]=r[k]-d*n[k];
+    const auto ad=vd_abs(d);ValueDirectional omega;
+    for(int i=0;i<3;++i){
+        const auto* a=V[i];const auto* b=V[(i+1)%3];
+        ValueDirectional lh[3];for(int k=0;k<3;++k)lh[k]=b[k]-a[k];
+        const auto ll=vd_norm(lh);if(ll.value<1e-300)continue;
+        for(auto& x:lh)x=x/ll;
+        ValueDirectional uh[3];vd_cross(lh,n,uh);
+        ValueDirectional ap[3],bp[3],ra[3],rb[3];
+        for(int k=0;k<3;++k){
+            ap[k]=a[k]-p[k];bp[k]=b[k]-p[k];
+            ra[k]=r[k]-a[k];rb[k]=r[k]-b[k];
+        }
+        const auto P0=vd_dot(ap,uh),sm=vd_dot(ap,lh),sp=vd_dot(bp,lh);
+        const auto Rm=vd_norm(ra),Rp=vd_norm(rb),R0sq=P0*P0+d*d;
+        const auto dm=Rm+sm,dp=Rp+sp;
+        const auto f=(dp.value>1e-300&&dm.value>1e-300)
+            ?vd_log(dp/dm):ValueDirectional{};
+        const auto beta=vd_atan2(P0*sp,R0sq+ad*Rp)
+                       -vd_atan2(P0*sm,R0sq+ad*Rm);
+        for(int k=0;k<3;++k)out[k]=out[k]+f*uh[k];
+        omega=omega+beta;
+    }
+    const double sign=d.value>0.0?1.0:(d.value<0.0?-1.0:0.0);
+    for(int k=0;k<3;++k)out[k]=out[k]+sign*omega*n[k];
+}
+
+void TetVolFieldLinearDirectional(
+    const double V[4][3], const double dV[4][3],
+    const double r[3], const double dr[3],
+    double rho0, double drho0, const double g[3], const double dg[3],
+    double value[3], double direction[3])
+{
+    static const int faces[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    ValueDirectional vertices[4][3],target[3],centroid[3],gradient[3];
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k){
+        vertices[i][k]={V[i][k],dV[i][k]};
+        centroid[k]=centroid[k]+vertices[i][k]/4.0;
+    }
+    for(int k=0;k<3;++k){target[k]={r[k],dr[k]};gradient[k]={g[k],dg[k]};}
+    const ValueDirectional density0{rho0,drho0};
+    ValueDirectional out[3];
+    for(int fi=0;fi<4;++fi){
+        double face[3][3],dface[3][3],moments[4],dmoments[4];
+        ValueDirectional face_dual[3][3],e1[3],e2[3],normal[3],center[3];
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k){
+            const int vi=faces[fi][j];
+            face[j][k]=V[vi][k];dface[j][k]=dV[vi][k];
+            face_dual[j][k]=vertices[vi][k];
+            center[k]=center[k]+face_dual[j][k]/3.0;
+        }
+        for(int k=0;k<3;++k){
+            e1[k]=face_dual[1][k]-face_dual[0][k];
+            e2[k]=face_dual[2][k]-face_dual[0][k];
+        }
+        vd_cross(e1,e2,normal);const auto length=vd_norm(normal);
+        if(length.value<1e-300)continue;
+        for(auto& x:normal)x=x/length;
+        ValueDirectional outward[3];
+        for(int k=0;k<3;++k)outward[k]=center[k]-centroid[k];
+        if(vd_dot(outward,normal).value<0.0)for(auto& x:normal)x=-x;
+        SurfacePotentialMomentsUpToDirectional(
+            face,dface,r,dr,1,moments,dmoments);
+        ValueDirectional weighted=density0*ValueDirectional{moments[0],dmoments[0]};
+        for(int k=0;k<3;++k){
+            const int index=PotentialMomentIndex(k==0?1:0,k==1?1:0,k==2?1:0);
+            weighted=weighted+gradient[k]*ValueDirectional{moments[index],dmoments[index]};
+        }
+        for(int k=0;k<3;++k)out[k]=out[k]+normal[k]*weighted;
+    }
+    double tet_moments[4],dtet_moments[4];
+    TetPotentialMomentsDirectionalUpTo1(V,dV,r,dr,tet_moments,dtet_moments);
+    const ValueDirectional potential{tet_moments[0],dtet_moments[0]};
+    for(int k=0;k<3;++k){
+        out[k]=out[k]-gradient[k]*potential;
+        value[k]=out[k].value;direction[k]=out[k].direction;
+    }
+}
+
+void QuadTriFieldDirectional(
+    const double V[3][3], const double dV[3][3],
+    const double r[3], const double dr[3],
+    double sigma0, double dsigma0,
+    const double s[3], const double ds[3],
+    const double S[3][3], const double dS[3][3],
+    double value[3], double direction[3])
+{
+    ValueDirectional P[3][3],target[3],slope[3],hessian[3][3];
+    for(int i=0;i<3;++i)for(int k=0;k<3;++k)P[i][k]={V[i][k],dV[i][k]};
+    for(int k=0;k<3;++k){target[k]={r[k],dr[k]};slope[k]={s[k],ds[k]};}
+    for(int i=0;i<3;++i)for(int j=0;j<3;++j)hessian[i][j]={S[i][j],dS[i][j]};
+    const ValueDirectional constant{sigma0,dsigma0};
+    TriPolySetupDirectional geometry;
+    if(!tri_poly_setup_directional(P,target,geometry)){
+        for(int k=0;k<3;++k)value[k]=direction[k]=0.0;
+        return;
+    }
+    ValueDirectional field0[3];TriFieldDirectionalValue(P,target,field0);
+    double moments[4],dmoments[4];
+    SurfacePotentialMomentsUpToDirectional(V,dV,r,dr,1,moments,dmoments);
+    const ValueDirectional I0{moments[0],dmoments[0]};
+    ValueDirectional M1[3];
+    for(int k=0;k<3;++k){
+        const int index=PotentialMomentIndex(k==0?1:0,k==1?1:0,k==2?1:0);
+        M1[k]={moments[index],dmoments[index]};
+    }
+    const auto J30=vd_dot(geometry.n,field0)/geometry.h;
+    ValueDirectional intxi1[3],xixi[3][3],inplane[3];
+    for(int a=0;a<3;++a)for(int b=0;b<3;++b)
+        xixi[a][b]=((a==b?1.0:0.0)-geometry.n[a]*geometry.n[b])*I0;
+    for(int edge=0;edge<3;++edge){
+        const auto* A=P[edge];const auto* B=P[(edge+1)%3];
+        const auto& eg=geometry.edges[edge];
+        ValueDirectional tangent[3],normal[3];
+        for(int k=0;k<3;++k)tangent[k]=(B[k]-A[k])/eg.L;
+        for(int k=0;k<3;++k)
+            normal[k]=eg.m2[0]*geometry.e1[k]+eg.m2[1]*geometry.e2[k];
+        ValueDirectional Jl[POLY_MAX_DEG+3]{};
+        edge_l_moments_poly_directional(eg,2,Jl);
+        const ValueDirectional Gxi[2]={
+            eg.xiA[0]*Jl[0]+eg.t2[0]*Jl[1],
+            eg.xiA[1]*Jl[0]+eg.t2[1]*Jl[1]};
+        ValueDirectional Gxi3[3];
+        for(int k=0;k<3;++k)
+            Gxi3[k]=Gxi[0]*geometry.e1[k]+Gxi[1]*geometry.e2[k];
+        for(int k=0;k<3;++k)intxi1[k]=intxi1[k]-normal[k]*Jl[0];
+        for(int a=0;a<3;++a)for(int b=0;b<3;++b)
+            xixi[a][b]=xixi[a][b]-Gxi3[a]*normal[b];
+        ValueDirectional sA,AStA,AStt,ttStt;
+        for(int a=0;a<3;++a){
+            sA=sA+slope[a]*A[a];
+            for(int b=0;b<3;++b){
+                AStA=AStA+A[a]*hessian[a][b]*A[b];
+                AStt=AStt+A[a]*hessian[a][b]*tangent[b];
+                ttStt=ttStt+tangent[a]*hessian[a][b]*tangent[b];
+            }
+        }
+        const auto c0=constant+sA+AStA;
+        auto c1=vd_dot(slope,tangent)+2.0*AStt;
+        const auto esig=c0*Jl[0]+c1*Jl[1]+ttStt*Jl[2];
+        for(int k=0;k<3;++k)inplane[k]=inplane[k]+normal[k]*esig;
+    }
+    ValueDirectional J31[3],J32[3][3];
+    for(int k=0;k<3;++k)J31[k]=intxi1[k]+geometry.rp[k]*J30;
+    for(int a=0;a<3;++a)for(int b=0;b<3;++b)
+        J32[a][b]=xixi[a][b]+geometry.rp[a]*intxi1[b]
+                   +intxi1[a]*geometry.rp[b]+geometry.rp[a]*geometry.rp[b]*J30;
+    const auto sn=vd_dot(slope,geometry.n);
+    ValueDirectional projected_slope[3],SM1[3];
+    for(int k=0;k<3;++k)projected_slope[k]=slope[k]-sn*geometry.n[k];
+    for(int a=0;a<3;++a)for(int b=0;b<3;++b)
+        SM1[a]=SM1[a]+hessian[a][b]*M1[b];
+    const auto SM1n=vd_dot(SM1,geometry.n);
+    for(int k=0;k<3;++k)
+        inplane[k]=inplane[k]-(projected_slope[k]*I0
+                              +2.0*(SM1[k]-SM1n*geometry.n[k]));
+    ValueDirectional normal_scale=constant*J30+vd_dot(slope,J31);
+    for(int a=0;a<3;++a)for(int b=0;b<3;++b)
+        normal_scale=normal_scale+hessian[a][b]*J32[a][b];
+    normal_scale=geometry.h*normal_scale;
+    for(int k=0;k<3;++k){
+        const auto out=inplane[k]+geometry.n[k]*normal_scale;
+        value[k]=out.value;direction[k]=out.direction;
+    }
+}
+
 // ---- closest-point helpers for the Duffy singularity origin (x0) ----------------------------------------
 // Ericson, Real-Time Collision Detection: closest point on a triangle to p (Voronoi-region method).
 void ClosestPointTriangle(const double p[3], const double a[3], const double b[3], const double c[3],

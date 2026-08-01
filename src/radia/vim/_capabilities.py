@@ -26,8 +26,13 @@ _CAPABILITIES = (
     HDivCapability(2, "quad", 2, (1, 2, 3), 3),
     HDivCapability(2, "tri-quad", 1, (1, 2), 2),
     HDivCapability(2, "tri-quad", 2, (1, 2, 3), 3),
+    # Broken RT0 is the material-topology space: constant cell divergence and
+    # constant normal jump per facet, on straight affine TETs or HEXes.  The
+    # higher-order body-fitted/Trafo solve remains BDM1/BDM2.
+    HDivCapability(3, "tet", 0, (1,), 1),
     HDivCapability(3, "tet", 1, (1, 2), 2),
     HDivCapability(3, "tet", 2, (1, 2), 2),
+    HDivCapability(3, "hex", 0, (1,), 1),
     HDivCapability(3, "hex", 1, (1, 2), 2),
     HDivCapability(3, "hex", 2, (1, 2), 2),
     HDivCapability(3, "wedge", 1, (1, 2), 2),
@@ -67,7 +72,8 @@ def validate_hdiv_configuration(dimension: int, vertex_counts, hdiv_order: int,
     capability = _BY_KEY.get(key)
     if capability is None:
         raise ValueError(
-            "HDiv-VIM supports HDiv order in {1,2}; got dimension=%d, topology=%s, order=%r."
+            "HDiv-VIM supports TET/HEX order in {0,1,2} and other supported "
+            "topologies in {1,2}; got dimension=%d, topology=%s, order=%r."
             % (int(dimension), topology, hdiv_order))
     geometry_order = max(1, int(geometry_order))
     if geometry_order not in capability.geometry_orders:

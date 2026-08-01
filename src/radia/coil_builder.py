@@ -731,9 +731,20 @@ class CoilBuilder:
 
 		return self
 
-	def to_radia(self):
+	def to_radia(self, arc_max_segment_length=None):
 		"""
 		Convert all segments to Radia objects.
+
+		Arc currents are discretized so that one Radia integration segment is
+		no longer than ``arc_max_segment_length``.  By default the larger
+		cross-section dimension is used.  The former fixed value of 10 is not
+		adequate for long, large-radius accelerator coils observed close to the
+		conductor and can create artificial field peaks.
+
+		Args:
+			arc_max_segment_length: Maximum arc integration segment length in
+				the active geometry unit.  ``None`` uses
+				``max(segment.width, segment.height)``.
 
 		Returns:
 			list: List of Radia object IDs (can be combined with rad.ObjCnt)
@@ -778,13 +789,21 @@ class CoilBuilder:
 					phi2 += 2 * np.pi
 
 				r_range = [seg.radius - seg.width / 2, seg.radius + seg.width / 2]
+				max_length=(max(seg.width,seg.height)
+					if arc_max_segment_length is None else
+					float(arc_max_segment_length))
+				if not np.isfinite(max_length) or max_length<=0.0:
+					raise ValueError(
+						"arc_max_segment_length must be positive and finite")
+				arc_length=abs(np.deg2rad(seg.arc_angle))*seg.radius
+				n_arc_segments=max(10,int(np.ceil(arc_length/max_length)))
 				coil = rad.ObjArcCur(
 					[0, 0, 0],       # center
 					r_range,          # radii [r_min, r_max]
 					[phi1, phi2],     # phi range
 					seg.height,       # height
-					10,               # nseg
-					"auto",           # man_auto
+					n_arc_segments,   # nseg
+					"man",            # enforce the accuracy-derived subdivision
 					"z",              # axis (transformed by Euler angles below)
 					j_density         # j (current density, sign handles direction)
 				)
@@ -1635,5 +1654,134 @@ class CoilBuilder:
 		return Glue(shapes)
 
 
+def _normalize_coil_builders(coils):
+	"""Return a validated tuple of CoilBuilder objects."""
+	if isinstance(coils,CoilBuilder):
+		values=(coils,)
+	else:
+		values=tuple(coils)
+	if not values or any(not isinstance(value,CoilBuilder) for value in values):
+		raise TypeError("coils must contain one or more CoilBuilder objects")
+	return values
+
+
+def audit_coil_field_consistency(coils, sample_points, *, n_arc=200,
+		arc_max_segment_length=None, relative_tolerance=0.02,
+		absolute_tolerance_T=1e-9, closure_tolerance=1e-9):
+	"""Compare CoilBuilder's solid and finite-filament magnetic fields.
+
+	The finite-filament path is the reference used by NGSolve source
+	CoefficientFunctions.  The Radia solid-current representation must agree at
+	the caller-supplied observation points before it is used as an alternative
+	field source.  This gate also verifies that every current path is closed.
+	"""
+	builders=_normalize_coil_builders(coils)
+	points=np.ascontiguousarray(sample_points,dtype=float)
+	if points.ndim!=2 or points.shape[1]!=3 or points.shape[0]==0:
+		raise ValueError("sample_points must have shape (n,3)")
+	if not np.all(np.isfinite(points)):
+		raise ValueError("sample_points must be finite")
+	n_arc=int(n_arc)
+	if n_arc<1:
+		raise ValueError("n_arc must be positive")
+	relative_tolerance=float(relative_tolerance)
+	absolute_tolerance_T=float(absolute_tolerance_T)
+	closure_tolerance=float(closure_tolerance)
+	if (not np.isfinite(relative_tolerance) or relative_tolerance<0.0 or
+			not np.isfinite(absolute_tolerance_T) or absolute_tolerance_T<0.0 or
+			not np.isfinite(closure_tolerance) or closure_tolerance<0.0):
+		raise ValueError("audit tolerances must be finite and nonnegative")
+
+	from .biot_savart import MU0,h_segments_batch
+	import radia as rad
+
+	wire_field=np.zeros((len(points),3),dtype=float)
+	solid_objects=[]
+	solid_container=None
+	try:
+		for builder in builders:
+			segments,current=builder.to_wire_segments(n_arc=n_arc)
+			wire_field+=MU0*h_segments_batch(
+				segments,points,current=float(current))
+			solid_objects.extend(builder.to_radia(
+				arc_max_segment_length=arc_max_segment_length))
+		solid_container=rad.ObjCnt(solid_objects)
+		solid_field=np.asarray(rad.Fld(solid_container,"b",points),dtype=float)
+	finally:
+		# The audit owns only the temporary Radia source objects it creates.
+		# Never clear the caller's global Radia registry with UtiDelAll().
+		if solid_container is not None:
+			rad.UtiDel(solid_container)
+		else:
+			for obj in reversed(solid_objects):
+				rad.UtiDel(obj)
+	if solid_field.shape!=(len(points),3) or not np.all(np.isfinite(solid_field)):
+		raise RuntimeError("Radia solid-current field returned invalid values")
+	difference=solid_field-wire_field
+	abs_error=np.linalg.norm(difference,axis=1)
+	wire_norm=np.linalg.norm(wire_field,axis=1)
+	denominator=np.maximum(wire_norm,absolute_tolerance_T)
+	rel_error=abs_error/denominator
+	closure_gaps=np.asarray([builder.gap for builder in builders],dtype=float)
+	max_abs=float(np.max(abs_error))
+	max_rel=float(np.max(rel_error))
+	closed=bool(np.all(closure_gaps<=closure_tolerance))
+	field_ok=bool(max_abs<=absolute_tolerance_T or
+		max_rel<=relative_tolerance)
+	return {
+		"schema":"radia.coil-field-audit/v1",
+		"passed":bool(closed and field_ok),
+		"closed":closed,
+		"field_consistent":field_ok,
+		"coil_count":len(builders),
+		"sample_count":len(points),
+		"closure_gaps":closure_gaps.tolist(),
+		"max_absolute_error_T":max_abs,
+		"rms_absolute_error_T":float(np.sqrt(np.mean(abs_error**2))),
+		"max_relative_error":max_rel,
+		"rms_relative_error":float(np.sqrt(np.mean(rel_error**2))),
+		"wire_field_min_T":float(np.min(wire_norm)),
+		"wire_field_max_T":float(np.max(wire_norm)),
+		"relative_tolerance":relative_tolerance,
+		"absolute_tolerance_T":absolute_tolerance_T,
+		"closure_tolerance":closure_tolerance,
+	}
+
+
+def audit_coil_yoke_clearance(coils, yoke, *, minimum_clearance=0.0,
+		intersection_volume_tolerance=1e-15):
+	"""Check solid CoilBuilder geometry against a yoke OCC shape or STEP file."""
+	builders=_normalize_coil_builders(coils)
+	minimum_clearance=float(minimum_clearance)
+	intersection_volume_tolerance=float(intersection_volume_tolerance)
+	if (not np.isfinite(minimum_clearance) or minimum_clearance<0.0 or
+			not np.isfinite(intersection_volume_tolerance) or
+			intersection_volume_tolerance<0.0):
+		raise ValueError("clearance tolerances must be finite and nonnegative")
+	from netgen.occ import OCCGeometry
+	if isinstance(yoke,(str,bytes)) or hasattr(yoke,"__fspath__"):
+		yoke_shape=OCCGeometry(str(yoke)).shape
+	else:
+		yoke_shape=yoke
+	coil_shape=builders[0].combined_occ(list(builders[1:]))
+	intersection=coil_shape*yoke_shape
+	intersection_volume=float(intersection.mass)
+	clearance=float(coil_shape.Distance(yoke_shape))
+	no_overlap=intersection_volume<=intersection_volume_tolerance
+	clearance_ok=clearance+1e-15>=minimum_clearance
+	return {
+		"schema":"radia.coil-yoke-clearance-audit/v1",
+		"passed":bool(no_overlap and clearance_ok),
+		"no_overlap":bool(no_overlap),
+		"clearance_ok":bool(clearance_ok),
+		"coil_count":len(builders),
+		"intersection_volume":intersection_volume,
+		"minimum_clearance":minimum_clearance,
+		"measured_clearance":clearance,
+		"intersection_volume_tolerance":intersection_volume_tolerance,
+	}
+
+
 # Export public API
-__all__ = ['CoilBuilder', 'CoilSegment', 'StraightSegment', 'ArcSegment']
+__all__ = ['CoilBuilder', 'CoilSegment', 'StraightSegment', 'ArcSegment',
+	'audit_coil_field_consistency','audit_coil_yoke_clearance']
