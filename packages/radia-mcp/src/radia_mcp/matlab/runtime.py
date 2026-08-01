@@ -825,6 +825,8 @@ def matlab_simulink_library_contract():
         "ltspice": {
             "supported_distribution": "Current Analog Devices LTspice only",
             "executable": "LTspice.exe",
+            "simulink_runtime": "Level-2 MATLAB S-Function: radia_ltspice_sfun",
+            "native_boundary": "Standalone MEX function ABI only when a measured hot path requires it",
             "automatic_locations": [
                 r"C:\Program Files\ADI\LTspice\LTspice.exe",
                 r"%LOCALAPPDATA%\Programs\ADI\LTspice\LTspice.exe",
@@ -832,6 +834,16 @@ def matlab_simulink_library_contract():
             "explicit_override": "Pass Executable=... or set the block executable parameter.",
             "legacy_ltc_versions": "not supported",
             "browser_dependency": "Registration does not require LTspice; circuit execution does.",
+        },
+        "kicad_ltspice": {
+            "source_of_truth": "KiCad .kicad_sch remains the editable PCB-design source; generated CIR/ASC files are analysis artifacts.",
+            "workflow": [
+                "radia.kicad.exportSpiceNetlist",
+                "radia.kicad.prepareLTspice",
+                "radia.kicad.buildLTspiceBlock",
+            ],
+            "pipeline": ".kicad_sch -> kicad-cli SPICE CIR -> editable LTspice ASC and/or Simulink LTspice Circuit block",
+            "reverse_sync": "LTspice ASC edits are not written back to KiCad schematic or PCB metadata.",
         },
         "optimization": {
             "execution": "one complete Optuna trial per Simulink sample after a rising start trigger",

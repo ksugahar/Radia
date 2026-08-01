@@ -1,5 +1,5 @@
 function blockPath = buildLTspiceBlock(modelName, options)
-%BUILDLTSPICEBLOCK Create a draggable Level-2 LTspice coupling block.
+%BUILDLTSPICEBLOCK Create a readable Level-2 MATLAB LTspice coupling block.
 arguments
  modelName (1,1) string; options.Netlist (1,1) string; options.InputNames (:,1) string=strings(0,1); options.OutputTraces (:,1) string=strings(0,1)
  options.InputName (1,1) string="control"; options.OutputTrace (1,1) string=""; options.SampleTime_s (1,1) double=1e-3

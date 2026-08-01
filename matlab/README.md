@@ -647,6 +647,12 @@ and mutation. Use
 LTspice coupling does not require Simscape. `radia.ltspice.run` accepts both
 netlists and `.asc` schematics; `SchematicEditor` edits component values, and
 the conversion path stages recursive local include/model/hierarchical files.
+For KiCad-owned designs, `radia.kicad.exportSpiceNetlist` calls the current
+`kicad-cli` SPICE exporter, `radia.kicad.prepareLTspice` generates the editable
+`.asc`, and `radia.kicad.buildLTspiceBlock` adds the exported circuit to a
+Simulink model. The `.kicad_sch` file remains the design/PCB source of truth;
+generated `.cir` and `.asc` files are analysis artifacts and ASC edits are not
+written back to KiCad.
 `radia.ltspice.netlistToSchematic("circuit.cir")` is the thin MATLAB wrapper
 over the canonical `radia-spice-lab` Python converter. By default it converts
 back with hidden LTspice and rejects the result unless the node-rename-invariant
@@ -711,6 +717,11 @@ Multibody owns the mechanical equations and controller; the electromagnetic
 solver does not hide motion in a private application loop.
 
 The `LTspice Circuit` block accepts vector `InputNames` and `OutputTraces`.
+Its production runtime is `radia_ltspice_sfun`, a readable Level-2 MATLAB
+S-Function. It owns Simulink ports, sample time, transactional persistent state,
+termination, and error propagation while delegating circuit execution and RAW
+processing to the checked `radia.ltspice` APIs. `Outputs` computes and caches a
+candidate interval; `Update` commits it exactly once per accepted sample.
 Each sample advances one reset-time LTspice interval and hands saved node
 voltages and inductor currents to the next interval. Block state is isolated
 per instance and cleared by the Simulink `Terminate` callback, including model
