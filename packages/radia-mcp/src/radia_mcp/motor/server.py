@@ -85,6 +85,7 @@ from .demagnetization_history_gate import permanent_magnet_demagnetization_histo
 from .dual_torque_curve_gate import dual_torque_method_curve_gate as build_dual_torque_method_curve_gate
 from .hdiv_hex_torque_gate import hdiv_hex_motor_torque_gate as build_hdiv_hex_motor_torque_gate
 from .pm_armature_reaction_gate import (
+    pm_absolute_demag_three_way_gate as build_pm_absolute_demag_three_way_gate,
     pm_armature_reaction_hdiv_hex_gate as build_pm_armature_reaction_hdiv_hex_gate,
 )
 from .virtual_work_width_gate import motor_virtual_work_width_ladder_gate as build_motor_virtual_work_width_ladder_gate
@@ -147,6 +148,20 @@ def motor_pm_armature_reaction_hdiv_hex_gate(summary_json: str) -> str:
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         result = {
             "policy": "pm_armature_reaction_hdiv_hex_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def motor_pm_absolute_demag_three_way_gate(summary_json: str) -> str:
+    """Attribute segmented-PM absolute demag error with BDM orders and H1 FEM."""
+    try:
+        result = build_pm_absolute_demag_three_way_gate(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "pm_absolute_demag_three_way_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
