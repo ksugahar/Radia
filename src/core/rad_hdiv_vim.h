@@ -103,6 +103,22 @@ void LinTriField(const double V[3][3], const double r[3], double sigma0,
                  const double s[3], double out[3]);                                /* linear surface charge */
 void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
+/* Forward geometry/coefficient derivative of the same exact affine TET/TRI
+ * field kernels.  Both value and direction exclude 1/(4*pi).  These routines
+ * differentiate the closed-form moment formulas; no finite-difference or
+ * observation quadrature is used. */
+void TetVolFieldLinearDirectional(
+    const double V[4][3], const double dV[4][3],
+    const double r[3], const double dr[3],
+    double rho0, double drho0, const double g[3], const double dg[3],
+    double value[3], double direction[3]);
+void QuadTriFieldDirectional(
+    const double V[3][3], const double dV[3][3],
+    const double r[3], const double dr[3],
+    double sigma0, double dsigma0,
+    const double s[3], const double ds[3],
+    const double S[3][3], const double dS[3][3],
+    double value[3], double direction[3]);
 
 /* Closest point on a flat triangle / in a tetrahedron to p -- the Duffy singularity origin x0 for the
  * order>=3 / curved singular-quadrature charge-potential path (PhiAtHO_Duffy).  out[3]. */

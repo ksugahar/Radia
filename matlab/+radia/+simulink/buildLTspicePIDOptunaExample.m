@@ -12,9 +12,10 @@ plantName = "radia_ltspice_pid_plant";
 harnessName = "radia_ltspice_pid_optuna";
 closeIfLoaded([plantName,harnessName]);
 buildPlant(plantName,outputDirectory);
-buildHarness(harnessName,outputDirectory,options.NumTrials);
+plantFile=fullfile(outputDirectory,plantName+".slx");
+buildHarness(harnessName,outputDirectory,plantFile,options.NumTrials);
 files = struct("harness",fullfile(outputDirectory,harnessName+".slx"), ...
-    "plant",fullfile(outputDirectory,plantName+".slx"));
+    "plant",plantFile);
 if options.OpenModel, open_system(harnessName); end
 end
 
@@ -28,7 +29,12 @@ add_block("simulink/Discrete/Discrete PID Controller",model+"/PID", ...
     SampleTime="0.005");
 add_block("simulink/Discontinuities/Saturation",model+"/Command limit", ...
     UpperLimit="5",LowerLimit="0");
-netlist = fullfile(outputDirectory,"samples","ltspice_pid_rc_plant.cir");
+netlist = fullfile(radia.simulink.exampleDirectory(), ...
+    "samples","ltspice_pid_rc_plant.cir");
+if ~isfile(netlist)
+    error("radia:simulink:LTspicePIDNetlist", ...
+        "Bundled LTspice PID plant netlist was not found: %s",netlist);
+end
 radia.simulink.buildLTspiceBlock(model,Netlist=netlist, ...
     InputNames="control",OutputTraces="V(output)", ...
     SampleTime_s=5e-3,MaxStep_s=1e-4,Timeout_s=30,Save=false);
@@ -61,12 +67,14 @@ save_system(model,fullfile(outputDirectory,model+".slx"));
 clear cleanup; close_system(model,0);
 end
 
-function buildHarness(model,outputDirectory,numTrials)
+function buildHarness(model,outputDirectory,plantFile,numTrials)
 new_system(model); cleanup = onCleanup(@() closeIfLoaded(model));
 add_block("simulink/Sources/Step",model+"/Start optimization", ...
     Time="0",Before="0",After="1",SampleTime="0.1");
+objective="@(trial)radia.simulink.ltspicePIDObjective(trial," + ...
+    quoteString(plantFile) + ")";
 radia.simulink.buildOptunaBlock(model, ...
-    ObjectiveFcn="radia.simulink.ltspicePIDObjective", ...
+    ObjectiveFcn=objective, ...
     NumTrials=numTrials,SampleTime_s=0.1,Sampler="cmaes",Save=false);
 add_block("simulink/Sinks/Display",model+"/Best objective");
 add_block("simulink/Sinks/Display",model+"/Completed trials");
@@ -91,6 +99,10 @@ set_param(model,Solver="FixedStepDiscrete",FixedStep="0.1", ...
 Simulink.BlockDiagram.arrangeSystem(model);
 save_system(model,fullfile(outputDirectory,model+".slx"));
 clear cleanup; close_system(model,0);
+end
+
+function expression=quoteString(value)
+expression="'"+replace(string(value),"'","''")+"'";
 end
 
 function closeIfLoaded(models)

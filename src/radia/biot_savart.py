@@ -153,6 +153,82 @@ def h_segments_batch(segments, obs_points, current=1.0):
     return H_total
 
 
+def h_filament_cf(p1, p2, current=1.0):
+    """Exact finite-filament H field as a differentiable NGSolve CF.
+
+    This is the same analytic expression as :func:`h_filament`, written from
+    NGSolve coordinate CoefficientFunctions.  Consequently ``Diff(x/y/z)``
+    supplies the spatial derivative needed by GetTrafo shape calculus; no
+    point sampling or finite-difference gradient is involved.  The filament
+    must not intersect the integration mesh.
+    """
+    import ngsolve as ng
+
+    start = np.asarray(p1, dtype=float).reshape(-1)
+    end = np.asarray(p2, dtype=float).reshape(-1)
+    if start.shape != (3,) or end.shape != (3,):
+        raise ValueError("h_filament_cf: endpoints must be three-vectors")
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if not np.isfinite(length) or length <= 1.0e-30:
+        raise ValueError("h_filament_cf: filament length must be positive")
+    if not np.isfinite(current):
+        raise ValueError("h_filament_cf: current must be finite")
+    tangent = direction / length
+    coordinates = (ng.x, ng.y, ng.z)
+    r1 = tuple(
+        coordinate - float(value)
+        for coordinate, value in zip(coordinates, start)
+    )
+    r2 = tuple(
+        coordinate - float(value)
+        for coordinate, value in zip(coordinates, end)
+    )
+    norm1 = ng.sqrt(sum(value * value for value in r1))
+    norm2 = ng.sqrt(sum(value * value for value in r2))
+    projection1 = sum(
+        float(value) * component for value, component in zip(tangent, r1)
+    )
+    projection2 = sum(
+        float(value) * component for value, component in zip(tangent, r2)
+    )
+    cross = (
+        float(tangent[1]) * r1[2] - float(tangent[2]) * r1[1],
+        float(tangent[2]) * r1[0] - float(tangent[0]) * r1[2],
+        float(tangent[0]) * r1[1] - float(tangent[1]) * r1[0],
+    )
+    distance_squared = sum(component * component for component in cross)
+    factor = (
+        float(current)
+        * INV_4PI
+        * (projection1 / norm1 - projection2 / norm2)
+        / distance_squared
+    )
+    return ng.CoefficientFunction(
+        tuple(factor * component for component in cross)
+    )
+
+
+def h_segments_cf(segments, current=1.0):
+    """Sum exact differentiable finite-filament fields in one NGSolve CF."""
+    fields = [
+        h_filament_cf(start, end, current=current)
+        for start, end in segments
+    ]
+    if not fields:
+        raise ValueError("h_segments_cf: no wire segments provided")
+    # NGSolve differentiates/evaluates CF expression trees recursively.  A
+    # balanced reduction keeps the expression depth O(log(n_segment)).
+    while len(fields) > 1:
+        fields = [
+            fields[index] + fields[index + 1]
+            if index + 1 < len(fields)
+            else fields[index]
+            for index in range(0, len(fields), 2)
+        ]
+    return fields[0]
+
+
 def a_segments_batch(segments, obs_points, current=1.0):
     """Vector potential A at multiple observation points from wire segments.
 

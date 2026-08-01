@@ -203,6 +203,16 @@ void HACApK_matvec_sym_wrapper(
     double *y,
     int nd);
 
+/* Row-major batch [nrhs][nd].  Traverses every symmetric H-matrix leaf once
+ * and uses BLAS-3 GEMM across right-hand sides. */
+void HACApK_matvec_sym_many_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd,
+    int nrhs);
+
 /* Optional matvec profiler. Enabled by RADIA_HDIV_HMATVEC_STATS=1.
  * values[0..7] = total_s, zero_s, permute_s, leaf_s, reduce_s, meta_s,
  *                lowrank_flop_est, dense_flop_est.

@@ -22,12 +22,90 @@ from ngsolve import HDiv, InnerProduct, Mesh, SetNumThreads, TaskManager  # noqa
 
 from radia.isochronous_topopt import (  # noqa: E402
     CHI_MIN, MU0, DensityAdjointVIM, HelmholtzFilter, HeavisideProjection,
-    demag_field_from_solution, density_gradient_from_s_gradient,
+    _accept_deep_restoration, _solve_minimax_lp_update,
+    demag_field_from_solution, demag_field_evaluator,
+    density_gradient_from_s_gradient,
     density_discreteness, density_to_s, field_functional_load,
     gradient_pair_points, iron_only_verification_ready,
     iron_only_mesh, optimize_density, orbit_arc_points, uniform_field_load,
-    verify_design_iron_only,
+    verify_design_iron_only, track_sector_orbit, sector_linear_optics,
+    combined_function_linear_optics, design_achromatic_gradient_profile,
+    straightened_bend_validation,
+    isochronous_increment_targets, isochronous_total_field_bands,
+    isochronous_profile_metrics, restore_projected_volume,
 )
+
+
+def test_combined_function_sector_map_and_analytic_gradient_chain():
+    rho=2.3;theta=0.41
+    optics=combined_function_linear_optics(
+        [1.0/rho],[0.0],[rho*theta],gradient_jacobian=[[1.0]])
+    np.testing.assert_allclose(
+        optics.dispersion[-1],
+        [rho*(1.0-np.cos(theta)),np.sin(theta)],rtol=2e-14,atol=2e-14)
+    expected=np.array([[np.cos(theta),rho*np.sin(theta)],
+                       [-np.sin(theta)/rho,np.cos(theta)]])
+    np.testing.assert_allclose(optics.radial_matrix,expected,rtol=2e-14,atol=2e-14)
+    assert optics.radial_stable and not optics.vertical_stable
+
+    step=2e-6
+    plus=combined_function_linear_optics([1/rho],[step],[rho*theta])
+    minus=combined_function_linear_optics([1/rho],[-step],[rho*theta])
+    fd=(plus.dispersion[-1]-minus.dispersion[-1])/(2*step)
+    np.testing.assert_allclose(optics.endpoint_jacobian[:,0],fd,
+                               rtol=2e-9,atol=2e-11)
+
+
+def test_analytic_achromatic_gradient_design_has_zero_endpoint_eta():
+    design=design_achromatic_gradient_profile(
+        length=4.0,bend_angle=np.pi/6,n_segments=4,
+        normalized_gradient_limit=5.0)
+    optics=design.optics
+    assert optics.dispersion[0,0] == 0.0
+    assert abs(optics.dispersion[-1,0]) < 1e-10
+    assert optics.radial_stable and optics.vertical_stable
+    assert np.all(np.abs(design.normalized_gradient)<=5.0+1e-12)
+    np.testing.assert_allclose(
+        design.curvature@design.segment_lengths,np.pi/6,rtol=0,atol=1e-14)
+
+
+def test_analytic_achromatic_gradient_design_supports_reachable_sign_branch():
+    design=design_achromatic_gradient_profile(
+        length=4.0,bend_angle=np.pi/6,n_segments=4,
+        normalized_gradient_limit=5.0,
+        initial_normalized_gradient=[-2.3,2.85,.5,1.9],
+        gradient_sign_pattern=[-1,1,1,1])
+    assert abs(design.optics.dispersion[-1,0])<1e-10
+    assert design.optics.radial_stable and design.optics.vertical_stable
+    assert design.normalized_gradient[0]<=0.0
+    assert np.all(design.normalized_gradient[1:]>=0.0)
+
+
+def test_iron_only_mesh_extracts_hex_and_names_shape_boundaries():
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    keep=np.array([True,False])
+    extracted=iron_only_mesh(
+        mesh,keep,boundary_classifier=lambda center,normal:
+        "pole" if normal[0]>0.9 else "fixed")
+    assert extracted.ne==1
+    assert set(extracted.GetBoundaries())=={"fixed","pole"}
+    assert len(tuple(extracted.Elements(ng.VOL))[0].vertices)==8
+
+
+def test_iron_only_mesh_can_handoff_active_hexes_as_conforming_tets():
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    extracted=iron_only_mesh(
+        mesh,np.array([True,False]),tetrahedralize_hex=True,
+        boundary_classifier=lambda center,normal:
+        "pole" if normal[0]>0.9 else "fixed")
+    elements=tuple(extracted.Elements(ng.VOL))
+    assert len(elements)==6
+    assert {len(element.vertices) for element in elements}=={4}
+    assert set(extracted.GetBoundaries())=={"fixed","pole"}
+    np.testing.assert_allclose(
+        ng.Integrate(1.0,extracted),0.5,rtol=0.0,atol=2e-14)
 
 
 def test_heaviside_projection_chain_and_grayness_gate():
@@ -69,6 +147,15 @@ def problem():
     return SimpleNamespace(mesh=mesh, fes=fes, prob=prob, s0=s0,
                            dipole_points=pts, dipole_weights=wts,
                            f_state=f_state, f_adj=f_adj, base=base, rng=rng)
+
+
+@pytest.fixture(scope="module")
+def broken_problem(problem):
+    with TaskManager():
+        fes = ng.HDiv(problem.mesh, order=1, discontinuous=True)
+        prob = DensityAdjointVIM(
+            fes, eps=1e-7, internal_interfaces=True)
+    return SimpleNamespace(mesh=problem.mesh, fes=fes, prob=prob)
 
 
 def _objective_at(problem, s):
@@ -120,6 +207,36 @@ def test_reciprocity_matches_cpp_field_evaluator(problem):
     assert rel < 1e-7, (problem.base.objective, independent, rel)
 
 
+def test_reusable_demag_field_evaluator_matches_batch_path(problem):
+    points = problem.dipole_points[:3]
+    reusable = demag_field_evaluator(problem.prob.demag, problem.base.gfM)
+    batch = demag_field_from_solution(problem.prob.demag, problem.base.gfM, points)
+    np.testing.assert_allclose(reusable(points), batch, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(reusable(points[0]), batch[0], rtol=0.0, atol=0.0)
+
+
+def test_native_flat_tet_field_functional_rows_match_exact_batch(broken_problem):
+    """Sparse native observation rows reuse the exact analytic TET/TRI kernel."""
+    rng=np.random.default_rng(20260730)
+    coefficients=rng.normal(size=broken_problem.fes.ndof)
+    gf=ng.GridFunction(broken_problem.fes)
+    gf.vec.FV().NumPy()[:]=coefficients
+    points=np.array([[1.45,0.13,0.17],[-1.37,0.22,-0.19],
+                     [0.18,1.51,0.23]],dtype=float)
+    weights=rng.normal(size=(3,len(points),3))
+    with TaskManager():
+        rows=np.asarray(
+            broken_problem.prob.demag._G.configured_field_functional_rows(
+                points,weights),dtype=float)
+        field=demag_field_from_solution(
+            broken_problem.prob.demag,gf,points)
+    expected=np.einsum("rpc,pc->r",weights,field)
+    assert rows.shape==(3,broken_problem.fes.ndof)
+    assert rows.flags.c_contiguous
+    np.testing.assert_allclose(rows@coefficients,expected,
+                               rtol=2e-13,atol=2e-13)
+
+
 def test_warm_start_reproduces_and_saves_iterations(problem):
     """Warm-started re-solve at the same design matches and converges fast."""
     with TaskManager():
@@ -143,6 +260,67 @@ def test_native_jacobi_solver_satisfies_true_residual(problem):
     assert relative < 1.1e-10
 
 
+def test_native_batched_multi_rhs_is_row_major_and_true_residual(problem):
+    """Block Krylov H-leaf traversal changes execution, not the solution."""
+    with TaskManager():
+        mass, operator, _ = problem.prob._system(problem.s0)
+        gram = problem.prob.demag._G
+        gram.configure_mass_matrix_ngsolve(mass.mat)
+        rhs = np.ascontiguousarray(np.stack([
+            problem.f_state.vec.FV().NumPy(),
+            problem.f_adj.vec.FV().NumPy(),
+        ]), dtype=float)
+        result = gram.solve_configured_linear_material_auto_prec_many(
+            1.0, rhs, 1e-10, 20000)
+        solutions = np.asarray(result["m"], dtype=float)
+        assert solutions.shape == rhs.shape and solutions.flags.c_contiguous
+        assert len(result["iters"]) == 2
+        assert int(result["coarse_dim"]) == 0
+        assert int(result["recycle_dim"]) == 0
+        for row, load in zip(solutions, [problem.f_state, problem.f_adj]):
+            gf = ng.GridFunction(problem.fes)
+            gf.vec.FV().NumPy()[:] = row
+            residual = load.vec.CreateVector()
+            residual.data = load.vec - operator * gf.vec
+            relative = ng.Norm(residual) / ng.Norm(load.vec)
+            assert relative < 1.1e-10
+        reference, _ = problem.prob.solve(
+            problem.s0, problem.f_state, tol=1e-10,
+            solver="native-jacobi")
+        reference_array = np.asarray(reference.vec.FV().NumPy(), dtype=float)
+        relative_solution = np.linalg.norm(solutions[0] - reference_array) / np.linalg.norm(reference_array)
+        assert relative_solution < 1e-9
+
+        # The measured CPU default stays cluster-free, but the explicit
+        # cluster-tree contraction/deflation surface remains numerically
+        # locked for accelerator or future GPU backends.
+        clustered = gram.solve_configured_linear_material_auto_prec_many(
+            1.0, rhs, 1e-10, 20000, 8, 2, 1)
+        assert int(clustered["coarse_dim"]) == 2
+        assert int(clustered["recycle_dim"]) == 1
+        for row, load in zip(np.asarray(clustered["m"]),
+                             [problem.f_state, problem.f_adj]):
+            gf = ng.GridFunction(problem.fes)
+            gf.vec.FV().NumPy()[:] = row
+            residual = load.vec.CreateVector()
+            residual.data = load.vec - operator * gf.vec
+            assert ng.Norm(residual) / ng.Norm(load.vec) < 1.1e-10
+
+        # Broken-HDiv topology needs the mass Riesz map.  Its multi-RHS path
+        # applies one cached PARDISO factor to the row-major RHS batch while
+        # preserving the same true-residual contract.
+        mass_batch = gram.solve_configured_linear_material_auto_prec_many(
+            1.0, rhs, 1e-10, 20000, mass_riesz=True)
+        assert np.asarray(mass_batch["m"]).flags.c_contiguous
+        for row, load in zip(np.asarray(mass_batch["m"]),
+                             [problem.f_state, problem.f_adj]):
+            gf = ng.GridFunction(problem.fes)
+            gf.vec.FV().NumPy()[:] = row
+            residual = load.vec.CreateVector()
+            residual.data = load.vec - operator * gf.vec
+            assert ng.Norm(residual) / ng.Norm(load.vec) < 1.1e-10
+
+
 def test_dipole_point_inside_mesh_raises(problem):
     with pytest.raises(ValueError, match="INSIDE"):
         field_functional_load(problem.fes, [[0.0, 0.0, 0.0]], [1.0])
@@ -153,6 +331,50 @@ def test_wrong_design_vector_raises(problem):
         problem.prob.solve(np.ones(3), problem.f_state)
     with pytest.raises(ValueError, match="positive"):
         problem.prob.solve(np.zeros(problem.prob.n_el), problem.f_state)
+
+
+def test_broken_hdiv_interface_charge_preserves_uniform_field(
+        problem, broken_problem):
+    """All internal jump rows cancel for a globally uniform magnetization."""
+    with TaskManager():
+        gf = ng.GridFunction(broken_problem.fes)
+        gf.Set(ng.CoefficientFunction((0.0, 0.0, 1.0)))
+        charges = np.asarray(
+            broken_problem.prob.demag._B @ gf.vec.FV().NumPy(), dtype=float)
+        face_charges = charges[problem.mesh.ne:].reshape(
+            problem.mesh.nfacet, 3)
+        owners = {facet.nr: 0 for facet in problem.mesh.facets}
+        for el in problem.mesh.Elements(ng.VOL):
+            for facet in el.facets:
+                owners[facet.nr] += 1
+        internal = np.array(
+            [owners[facet.nr] == 2 for facet in problem.mesh.facets])
+        assert np.max(np.abs(face_charges[internal])) < 1e-10
+        reference = problem.prob.demag.DemagFactor(
+            ng.CoefficientFunction((0.0, 0.0, 1.0)))
+        measured = broken_problem.prob.demag.DemagFactor(
+            ng.CoefficientFunction((0.0, 0.0, 1.0)))
+    assert abs(measured - reference) < 1e-9
+
+
+def test_internal_interface_charge_rejects_conforming_hdiv(problem):
+    with TaskManager(), pytest.raises(ValueError, match="discontinuous=True"):
+        DensityAdjointVIM(
+            problem.fes, eps=1e-7, internal_interfaces=True)
+
+
+def test_broken_rt0_is_reduced_complete_topology_space(problem):
+    """RT0 keeps one cell-divergence and one normal-jump mode per facet."""
+    with TaskManager():
+        fes = ng.HDiv(problem.mesh, order=0, discontinuous=True)
+        reduced = DensityAdjointVIM(
+            fes, eps=1e-7, internal_interfaces=True)
+        assert fes.ndof == 4 * problem.mesh.ne
+        assert reduced.demag._B.shape == (
+            problem.mesh.ne + problem.mesh.nfacet, fes.ndof)
+        factor = reduced.demag.DemagFactor(
+            ng.CoefficientFunction((0.0, 0.0, 1.0)))
+    assert 0.32 < factor < 0.35
 
 
 def test_density_mapping_floor_and_chain_rule():
@@ -324,6 +546,66 @@ def test_optimize_density_deep_restoration_prioritizes_feasibility():
     assert result.history[1]["violation"][0] < result.history[0]["violation"][0]
 
 
+def test_deep_restoration_reduces_worst_band_normalized_violation():
+    """Restoration must not trade a worse max row for a smaller L1 total."""
+    chi_iron = 100.0
+
+    class UnevenLinearProblem:
+        n_el = 2
+        element_volumes = np.ones(2)
+
+        def linearize(self, s, state_load, loads, **kwargs):
+            chi = 1.0 / np.asarray(s, dtype=float)
+            rho = (chi - CHI_MIN) / (chi_iron - CHI_MIN)
+            grad0 = np.array([
+                -(chi[0] ** 2) / (chi_iron - CHI_MIN), 0.0])
+            grad1 = np.array([
+                0.0, -(chi[1] ** 2) / (chi_iron - CHI_MIN)])
+            return SimpleNamespace(
+                values=np.array([rho[1], rho[0], rho[1]]),
+                jacobians=np.stack([grad1, grad0, grad1]),
+                gfM=None, gfLambdas=(None, None, None),
+                state_iterations=0, adjoint_iterations=(0, 0, 0))
+
+    result = optimize_density(
+        UnevenLinearProblem(), object(), object(), [object(), object()],
+        [0.2, 0.2], chi_iron=chi_iron, volume_fraction=1.0,
+        initial_density=np.array([0.9, 0.5]), band_floor=[0.01, 0.01],
+        move_limit=0.2, max_iterations=2)
+    merits = [entry["max_violation_over_band"] for entry in result.history]
+    assert len(merits) == 2
+    assert merits[1] < merits[0] < 70.0
+
+
+def test_deep_restoration_allows_active_worst_row_to_change():
+    band = np.ones(2)
+    # The first row rises by 40 %, but remains below the improved maximum.
+    # This is legitimate Chebyshev progress and must not be blocked by an
+    # individual-row trust guard.
+    assert _accept_deep_restoration(
+        np.array([5.0, -8.0]), np.array([7.0, -7.5]), band, True)
+    # A smaller L1 total cannot compensate for a worse maximum.
+    assert not _accept_deep_restoration(
+        np.array([5.0, -8.0]), np.array([1.0, -8.1]), band, True)
+    assert not _accept_deep_restoration(
+        np.array([5.0, -8.0]), np.array([4.0, -7.0]), band, False)
+
+
+def test_deep_restoration_minimax_lp_uses_common_epigraph_cap():
+    rho = np.array([0.5, 0.5, 0.37])
+    gradients = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0]])
+    violation = np.array([5.0, -8.0])
+    update = _solve_minimax_lp_update(
+        rho, gradients, violation, np.ones(2), np.ones(3), 3.0,
+        move_limit=0.2)
+    linearized = violation + gradients @ update.delta
+    np.testing.assert_allclose(np.max(np.abs(linearized)), 6.0, atol=1e-10)
+    np.testing.assert_allclose(update.predicted_objective, 6.0, atol=2e-8)
+    assert update.predicted_objective < np.max(np.abs(violation))
+    # The proximal second LP leaves the response-null density untouched.
+    np.testing.assert_allclose(update.density[2], rho[2], atol=1e-12)
+
+
 def test_optimize_density_applies_projection_and_reports_discreteness():
     chi_iron = 100.0
 
@@ -365,6 +647,65 @@ def test_optimize_density_rejects_projected_volume_over_budget():
             volume_fraction=0.5, initial_density=np.full(2, 0.5),
             density_projection=HeavisideProjection(beta=4.0, eta=0.3),
             max_iterations=1)
+
+
+def test_restore_projected_volume_repairs_beta_continuation_start():
+    rho = np.array([0.2, 0.45, 0.7, 0.9])
+    volumes = np.array([1.0, 2.0, 1.5, 0.5])
+    projection = HeavisideProjection(beta=8.0, eta=0.4)
+    before = float(volumes @ projection.apply(rho))
+    limit = 0.5 * float(volumes.sum())
+    assert before > limit
+
+    feasible, info = restore_projected_volume(
+        rho, volumes, 0.5, density_projection=projection)
+    after = float(volumes @ projection.apply(feasible))
+    assert info["changed"]
+    assert info["shift"] > 0.0
+    assert after <= limit + 1e-12
+    assert abs(after-limit) <= 1e-10
+    np.testing.assert_allclose(
+        feasible, np.clip(rho-info["shift"], 0.0, 1.0), atol=0.0)
+    # The scalar correction preserves the topology ranking.
+    assert np.all(np.diff(feasible) >= 0.0)
+
+
+def test_restore_projected_volume_leaves_feasible_design_unchanged():
+    rho = np.array([0.1, 0.2, 0.3])
+    feasible, info = restore_projected_volume(
+        rho, np.ones(3), 0.5,
+        density_projection=HeavisideProjection(beta=4.0))
+    np.testing.assert_array_equal(feasible, rho)
+    assert not info["changed"]
+    assert info["iterations"] == 0
+
+
+def test_optimize_density_retries_nonconverged_trial_with_smaller_move():
+    chi_iron = 100.0
+
+    class RetryProblem:
+        n_el = 2
+        element_volumes = np.ones(2)
+
+        def linearize(self, s, state_load, loads, **kwargs):
+            chi = 1.0 / np.asarray(s, dtype=float)
+            rho = (chi - CHI_MIN) / (chi_iron - CHI_MIN)
+            if rho[0] > 0.575:
+                raise RuntimeError("synthetic CG did not converge")
+            grad_s = np.array([
+                -(chi[0]**2) / (chi_iron - CHI_MIN), 0.0])
+            return SimpleNamespace(
+                values=np.array([rho[0]]), jacobians=grad_s[None, :],
+                gfM=None, gfLambdas=(None,), state_iterations=0,
+                adjoint_iterations=(0,))
+
+    result = optimize_density(
+        RetryProblem(), object(), object(), chi_iron=chi_iron,
+        volume_fraction=0.5, initial_density=np.array([0.5, 0.5]),
+        move_limit=0.1, move_min=0.01, max_iterations=1)
+    np.testing.assert_allclose(result.density, [0.55, 0.45], atol=1e-12)
+    assert result.solves == 3
+    assert result.history[0]["trials"] == 2
 
 
 # ---------------------------------------------------------------- Stage 3
@@ -428,6 +769,34 @@ def test_verify_design_iron_only_protocol(problem):
     assert ver.values_embedded[0] < 0.0 and ver.values_iron_only[0] < 0.0
     assert 0.0 < ver.bands[0] < 0.12, ver.bands
     assert ver.embedded_iterations > 0 and ver.iron_only_iterations > 0
+    assert ver.embedded_solution.space is problem.fes
+    assert ver.iron_solution.space is ver.iron_problem.fes
+
+
+def test_broken_hdiv_binary_topology_matches_exact_void(broken_problem):
+    """Facet jumps remove the conforming-density interface model error."""
+    with TaskManager():
+        vols = broken_problem.prob.element_volumes
+        cz = np.asarray(
+            ng.Integrate(ng.z, broken_problem.mesh, element_wise=True),
+            dtype=float) / vols
+        density = (cz > 0.0).astype(float)
+        cpts, _ = orbit_arc_points(1.5, 0.4, 6)
+
+        def state_builder(fes):
+            return uniform_field_load(fes, (0.0, 0.0, 1.0))
+
+        def functional_builder(fes):
+            return field_functional_load(
+                fes, cpts, np.full(6, 1.0 / 6.0), axis=2,
+                scale=MU0, bonus_intorder=10)
+
+        ver = verify_design_iron_only(
+            broken_problem.prob, density, state_builder,
+            [functional_builder], chi_iron=100.0,
+            gram_kwargs=dict(eps=1e-7), linear_solver="native")
+    assert ver.iron_problem.demag.internal_interfaces
+    assert abs(ver.bands[0]) < 2e-5, ver.bands
 
 
 def test_iron_only_mesh_guards(problem):
@@ -479,3 +848,58 @@ def test_orbit_arc_and_direction_pairs():
     with pytest.raises(ValueError, match="zero direction"):
         gradient_pair_points(pts, np.ones(4), delta=0.2,
                              direction=np.zeros((4, 3)))
+
+
+def test_sector_orbit_and_linear_optics_uniform_field():
+    radius, field_strength = 1.2, 2.0
+    span = (0.0, pi/3.0)
+
+    def field(_point):
+        return np.array([0.0, 0.0, field_strength])
+
+    inverse_rigidity = -1.0/(radius*field_strength)
+    orbit = track_sector_orbit(
+        field, radius, span, inverse_rigidity, n_steps=360)
+    assert orbit.exit_radius == pytest.approx(radius, rel=2e-11)
+    assert orbit.exit_angle == pytest.approx(span[1], abs=2e-11)
+    optics = sector_linear_optics(
+        field, radius, span, inverse_rigidity, n_steps=360)
+    assert optics.radial_determinant == pytest.approx(1.0, rel=2e-6)
+    assert optics.vertical_determinant == pytest.approx(1.0, rel=2e-6)
+
+
+def test_straightened_bend_validation_uniform_combined_function():
+    length=4.0;rigidity=2.0;angle=pi/6.0
+    stations=np.linspace(0.0,length,81)
+    bz=np.full(stations.shape,rigidity*angle/length)
+    result=straightened_bend_validation(
+        stations,bz,np.zeros_like(stations),rigidity)
+    assert result.bend_angle == pytest.approx(angle,rel=2e-15)
+    np.testing.assert_allclose(result.position[-1,0],0.0,atol=2e-14)
+    expected_chord=2.0*(length/angle)*np.sin(0.5*angle)
+    assert result.position[-1,1] == pytest.approx(expected_chord,rel=2e-14)
+    assert result.optics.dispersion[0,0] == 0.0
+    assert result.optics.dispersion[0,1] == 0.0
+    assert result.optics.dispersion[-1,0] == pytest.approx(
+        (length/angle)*(1.0-np.cos(angle)),rel=2e-14)
+
+
+def test_isochronous_profile_metrics_exact_gamma_law():
+    radii = np.linspace(0.1, 0.4, 5)
+    gamma = 1.0/np.sqrt(1.0-(radii/0.8)**2)
+    exact = isochronous_profile_metrics(radii, 1.7*gamma, gamma)
+    assert exact["max_abs_field_error"] < 3e-16
+    assert exact["max_abs_period_error"] < 3e-16
+
+
+def test_isochronous_increment_targets_include_fixed_coil_field():
+    gamma = np.array([1.0, 1.1, 1.25])
+    targets = isochronous_increment_targets(
+        gamma, reference_increment=0.2, external_bz=1.0,
+        reference_index=1)
+    total = 1.0 + targets
+    np.testing.assert_allclose(total/total[1], gamma/gamma[1], rtol=1e-15)
+    assert not np.allclose(targets, 0.2*gamma/gamma[1])
+    np.testing.assert_allclose(
+        isochronous_total_field_bands(targets, 1.0, 5e-3),
+        5e-3*np.abs(total))

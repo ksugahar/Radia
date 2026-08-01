@@ -43,6 +43,11 @@ void dgemv_(const char *trans, const int *m, const int *n,
             const double *alpha, const double *a, const int *lda,
             const double *x, const int *incx,
             const double *beta, double *y, const int *incy);
+void dgemm_(const char *transa, const char *transb,
+            const int *m, const int *n, const int *k,
+            const double *alpha, const double *a, const int *lda,
+            const double *b, const int *ldb, const double *beta,
+            double *c, const int *ldc);
 
 #ifdef __cplusplus
 }
@@ -88,6 +93,13 @@ static double **g_tmp_vec = NULL;    /* Thread-local tmp vectors */
 static int g_matvec_nd = 0;          /* Size of allocated arrays */
 static int g_matvec_nthr = 0;        /* Number of threads */
 static int g_matvec_ktmax = 0;       /* Max rank for tmp_vec */
+static double *g_batch_x_perm = NULL;    /* column-major [nd,nrhs] */
+static double **g_batch_y_thread = NULL; /* thread-local [nd,nrhs] */
+static double **g_batch_tmp = NULL;      /* thread-local [ktmax,nrhs] */
+static int g_batch_nd = 0;
+static int g_batch_nrhs = 0;
+static int g_batch_nthr = 0;
+static int g_batch_ktmax = 0;
 
 typedef struct {
     int64_t calls;
@@ -230,6 +242,37 @@ static void init_matvec_buffers(int nd, int nthr, int ktmax) {
     }
 }
 
+static void free_batch_matvec_buffers(void) {
+    int i;
+    if (g_batch_x_perm) { free(g_batch_x_perm); g_batch_x_perm = NULL; }
+    if (g_batch_y_thread) {
+        for (i = 0; i < g_batch_nthr; ++i) free(g_batch_y_thread[i]);
+        free(g_batch_y_thread); g_batch_y_thread = NULL;
+    }
+    if (g_batch_tmp) {
+        for (i = 0; i < g_batch_nthr; ++i) free(g_batch_tmp[i]);
+        free(g_batch_tmp); g_batch_tmp = NULL;
+    }
+    g_batch_nd = g_batch_nrhs = g_batch_nthr = g_batch_ktmax = 0;
+}
+
+static void init_batch_matvec_buffers(int nd, int nrhs, int nthr, int ktmax) {
+    int i;
+    if (g_batch_nd == nd && g_batch_nrhs == nrhs &&
+        g_batch_nthr == nthr && g_batch_ktmax >= ktmax) return;
+    free_batch_matvec_buffers();
+    g_batch_x_perm = (double*)malloc(sizeof(double)*(size_t)nd*nrhs);
+    g_batch_y_thread = (double**)malloc(sizeof(double*)*nthr);
+    g_batch_tmp = (double**)malloc(sizeof(double*)*nthr);
+    for (i = 0; i < nthr; ++i) {
+        g_batch_y_thread[i] = (double*)malloc(sizeof(double)*(size_t)nd*nrhs);
+        g_batch_tmp[i] = (double*)malloc(
+            sizeof(double)*(size_t)(ktmax > 0 ? ktmax : 1)*nrhs);
+    }
+    g_batch_nd = nd; g_batch_nrhs = nrhs; g_batch_nthr = nthr;
+    g_batch_ktmax = ktmax;
+}
+
 /* Free persistent matvec buffers (call when H-matrix is destroyed) */
 static void free_matvec_buffers(void) {
     int i;
@@ -252,6 +295,7 @@ static void free_matvec_buffers(void) {
     g_matvec_nd = 0;
     g_matvec_nthr = 0;
     g_matvec_ktmax = 0;
+    free_batch_matvec_buffers();
 }
 
 /* Public function to reset all HACApK global state */
@@ -1202,6 +1246,91 @@ static void matvec_sym_thread_func(int tid, int nthr, void *data) {
     matvec_mkl_end();
 }
 
+typedef struct {
+    st_cHACApK_leafmtx *st_lf;
+    int nlf, nd, nrhs;
+} matvec_many_job_ctx;
+
+static void matvec_sym_many_thread_func(int tid, int nthr, void *data) {
+    matvec_many_job_ctx *ctx = (matvec_many_job_ctx*)data;
+    const double one = 1.0, zero = 0.0;
+    const char trans = 'T', no_trans = 'N';
+    double *y_local = g_batch_y_thread[tid];
+    double *tmp = g_batch_tmp[tid];
+    int ip;
+    matvec_mkl_begin();
+    for (ip = tid + 1; ip <= ctx->nlf; ip += nthr) {
+        st_cHACApK_leafmtx leaf = ctx->st_lf[ip];
+        int upper, ndl, ndt, nstrtl, nstrtt;
+        double *a1, *a2;
+        if (!leaf || leaf->nstrtl > leaf->nstrtt) continue;
+        upper = leaf->nstrtl < leaf->nstrtt;
+        ndl = leaf->ndl; ndt = leaf->ndt;
+        nstrtl = leaf->nstrtl; nstrtt = leaf->nstrtt;
+        a1 = leaf->a1; a2 = leaf->a2;
+        if (leaf->ltmtx == 1) {
+            int kt = leaf->kt;
+            if (!a1 || !a2 || kt <= 0) continue;
+            dgemm_(&trans, &no_trans, &kt, &ctx->nrhs, &ndt,
+                   &one, a1, &ndt, &g_batch_x_perm[nstrtt-1], &ctx->nd,
+                   &zero, tmp, &kt);
+            dgemm_(&no_trans, &no_trans, &ndl, &ctx->nrhs, &kt,
+                   &one, a2, &ndl, tmp, &kt, &one,
+                   &y_local[nstrtl-1], &ctx->nd);
+            if (upper) {
+                dgemm_(&trans, &no_trans, &kt, &ctx->nrhs, &ndl,
+                       &one, a2, &ndl, &g_batch_x_perm[nstrtl-1], &ctx->nd,
+                       &zero, tmp, &kt);
+                dgemm_(&no_trans, &no_trans, &ndt, &ctx->nrhs, &kt,
+                       &one, a1, &ndt, tmp, &kt, &one,
+                       &y_local[nstrtt-1], &ctx->nd);
+            }
+        } else {
+            if (!a1) continue;
+            dgemm_(&trans, &no_trans, &ndl, &ctx->nrhs, &ndt,
+                   &one, a1, &ndt, &g_batch_x_perm[nstrtt-1], &ctx->nd,
+                   &one, &y_local[nstrtl-1], &ctx->nd);
+            if (upper)
+                dgemm_(&no_trans, &no_trans, &ndt, &ctx->nrhs, &ndl,
+                       &one, a1, &ndt, &g_batch_x_perm[nstrtl-1], &ctx->nd,
+                       &one, &y_local[nstrtt-1], &ctx->nd);
+        }
+    }
+    matvec_mkl_end();
+}
+
+static void matvec_many_zero_y(int tid, void *data) {
+    matvec_many_job_ctx *ctx = (matvec_many_job_ctx*)data;
+    memset(g_batch_y_thread[tid], 0,
+           sizeof(double)*(size_t)ctx->nd*ctx->nrhs);
+}
+
+typedef struct {
+    const double *x;
+    double *y;
+    int *lod;
+    int nd, nrhs, nthr;
+} matvec_many_io_ctx;
+
+static void matvec_many_permute(int idx, void *data) {
+    matvec_many_io_ctx *ctx = (matvec_many_io_ctx*)data;
+    const int rhs = idx / ctx->nd;
+    const int pos = idx - rhs*ctx->nd;
+    g_batch_x_perm[pos + (size_t)ctx->nd*rhs] =
+        ctx->x[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1];
+}
+
+static void matvec_many_reduce(int idx, void *data) {
+    matvec_many_io_ctx *ctx = (matvec_many_io_ctx*)data;
+    const int rhs = idx / ctx->nd;
+    const int pos = idx - rhs*ctx->nd;
+    double sum = 0.0;
+    int tid;
+    for (tid = 0; tid < ctx->nthr; ++tid)
+        sum += g_batch_y_thread[tid][pos + (size_t)ctx->nd*rhs];
+    ctx->y[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1] = sum;
+}
+
 /* Reduce thread-local y arrays and apply inverse permutation for one element */
 static void matvec_reduce_output(int idx, void *data) {
     typedef struct { double *y; int *lod; int nthr; } reduce_ctx;
@@ -1365,6 +1494,29 @@ void HACApK_matvec_sym_wrapper(
     void *leafmtxp_void, void *ctl_void, const double *x, double *y, int nd)
 {
     hacapk_matvec_run(leafmtxp_void, ctl_void, x, y, nd, matvec_sym_thread_func, 1);
+}
+
+void HACApK_matvec_sym_many_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs)
+{
+    st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
+    st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
+    int nthr;
+    matvec_many_job_ctx job;
+    matvec_many_io_ctx io;
+    if (!leafmtxp || !ctl || !ctl->lod || !leafmtxp->st_lf ||
+        !x || !y || nd < 1 || nrhs < 1) return;
+    nthr = hacapk_get_num_threads();
+    init_batch_matvec_buffers(nd, nrhs, nthr, leafmtxp->ktmax);
+    job.st_lf = leafmtxp->st_lf; job.nlf = leafmtxp->nlf;
+    job.nd = nd; job.nrhs = nrhs;
+    io.x = x; io.y = y; io.lod = ctl->lod; io.nd = nd;
+    io.nrhs = nrhs; io.nthr = nthr;
+    hacapk_parallel_for(nthr, matvec_many_zero_y, &job);
+    hacapk_parallel_for(nd*nrhs, matvec_many_permute, &io);
+    hacapk_parallel_job(matvec_sym_many_thread_func, &job);
+    hacapk_parallel_for(nd*nrhs, matvec_many_reduce, &io);
 }
 
 /*=========================================================================

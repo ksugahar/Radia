@@ -1,13 +1,17 @@
-function value = ltspicePIDObjective(trial)
+function value = ltspicePIDObjective(trial,modelFile)
 %LTSPICEPIDOBJECTIVE Evaluate PID gains with the LTspice Simulink plant.
 arguments
     trial (1,1) radia.optuna.Trial
+    modelFile (1,1) string = fullfile(radia.simulink.exampleDirectory(), ...
+        "radia_ltspice_pid_plant.slx")
 end
 
 gains = trial.suggestVector(["Kp","Ki","Kd"], ...
     [0.05, 0.5, 1e-6], [8, 800, 5e-3], Log=[true,true,true]);
-modelFile = fullfile(radia.simulink.exampleDirectory(), ...
-    "radia_ltspice_pid_plant.slx");
+if ~isfile(modelFile)
+    error("radia:simulink:PIDExampleModel", ...
+        "The LTspice PID plant model does not exist: %s",modelFile);
+end
 runner = radia.optuna.SimulinkRunner(modelFile, ...
     ConfigureFcn=@(input,~) configureTrial(input,gains), ...
     ScoreFcn=@scoreTrial, StopTime="0.025");

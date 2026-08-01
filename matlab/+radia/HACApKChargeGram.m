@@ -278,6 +278,42 @@ classdef HACApKChargeGram < handle
                 double(faceVelocity), double(left), double(right));
         end
 
+        function values = directionalDerivativeContractionsMany( ...
+                obj, family, cellVelocity, faceVelocity, left, right)
+            arguments
+                obj
+                family (1,1) string
+                cellVelocity double
+                faceVelocity double
+                left (:,:) double
+                right (:,1) double
+            end
+            family = lower(family);
+            if ~ismember(family, ["hex", "tet", "wedge"])
+                error("radia:HACApKChargeGram:DerivativeFamily", ...
+                    "family must be hex, tet, or wedge.");
+            end
+            if ndims(cellVelocity) ~= 4 || ndims(faceVelocity) ~= 4 || ...
+                    size(cellVelocity,1) ~= size(faceVelocity,1) || ...
+                    size(cellVelocity,4) ~= 3 || size(faceVelocity,4) ~= 3
+                error("radia:HACApKChargeGram:DerivativeBatchShape", ...
+                    ["Velocity arrays must have shape " ...
+                     "nMode-by-nHost-by-nNode-by-3 with equal mode counts."]);
+            end
+            expected = struct("hex",[27,9],"tet",[4,3],"wedge",[18,9]);
+            nodeCounts = expected.(family);
+            if size(cellVelocity,3) ~= nodeCounts(1) || ...
+                    size(faceVelocity,3) ~= nodeCounts(2)
+                error("radia:HACApKChargeGram:DerivativeBatchShape", ...
+                    "Velocity node counts do not match the selected family.");
+            end
+            obj.assertAlive();
+            values = radia.internal.callMex( ...
+                'hacapk.charge_gram.directional_derivative_contractions_many', ...
+                obj.NativeHandle, char(family), double(cellVelocity), ...
+                double(faceVelocity), double(left), double(right));
+        end
+
         function info = info(obj)
             obj.assertAlive();
             info = radia.internal.callMex( ...
@@ -362,6 +398,18 @@ classdef HACApKChargeGram < handle
                 'hacapk.charge_gram.restore_geometry_mass_matrix', obj.NativeHandle);
         end
 
+        function setConfiguredConstraints(obj, dofs, options)
+            arguments
+                obj
+                dofs
+                options.PreserveExisting (1,1) logical = false
+            end
+            obj.assertAlive();
+            radia.internal.callMex( ...
+                'hacapk.charge_gram.set_configured_constraints', ...
+                obj.NativeHandle, int32(dofs), options.PreserveExisting);
+        end
+
         function result = operatorInfo(obj)
             obj.assertAlive();
             result = radia.internal.callMex('hacapk.charge_gram.operator_info', obj.NativeHandle);
@@ -397,6 +445,62 @@ classdef HACApKChargeGram < handle
                 obj.NativeHandle, double(rhs));
         end
 
+        function y = applyConfiguredLinearMaterialOperator( ...
+                obj, invChi, x, options)
+            arguments
+                obj
+                invChi (1,1) double
+                x
+                options.RespectConstraints (1,1) logical = true
+            end
+            obj.assertAlive();
+            y = radia.internal.callMex( ...
+                'hacapk.charge_gram.apply_configured_linear_material_operator', ...
+                obj.NativeHandle, invChi, double(x), ...
+                options.RespectConstraints);
+        end
+
+        function y = applyConfiguredLinearMaterialOperatorMany( ...
+                obj, invChi, x, options)
+            arguments
+                obj
+                invChi (1,1) double
+                x (:,:) double
+                options.RespectConstraints (1,1) logical = true
+            end
+            obj.assertAlive();
+            y = radia.internal.callMex( ...
+                ['hacapk.charge_gram.' ...
+                 'apply_configured_linear_material_operator_many'], ...
+                obj.NativeHandle, invChi, double(x), ...
+                options.RespectConstraints);
+        end
+
+        function result = reduceConfiguredCandidateSchur( ...
+                obj, invChi, candidateDofs, rhs, state, responseMatrix, ...
+                adjoints, options)
+            arguments
+                obj
+                invChi (1,1) double
+                candidateDofs
+                rhs
+                state
+                responseMatrix (:,:) double
+                adjoints (:,:) double
+                options.Tol (1,1) double = 1e-9
+                options.MaxIt (1,1) double = 5000
+                options.SolveBatchSize (1,1) double = 64
+                options.MassRiesz (1,1) logical = true
+            end
+            obj.assertAlive();
+            result = radia.internal.callMex( ...
+                'hacapk.charge_gram.reduce_configured_candidate_schur', ...
+                obj.NativeHandle, invChi, int32(candidateDofs), double(rhs), ...
+                double(state), double(responseMatrix), double(adjoints), ...
+                options.Tol, options.MaxIt, options.SolveBatchSize, ...
+                options.MassRiesz);
+        end
+
         function result = solveConfiguredLinearMaterial(obj, invChi, rhs, options)
             arguments
                 obj
@@ -428,6 +532,61 @@ classdef HACApKChargeGram < handle
                 'hacapk.charge_gram.solve_configured_linear_material_auto_prec', ...
                 obj.NativeHandle, invChi, double(rhs), options.Tol, options.MaxIt, ...
                 true, double(options.X0));
+        end
+
+        function result = solveConfiguredLinearMaterialAutoPrecMany( ...
+                obj, invChi, rhs, options)
+            arguments
+                obj
+                invChi (1,1) double
+                rhs (:,:) double
+                options.Tol (1,1) double = 1e-9
+                options.MaxIt (1,1) double = 5000
+                options.ClusterCoarseSize (1,1) double = 0
+                options.ClusterDeflationSize (1,1) double = 0
+                options.RecycleSize (1,1) double = 0
+                options.MassRiesz (1,1) logical = false
+                options.X0 = []
+            end
+            obj.assertAlive();
+            result = radia.internal.callMex( ...
+                ['hacapk.charge_gram.' ...
+                 'solve_configured_linear_material_auto_prec_many'], ...
+                obj.NativeHandle, invChi, double(rhs), options.Tol, ...
+                options.MaxIt, options.ClusterCoarseSize, ...
+                options.ClusterDeflationSize, options.RecycleSize, ...
+                options.MassRiesz, double(options.X0));
+        end
+
+        function rows = configuredFieldFunctionalRows( ...
+                obj, observations, weights)
+            arguments
+                obj
+                observations (:,3) double
+                weights double
+            end
+            obj.assertAlive();
+            rows = radia.internal.callMex( ...
+                'hacapk.charge_gram.configured_field_functional_rows', ...
+                obj.NativeHandle, double(observations), double(weights));
+        end
+
+        function rows = configuredFieldFunctionalRowsDirectionalDerivative( ...
+                obj, observations, weights, cellVertexVelocity, ...
+                faceVertexVelocity)
+            arguments
+                obj
+                observations (:,3) double
+                weights double
+                cellVertexVelocity double
+                faceVertexVelocity double
+            end
+            obj.assertAlive();
+            rows = radia.internal.callMex( ...
+                ['hacapk.charge_gram.' ...
+                 'configured_field_functional_rows_directional_derivative'], ...
+                obj.NativeHandle, double(observations), double(weights), ...
+                double(cellVertexVelocity), double(faceVertexVelocity));
         end
 
         function evaluator = createFieldEvaluator(obj, magnetization, options)

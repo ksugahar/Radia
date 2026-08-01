@@ -912,6 +912,57 @@ verifyEqual(testCase, manager.applyConfiguredMassRiesz([2; 3]), [2; 3], ...
     "AbsTol", 1e-14);
 expectedDemag = manager.applyConfiguredDemag([1; 2]);
 verifyTrue(testCase, all(isfinite(expectedDemag)));
+invChi = 0.4;
+expectedOperator = expectedDemag + invChi * [2; 6];
+verifyEqual(testCase, ...
+    manager.applyConfiguredLinearMaterialOperator(invChi, [1; 2]), ...
+    expectedOperator, "AbsTol", 2e-12);
+batchInput = [1, 2; -0.5, 0.25];
+batchOutput = manager.applyConfiguredLinearMaterialOperatorMany( ...
+    invChi, batchInput);
+verifyEqual(testCase, batchOutput(1,:).', expectedOperator, "AbsTol", 2e-12);
+verifyEqual(testCase, batchOutput(2,:).', ...
+    manager.applyConfiguredLinearMaterialOperator(invChi, batchInput(2,:).'), ...
+    "AbsTol", 2e-12);
+
+manager.setConfiguredConstraints(int32(0));
+verifyEqual(testCase, manager.operatorInfo().constraint_count, 1);
+constrained = manager.applyConfiguredLinearMaterialOperator( ...
+    invChi, [1; 2]);
+verifyEqual(testCase, constrained(1), 0, "AbsTol", 1e-14);
+verifyEqual(testCase, ...
+    manager.applyConfiguredLinearMaterialOperatorMany(invChi, batchInput), ...
+    [constrained.'; manager.applyConfiguredLinearMaterialOperator( ...
+        invChi, batchInput(2,:).').'], "AbsTol", 2e-12);
+manager.setConfiguredConstraints(int32.empty);
+
+rhsBatch = [1, -0.25; 0.2, 0.75];
+solvedBatch = manager.solveConfiguredLinearMaterialAutoPrecMany( ...
+    invChi, rhsBatch, Tol=1e-11, MaxIt=5000);
+verifySize(testCase, solvedBatch.m, size(rhsBatch));
+verifySize(testCase, solvedBatch.iters, [size(rhsBatch,1), 1]);
+for k = 1:size(rhsBatch,1)
+    residual = manager.applyConfiguredLinearMaterialOperator( ...
+        invChi, solvedBatch.m(k,:).') - rhsBatch(k,:).';
+    verifyLessThan(testCase, norm(residual), 2e-9);
+end
+
+manager.setConfiguredConstraints(int32(0));
+activeRhs = [0; 0.75];
+activeState = manager.solveConfiguredLinearMaterialAutoPrecMany( ...
+    invChi, activeRhs.', Tol=1e-11, MaxIt=5000).m.';
+responseMatrix = [0, 1];
+adjoints = manager.solveConfiguredLinearMaterialAutoPrecMany( ...
+    invChi, responseMatrix, Tol=1e-11, MaxIt=5000).m;
+reduced = manager.reduceConfiguredCandidateSchur( ...
+    invChi, int32(0), activeRhs, activeState, responseMatrix, adjoints, ...
+    Tol=1e-11, MaxIt=5000, SolveBatchSize=1, MassRiesz=false);
+verifySize(testCase, reduced.schur, [1, 1]);
+verifySize(testCase, reduced.rhs, [1, 1]);
+verifySize(testCase, reduced.response, [1, 1]);
+verifyTrue(testCase, all(isfinite([reduced.schur(:); reduced.rhs(:); ...
+    reduced.response(:)])));
+manager.setConfiguredConstraints(int32.empty);
 demag = manager.demagMatrix();
 nativeInput = demag.vector();
 nativeInput.setValues([1; 2]);
@@ -1453,6 +1504,49 @@ wedgeComplete = wedge.wedgeChargeGramDirectionalDerivative( ...
 verifySize(testCase, wedgeComplete, [2,2]);
 verifyEqual(testCase, wedgeComplete, zeros(2), "AbsTol", 4e-12);
 clear wedgeCleanup tetCleanup
+end
+
+function testHACApKConfiguredFieldRowsAndBatchedDerivatives(testCase)
+a = 0.5854101966249685;
+b = 0.1381966011250105;
+tetPoints = [a,b,b; b,a,b; b,b,a; b,b,b];
+tetWeights = ones(4,1)/24;
+trianglePoints = [1/6,1/6; 2/3,1/6; 1/6,2/3];
+triangleWeights = ones(3,1)/6;
+cellVerts = [0,0,0; 1,0,0; 0,1,0; 0,0,1];
+faceVerts = cellVerts([1,3,2],:);
+manager = radia.HACApKChargeGram.from_high_order_tet( ...
+    cellVerts, faceVerts, 1, int32([0;0]), int32([0;1]), ...
+    int32(zeros(2,3)), tetPoints, tetWeights, trianglePoints, ...
+    triangleWeights, InnerTetPoints=tetPoints, ...
+    InnerTetWeights=tetWeights, InnerTrianglePoints=trianglePoints, ...
+    InnerTriangleWeights=triangleWeights, Build=false);
+cleanup = onCleanup(@() delete(manager));
+verifyTrue(testCase, manager.build(AcaEps=1e-12, LeafSize=4));
+manager.configureChargeMap(int32([0;1;2]), int32([0;1]), [1;1], 2);
+
+observations = [2,2,2; -0.5,0.25,0.3];
+weights = zeros(2,2,3);
+weights(1,:,1) = [1,-0.5];
+weights(2,:,2) = [0.25,1.5];
+rows = manager.configuredFieldFunctionalRows(observations, weights);
+verifySize(testCase, rows, [2,2]);
+verifyTrue(testCase, all(isfinite(rows), "all"));
+
+cellVelocity = zeros(1,1,4,3);
+faceVelocity = zeros(1,1,3,3);
+derivative = manager.configuredFieldFunctionalRowsDirectionalDerivative( ...
+    observations, weights, cellVelocity, faceVelocity);
+verifySize(testCase, derivative, [1,2,2]);
+verifyEqual(testCase, derivative, zeros(1,2,2), "AbsTol", 1e-14);
+
+left = [1,-0.25; 0.5,2];
+right = [0.75;-1];
+contractions = manager.directionalDerivativeContractionsMany( ...
+    "tet", cellVelocity, faceVelocity, left, right);
+verifySize(testCase, contractions, [2,1]);
+verifyEqual(testCase, contractions, zeros(2,1), "AbsTol", 1e-14);
+clear cleanup
 end
 
 function testHACApKPlanar2DCellEdgeFarBlock(testCase)

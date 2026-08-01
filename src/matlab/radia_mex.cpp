@@ -1468,6 +1468,7 @@ mxArray* Commands() {
         "hacapk.charge_gram.wedge_directional_derivative",
         "hacapk.charge_gram.directional_derivative_operator",
         "hacapk.charge_gram.directional_derivative_contractions",
+        "hacapk.charge_gram.directional_derivative_contractions_many",
         "hacapk.charge_gram_derivative.destroy",
         "hacapk.charge_gram_derivative.info",
         "hacapk.charge_gram_derivative.entry",
@@ -1482,11 +1483,18 @@ mxArray* Commands() {
         "hacapk.charge_gram.configure_mass_matrix_ngsolve",
         "hacapk.charge_gram.configure_geometry_mass_matrix_ngsolve",
         "hacapk.charge_gram.restore_geometry_mass_matrix",
+        "hacapk.charge_gram.set_configured_constraints",
         "hacapk.charge_gram.operator_info", "hacapk.charge_gram.demag_matrix",
         "hacapk.charge_gram.demag_apply",
         "hacapk.charge_gram.geometry_mass_apply", "hacapk.charge_gram.mass_riesz",
+        "hacapk.charge_gram.apply_configured_linear_material_operator",
+        "hacapk.charge_gram.apply_configured_linear_material_operator_many",
+        "hacapk.charge_gram.reduce_configured_candidate_schur",
         "hacapk.charge_gram.solve_configured_linear_material",
         "hacapk.charge_gram.solve_configured_linear_material_auto_prec",
+        "hacapk.charge_gram.solve_configured_linear_material_auto_prec_many",
+        "hacapk.charge_gram.configured_field_functional_rows",
+        "hacapk.charge_gram.configured_field_functional_rows_directional_derivative",
         "hacapk.charge_gram.create_field_evaluator",
         "hacapk.charge_gram.create_planar_field_evaluator",
         "hacapk.charge_gram.stats",
@@ -6440,6 +6448,72 @@ void ChargeGramDirectionalDerivativeContractions(
     plhs[0] = RealColumn(values);
 }
 
+void ChargeGramDirectionalDerivativeContractionsMany(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 7, nlhs, 1,
+        "values = radia_mex('hacapk.charge_gram."
+        "directional_derivative_contractions_many', parent, family, "
+        "cell_velocity, face_velocity, left, right)");
+    ChargeGramHandle& parent = ChargeGram(Handle(prhs[1]));
+    const std::string family_name = Text(prhs[2], "family");
+    ChargeDerivativeFamily family;
+    std::size_t expected_cell_nodes = 0;
+    std::size_t expected_face_nodes = 0;
+    if (family_name == "hex") {
+        family = ChargeDerivativeFamily::Hex;
+        expected_cell_nodes = 27;
+        expected_face_nodes = 9;
+    } else if (family_name == "tet") {
+        family = ChargeDerivativeFamily::Tet;
+        expected_cell_nodes = 4;
+        expected_face_nodes = 3;
+    } else if (family_name == "wedge") {
+        family = ChargeDerivativeFamily::Wedge;
+        expected_cell_nodes = 18;
+        expected_face_nodes = 9;
+    } else {
+        BadArgument("family must be 'hex', 'tet', or 'wedge'");
+    }
+
+    std::size_t n_mode = 0, cell_count = 0, cell_nodes = 0;
+    std::size_t cell_components = 0, face_modes = 0, face_count = 0;
+    std::size_t face_nodes = 0, face_components = 0;
+    auto cell_velocity = RealTensor4(prhs[3], n_mode, cell_count, cell_nodes,
+                                     cell_components, "cell_velocity");
+    auto face_velocity = RealTensor4(prhs[4], face_modes, face_count, face_nodes,
+                                     face_components, "face_velocity");
+    if (n_mode == 0 || n_mode != face_modes)
+        BadArgument("cell_velocity and face_velocity must have the same positive mode count");
+    if (cell_nodes != expected_cell_nodes || cell_components != 3)
+        BadArgument("cell_velocity has the wrong node count for the selected family");
+    if (face_nodes != expected_face_nodes || face_components != 3)
+        BadArgument("face_velocity has the wrong node count for the selected family");
+    if (n_mode > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the derivative mode count exceeds the native integer range");
+
+    std::size_t n_left = 0, left_size = 0;
+    auto left = RealMatrix(prhs[5], n_left, left_size, "left");
+    auto right = RealVector(prhs[6], "right");
+    if (n_left == 0 || left_size != static_cast<std::size_t>(parent.n_dof) ||
+        right.size() != static_cast<std::size_t>(parent.n_dof))
+        BadArgument("left must be n_left-by-n_dof and right must contain n_dof entries");
+    if (n_left > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the left-vector count exceeds the native integer range");
+    const auto finite = [](double value) { return std::isfinite(value); };
+    if (!std::all_of(cell_velocity.begin(), cell_velocity.end(), finite) ||
+        !std::all_of(face_velocity.begin(), face_velocity.end(), finite) ||
+        !std::all_of(left.begin(), left.end(), finite) ||
+        !std::all_of(right.begin(), right.end(), finite))
+        BadArgument("derivative velocities and contraction vectors must be finite");
+    auto values = parent.manager->DirectionalDerivativeContractionsMany(
+        family, static_cast<int>(n_mode), static_cast<int>(n_left),
+        cell_velocity, face_velocity, left, right);
+    if (!std::all_of(values.begin(), values.end(), finite))
+        throw std::runtime_error(
+            "charge-Gram derivative contractions returned invalid values");
+    plhs[0] = RealMatrixOutput(values, n_left, n_mode);
+}
+
 void ChargeGramDerivativeInfo(int nlhs, mxArray* plhs[], int nrhs,
                               const mxArray* prhs[]) {
     CheckArity(nrhs, 2, nlhs, 1,
@@ -7603,6 +7677,17 @@ void ChargeGramRestoreGeometryMassMatrix(int nlhs, mxArray* plhs[], int nrhs,
     plhs[0] = mxCreateLogicalScalar(holder.manager->RestoreGeometryMassMatrix());
 }
 
+void ChargeGramSetConfiguredConstraints(int nlhs, mxArray*[], int nrhs,
+                                        const mxArray* prhs[]) {
+    CheckArity(nrhs, 4, nlhs, 0,
+        "radia_mex('hacapk.charge_gram.set_configured_constraints', "
+        "handle, dofs, preserve_existing)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    holder.manager->SetConfiguredConstraints(
+        IntegerVector(prhs[2], "dofs"),
+        Boolean(prhs[3], "preserve_existing"));
+}
+
 void ChargeGramOperatorInfo(int nlhs, mxArray* plhs[], int nrhs,
                             const mxArray* prhs[]) {
     CheckArity(nrhs, 2, nlhs, 1,
@@ -7665,6 +7750,92 @@ void ChargeGramConfiguredApply(const std::string& command, int nlhs,
     plhs[0] = RealColumn(y);
 }
 
+void ChargeGramLinearMaterialApply(const std::string& command, int nlhs,
+                                   mxArray* plhs[], int nrhs,
+                                   const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+        "y = radia_mex('hacapk.charge_gram."
+        "apply_configured_linear_material_operator[_many]', handle, "
+        "inv_chi, x, respect_constraints)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    const double inv_chi = Scalar(prhs[2], "inv_chi");
+    const bool respect_constraints = Boolean(prhs[4], "respect_constraints");
+    if (command ==
+        "hacapk.charge_gram.apply_configured_linear_material_operator") {
+        auto x = RealVector(prhs[3], "x");
+        auto y = holder.manager->ApplyConfiguredLinearMaterialOperator(
+            inv_chi, x, respect_constraints);
+        plhs[0] = RealColumn(y);
+        return;
+    }
+    std::size_t nrhs_value = 0, n_face = 0;
+    auto x = RealMatrix(prhs[3], nrhs_value, n_face, "x");
+    if (nrhs_value == 0 ||
+        n_face != static_cast<std::size_t>(holder.manager->ConfiguredNFace()))
+        BadArgument("x must have shape n_rhs-by-configured_n_face");
+    if (nrhs_value >
+        static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the right-hand-side count exceeds the native integer range");
+    auto y = holder.manager->ApplyConfiguredLinearMaterialOperatorMany(
+        inv_chi, x, static_cast<int>(nrhs_value), respect_constraints);
+    plhs[0] = RealMatrixOutput(y, nrhs_value, n_face);
+}
+
+void ChargeGramReduceConfiguredCandidateSchur(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 12, nlhs, 1,
+        "result = radia_mex('hacapk.charge_gram."
+        "reduce_configured_candidate_schur', handle, inv_chi, "
+        "candidate_dofs, rhs, state, response_matrix, adjoints, tol, "
+        "maxit, solve_batch_size, mass_riesz)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    const double inv_chi = Scalar(prhs[2], "inv_chi");
+    auto candidate_dofs = IntegerVector(prhs[3], "candidate_dofs");
+    auto rhs = RealVector(prhs[4], "rhs");
+    auto state = RealVector(prhs[5], "state");
+    std::size_t n_response = 0, response_cols = 0;
+    auto response = RealMatrix(
+        prhs[6], n_response, response_cols, "response_matrix");
+    std::size_t adjoint_rows = 0, adjoint_cols = 0;
+    auto adjoints = RealMatrix(
+        prhs[7], adjoint_rows, adjoint_cols, "adjoints");
+    const int n_face = holder.manager->ConfiguredNFace();
+    if (n_response == 0 || response_cols != static_cast<std::size_t>(n_face) ||
+        adjoint_rows != n_response || adjoint_cols != response_cols)
+        BadArgument(
+            "response_matrix and adjoints must share shape n_response-by-configured_n_face");
+    if (n_response >
+        static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the response count exceeds the native integer range");
+    const double tol = Scalar(prhs[8], "tol");
+    const int maxit = PositiveInteger(prhs[9], "maxit");
+    const int solve_batch_size = PositiveInteger(prhs[10], "solve_batch_size");
+    const bool mass_riesz = Boolean(prhs[11], "mass_riesz");
+    auto reduced = holder.manager->ReduceConfiguredCandidateSchur(
+        inv_chi, candidate_dofs, rhs, state, response, adjoints,
+        static_cast<int>(n_response), tol, maxit, solve_batch_size,
+        mass_riesz);
+    const char* fields[] = {"schur", "rhs", "response", "iters",
+                            "operator_s", "solve_s", "contraction_s"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 7, fields);
+    mxSetField(plhs[0], 0, "schur",
+        RealMatrixOutput(reduced.schur, reduced.n_candidate,
+                         reduced.n_candidate));
+    mxSetField(plhs[0], 0, "rhs", RealColumn(reduced.rhs));
+    mxSetField(plhs[0], 0, "response",
+        RealMatrixOutput(reduced.response, reduced.n_response,
+                         reduced.n_candidate));
+    const std::vector<double> iterations(
+        reduced.iterations.begin(), reduced.iterations.end());
+    mxSetField(plhs[0], 0, "iters", RealColumn(iterations));
+    mxSetField(plhs[0], 0, "operator_s",
+               mxCreateDoubleScalar(reduced.operator_s));
+    mxSetField(plhs[0], 0, "solve_s",
+               mxCreateDoubleScalar(reduced.solve_s));
+    mxSetField(plhs[0], 0, "contraction_s",
+               mxCreateDoubleScalar(reduced.contraction_s));
+}
+
 void ChargeGramSolveConfigured(const std::string& command, int nlhs,
                                mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     if (nlhs != 1 || nrhs < 4 || nrhs > 8)
@@ -7697,6 +7868,141 @@ void ChargeGramSolveConfigured(const std::string& command, int nlhs,
     mxSetField(plhs[0], 0, "prec_min", mxCreateDoubleScalar(prec_min));
     mxSetField(plhs[0], 0, "prec_max", mxCreateDoubleScalar(prec_max));
     mxSetField(plhs[0], 0, "timings", PairStructOutput(holder.manager->LastSolveTimings()));
+}
+
+void ChargeGramSolveConfiguredMany(int nlhs, mxArray* plhs[], int nrhs,
+                                   const mxArray* prhs[]) {
+    CheckArity(nrhs, 11, nlhs, 1,
+        "result = radia_mex('hacapk.charge_gram."
+        "solve_configured_linear_material_auto_prec_many', handle, "
+        "inv_chi, rhs, tol, maxit, cluster_coarse_size, "
+        "cluster_deflation_size, recycle_size, mass_riesz, x0)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    const double inv_chi = Scalar(prhs[2], "inv_chi");
+    std::size_t nrhs_value = 0, n_face = 0;
+    auto rhs = RealMatrix(prhs[3], nrhs_value, n_face, "rhs");
+    if (nrhs_value == 0 ||
+        n_face != static_cast<std::size_t>(holder.manager->ConfiguredNFace()))
+        BadArgument("rhs must have shape n_rhs-by-configured_n_face");
+    if (nrhs_value >
+        static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the right-hand-side count exceeds the native integer range");
+    const double tol = Scalar(prhs[4], "tol");
+    const int maxit = PositiveInteger(prhs[5], "maxit");
+    const int cluster_coarse_size =
+        NonnegativeInteger(prhs[6], "cluster_coarse_size");
+    const int cluster_deflation_size =
+        NonnegativeInteger(prhs[7], "cluster_deflation_size");
+    const int recycle_size = NonnegativeInteger(prhs[8], "recycle_size");
+    const bool mass_riesz = Boolean(prhs[9], "mass_riesz");
+    std::vector<double> x0;
+    const std::vector<double>* x0_ptr = nullptr;
+    if (mxGetNumberOfElements(prhs[10]) != 0) {
+        std::size_t x0_rows = 0, x0_cols = 0;
+        x0 = RealMatrix(prhs[10], x0_rows, x0_cols, "x0");
+        if (x0_rows != nrhs_value || x0_cols != n_face)
+            BadArgument("x0 must have the same shape as rhs");
+        x0_ptr = &x0;
+    }
+    std::vector<int> iterations;
+    double prec_min = 0.0, prec_max = 0.0;
+    double coarse_setup_s = 0.0, projection_s = 0.0;
+    int coarse_dim = 0, recycle_dim = 0;
+    auto result = holder.manager->SolveConfiguredLinearMaterialAutoPrecMany(
+        inv_chi, rhs, static_cast<int>(nrhs_value), tol, maxit,
+        cluster_coarse_size, cluster_deflation_size, recycle_size,
+        iterations, prec_min, prec_max, coarse_dim, recycle_dim,
+        coarse_setup_s, projection_s, mass_riesz, x0_ptr);
+    const char* fields[] = {
+        "m", "iters", "prec_min", "prec_max", "coarse_dim",
+        "recycle_dim", "coarse_setup_s", "projection_s",
+        "last_rhs_timings"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 9, fields);
+    mxSetField(plhs[0], 0, "m",
+               RealMatrixOutput(result, nrhs_value, n_face));
+    const std::vector<double> iteration_values(
+        iterations.begin(), iterations.end());
+    mxSetField(plhs[0], 0, "iters", RealColumn(iteration_values));
+    mxSetField(plhs[0], 0, "prec_min", mxCreateDoubleScalar(prec_min));
+    mxSetField(plhs[0], 0, "prec_max", mxCreateDoubleScalar(prec_max));
+    mxSetField(plhs[0], 0, "coarse_dim", mxCreateDoubleScalar(coarse_dim));
+    mxSetField(plhs[0], 0, "recycle_dim", mxCreateDoubleScalar(recycle_dim));
+    mxSetField(plhs[0], 0, "coarse_setup_s",
+               mxCreateDoubleScalar(coarse_setup_s));
+    mxSetField(plhs[0], 0, "projection_s",
+               mxCreateDoubleScalar(projection_s));
+    mxSetField(plhs[0], 0, "last_rhs_timings",
+               PairStructOutput(holder.manager->LastSolveTimings()));
+}
+
+void ChargeGramConfiguredFieldFunctionalRows(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 4, nlhs, 1,
+        "rows = radia_mex('hacapk.charge_gram."
+        "configured_field_functional_rows', handle, observations, weights)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    std::size_t n_observations = 0, observation_components = 0;
+    auto observations = RealMatrix(
+        prhs[2], n_observations, observation_components, "observations");
+    std::size_t n_rows = 0, weight_observations = 0;
+    std::size_t weight_components = 0;
+    auto weights = RealTensor3(prhs[3], n_rows, weight_observations,
+                               weight_components, "weights");
+    if (n_observations == 0 || observation_components != 3 || n_rows == 0 ||
+        weight_observations != n_observations || weight_components != 3)
+        BadArgument(
+            "observations must be n-by-3 and weights must be n_rows-by-n-by-3");
+    if (n_rows > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the functional-row count exceeds the native integer range");
+    auto rows = holder.manager->ConfiguredFieldFunctionalRows(
+        observations, weights, static_cast<int>(n_rows));
+    plhs[0] = RealMatrixOutput(
+        rows, n_rows,
+        static_cast<std::size_t>(holder.manager->ConfiguredNFace()));
+}
+
+void ChargeGramConfiguredFieldFunctionalRowsDirectionalDerivative(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 6, nlhs, 1,
+        "rows = radia_mex('hacapk.charge_gram."
+        "configured_field_functional_rows_directional_derivative', handle, "
+        "observations, weights, cell_vertex_velocity, face_vertex_velocity)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    std::size_t n_observations = 0, observation_components = 0;
+    auto observations = RealMatrix(
+        prhs[2], n_observations, observation_components, "observations");
+    std::size_t n_rows = 0, weight_observations = 0;
+    std::size_t weight_components = 0;
+    auto weights = RealTensor3(prhs[3], n_rows, weight_observations,
+                               weight_components, "weights");
+    std::size_t n_modes = 0, n_cells = 0, cell_nodes = 0;
+    std::size_t cell_components = 0;
+    auto cell_velocity = RealTensor4(
+        prhs[4], n_modes, n_cells, cell_nodes, cell_components,
+        "cell_vertex_velocity");
+    std::size_t face_modes = 0, n_faces = 0, face_nodes = 0;
+    std::size_t face_components = 0;
+    auto face_velocity = RealTensor4(
+        prhs[5], face_modes, n_faces, face_nodes, face_components,
+        "face_vertex_velocity");
+    if (n_observations == 0 || observation_components != 3 || n_rows == 0 ||
+        weight_observations != n_observations || weight_components != 3)
+        BadArgument(
+            "observations must be n-by-3 and weights must be n_rows-by-n-by-3");
+    if (n_modes == 0 || face_modes != n_modes || cell_nodes != 4 ||
+        face_nodes != 3 || cell_components != 3 || face_components != 3)
+        BadArgument(
+            "velocity arrays must be n_modes-by-n_host-by-n_node-by-3 for flat TET geometry");
+    if (n_rows > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
+        n_modes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the row or mode count exceeds the native integer range");
+    auto derivative =
+        holder.manager->ConfiguredFieldFunctionalRowsDirectionalDerivative(
+            observations, weights, static_cast<int>(n_rows),
+            static_cast<int>(n_modes), cell_velocity, face_velocity);
+    plhs[0] = RealTensor3Output(
+        derivative, n_modes, n_rows,
+        static_cast<std::size_t>(holder.manager->ConfiguredNFace()));
 }
 
 void ChargeGramCreateFieldEvaluator(int nlhs, mxArray* plhs[], int nrhs,
@@ -9882,6 +10188,44 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "hacapk.charge_gram.directional_derivative_contractions") {
         ChargeGramDirectionalDerivativeContractions(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command ==
+        "hacapk.charge_gram.directional_derivative_contractions_many") {
+        ChargeGramDirectionalDerivativeContractionsMany(
+            nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hacapk.charge_gram.set_configured_constraints") {
+        ChargeGramSetConfiguredConstraints(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command ==
+            "hacapk.charge_gram.apply_configured_linear_material_operator" ||
+        command ==
+            "hacapk.charge_gram.apply_configured_linear_material_operator_many") {
+        ChargeGramLinearMaterialApply(command, nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command ==
+        "hacapk.charge_gram.reduce_configured_candidate_schur") {
+        ChargeGramReduceConfiguredCandidateSchur(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command ==
+        "hacapk.charge_gram.solve_configured_linear_material_auto_prec_many") {
+        ChargeGramSolveConfiguredMany(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command ==
+        "hacapk.charge_gram.configured_field_functional_rows") {
+        ChargeGramConfiguredFieldFunctionalRows(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hacapk.charge_gram."
+                   "configured_field_functional_rows_directional_derivative") {
+        ChargeGramConfiguredFieldFunctionalRowsDirectionalDerivative(
+            nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "hacapk.charge_gram_derivative.destroy") {

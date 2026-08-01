@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.31"
+version = "4.95.32"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -82,6 +82,13 @@ build123d = [
     # expose XCAF labels, so a pythonocc-core-based reader is required
     # when the user wants labeled STEP ports.
     "build123d>=0.9",
+]
+beam = [
+    # Xsuite owns accelerator-coordinate Boris tracking. SciPy owns adaptive
+    # physical-time integration for closed orbits, electrostatic acceleration,
+    # and stop-event accounting. Radia only supplies SI field adapters.
+    "xtrack>=0.109.1",
+    "scipy>=1.11",
 ]
 viz = [
     "pyvista>=0.40",

@@ -354,6 +354,13 @@ public:
         ChargeDerivativeFamily family,int n_directions,
         const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
         const std::vector<double>& left,const std::vector<double>& right) const;
+    // Row-major [left][direction] contractions.  Derivative block evaluation
+    // and leaf ACA are shared by every left vector instead of being rebuilt
+    // once per adjoint functional.
+    std::vector<double> DirectionalDerivativeContractionsMany(
+        ChargeDerivativeFamily family,int n_directions,int n_left,
+        const std::vector<double>& cell_velocity,const std::vector<double>& face_velocity,
+        const std::vector<double>& left,const std::vector<double>& right) const;
     std::vector<double> TetVolumeSelfBlockDirectionalDerivative(
         int host, const std::vector<double>& vertex_velocity) const;
     std::vector<double> TetFaceSelfBlockDirectionalDerivative(
@@ -438,7 +445,11 @@ public:
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
         double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true,
-        const std::vector<double>* x0 = nullptr);
+        const std::vector<double>* x0 = nullptr,
+        const std::vector<double>* coarse_basis = nullptr,
+        const std::vector<double>* coarse_applied = nullptr,
+        const std::vector<double>* coarse_factor = nullptr,
+        int coarse_dim = 0);
     // Matrix-free postprocessing primitives used by the production planar and
     // three-dimensional HDiv paths.  ApplyDemagOperator computes B^T G B x
     // without materializing N.  ApplyMassRiesz computes M_mass^{-1} rhs with a
@@ -475,6 +486,8 @@ public:
     bool HasConfiguredGeometryMassMatrix() const { return m_operatorGeometryMassConfigured; }
     int ConfiguredNFace() const { return m_operatorNFace; }
     int ConfiguredConstraintCount() const;
+    void SetConfiguredConstraints(const std::vector<int>& dofs,
+                                  bool preserve_existing = false);
     std::vector<double> ApplyConfiguredDemag(
         const std::vector<double>& x, bool symmetric = true);
     void ApplyConfiguredDemag(
@@ -483,6 +496,39 @@ public:
         double scale, const double* x, double* y, bool symmetric = true);
     std::vector<double> ApplyConfiguredGeometryMass(const std::vector<double>& x);
     void ApplyConfiguredGeometryMass(const double* x, double* y);
+    // Apply A = inv_chi*M + B^T*G*B to one vector.  Candidate-element
+    // generation sets respect_constraints=false to extract full-strength
+    // Schur columns while the active solve keeps those DOFs constrained.
+    std::vector<double> ApplyConfiguredLinearMaterialOperator(
+        double inv_chi, const std::vector<double>& x,
+        bool respect_constraints = true);
+    // Row-major shared-operator application for finite-insertion columns.
+    // B, G, and M are traversed once per RHS batch; G uses the native
+    // HACApK MatVecSymMany kernel rather than repeated scalar Python calls.
+    std::vector<double> ApplyConfiguredLinearMaterialOperatorMany(
+        double inv_chi, const std::vector<double>& x, int nrhs,
+        bool respect_constraints = true);
+    struct CandidateSchurReduction {
+        std::vector<double> schur;       // row-major [n_candidate,n_candidate]
+        std::vector<double> rhs;         // [n_candidate]
+        std::vector<double> response;    // row-major [n_response,n_candidate]
+        std::vector<int> iterations;     // one active solve count per candidate DOF
+        int n_candidate = 0;
+        int n_response = 0;
+        double operator_s = 0.0;
+        double solve_s = 0.0;
+        double contraction_s = 0.0;
+    };
+    // Fuse A*e_j construction, constrained active solves, and Schur/response
+    // contractions for a screened candidate-DOF set.  Sparse topology and
+    // H-matrix state remain native; only the small reduced arrays return.
+    CandidateSchurReduction ReduceConfiguredCandidateSchur(
+        double inv_chi, const std::vector<int>& candidate_dofs,
+        const std::vector<double>& rhs, const std::vector<double>& state,
+        const std::vector<double>& response_matrix,
+        const std::vector<double>& adjoints, int n_response,
+        double tol, int maxit, int solve_batch_size,
+        bool mass_riesz = true);
     std::vector<double> ApplyConfiguredMassRiesz(const std::vector<double>& rhs);
     std::vector<double> SolveConfiguredLinearMaterial(
         double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
@@ -492,9 +538,50 @@ public:
         double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
         int& iters_out, double& prec_min, double& prec_max,
         const std::vector<double>* x0 = nullptr);
+    // Shared-operator multi-RHS solve used by HDiv-MMM topology optimization.
+    // The charge H-matrix cluster tree defines aggregate charge candidates,
+    // lifted to HDiv faces through D^-1 B^T.  A cluster Galerkin Rayleigh--Ritz
+    // contraction retains its lowest modes; a balanced two-level preconditioner
+    // and initial Galerkin correction deflate them for every right-hand side;
+    // already-converged solutions also form a small Ritz recycle space for
+    // later columns.  PCG's true-residual gate remains unchanged, so the
+    // acceleration does not change the converged system.  rhs/x0 are row-major
+    // [nrhs][n_face].
+    std::vector<double> SolveConfiguredLinearMaterialAutoPrecMany(
+        double inv_chi, const std::vector<double>& rhs, int nrhs,
+        double tol, int maxit, int cluster_coarse_size,
+        int cluster_deflation_size, int recycle_size,
+        std::vector<int>& iters_out, double& prec_min, double& prec_max,
+        int& coarse_dim_out, int& recycle_dim_out,
+        double& coarse_setup_s, double& projection_s,
+        bool mass_riesz = false,
+        const std::vector<double>* x0 = nullptr);
     std::shared_ptr<rad_hdiv::HDivFieldEvaluator> CreateConfiguredFieldEvaluator(
         const std::vector<double>& magnetization,
         const rad_hdiv::FieldEvaluatorOptions& options = {}) const;
+    // Exact flat-TET observation rows without constructing one global field
+    // evaluator per HDiv basis vector.  weights is row-major
+    // [n_rows,n_observations,3]; the return is row-major
+    // [n_rows,ConfiguredNFace()] and maps magnetization coefficients directly
+    // to H-field functionals (the Laplace 1/(4*pi) normalization is included).
+    // Each column materializes only the charge modes touched by that HDiv DOF,
+    // so work is linear in the sparse charge map rather than quadratic in the
+    // number of elements.  This is the exact analytic TET/TRI field kernel,
+    // not a volume-quadrature reciprocity approximation.
+    std::vector<double> ConfiguredFieldFunctionalRows(
+        const std::vector<double>& observations,
+        const std::vector<double>& weights, int n_rows) const;
+    // Analytic GetTrafo directional derivative of the exact rows above.
+    // Velocities are row-major [n_modes,ncell,4,3] and
+    // [n_modes,nface,3,3]; the return is
+    // [n_modes,n_rows,ConfiguredNFace()].  The flat-TET Piola B-rate,
+    // physical polynomial coefficients, analytic TET/TRI field moments, and
+    // image transforms are differentiated together in this C++ source.
+    std::vector<double> ConfiguredFieldFunctionalRowsDirectionalDerivative(
+        const std::vector<double>& observations,
+        const std::vector<double>& weights, int n_rows, int n_modes,
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
     std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> CreateConfiguredPlanarFieldEvaluator(
         const std::vector<double>& magnetization) const;
     std::vector<std::pair<std::string, double>> LastSolveTimings() const;
@@ -530,7 +617,8 @@ protected:
 private:
     friend class RadHACApKChargeGramDerivative;
     void ApplyConfiguredDemagImpl(
-        const double* x, double* y, double scale, bool add, bool symmetric);
+        const double* x, double* y, double scale, bool add, bool symmetric,
+        bool respect_constraints = true);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
     // IMA image term: (1/4pi) sum_p w_p PhiAt(src, R_mask(p)) -- tgt's outer points reflected on the mask

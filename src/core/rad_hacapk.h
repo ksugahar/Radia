@@ -118,6 +118,9 @@ public:
     // upper-triangular leaves -- valid for a symmetric cluster tree like the charge Gram).
     void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y);
     void MatVecSym(const std::vector<double>& x, std::vector<double>& y);
+    // Row-major [nrhs][ndof] BLAS-3 symmetric H-matrix application.
+    void MatVecSymMany(const std::vector<double>& x, int nrhs,
+                       std::vector<double>& y);
 
     /**
      * Update diagonal blocks when 1/chi changes (nonlinear iteration)

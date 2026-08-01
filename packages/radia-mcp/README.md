@@ -243,7 +243,7 @@ shown below for reference; everything else is discoverable via meta.
 | **radia-ngsolve** | `mcp-server-radia-ngsolve` | NGSolve FEM/BEM, Whitney elements via H1/HCurl/HDiv, PEEC inductance, **closed-form formulas** (Wakao-Igarashi Part 1-9, cuboid average B, Bessel impedance, etc.) |
 | **ih** | `mcp-server-ih` | Induction heating workflow: workpiece SIBC, ESIM nonlinear cell problem, Karl iteration, screening physics |
 | **peec** | `mcp-server-peec` | PEEC: Loop-Star, FastHenry, PyPEECBuilder, Bessel/Dowell/ESIM SIBC, PRIMA model-order reduction, SPICE extraction |
-| **electromagnet** | `mcp-server-electromagnet` | Accelerator magnet: CoilBuilder, Hantila polarization, B-input Play/Energy hysteresis, IMA sign selection, multipole harmonics |
+| **electromagnet** | `mcp-server-electromagnet` | Accelerator magnets: magnetic rigidity and beam-optics handoff, normal/ramped/superconducting design, field measurement, curated textbook guide, CoilBuilder, Hantila, hysteresis, IMA, and multipoles |
 
 ---
 

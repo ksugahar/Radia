@@ -743,6 +743,30 @@ void RadHACApKBase::MatVecSym(const std::vector<double>& x, std::vector<double>&
     }
 }
 
+void RadHACApKBase::MatVecSymMany(
+    const std::vector<double>& x, int nrhs, std::vector<double>& y)
+{
+    if (!m_valid || !m_leafmtxp || !m_control || nrhs < 1 ||
+        x.size() != static_cast<size_t>(nrhs)*m_ndof) {
+        throw std::runtime_error("MatVecSymMany: invalid operator or row-major batch shape");
+    }
+    y.assign(x.size(), 0.0);
+    HACApK_matvec_sym_many_wrapper(
+        m_leafmtxp, m_control, x.data(), y.data(), m_ndof, nrhs);
+    if (m_defl_nplaq > 0 && m_defl_alpha != 0.0)
+        for (int rhs = 0; rhs < nrhs; ++rhs)
+            for (int p = 0; p < m_defl_nplaq; ++p) {
+                double c = 0.0;
+                for (int k = m_defl_offsets[p]; k < m_defl_offsets[p+1]; ++k)
+                    c += m_defl_signs[k] *
+                         x[static_cast<size_t>(rhs)*m_ndof+m_defl_dofs[k]];
+                c *= m_defl_alpha;
+                for (int k = m_defl_offsets[p]; k < m_defl_offsets[p+1]; ++k)
+                    y[static_cast<size_t>(rhs)*m_ndof+m_defl_dofs[k]] +=
+                        m_defl_signs[k]*c;
+            }
+}
+
 void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
     if (!m_valid || !m_leafmtxp || !m_control) return;
 

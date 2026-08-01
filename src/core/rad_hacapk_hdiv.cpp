@@ -32,6 +32,8 @@ void HACApK_matvec_stats_get(double *values, int n_values,
 
 #ifdef HAVE_LAPACK
 #include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the HDiv mass for the MASS RIESZ precond
+#include "mkl_cblas.h"            // row-major cluster-space dense contractions
+#include "mkl_lapacke.h"          // small cluster Rayleigh--Ritz eigensolve
 namespace {
 // PARDISO is entered from the Python-facing solve while NGSolve may already
 // own a TaskManager pool.  MKL's process-wide thread setting is insufficient
@@ -126,6 +128,24 @@ struct MassRieszPardiso {
                 &idum, &nrhs, iparm, &msglvl, const_cast<double*>(rhs), x, &error);
         if (error != 0)
             throw std::runtime_error("MassRieszPardiso: PARDISO solve phase failed");
+    }
+    void SolveMany(const double* rhs, double* x, int rhs_count) {
+        // PARDISO stores dense right-hand sides column-major [n][nrhs].
+        // Radia's public row-major [nrhs][n] buffer is byte-identical: each
+        // right-hand side is one contiguous PARDISO column.
+        if (rhs_count < 1)
+            throw std::runtime_error(
+                "MassRieszPardiso: rhs_count must be positive");
+        ngcore::SuspendTaskManager stm;
+        PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
+        MKL_INT phase = 33, nrhs = static_cast<MKL_INT>(rhs_count);
+        MKL_INT idum = 0, error = 0;
+        pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(),
+                ia.data(), ja.data(), &idum, &nrhs, iparm, &msglvl,
+                const_cast<double*>(rhs), x, &error);
+        if (error != 0)
+            throw std::runtime_error(
+                "MassRieszPardiso: batched PARDISO solve phase failed");
     }
 };
 } // namespace
@@ -1836,9 +1856,66 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         double G[4]={},dG[4]={};for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<3;++k){G[2*i+j]+=a[i][k]*a[j][k];dG[2*i+j]+=da[i][k]*a[j][k]+a[i][k]*da[j][k];}const double det=G[0]*G[3]-G[1]*G[2];double GI[4]={G[3]/det,-G[1]/det,-G[2]/det,G[0]/det},dGI[4];for(int i=0;i<2;++i)for(int j=0;j<2;++j){double z=0;for(int k=0;k<2;++k)for(int l=0;l<2;++l)z+=GI[2*i+k]*dG[2*k+l]*GI[2*l+j];dGI[2*i+j]=-z;}double form[2][4]={},dform[2][4]={};for(int c=0;c<2;++c)for(int k=0;k<3;++k){form[c][k+1]=GI[2*c]*a[0][k]+GI[2*c+1]*a[1][k];dform[c][k+1]=dGI[2*c]*a[0][k]+GI[2*c]*da[0][k]+dGI[2*c+1]*a[1][k]+GI[2*c+1]*da[1][k];form[c][0]-=form[c][k+1]*V[0][k];dform[c][0]-=dform[c][k+1]*V[0][k]+form[c][k+1]*dV[0][k];}
         double mv[10],dm[10];rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];if(e[0]+e[1]>2||e[2])throw std::logic_error("analytic TET face derivative supports charge degree <= 2");double poly[10]={1},dpoly[10]={};int degree=0;for(int z=0;z<e[0];++z)MulLinear3(poly,dpoly,degree,form[0],dform[0]);for(int z=0;z<e[1];++z)MulLinear3(poly,dpoly,degree,form[1],dform[1]);val[l]=der[l]=0;for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){const int id=MomentIndex3(ax,ay,total-ax-ay);val[l]+=poly[id]*mv[id];der[l]+=dpoly[id]*mv[id]+poly[id]*dm[id];}}
     };
-    auto directed=[&](int kt,int ht,int ks,int hs){const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];std::vector<double>b((size_t)gt.size()*gs.size()),v,d;for(size_t q=0;q<m_qp[gt[0]].size();++q){const auto&pp=m_qp[gt[0]][q];double p[3]={pp[0],pp[1],pp[2]},dp[3],rate;target_kinematics(kt,ht,p,dp,rate);source_inner(ks,hs,p,dp,v,d);for(size_t i=0;i<gt.size();++i){const double w=m_qw[gt[i]][q];for(size_t j=0;j<gs.size();++j)b[i*gs.size()+j]+=w*(d[j]+rate*v[j]);}}for(double&x:b)x*=RAD_INV_FOUR_PI;return b;};
+    auto directed=[&](int kt,int ht,int ks,int hs,int reflection_mask){
+        const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
+        const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
+        std::vector<double>b((size_t)gt.size()*gs.size()),v,d;
+        for(size_t q=0;q<m_qp[gt[0]].size();++q){
+            const auto&pp=m_qp[gt[0]][q];
+            double p[3]={pp[0],pp[1],pp[2]},dp[3],rate;
+            target_kinematics(kt,ht,p,dp,rate);
+            // QuadDotRefl(tgt,src,mask) evaluates the ordinary source
+            // potential at R(x).  The mirror planes are fixed, so its exact
+            // directional derivative is obtained by reflecting both the
+            // moving outer point and its velocity; the measure rate is
+            // unchanged by the isometry.
+            for(int axis=0;axis<3;++axis)if(reflection_mask&(1<<axis)){
+                p[axis]=-p[axis];dp[axis]=-dp[axis];
+            }
+            source_inner(ks,hs,p,dp,v,d);
+            for(size_t i=0;i<gt.size();++i){
+                const double w=m_qw[gt[i]][q];
+                for(size_t j=0;j<gs.size();++j)
+                    b[i*gs.size()+j]+=w*(d[j]+rate*v[j]);
+            }
+        }
+        for(double&x:b)x*=RAD_INV_FOUR_PI;
+        return b;
+    };
     const int nh=nc+nf;
-    auto pair_block=[&](int ga,int gb){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc,kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];std::vector<double> block;if(ga==gb&&!m_polyCombo)block=ka==0?TetVolumeSelfBlockDirectionalDerivative(ha,std::vector<double>(cell_velocity.begin()+(size_t)ha*12,cell_velocity.begin()+(size_t)(ha+1)*12)):TetFaceSelfBlockDirectionalDerivative(ha,std::vector<double>(face_velocity.begin()+(size_t)ha*9,face_velocity.begin()+(size_t)(ha+1)*9));else{auto ab=directed(ka,ha,kb,hb),ba=directed(kb,hb,ka,ha);block.resize((size_t)A.size()*B.size());for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)block[i*B.size()+j]=.5*(ab[i*B.size()+j]+ba[j*A.size()+i]);}return block;};
+    auto pair_block=[&](int ga,int gb){
+        const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;
+        const int kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;
+        const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];
+        const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];
+        std::vector<double> block;
+        if(ga==gb&&!m_polyCombo)
+            block=ka==0
+                ?TetVolumeSelfBlockDirectionalDerivative(
+                    ha,std::vector<double>(cell_velocity.begin()+(size_t)ha*12,
+                                           cell_velocity.begin()+(size_t)(ha+1)*12))
+                :TetFaceSelfBlockDirectionalDerivative(
+                    ha,std::vector<double>(face_velocity.begin()+(size_t)ha*9,
+                                           face_velocity.begin()+(size_t)(ha+1)*9));
+        else{
+            auto ab=directed(ka,ha,kb,hb,0);
+            auto ba=directed(kb,hb,ka,ha,0);
+            block.resize((size_t)A.size()*B.size());
+            for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)
+                block[i*B.size()+j]=.5*(ab[i*B.size()+j]+ba[j*A.size()+i]);
+        }
+        // Differentiate the same symmetrized IMA fold used by the parent
+        // ChargeGram.  Image self-hosts are ordinary reflected pairs, never
+        // singular self-panel terms.
+        for(size_t image=0;image<m_image_masks.size();++image){
+            const auto ab=directed(ka,ha,kb,hb,m_image_masks[image]);
+            const auto ba=directed(kb,hb,ka,ha,m_image_masks[image]);
+            for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)
+                block[i*B.size()+j]+=m_image_signs[image]*.5*
+                    (ab[i*B.size()+j]+ba[j*A.size()+i]);
+        }
+        return block;
+    };
     if(selected_host_a>=0){if(selected_host_a>selected_host_b)std::swap(selected_host_a,selected_host_b);if(selected_host_b>=nh)throw std::out_of_range("TET derivative host out of range");return pair_block(selected_host_a,selected_host_b);}
     out.assign((size_t)m_n*m_n,0.0);
     for(int ga=0;ga<nh;++ga){const int ka=ga<nc?0:1,ha=ga<nc?ga:ga-nc;const auto&A=ka==0?m_hoCellCharges[ha]:m_hoFaceCharges[ha];for(int gb=ga;gb<nh;++gb){const int kb=gb<nc?0:1,hb=gb<nc?gb:gb-nc;const auto&B=kb==0?m_hoCellCharges[hb]:m_hoFaceCharges[hb];const auto block=pair_block(ga,gb);for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j){const double x=block[i*B.size()+j];out[(size_t)A[i]*m_n+B[j]]=x;out[(size_t)B[j]*m_n+A[i]]=x;}}}
@@ -4132,7 +4209,31 @@ double RadHACApKChargeGramDerivative::GetInteractionMatrixElement(int i,int j) c
 {
     if(i<0||j<0||i>=m_parent.m_n||j>=m_parent.m_n)throw std::out_of_range("ChargeGram derivative index out of range");
     if(m_family==ChargeDerivativeFamily::Wedge)return m_parent.WedgeChargeGramDirectionalDerivativeElement(i,j,m_cell_velocity,m_face_velocity,m_cache_token);
-    if(m_family==ChargeDerivativeFamily::Tet)return m_parent.TetChargeGramDirectionalDerivativeElement(i,j,m_cell_velocity,m_face_velocity,m_cache_token);
+    if(m_family==ChargeDerivativeFamily::Tet){
+        const int nc=(int)m_parent.m_hoCellCharges.size();
+        int oa=m_parent.m_kind[i]==0?m_parent.m_host[i]:nc+m_parent.m_host[i];
+        int ob=m_parent.m_kind[j]==0?m_parent.m_host[j]:nc+m_parent.m_host[j];
+        int li=m_parent.m_hoLocalOf[i],lj=m_parent.m_hoLocalOf[j];
+        if(oa>ob){std::swap(oa,ob);std::swap(li,lj);}
+        const long long key=((long long)oa<<32)|(unsigned)ob;
+        {
+            std::lock_guard<std::mutex> lock(m_cache_mutex);
+            auto it=m_block_cache.find(key);
+            if(it!=m_block_cache.end()){
+                const int kb=ob<nc?0:1,hb=ob<nc?ob:ob-nc;
+                const int nb=kb==0?(int)m_parent.m_hoCellCharges[hb].size():(int)m_parent.m_hoFaceCharges[hb].size();
+                return it->second[(size_t)li*nb+lj];
+            }
+        }
+        auto computed=m_parent.TetChargeGramDirectionalDerivativeImpl(
+            m_cell_velocity,m_face_velocity,oa,ob);
+        std::lock_guard<std::mutex> lock(m_cache_mutex);
+        if(m_block_cache.size()>HexBlockCacheLimit())m_block_cache.clear();
+        auto it=m_block_cache.emplace(key,std::move(computed)).first;
+        const int kb=ob<nc?0:1,hb=ob<nc?ob:ob-nc;
+        const int nb=kb==0?(int)m_parent.m_hoCellCharges[hb].size():(int)m_parent.m_hoFaceCharges[hb].size();
+        return it->second[(size_t)li*nb+lj];
+    }
     const int ki=m_parent.m_kind[i],kj=m_parent.m_kind[j],hi=m_parent.m_host[i],hj=m_parent.m_host[j];
     int ga=ki==0?hi:(int)m_parent.m_cellCharges.size()+hi,gb=kj==0?hj:(int)m_parent.m_cellCharges.size()+hj;
     const bool transpose=ga>gb;if(transpose){std::swap(ga,gb);}
@@ -4192,13 +4293,8 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
     const auto* control=static_cast<const st_cHACApK_lcontrol_t*>(m_control);
     const bool useTree=IsValid()&&leaves&&control&&control->lod;
     std::vector<double> result((size_t)nDirections,0.0);
-    // Stream one direction at a time.  The derivative objects are independent,
-    // but their exact-entry kernels read through the same parent ChargeGram
-    // and its native quadrature/cache state.  Concurrent mode traversal is not
-    // reentrant on Windows and intermittently corrupts the process heap after
-    // an earlier NGSolve TaskManager region has closed.  Serial streaming keeps
-    // peak storage at one derivative and leaves parallelism to the surrounding
-    // FE/H-matrix operations.
+    // Stream one direction at a time.  Exact-entry kernels read through the
+    // same parent ChargeGram quadrature/cache state, which is not reentrant.
     for(int kk=0;kk<nDirections;++kk){
         std::vector<double> cv(cellVelocity.begin()+kk*cellStride,cellVelocity.begin()+(kk+1)*cellStride);
         std::vector<double> fv(faceVelocity.begin()+kk*faceStride,faceVelocity.begin()+(kk+1)*faceStride);
@@ -4268,6 +4364,139 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractions(
             }
         }
         result[kk]=(double)sum;
+    }
+    return result;
+}
+
+std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractionsMany(
+    ChargeDerivativeFamily family,int nDirections,int nLeft,
+    const std::vector<double>& cellVelocity,const std::vector<double>& faceVelocity,
+    const std::vector<double>& left,const std::vector<double>& right) const
+{
+    if(nDirections<1||nLeft<1)
+        throw std::invalid_argument("n_directions and n_left must be positive");
+    if(left.size()!=(size_t)nLeft*m_n||right.size()!=(size_t)m_n)
+        throw std::invalid_argument("left matrix/right vector must match ChargeGram ndof");
+    size_t cellStride=0,faceStride=0,cellNodeStride=0,faceNodeStride=0;
+    if(family==ChargeDerivativeFamily::Hex){cellNodeStride=81;faceNodeStride=27;cellStride=m_cellCharges.size()*81;faceStride=m_faceCharges.size()*27;}
+    else if(family==ChargeDerivativeFamily::Tet){cellNodeStride=12;faceNodeStride=9;cellStride=m_hoCellCharges.size()*12;faceStride=m_hoFaceCharges.size()*9;}
+    else {cellNodeStride=54;faceNodeStride=27;cellStride=m_cellCharges.size()*54;faceStride=m_faceCharges.size()*27;}
+    if(cellVelocity.size()!=(size_t)nDirections*cellStride||faceVelocity.size()!=(size_t)nDirections*faceStride)
+        throw std::invalid_argument("batched derivative velocity shape mismatch");
+    const auto* leaves=static_cast<const st_cHACApK_leafmtxp_t*>(m_leafmtxp);
+    const auto* control=static_cast<const st_cHACApK_lcontrol_t*>(m_control);
+    const bool useTree=IsValid()&&leaves&&control&&control->lod;
+    std::vector<double> result((size_t)nLeft*nDirections,0.0);
+    auto hostActive=[](const std::vector<double>& velocity,size_t offset,size_t count){
+        for(size_t p=offset;p<offset+count;++p)if(velocity[p]!=0.0)return true;
+        return false;
+    };
+    std::vector<std::unique_ptr<RadHACApKChargeGramDerivative>> derivatives((size_t)nDirections);
+    std::vector<std::vector<unsigned char>> activeByDirection((size_t)nDirections);
+    for(int kk=0;kk<nDirections;++kk){
+        std::vector<double> cv(cellVelocity.begin()+(size_t)kk*cellStride,
+                               cellVelocity.begin()+(size_t)(kk+1)*cellStride);
+        std::vector<double> fv(faceVelocity.begin()+(size_t)kk*faceStride,
+                               faceVelocity.begin()+(size_t)(kk+1)*faceStride);
+        auto& active=activeByDirection[(size_t)kk];active.assign((size_t)m_n,0);
+        for(int charge=0;charge<m_n;++charge){const int kind=m_kind[charge],host=m_host[charge];active[charge]=
+            kind==0?hostActive(cv,(size_t)host*cellNodeStride,cellNodeStride)
+                   :hostActive(fv,(size_t)host*faceNodeStride,faceNodeStride);}
+        derivatives[(size_t)kk]=std::make_unique<RadHACApKChargeGramDerivative>(
+            *this,family,std::move(cv),std::move(fv));
+    }
+    if(!useTree){
+        for(int kk=0;kk<nDirections;++kk){
+            auto& derivative=*derivatives[kk];
+            std::vector<long double> sums((size_t)nLeft,0.0L);
+            for(int i=0;i<m_n;++i){
+                const double diagonal=derivative.GetInteractionMatrixElement(i,i);
+                for(int ll=0;ll<nLeft;++ll)sums[ll]+=(long double)left[(size_t)ll*m_n+i]*diagonal*right[i];
+                for(int j=i+1;j<m_n;++j){
+                    const double a=derivative.GetInteractionMatrixElement(i,j);
+                    for(int ll=0;ll<nLeft;++ll){const double* l=&left[(size_t)ll*m_n];sums[ll]+=(long double)a*((long double)l[i]*right[j]+(long double)l[j]*right[i]);}
+                }
+            }
+            for(int ll=0;ll<nLeft;++ll)result[(size_t)ll*nDirections+kk]=(double)sums[ll];
+        }
+        return result;
+    }
+
+    // Keep the multi-left contraction batched, but traverse direction chunks
+    // serially so exact-entry kernels never reenter the shared parent Gram.
+    // Each chunk keeps a private sum and no derivative H-matrix is materialised.
+    const int nLeaves=leaves->nlf;
+    const int targetTasks=std::max(1,4*radia::GetMaxThreads());
+    const int chunksPerDirection=std::min(nLeaves,
+        std::max(1,(targetTasks+nDirections-1)/nDirections));
+    const int nTasks=nDirections*chunksPerDirection;
+    std::vector<long double> partial((size_t)nTasks*nLeft,0.0L);
+    for(size_t task=0;task<(size_t)nTasks;++task){
+        const int kk=(int)task/chunksPerDirection;
+        const int chunk=(int)task%chunksPerDirection;
+        const int first=1+(int)((long long)chunk*nLeaves/chunksPerDirection);
+        const int last=1+(int)((long long)(chunk+1)*nLeaves/chunksPerDirection);
+        auto& derivative=*derivatives[(size_t)kk];
+        const auto& active=activeByDirection[(size_t)kk];
+        std::vector<long double> sums((size_t)nLeft,0.0L);
+        for(int ip=first;ip<last;++ip){
+            const st_cHACApK_leafmtx_t* leaf=leaves->st_lf[ip];
+            if(!leaf||leaf->nstrtl>leaf->nstrtt)continue;
+            const int nr=leaf->ndl,nc=leaf->ndt,r0=leaf->nstrtl,c0=leaf->nstrtt;
+            bool blockActive=false;
+            for(int i=0;i<nr&&!blockActive;++i)blockActive=active[(size_t)control->lod[r0+i]-1]!=0;
+            for(int j=0;j<nc&&!blockActive;++j)blockActive=active[(size_t)control->lod[c0+j]-1]!=0;
+            if(!blockActive)continue;
+            const bool upper=r0<c0;
+            auto rowDof=[&](int i){return control->lod[r0+i]-1;};
+            auto colDof=[&](int j){return control->lod[c0+j]-1;};
+            auto addRankOne=[&](const std::vector<double>&u,const std::vector<double>&v){
+                long double ur=0,vr=0;
+                for(int i=0;i<nr;++i)ur+=(long double)u[i]*right[rowDof(i)];
+                for(int j=0;j<nc;++j)vr+=(long double)v[j]*right[colDof(j)];
+                for(int ll=0;ll<nLeft;++ll){
+                    const double* l=&left[(size_t)ll*m_n];long double lu=0,lv=0;
+                    for(int i=0;i<nr;++i)lu+=(long double)l[rowDof(i)]*u[i];
+                    for(int j=0;j<nc;++j)lv+=(long double)l[colDof(j)]*v[j];
+                    sums[ll]+=lu*vr;if(upper)sums[ll]+=lv*ur;
+                }
+            };
+            if(leaf->ltmtx!=1){
+                for(int i=0;i<nr;++i){const int gi=rowDof(i);for(int j=0;j<nc;++j){const int gj=colDof(j);const double a=derivative.GetInteractionMatrixElement(gi,gj);for(int ll=0;ll<nLeft;++ll){const double* l=&left[(size_t)ll*m_n];sums[ll]+=(long double)l[gi]*a*right[gj];if(upper)sums[ll]+=(long double)l[gj]*a*right[gi];}}}
+                continue;
+            }
+            const int rankLimit=std::min({nr,nc,m_derivativeMaxRank});
+            std::vector<std::vector<double>> us,vs;us.reserve(rankLimit);vs.reserve(rankLimit);
+            std::vector<unsigned char> used((size_t)nr,0);int pivotRow=0;
+            long double approximationNorm2=0;
+            for(int rank=0;rank<rankLimit;++rank){
+                std::vector<double> v((size_t)nc),u((size_t)nr);
+                int pivotCol=-1;double pivotAbs=0;
+                for(int attempt=0;attempt<nr&&pivotCol<0;++attempt){
+                    while(pivotRow<nr&&used[pivotRow])++pivotRow;
+                    if(pivotRow>=nr){pivotRow=0;while(pivotRow<nr&&used[pivotRow])++pivotRow;}
+                    if(pivotRow>=nr)break;
+                    for(int j=0;j<nc;++j){double value=derivative.GetInteractionMatrixElement(rowDof(pivotRow),colDof(j));for(size_t s=0;s<us.size();++s)value-=us[s][pivotRow]*vs[s][j];v[j]=value;if(std::abs(value)>pivotAbs){pivotAbs=std::abs(value);pivotCol=j;}}
+                    if(pivotAbs<=1e-30){used[pivotRow]=1;pivotCol=-1;pivotAbs=0;++pivotRow;}
+                }
+                if(pivotCol<0)break;
+                const double pivot=v[pivotCol];
+                for(int i=0;i<nr;++i){double value=derivative.GetInteractionMatrixElement(rowDof(i),colDof(pivotCol));for(size_t s=0;s<us.size();++s)value-=us[s][i]*vs[s][pivotCol];u[i]=value/pivot;}
+                used[pivotRow]=1;addRankOne(u,v);
+                long double un2=0,vn2=0,cross=0;for(double x:u)un2+=(long double)x*x;for(double x:v)vn2+=(long double)x*x;
+                for(size_t s=0;s<us.size();++s){long double uu=0,vv=0;for(int i=0;i<nr;++i)uu+=(long double)us[s][i]*u[i];for(int j=0;j<nc;++j)vv+=(long double)vs[s][j]*v[j];cross+=uu*vv;}
+                const long double termNorm2=un2*vn2;approximationNorm2+=termNorm2+2*cross;
+                us.push_back(std::move(u));vs.push_back(std::move(v));
+                int next=-1;double nextAbs=0;for(int i=0;i<nr;++i)if(!used[i]&&std::abs(us.back()[i])>nextAbs){nextAbs=std::abs(us.back()[i]);next=i;}pivotRow=next<0?0:next;
+                if(rank>0&&termNorm2<=m_derivativeAcaEps*m_derivativeAcaEps*std::max((long double)0,approximationNorm2))break;
+            }
+        }
+        for(int ll=0;ll<nLeft;++ll)partial[task*(size_t)nLeft+ll]=sums[ll];
+    }
+    for(int kk=0;kk<nDirections;++kk)for(int chunk=0;chunk<chunksPerDirection;++chunk){
+        const size_t task=(size_t)kk*chunksPerDirection+chunk;
+        for(int ll=0;ll<nLeft;++ll)
+            result[(size_t)ll*nDirections+kk]+=(double)partial[task*(size_t)nLeft+ll];
     }
     return result;
 }
@@ -6235,7 +6464,11 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
     double tol, int maxit, int& iters_out, bool mass_riesz, bool symmetric,
-    const std::vector<double>* x0)
+    const std::vector<double>* x0,
+    const std::vector<double>* coarse_basis,
+    const std::vector<double>* coarse_applied,
+    const std::vector<double>* coarse_factor,
+    int coarse_dim)
 {
     using Clock = std::chrono::steady_clock;
     auto elapsed = [](Clock::time_point a, Clock::time_point b) {
@@ -6247,6 +6480,15 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
     if ((int)rhs.size() != n_face)
         throw std::runtime_error("SolveLinearMaterial: rhs size mismatch");
+    const bool balanced_cluster_prec = coarse_dim > 0;
+    if (coarse_dim < 0 ||
+        (balanced_cluster_prec &&
+         (!coarse_basis || !coarse_applied || !coarse_factor ||
+          coarse_basis->size() != static_cast<size_t>(coarse_dim) * n_face ||
+          coarse_applied->size() != static_cast<size_t>(coarse_dim) * n_face ||
+          coarse_factor->size() != static_cast<size_t>(coarse_dim) * coarse_dim)))
+        throw std::runtime_error(
+            "SolveLinearMaterial: invalid cluster coarse preconditioner");
     const bool constrained = m_operatorConstrained.size() == (size_t)n_face &&
         std::any_of(m_operatorConstrained.begin(), m_operatorConstrained.end(),
                     [](unsigned char value) { return value != 0; });
@@ -6340,6 +6582,26 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         ? m_operatorMassIndices : local_mass_col;
     const std::vector<double>& mass_val = configured_mass
         ? m_operatorMassData : local_mass_val;
+    auto coarse_solve = [&](std::vector<double>& value) {
+        for (int i = 0; i < coarse_dim; ++i) {
+            for (int j = 0; j < i; ++j)
+                value[static_cast<size_t>(i)] -=
+                    (*coarse_factor)[static_cast<size_t>(i)*coarse_dim+j] *
+                    value[static_cast<size_t>(j)];
+            value[static_cast<size_t>(i)] /=
+                (*coarse_factor)[static_cast<size_t>(i)*coarse_dim+i];
+        }
+        for (int ii = coarse_dim; ii-- > 0;) {
+            for (int j = ii + 1; j < coarse_dim; ++j)
+                value[static_cast<size_t>(ii)] -=
+                    (*coarse_factor)[static_cast<size_t>(j)*coarse_dim+ii] *
+                    value[static_cast<size_t>(j)];
+            value[static_cast<size_t>(ii)] /=
+                (*coarse_factor)[static_cast<size_t>(ii)*coarse_dim+ii];
+        }
+    };
+    std::vector<double> coarse_r_work(static_cast<size_t>(coarse_dim), 0.0);
+    std::vector<double> coarse_d_work(static_cast<size_t>(coarse_dim), 0.0);
     auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
         const auto t0 = Clock::now();
 #ifdef HAVE_LAPACK
@@ -6351,7 +6613,76 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
             return;
         }
 #endif
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
+        if (!balanced_cluster_prec) {
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                zz[f] = rr[f] / prec[f];
+            });
+        }
+        else {
+            // Balanced two-level preconditioner
+            //   P^T D^-1 P + Z (Z^T A Z)^-1 Z^T,
+            // P = I - A Z (Z^T A Z)^-1 Z^T.
+            // Z and A*Z come directly from the H-matrix cluster tree and are
+            // precomputed once per RHS batch.  This is true deflation during
+            // every PCG iteration, not merely a one-off coarse initial guess.
+            std::fill(coarse_r_work.begin(), coarse_r_work.end(), 0.0);
+#ifdef HAVE_LAPACK
+            cblas_dgemv(CblasRowMajor, CblasNoTrans, coarse_dim, n_face,
+                        1.0, coarse_basis->data(), n_face, rr.data(), 1,
+                        0.0, coarse_r_work.data(), 1);
+#else
+            for (int c = 0; c < coarse_dim; ++c) {
+                const double* zc = coarse_basis->data() + static_cast<size_t>(c)*n_face;
+                for (int f = 0; f < n_face; ++f)
+                    coarse_r_work[static_cast<size_t>(c)] += zc[f] * rr[static_cast<size_t>(f)];
+            }
+#endif
+            coarse_solve(coarse_r_work);
+#ifdef HAVE_LAPACK
+            std::copy(rr.begin(), rr.end(), zz.begin());
+            cblas_dgemv(CblasRowMajor, CblasTrans, coarse_dim, n_face,
+                        -1.0, coarse_applied->data(), n_face,
+                        coarse_r_work.data(), 1, 1.0, zz.data(), 1);
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                zz[f] /= prec[f];
+            });
+            std::fill(coarse_d_work.begin(), coarse_d_work.end(), 0.0);
+            cblas_dgemv(CblasRowMajor, CblasNoTrans, coarse_dim, n_face,
+                        1.0, coarse_applied->data(), n_face, zz.data(), 1,
+                        0.0, coarse_d_work.data(), 1);
+#else
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                double projected = rr[f];
+                for (int c = 0; c < coarse_dim; ++c)
+                    projected -= (*coarse_applied)[static_cast<size_t>(c)*n_face+f] *
+                                 coarse_r_work[static_cast<size_t>(c)];
+                zz[f] = projected / prec[f];
+            });
+            std::fill(coarse_d_work.begin(), coarse_d_work.end(), 0.0);
+            for (int c = 0; c < coarse_dim; ++c) {
+                const double* azc = coarse_applied->data() + static_cast<size_t>(c)*n_face;
+                for (int f = 0; f < n_face; ++f)
+                    coarse_d_work[static_cast<size_t>(c)] += azc[f] * zz[static_cast<size_t>(f)];
+            }
+#endif
+            coarse_solve(coarse_d_work);
+#ifdef HAVE_LAPACK
+            for (int c = 0; c < coarse_dim; ++c)
+                coarse_d_work[static_cast<size_t>(c)] =
+                    coarse_r_work[static_cast<size_t>(c)] -
+                    coarse_d_work[static_cast<size_t>(c)];
+            cblas_dgemv(CblasRowMajor, CblasTrans, coarse_dim, n_face,
+                        1.0, coarse_basis->data(), n_face,
+                        coarse_d_work.data(), 1, 1.0, zz.data(), 1);
+#else
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                for (int c = 0; c < coarse_dim; ++c)
+                    zz[f] += (*coarse_basis)[static_cast<size_t>(c)*n_face+f] *
+                             (coarse_r_work[static_cast<size_t>(c)] -
+                              coarse_d_work[static_cast<size_t>(c)]);
+            });
+#endif
+        }
         m_lastSolveTiming.prec_s += elapsed(t0, Clock::now());
         ++m_lastSolveTiming.prec_count;
     };
@@ -6728,6 +7059,24 @@ int RadHACApKChargeGram::ConfiguredConstraintCount() const
                               [](unsigned char value) { return value != 0; });
 }
 
+void RadHACApKChargeGram::SetConfiguredConstraints(
+    const std::vector<int>& dofs, bool preserve_existing)
+{
+    if (!m_operatorChargeConfigured || m_operatorNFace < 0)
+        throw std::runtime_error(
+            "SetConfiguredConstraints: charge map must be configured first");
+    if (m_operatorConstrained.size() != static_cast<size_t>(m_operatorNFace))
+        m_operatorConstrained.assign(static_cast<size_t>(m_operatorNFace), 0);
+    else if (!preserve_existing)
+        std::fill(m_operatorConstrained.begin(), m_operatorConstrained.end(), 0);
+    for (int dof : dofs) {
+        if (dof < 0 || dof >= m_operatorNFace)
+            throw std::out_of_range(
+                "SetConfiguredConstraints: DOF index out of range");
+        m_operatorConstrained[static_cast<size_t>(dof)] = 1;
+    }
+}
+
 void RadHACApKChargeGram::ConfigureMassMatrix(
     std::vector<int> mI, std::vector<int> mJ,
     std::vector<double> mV, int n_face)
@@ -6845,7 +7194,8 @@ void RadHACApKChargeGram::ApplyConfiguredDemagAdd(
 }
 
 void RadHACApKChargeGram::ApplyConfiguredDemagImpl(
-    const double* x, double* y, double scale, bool add, bool symmetric)
+    const double* x, double* y, double scale, bool add, bool symmetric,
+    bool respect_constraints)
 {
     if (!m_operatorChargeConfigured)
         throw std::runtime_error("ApplyConfiguredDemag: charge map is not configured");
@@ -6883,7 +7233,8 @@ void RadHACApKChargeGram::ApplyConfiguredDemagImpl(
             for (int k = m_operatorBTIndptr[row]; k < m_operatorBTIndptr[row + 1]; ++k)
                 sum += m_operatorBTData[(size_t)k] *
                        Gq_data[(size_t)m_operatorBTIndices[(size_t)k]];
-            if (!m_operatorConstrained[f]) y[f] += scale * sum;
+            if (!respect_constraints || !m_operatorConstrained[f])
+                y[f] += scale * sum;
         });
     }
 }
@@ -6989,7 +7340,1420 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(
     return SolveLinearMaterial(m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
                                n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
                                inv_chi, prec, rhs, tol, maxit, iters_out,
-                               /*mass_riesz=*/false, /*symmetric=*/true, x0);
+                                /*mass_riesz=*/false, /*symmetric=*/true, x0);
+}
+
+std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperator(
+    double inv_chi, const std::vector<double>& x, bool respect_constraints)
+{
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "ApplyConfiguredLinearMaterialOperator: charge map and mass matrix must be configured");
+    if (static_cast<int>(x.size()) != m_operatorNFace)
+        throw std::runtime_error(
+            "ApplyConfiguredLinearMaterialOperator: x size mismatch");
+    if (!std::isfinite(inv_chi) || inv_chi < 0.0)
+        throw std::runtime_error(
+            "ApplyConfiguredLinearMaterialOperator: inv_chi must be finite and nonnegative");
+    std::vector<double> y(static_cast<size_t>(m_operatorNFace), 0.0);
+    ApplyConfiguredDemagImpl(x.data(), y.data(), 1.0, false, true,
+                             respect_constraints);
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](size_t row) {
+        if (respect_constraints && m_operatorConstrained[row]) {
+            y[row] = 0.0;
+            return;
+        }
+        double value = 0.0;
+        for (int k = m_operatorMassIndptr[row];
+             k < m_operatorMassIndptr[row + 1]; ++k)
+            value += m_operatorMassData[static_cast<size_t>(k)] *
+                     x[static_cast<size_t>(m_operatorMassIndices[static_cast<size_t>(k)])];
+        y[row] += inv_chi * value;
+    });
+    return y;
+}
+
+std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMany(
+    double inv_chi, const std::vector<double>& x, int nrhs,
+    bool respect_constraints)
+{
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "ApplyConfiguredLinearMaterialOperatorMany: charge map and mass matrix must be configured");
+    const int n_face = m_operatorNFace;
+    if (nrhs < 1 || static_cast<int64_t>(x.size()) !=
+            static_cast<int64_t>(nrhs)*n_face)
+        throw std::runtime_error(
+            "ApplyConfiguredLinearMaterialOperatorMany: x must be row-major [nrhs][n_face]");
+    if (!std::isfinite(inv_chi) || inv_chi < 0.0)
+        throw std::runtime_error(
+            "ApplyConfiguredLinearMaterialOperatorMany: inv_chi must be finite and nonnegative");
+    const size_t face_total = static_cast<size_t>(nrhs)*n_face;
+    std::vector<double> y(face_total, 0.0);
+    for (int component = 0; component < m_operatorChargeComponents; ++component) {
+        std::vector<double> charge(static_cast<size_t>(nrhs)*m_ndof, 0.0);
+        const size_t row_offset = static_cast<size_t>(component)*m_ndof;
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(
+                ngcore::IntRange(static_cast<size_t>(nrhs)*m_ndof),
+                [&](size_t index) {
+                    const int rhs = static_cast<int>(index/m_ndof);
+                    const int row = static_cast<int>(index%m_ndof);
+                    double value = 0.0;
+                    const size_t mapped = row_offset+static_cast<size_t>(row);
+                    for (int k = m_operatorBIndptr[mapped];
+                         k < m_operatorBIndptr[mapped+1]; ++k)
+                        value += m_operatorBData[static_cast<size_t>(k)] *
+                            x[static_cast<size_t>(rhs)*n_face+
+                              m_operatorBIndices[static_cast<size_t>(k)]];
+                    charge[index] = value;
+                });
+        }
+        std::vector<double> gcharge;
+        MatVecSymMany(charge, nrhs, gcharge);
+        const size_t bt_offset = static_cast<size_t>(component)*n_face;
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(face_total), [&](size_t index) {
+                const int rhs = static_cast<int>(index/n_face);
+                const int face = static_cast<int>(index%n_face);
+                if (respect_constraints &&
+                    m_operatorConstrained[static_cast<size_t>(face)]) return;
+                double value = 0.0;
+                const size_t mapped = bt_offset+static_cast<size_t>(face);
+                for (int k = m_operatorBTIndptr[mapped];
+                     k < m_operatorBTIndptr[mapped+1]; ++k)
+                    value += m_operatorBTData[static_cast<size_t>(k)] *
+                        gcharge[static_cast<size_t>(rhs)*m_ndof+
+                                m_operatorBTIndices[static_cast<size_t>(k)]];
+                y[index] += value;
+            });
+        }
+    }
+    {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(face_total), [&](size_t index) {
+            const int rhs = static_cast<int>(index/n_face);
+            const int row = static_cast<int>(index%n_face);
+            if (respect_constraints &&
+                m_operatorConstrained[static_cast<size_t>(row)]) {
+                y[index] = 0.0;
+                return;
+            }
+            double value = 0.0;
+            for (int k = m_operatorMassIndptr[static_cast<size_t>(row)];
+                 k < m_operatorMassIndptr[static_cast<size_t>(row)+1]; ++k)
+                value += m_operatorMassData[static_cast<size_t>(k)] *
+                    x[static_cast<size_t>(rhs)*n_face+
+                      m_operatorMassIndices[static_cast<size_t>(k)]];
+            y[index] += inv_chi*value;
+        });
+    }
+    return y;
+}
+
+RadHACApKChargeGram::CandidateSchurReduction
+RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
+    double inv_chi, const std::vector<int>& candidate_dofs,
+    const std::vector<double>& rhs, const std::vector<double>& state,
+    const std::vector<double>& response_matrix,
+    const std::vector<double>& adjoints, int n_response,
+    double tol, int maxit, int solve_batch_size, bool mass_riesz)
+{
+    using Clock = std::chrono::steady_clock;
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateSchur: charge map and mass matrix must be configured");
+    const int n_face = m_operatorNFace;
+    const int nc = static_cast<int>(candidate_dofs.size());
+    if (!std::isfinite(inv_chi) || inv_chi < 0.0 ||
+        !std::isfinite(tol) || tol <= 0.0 || maxit < 1)
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateSchur: invalid material or solver parameters");
+    if (nc < 1 || n_response < 1 || solve_batch_size < 1)
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateSchur: candidate, response, and batch dimensions must be positive");
+    if (static_cast<int>(rhs.size()) != n_face ||
+        static_cast<int>(state.size()) != n_face ||
+        static_cast<int64_t>(response_matrix.size()) !=
+            static_cast<int64_t>(n_response)*n_face ||
+        response_matrix.size() != adjoints.size())
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateSchur: state/response array shape mismatch");
+    std::vector<unsigned char> seen(static_cast<size_t>(n_face), 0);
+    for (int dof : candidate_dofs) {
+        if (dof < 0 || dof >= n_face || seen[static_cast<size_t>(dof)])
+            throw std::runtime_error(
+                "ReduceConfiguredCandidateSchur: candidate DOFs must be unique and in range");
+        if (!m_operatorConstrained[static_cast<size_t>(dof)])
+            throw std::runtime_error(
+                "ReduceConfiguredCandidateSchur: candidate DOFs must be outside the active set");
+        seen[static_cast<size_t>(dof)] = 1;
+    }
+
+    CandidateSchurReduction result;
+    result.n_candidate = nc;
+    result.n_response = n_response;
+    const auto operator_started = Clock::now();
+    std::vector<double> basis(static_cast<size_t>(nc)*n_face, 0.0);
+    for (int column = 0; column < nc; ++column)
+        basis[static_cast<size_t>(column)*n_face+
+              candidate_dofs[static_cast<size_t>(column)]] = 1.0;
+    std::vector<double> columns = ApplyConfiguredLinearMaterialOperatorMany(
+        inv_chi, basis, nc, /*respect_constraints=*/false);
+    basis.clear(); basis.shrink_to_fit();
+    result.operator_s = std::chrono::duration<double>(
+        Clock::now()-operator_started).count();
+
+    // A_aE in row-major [candidate][face], with inactive rows projected out.
+    std::vector<double> coupling = columns;
+    {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(
+            ngcore::IntRange(static_cast<size_t>(nc)*n_face),
+            [&](size_t index) {
+                if (m_operatorConstrained[index%static_cast<size_t>(n_face)])
+                    coupling[index] = 0.0;
+            });
+    }
+    const auto solve_started = Clock::now();
+    std::vector<double> active_solutions(static_cast<size_t>(nc)*n_face, 0.0);
+    result.iterations.reserve(static_cast<size_t>(nc));
+    for (int begin = 0; begin < nc; begin += solve_batch_size) {
+        const int count = std::min(solve_batch_size, nc-begin);
+        const auto first = coupling.begin()+static_cast<size_t>(begin)*n_face;
+        std::vector<double> chunk(first, first+static_cast<size_t>(count)*n_face);
+        std::vector<int> iterations;
+        double pmin = 0.0, pmax = 0.0, coarse_setup_s = 0.0, projection_s = 0.0;
+        int coarse_dim = 0, recycle_dim = 0;
+        std::vector<double> solved = SolveConfiguredLinearMaterialAutoPrecMany(
+            inv_chi, chunk, count, tol, maxit,
+            /*cluster_coarse_size=*/0, /*cluster_deflation_size=*/0,
+            /*recycle_size=*/0, iterations, pmin, pmax,
+            coarse_dim, recycle_dim, coarse_setup_s, projection_s,
+            mass_riesz, nullptr);
+        std::copy(solved.begin(), solved.end(),
+                  active_solutions.begin()+static_cast<size_t>(begin)*n_face);
+        result.iterations.insert(
+            result.iterations.end(), iterations.begin(), iterations.end());
+    }
+    result.solve_s = std::chrono::duration<double>(
+        Clock::now()-solve_started).count();
+
+    const auto contraction_started = Clock::now();
+    result.schur.assign(static_cast<size_t>(nc)*nc, 0.0);
+    for (int p = 0; p < nc; ++p)
+        for (int q = 0; q < nc; ++q)
+            result.schur[static_cast<size_t>(p)*nc+q] =
+                columns[static_cast<size_t>(q)*n_face+
+                        candidate_dofs[static_cast<size_t>(p)]];
+    result.rhs.resize(static_cast<size_t>(nc));
+    result.response.assign(static_cast<size_t>(n_response)*nc, 0.0);
+    for (int p = 0; p < nc; ++p) {
+        result.rhs[static_cast<size_t>(p)] =
+            rhs[static_cast<size_t>(candidate_dofs[static_cast<size_t>(p)])];
+        for (int output = 0; output < n_response; ++output)
+            result.response[static_cast<size_t>(output)*nc+p] =
+                response_matrix[static_cast<size_t>(output)*n_face+
+                                candidate_dofs[static_cast<size_t>(p)]];
+    }
+#ifdef HAVE_LAPACK
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+        nc, nc, n_face, -1.0, coupling.data(), n_face,
+        active_solutions.data(), n_face, 1.0, result.schur.data(), nc);
+    cblas_dgemv(CblasRowMajor, CblasNoTrans, nc, n_face,
+        -1.0, coupling.data(), n_face, state.data(), 1,
+        1.0, result.rhs.data(), 1);
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+        n_response, nc, n_face, -1.0, adjoints.data(), n_face,
+        coupling.data(), n_face, 1.0, result.response.data(), nc);
+#else
+    for (int p = 0; p < nc; ++p) {
+        for (int face = 0; face < n_face; ++face)
+            result.rhs[static_cast<size_t>(p)] -=
+                coupling[static_cast<size_t>(p)*n_face+face]*
+                state[static_cast<size_t>(face)];
+        for (int q = 0; q < nc; ++q)
+            for (int face = 0; face < n_face; ++face)
+                result.schur[static_cast<size_t>(p)*nc+q] -=
+                    coupling[static_cast<size_t>(p)*n_face+face]*
+                    active_solutions[static_cast<size_t>(q)*n_face+face];
+        for (int output = 0; output < n_response; ++output)
+            for (int face = 0; face < n_face; ++face)
+                result.response[static_cast<size_t>(output)*nc+p] -=
+                    adjoints[static_cast<size_t>(output)*n_face+face]*
+                    coupling[static_cast<size_t>(p)*n_face+face];
+    }
+#endif
+    for (int p = 0; p < nc; ++p)
+        for (int q = p+1; q < nc; ++q) {
+            const double value = 0.5*(
+                result.schur[static_cast<size_t>(p)*nc+q]+
+                result.schur[static_cast<size_t>(q)*nc+p]);
+            result.schur[static_cast<size_t>(p)*nc+q] = value;
+            result.schur[static_cast<size_t>(q)*nc+p] = value;
+        }
+    result.contraction_s = std::chrono::duration<double>(
+        Clock::now()-contraction_started).count();
+    return result;
+}
+
+std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMany(
+    double inv_chi, const std::vector<double>& rhs, int nrhs,
+    double tol, int maxit, int cluster_coarse_size,
+    int cluster_deflation_size, int recycle_size,
+    std::vector<int>& iters_out, double& prec_min, double& prec_max,
+    int& coarse_dim_out, int& recycle_dim_out,
+    double& coarse_setup_s, double& projection_s,
+    bool mass_riesz,
+    const std::vector<double>* x0)
+{
+    using Clock = std::chrono::steady_clock;
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: charge map and mass matrix must be configured");
+    const int n_face = m_operatorNFace;
+    if (nrhs < 1 || static_cast<int64_t>(rhs.size()) !=
+            static_cast<int64_t>(nrhs) * n_face)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: rhs must be row-major [nrhs][n_face]");
+    if (x0 && x0->size() != rhs.size())
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: x0 shape mismatch");
+    if (cluster_coarse_size < 0 || cluster_deflation_size < 0 || recycle_size < 0)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: coarse/recycle sizes must be non-negative");
+    if (cluster_coarse_size > 0 && cluster_deflation_size < 1)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: positive cluster size requires deflation size");
+    if (mass_riesz && cluster_coarse_size > 0)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: mass-Riesz block PCG "
+            "currently requires cluster_coarse_size=0");
+
+    // Build the exact system diagonal once for the complete RHS batch.  The
+    // former Python loop rebuilt this support map and diagonal for every
+    // state/adjoint even though all columns share A.
+    std::vector<double> mass_diag(static_cast<size_t>(n_face), 0.0);
+    for (size_t k = 0; k < m_operatorMassV.size(); ++k)
+        if (m_operatorMassI[k] == m_operatorMassJ[k])
+            mass_diag[static_cast<size_t>(m_operatorMassI[k])] += m_operatorMassV[k];
+    std::vector<std::vector<int>> support_id(static_cast<size_t>(n_face));
+    std::vector<std::vector<double>> support_value(static_cast<size_t>(n_face));
+    for (int a = 0; a < m_ndof; ++a)
+        for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
+             k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k) {
+            const int f = m_operatorBIndices[static_cast<size_t>(k)];
+            support_id[static_cast<size_t>(f)].push_back(a);
+            support_value[static_cast<size_t>(f)].push_back(
+                m_operatorBData[static_cast<size_t>(k)]);
+        }
+    std::vector<double> prec(static_cast<size_t>(n_face), 0.0);
+    {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+            double ndiag = 0.0;
+            const auto& ids = support_id[f];
+            const auto& vals = support_value[f];
+            for (size_t p = 0; p < ids.size(); ++p)
+                for (size_t q = 0; q < ids.size(); ++q)
+                    ndiag += vals[p] * vals[q] *
+                        GetInteractionMatrixElement(ids[p], ids[q]);
+            double value = inv_chi * mass_diag[f] + ndiag;
+            if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+            prec[f] = value;
+        });
+    }
+    prec_min = n_face ? prec[0] : 0.0;
+    prec_max = prec_min;
+    for (double value : prec) {
+        prec_min = std::min(prec_min, value);
+        prec_max = std::max(prec_max, value);
+    }
+
+#ifdef HAVE_LAPACK
+    std::shared_ptr<RadMassRieszCache> block_mr_keep;
+    MassRieszPardiso* block_mr = nullptr;
+    if (mass_riesz) {
+        block_mr_keep = EnsureMassRieszFactor(
+            m_operatorMassI, m_operatorMassJ, m_operatorMassV, n_face,
+            "SolveConfiguredLinearMaterialAutoPrecMany", nullptr);
+        block_mr = &block_mr_keep->factor;
+    }
+#else
+    if (mass_riesz)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrecMany: mass Riesz requires "
+            "MKL PARDISO (HAVE_LAPACK)");
+#endif
+
+    auto dot = [&](const double* a, const double* b) {
+        double sum = 0.0, correction = 0.0;
+        for (int i = 0; i < n_face; ++i) {
+            const double value = a[i] * b[i];
+            const double next = sum + value;
+            correction += std::fabs(sum) >= std::fabs(value)
+                ? (sum - next) + value : (value - next) + sum;
+            sum = next;
+        }
+        return sum + correction;
+    };
+    auto apply_system = [&](const double* input, std::vector<double>& output) {
+        output.assign(static_cast<size_t>(n_face), 0.0);
+        ApplyConfiguredDemag(input, output.data(), true);
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t row) {
+            if (m_operatorConstrained[row]) { output[row] = 0.0; return; }
+            double value = 0.0;
+            for (int k = m_operatorMassIndptr[row];
+                 k < m_operatorMassIndptr[row + 1]; ++k)
+                value += m_operatorMassData[static_cast<size_t>(k)] *
+                         input[static_cast<size_t>(m_operatorMassIndices[static_cast<size_t>(k)])];
+            output[row] += inv_chi * value;
+        });
+    };
+    auto cholesky = [](std::vector<double>& matrix, int n, const char* who) {
+        double max_diag = 0.0;
+        for (int i = 0; i < n; ++i)
+            max_diag = std::max(max_diag, std::fabs(matrix[static_cast<size_t>(i)*n+i]));
+        const double floor = std::max(1.0e-30, 1.0e-13 * max_diag);
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j <= i; ++j) {
+                double value = 0.5 * (matrix[static_cast<size_t>(i)*n+j] +
+                                      matrix[static_cast<size_t>(j)*n+i]);
+                for (int k = 0; k < j; ++k)
+                    value -= matrix[static_cast<size_t>(i)*n+k] *
+                             matrix[static_cast<size_t>(j)*n+k];
+                if (i == j) {
+                    if (!(value > floor) || !std::isfinite(value))
+                        throw std::runtime_error(std::string(who) +
+                            ": Galerkin matrix is not numerically SPD");
+                    matrix[static_cast<size_t>(i)*n+j] = std::sqrt(value);
+                }
+                else
+                    matrix[static_cast<size_t>(i)*n+j] =
+                        value / matrix[static_cast<size_t>(j)*n+j];
+            }
+            for (int j = i + 1; j < n; ++j)
+                matrix[static_cast<size_t>(i)*n+j] = 0.0;
+        }
+    };
+    auto chol_solve = [](const std::vector<double>& factor, int n,
+                         std::vector<double>& value) {
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < i; ++j)
+                value[static_cast<size_t>(i)] -=
+                    factor[static_cast<size_t>(i)*n+j] * value[static_cast<size_t>(j)];
+            value[static_cast<size_t>(i)] /= factor[static_cast<size_t>(i)*n+i];
+        }
+        for (int ii = n; ii-- > 0;) {
+            for (int j = ii + 1; j < n; ++j)
+                value[static_cast<size_t>(ii)] -=
+                    factor[static_cast<size_t>(j)*n+ii] * value[static_cast<size_t>(j)];
+            value[static_cast<size_t>(ii)] /= factor[static_cast<size_t>(ii)*n+ii];
+        }
+    };
+
+    // Select actual nodes from the preserved binary cluster tree.  Repeatedly
+    // split the largest current node until the requested coarse dimension is
+    // reached; ranges and lod are the same permutation used by H-matvec.
+    const auto t_coarse0 = Clock::now();
+    std::vector<st_cHACApK_cluster> clusters;
+    if (cluster_coarse_size > 0) {
+        auto* leaf = static_cast<st_cHACApK_leafmtxp>(m_leafmtxp);
+        auto* ctl = static_cast<st_cHACApK_lcontrol>(m_control);
+        if (!leaf || !leaf->st_clt_root || !ctl || !ctl->lod)
+            throw std::runtime_error(
+                "SolveConfiguredLinearMaterialAutoPrecMany: H-matrix cluster tree is unavailable");
+        clusters.push_back(leaf->st_clt_root);
+        while (static_cast<int>(clusters.size()) < cluster_coarse_size) {
+            int split = -1, largest = -1;
+            for (int i = 0; i < static_cast<int>(clusters.size()); ++i) {
+                const auto node = clusters[static_cast<size_t>(i)];
+                if (node && node->nnson > 0 &&
+                    static_cast<int>(clusters.size()) + node->nnson - 1 <= cluster_coarse_size &&
+                    node->nsize > largest) {
+                    split = i; largest = node->nsize;
+                }
+            }
+            if (split < 0) break;
+            const auto node = clusters[static_cast<size_t>(split)];
+            clusters.erase(clusters.begin() + split);
+            for (int child = 1; child <= node->nnson; ++child)
+                clusters.push_back(node->pc_sons[child]);
+        }
+        std::vector<int> charge_cluster(static_cast<size_t>(m_ndof), -1);
+        for (int c = 0; c < static_cast<int>(clusters.size()); ++c) {
+            const auto node = clusters[static_cast<size_t>(c)];
+            for (int pos = node->nstrt; pos < node->nstrt + node->nsize; ++pos) {
+                if (pos < 1 || pos > m_ndof)
+                    throw std::runtime_error(
+                        "SolveConfiguredLinearMaterialAutoPrecMany: invalid cluster range");
+                const int charge = ctl->lod[pos] - 1;
+                if (charge < 0 || charge >= m_ndof)
+                    throw std::runtime_error(
+                        "SolveConfiguredLinearMaterialAutoPrecMany: invalid cluster permutation");
+                charge_cluster[static_cast<size_t>(charge)] = c;
+            }
+        }
+        // Lift each charge-tree aggregate through D^-1 B^T.  A piecewise
+        // constant FACE vector is not an HDiv aggregate and was measured to
+        // worsen the 40k-DOF condition number.  B^T 1_cluster is instead the
+        // aggregate boundary flux of that charge cluster (interior faces
+        // cancel); diagonal scaling makes it the natural Jacobi coarse mode.
+        std::vector<double> raw_z(clusters.size() * static_cast<size_t>(n_face), 0.0);
+        for (int charge = 0; charge < m_ndof; ++charge) {
+            const int c = charge_cluster[static_cast<size_t>(charge)];
+            if (c < 0) continue;
+            for (int k = m_operatorBIndptr[static_cast<size_t>(charge)];
+                 k < m_operatorBIndptr[static_cast<size_t>(charge) + 1]; ++k) {
+                const int face = m_operatorBIndices[static_cast<size_t>(k)];
+                if (!m_operatorConstrained[static_cast<size_t>(face)])
+                    raw_z[static_cast<size_t>(c)*n_face+face] +=
+                        m_operatorBData[static_cast<size_t>(k)];
+            }
+        }
+        std::vector<double> z;
+        z.reserve(clusters.size() * static_cast<size_t>(n_face));
+        int dim = 0;
+        std::vector<double> candidate(static_cast<size_t>(n_face), 0.0);
+        for (size_t c = 0; c < clusters.size(); ++c) {
+            for (int face = 0; face < n_face; ++face)
+                candidate[static_cast<size_t>(face)] =
+                    raw_z[c*static_cast<size_t>(n_face)+face] / prec[static_cast<size_t>(face)];
+            const double raw_norm = std::sqrt(std::max(
+                0.0, dot(candidate.data(), candidate.data())));
+            for (int pass = 0; pass < 2; ++pass)
+                for (int previous = 0; previous < dim; ++previous) {
+                    const double* zp = z.data() + static_cast<size_t>(previous)*n_face;
+                    const double coefficient = dot(zp, candidate.data());
+                    for (int face = 0; face < n_face; ++face)
+                        candidate[static_cast<size_t>(face)] -= coefficient * zp[face];
+                }
+            const double norm = std::sqrt(std::max(
+                0.0, dot(candidate.data(), candidate.data())));
+            if (raw_norm > 1.0e-30 && norm > 1.0e-10 * raw_norm) {
+                for (double& value : candidate) value /= norm;
+                z.insert(z.end(), candidate.begin(), candidate.end());
+                ++dim;
+            }
+        }
+        clusters.clear();
+        clusters.shrink_to_fit();
+        raw_z.clear();
+        raw_z.shrink_to_fit();
+        std::vector<double> az(static_cast<size_t>(dim) * n_face, 0.0);
+        for (int c = 0; c < dim; ++c) {
+            std::vector<double> applied;
+            apply_system(z.data() + static_cast<size_t>(c)*n_face, applied);
+            std::copy(applied.begin(), applied.end(),
+                      az.begin() + static_cast<size_t>(c)*n_face);
+        }
+        std::vector<double> coarse_factor(static_cast<size_t>(dim)*dim, 0.0);
+        for (int i = 0; i < dim; ++i)
+            for (int j = 0; j < dim; ++j)
+                coarse_factor[static_cast<size_t>(i)*dim+j] = dot(
+                    z.data() + static_cast<size_t>(i)*n_face,
+                    az.data() + static_cast<size_t>(j)*n_face);
+
+        // The aggregate span contains both smooth and high-energy boundary
+        // fluxes.  Deflating all of it was measured slower and increased the
+        // 40k-DOF iteration count.  Contract the actual cluster-tree Galerkin
+        // matrix and retain only its lowest Rayleigh--Ritz modes.
+        const int keep_requested = std::min(dim, cluster_deflation_size);
+        if (keep_requested < dim) {
+#ifdef HAVE_LAPACK
+            std::vector<double> eigenvectors = coarse_factor;
+            std::vector<double> eigenvalues(static_cast<size_t>(dim), 0.0);
+            const int info = LAPACKE_dsyev(
+                LAPACK_ROW_MAJOR, 'V', 'U', dim, eigenvectors.data(), dim,
+                eigenvalues.data());
+            if (info != 0)
+                throw std::runtime_error(
+                    "SolveConfiguredLinearMaterialAutoPrecMany: cluster Rayleigh-Ritz eigensolve failed");
+            // Compressed H-matrices can leave roundoff-scale negative Ritz
+            // values even while all solved physical directions are positive.
+            // Never inject those into an SPD PCG preconditioner: retain the
+            // lowest strictly positive modes above a relative spectral floor.
+            double spectral_scale = 0.0;
+            for (double value : eigenvalues)
+                spectral_scale = std::max(spectral_scale, std::fabs(value));
+            const double spectral_floor = std::max(1.0e-30, 1.0e-11*spectral_scale);
+            std::vector<int> selected;
+            for (int i = 0; i < dim && static_cast<int>(selected.size()) < keep_requested; ++i)
+                if (eigenvalues[static_cast<size_t>(i)] > spectral_floor)
+                    selected.push_back(i);
+            if (selected.empty())
+                throw std::runtime_error(
+                    "SolveConfiguredLinearMaterialAutoPrecMany: no positive cluster Ritz mode");
+            const int keep = static_cast<int>(selected.size());
+            std::vector<double> selected_z(static_cast<size_t>(keep)*n_face, 0.0);
+            std::vector<double> selected_az(static_cast<size_t>(keep)*n_face, 0.0);
+            for (int mode = 0; mode < keep; ++mode)
+                for (int aggregate = 0; aggregate < dim; ++aggregate) {
+                    // LAPACKE row-major returns the mathematical eigenvector
+                    // matrix: eigenvectors are columns.
+                    const double coefficient =
+                        eigenvectors[static_cast<size_t>(aggregate)*dim+
+                                     selected[static_cast<size_t>(mode)]];
+                    const double* za = z.data() + static_cast<size_t>(aggregate)*n_face;
+                    const double* aza = az.data() + static_cast<size_t>(aggregate)*n_face;
+                    double* zs = selected_z.data() + static_cast<size_t>(mode)*n_face;
+                    double* azs = selected_az.data() + static_cast<size_t>(mode)*n_face;
+                    for (int face = 0; face < n_face; ++face) {
+                        zs[face] += coefficient * za[face];
+                        azs[face] += coefficient * aza[face];
+                    }
+                }
+            z.swap(selected_z);
+            az.swap(selected_az);
+            dim = keep;
+            coarse_factor.assign(static_cast<size_t>(dim)*dim, 0.0);
+            for (int i = 0; i < dim; ++i)
+                for (int j = 0; j < dim; ++j)
+                    coarse_factor[static_cast<size_t>(i)*dim+j] = dot(
+                        z.data() + static_cast<size_t>(i)*n_face,
+                        az.data() + static_cast<size_t>(j)*n_face);
+#else
+            throw std::runtime_error(
+                "SolveConfiguredLinearMaterialAutoPrecMany: cluster Rayleigh-Ritz requires LAPACK");
+#endif
+        }
+        coarse_dim_out = dim;
+        if (dim > 0) cholesky(coarse_factor, dim, "cluster coarse correction");
+        coarse_setup_s = std::chrono::duration<double>(Clock::now() - t_coarse0).count();
+
+        std::vector<double> solutions(static_cast<size_t>(nrhs)*n_face, 0.0);
+        std::vector<double> recycle_u, recycle_au;
+        int recycle_dim = 0;
+        iters_out.assign(static_cast<size_t>(nrhs), 0);
+        projection_s = 0.0;
+        for (int column = 0; column < nrhs; ++column) {
+            const double* b = rhs.data() + static_cast<size_t>(column)*n_face;
+            std::vector<double> seed(static_cast<size_t>(n_face), 0.0);
+            if (x0)
+                std::copy(x0->begin() + static_cast<size_t>(column)*n_face,
+                          x0->begin() + static_cast<size_t>(column+1)*n_face,
+                          seed.begin());
+            const auto tp0 = Clock::now();
+            std::vector<double> applied;
+            apply_system(seed.data(), applied);
+            std::vector<double> residual(static_cast<size_t>(n_face));
+            for (int face = 0; face < n_face; ++face)
+                residual[static_cast<size_t>(face)] = b[face] - applied[static_cast<size_t>(face)];
+            if (dim > 0) {
+                std::vector<double> coeff(static_cast<size_t>(dim), 0.0);
+                for (int c = 0; c < dim; ++c)
+                    coeff[static_cast<size_t>(c)] = dot(
+                        z.data() + static_cast<size_t>(c)*n_face, residual.data());
+                chol_solve(coarse_factor, dim, coeff);
+                for (int c = 0; c < dim; ++c) {
+                    const double value = coeff[static_cast<size_t>(c)];
+                    const double* zc = z.data() + static_cast<size_t>(c)*n_face;
+                    const double* azc = az.data() + static_cast<size_t>(c)*n_face;
+                    for (int face = 0; face < n_face; ++face) {
+                        seed[static_cast<size_t>(face)] += value * zc[face];
+                        residual[static_cast<size_t>(face)] -= value * azc[face];
+                    }
+                }
+            }
+            if (recycle_dim > 0) {
+                std::vector<double> factor(static_cast<size_t>(recycle_dim)*recycle_dim, 0.0);
+                std::vector<double> coeff(static_cast<size_t>(recycle_dim), 0.0);
+                for (int i = 0; i < recycle_dim; ++i) {
+                    const double* ui = recycle_u.data() + static_cast<size_t>(i)*n_face;
+                    coeff[static_cast<size_t>(i)] = dot(ui, residual.data());
+                    for (int j = 0; j < recycle_dim; ++j)
+                        factor[static_cast<size_t>(i)*recycle_dim+j] = dot(
+                            ui, recycle_au.data() + static_cast<size_t>(j)*n_face);
+                }
+                cholesky(factor, recycle_dim, "Ritz recycle correction");
+                chol_solve(factor, recycle_dim, coeff);
+                for (int c = 0; c < recycle_dim; ++c) {
+                    const double value = coeff[static_cast<size_t>(c)];
+                    const double* uc = recycle_u.data() + static_cast<size_t>(c)*n_face;
+                    for (int face = 0; face < n_face; ++face)
+                        seed[static_cast<size_t>(face)] += value * uc[face];
+                }
+            }
+            projection_s += std::chrono::duration<double>(Clock::now() - tp0).count();
+            std::vector<double> one_rhs(b, b + n_face);
+            int iterations = 0;
+            std::vector<double> solution = SolveLinearMaterial(
+                m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+                n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+                inv_chi, prec, one_rhs, tol, maxit, iterations,
+                /*mass_riesz=*/false, /*symmetric=*/true, &seed,
+                &z, &az, &coarse_factor, dim);
+            iters_out[static_cast<size_t>(column)] = iterations;
+            std::copy(solution.begin(), solution.end(),
+                      solutions.begin() + static_cast<size_t>(column)*n_face);
+
+            if (recycle_dim < recycle_size) {
+                std::vector<double> candidate = solution;
+                for (int c = 0; c < recycle_dim; ++c) {
+                    const double* uc = recycle_u.data() + static_cast<size_t>(c)*n_face;
+                    const double coeff = dot(uc, candidate.data());
+                    for (int face = 0; face < n_face; ++face)
+                        candidate[static_cast<size_t>(face)] -= coeff * uc[face];
+                }
+                const double norm = std::sqrt(std::max(0.0, dot(candidate.data(), candidate.data())));
+                const double solution_norm = std::sqrt(std::max(0.0, dot(solution.data(), solution.data())));
+                if (norm > 1.0e-10 * std::max(1.0, solution_norm)) {
+                    for (double& value : candidate) value /= norm;
+                    std::vector<double> a_candidate;
+                    apply_system(candidate.data(), a_candidate);
+                    recycle_u.insert(recycle_u.end(), candidate.begin(), candidate.end());
+                    recycle_au.insert(recycle_au.end(), a_candidate.begin(), a_candidate.end());
+                    ++recycle_dim;
+                }
+            }
+        }
+        recycle_dim_out = recycle_dim;
+        return solutions;
+    }
+
+    // Explicitly disabled coarse space: block PCG.  State and adjoint columns
+    // share one Krylov space, so a single BLAS-3 H-matrix traversal advances
+    // every right-hand side.  The public storage remains row-major
+    // [nrhs][n_face]; the small dense matrices below use the mathematical
+    // column convention internally.
+    coarse_dim_out = 0;
+    coarse_setup_s = std::chrono::duration<double>(Clock::now() - t_coarse0).count();
+    projection_s = 0.0;
+    recycle_dim_out = 0;
+    const size_t total = static_cast<size_t>(nrhs)*n_face;
+    auto project_many = [&](std::vector<double>& value) {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(total), [&](size_t index) {
+            if (m_operatorConstrained[index % static_cast<size_t>(n_face)])
+                value[index] = 0.0;
+        });
+    };
+    auto apply_preconditioner_many = [&](const std::vector<double>& input,
+                                         std::vector<double>& output,
+                                         const std::vector<int>& rows) {
+        std::fill(output.begin(), output.end(), 0.0);
+#ifdef HAVE_LAPACK
+        if (mass_riesz) {
+            block_mr->SolveMany(input.data(), output.data(), nrhs);
+            project_many(output);
+            return;
+        }
+#endif
+        for (int row : rows)
+            for (int face = 0; face < n_face; ++face)
+                output[static_cast<size_t>(row)*n_face+face] =
+                    input[static_cast<size_t>(row)*n_face+face] /
+                    prec[static_cast<size_t>(face)];
+    };
+    auto apply_system_many = [&](const std::vector<double>& input,
+                                 std::vector<double>& output) {
+        std::vector<double> charge(static_cast<size_t>(nrhs)*m_ndof, 0.0);
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(static_cast<size_t>(nrhs)*m_ndof),
+                [&](size_t index) {
+                    const int column = static_cast<int>(index / m_ndof);
+                    const int row = static_cast<int>(index % m_ndof);
+                    double value = 0.0;
+                    for (int k = m_operatorBIndptr[static_cast<size_t>(row)];
+                         k < m_operatorBIndptr[static_cast<size_t>(row)+1]; ++k)
+                        value += m_operatorBData[static_cast<size_t>(k)] *
+                            input[static_cast<size_t>(column)*n_face+
+                                  m_operatorBIndices[static_cast<size_t>(k)]];
+                    charge[index] = value;
+                });
+        }
+        std::vector<double> gcharge;
+        MatVecSymMany(charge, nrhs, gcharge);
+        output.assign(total, 0.0);
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(total), [&](size_t index) {
+                const int column = static_cast<int>(index / n_face);
+                const int face = static_cast<int>(index % n_face);
+                if (m_operatorConstrained[static_cast<size_t>(face)]) return;
+                double value = 0.0;
+                for (int k = m_operatorBTIndptr[static_cast<size_t>(face)];
+                     k < m_operatorBTIndptr[static_cast<size_t>(face)+1]; ++k)
+                    value += m_operatorBTData[static_cast<size_t>(k)] *
+                        gcharge[static_cast<size_t>(column)*m_ndof+
+                                m_operatorBTIndices[static_cast<size_t>(k)]];
+                double mass_value = 0.0;
+                for (int k = m_operatorMassIndptr[static_cast<size_t>(face)];
+                     k < m_operatorMassIndptr[static_cast<size_t>(face)+1]; ++k)
+                    mass_value += m_operatorMassData[static_cast<size_t>(k)] *
+                        input[static_cast<size_t>(column)*n_face+
+                              m_operatorMassIndices[static_cast<size_t>(k)]];
+                output[index] = value + inv_chi*mass_value;
+            });
+        }
+    };
+    auto row_dot = [&](const std::vector<double>& a,
+                       const std::vector<double>& b, int row_a, int row_b) {
+        return dot(a.data()+static_cast<size_t>(row_a)*n_face,
+                   b.data()+static_cast<size_t>(row_b)*n_face);
+    };
+    auto block_gram = [&](const std::vector<double>& left,
+                          const std::vector<double>& right,
+                          const std::vector<int>& rows) {
+        const int dim = static_cast<int>(rows.size());
+        std::vector<double> result(static_cast<size_t>(dim)*dim, 0.0);
+        for (int i = 0; i < dim; ++i)
+            for (int j = 0; j < dim; ++j)
+                result[static_cast<size_t>(i)*dim+j] =
+                    row_dot(left, right, rows[static_cast<size_t>(i)],
+                            rows[static_cast<size_t>(j)]);
+        return result;
+    };
+    auto symmetric_pseudoinverse_apply = [&](std::vector<double> matrix,
+                                              const std::vector<double>& right,
+                                              int dim, const char* who) {
+#ifdef HAVE_LAPACK
+        for (int i = 0; i < dim; ++i)
+            for (int j = i+1; j < dim; ++j) {
+                const double value = 0.5*(
+                    matrix[static_cast<size_t>(i)*dim+j] +
+                    matrix[static_cast<size_t>(j)*dim+i]);
+                matrix[static_cast<size_t>(i)*dim+j] = value;
+                matrix[static_cast<size_t>(j)*dim+i] = value;
+            }
+        std::vector<double> eigenvalues(static_cast<size_t>(dim), 0.0);
+        const int info = LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', dim,
+                                       matrix.data(), dim, eigenvalues.data());
+        if (info != 0)
+            throw std::runtime_error(std::string(who)+": eigensolve failed");
+        const double scale = std::max(1.0e-300,
+            *std::max_element(eigenvalues.begin(), eigenvalues.end()));
+        const double floor = 1.0e-13*scale;
+        std::vector<double> transformed(static_cast<size_t>(dim)*dim, 0.0);
+        std::vector<double> result(static_cast<size_t>(dim)*dim, 0.0);
+        int rank = 0;
+        for (int mode = 0; mode < dim; ++mode) {
+            const double lambda = eigenvalues[static_cast<size_t>(mode)];
+            if (!(lambda > floor)) continue;
+            ++rank;
+            for (int column = 0; column < dim; ++column)
+                for (int row = 0; row < dim; ++row)
+                    transformed[static_cast<size_t>(mode)*dim+column] +=
+                        matrix[static_cast<size_t>(row)*dim+mode] *
+                        right[static_cast<size_t>(row)*dim+column] / lambda;
+        }
+        if (rank == 0)
+            throw std::runtime_error(std::string(who)+": numerical rank is zero");
+        for (int row = 0; row < dim; ++row)
+            for (int column = 0; column < dim; ++column)
+                for (int mode = 0; mode < dim; ++mode)
+                    result[static_cast<size_t>(row)*dim+column] +=
+                        matrix[static_cast<size_t>(row)*dim+mode] *
+                        transformed[static_cast<size_t>(mode)*dim+column];
+        return result;
+#else
+        cholesky(matrix, dim, who);
+        std::vector<double> result(static_cast<size_t>(dim)*dim, 0.0);
+        for (int column = 0; column < dim; ++column) {
+            std::vector<double> value(static_cast<size_t>(dim), 0.0);
+            for (int row = 0; row < dim; ++row)
+                value[static_cast<size_t>(row)] =
+                    right[static_cast<size_t>(row)*dim+column];
+            chol_solve(matrix, dim, value);
+            for (int row = 0; row < dim; ++row)
+                result[static_cast<size_t>(row)*dim+column] = value[static_cast<size_t>(row)];
+        }
+        return result;
+#endif
+    };
+    auto add_block_product = [&](std::vector<double>& target,
+                                 const std::vector<double>& source,
+                                 const std::vector<double>& coefficients,
+                                 const std::vector<int>& rows, double scale) {
+        const int dim = static_cast<int>(rows.size());
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(static_cast<size_t>(dim)*n_face),
+            [&](size_t index) {
+                const int local_target = static_cast<int>(index/n_face);
+                const int face = static_cast<int>(index%n_face);
+                double value = 0.0;
+                for (int local_source = 0; local_source < dim; ++local_source)
+                    value += source[static_cast<size_t>(
+                        rows[static_cast<size_t>(local_source)])*n_face+face] *
+                        coefficients[static_cast<size_t>(local_source)*dim+
+                                     local_target];
+                target[static_cast<size_t>(rows[static_cast<size_t>(local_target)])*
+                       n_face+face] += scale*value;
+            });
+    };
+
+    // Normalize columns before the block recurrence.  The physical state and
+    // point-field adjoints differ by many orders of magnitude; without this
+    // scaling their 7x7 Gram matrices lose the smaller columns numerically.
+    std::vector<double> projected_rhs = rhs;
+    project_many(projected_rhs);
+    std::vector<double> rhs_scale(static_cast<size_t>(nrhs), 1.0);
+    std::vector<int> active;
+    iters_out.assign(static_cast<size_t>(nrhs), maxit);
+    for (int row = 0; row < nrhs; ++row) {
+        rhs_scale[static_cast<size_t>(row)] = std::sqrt(std::max(
+            0.0, row_dot(projected_rhs, projected_rhs, row, row)));
+        if (rhs_scale[static_cast<size_t>(row)] > 0.0) {
+            const double inverse = 1.0/rhs_scale[static_cast<size_t>(row)];
+            for (int face = 0; face < n_face; ++face)
+                projected_rhs[static_cast<size_t>(row)*n_face+face] *= inverse;
+            active.push_back(row);
+        }
+        else iters_out[static_cast<size_t>(row)] = 0;
+    }
+    std::vector<double> solutions(total, 0.0);
+    if (x0)
+        for (int row : active)
+            for (int face = 0; face < n_face; ++face)
+                solutions[static_cast<size_t>(row)*n_face+face] =
+                    (*x0)[static_cast<size_t>(row)*n_face+face] /
+                    rhs_scale[static_cast<size_t>(row)];
+    project_many(solutions);
+    std::vector<double> applied, residual(total), zvec(total), pvec(total), apvec;
+    apply_system_many(solutions, applied);
+    for (size_t i = 0; i < total; ++i)
+        residual[i] = projected_rhs[i]-applied[i];
+    project_many(residual);
+
+    auto restart_block = [&]() {
+        apply_preconditioner_many(residual, zvec, active);
+        pvec = zvec;
+        return block_gram(residual, zvec, active);
+    };
+    std::vector<double> gamma = restart_block();
+    constexpr int refresh_period = 250;
+    // A block space naturally loses rank as correlated state/adjoint columns
+    // share converged spectral components.  Use it as a bounded common-Krylov
+    // startup, then finish each physical column with the mature true-residual
+    // scalar PCG.  This keeps rank deflation from turning into a hard failure
+    // and caps the cost if BLAS-3 is not profitable on a particular CPU.
+    constexpr int shared_krylov_limit = 500;
+    const auto shared_t0 = Clock::now();
+    int block_iterations = 0;
+    bool block_breakdown = false;
+    for (int iteration = 0;
+         iteration < std::min(maxit, shared_krylov_limit) && !active.empty();
+         ++iteration) {
+        block_iterations = iteration+1;
+        apply_system_many(pvec, apvec);
+        const int dim = static_cast<int>(active.size());
+        const std::vector<double> delta = block_gram(pvec, apvec, active);
+        std::vector<double> alpha;
+        try {
+            alpha = symmetric_pseudoinverse_apply(
+                delta, gamma, dim, "block PCG search matrix");
+        }
+        catch (const std::runtime_error& error) {
+            if (std::string(error.what()).find("numerical rank is zero") ==
+                    std::string::npos)
+                throw;
+            block_breakdown = true;
+            break;
+        }
+        add_block_product(solutions, pvec, alpha, active, 1.0);
+        add_block_product(residual, apvec, alpha, active, -1.0);
+        project_many(solutions); project_many(residual);
+
+        bool candidate = ((iteration+1)%refresh_period)==0;
+        for (int row : active)
+            candidate = candidate || std::sqrt(std::max(
+                0.0, row_dot(residual, residual, row, row))) <= tol;
+        if (candidate) {
+            apply_system_many(solutions, applied);
+            for (size_t i = 0; i < total; ++i)
+                residual[i] = projected_rhs[i]-applied[i];
+            project_many(residual);
+            std::vector<int> remaining;
+            for (int row : active) {
+                const double norm = std::sqrt(std::max(
+                    0.0, row_dot(residual, residual, row, row)));
+                if (norm <= tol)
+                    iters_out[static_cast<size_t>(row)] = iteration+1;
+                else remaining.push_back(row);
+            }
+            active.swap(remaining);
+            if (active.empty()) break;
+            gamma = restart_block();
+            continue;
+        }
+
+        apply_preconditioner_many(residual, zvec, active);
+        const std::vector<double> gamma_new = block_gram(residual, zvec, active);
+        std::vector<double> beta;
+        try {
+            beta = symmetric_pseudoinverse_apply(
+                gamma, gamma_new, dim, "block PCG residual matrix");
+        }
+        catch (const std::runtime_error& error) {
+            if (std::string(error.what()).find("numerical rank is zero") ==
+                    std::string::npos)
+                throw;
+            block_breakdown = true;
+            break;
+        }
+        std::vector<double> next_p = zvec;
+        add_block_product(next_p, pvec, beta, active, 1.0);
+        pvec.swap(next_p);
+        project_many(pvec);
+        gamma = gamma_new;
+    }
+    projection_s = std::chrono::duration<double>(Clock::now()-shared_t0).count();
+    if (!active.empty()) {
+        // Finish from the shared block iterate.  The exact same A and Jacobi
+        // diagonal are reused, and SolveLinearMaterial retains its periodic
+        // true-residual replacement and final convergence gate.
+        const int remaining_iterations = std::max(1, maxit-block_iterations);
+        for (int row : active) {
+            const auto offset = static_cast<size_t>(row)*n_face;
+            std::vector<double> one_rhs(
+                projected_rhs.begin()+offset,
+                projected_rhs.begin()+offset+n_face);
+            std::vector<double> seed(
+                solutions.begin()+offset, solutions.begin()+offset+n_face);
+            int scalar_iterations = 0;
+            std::vector<double> solution = SolveLinearMaterial(
+                m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+                n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+                inv_chi, prec, one_rhs, tol, remaining_iterations,
+                scalar_iterations, /*mass_riesz=*/mass_riesz,
+                /*symmetric=*/true, &seed, nullptr, nullptr, nullptr, 0);
+            iters_out[static_cast<size_t>(row)] =
+                block_iterations+scalar_iterations;
+            std::copy(solution.begin(), solution.end(),
+                      solutions.begin()+offset);
+        }
+    }
+    (void)block_breakdown; // reported indirectly by per-column iteration counts
+    for (int row = 0; row < nrhs; ++row)
+        for (int face = 0; face < n_face; ++face)
+            solutions[static_cast<size_t>(row)*n_face+face] *=
+                rhs_scale[static_cast<size_t>(row)];
+    return solutions;
+}
+
+std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
+    const std::vector<double>& observations,
+    const std::vector<double>& weights, int n_rows) const
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error(
+            "ConfiguredFieldFunctionalRows: charge map is not configured");
+    if (m_d2)
+        throw std::runtime_error(
+            "ConfiguredFieldFunctionalRows: planar geometry is not supported");
+    if (observations.empty() || observations.size()%3 != 0)
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRows: observations must have shape (n,3)");
+    const int n_observations = static_cast<int>(observations.size()/3);
+    if (n_rows < 1 || weights.size() !=
+            static_cast<size_t>(n_rows)*observations.size())
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRows: weights must have shape (n_rows,n,3)");
+    for (double value : observations)
+        if (!std::isfinite(value))
+            throw std::invalid_argument(
+                "ConfiguredFieldFunctionalRows: observations must be finite");
+    for (double value : weights)
+        if (!std::isfinite(value))
+            throw std::invalid_argument(
+                "ConfiguredFieldFunctionalRows: weights must be finite");
+    if (!m_highorder || m_curved || m_hexmode || m_wedgemode)
+        throw std::runtime_error(
+            "ConfiguredFieldFunctionalRows: exact sparse observation rows currently require flat affine TET geometry");
+    for (int a = 0; a < m_ndof; ++a) {
+        const int* e = &m_expo[static_cast<size_t>(3*a)];
+        const int degree = e[0]+e[1]+e[2];
+        if ((m_kind[static_cast<size_t>(a)] == 0 && degree > 1) ||
+            (m_kind[static_cast<size_t>(a)] == 1 && degree > 2))
+            throw std::runtime_error(
+                "ConfiguredFieldFunctionalRows: flat TET charge degree is unsupported");
+    }
+
+    // Transpose the configured sparse charge map once.  A broken RT/BDM TET
+    // coefficient touches only its cell divergence mode and four face modes;
+    // retaining that locality avoids the old O(n_face*n_charge) zero scan.
+    std::vector<std::vector<std::pair<int, double>>> charge_by_face(
+        static_cast<size_t>(m_operatorNFace));
+    for (int a = 0; a < m_ndof; ++a) {
+        for (int entry = m_operatorBIndptr[static_cast<size_t>(a)];
+             entry < m_operatorBIndptr[static_cast<size_t>(a)+1]; ++entry) {
+            const int face = m_operatorBIndices[static_cast<size_t>(entry)];
+            if (face < 0 || face >= m_operatorNFace)
+                throw std::runtime_error(
+                    "ConfiguredFieldFunctionalRows: charge-map column is out of range");
+            const double value = m_operatorBData[static_cast<size_t>(entry)];
+            if (value != 0.0)
+                charge_by_face[static_cast<size_t>(face)].emplace_back(a, value);
+        }
+    }
+
+    std::vector<double> output(
+        static_cast<size_t>(n_rows)*m_operatorNFace, 0.0);
+    constexpr double inv_four_pi =
+        0.079577471545947667884441881686257181;
+    ngcore::RegionTaskManager task_manager;
+    ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](int face) {
+        const auto& column = charge_by_face[static_cast<size_t>(face)];
+        if (column.empty()) return;
+        std::vector<double> volume;
+        std::vector<double> surface;
+        volume.reserve(column.size()*16);
+        surface.reserve(column.size()*22);
+        for (const auto& item : column) {
+            const int a = item.first;
+            const double coefficient = item.second;
+            const int host = m_host[static_cast<size_t>(a)];
+            const int* e = &m_expo[static_cast<size_t>(3*a)];
+            if (m_kind[static_cast<size_t>(a)] == 0) {
+                const size_t offset = volume.size();
+                volume.resize(offset+16, 0.0);
+                double* block = volume.data()+offset;
+                std::copy_n(&m_cellV[static_cast<size_t>(host)*12], 12, block);
+                const int degree = e[0]+e[1]+e[2];
+                if (degree == 0) {
+                    block[12] = coefficient;
+                } else {
+                    const int axis = e[0] ? 0 : (e[1] ? 1 : 2);
+                    const double* inv = &m_cellInv[static_cast<size_t>(host)*9];
+                    double gradient[3] = {
+                        coefficient*inv[3*axis],
+                        coefficient*inv[3*axis+1],
+                        coefficient*inv[3*axis+2]
+                    };
+                    block[12] = -(gradient[0]*block[0] +
+                                  gradient[1]*block[1] +
+                                  gradient[2]*block[2]);
+                    for (int k = 0; k < 3; ++k) block[13+k] = gradient[k];
+                }
+                continue;
+            }
+
+            const size_t offset = surface.size();
+            surface.resize(offset+22, 0.0);
+            double* block = surface.data()+offset;
+            const double* vertices =
+                &m_faceV[static_cast<size_t>(host)*9];
+            std::copy_n(vertices, 9, block);
+            const double e1[3] = {
+                vertices[3]-vertices[0], vertices[4]-vertices[1],
+                vertices[5]-vertices[2]};
+            const double e2[3] = {
+                vertices[6]-vertices[0], vertices[7]-vertices[1],
+                vertices[8]-vertices[2]};
+            const double* gi =
+                &m_faceGinv[static_cast<size_t>(host)*4];
+            double L[2][3];
+            for (int k = 0; k < 3; ++k) {
+                L[0][k] = gi[0]*e1[k]+gi[1]*e2[k];
+                L[1][k] = gi[2]*e1[k]+gi[3]*e2[k];
+            }
+            const double b[2] = {
+                -(L[0][0]*vertices[0]+L[0][1]*vertices[1]+L[0][2]*vertices[2]),
+                -(L[1][0]*vertices[0]+L[1][1]*vertices[1]+L[1][2]*vertices[2])
+            };
+            const int i = e[0], j = e[1];
+            if (i == 0 && j == 0) {
+                block[9] = coefficient;
+            } else if (i+j == 1) {
+                const int axis = i ? 0 : 1;
+                block[9] = coefficient*b[axis];
+                for (int k = 0; k < 3; ++k)
+                    block[10+k] = coefficient*L[axis][k];
+            } else {
+                const int first = i == 2 ? 0 : (j == 2 ? 1 : 0);
+                const int second = i == 2 ? 0 : (j == 2 ? 1 : 1);
+                block[9] = coefficient*b[first]*b[second];
+                for (int k = 0; k < 3; ++k)
+                    block[10+k] = coefficient*(
+                        b[first]*L[second][k]+b[second]*L[first][k]);
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 3; ++c)
+                        block[13+3*r+c] = first == second
+                            ? coefficient*L[first][r]*L[first][c]
+                            : 0.5*coefficient*(
+                                L[first][r]*L[second][c]+L[second][r]*L[first][c]);
+            }
+        }
+        auto evaluator = rad_hdiv::HDivFieldEvaluator::FromTet(
+            std::move(volume), std::move(surface),
+            m_image_masks, m_image_signs);
+        std::vector<double> field(observations.size());
+        evaluator->EvaluateSerial(
+            observations.data(), static_cast<size_t>(n_observations),
+            field.data(), rad_hdiv::HDivFieldEvaluator::Algorithm::Direct);
+        for (int row = 0; row < n_rows; ++row) {
+            double value = 0.0;
+            double correction = 0.0;
+            const size_t offset =
+                static_cast<size_t>(row)*observations.size();
+            for (size_t index = 0; index < observations.size(); ++index) {
+                const double term = weights[offset+index]*field[index];
+                const double next = value+term;
+                correction += std::fabs(value) >= std::fabs(term)
+                    ? (value-next)+term : (term-next)+value;
+                value = next;
+            }
+            output[static_cast<size_t>(row)*m_operatorNFace+face] =
+                inv_four_pi*(value+correction);
+        }
+    });
+    return output;
+}
+
+std::vector<double>
+RadHACApKChargeGram::ConfiguredFieldFunctionalRowsDirectionalDerivative(
+    const std::vector<double>& observations,
+    const std::vector<double>& weights, int n_rows, int n_modes,
+    const std::vector<double>& cell_velocity,
+    const std::vector<double>& face_velocity) const
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: charge map is not configured");
+    if (m_d2 || !m_highorder || m_curved || m_hexmode || m_wedgemode || m_polyCombo)
+        throw std::runtime_error(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: exact analytic rows require flat affine TET geometry");
+    if (observations.empty() || observations.size()%3 != 0)
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: observations must have shape (n,3)");
+    const int n_observations=static_cast<int>(observations.size()/3);
+    if (n_rows<1 || weights.size()!=static_cast<size_t>(n_rows)*observations.size())
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: weights must have shape (n_rows,n,3)");
+    if (n_modes<1)
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: n_modes must be positive");
+    const int n_cells=static_cast<int>(m_hoCellCharges.size());
+    const int n_faces=static_cast<int>(m_hoFaceCharges.size());
+    if (cell_velocity.size()!=static_cast<size_t>(n_modes)*n_cells*12)
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: cell_vertex_velocity must have shape (n_modes,ncell,4,3)");
+    if (face_velocity.size()!=static_cast<size_t>(n_modes)*n_faces*9)
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: face_vertex_velocity must have shape (n_modes,nface,3,3)");
+    for(double value:observations)if(!std::isfinite(value))
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: observations must be finite");
+    for(double value:weights)if(!std::isfinite(value))
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: weights must be finite");
+    for(double value:cell_velocity)if(!std::isfinite(value))
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: cell velocities must be finite");
+    for(double value:face_velocity)if(!std::isfinite(value))
+        throw std::invalid_argument(
+            "ConfiguredFieldFunctionalRowsDirectionalDerivative: face velocities must be finite");
+    for(int a=0;a<m_ndof;++a){
+        const int* e=&m_expo[static_cast<size_t>(3*a)];
+        const int degree=e[0]+e[1]+e[2];
+        if((m_kind[static_cast<size_t>(a)]==0&&degree>1)
+           ||(m_kind[static_cast<size_t>(a)]==1&&degree>2))
+            throw std::runtime_error(
+                "ConfiguredFieldFunctionalRowsDirectionalDerivative: flat TET charge degree is unsupported");
+    }
+
+    // The Piola B row and its host measure have opposite logarithmic rates.
+    // Building the physical polynomial with coefficient (1,rate) therefore
+    // differentiates the complete charge-row response, including dB, while
+    // retaining the fixed reference monomial exactly.
+    std::vector<double> rates(static_cast<size_t>(n_modes)*m_ndof);
+    for(int mode=0;mode<n_modes;++mode){
+        const auto cell_begin=cell_velocity.begin()+static_cast<size_t>(mode)*n_cells*12;
+        const auto face_begin=face_velocity.begin()+static_cast<size_t>(mode)*n_faces*9;
+        const auto local=TetChargeMapRowDirectionalRates(
+            std::vector<double>(cell_begin,cell_begin+static_cast<size_t>(n_cells)*12),
+            std::vector<double>(face_begin,face_begin+static_cast<size_t>(n_faces)*9));
+        std::copy(local.begin(),local.end(),rates.begin()+static_cast<size_t>(mode)*m_ndof);
+    }
+
+    std::vector<double> charge_rows(
+        static_cast<size_t>(n_modes)*n_rows*m_ndof,0.0);
+    constexpr double inv_four_pi=0.079577471545947667884441881686257181;
+    const double zero_direction[3]={0.0,0.0,0.0};
+    ngcore::RegionTaskManager task_manager;
+    ngcore::ParallelFor(ngcore::IntRange(n_modes*m_ndof),[&](int linear){
+        const int mode=linear/m_ndof;
+        const int a=linear-mode*m_ndof;
+        const int host=m_host[static_cast<size_t>(a)];
+        const int* exponent=&m_expo[static_cast<size_t>(3*a)];
+        const double rate=rates[static_cast<size_t>(mode)*m_ndof+a];
+        double V4[4][3]{},dV4[4][3]{},rho0=0.0,drho0=0.0,g[3]{},dg[3]{};
+        double V3[3][3]{},dV3[3][3]{},sigma0=0.0,dsigma0=0.0;
+        double slope[3]{},dslope[3]{},hessian[3][3]{},dhessian[3][3]{};
+        const bool volume=m_kind[static_cast<size_t>(a)]==0;
+        if(volume){
+            const double* vertices=&m_cellV[static_cast<size_t>(host)*12];
+            const double* velocity=&cell_velocity[
+                (static_cast<size_t>(mode)*n_cells+host)*12];
+            for(int i=0;i<4;++i)for(int k=0;k<3;++k){
+                V4[i][k]=vertices[3*i+k];dV4[i][k]=velocity[3*i+k];
+            }
+            const int degree=exponent[0]+exponent[1]+exponent[2];
+            if(degree==0){rho0=1.0;drho0=rate;}
+            else{
+                const int axis=exponent[0]?0:(exponent[1]?1:2);
+                const double* inverse=&m_cellInv[static_cast<size_t>(host)*9];
+                double dE[3][3]{};
+                for(int physical=0;physical<3;++physical)
+                    for(int reference=0;reference<3;++reference)
+                        dE[physical][reference]=dV4[reference+1][physical]-dV4[0][physical];
+                double dinverse[3][3]{};
+                for(int i=0;i<3;++i)for(int j=0;j<3;++j)
+                    for(int k=0;k<3;++k)for(int l=0;l<3;++l)
+                        dinverse[i][j]-=inverse[3*i+k]*dE[k][l]*inverse[3*l+j];
+                for(int k=0;k<3;++k){
+                    g[k]=inverse[3*axis+k];
+                    dg[k]=rate*g[k]+dinverse[axis][k];
+                    rho0-=g[k]*V4[0][k];
+                    drho0-=dg[k]*V4[0][k]+g[k]*dV4[0][k];
+                }
+            }
+        }else{
+            const double* vertices=&m_faceV[static_cast<size_t>(host)*9];
+            const double* velocity=&face_velocity[
+                (static_cast<size_t>(mode)*n_faces+host)*9];
+            for(int i=0;i<3;++i)for(int k=0;k<3;++k){
+                V3[i][k]=vertices[3*i+k];dV3[i][k]=velocity[3*i+k];
+            }
+            double edge[2][3],dedge[2][3];
+            for(int i=0;i<2;++i)for(int k=0;k<3;++k){
+                edge[i][k]=V3[i+1][k]-V3[0][k];
+                dedge[i][k]=dV3[i+1][k]-dV3[0][k];
+            }
+            double dgram[2][2]{};
+            for(int i=0;i<2;++i)for(int j=0;j<2;++j)
+                for(int k=0;k<3;++k)
+                    dgram[i][j]+=dedge[i][k]*edge[j][k]+edge[i][k]*dedge[j][k];
+            const double* inverse=&m_faceGinv[static_cast<size_t>(host)*4];
+            double dinverse[2][2]{};
+            for(int i=0;i<2;++i)for(int j=0;j<2;++j)
+                for(int k=0;k<2;++k)for(int l=0;l<2;++l)
+                    dinverse[i][j]-=inverse[2*i+k]*dgram[k][l]*inverse[2*l+j];
+            double L[2][3]{},dL[2][3]{},b[2]{},db[2]{};
+            for(int i=0;i<2;++i)for(int k=0;k<3;++k){
+                for(int j=0;j<2;++j){
+                    L[i][k]+=inverse[2*i+j]*edge[j][k];
+                    dL[i][k]+=dinverse[i][j]*edge[j][k]
+                              +inverse[2*i+j]*dedge[j][k];
+                }
+                b[i]-=L[i][k]*V3[0][k];
+                db[i]-=dL[i][k]*V3[0][k]+L[i][k]*dV3[0][k];
+            }
+            const int i=exponent[0],j=exponent[1];
+            if(i==0&&j==0){sigma0=1.0;dsigma0=rate;}
+            else if(i+j==1){
+                const int axis=i?0:1;
+                sigma0=b[axis];dsigma0=rate*b[axis]+db[axis];
+                for(int k=0;k<3;++k){
+                    slope[k]=L[axis][k];
+                    dslope[k]=rate*L[axis][k]+dL[axis][k];
+                }
+            }else{
+                const int first=i==2?0:(j==2?1:0);
+                const int second=i==2?0:(j==2?1:1);
+                sigma0=b[first]*b[second];
+                dsigma0=rate*sigma0+db[first]*b[second]+b[first]*db[second];
+                for(int k=0;k<3;++k){
+                    slope[k]=b[first]*L[second][k]+b[second]*L[first][k];
+                    dslope[k]=rate*slope[k]+db[first]*L[second][k]
+                        +b[first]*dL[second][k]+db[second]*L[first][k]
+                        +b[second]*dL[first][k];
+                }
+                for(int r0=0;r0<3;++r0)for(int c0=0;c0<3;++c0){
+                    if(first==second){
+                        hessian[r0][c0]=L[first][r0]*L[first][c0];
+                        dhessian[r0][c0]=rate*hessian[r0][c0]
+                            +dL[first][r0]*L[first][c0]
+                            +L[first][r0]*dL[first][c0];
+                    }else{
+                        hessian[r0][c0]=0.5*(L[first][r0]*L[second][c0]
+                                            +L[second][r0]*L[first][c0]);
+                        dhessian[r0][c0]=rate*hessian[r0][c0]+0.5*(
+                            dL[first][r0]*L[second][c0]
+                            +L[first][r0]*dL[second][c0]
+                            +dL[second][r0]*L[first][c0]
+                            +L[second][r0]*dL[first][c0]);
+                    }
+                }
+            }
+        }
+
+        std::vector<double> sums(static_cast<size_t>(n_rows),0.0);
+        std::vector<double> corrections(static_cast<size_t>(n_rows),0.0);
+        auto evaluate=[&](const double target[3],double derivative[3]){
+            double field[3];
+            if(volume)rad_hdiv::TetVolFieldLinearDirectional(
+                V4,dV4,target,zero_direction,rho0,drho0,g,dg,field,derivative);
+            else rad_hdiv::QuadTriFieldDirectional(
+                V3,dV3,target,zero_direction,sigma0,dsigma0,slope,dslope,
+                hessian,dhessian,field,derivative);
+        };
+        for(int observation=0;observation<n_observations;++observation){
+            const double* target=&observations[static_cast<size_t>(observation)*3];
+            double total[3];evaluate(target,total);
+            for(size_t image=0;image<m_image_masks.size();++image){
+                const int mask=m_image_masks[image];
+                double reflected[3]={target[0],target[1],target[2]},term[3];
+                for(int k=0;k<3;++k)if(mask&(1<<k))reflected[k]=-reflected[k];
+                evaluate(reflected,term);
+                for(int k=0;k<3;++k){
+                    if(mask&(1<<k))term[k]=-term[k];
+                    total[k]+=m_image_signs[image]*term[k];
+                }
+            }
+            for(int row=0;row<n_rows;++row){
+                const size_t offset=(static_cast<size_t>(row)*n_observations+observation)*3;
+                const double term=weights[offset]*total[0]
+                    +weights[offset+1]*total[1]+weights[offset+2]*total[2];
+                const double next=sums[static_cast<size_t>(row)]+term;
+                corrections[static_cast<size_t>(row)]+=std::fabs(sums[static_cast<size_t>(row)])>=std::fabs(term)
+                    ?(sums[static_cast<size_t>(row)]-next)+term
+                    :(term-next)+sums[static_cast<size_t>(row)];
+                sums[static_cast<size_t>(row)]=next;
+            }
+        }
+        for(int row=0;row<n_rows;++row)
+            charge_rows[(static_cast<size_t>(mode)*n_rows+row)*m_ndof+a]
+                =inv_four_pi*(sums[static_cast<size_t>(row)]+corrections[static_cast<size_t>(row)]);
+    });
+
+    std::vector<std::vector<std::pair<int,double>>> charge_by_face(
+        static_cast<size_t>(m_operatorNFace));
+    for(int a=0;a<m_ndof;++a)
+        for(int entry=m_operatorBIndptr[static_cast<size_t>(a)];
+            entry<m_operatorBIndptr[static_cast<size_t>(a)+1];++entry){
+            const int face=m_operatorBIndices[static_cast<size_t>(entry)];
+            if(face<0||face>=m_operatorNFace)
+                throw std::runtime_error(
+                    "ConfiguredFieldFunctionalRowsDirectionalDerivative: charge-map column is out of range");
+            const double coefficient=m_operatorBData[static_cast<size_t>(entry)];
+            if(coefficient!=0.0)
+                charge_by_face[static_cast<size_t>(face)].emplace_back(a,coefficient);
+        }
+    std::vector<double> output(
+        static_cast<size_t>(n_modes)*n_rows*m_operatorNFace,0.0);
+    ngcore::ParallelFor(ngcore::IntRange(n_modes*n_rows*m_operatorNFace),[&](int linear){
+        const int face=linear%m_operatorNFace;
+        const int outer=linear/m_operatorNFace;
+        const int row=outer%n_rows;
+        const int mode=outer/n_rows;
+        double sum=0.0,correction=0.0;
+        for(const auto& item:charge_by_face[static_cast<size_t>(face)]){
+            const double term=item.second*charge_rows[
+                (static_cast<size_t>(mode)*n_rows+row)*m_ndof+item.first];
+            const double next=sum+term;
+            correction+=std::fabs(sum)>=std::fabs(term)
+                ?(sum-next)+term:(term-next)+sum;
+            sum=next;
+        }
+        output[static_cast<size_t>(linear)]=sum+correction;
+    });
+    return output;
 }
 
 std::shared_ptr<rad_hdiv::HDivFieldEvaluator>
@@ -7101,6 +8865,122 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         return rad_hdiv::HDivFieldEvaluator::FromTet(
             std::move(volume), std::move(surface), m_image_masks, m_image_signs, options);
     }
+
+    // Straight affine HEX RT0: retain an exact near-field representation.
+    // A fixed tensor cloud is adequate for Gram far blocks, but it is not a
+    // field evaluator near a long/thin pole face: four Gauss points along a
+    // one-metre face produced O(10%) orbit-field errors at a 50-mm gap.  RT0
+    // has one constant reference charge per cell/facet, so an affine HEX can
+    // be split into the same six Kuhn tets and each affine quad into two
+    // triangles.  q_ref dxi = rho dx and q_ref du dv = sigma dS give the
+    // physical constant densities below.  The existing analytic TET/TRI
+    // kernel then becomes the single exact numerical source for every target,
+    // including points close to the pole face.
+    bool analytic_hex_rt0 = m_hexmode;
+    for (int a = 0; analytic_hex_rt0 && a < m_ndof; ++a) {
+        const int* e = &m_expo[static_cast<size_t>(3*a)];
+        analytic_hex_rt0 = e[0] == 0 && e[1] == 0 && e[2] == 0;
+    }
+    const bool configured_hex_rt0 = analytic_hex_rt0;
+    if (analytic_hex_rt0) {
+        std::vector<double> volume;
+        std::vector<double> surface;
+        volume.reserve(static_cast<size_t>(m_n_el)*6*16);
+        surface.reserve(static_cast<size_t>(m_hex_n_bf)*2*22);
+        const double center3[3] = {0.5, 0.5, 0.5};
+        const double center2[2] = {0.5, 0.5};
+        const double affine_tol = 2.0e-11;
+
+        for (int host = 0; analytic_hex_rt0 && host < m_n_el; ++host) {
+            const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
+            double ignored[3], J0[3][3];
+            HexQ2Map(nodes, center3, ignored, J0);
+            const double det = HexDet3(J0);
+            double scale = 0.0;
+            for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j)
+                scale = std::max(scale, std::fabs(J0[i][j]));
+            if (!(std::fabs(det) > 1.0e-300) || !std::isfinite(det)) {
+                analytic_hex_rt0 = false;
+                break;
+            }
+            double corners[8][3];
+            for (int vertex = 0; vertex < 8; ++vertex) {
+                double J[3][3];
+                HexQ2Map(nodes, HEXREF_V[vertex], corners[vertex], J);
+                for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j)
+                    if (std::fabs(J[i][j]-J0[i][j]) >
+                            affine_tol*std::max(1.0, scale))
+                        analytic_hex_rt0 = false;
+            }
+            if (!analytic_hex_rt0) break;
+            double coefficient = 0.0;
+            for (int charge_id : m_cellCharges[static_cast<size_t>(host)])
+                coefficient += charge[static_cast<size_t>(charge_id)];
+            if (coefficient == 0.0) continue;
+            const double rho = coefficient/std::fabs(det);
+            for (int sub = 0; sub < 6; ++sub) {
+                const size_t offset = volume.size();
+                volume.resize(offset+16, 0.0);
+                for (int local = 0; local < 4; ++local)
+                    for (int axis = 0; axis < 3; ++axis)
+                        volume[offset+3*local+axis] =
+                            corners[HEXREF_TETS[sub][local]][axis];
+                volume[offset+12] = rho;
+            }
+        }
+
+        for (int host = 0; analytic_hex_rt0 && host < m_hex_n_bf; ++host) {
+            const double* nodes = &m_quadNodes[static_cast<size_t>(host)*27];
+            double ignored[3], T0[3][2];
+            QuadQ2Map(nodes, center2, ignored, T0);
+            const double jacobian = HexSurfJ(T0);
+            double scale = 0.0;
+            for (int i = 0; i < 3; ++i) for (int j = 0; j < 2; ++j)
+                scale = std::max(scale, std::fabs(T0[i][j]));
+            if (!(jacobian > 1.0e-300) || !std::isfinite(jacobian)) {
+                analytic_hex_rt0 = false;
+                break;
+            }
+            double corners[4][3];
+            for (int vertex = 0; vertex < 4; ++vertex) {
+                double T[3][2];
+                QuadQ2Map(nodes, QUADREF_V[vertex], corners[vertex], T);
+                for (int i = 0; i < 3; ++i) for (int j = 0; j < 2; ++j)
+                    if (std::fabs(T[i][j]-T0[i][j]) >
+                            affine_tol*std::max(1.0, scale))
+                        analytic_hex_rt0 = false;
+            }
+            if (!analytic_hex_rt0) break;
+            double coefficient = 0.0;
+            for (int charge_id : m_faceCharges[static_cast<size_t>(host)])
+                coefficient += charge[static_cast<size_t>(charge_id)];
+            if (coefficient == 0.0) continue;
+            const double sigma = coefficient/jacobian;
+            for (int sub = 0; sub < 2; ++sub) {
+                const size_t offset = surface.size();
+                surface.resize(offset+22, 0.0);
+                for (int local = 0; local < 3; ++local)
+                    for (int axis = 0; axis < 3; ++axis)
+                        surface[offset+3*local+axis] =
+                            corners[QUADREF_TRIS[sub][local]][axis];
+                surface[offset+9] = sigma;
+            }
+        }
+        if (analytic_hex_rt0) {
+            if (!volume.empty() || !surface.empty())
+                return rad_hdiv::HDivFieldEvaluator::FromTet(
+                    std::move(volume), std::move(surface),
+                    m_image_masks, m_image_signs, options);
+            return rad_hdiv::HDivFieldEvaluator::FromCloud(
+                {0.0, 0.0, 0.0}, {0.0},
+                m_image_masks, m_image_signs, options);
+        }
+    }
+    if (configured_hex_rt0)
+        throw std::runtime_error(
+            "CreateConfiguredFieldEvaluator: HEX RT0 direct field requires "
+            "an affine Q1 geometry; non-affine/warped HEX must be refined or "
+            "promoted to the body-fitted BDM field stage");
 
     // Curved HEX/WEDGE use their shared host quadrature directly.  Co-located charge modes are combined at
     // each physical point, so the source count scales with elements, not with element modes.

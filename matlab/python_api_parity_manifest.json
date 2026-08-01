@@ -102,6 +102,13 @@
       "notes": "Density-adjoint HDiv-MMM topology optimization for isochronous magnets: NGSolve CG/adjoint composition above the native charge-Gram kernels; design-loop promotion decides any later native surface."
     },
     {
+      "id": "particle-tracking",
+      "patterns": ["particle_tracking.py"],
+      "classification": "matlab-native",
+      "matlab": ["matlab/+radia/+tracking/trackLorentz.m", "matlab/+radia/+tracking/twoMomentumExitDispersion.m"],
+      "notes": "MATLAB ode113 and SciPy DOP853 integrate the same SI momentum-state relativistic Lorentz equation and expose the same symmetric two-momentum exit-dispersion criterion."
+    },
+    {
       "id": "mesh-cad-io",
       "patterns": ["cubit_bem_extractor.py", "gmsh_post_export.py", "netgen_mesh_import.py", "peec_mesh_import.py", "setup_cubit.py", "step_mesh_builder.py"],
       "classification": "python-fallback",

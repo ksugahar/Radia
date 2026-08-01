@@ -381,7 +381,133 @@ def _exterior_bnd_elements(mesh):
     return kept
 
 
-def _charge_basis(fes, quad, *, materialize_mass=True):
+def _assert_broken_hdiv(fes):
+    """Require element-local HDiv unknowns for explicit interface charges.
+
+    An internal charge sheet is the jump of ``M.n`` between the two element
+    sides.  A conforming HDiv space identifies those trace DoFs, so asking for
+    explicit internal charges on it would silently produce zero.  Detect that
+    invalid combination from the actual element DoF ownership instead of an
+    undocumented NGSolve flag.
+    """
+    owners = {}
+    for el in fes.mesh.Elements(ng.VOL):
+        for facet in el.facets:
+            owners.setdefault(int(facet.nr), []).append(el)
+    for adjacent in owners.values():
+        if len(adjacent) == 2:
+            left = set(int(d) for d in fes.GetDofNrs(adjacent[0]) if int(d) >= 0)
+            right = set(int(d) for d in fes.GetDofNrs(adjacent[1]) if int(d) >= 0)
+            if left & right:
+                raise ValueError(
+                    "vim.ChargeGram: internal_interfaces=True requires "
+                    "ng.HDiv(..., discontinuous=True); the supplied space "
+                    "shares normal-trace DoFs across an internal facet")
+            return
+    if fes.mesh.ne > 1:
+        raise ValueError(
+            "vim.ChargeGram: could not find a two-sided internal facet while "
+            "checking internal_interfaces=True")
+
+
+def _broken_tet_face_charge_basis(fes, p):
+    """NGSolve-assembled jump ``[M.n]`` on every straight triangular facet.
+
+    The trial space is broken HDiv and the test space is NGSolve's shared
+    ``FacetFESpace``.  ``dx(element_boundary=True)`` visits both sides of an
+    internal facet with their outward normals; assembly into the shared facet
+    test DoFs therefore forms the signed jump without reconstructing an HDiv
+    basis in Python.  The small per-facet moment conversion only changes the
+    NGSolve facet polynomial into the C++ triangle's monomial frame.
+    """
+    _assert_broken_hdiv(fes)
+    mesh = fes.mesh
+    facet_space = ng.FacetFESpace(mesh, order=int(p))
+    u = fes.TrialFunction()
+    q = facet_space.TestFunction()
+    normal = ng.specialcf.normal(mesh.dim)
+    jump = ng.BilinearForm(trialspace=fes, testspace=facet_space)
+    jump += (u * normal) * q * ng.dx(element_boundary=True)
+    jump.Assemble()
+    jump_moments = _csr(jump)
+
+    # Physical monomial moments are assembled by NGSolve.  Restricting these
+    # global polynomials to one affine triangle and changing to the C++ local
+    # (xi,eta) monomials is geometry algebra, not an FE-basis reimplementation.
+    xyz_mons = _monos_vol(int(p))
+    moment_vectors = []
+    for i, j, k in xyz_mons:
+        physical_monomial = ng.x ** i * ng.y ** j * ng.z ** k
+        linear = ng.LinearForm(facet_space)
+        linear += physical_monomial * q * ng.dx(element_boundary=True)
+        linear.Assemble()
+        moment_vectors.append(
+            np.asarray(linear.vec.FV().NumPy(), dtype=float).copy())
+
+    owner_count = {int(facet.nr): 0 for facet in mesh.facets}
+    for el in mesh.Elements(ng.VOL):
+        for facet in el.facets:
+            owner_count[int(facet.nr)] += 1
+
+    facets = list(mesh.facets)
+    mons = _monos_surf(int(p))
+    ref_points, _ = _tri_ref(max(int(p) + 1, 2))
+    Q = np.asarray([[x ** i * y ** j for i, j in mons]
+                    for x, y in ref_points], dtype=float)
+    rows = []
+    face_vertices = []
+    for facet in facets:
+        nr = int(facet.nr)
+        dofs = [int(d) for d in facet_space.GetDofNrs(facet)]
+        if len(dofs) != len(mons):
+            raise RuntimeError(
+                "vim.ChargeGram: FacetFESpace order %d has %d DoFs on "
+                "triangle %d, expected %d" % (p, len(dofs), nr, len(mons)))
+        owners = owner_count[nr]
+        if owners not in (1, 2):
+            raise ValueError(
+                "vim.ChargeGram: facet %d has %d volume owners (expected "
+                "1 exterior or 2 internal)" % (nr, owners))
+        vertices = np.asarray([mesh[v].point for v in facet.vertices], dtype=float)
+        if vertices.shape != (3, 3):
+            raise ValueError(
+                "vim.ChargeGram: internal TET interface path requires "
+                "triangular facets")
+        face_vertices.append(vertices)
+
+        # Linear-form assembly visits an internal facet twice.  Divide those
+        # test moments by the owner count to recover one physical-face moment;
+        # do NOT divide jump_moments, whose two signed contributions are the
+        # desired jump.
+        D = np.column_stack([values[dofs] / owners
+                             for values in moment_vectors])
+        physical_points = (vertices[0][None, :]
+                           + ref_points[:, 0, None]
+                           * (vertices[1] - vertices[0])[None, :]
+                           + ref_points[:, 1, None]
+                           * (vertices[2] - vertices[0])[None, :])
+        P = np.asarray([[x ** i * y ** j * z ** k for i, j, k in xyz_mons]
+                        for x, y, z in physical_points], dtype=float)
+        # P = Q @ local_to_physical.  Since the global monomial family is
+        # redundant on a plane, recover the unique NGSolve-test/local-monomial
+        # moment matrix with the Moore-Penrose right inverse.
+        local_to_physical = np.linalg.lstsq(Q, P, rcond=None)[0]
+        C = D @ np.linalg.pinv(local_to_physical)
+        if np.linalg.cond(C) > 1e12:
+            raise RuntimeError(
+                "vim.ChargeGram: ill-conditioned facet moment conversion "
+                "on facet %d (cond=%g)" % (nr, np.linalg.cond(C)))
+        rows.append(sp.csr_matrix(np.linalg.solve(C, jump_moments[dofs, :].toarray())))
+
+    return dict(
+        B=sp.vstack(rows).tocsr(),
+        face_vertices=face_vertices,
+        mons=mons,
+    )
+
+
+def _charge_basis(fes, quad, *, materialize_mass=True,
+                  internal_interfaces=False):
     """Shared geometry + monomial charge-density map for the BDM1 HDiv-VIM operator.
 
     Returns B (CSR
@@ -407,9 +533,27 @@ def _charge_basis(fes, quad, *, materialize_mass=True):
     M_mass = _csr(mh) if materialize_mass else None
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
-    vV = [np.array([mesh[v].point for v in mesh[e].vertices]) for e in vels]
-    bV = [np.array([mesh[v].point for v in mesh[e].vertices]) for e in bels]
+    bels = (_exterior_bnd_elements(mesh) if not internal_interfaces
+            else [])
+    # A linear topological TET mesh can carry a live NGSolve deformation.
+    # ``mesh[v].point`` remains the undeformed topological coordinate in that
+    # state, whereas every assembled FE form above uses ``GetTrafo``.  Mixing
+    # those geometries makes the rebuilt ChargeGram inconsistent with its
+    # mass/RHS and invalidates shape-derivative regressions.  Read the four/
+    # three reference vertices through the mapped-rule path whenever a live
+    # deformation is installed.  The raw vertex path remains the cheap source
+    # of truth for an undeformed affine mesh.
+    live_deformation = mesh.deformation is not None
+    vV = ([_trafo_lattice_nodes(mesh, e, _IR_TET_VERTICES)[
+               _TET_REF_TO_ELEMENT_VERTEX_ORDER]
+           for e in vels]
+          if live_deformation else
+          [np.array([mesh[v].point for v in mesh[e].vertices]) for e in vels])
+    bV = ([_trafo_lattice_nodes(mesh, e, _IR_TRI_VERTICES)[
+               _TRI_REF_TO_ELEMENT_VERTEX_ORDER]
+           for e in bels]
+          if live_deformation else
+          [np.array([mesh[v].point for v in mesh[e].vertices]) for e in bels])
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
     bdof = [list(L2b.GetDofNrs(e)) for e in bels]
     mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
@@ -443,13 +587,22 @@ def _charge_basis(fes, quad, *, materialize_mass=True):
             blk = Sv @ Bv_d[vdof[c], :]                         # sparse (nmons_v x ndof)
             for a, (i, j, k) in enumerate(mons_v):
                 Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
-    for f in range(len(bels)):
-        Ss = sp.csr_matrix(_change_of_basis(L2b.GetFE(bels[f]), mons_s, *rsq, dim=2,
-                                            trafo=mesh.GetTrafo(bels[f]), Vmesh=bV[f]))
-        blk = Ss @ Bb_d[bdof[f], :]                             # sparse (nmons_s x ndof)
-        for a, (i, j) in enumerate(mons_s):
-            Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
-    B = sp.vstack(Brows).tocsr()                                # (n_charge, ndof)
+    if internal_interfaces:
+        broken_faces = _broken_tet_face_charge_basis(fes, p)
+        bV = broken_faces["face_vertices"]
+        Bface = broken_faces["B"]
+        for f in range(len(bV)):
+            for i, j in broken_faces["mons"]:
+                host.append(f); kind.append(1); expo += [i, j, 0]
+        B = sp.vstack([sp.vstack(Brows).tocsr(), Bface]).tocsr()
+    else:
+        for f in range(len(bels)):
+            Ss = sp.csr_matrix(_change_of_basis(L2b.GetFE(bels[f]), mons_s, *rsq, dim=2,
+                                                trafo=mesh.GetTrafo(bels[f]), Vmesh=bV[f]))
+            blk = Ss @ Bb_d[bdof[f], :]                         # sparse (nmons_s x ndof)
+            for a, (i, j) in enumerate(mons_s):
+                Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+        B = sp.vstack(Brows).tocsr()                            # (n_charge, ndof)
     return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
                 host=host, kind=kind, expo=expo, vV=vV, bV=bV,
                 cell_verts=_f64_buffer(np.concatenate([V.ravel() for V in vV])),
@@ -467,6 +620,18 @@ _TET_REFNODES = [(0., 0, 0), (1., 0, 0), (0., 1, 0), (0., 0, 1),
 _TRI_REFNODES = [(0., 0), (1., 0), (0., 1), (.5, 0), (.5, .5), (0., .5)]
 _IR_TET_NODES = ng.IntegrationRule([tuple(r) for r in _TET_REFNODES], [1.0] * 10)
 _IR_TRI_NODES = ng.IntegrationRule([(r[0], r[1]) for r in _TRI_REFNODES], [1.0] * 6)
+_IR_TET_VERTICES = ng.IntegrationRule(
+    [tuple(r) for r in _TET_REFNODES[:4]], [1.0] * 4
+)
+_IR_TRI_VERTICES = ng.IntegrationRule(
+    [(r[0], r[1]) for r in _TRI_REFNODES[:3]], [1.0] * 3
+)
+# NGSolve's simplex reference convention starts at the final topological
+# element vertex.  Reorder mapped reference corners back to
+# ``mesh[e].vertices`` order, which is the established C++ flat-simplex
+# geometry contract used by ``_change_of_basis`` and ChargeGram.
+_TET_REF_TO_ELEMENT_VERTEX_ORDER = np.array([1, 2, 3, 0], dtype=int)
+_TRI_REF_TO_ELEMENT_VERTEX_ORDER = np.array([1, 2, 0], dtype=int)
 
 
 def _change_of_basis_ref(fe, mons, refP, refW, dim):
@@ -688,9 +853,136 @@ def _trafo_lattice_nodes(mesh, e, ir, max_tries=4):
         "extraction; abort and report the incident).")
 
 
-def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
+def _broken_hex_face_charge_basis(fes, p):
+    """NGSolve-assembled normal jump on every quadrilateral facet.
+
+    ``FacetFESpace`` owns element-side orientation.  The conversion below only
+    changes its scalar facet basis into the ``u^i v^j`` tensor monomials used
+    by the existing C++ HEX ChargeGram.  No HDiv shape or Piola transform is
+    reconstructed in Python.
+
+    For RT0, the reference normal flux is one constant per facet and its
+    coefficient is exactly the assembled total flux: physical ``dS`` and the
+    Piola surface factor cancel.  Thus mapped bilinear facets need no geometric
+    projection.  Higher-order facet polynomials retain the affine-only change
+    of basis below; silently projecting them on a warped facet would be wrong.
+    """
+    _assert_broken_hdiv(fes)
+    mesh = fes.mesh
+    facet_space = ng.FacetFESpace(mesh, order=int(p))
+    u = fes.TrialFunction()
+    q = facet_space.TestFunction()
+    normal = ng.specialcf.normal(mesh.dim)
+    jump = ng.BilinearForm(trialspace=fes, testspace=facet_space)
+    jump += (u * normal) * q * ng.dx(element_boundary=True)
+    jump.Assemble()
+    jump_moments = _csr(jump)
+
+    # On an affine quad, every tensor monomial u^i v^j (i,j <= p) is
+    # representable by global monomials of total degree <= 2p.  Assemble the
+    # physical moments with NGSolve and solve only the small geometry change of
+    # basis per facet.
+    xyz_mons = _monos_vol(2 * int(p))
+    moment_vectors = []
+    for i, j, k in xyz_mons:
+        physical_monomial = ng.x ** i * ng.y ** j * ng.z ** k
+        linear = ng.LinearForm(facet_space)
+        linear += physical_monomial * q * ng.dx(element_boundary=True)
+        linear.Assemble()
+        moment_vectors.append(
+            np.asarray(linear.vec.FV().NumPy(), dtype=float).copy())
+
+    owner_count = {int(facet.nr): 0 for facet in mesh.facets}
+    for element in mesh.Elements(ng.VOL):
+        for facet in element.facets:
+            owner_count[int(facet.nr)] += 1
+
+    mons = _mons_quad(int(p))
+    gauss, _ = _g01(max(int(p) + 2, 3))
+    ref_points = np.asarray([(uu, vv) for vv in gauss for uu in gauss])
+    Q = np.asarray([[uu ** i * vv ** j for i, j in mons]
+                    for uu, vv in ref_points], dtype=float)
+    rows = []
+    face_nodes = []
+    for facet in mesh.facets:
+        nr = int(facet.nr)
+        dofs = [int(d) for d in facet_space.GetDofNrs(facet)]
+        if len(dofs) != len(mons):
+            raise RuntimeError(
+                "vim.ChargeGram: FacetFESpace order %d has %d DoFs on "
+                "quadrilateral %d, expected %d"
+                % (p, len(dofs), nr, len(mons)))
+        owners = owner_count[nr]
+        if owners not in (1, 2):
+            raise ValueError(
+                "vim.ChargeGram: facet %d has %d volume owners (expected "
+                "1 exterior or 2 internal)" % (nr, owners))
+        corners_cyclic = np.asarray(
+            [mesh[vertex].point for vertex in facet.vertices], dtype=float)
+        if corners_cyclic.shape != (4, 3):
+            raise ValueError(
+                "vim.ChargeGram: internal HEX interface path requires "
+                "quadrilateral facets")
+        # NGSolve facets provide cyclic vertices.  C++ Q2 lattice order uses
+        # [00,10,01,11], hence the 0,1,3,2 permutation.
+        corners = corners_cyclic[[0, 1, 3, 2]]
+        face_nodes.append(_QUAD_Q2_LINEAR_WEIGHTS @ corners)
+        if int(p)==0:
+            # FacetFESpace's constant test is one.  Assembly therefore gives
+            # int_face M.n dS = int_[0,1]^2 q_ref du dv = q_ref directly,
+            # including the signed two-sided jump on an internal interface.
+            rows.append(jump_moments[dofs, :].tocsr())
+            continue
+        scale = max(np.linalg.norm(corners[1] - corners[0]),
+                    np.linalg.norm(corners[2] - corners[0]), 1.0)
+        affine_residual = np.linalg.norm(
+            corners[3] - corners[1] - corners[2] + corners[0]) / scale
+        if affine_residual > 1e-10:
+            raise NotImplementedError(
+                "vim.ChargeGram: internal HEX interfaces currently require "
+                "affine straight quadrilateral facets; facet %d residual=%g"
+                % (nr, affine_residual))
+        weights = np.asarray([
+            [(1.0-uu)*(1.0-vv), uu*(1.0-vv),
+             (1.0-uu)*vv, uu*vv]
+            for uu, vv in ref_points], dtype=float)
+        physical_points = weights @ corners
+        P = np.asarray([
+            [x ** i * y ** j * z ** k for i, j, k in xyz_mons]
+            for x, y, z in physical_points], dtype=float)
+        local_to_physical = np.linalg.lstsq(Q, P, rcond=None)[0]
+        D = np.column_stack(
+            [values[dofs] / owners for values in moment_vectors])
+        C = D @ np.linalg.pinv(local_to_physical)
+        condition = np.linalg.cond(C)
+        if not np.isfinite(condition) or condition > 1e12:
+            raise RuntimeError(
+                "vim.ChargeGram: ill-conditioned HEX facet moment conversion "
+                "on facet %d (cond=%g)" % (nr, condition))
+        # C contains physical-surface moments (dS = Js du dv), whereas the
+        # HEX C++ kernel consumes the Piola-exact reference flux
+        # q_ref = sigma * Js.  Js is constant on the affine facet.
+        surface_jacobian = np.linalg.norm(
+            np.cross(corners[1] - corners[0],
+                     corners[2] - corners[0]))
+        if not np.isfinite(surface_jacobian) or surface_jacobian <= 0.0:
+            raise ValueError(
+                "vim.ChargeGram: degenerate HEX facet %d" % nr)
+        rows.append(sp.csr_matrix(
+            surface_jacobian
+            * np.linalg.solve(C, jump_moments[dofs, :].toarray())))
+
+    return dict(
+        B=sp.vstack(rows).tocsr(),
+        face_nodes=face_nodes,
+        mons=mons,
+    )
+
+
+def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
+                      internal_interfaces=False):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
-    flat + curved ONE path).  fes = HDiv(hexmesh, order=1|2).  CALLER wraps TaskManager.  Flat NGSolve `.vol`
+    flat + curved ONE path).  fes = HDiv(hexmesh, order=0|1|2).  CALLER wraps TaskManager.  Flat NGSolve `.vol`
     hexes use direct NGSolve-reference lattice interpolation; curved meshes keep the GetTrafo source of truth.
 
     PIOLA-EXACT charge model (the warped-hex correctness fix): on a mapped hex the TRUE volume charge is
@@ -705,8 +997,8 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
     dxi deta  with NO Jacobian factors (they cancel against the two 1/J densities)."""
     mesh = fes.mesh
     p = int(fes.globalorder)
-    if p not in (1, 2):
-        raise ValueError("HEX HDiv-VIM supports HDiv order in {1,2}")
+    if p not in (0, 1, 2):
+        raise ValueError("HEX HDiv-VIM supports HDiv order in {0,1,2}")
     mons_hex = _mons_hex(p)
     mons_quad = _mons_quad(p)
     t0 = time.perf_counter()
@@ -728,7 +1020,10 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
     rqp, rqw = _ref_prod_gauss(cob_quad, 2)
     ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
     ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
-    linear_lattice = (mesh.GetCurveOrder() < 2)
+    # A linear topological mesh can still carry a live NGSolve deformation.
+    # In that case the cheap vertex interpolation describes the undeformed
+    # geometry, so the charge Gram lattice must come from GetTrafo.
+    linear_lattice = (mesh.GetCurveOrder() < 2 and mesh.deformation is None)
     t_topology = time.perf_counter()
 
     host, kind, expo = [], [], []
@@ -795,11 +1090,23 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
     else:
         Bface = sp.csr_matrix((0, Bb.shape[1]))
     face_project_s += time.perf_counter() - _ts
+    if internal_interfaces:
+        internal = _broken_hex_face_charge_basis(fes, p)
+        Bface = internal["B"]
+        face_nodes = internal["face_nodes"]
+        n_volume_charges = n_el * len(mons_hex)
+        del host[n_volume_charges:]
+        del kind[n_volume_charges:]
+        del expo[3*n_volume_charges:]
+        for f in range(len(face_nodes)):
+            for i, j in mons_quad:
+                host.append(f); kind.append(1); expo += [i, j, 0]
     t_before_vstack = time.perf_counter()
     B = sp.vstack([Bvol, Bface]).tocsr()
     t_after_vstack = time.perf_counter()
     return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
-                host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
+                host=host, kind=kind, expo=expo, n_el=n_el,
+                n_bf=len(face_nodes),
                 cell_nodes=_f64_buffer(np.concatenate([n.ravel() for n in cell_nodes])),
                 face_nodes=(_f64_buffer(np.concatenate([n.ravel() for n in face_nodes]))
                             if face_nodes else _EMPTY_F64),
@@ -820,7 +1127,8 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
 
 def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
-                           materialize_mass=True, build_hmatrix=True):
+                           materialize_mass=True, build_hmatrix=True,
+                           internal_interfaces=False):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glout_n = the 1D outer rule.  BDM1 keeps the validated default 4.  Flat BDM2 uses
@@ -847,7 +1155,9 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     default_outer = 4 if p == 1 else (5 if fes.mesh.GetCurveOrder() < 2 else 6)
     glout_n = default_outer if glout_n is None else int(glout_n)
     glin_n = (5 if p == 1 else 7) if glin_n is None else int(glin_n)
-    cb = _charge_basis_hex(fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass)
+    cb = _charge_basis_hex(
+        fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass,
+        internal_interfaces=bool(internal_interfaces))
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
@@ -1152,7 +1462,9 @@ def _charge_basis_wedge(fes, *, materialize_mass=True):
     Brows, host, kind, expo = [], [], [], []
     cell_nodes, face_nodes, face_type = [], [], []
     t_setup = time.perf_counter()
-    linear_lattice = (mesh.GetCurveOrder() < 2)
+    # See the HEX path above: SetDeformation changes GetTrafo without changing
+    # GetCurveOrder, hence a deformed linear WEDGE needs transformed nodes.
+    linear_lattice = (mesh.GetCurveOrder() < 2 and mesh.deformation is None)
     vol_transform_cache = {}
     face_transform_cache = {}
     vol_rows, vol_cols, vol_data = [], [], []
@@ -1335,7 +1647,7 @@ def _configure_cpp_operator(B, G, M_mass, M_mass_ngsolve):
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
                       image_masks=None, image_signs=None, _materialize_mass=True,
-                      _build_hmatrix=True):
+                      _build_hmatrix=True, internal_interfaces=False):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
@@ -1364,6 +1676,14 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     p = int(fes.globalorder)
     _vtypes = _volume_vertex_counts(mesh)
     validate_hdiv_configuration(mesh.dim, _vtypes, p, mesh.GetCurveOrder())
+    if internal_interfaces and not (
+            mesh.dim == 3 and _vtypes in ({4}, {8})
+            and mesh.GetCurveOrder() < 2):
+        raise NotImplementedError(
+            "vim.ChargeGram: internal_interfaces=True is currently wired "
+            "for straight pure-TET and affine-facet pure-HEX meshes; "
+            "WEDGE/curved topology interfaces require their matching facet "
+            "geometry kernels")
     if mesh.dim == 3 and _vtypes == {4}:
         if curve_order is None:
             mesh_curve_order = int(mesh.GetCurveOrder())
@@ -1406,7 +1726,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         return _configure_cpp_operator(*_build_charge_gram_hex(
             fes, eps=eps, leafsize=leafsize, eta=eta,
             image_masks=image_masks, image_signs=image_signs,
-            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
+            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
+            internal_interfaces=bool(internal_interfaces)))
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
@@ -1446,7 +1767,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # nonlinear choice (degree 5 > the old degree-3 product-27), just delivered by the symmetric rule.  intorder
     # still overrides for an explicit choice.  See tests/feec/test_hdiv_vim_psd.py + _symmetric_outer_quad.py.
     quad = (max(p + 2, (intorder + 1) // 2) if intorder is not None
-            else (max(3 * p, 4) if nonlinear else 3 * p))
+            else (max(3 * p, 4) if nonlinear else max(2, 3 * p)))
     if curve_order is not None:
         # CURVED (isoparametric P2) Gram: curved charge map B (reference-frame change-of-basis) + the C++
         # curved-Duffy charge Gram.  Only P2 is wired (the C++ CurvedTet/TriPotential are P2); the mesh must
@@ -1484,7 +1805,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # max(quad-2, p+1); only passed to C++ when iq < quad (else inner = outer).  Validated to hold the same
     # demag accuracy as inner=outer by the nearfar/operator goldens + the uniform-1/3 metric.
     iq = inner_quad if inner_quad is not None else max(quad - 2, p + 1)
-    cb = _charge_basis(fes, quad, materialize_mass=_materialize_mass)
+    cb = _charge_basis(
+        fes, quad, materialize_mass=_materialize_mass,
+        internal_interfaces=bool(internal_interfaces))
     B, M_mass, host, kind, expo = cb["B"], cb["M_mass"], cb["host"], cb["kind"], cb["expo"]
     cell_verts, face_verts, n_el = cb["cell_verts"], cb["face_verts"], cb["n_el"]
     # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
@@ -1519,7 +1842,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
 class DemagOperator:
     """ngsolve.bem-style production HDiv-VIM demag operator.
 
-    Construct from an order-1 or order-2 HDiv FESpace; ``.mat`` is the analytic C++
+    Construct from an order-1/order-2 HDiv FESpace, or straight TET/HEX
+    order-0 RT0 for the explicit broken-interface material-topology path;
+    ``.mat`` is the analytic C++
     charge-Gram operator ``N = B^T G B``.  The same operator is used by
     :func:`radia.vim.Solve`, so the diagnostic and material paths cannot drift
     into separate research backends.  The caller wraps construction and
@@ -1528,7 +1853,9 @@ class DemagOperator:
 
     def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
-                 curve_order=None, curve_gauss=8):
+                 curve_order=None, curve_gauss=8,
+                 internal_interfaces=False, image_masks=None,
+                 image_signs=None):
         p = int(fes.globalorder)
         vtypes = _volume_vertex_counts(fes.mesh)
         validate_hdiv_configuration(fes.mesh.dim, vtypes, p, fes.mesh.GetCurveOrder())
@@ -1544,10 +1871,15 @@ class DemagOperator:
         elif curve_order == 0:
             curve_order = None
         self.curve_order = curve_order
+        self.internal_interfaces = bool(internal_interfaces)
+        self.image_masks = tuple(() if image_masks is None else image_masks)
+        self.image_signs = tuple(() if image_signs is None else image_signs)
         self._B, self._G, self._Mmass = build_charge_gram(
             fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
             far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
-            curve_order=curve_order, curve_gauss=curve_gauss)
+            curve_order=curve_order, curve_gauss=curve_gauss,
+            internal_interfaces=self.internal_interfaces,
+            image_masks=self.image_masks, image_signs=self.image_signs)
         self.mat = self._G.demag_matrix()
 
     @property

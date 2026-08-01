@@ -10,6 +10,8 @@ Provides tools for:
 - IMA (Image Method of Analysis) sign selection
 - Field harmonics / multipole analysis
 - radia-em Clebsch hodograph panel mode and accelerator design references
+- Accelerator fundamentals, beam-optics handoff, ramped/superconducting
+  magnet engineering, measurement, and a curated textbook source guide
 
 Usage:
     mcp-server-electromagnet              # Start MCP server (stdio transport)
@@ -23,12 +25,15 @@ Hantila polarization, B-input hysteresis, IMA sign selection,
 field-harmonics / multipole analysis).
 """
 
+import importlib.util
 import sys
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool, register_topics_tool
 
-from .em_knowledge import get_electromagnet_documentation, TOPICS
+from ..common import register_status_tool, register_topics_tool
+from .accelerator_fundamentals_knowledge import get_accelerator_source_guide
+from .em_knowledge import TOPICS, get_electromagnet_documentation
 
 mcp = FastMCP("mcp-server-electromagnet")
 
@@ -60,9 +65,130 @@ def electromagnet_usage(topic: str = "overview") -> str:
             "harmonics"        - Multipole analysis, FFT extraction
             "clebsch_hodograph" - radia-em Clebsch hodograph mode and links
                                   to accelerator pole-face design topics
+            "accelerator_fundamentals" - Magnetic rigidity and requirements
+            "beam_optics_contract" - Twiss/dispersion/tune field handoff
+            "accelerator_magnet_types" - Magnet roles and technology choice
+            "accelerator_magnet_design" - End-to-end engineering workflow
+            "rapid_cycling_magnets" - Eddy current and power-supply design
+            "superconducting_accelerator_magnets" - Conductor/quench design
+            "accelerator_magnet_measurement" - Field QA and commissioning
+            "accelerator_model_boundaries" - Coupled accelerator analyses
+            "accelerator_sources" - Curated 12-textbook source guide
             "all"              - Complete documentation
     """
     return get_electromagnet_documentation(topic)
+
+
+@mcp.tool()
+def electromagnet_accelerator_sources(query: str = "") -> str:
+    """Search the curated accelerator textbook source guide.
+
+    The guide covers 12 textbooks and lecture notes used to build the
+    accelerator fundamentals in this server. It returns bibliographic and
+    topical locators only; source PDF text is not distributed.
+
+    Args:
+        query: Optional keyword filter such as ``beam optics``,
+               ``rapid cycling``, ``space charge``, ``measurement``, or
+               ``superconducting``. Empty returns the complete guide.
+    """
+    return get_accelerator_source_guide(query)
+
+
+def _load_coils_for_audit(coil_script: str):
+    """Load the existing panel ``build_coil`` contract for audit tools."""
+    path = Path(coil_script).expanduser().resolve(strict=True)
+    if path.suffix.lower() != ".py":
+        raise ValueError("coil_script must be a Python .py file")
+    spec = importlib.util.spec_from_file_location(
+        f"radia_mcp_coil_audit_{abs(hash(path))}", path
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load coil script: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    builder = getattr(module, "build_coils", None)
+    if builder is None:
+        builder = getattr(module, "build_coil", None)
+    if not callable(builder):
+        raise ValueError(
+            "coil_script must define build_coil() or build_coils()"
+        )
+    return builder()
+
+
+@mcp.tool()
+def electromagnet_coil_yoke_clearance_audit(
+    coil_script: str,
+    yoke_step: str,
+    minimum_clearance: float = 0.0,
+    intersection_volume_tolerance: float = 1.0e-15,
+    fail_on_error: bool = False,
+) -> dict:
+    """Reject coil/yoke overlap and insufficient manufacturing clearance.
+
+    The coil script uses the same trusted local ``build_coil() ->
+    CoilBuilder`` contract as the Electromagnet application. It may instead
+    define ``build_coils()`` and return multiple CoilBuilder objects. The yoke
+    is read from STEP, intersected with the swept copper solid, and checked
+    before any field solve is started.
+    """
+    from radia.coil_builder import audit_coil_yoke_clearance
+
+    coils = _load_coils_for_audit(coil_script)
+    yoke_path = Path(yoke_step).expanduser().resolve(strict=True)
+    report = audit_coil_yoke_clearance(
+        coils,
+        yoke_path,
+        minimum_clearance=minimum_clearance,
+        intersection_volume_tolerance=intersection_volume_tolerance,
+    )
+    if fail_on_error and not report["passed"]:
+        raise RuntimeError(
+            "Coil/yoke clearance audit failed: "
+            f"intersection_volume={report['intersection_volume']:.9g}, "
+            f"measured_clearance={report['measured_clearance']:.9g}, "
+            f"required_clearance={report['minimum_clearance']:.9g}"
+        )
+    return report
+
+
+@mcp.tool()
+def electromagnet_coil_field_audit(
+    coil_script: str,
+    sample_points: list[list[float]],
+    n_arc: int = 200,
+    arc_max_segment_length: float | None = None,
+    relative_tolerance: float = 0.02,
+    absolute_tolerance_T: float = 1.0e-9,
+    closure_tolerance: float = 1.0e-9,
+    fail_on_error: bool = False,
+) -> dict:
+    """Cross-check CoilBuilder solid-current and FE filament field sources.
+
+    Sample points must lie in the beam/field observation region, outside the
+    conductor. This also rejects open current paths. It is intended as a
+    pre-solve source-model gate, not as a replacement for the FE solve.
+    """
+    from radia.coil_builder import audit_coil_field_consistency
+
+    coils = _load_coils_for_audit(coil_script)
+    report = audit_coil_field_consistency(
+        coils,
+        sample_points,
+        n_arc=n_arc,
+        arc_max_segment_length=arc_max_segment_length,
+        relative_tolerance=relative_tolerance,
+        absolute_tolerance_T=absolute_tolerance_T,
+        closure_tolerance=closure_tolerance,
+    )
+    if fail_on_error and not report["passed"]:
+        raise RuntimeError(
+            "Coil field audit failed: "
+            f"closed={report['closed']}, "
+            f"max_relative_error={report['max_relative_error']:.9g}"
+        )
+    return report
 
 
 # ============================================================
@@ -78,14 +204,19 @@ def new_electromagnet_simulation(magnet_type: str = "dipole") -> str:
         f"Set up an accelerator {magnet_type} magnet simulation.\n\n"
         "Use the electromagnet_usage tool for detailed documentation.\n\n"
         "General workflow:\n"
+        "0. Translate lattice requirements through magnetic rigidity\n"
+        "   - electromagnet_usage('accelerator_fundamentals')\n"
+        "   - electromagnet_usage('beam_optics_contract')\n"
         "1. Define coil with CoilBuilder (no coil mesh needed)\n"
         "   - electromagnet_usage('coilbuilder') for API reference\n"
-        "2. Create yoke + air + Kelvin domain in Cubit\n"
+        "2. Export the yoke STEP and run the coil/yoke clearance audit\n"
+        "   - fail on overlap or insufficient manufacturing clearance\n"
+        "3. Create yoke + air + Kelvin domain in Cubit\n"
         "   - export netgen 'model.vol' order 2 overwrite\n"
-        "3. NGSolve FEM solve (Omega-reduced scalar potential)\n"
+        "4. NGSolve FEM solve (Omega-reduced scalar potential)\n"
         "   - electromagnet_usage('kelvin_workflow') for full code\n"
-        "4. Visualize with GmshPostExport + coil STEP overlay\n"
-        "5. Extract field harmonics at reference radius\n"
+        "5. Visualize with GmshPostExport + coil STEP overlay\n"
+        "6. Extract field harmonics at reference radius\n"
         "   - electromagnet_usage('harmonics') for FFT method\n\n"
     )
 
@@ -155,6 +286,11 @@ def main():
             "overview", "coilbuilder", "kelvin_workflow",
             "hantila", "hysteresis", "ima", "harmonics",
             "clebsch_hodograph",
+            "accelerator_fundamentals", "beam_optics_contract",
+            "accelerator_magnet_types", "accelerator_magnet_design",
+            "rapid_cycling_magnets", "superconducting_accelerator_magnets",
+            "accelerator_magnet_measurement", "accelerator_model_boundaries",
+            "accelerator_sources",
         ]
         for t in topics:
             result = electromagnet_usage(t)
@@ -164,6 +300,9 @@ def main():
         prompt = new_electromagnet_simulation("dipole")
         print(f"  new_electromagnet_simulation('dipole'): {len(prompt)} chars")
         assert "CoilBuilder" in prompt
+        sources = electromagnet_accelerator_sources("rapid cycling")
+        print(f"  electromagnet_accelerator_sources('rapid cycling'): {len(sources)} chars")
+        assert "High-Intensity Proton Synchrotrons" in sources
         print("  PASSED")
         return
 

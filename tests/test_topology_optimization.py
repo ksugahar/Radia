@@ -3,6 +3,8 @@ import numpy as np
 from radia.topology_optimization import (
     affine_cell_self_energy_shape_derivative,
     assemble_ngsolve_hdiv_shape_tangents,
+    assemble_ngsolve_hdiv_linear_form_shape_tangents,
+    assemble_ngsolve_hdiv_mass_shape_contractions,
     linearize_laplace_charge_gram,
     production_hex_volume_self_block_derivatives,
     production_hex_face_self_block_derivatives,
@@ -20,7 +22,698 @@ from radia.topology_optimization import (
     linearize_production_vim_from_ngsolve,
     linearize_production_vim_matrix_free_from_ngsolve,
     sample_production_gettrafo_displacements,
+    production_vim_functional_shape_jacobian_streaming,
+    ElementInsertionResponse,
+    ShapeLinearization,
+    finite_element_insertion_response,
+    hdiv_mmm_block_insertion_response,
+    linearize_hdiv_mmm_element_generation,
+    grow_hdiv_mmm_by_superposition,
+    ngsolve_boundary_growth_candidates,
+    ngsolve_boundary_removal_candidates,
+    ngsolve_growth_topology,
+    ngsolve_discontinuous_element_dof_blocks,
+    select_collaborative_element_batch,
+    select_tsvd_element_candidates,
+    solve_hdiv_mmm_active_elements,
+    solve_element_generation_lp,
+    solve_shape_lp,
 )
+
+
+def _element_centroids(mesh):
+    import ngsolve as ng
+    return np.asarray([
+        np.mean([np.asarray(mesh[vertex].point,dtype=float)
+                 for vertex in element.vertices],axis=0)
+        for element in mesh.Elements(ng.VOL)])
+
+
+def test_growth_topology_rejects_cavity_and_disconnected_iron():
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=3,nz=3)
+    centers=_element_centroids(mesh)
+    center=int(np.argmin(np.linalg.norm(centers-.5,axis=1)))
+    cavity=np.ones(mesh.ne,dtype=bool);cavity[center]=False
+    report=ngsolve_growth_topology(mesh,cavity)
+    assert report.iron_connected and not report.inactive_reaches_exterior
+    np.testing.assert_array_equal(report.enclosed_inactive_elements,[center])
+    assert not report.valid
+
+    corners=np.zeros(mesh.ne,dtype=bool)
+    corners[int(np.argmin(np.sum(centers,axis=1)))]=True
+    corners[int(np.argmax(np.sum(centers,axis=1)))]=True
+    report=ngsolve_growth_topology(mesh,corners)
+    assert len(report.iron_components)==2 and not report.iron_connected
+    assert report.inactive_reaches_exterior and not report.valid
+
+    slab=centers[:,0]<.34
+    report=ngsolve_growth_topology(mesh,slab)
+    assert report.valid
+
+
+def test_growth_candidates_respect_fixed_air_and_column_predecessor():
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    centers=_element_centroids(mesh);order=np.argsort(centers[:,0])
+    active=np.zeros(mesh.ne,dtype=bool);active[order[0]]=True
+    predecessor=np.full(mesh.ne,-1,dtype=np.int64)
+    predecessor[order[1]]=order[0];predecessor[order[2]]=order[1]
+    candidates=ngsolve_boundary_growth_candidates(
+        mesh,active,predecessor_elements=predecessor)
+    np.testing.assert_array_equal(candidates,[order[1]])
+    descendants=ngsolve_boundary_growth_candidates(
+        mesh,active,predecessor_elements=predecessor,
+        include_predecessor_descendants=True)
+    np.testing.assert_array_equal(descendants,order[1:])
+    fixed=np.zeros(mesh.ne,dtype=bool);fixed[order[1]]=True
+    assert ngsolve_boundary_growth_candidates(
+        mesh,active,fixed_inactive_elements=fixed,
+        predecessor_elements=predecessor).size==0
+
+
+def test_binary_generation_lp_enforces_predecessor_selection():
+    update=solve_element_generation_lp(
+        current_response=[0.0],response_target=[0.0],response_band=[1.0],
+        candidate_response_delta=np.zeros((1,2)),candidate_volumes=[1.0,1.0],
+        volume_budget=2.0,maximum_new_elements=2,
+        candidate_objective_change=[0.0,-1.0],predecessor_pairs=[(1,0)])
+    np.testing.assert_array_equal(update.selected,[True,True])
+
+
+def test_ngsolve_hdiv_linear_form_shape_tangent_includes_spatial_kernel_motion():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=False,nx=1,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1);space=ng.VectorH1(mesh,order=1)
+    velocity=ng.GridFunction(space)
+    velocity.Set(ng.CF((.1*ng.x,.02*ng.y,-.03*ng.z)))
+    coefficient=ng.CF((ng.x*ng.x,ng.y*ng.z,ng.z+.2*ng.x))
+    with ng.TaskManager():
+        _,analytic=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+            fes,coefficient,[velocity])
+        values=[];epsilon=2e-6
+        for sign in (1.0,-1.0):
+            deformation=ng.GridFunction(space)
+            deformation.vec.data=sign*epsilon*velocity.vec
+            mesh.SetDeformation(deformation)
+            form=ng.LinearForm(fes)
+            form+=ng.InnerProduct(coefficient,fes.TestFunction())*ng.dx
+            form.Assemble();values.append(form.vec.FV().NumPy().copy())
+            mesh.UnsetDeformation()
+    fd=(values[0]-values[1])/(2*epsilon)
+    np.testing.assert_allclose(analytic[0],fd,rtol=2e-8,atol=2e-10)
+
+
+def test_finite_filament_hdiv_load_shape_tangent_matches_rebuild():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.biot_savart import h_segments_cf
+    mesh=MakeStructured3DMesh(hexes=False,nx=1,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1);space=ng.VectorH1(mesh,order=1)
+    velocity=ng.GridFunction(space)
+    velocity.Set(ng.CF((.04*ng.x-.01*ng.y,.02*ng.y,-.03*ng.z)))
+    coefficient=h_segments_cf([
+        ((-0.3,-0.2,1.4),(1.2,-0.2,1.4)),
+        ((1.2,-0.2,1.4),(1.2,1.3,1.4)),
+    ],current=1200.0)
+    with ng.TaskManager():
+        _,analytic=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+            fes,coefficient,[velocity],bonus_intorder=10)
+        values=[];epsilon=2e-6
+        for sign in (1.0,-1.0):
+            deformation=ng.GridFunction(space)
+            deformation.vec.data=sign*epsilon*velocity.vec
+            mesh.SetDeformation(deformation)
+            form=ng.LinearForm(fes)
+            form+=ng.InnerProduct(coefficient,fes.TestFunction())*ng.dx(
+                bonus_intorder=10)
+            form.Assemble();values.append(form.vec.FV().NumPy().copy())
+            mesh.UnsetDeformation()
+    fd=(values[0]-values[1])/(2*epsilon)
+    np.testing.assert_allclose(analytic[0],fd,rtol=3e-8,atol=2e-9)
+
+
+def test_ngsolve_hdiv_mass_shape_contractions_match_sparse_directional_matrices():
+    import ngsolve as ng
+    import scipy.sparse as sp
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=False,nx=1,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1);space=ng.VectorH1(mesh,order=1)
+    modes=[]
+    for coefficient in ((.08,-.03,.02),(-.01,.04,.06)):
+        mode=ng.GridFunction(space)
+        mode.Set(ng.CF((coefficient[0]*ng.x,coefficient[1]*ng.y,
+                        coefficient[2]*ng.z)))
+        modes.append(mode)
+    rng=np.random.default_rng(20260731)
+    right=rng.normal(size=fes.ndof);left=rng.normal(size=(3,fes.ndof))
+    with ng.TaskManager():
+        _,dmass,_=assemble_ngsolve_hdiv_shape_tangents(
+            fes,modes,sp.eye(fes.ndof),sparse=True)
+        contractions=assemble_ngsolve_hdiv_mass_shape_contractions(
+            fes,modes,left,right)
+    expected=np.asarray([[row@(matrix@right) for matrix in dmass]
+                         for row in left])
+    np.testing.assert_allclose(contractions,expected,rtol=3e-13,atol=3e-13)
+
+
+def test_hex_charge_basis_lattice_follows_live_ngsolve_deformation():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis_hex
+    mesh=MakeStructured3DMesh(hexes=True,nx=1,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1)
+    space=ng.VectorH1(mesh,order=1)
+    deformation=ng.GridFunction(space)
+    deformation.Set(ng.CF((.07*ng.x-.02*ng.y,.03*ng.y,.04*ng.z+.01*ng.x)))
+    with ng.TaskManager():
+        undeformed=_charge_basis_hex(fes,cob_quad=3,materialize_mass=False)
+        mesh.SetDeformation(deformation)
+        deformed=_charge_basis_hex(fes,cob_quad=3,materialize_mass=False)
+        mesh.UnsetDeformation()
+    x0=np.asarray(undeformed["cell_nodes"]).reshape(-1,3)
+    x1=np.asarray(deformed["cell_nodes"]).reshape(-1,3)
+    expected=x0+np.column_stack((.07*x0[:,0]-.02*x0[:,1],
+                                 .03*x0[:,1],
+                                 .04*x0[:,2]+.01*x0[:,0]))
+    np.testing.assert_allclose(x1,expected,rtol=2e-13,atol=2e-13)
+
+
+def test_tet_charge_basis_vertices_follow_live_ngsolve_deformation():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis
+    mesh=MakeStructured3DMesh(hexes=False,nx=1,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1)
+    space=ng.VectorH1(mesh,order=1)
+    deformation=ng.GridFunction(space)
+    deformation.Set(ng.CF((.07*ng.x-.02*ng.y,.03*ng.y,
+                           .04*ng.z+.01*ng.x)))
+    with ng.TaskManager():
+        undeformed=_charge_basis(fes,quad=4,materialize_mass=False)
+        mesh.SetDeformation(deformation)
+        deformed=_charge_basis(fes,quad=4,materialize_mass=False)
+        mesh.UnsetDeformation()
+    for key in ("vV","bV"):
+        x0=np.asarray(undeformed[key]).reshape(-1,3)
+        x1=np.asarray(deformed[key]).reshape(-1,3)
+        expected=x0+np.column_stack((.07*x0[:,0]-.02*x0[:,1],
+                                     .03*x0[:,1],
+                                     .04*x0[:,2]+.01*x0[:,0]))
+        np.testing.assert_allclose(x1,expected,rtol=2e-13,atol=2e-13)
+
+
+def test_multi_functional_streaming_shape_jacobian_matches_rebuilt_geometry():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram,_charge_basis_hex
+    gradient=np.array([[.04,-.02,.01],[.01,.03,-.015],[-.02,.005,.025]])
+    shift=np.array([.01,-.006,.004]);inv_chi=.2
+    applied=ng.CF((.2,-.1,1.0))
+    observed=ng.CF((ng.x*ng.x+.1*ng.z,.3*ng.y,ng.z+.2*ng.x))
+    def build(epsilon):
+        def mapping(x,y,z):
+            point=np.array([x,y,z]);return tuple(point+epsilon*(gradient@point+shift))
+        mesh=MakeStructured3DMesh(hexes=True,nx=1,ny=1,nz=1,mapping=mapping)
+        fes=ng.HDiv(mesh,order=1)
+        with ng.TaskManager():
+            basis=_charge_basis_hex(fes,cob_quad=3)
+            B,gram,_=build_charge_gram(fes,eps=1e-12,leafsize=256,eta=2.0)
+            rhs,_=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+                fes,applied,(),bonus_intorder=4)
+            row,_=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+                fes,observed,(),bonus_intorder=4)
+        solved=gram.solve_configured_linear_material_auto_prec_many(inv_chi,
+            np.ascontiguousarray(rhs[None,:]),tol=1e-12,maxit=5000,
+            mass_riesz=True)["m"][0]
+        return float(row@solved),(mesh,fes,basis,B,gram,rhs,row)
+    value,data=build(0.0);mesh,fes,basis,B,gram,rhs,row=data
+    space=ng.VectorH1(mesh,order=1);mode=ng.GridFunction(space)
+    mode.Set(ng.CF(tuple(gradient@np.array([ng.x,ng.y,ng.z],dtype=object)+shift)))
+    with ng.TaskManager():
+        _,drhs=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+            fes,applied,[mode],bonus_intorder=4)
+        _,drow=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+            fes,observed,[mode],bonus_intorder=4)
+        analytic=production_vim_functional_shape_jacobian_streaming(
+            fes=fes,deformation_modes=[mode],charge_basis=basis,
+            charge_gram=gram,charge_map=B,inv_chi=inv_chi,rhs=rhs,
+            response_matrix=row[None,:],rhs_jacobian=drhs,
+            dresponse_matrix=drow[:,None,:],family="hex",solve_tolerance=1e-12)
+    epsilon=2e-6;plus,_=build(epsilon);minus,_=build(-epsilon)
+    fd=(plus-minus)/(2*epsilon)
+    np.testing.assert_allclose(analytic.response,[value],rtol=2e-12,atol=2e-12)
+    np.testing.assert_allclose(analytic.response_jacobian[0,0],fd,rtol=2e-4,atol=2e-7)
+
+
+def test_finite_element_insertion_response_is_exact_for_full_strength_block():
+    rng=np.random.default_rng(20260730)
+    R=rng.normal(size=(7,7)); Aaa=R.T@R+4*np.eye(7)
+    Aae=.08*rng.normal(size=(7,3));
+    Ree=rng.normal(size=(3,3)); Aee=Ree.T@Ree+3*np.eye(3)
+    ba=rng.normal(size=7);be=rng.normal(size=3)
+    Ca=rng.normal(size=(4,7));Ce=rng.normal(size=(4,3))
+    ma=np.linalg.solve(Aaa,ba)
+    adjoint=np.linalg.solve(Aaa,Ca.T)
+    result=finite_element_insertion_response(
+        solve_active=lambda rhs:np.linalg.solve(Aaa,rhs),active_state=ma,
+        active_to_candidate=Aae,candidate_matrix=Aee,candidate_rhs=be,
+        active_response_matrix=Ca,candidate_response_matrix=Ce,
+        active_adjoint=adjoint)
+    enlarged=np.block([[Aaa,Aae],[Aae.T,Aee]])
+    full=np.linalg.solve(enlarged,np.r_[ba,be])
+    expected=(np.c_[Ca,Ce]@full)-(Ca@ma)
+    assert isinstance(result,ElementInsertionResponse)
+    np.testing.assert_allclose(result.active_state_delta,full[:7]-ma,rtol=2e-13,atol=2e-14)
+    np.testing.assert_allclose(result.candidate_state,full[7:],rtol=2e-13,atol=2e-14)
+    np.testing.assert_allclose(result.response_delta,expected,rtol=2e-13,atol=2e-14)
+
+
+def test_whole_element_generation_lp_has_no_gray_material():
+    update=solve_element_generation_lp([0.0],[2.0],[.05],
+        np.array([[1.0,1.0,.2]]),[1.0,1.0,.1],volume_budget=2.0,
+        maximum_new_elements=2,whole_elements=True)
+    assert update.selected.tolist()==[True,True,False]
+    assert set(update.weights.tolist())<={0.0,1.0}
+    np.testing.assert_allclose(update.predicted_response,[2.0],atol=1e-12)
+    assert update.added_volume==2.0 and update.predicted_max_band_ratio<1e-10
+
+
+def test_native_hdiv_mmm_boundary_insertions_match_exact_active_resolves():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=False,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    assert hasattr(gram,"reduce_configured_candidate_schur")
+    rng=np.random.default_rng(9182)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    active=np.zeros(mesh.ne,dtype=bool);active[0]=True
+    result=linearize_hdiv_mmm_element_generation(charge_gram=gram,fes=fes,
+        inv_chi=.2,rhs=rhs,response_matrix=response_matrix,
+        active_elements=active,solve_tolerance=1e-11,candidate_batch_size=4)
+    probes=np.ascontiguousarray(rng.normal(size=(3,fes.ndof)))
+    for respect_constraints in (False,True):
+        batched=gram.apply_configured_linear_material_operator_many(
+            .2,probes,respect_constraints=respect_constraints)
+        scalar=np.stack([
+            gram.apply_configured_linear_material_operator(
+                .2,row,respect_constraints=respect_constraints)
+            for row in probes])
+        np.testing.assert_allclose(batched,scalar,rtol=2e-13,atol=2e-13)
+        assert np.asarray(batched).flags.c_contiguous
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    active_dofs=blocks[0]
+    assert result.candidate_response_delta.shape==(2,len(result.candidate_elements))
+    assert result.available_candidate_count==len(result.candidate_elements)
+    assert set(result.native_reduction_timings)=={
+        "operator_s","solve_s","contraction_s"}
+    assert all(value>0.0 for value in result.native_reduction_timings.values())
+    for column,element in enumerate(result.candidate_elements):
+        keep=np.r_[active_dofs,blocks[int(element)]]
+        constrained=np.ones(fes.ndof,dtype=bool);constrained[keep]=False
+        gram.set_configured_constraints(
+            np.flatnonzero(constrained).astype(np.int32))
+        exact_rhs=rhs.copy();exact_rhs[constrained]=0.0
+        exact=gram.solve_configured_linear_material_auto_prec_many(.2,
+            np.ascontiguousarray(exact_rhs[None,:]),tol=1e-11,maxit=5000,
+            mass_riesz=True)["m"][0]
+        delta=response_matrix@exact-result.response
+        np.testing.assert_allclose(result.candidate_response_delta[:,column],
+            delta,rtol=2e-12,atol=2e-12)
+
+    selected=result.candidate_elements[:1]
+    screened=linearize_hdiv_mmm_element_generation(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        candidate_elements=result.candidate_elements,solve_tolerance=1e-11,
+        candidate_batch_size=4,
+        candidate_selector=lambda elements,delta,state,response:selected)
+    assert screened.available_candidate_count==len(result.candidate_elements)
+    np.testing.assert_array_equal(screened.candidate_elements,selected)
+    np.testing.assert_allclose(screened.state,result.state,rtol=2e-13,atol=2e-13)
+    np.testing.assert_allclose(screened.candidate_response_delta[:,0],
+                               result.candidate_response_delta[:,0],
+                               rtol=2e-12,atol=2e-12)
+
+
+def test_native_hdiv_mmm_block_schur_bundle_matches_exact_active_resolve():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(20260731)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(3,fes.ndof))
+    active=np.zeros(mesh.ne,dtype=bool);active[1]=True
+    linearization=linearize_hdiv_mmm_element_generation(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        solve_tolerance=1e-11,candidate_batch_size=4)
+    selected=linearization.candidate_elements
+    assert selected.size==2
+    block=hdiv_mmm_block_insertion_response(linearization,selected)
+    exact_state,exact_response,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,
+        active_elements=np.ones(mesh.ne,dtype=bool),solve_tolerance=1e-11)
+    np.testing.assert_allclose(
+        linearization.response+block.response_delta,exact_response,
+        rtol=3e-12,atol=3e-12)
+    assert block.schur_complement.shape[0]==sum(
+        len(linearization.candidate_dof_blocks[index])
+        for index in range(len(selected)))
+    assert np.all(np.isfinite(exact_state))
+
+
+def test_collaborative_search_finds_pair_when_neither_singleton_improves():
+    responses={
+        (10,):np.array([0.0,0.0]),
+        (11,):np.array([0.0,0.0]),
+        (12,):np.array([0.1,0.0]),
+        (10,11):np.array([1.0,-1.0]),
+        (10,12):np.array([0.1,0.0]),
+        (11,12):np.array([0.1,0.0]),
+    }
+    update=select_collaborative_element_batch(
+        current_response=np.zeros(2),response_target=np.array([1.0,-1.0]),
+        response_band=np.full(2,.05),candidate_elements=np.array([10,11,12]),
+        candidate_volumes=np.ones(3),
+        evaluate_bundle_response=lambda bundle:responses[tuple(bundle)],
+        volume_budget=2.0,maximum_new_elements=2,
+        candidate_limit=3,beam_width=4)
+    np.testing.assert_array_equal(update.selected_elements,[10,11])
+    np.testing.assert_allclose(update.predicted_response,[1.0,-1.0])
+    assert update.predicted_max_band_ratio==0.0
+    assert update.evaluated_bundles==6
+    assert "block-Schur" in update.status
+
+
+def test_collaborative_search_uses_smallest_bundle_capturing_most_improvement():
+    responses={
+        (10,):np.array([5.2]),
+        (11,):np.array([9.0]),
+        (10,11):np.array([5.0]),
+    }
+    update=select_collaborative_element_batch(
+        current_response=np.array([10.0]),response_target=np.array([0.0]),
+        response_band=np.array([1.0]),candidate_elements=np.array([10,11]),
+        candidate_volumes=np.ones(2),
+        evaluate_bundle_response=lambda bundle:responses[tuple(bundle)],
+        volume_budget=2.0,maximum_new_elements=2,
+        candidate_limit=2,beam_width=2,improvement_capture=.9)
+    # The pair improves the normalized error from 10 to 5, but element 10
+    # alone captures 96% of that reduction with half the added volume.
+    np.testing.assert_array_equal(update.selected_elements,[10])
+    assert update.predicted_max_band_ratio==5.2
+
+
+def test_all_candidate_aca_qr_tsvd_determines_binary_cardinality():
+    current=np.array([3.0,3.0])
+    target=np.zeros(2);band=np.ones(2)
+    elements=np.arange(10,dtype=np.int64)+20
+    # Ten candidates enter one rank-two response matrix.  Only the first two
+    # are required; cardinality follows the TSVD target solve, not a fixed cap.
+    delta=np.array([
+        [-2.9,0.0,-1.1,-.8,-.6,-.4,-.3,-.2,-.1,-.05],
+        [0.0,-2.9,-1.1,-.7,-.5,-.4,-.25,-.15,-.08,-.04]])
+    update=select_tsvd_element_candidates(
+        current_response=current,response_target=target,response_band=band,
+        candidate_elements=elements,candidate_response_delta=delta,
+        candidate_volumes=np.ones(10),volume_budget=10.0,
+        relative_tolerance=1e-10,improvement_capture=.9)
+    assert update.aca_rank==2 and update.numerical_rank==2
+    np.testing.assert_array_equal(update.selected_elements,[20,21])
+    assert update.predicted_max_band_ratio<0.11
+    assert update.relative_truncation_error<1e-12
+
+
+def test_tsvd_magnetization_sign_selects_addition_or_removal():
+    elements=np.array([10,11],dtype=np.int64)
+    volumes=np.ones(2)
+    add=select_tsvd_element_candidates(
+        current_response=[0.0],response_target=[1.0],response_band=[.1],
+        candidate_elements=elements,candidate_response_delta=[[1.0,.2]],
+        candidate_volumes=volumes,volume_budget=2.0,
+        candidate_material_active=[False,True],relative_tolerance=1e-10,
+        improvement_capture=1.0)
+    np.testing.assert_array_equal(add.selected_elements,[10])
+    np.testing.assert_array_equal(add.selected_directions,[1])
+    remove=select_tsvd_element_candidates(
+        current_response=[1.0],response_target=[0.0],response_band=[.1],
+        candidate_elements=elements,candidate_response_delta=[[.2,1.0]],
+        candidate_volumes=volumes,volume_budget=0.0,
+        candidate_material_active=[False,True],relative_tolerance=1e-10,
+        improvement_capture=1.0)
+    np.testing.assert_array_equal(remove.selected_elements,[11])
+    np.testing.assert_array_equal(remove.selected_directions,[-1])
+    assert remove.added_volume==-1.0
+
+
+def test_boundary_removal_is_outermost_and_preserves_seed():
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    active=np.ones(mesh.ne,dtype=bool)
+    fixed=np.zeros(mesh.ne,dtype=bool);fixed[0]=True
+    predecessor=np.array([-1,0,1],dtype=np.int64)
+    np.testing.assert_array_equal(ngsolve_boundary_removal_candidates(
+        mesh,active,fixed_active_elements=fixed,
+        predecessor_elements=predecessor),[2])
+    active[2]=False
+    np.testing.assert_array_equal(ngsolve_boundary_removal_candidates(
+        mesh,active,fixed_active_elements=fixed,
+        predecessor_elements=predecessor),[1])
+
+
+def test_hdiv_mmm_generation_driver_accepts_purely_collaborative_pair():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(4471)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    zero_response=np.zeros((1,fes.ndof))
+    masks=[]
+    for selected in ((1,),(0,1),(1,2),(0,1,2)):
+        mask=np.zeros(mesh.ne,dtype=bool);mask[list(selected)]=True;masks.append(mask)
+    states=[solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=zero_response,active_elements=mask,
+        solve_tolerance=1e-11)[0] for mask in masks]
+    state_deltas=np.vstack((states[1]-states[0],states[2]-states[0],
+                            states[3]-states[0]))
+    response_row=np.linalg.lstsq(
+        state_deltas,np.array([0.0,0.0,1.0]),rcond=None)[0][None,:]
+    realized=state_deltas@response_row[0]
+    np.testing.assert_allclose(realized,[0.0,0.0,1.0],atol=2e-11)
+    current=float((response_row@states[0]).item())
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_row,active_elements=masks[0],
+        element_volumes=volumes,response_target=[current+1.0],
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        maximum_batch_elements=2,max_iterations=1,
+        solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    assert result.stop_reason=="target_met"
+    np.testing.assert_array_equal(result.history[0].added_elements,[0,2])
+    assert result.history[0].selection_model==\
+        "all-candidate-aca-qr-tsvd-exact-conditional"
+    assert result.history[0].collaborative_bundles_evaluated==3
+    assert result.history[0].superposed_max_band_ratio>=9e7
+    np.testing.assert_allclose(result.response,[current+1.0],atol=3e-11)
+
+
+def test_hdiv_mmm_generation_driver_commits_exact_whole_element_batch():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=False,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(5521)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    active=np.zeros(mesh.ne,dtype=bool);active[0]=True
+    initial=linearize_hdiv_mmm_element_generation(charge_gram=gram,fes=fes,
+        inv_chi=.2,rhs=rhs,response_matrix=response_matrix,
+        active_elements=active,solve_tolerance=1e-11)
+    wanted=int(initial.candidate_elements[0])
+    target=initial.response+initial.candidate_response_delta[:,0]
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=grow_hdiv_mmm_by_superposition(charge_gram=gram,fes=fes,
+        inv_chi=.2,rhs=rhs,response_matrix=response_matrix,
+        active_elements=active,element_volumes=volumes,
+        response_target=target,response_band=np.full(2,1e-8),
+        volume_max=volumes[0]+volumes[wanted]+1e-14,
+        maximum_batch_elements=1,max_iterations=2,solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    assert result.stop_reason=="target_met"
+    assert result.history[0].added_elements.tolist()==[wanted]
+    assert result.active_elements[wanted] and np.count_nonzero(result.active_elements)==2
+    np.testing.assert_allclose(result.response,target,rtol=0,atol=3e-12)
+
+
+def test_hdiv_mmm_generation_removes_negative_magnetization_candidate():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(20260730)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    current=np.array([True,True,False])
+    target_active=np.array([True,False,False])
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=current,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([True,False,False]),
+        predecessor_elements=np.array([-1,0,1]),max_iterations=1,
+        solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.history[0].added_elements,[])
+    np.testing.assert_array_equal(result.history[0].removed_elements,[1])
+    assert result.history[0].selection_model==\
+        "signed-magnetization-aca-qr-tsvd-full-resolve"
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    np.testing.assert_allclose(result.response,target,rtol=0,atol=4e-11)
+
+
+def test_hdiv_mmm_generation_supports_removal_only_front():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(20260731)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    current=np.ones(2,dtype=bool);target_active=np.array([True,False])
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=current,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([True,False]),
+        predecessor_elements=np.array([-1,0]),max_iterations=1,
+        solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.history[0].removed_elements,[1])
+    assert result.history[0].addition_candidate_count==0
+    assert result.history[0].removal_candidate_count==1
+    assert result.history[0].selection_model==\
+        "signed-magnetization-aca-qr-tsvd-conditional-exact"
+    assert result.history[0].collaborative_bundles_evaluated>=1
+    np.testing.assert_array_equal(result.active_elements,target_active)
+
+
+def test_hdiv_mmm_generation_recalibrates_linear_coil_source_after_batch():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=False,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(8015)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    active=np.zeros(mesh.ne,dtype=bool);active[0]=True
+    initial=linearize_hdiv_mmm_element_generation(charge_gram=gram,fes=fes,
+        inv_chi=.2,rhs=rhs,response_matrix=response_matrix,
+        active_elements=active,solve_tolerance=1e-11)
+    inserted=initial.response+initial.candidate_response_delta[:,0]
+    raw_target=1.7*inserted
+    transform=lambda values:np.array([values[0],values[1]**2])
+    target=transform(raw_target)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=grow_hdiv_mmm_by_superposition(charge_gram=gram,fes=fes,
+        inv_chi=.2,rhs=rhs,response_matrix=response_matrix,
+        active_elements=active,element_volumes=volumes,
+        response_target=target,response_band=np.full(2,1e-8),
+        volume_max=float(np.sum(volumes))+1e-14,
+        maximum_batch_elements=1,max_iterations=2,solve_tolerance=1e-11,
+        source_calibration_rows=[0],
+        source_calibration_target=[raw_target[0]],
+        response_transform=transform)
+    assert result.converged and len(result.history)==1
+    assert result.stop_reason=="target_met"
+    np.testing.assert_allclose(result.response,raw_target,rtol=0,atol=4e-12)
+    np.testing.assert_allclose(result.objective_response,target,rtol=0,atol=4e-12)
+    np.testing.assert_allclose(result.source_scale,1.7,rtol=0,atol=2e-11)
+    np.testing.assert_allclose(result.history[0].source_scale,1.7,
+                               rtol=0,atol=2e-11)
+
+
+def test_ngsolve_boundary_growth_candidates_only_share_complete_facets():
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    active=np.array([True,False,False])
+    candidates=ngsolve_boundary_growth_candidates(mesh,active)
+    assert candidates.tolist()==[1]
+    active[:2]=True
+    assert ngsolve_boundary_growth_candidates(mesh,active).tolist()==[2]
+
+
+def test_shape_lp_restores_field_band_with_real_boundary_parameters():
+    linearization=ShapeLinearization(objective=0.0,
+        objective_gradient=np.array([-1.0,0.2]),response=np.array([2.0]),
+        response_jacobian=np.array([[1.0,0.0]]),response_target=np.array([0.0]),
+        response_band=np.array([1.0]))
+    update=solve_shape_lp(np.zeros(2),linearization,move_limit=[.1,.2],
+        parameter_bounds=([-1.0,-1.0],[1.0,1.0]))
+    # Feasibility restoration wins over the objective, which alone would move q0 positive.
+    np.testing.assert_allclose(update.parameters,[-.1,-.2],atol=1e-10)
+    assert update.restoration and abs(update.predicted_max_band_ratio-1.9)<3e-9
+
+
+def test_shape_lp_keeps_feasible_response_and_obeys_curvature():
+    linearization=ShapeLinearization(objective=1.0,
+        objective_gradient=np.array([-1.0,0.0,1.0]),response=np.array([0.0]),
+        response_jacobian=np.array([[1.0,0.0,0.0]]),response_target=np.array([0.0]),
+        response_band=np.array([.05]))
+    L=np.array([[1.0,-2.0,1.0]])
+    update=solve_shape_lp(np.zeros(3),linearization,move_limit=.1,
+        laplacian=L,curvature_limit=.02)
+    assert update.predicted_max_band_ratio<=1.0+1e-10
+    assert abs((L@update.parameters).item())<=.02+1e-10
+    assert np.all(np.abs(update.delta)<=.1+1e-12)
 
 
 def test_ngsolve_gettrafo_production_hex_closes_full_vim_scaling_tangent():
@@ -225,7 +918,15 @@ def test_native_production_wedge_full_gram_derivative_translation_scale_and_loca
     contractions=g0.directional_derivative_contractions("wedge",
         np.ascontiguousarray(np.stack([ones_c,cells])),
         np.ascontiguousarray(np.stack([ones_f,faces])),probe,right)
+    contractions_many=g0.directional_derivative_contractions_many("wedge",
+        np.ascontiguousarray(np.stack([ones_c,cells])),
+        np.ascontiguousarray(np.stack([ones_f,faces])),
+        np.ascontiguousarray(np.stack([probe,2*probe-right])),right)
     np.testing.assert_allclose(contractions,[probe@dt@right,probe@ds@right],
+        rtol=3e-13,atol=3e-13)
+    np.testing.assert_allclose(contractions_many,
+        [[probe@dt@right,probe@ds@right],
+         [(2*probe-right)@dt@right,(2*probe-right)@ds@right]],
         rtol=3e-13,atol=3e-13)
     assert np.linalg.norm(dt)<3e-11
     assert np.linalg.norm(ds+G)/np.linalg.norm(G)<3e-10
@@ -319,6 +1020,8 @@ def test_ngsolve_hdiv_mass_shape_tangent_uses_piola_weak_form():
     velocity=ng.GridFunction(vf); velocity.Set(ng.CF((.07*ng.x,-.03*ng.y,.02*ng.z)))
     with ng.TaskManager():
         mass,dmass,dB=assemble_ngsolve_hdiv_shape_tangents(fes,[velocity],np.eye(fes.ndof))
+        sparse_mass,sparse_dmass,sparse_dB=assemble_ngsolve_hdiv_shape_tangents(
+            fes,[velocity],np.eye(fes.ndof),sparse=True)
         eps=2e-6; trial=ng.GridFunction(vf); trial.vec.data=eps*velocity.vec
         mesh.SetDeformation(trial)
         u,v=fes.TnT(); shifted=ng.BilinearForm(fes); shifted+=u*v*ng.dx; shifted.Assemble()
@@ -328,6 +1031,12 @@ def test_ngsolve_hdiv_mass_shape_tangent_uses_piola_weak_form():
         minus=_csr(shifted).toarray(); mesh.UnsetDeformation()
     np.testing.assert_allclose((plus-minus)/(2*eps),dmass[0],rtol=2e-6,atol=2e-8)
     assert mass.shape==(fes.ndof,fes.ndof) and np.count_nonzero(dB)==0
+    import scipy.sparse as sp
+    assert sp.isspmatrix_csr(sparse_mass)
+    assert len(sparse_dmass)==1 and sp.isspmatrix_csr(sparse_dmass[0])
+    assert len(sparse_dB)==1 and sp.isspmatrix_csr(sparse_dB[0])
+    np.testing.assert_allclose(sparse_mass.toarray(),mass,rtol=0,atol=0)
+    np.testing.assert_allclose(sparse_dmass[0].toarray(),dmass[0],rtol=0,atol=0)
 
 
 def test_production_hex_self_block_python_boundary_preserves_host_mode_order():
@@ -486,7 +1195,12 @@ def test_native_production_tet_complete_gram_and_piola_product_derivative():
     contraction=gram.directional_derivative_contractions("tet",
         np.ascontiguousarray(cell_v[None,...]),np.ascontiguousarray(face_v[None,...]),
         probe,right)
+    contraction_many=gram.directional_derivative_contractions_many("tet",
+        np.ascontiguousarray(cell_v[None,...]),np.ascontiguousarray(face_v[None,...]),
+        np.ascontiguousarray(np.stack([probe,2*probe-right])),right)
     np.testing.assert_allclose(contraction,[probe@dG@right],rtol=3e-13,atol=3e-13)
+    np.testing.assert_allclose(contraction_many,
+        [[probe@dG@right],[(2*probe-right)@dG@right]],rtol=3e-13,atol=3e-13)
     fdG=(Gp-Gm)/(2*epsilon)
     np.testing.assert_allclose(dG,dG.T,rtol=0,atol=0)
     np.testing.assert_allclose(dG,fdG,rtol=4e-7,atol=8e-11)
@@ -510,6 +1224,152 @@ def test_native_production_tet_complete_gram_and_piola_product_derivative():
     dBs=dBs[0].toarray()
     np.testing.assert_allclose(dBs.T@G@B+B.T@dGs[0]@B+B.T@G@dBs,-N,
                                rtol=2e-11,atol=2e-13)
+
+
+def test_native_tet_configured_field_rows_directional_derivative_matches_fd():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis,build_charge_gram
+
+    gradient=np.array([[.073,-.031,.019],[.014,.052,-.027],[-.022,.041,.064]])
+    offset=np.array([.009,-.015,.011])
+    observations=np.array([[.31,.27,1e-3],[.5,.4,1.7],[-.2,.8,.5]])
+    weights=np.array([
+        [[.2,-.3,.7],[.1,.4,-.2],[-.5,.2,.3]],
+        [[.7,.1,-.4],[.3,-.2,.6],[.1,.5,-.3]]])
+    image_masks=(2,4,6);image_signs=(1.,-1.,-1.)
+
+    def build(step):
+        def mapping(x,y,z):
+            point=np.array([x,y,z])
+            return tuple(point+step*(gradient@point+offset))
+        mesh=MakeStructured3DMesh(
+            hexes=False,nx=1,ny=1,nz=1,mapping=mapping)
+        fes=ng.HDiv(mesh,order=1)
+        with ng.TaskManager():
+            charge_basis=_charge_basis(fes,4)
+            _,gram,_=build_charge_gram(
+                fes,eps=1e-10,leafsize=256,eta=2.0,
+                image_masks=image_masks,image_signs=image_signs)
+        return charge_basis,gram
+
+    charge_basis,gram=build(0.0)
+    cells=np.asarray(charge_basis["vV"])
+    faces=np.asarray(charge_basis["bV"])
+    analytic=np.asarray(
+        gram.configured_field_functional_rows_directional_derivative(
+            observations,weights,(cells@gradient.T+offset)[None,...],
+            (faces@gradient.T+offset)[None,...]))[0]
+    step=2e-6
+    _,plus=build(step);_,minus=build(-step)
+    finite_difference=(
+        np.asarray(plus.configured_field_functional_rows(observations,weights))
+        -np.asarray(minus.configured_field_functional_rows(observations,weights))
+        )/(2*step)
+
+    assert analytic.flags.c_contiguous and np.all(np.isfinite(analytic))
+    np.testing.assert_allclose(
+        analytic,finite_difference,rtol=3e-6,atol=2e-8)
+
+
+def test_tet_streaming_shape_jacobian_uses_exact_configured_field_derivative():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis,build_charge_gram
+
+    gradient=np.array([[.04,-.02,.01],[.01,.03,-.015],[-.02,.005,.025]])
+    shift=np.array([.01,-.006,.004]);inv_chi=.2
+    applied=ng.CF((.2,-.1,1.0))
+    observations=np.array([[.3,.2,2e-3],[.7,.4,1.4],[-.1,.6,.3]])
+    weights=np.array([
+        [[0.,0.,.5],[0.,0.,.3],[0.,0.,.2]],
+        [[.2,-.1,.4],[-.3,.5,.2],[.1,.2,-.4]]])
+
+    def build(epsilon):
+        def mapping(x,y,z):
+            point=np.array([x,y,z])
+            return tuple(point+epsilon*(gradient@point+shift))
+        mesh=MakeStructured3DMesh(
+            hexes=False,nx=1,ny=1,nz=1,mapping=mapping)
+        fes=ng.HDiv(mesh,order=1)
+        with ng.TaskManager():
+            basis=_charge_basis(fes,4)
+            B,gram,_=build_charge_gram(
+                fes,eps=1e-12,leafsize=256,eta=2.0)
+            rhs,_=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+                fes,applied,(),bonus_intorder=4)
+        C=np.asarray(gram.configured_field_functional_rows(
+            observations,weights))
+        state=np.asarray(gram.solve_configured_linear_material_auto_prec_many(
+            inv_chi,np.ascontiguousarray(rhs[None,:]),tol=1e-12,
+            maxit=5000,mass_riesz=True)["m"])[0]
+        return C@state,(mesh,fes,basis,B,gram,rhs,C)
+
+    value,data=build(0.0);mesh,fes,basis,B,gram,rhs,C=data
+    space=ng.VectorH1(mesh,order=1);mode=ng.GridFunction(space)
+    mode.Set(ng.CF(tuple(
+        gradient@np.array([ng.x,ng.y,ng.z],dtype=object)+shift)))
+    with ng.TaskManager():
+        _,drhs=assemble_ngsolve_hdiv_linear_form_shape_tangents(
+            fes,applied,[mode],bonus_intorder=4)
+        analytic=production_vim_functional_shape_jacobian_streaming(
+            fes=fes,deformation_modes=[mode],charge_basis=basis,
+            charge_gram=gram,charge_map=B,inv_chi=inv_chi,rhs=rhs,
+            response_matrix=C,rhs_jacobian=drhs,
+            response_observations=observations,response_weights=weights,
+            family="tet",solve_tolerance=1e-12)
+    epsilon=2e-6;plus,_=build(epsilon);minus,_=build(-epsilon)
+    finite_difference=(plus-minus)/(2*epsilon)
+
+    np.testing.assert_allclose(analytic.response,value,rtol=2e-12,atol=2e-12)
+    np.testing.assert_allclose(
+        analytic.response_jacobian[:,0],finite_difference,
+        rtol=3e-4,atol=3e-7)
+
+
+def test_native_tet_ima_directional_derivative_matches_geometry_regression():
+    """The matrix-free dG contraction differentiates the full IMA fold."""
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.topology_optimization import production_tet_charge_gram_derivatives
+    from radia.vim._vim import _charge_basis,build_charge_gram
+
+    gradient=np.array([[.07,-.03,.02],[0.,.05,0.],[0.,0.,.04]])
+    offset=np.array([.01,0.,0.])
+    epsilon=1e-6
+    image_masks=(2,4,6)
+    image_signs=(1.,-1.,-1.)
+
+    def build(step):
+        def mapping(x,y,z):
+            point=np.array([x,y,z])
+            return tuple(point+step*epsilon*(gradient@point+offset))
+        mesh=MakeStructured3DMesh(
+            hexes=False,nx=1,ny=1,nz=1,mapping=mapping)
+        fes=ng.HDiv(mesh,order=1)
+        with ng.TaskManager():
+            charge_basis=_charge_basis(fes,4)
+            _,gram,_=build_charge_gram(
+                fes,eps=1e-10,leafsize=256,eta=2.0,
+                image_masks=image_masks,image_signs=image_signs)
+        count=len(charge_basis["host"])
+        dense=np.array([[gram.entry(i,j) for j in range(count)]
+                        for i in range(count)])
+        return charge_basis,gram,dense
+
+    charge_basis,gram,_=build(0)
+    _,_,plus=build(1)
+    _,_,minus=build(-1)
+    cells=np.asarray(charge_basis["vV"])
+    faces=np.asarray(charge_basis["bV"])
+    derivative,_=production_tet_charge_gram_derivatives(
+        gram,(cells@gradient.T+offset)[None,...],
+        (faces@gradient.T+offset)[None,...],charge_basis["B"])
+    finite_difference=(plus-minus)/(2*epsilon)
+
+    np.testing.assert_allclose(derivative[0],derivative[0].T,rtol=0,atol=0)
+    np.testing.assert_allclose(
+        derivative[0],finite_difference,rtol=8e-7,atol=2e-10)
 
 
 def test_native_production_hex_face_self_block_derivative_invariants():
@@ -611,6 +1471,12 @@ def test_native_complete_hex_charge_gram_directional_derivative():
         np.ascontiguousarray(np.stack([cells, cells@gradient.T+offset])),
         np.ascontiguousarray(np.stack([faces, faces@gradient.T+offset])),
         np.ascontiguousarray(left),np.ascontiguousarray(right))
+    left_many=np.ascontiguousarray(np.stack([left,2.0*left-right]))
+    contractions_many=gram.directional_derivative_contractions_many(
+        "hex",
+        np.ascontiguousarray(np.stack([cells,cells@gradient.T+offset])),
+        np.ascontiguousarray(np.stack([faces,faces@gradient.T+offset])),
+        left_many,np.ascontiguousarray(right))
     derivative_operator=gram.directional_derivative_operator(
         "hex",cells@gradient.T+offset,faces@gradient.T+offset,
         eps=1e-12,leaf=256,eta=2.0)
@@ -623,6 +1489,10 @@ def test_native_complete_hex_charge_gram_directional_derivative():
     np.testing.assert_allclose(derivative,derivative.T,rtol=0,atol=0)
     np.testing.assert_allclose(contractions,
         [left@scaling@right,left@derivative@right],rtol=3e-12,atol=3e-13)
+    np.testing.assert_allclose(contractions_many,
+        [[left@scaling@right,left@derivative@right],
+         [(2*left-right)@scaling@right,
+          (2*left-right)@derivative@right]],rtol=3e-12,atol=3e-13)
     operator_dense=np.array([[derivative_operator.entry(i,j) for j in range(n)] for i in range(n)])
     np.testing.assert_allclose(operator_dense,derivative,rtol=2e-13,atol=2e-15)
     probe=np.linspace(-.7,.9,n)
@@ -657,7 +1527,15 @@ def test_native_hex_cluster_leaf_contraction_matches_analytic_dense_derivative()
     dense=np.asarray(gram.hex_charge_gram_directional_derivative(vc,vf))
     left=np.linspace(-.4,.7,dense.shape[0]);right=np.cos(np.arange(dense.shape[0]))
     observed=gram.directional_derivative_contractions("hex",vc[None],vf[None],left,right)[0]
+    left_many=np.ascontiguousarray(np.stack((left,2*left-right)))
+    observed_many=np.asarray(gram.directional_derivative_contractions_many(
+        "hex",np.ascontiguousarray(np.stack((vc,2*vc))),
+        np.ascontiguousarray(np.stack((vf,2*vf))),left_many,right))
     np.testing.assert_allclose(observed,left@dense@right,rtol=2e-6,atol=2e-9)
+    np.testing.assert_allclose(observed_many,
+        [[left@dense@right,2*left@dense@right],
+         [(2*left-right)@dense@right,2*(2*left-right)@dense@right]],
+        rtol=2e-6,atol=2e-9)
 
 
 def test_vim_linearization_matches_analytic_two_cell_system():
