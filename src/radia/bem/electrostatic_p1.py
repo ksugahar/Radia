@@ -66,18 +66,27 @@ def solve_prescribed_potential_p1(
     potential by assigning that value to its surface vertices.
     """
     verts = np.asarray(vertices, dtype=float)
-    tris = np.asarray(triangles, dtype=np.int64)
+    triangle_indices = np.asarray(triangles)
     potential = np.asarray(nodal_potential_v, dtype=float)
     if verts.ndim != 2 or verts.shape[1] != 3:
         raise ValueError("vertices must have shape (n, 3)")
-    if tris.ndim != 2 or tris.shape[1] != 3 or len(tris) == 0:
+    if (
+        triangle_indices.ndim != 2
+        or triangle_indices.shape[1] != 3
+        or len(triangle_indices) == 0
+    ):
         raise ValueError("triangles must have shape (m, 3) with m > 0")
+    if np.issubdtype(triangle_indices.dtype, np.bool_) or not np.issubdtype(
+        triangle_indices.dtype, np.integer
+    ):
+        raise ValueError("triangle vertex indices must be integers")
     if potential.shape != (len(verts),):
         raise ValueError("nodal_potential_v must have one value per vertex")
     if not np.all(np.isfinite(verts)) or not np.all(np.isfinite(potential)):
         raise ValueError("vertices and potentials must be finite")
-    if np.min(tris) < 0 or np.max(tris) >= len(verts):
+    if np.min(triangle_indices) < 0 or np.max(triangle_indices) >= len(verts):
         raise ValueError("triangle vertex index is out of range")
+    tris = triangle_indices.astype(np.int64, copy=False)
     epsilon = float(permittivity_f_per_m)
     if not np.isfinite(epsilon) or epsilon <= 0.0:
         raise ValueError("permittivity_f_per_m must be positive and finite")

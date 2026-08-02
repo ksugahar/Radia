@@ -1,10 +1,10 @@
 {
   "schema": "radia.validation.electrostatic.parallel-square-plates-p1-bem.v1",
-  "executed_at_utc": "2026-07-31T11:25:45.106290+00:00",
+  "executed_at_utc": "2026-08-02T03:36:51.353748+00:00",
   "execution_version": {
     "producer": "validation_parallel_square_plates_p1_bem.py",
     "python": "3.12.10",
-    "radia_source_head": "9cd0f9e31998a431584d7abf6031d6f71d27d5fc"
+    "radia_source_head": "6eade705a4f8d722a415f8146eaf287a136761af"
   },
   "physics_identity_digest": "a50369dc2ba5452dfa73c75993fbaaec84563af390b410e72c9e82dab7aa29f0",
   "discretization": "continuous P1 surface charge on flat triangles",
@@ -13,41 +13,33 @@
       "subdivisions_per_side": 4,
       "vertices": 50,
       "triangles": 64,
-      "positive_charge_c": 7.6806099052028e-10,
-      "negative_charge_c": -7.680609905202801e-10,
+      "positive_charge_c": 7.680609905202795e-10,
+      "negative_charge_c": -7.680609905202796e-10,
       "charge_balance_c": -1.0339757656912846e-25,
-      "capacitance_f": 3.8403049526014e-13,
-      "duration_s": 0.26377360000333283
+      "capacitance_f": 3.840304952601398e-13
     },
     {
       "subdivisions_per_side": 8,
       "vertices": 162,
       "triangles": 256,
-      "positive_charge_c": 7.790820982903382e-10,
+      "positive_charge_c": 7.790820982903378e-10,
       "negative_charge_c": -7.79082098290338e-10,
-      "charge_balance_c": 2.0679515313825692e-25,
-      "capacitance_f": 3.8954104914516914e-13,
-      "duration_s": 2.263901500002248
+      "charge_balance_c": -2.0679515313825692e-25,
+      "capacitance_f": 3.895410491451689e-13
     },
     {
       "subdivisions_per_side": 12,
       "vertices": 338,
       "triangles": 576,
-      "positive_charge_c": 7.831791571950093e-10,
+      "positive_charge_c": 7.831791571950094e-10,
       "negative_charge_c": -7.831791571950093e-10,
-      "charge_balance_c": 0.0,
-      "capacitance_f": 3.9158957859750467e-13,
-      "duration_s": 9.244878500001505
+      "charge_balance_c": 1.0339757656912846e-25,
+      "capacitance_f": 3.915895785975047e-13
     }
   ],
   "metrics": {
-    "relative_last_refinement_change": 0.0052313175944886684,
+    "relative_last_refinement_change": 0.0052313175944893285,
     "maximum_charge_imbalance_c": 2.0679515313825692e-25
-  },
-  "timing_breakdown_s": {
-    "solve_n12": 9.244878500001505,
-    "solve_n8": 2.263901500002248,
-    "solve_n4": 0.26377360000333283
   },
   "checks": {
     "opposite_conductor_charges": true,

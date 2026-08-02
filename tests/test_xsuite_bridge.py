@@ -99,4 +99,3 @@ def test_first_boundary_exit_is_reported_per_particle():
         {"particle_index": 0, "step_index": 2, "position_m": [0.6, 0.0, 0.4]},
         {"particle_index": 1, "step_index": 2, "position_m": [-0.7, 0.0, 0.4]},
     ]
-

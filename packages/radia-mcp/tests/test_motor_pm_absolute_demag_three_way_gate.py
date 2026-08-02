@@ -7,6 +7,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -120,3 +122,19 @@ def test_changed_tool_passes_real_stdio_protocol() -> None:
         "is_error": False,
         "status": "attributed_pending",
     }
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("hdiv", "bdm2_final_vs_fem_nrms"),
+        ("hdiv", "bdm2_final_relative_step"),
+        ("independent_fem", "source_nrms_p3"),
+    ],
+)
+def test_rejects_negative_error_or_iteration_metrics(section, field) -> None:
+    artifact = _fixture()
+    artifact[section][field] = -1.0e-6
+
+    with pytest.raises(ValueError, match="nonnegative"):
+        pm_absolute_demag_three_way_gate(artifact)

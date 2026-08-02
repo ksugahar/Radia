@@ -38,6 +38,12 @@ def test_prescribed_potential_has_equal_and_opposite_charge():
     [
         (np.zeros((3, 2)), np.array([[0, 1, 2]]), np.zeros(3), "vertices"),
         (np.zeros((3, 3)), np.empty((0, 3), dtype=int), np.zeros(3), "triangles"),
+        (
+            np.zeros((3, 3)),
+            np.array([[0.0, 1.0, 1.5]]),
+            np.zeros(3),
+            "indices must be integers",
+        ),
         (np.zeros((3, 3)), np.array([[0, 1, 3]]), np.zeros(3), "out of range"),
     ],
 )

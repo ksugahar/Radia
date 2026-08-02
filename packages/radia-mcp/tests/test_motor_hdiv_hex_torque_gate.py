@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 
+import pytest
+
 from radia_mcp.motor.hdiv_hex_torque_gate import hdiv_hex_motor_torque_gate
 
 
@@ -75,3 +77,24 @@ def test_hdiv_hex_motor_torque_gate_rejects_identity_and_torque_route_breaks():
     assert result["status"] == "needs_attention"
     assert result["checks"]["reference_is_executed_same_identity"] is False
     assert result["checks"]["moment_and_virtual_work_torque_agree"] is False
+
+
+def test_hdiv_hex_motor_torque_gate_rejects_angle_grid_drift():
+    artifact = _artifact()
+    drifted_angles = list(artifact["levels"][1]["angles_deg"])
+    drifted_angles[3] = 44.0
+    artifact["levels"][1]["angles_deg"] = drifted_angles
+
+    result = hdiv_hex_motor_torque_gate(artifact)
+
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_levels_share_the_same_angle_grid"] is False
+
+
+@pytest.mark.parametrize("key", ["hex_element_count", "ndof"])
+def test_hdiv_hex_motor_torque_gate_rejects_nonpositive_mesh_size(key):
+    artifact = _artifact()
+    artifact["levels"][0][key] = 0
+
+    with pytest.raises(ValueError, match="positive integer"):
+        hdiv_hex_motor_torque_gate(artifact)

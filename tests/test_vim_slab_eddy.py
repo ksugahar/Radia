@@ -68,3 +68,26 @@ def test_reduced_solve_rejects_nonphysical_frequency_and_bad_mesh():
         solve_parallel_slab_reduced(SLAB, 0.0)
     with pytest.raises(ValueError, match="elements"):
         solve_parallel_slab_reduced(SLAB, 100.0, elements=1)
+
+
+def test_two_element_mesh_accumulates_both_boundary_contributions():
+    frequency_hz = 100.0
+    result = solve_parallel_slab_reduced(SLAB, frequency_hz, elements=2)
+    omega = 2.0 * math.pi * frequency_hz
+    gamma_squared = (
+        1.0j
+        * omega
+        * 4.0e-7
+        * math.pi
+        * SLAB.relative_permeability
+        * SLAB.conductivity_s_per_m
+    )
+    h = SLAB.thickness_m / 2.0
+    diagonal = 2.0 / h + gamma_squared * (2.0 * h / 3.0)
+    off_diagonal = -1.0 / h + gamma_squared * (h / 6.0)
+    interior = -2.0 * off_diagonal / diagonal
+    expected_response = SLAB.relative_permeability * (1.0 + interior) / 2.0
+
+    assert result["effective_relative_permeability"] == pytest.approx(
+        expected_response
+    )
