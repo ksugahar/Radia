@@ -15,6 +15,7 @@ arguments
     options.MagneticField (1,1) function_handle = @localZeroField
     options.Relativistic (1,1) logical = true
     options.ExitPlane = []
+    options.StopBox = []
     options.RelativeTolerance (1,1) double {mustBeFinite,mustBePositive} = 1e-10
     options.AbsoluteTolerance (1,1) double {mustBeFinite,mustBePositive} = 1e-13
 end
@@ -42,15 +43,18 @@ rhs = @(time,state) radia.tracking.relativisticLorentzRhs( ...
 odeOptions = odeset("RelTol",options.RelativeTolerance, ...
     "AbsTol",options.AbsoluteTolerance);
 plane = localValidatePlane(options.ExitPlane);
-if ~isempty(plane)
+box = localValidateBox(options.StopBox);
+if ~isempty(plane) || ~isempty(box)
+    eventNames = localEventNames(box,plane);
     odeOptions = odeset(odeOptions,"Events", ...
-        @(time,state) localPlaneEvent(time,state,plane));
-    [time,state,eventTime,eventState] = ode113( ...
+        @(time,state) localStopEvents(time,state,box,plane));
+    [time,state,eventTime,eventState,eventIndex] = ode113( ...
         rhs,timesS,state0,odeOptions);
 else
     [time,state] = ode113(rhs,timesS,state0,odeOptions);
     eventTime = [];
     eventState = [];
+    eventIndex = [];
 end
 
 normalizedMomentum = state(:,4:6);
@@ -89,7 +93,7 @@ result = struct( ...
         max(abs(kineticEnergy-kineticEnergy(1)))/energyScale, ...
     "stop_event",[]);
 if ~isempty(eventTime)
-    eventNormalizedMomentum = eventState(end,4:6).';
+    eventNormalizedMomentum = eventState(1,4:6).';
     if options.Relativistic
         eventGamma = sqrt(1.0+dot( ...
             eventNormalizedMomentum,eventNormalizedMomentum));
@@ -97,9 +101,9 @@ if ~isempty(eventTime)
         eventGamma = 1.0;
     end
     result.stop_event = struct( ...
-        "face","plane", ...
-        "time_s",eventTime(end), ...
-        "position_m",eventState(end,1:3).', ...
+        "face",eventNames(eventIndex(1)), ...
+        "time_s",eventTime(1), ...
+        "position_m",eventState(1,1:3).', ...
         "velocity_m_s",speedOfLight*eventNormalizedMomentum/eventGamma);
 end
 end
@@ -136,8 +140,50 @@ plane = struct("point_m",point,"normal",normal/norm(normal), ...
     "direction",direction);
 end
 
-function [value,isTerminal,direction] = localPlaneEvent(~,state,plane)
-value = dot(state(1:3)-plane.point_m,plane.normal);
-isTerminal = 1;
-direction = plane.direction;
+function box = localValidateBox(value)
+if isempty(value)
+    box = [];
+    return
+end
+if ~isstruct(value) || ~isfield(value,"minimum_m") || ...
+        ~isfield(value,"maximum_m")
+    error("radia:tracking:StopBox", ...
+        "StopBox must contain minimum_m and maximum_m");
+end
+minimum = double(value.minimum_m(:));
+maximum = double(value.maximum_m(:));
+if ~isequal(size(minimum),[3,1]) || ...
+        ~isequal(size(maximum),[3,1]) || ...
+        any(~isfinite([minimum;maximum])) || any(minimum>=maximum)
+    error("radia:tracking:StopBox", ...
+        "StopBox bounds must be finite three-vectors with minimum below maximum");
+end
+box = struct("minimum_m",minimum,"maximum_m",maximum);
+end
+
+function names = localEventNames(box,plane)
+names = strings(0,1);
+if ~isempty(box)
+    names = ["x_minimum";"x_maximum"; ...
+        "y_minimum";"y_maximum";"z_minimum";"z_maximum"];
+end
+if ~isempty(plane)
+    names(end+1,1) = "plane";
+end
+end
+
+function [value,isTerminal,direction] = localStopEvents(~,state,box,plane)
+value = zeros(0,1);
+direction = zeros(0,1);
+if ~isempty(box)
+    value = [state(1)-box.minimum_m(1);box.maximum_m(1)-state(1); ...
+        state(2)-box.minimum_m(2);box.maximum_m(2)-state(2); ...
+        state(3)-box.minimum_m(3);box.maximum_m(3)-state(3)];
+    direction = -ones(6,1);
+end
+if ~isempty(plane)
+    value(end+1,1) = dot(state(1:3)-plane.point_m,plane.normal);
+    direction(end+1,1) = plane.direction;
+end
+isTerminal = ones(size(value));
 end

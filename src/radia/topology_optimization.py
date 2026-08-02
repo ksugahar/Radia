@@ -993,6 +993,8 @@ class HDivMMMElementGenerationLinearization:
     state_iterations: int
     adjoint_iterations: tuple[int, ...]
     schur_iterations: tuple[int, ...]
+    candidate_coupling_rank: int
+    candidate_coupling_relative_truncation_error: float
 
 
 @dataclass(frozen=True)
@@ -1060,6 +1062,10 @@ class HDivMMMGenerationIteration:
     removed_elements: np.ndarray | None = None
     addition_candidate_count: int = 0
     removal_candidate_count: int = 0
+    candidate_coupling_rank: int = 0
+    candidate_coupling_relative_truncation_error: float = 0.0
+    candidate_schur_max_iterations: int = 0
+    response_adjoint_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -1325,7 +1331,8 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         rhs, response_matrix, active_elements, candidate_elements=None,
         incident_response=None, solve_tolerance=1e-9,
         solve_max_iterations=5000, candidate_batch_size=64,
-        mass_riesz=True,
+        mass_riesz=True, cluster_coarse_size=64,
+        cluster_deflation_size=8, recycle_size=8,
         candidate_selector=None) -> HDivMMMElementGenerationLinearization:
     """Close boundary element generation on the configured H-matrix operator.
 
@@ -1336,7 +1343,10 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
     supplied, all available candidates are first ranked using the local
     full-strength insertion that neglects active relaxation.  The callback is
     called as ``selector(elements, approximate_delta, state, response)`` and
-    returns the element indices that receive the exact fused reduction.  The
+    returns the element indices that receive the exact fused reduction.  An
+    empty selection is permitted when a joint add/remove TSVD proposal contains
+    removals only; the caller can then verify that removal bundle by one full
+    active-set solve without constructing an unused insertion Schur block.  The
     full dense ``A`` and ``N`` matrices are never materialized.
     """
     blocks=ngsolve_discontinuous_element_dof_blocks(fes)
@@ -1360,6 +1370,11 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         raise ValueError("inv_chi must be finite and nonnegative")
     batch_size=int(candidate_batch_size)
     if batch_size<1: raise ValueError("candidate_batch_size must be positive")
+    coarse_size=int(cluster_coarse_size)
+    deflation_size=int(cluster_deflation_size)
+    recycle=int(recycle_size)
+    if coarse_size<0 or deflation_size<0 or recycle<0:
+        raise ValueError("cluster-tree solver sizes must be nonnegative")
     active_dofs=np.concatenate([blocks[k] for k in np.flatnonzero(active_el)]).astype(np.int32)
     active_mask=np.zeros(n,dtype=bool); active_mask[active_dofs]=True
     inactive_dofs=np.flatnonzero(~active_mask).astype(np.int32)
@@ -1367,15 +1382,55 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
 
     def solve_many(rows):
         data=np.ascontiguousarray(rows,dtype=np.float64)
+        if data.ndim!=2 or data.shape[1]!=n or not np.all(np.isfinite(data)):
+            raise ValueError(
+                "HDiv-MMM multi-RHS rows must be a finite (nrhs, ndof) array")
+        # The state and all response adjoints share the same active matrix.
+        # On a production BDM system, use the H-matrix cluster tree for the
+        # two-level coarse/deflation space and recycle converged RHS modes.
+        # Tiny regression systems stay on the cheaper diagonal path.
+        use_cluster=(data.shape[0]>1 and coarse_size>0 and
+                     n>=max(1024,4*coarse_size))
         result=charge_gram.solve_configured_linear_material_auto_prec_many(
             float(inv_chi),data,tol=float(solve_tolerance),
-            maxit=int(solve_max_iterations),cluster_coarse_size=0,
-            cluster_deflation_size=0,recycle_size=0,
-            mass_riesz=bool(mass_riesz))
+            maxit=int(solve_max_iterations),
+            cluster_coarse_size=(coarse_size if use_cluster else 0),
+            cluster_deflation_size=(deflation_size if use_cluster else 0),
+            recycle_size=(min(recycle,data.shape[0]) if use_cluster else 0),
+            # The native solver deliberately treats mass-Riesz and the
+            # cluster-tree two-level preconditioner as alternative policies.
+            mass_riesz=(False if use_cluster else bool(mass_riesz)))
         solutions=np.asarray(result["m"],dtype=float)
         iterations=tuple(int(x) for x in result["iters"])
-        if solutions.shape!=data.shape or len(iterations)!=data.shape[0]:
+        if (solutions.shape!=data.shape or len(iterations)!=data.shape[0]
+                or not np.all(np.isfinite(solutions))):
             raise RuntimeError("native HDiv-MMM multi-RHS solve returned invalid shapes")
+        if hasattr(charge_gram,
+                   "apply_configured_linear_material_operator_many"):
+            applied=np.asarray(
+                charge_gram.apply_configured_linear_material_operator_many(
+                    float(inv_chi),np.ascontiguousarray(solutions),
+                    respect_constraints=True),dtype=float)
+        else:
+            applied=np.stack([
+                np.asarray(charge_gram.apply_configured_linear_material_operator(
+                    float(inv_chi),row,respect_constraints=True),dtype=float)
+                for row in solutions])
+        if applied.shape!=data.shape or not np.all(np.isfinite(applied)):
+            raise RuntimeError(
+                "native HDiv-MMM convergence check returned invalid shapes")
+        denominator=np.maximum(
+            np.linalg.norm(data,axis=1),np.finfo(float).tiny)
+        relative=np.linalg.norm(data-applied,axis=1)/denominator
+        residual_limit=max(5.0*float(solve_tolerance),1.0e-12)
+        failed=np.flatnonzero(relative>residual_limit)
+        if failed.size:
+            evidence=", ".join(
+                f"row {int(row)}={relative[row]:.3e}"
+                for row in failed[:8])
+            raise RuntimeError(
+                "native HDiv-MMM multi-RHS solve did not meet its checked "
+                f"relative residual ({evidence}; limit={residual_limit:.3e})")
         return solutions,iterations
 
     base_rhs=np.vstack((rhs_full,C)).copy();base_rhs[:,inactive_dofs]=0.0
@@ -1447,12 +1502,23 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         approximate_delta=np.stack(approximate,axis=1)
         selected=np.asarray(candidate_selector(
             candidates,approximate_delta,state,response),dtype=np.int64).reshape(-1)
-        if selected.size==0 or np.unique(selected).size!=selected.size:
-            raise ValueError("candidate_selector must return a non-empty unique subset")
+        if np.unique(selected).size!=selected.size:
+            raise ValueError("candidate_selector must return a unique subset")
         available=set(int(k) for k in candidates)
         if any(int(k) not in available for k in selected):
             raise ValueError("candidate_selector returned an unavailable element")
         candidates=selected
+
+    if candidates.size==0:
+        empty=np.empty(0,dtype=np.int64)
+        return HDivMMMElementGenerationLinearization(
+            state,response,empty,tuple(),
+            np.empty((C.shape[0],0),dtype=float),tuple(),
+            np.zeros(1,dtype=np.int32),np.empty((0,0),dtype=float),
+            np.empty(0,dtype=float),
+            np.empty((C.shape[0],0),dtype=float),available_candidate_count,
+            {"operator_s":0.0,"solve_s":0.0,"contraction_s":0.0},
+            int(base_iterations[0]),tuple(base_iterations[1:]),tuple(),0,0.0)
 
     candidate_blocks=tuple(blocks[int(k)] for k in candidates)
     candidate_dofs=np.concatenate(candidate_blocks).astype(np.int32)
@@ -1467,12 +1533,18 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         reduced_schur=np.asarray(reduced["schur"],dtype=float)
         reduced_rhs=np.asarray(reduced["rhs"],dtype=float).reshape(-1)
         reduced_response=np.asarray(reduced["response"],dtype=float)
-        schur_iterations=tuple(int(x) for x in reduced["iters"])
-        native_timings={key:float(reduced[key]) for key in native_timings}
+        schur_iterations=tuple(int(x) for x in reduced.get(
+            "coupling_mode_iters",reduced["iters"]))
         nc=len(candidate_dofs)
+        coupling_rank=int(reduced.get("coupling_rank",nc))
+        coupling_error=float(reduced.get(
+            "coupling_relative_truncation_error",0.0))
+        native_timings={key:float(reduced[key]) for key in native_timings}
         if (reduced_schur.shape!=(nc,nc) or reduced_rhs.shape!=(nc,)
                 or reduced_response.shape!=(C.shape[0],nc)
-                or len(schur_iterations)!=nc):
+                or coupling_rank<0 or coupling_rank>nc
+                or len(schur_iterations)!=coupling_rank
+                or not np.isfinite(coupling_error)):
             raise RuntimeError("native candidate Schur reduction returned invalid shapes")
     else:  # Compatibility with an older downloaded native binary.
         operator_columns=[]
@@ -1496,6 +1568,8 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
                      -active_coupling.T@state[active_dofs])
         reduced_response=(C[:,candidate_dofs]
                           -adjoints[active_dofs].T@active_coupling)
+        coupling_rank=len(candidate_dofs)
+        coupling_error=0.0
 
     offsets=np.r_[0,np.cumsum([len(block) for block in candidate_blocks])]
     response_deltas=[];candidate_states=[]
@@ -1513,7 +1587,8 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         np.ascontiguousarray(reduced_schur),np.ascontiguousarray(reduced_rhs),
         np.ascontiguousarray(reduced_response),available_candidate_count,
         native_timings,int(base_iterations[0]),
-        tuple(base_iterations[1:]),tuple(schur_iterations))
+        tuple(base_iterations[1:]),tuple(schur_iterations),
+        int(coupling_rank),float(coupling_error))
 
 
 def hdiv_mmm_block_insertion_response(linearization,
@@ -2025,7 +2100,15 @@ def select_tsvd_exact_block_batch(*, current_response, response_target,
 def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, incident_response=None,
         solve_tolerance=1e-9, solve_max_iterations=5000, mass_riesz=True):
-    """Solve one exact whole-element active iron set on the fixed superset mesh."""
+    """Solve one exact whole-element active iron set on the fixed superset mesh.
+
+    The native Krylov routine uses periodically refreshed true residuals, but
+    its historical result dictionary exposes only the iteration count.  Apply
+    the same configured H-matrix operator once more here and reject a state
+    that reached ``solve_max_iterations`` without satisfying the requested
+    relative residual.  Candidate Schur models must never be accepted against
+    an unconverged physical re-solve.
+    """
     blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     active=np.asarray(active_elements,dtype=bool).reshape(-1)
     if active.shape!=(len(blocks),) or not np.any(active):
@@ -2045,6 +2128,22 @@ def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
         cluster_coarse_size=0,cluster_deflation_size=0,recycle_size=0,
         mass_riesz=bool(mass_riesz))
     state=np.asarray(result["m"],dtype=float)[0]
+    applied=np.asarray(
+        charge_gram.apply_configured_linear_material_operator(
+            float(inv_chi),np.ascontiguousarray(state),
+            respect_constraints=True),dtype=float).reshape(-1)
+    rhs_norm=float(np.linalg.norm(active_rhs))
+    residual_norm=float(np.linalg.norm(applied-active_rhs))
+    relative_residual=(residual_norm/rhs_norm if rhs_norm>0.0 else
+                       residual_norm)
+    residual_limit=max(5.0*float(solve_tolerance),1.0e-12)
+    if (not np.isfinite(relative_residual) or
+            relative_residual>residual_limit):
+        iterations=int(np.asarray(result["iters"]).reshape(-1)[0])
+        raise RuntimeError(
+            "HDiv-MMM active-set solve failed the true-residual gate: "
+            f"relative residual {relative_residual:.6e} exceeds "
+            f"{residual_limit:.6e} after {iterations} iterations")
     response=C@state
     if incident_response is not None:
         incident=np.asarray(incident_response,dtype=float).reshape(-1)
@@ -2060,12 +2159,17 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         max_iterations=30, ratio_tolerance=1e-8,
         solve_tolerance=1e-9, solve_max_iterations=5000,
         candidate_batch_size=64, mass_riesz=True,
+        cluster_coarse_size=64, cluster_deflation_size=8,
+        recycle_size=8,
         fixed_inactive_elements=None,
         fixed_active_elements=None,
+        removal_coupling_groups=None,
         predecessor_elements=None,
+        active_set_validator=None,
         source_calibration_rows=None,
         source_calibration_target=None,
         response_transform=None,
+        response_transform_jacobian=None,
         include_predecessor_descendants=False,
         exact_candidate_limit=64,
         batch_improvement_capture=0.9,
@@ -2099,7 +2203,26 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     ``response_transform`` may map the raw linear field response to nonlinear
     design metrics.  It is evaluated on every exact one-element Schur response
     and exact accepted batch, so the LP sees finite metric changes rather than
-    a finite-difference derivative.
+    a finite-difference derivative.  ``response_transform_jacobian`` may return
+    its analytic Jacobian at a calibrated raw response.  The driver then
+    contracts the raw observation rows to the design-metric dimension *before*
+    the active-system adjoint solves.  Source-recalibration differentiation is
+    included exactly, so an 80-row field profile can require only four optics
+    adjoints while every committed material move still receives a full raw
+    field re-solve.
+
+    ``removal_coupling_groups`` assigns a nonnegative group id to elements
+    that must be deleted together (``-1`` leaves an element independent).
+    This is useful for a sheet/pole Lego whose through-thickness cells must
+    share one terminal edge.  TSVD columns, volume accounting, topology gates,
+    and committed full solves all use the complete group; no member can leave
+    a partial-thickness notch.
+
+    ``active_set_validator`` may impose an application-specific binary geometry
+    rule after the generic iron/air connectivity gate.  It receives the full
+    boolean active mask and must return truth for an admissible shape.  This is
+    intended for exact rules such as a one-cell Lipschitz bound on neighbouring
+    pole-end columns; it is never a density penalty or finite-difference model.
     """
     active=np.asarray(active_elements,dtype=bool).reshape(-1).copy()
     volumes=np.asarray(element_volumes,dtype=float).reshape(-1)
@@ -2120,6 +2243,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         raise ValueError("TSVD selection parameters are invalid")
     calibration=(None if source_calibration_rows is None else
                  np.asarray(source_calibration_rows,dtype=np.int64).reshape(-1))
+    if response_transform_jacobian is not None and response_transform is None:
+        raise ValueError(
+            "response_transform_jacobian requires response_transform")
     if calibration is not None:
         if calibration.size==0 or np.any(calibration<0):
             raise ValueError("source_calibration_rows must index a non-empty response subset")
@@ -2144,6 +2270,18 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             raise ValueError("response_transform must return one finite design-response vector")
         return transformed
 
+    def transform_jacobian(calibrated_response):
+        if response_transform_jacobian is None:
+            return None
+        raw=np.asarray(calibrated_response,dtype=float).reshape(-1)
+        jacobian=np.asarray(response_transform_jacobian(raw),dtype=float)
+        if (jacobian.shape!=(target.size,raw.size) or
+                not np.all(np.isfinite(jacobian))):
+            raise ValueError(
+                "response_transform_jacobian must return a finite matrix "
+                "with shape (n_design_response,n_raw_response)")
+        return jacobian
+
     def calibrate_source(base_state,base_response):
         state_value=np.asarray(base_state,dtype=float)
         response_value=np.asarray(base_response,dtype=float)
@@ -2166,6 +2304,51 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                   np.asarray(fixed_active_elements,dtype=bool).reshape(-1))
     if fixed_active.shape!=active.shape or np.any(fixed_active&~active):
         raise ValueError("fixed active elements must match and belong to the initial iron")
+    removal_groups=(np.full(active.shape,-1,dtype=np.int64)
+                    if removal_coupling_groups is None else
+                    np.asarray(removal_coupling_groups,dtype=np.int64).reshape(-1))
+    if (removal_groups.shape!=active.shape or np.any(removal_groups<-1)):
+        raise ValueError(
+            "removal_coupling_groups must contain group ids or -1")
+
+    def valid_active_set(mask):
+        values=np.asarray(mask,dtype=bool).reshape(-1)
+        if values.shape!=active.shape:
+            return False
+        if not np.any(values):
+            return False
+        if not ngsolve_growth_topology(fes.mesh,values).valid:
+            return False
+        if active_set_validator is None:
+            return True
+        verdict=active_set_validator(values.copy())
+        result=np.asarray(verdict)
+        if result.ndim!=0:
+            raise ValueError("active_set_validator must return one boolean")
+        return bool(result)
+
+    def grouped_removal_candidates(raw_candidates,current_active):
+        raw=np.asarray(raw_candidates,dtype=np.int64).reshape(-1)
+        raw_set=set(int(value) for value in raw)
+        members={}
+        for element in raw:
+            group=int(removal_groups[int(element)])
+            if group<0:
+                block=np.asarray([int(element)],dtype=np.int64)
+            else:
+                block=np.flatnonzero(removal_groups==group).astype(np.int64)
+            representative=int(np.min(block))
+            if representative in members:
+                continue
+            if (not np.all(current_active[block]) or np.any(fixed_active[block])
+                    or any(int(value) not in raw_set for value in block)):
+                continue
+            trial=current_active.copy();trial[block]=False
+            if not valid_active_set(trial):
+                continue
+            members[representative]=block
+        representatives=np.asarray(sorted(members),dtype=np.int64)
+        return representatives,members
     predecessors=(None if predecessor_elements is None else
                   np.asarray(predecessor_elements,dtype=np.int64).reshape(-1))
     if predecessors is not None and (predecessors.shape!=active.shape
@@ -2176,6 +2359,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     topology=ngsolve_growth_topology(fes.mesh,active)
     if not topology.valid:
         raise ValueError("initial iron seed must be connected and contain no enclosed inactive cavity")
+    if active_set_validator is not None and not valid_active_set(active):
+        raise ValueError("initial iron seed violates active_set_validator")
     state,response,solve_iterations=solve_hdiv_mmm_active_elements(
         charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
         response_matrix=response_matrix,active_elements=active,
@@ -2196,9 +2381,11 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             fes.mesh,active,fixed_inactive_elements=fixed,
             predecessor_elements=predecessors,
             include_predecessor_descendants=include_predecessor_descendants)
-        removal_candidates=ngsolve_boundary_removal_candidates(
+        raw_removal_candidates=ngsolve_boundary_removal_candidates(
             fes.mesh,active,fixed_active_elements=fixed_active,
             predecessor_elements=predecessors)
+        removal_candidates,removal_members=grouped_removal_candidates(
+            raw_removal_candidates,active)
         if candidates.size==0 and removal_candidates.size==0:
             stop_reason="no_growth_candidates";break
         if (removal_candidates.size==0 and
@@ -2207,7 +2394,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         if candidates.size==0:
             material=[]
             for element in removal_candidates:
-                block=element_blocks[int(element)]
+                block=np.concatenate([
+                    element_blocks[int(member)]
+                    for member in removal_members[int(element)]])
                 local=np.asarray(response_matrix,dtype=float)[:,block]@state[block]
                 try:
                     _,removed,_=calibrate_source(state,response-local)
@@ -2218,7 +2407,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 current_response=objective_response,response_target=target,
                 response_band=band,candidate_elements=removal_candidates,
                 candidate_response_delta=np.column_stack(material),
-                candidate_volumes=volumes[removal_candidates],
+                candidate_volumes=np.asarray([
+                    np.sum(volumes[removal_members[int(element)]])
+                    for element in removal_candidates]),
                 volume_budget=max(0.0,remaining),
                 candidate_material_active=np.ones(len(removal_candidates),dtype=bool),
                 relative_tolerance=float(tsvd_relative_tolerance),
@@ -2284,8 +2475,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
 
             best=None;batch_trials=0
             for bundle in attempts:
-                trial_active=active.copy();trial_active[bundle]=False
-                if not ngsolve_growth_topology(fes.mesh,trial_active).valid:
+                expanded=np.unique(np.concatenate([
+                    removal_members[int(element)] for element in bundle]))
+                trial_active=active.copy();trial_active[expanded]=False
+                if not valid_active_set(trial_active):
                     continue
                 batch_trials+=1
                 trial_state,trial_response,trial_iterations=\
@@ -2305,12 +2498,19 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 trial_ratio=ratio(trial_objective)
                 if (trial_ratio<current_ratio-ratio_tolerance and
                         (best is None or trial_ratio<best[0])):
-                    best=(trial_ratio,bundle,trial_active,trial_state,
+                    best=(trial_ratio,bundle,expanded,trial_active,trial_state,
                           trial_response,trial_iterations,trial_scale,
                           trial_objective)
+                    # The globally compressed TSVD proposal is the first
+                    # attempt.  Exact solves are an acceptance gate, not an
+                    # exhaustive local optimizer: once an ordered proposal
+                    # improves, commit it and let the next outer iteration
+                    # relinearize every candidate.  Alternatives are paid for
+                    # only when all earlier global/nested proposals fail.
+                    break
             if best is None:
                 stop_reason="conditional_exact_rejected_removal_front";break
-            (actual,selected_remove,trial_active,trial_state,trial_response,
+            (actual,selected_remove,removed_physical,trial_active,trial_state,trial_response,
              trial_iterations,trial_scale,trial_objective)=best
             selected_columns=np.asarray([
                 removal_lookup[int(element)] for element in selected_remove],
@@ -2331,7 +2531,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 len(selected_remove),float(agreement),
                 int(removal_tsvd.numerical_rank),int(removal_tsvd.aca_rank),
                 float(removal_tsvd.relative_truncation_error),
-                int(len(removal_tsvd.selected_elements)),selected_remove,0,
+                int(len(removal_tsvd.selected_elements)),removed_physical,0,
                 int(len(removal_candidates)))
             history.append(row)
             if iteration_callback is not None: iteration_callback(row)
@@ -2339,26 +2539,67 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             if converged: stop_reason="target_met"
             continue
 
+        # Contract field observations to the actual design metrics before the
+        # state/adjoint batch.  If coil amplitude alpha=t/(a^T y) is eliminated,
+        # d(alpha*y)/dy = alpha*(I-y*a^T/(a^T y)); this complete derivative is
+        # composed with the analytic optics Jacobian.  The projection is only
+        # a proposal model.  Accepted active sets are still solved and scored
+        # with the full raw response above.
+        objective_projection=None
+        linear_response_matrix=np.asarray(response_matrix,dtype=float)
+        linear_incident_response=incident_response
+        if response_transform_jacobian is not None:
+            if not np.isfinite(source_scale) or source_scale<=0.0:
+                raise RuntimeError(
+                    "response-row contraction requires a positive source scale")
+            raw_base=np.asarray(response,dtype=float)/float(source_scale)
+            calibrated_jacobian=transform_jacobian(response)
+            calibration_jacobian=float(source_scale)*np.eye(raw_base.size)
+            if calibration is not None:
+                averaging=np.zeros(raw_base.size,dtype=float)
+                np.add.at(averaging,calibration,1.0/float(calibration.size))
+                denominator=float(averaging@raw_base)
+                if not np.isfinite(denominator) or denominator==0.0:
+                    raise RuntimeError(
+                        "source-calibrated response projection has zero denominator")
+                calibration_jacobian-=float(source_scale)*np.outer(
+                    raw_base,averaging)/denominator
+            objective_projection=np.ascontiguousarray(
+                calibrated_jacobian@calibration_jacobian,dtype=float)
+            linear_response_matrix=np.ascontiguousarray(
+                objective_projection@linear_response_matrix,dtype=float)
+            if incident_response is not None:
+                linear_incident_response=np.ascontiguousarray(
+                    objective_projection@np.asarray(
+                        incident_response,dtype=float).reshape(-1),dtype=float)
+
         tsvd_proposal=None
+        removal_material_response={}
+        fallback_addition_elements=np.empty(0,dtype=np.int64)
         def select_exact_candidates(elements,approximate_delta,
                                     approximate_state,approximate_response):
-            nonlocal tsvd_proposal
+            nonlocal tsvd_proposal,fallback_addition_elements
             elements=np.asarray(elements,dtype=np.int64).reshape(-1)
-            _,base_calibrated,_=calibrate_source(
-                approximate_state,approximate_response)
-            base_objective=transform_response(base_calibrated)
+            if objective_projection is None:
+                _,base_calibrated,_=calibrate_source(
+                    approximate_state,approximate_response)
+                base_objective=transform_response(base_calibrated)
+            else:
+                base_objective=np.asarray(objective_response,dtype=float)
             effective=[];valid=[]
             for column in range(elements.size):
                 delta=np.asarray(approximate_delta[:,column],dtype=float)
                 if not np.all(np.isfinite(delta)):
                     continue
-                try:
-                    _,inserted,_=calibrate_source(
-                        approximate_state,approximate_response+delta)
-                    objective=transform_response(inserted)
-                except (RuntimeError,ValueError):
-                    continue
-                valid.append(column);effective.append(objective-base_objective)
+                if objective_projection is None:
+                    try:
+                        _,inserted,_=calibrate_source(
+                            approximate_state,approximate_response+delta)
+                        objective=transform_response(inserted)
+                    except (RuntimeError,ValueError):
+                        continue
+                    delta=objective-base_objective
+                valid.append(column);effective.append(delta)
             if not valid:
                 raise RuntimeError("all candidate insertion responses are invalid")
             valid=np.asarray(valid,dtype=np.int64)
@@ -2366,22 +2607,33 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             material_effective=list(effective)
             material_elements=list(map(int,valid_elements))
             material_is_active=[False]*len(material_elements)
+            material_volumes=list(map(float,volumes[valid_elements]))
             for element in removal_candidates:
-                block=element_blocks[int(element)]
+                block=np.concatenate([
+                    element_blocks[int(member)]
+                    for member in removal_members[int(element)]])
                 local_material=(np.asarray(response_matrix,dtype=float)[:,block]
                                 @np.asarray(approximate_state)[block])
-                try:
-                    _,removed,_=calibrate_source(
-                        approximate_state,approximate_response-local_material)
-                    removed_objective=transform_response(removed)
-                except (RuntimeError,ValueError):
-                    continue
+                if objective_projection is None:
+                    try:
+                        _,removed,_=calibrate_source(
+                            approximate_state,
+                            approximate_response-local_material)
+                        material_response=base_objective-transform_response(removed)
+                    except (RuntimeError,ValueError):
+                        continue
+                else:
+                    material_response=objective_projection@local_material
+                removal_material_response[int(element)]=np.asarray(
+                    material_response,dtype=float).copy()
                 # TSVD columns represent positive material.  Removing the
                 # active cell is the negative of this column; the recovered
                 # coefficient sign chooses which operation is feasible.
-                material_effective.append(base_objective-removed_objective)
+                material_effective.append(material_response)
                 material_elements.append(int(element))
                 material_is_active.append(True)
+                material_volumes.append(float(np.sum(
+                    volumes[removal_members[int(element)]])))
             material_elements=np.asarray(material_elements,dtype=np.int64)
             material_matrix=np.column_stack(material_effective)
             material_is_active=np.asarray(material_is_active,dtype=bool)
@@ -2389,7 +2641,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 current_response=base_objective,response_target=target,
                 response_band=band,candidate_elements=material_elements,
                 candidate_response_delta=material_matrix,
-                candidate_volumes=volumes[material_elements],
+                candidate_volumes=np.asarray(material_volumes,dtype=float),
                 volume_budget=max(0.0,remaining),active_elements=active,
                 predecessor_elements=predecessors,
                 candidate_material_active=material_is_active,
@@ -2401,34 +2653,91 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             representatives=np.asarray(
                 tsvd_proposal.representative_elements,dtype=np.int64)[
                 np.asarray(tsvd_proposal.representative_directions)>0]
+            addition_delta={int(element):np.asarray(effective[column],dtype=float)
+                            for column,element in enumerate(valid_elements)}
+            positive_probe=np.union1d(selected,representatives).astype(np.int64)
+            effective_matrix=np.column_stack(effective)
+            addition_score=np.max(np.abs((
+                base_objective[:,None]+effective_matrix-target[:,None]) /
+                band[:,None]),axis=0)
+            score_by_element={int(element):float(addition_score[column])
+                              for column,element in enumerate(valid_elements)}
+            ranked_additions=valid_elements[np.argsort(
+                addition_score,kind="stable")]
+            fallback_limit=min(int(exact_candidate_limit),max(
+                2,len(positive_probe),
+                2*int(tsvd_proposal.numerical_rank)+2))
+            fallback_pool=np.union1d(
+                positive_probe,ranked_additions[:fallback_limit])
+            fallback_addition_elements=np.asarray(sorted(
+                (int(element) for element in fallback_pool),
+                key=lambda element:(score_by_element.get(element,np.inf),
+                                    element))[:fallback_limit],dtype=np.int64)
             front=np.union1d(selected,representatives).astype(np.int64)
-            if valid_elements.size<=int(exact_candidate_limit):
+            if (selected.size==0 and
+                    np.any(np.asarray(tsvd_proposal.selected_directions)<0)):
+                # The signed global model requests only deletion.  No
+                # insertion Schur block affects that proposed full resolve.
+                # Defer its bounded addition front until an exact full solve
+                # rejects the deletion.  The retained front includes the best
+                # predicted pair even when neither singleton improves.
+                return np.empty(0,dtype=np.int64)
+            # Exhaustive exact Schur search remains useful for tiny regression
+            # fronts, but scaling it to every BDM1 element defeats the global
+            # ACA/QR/TSVD screen.  Above eight elements retain only the signed
+            # TSVD/QR representatives, bounded by the explicit exact-front
+            # limit; accepted batch cardinality is still decided by the LP.
+            exhaustive_limit=min(8,int(exact_candidate_limit))
+            if valid_elements.size<=exhaustive_limit:
                 return valid_elements
             if front.size:
-                return front
+                selected_set=set(int(value) for value in selected)
+                # The global TSVD/MILP proposal determines batch cardinality;
+                # an exact-front safety limit must never truncate that proposal
+                # (which would turn a cooperative move back into arbitrary
+                # "try N elements").  The limit bounds only extra QR
+                # representatives used to challenge the proposal.
+                proposed=np.asarray(sorted(selected_set),dtype=np.int64)
+                extras=np.asarray(sorted(
+                    int(value) for value in front
+                    if int(value) not in selected_set),dtype=np.int64)
+                extra_limit=max(0,int(exact_candidate_limit)-len(proposed))
+                return np.r_[proposed,extras[:extra_limit]].astype(
+                    np.int64,copy=False)
             # A no-improvement TSVD proposal still receives one exact Schur
             # probe.  When the zero-rank set is small, keep it whole so a pair
             # that improves only jointly is not discarded.  The limit controls
             # exact look-ahead work, not accepted batch cardinality.
-            effective_matrix=np.column_stack(effective)
             score=np.max(np.abs((base_objective[:,None]+effective_matrix-
                                  target[:,None])/band[:,None]),axis=0)
             return valid_elements[np.asarray([int(np.argmin(score))])]
 
         lin=linearize_hdiv_mmm_element_generation(charge_gram=charge_gram,
-            fes=fes,inv_chi=inv_chi,rhs=rhs,response_matrix=response_matrix,
+            fes=fes,inv_chi=inv_chi,rhs=rhs,
+            response_matrix=linear_response_matrix,
             active_elements=active,candidate_elements=candidates,
-            incident_response=incident_response,
+            incident_response=linear_incident_response,
             solve_tolerance=solve_tolerance,
             solve_max_iterations=solve_max_iterations,
             candidate_batch_size=candidate_batch_size,mass_riesz=mass_riesz,
+            cluster_coarse_size=cluster_coarse_size,
+            cluster_deflation_size=cluster_deflation_size,
+            recycle_size=recycle_size,
             candidate_selector=select_exact_candidates)
-        _,lp_raw_response,linear_scale=calibrate_source(lin.state,lin.response)
-        lp_response=transform_response(lp_raw_response)
-        state=lin.state*linear_scale
-        response=lp_raw_response
-        source_scale=linear_scale
-        objective_response=lp_response
+        if objective_projection is None:
+            _,lp_raw_response,linear_scale=calibrate_source(
+                lin.state,lin.response)
+            lp_response=transform_response(lp_raw_response)
+            state=lin.state*linear_scale
+            response=lp_raw_response
+            source_scale=linear_scale
+            objective_response=lp_response
+        else:
+            # The projected base response lacks the nonlinear affine offset;
+            # retain the last exact raw solve and use the new unscaled state
+            # only for the reduced candidate system.
+            state=lin.state*source_scale
+            lp_response=np.asarray(objective_response,dtype=float)
         current_ratio=ratio(objective_response)
         if tsvd_proposal is None:
             raise RuntimeError("all-candidate TSVD selector did not run")
@@ -2453,10 +2762,15 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         # introduced.  If the signed low-rank model is inaccurate, fall back
         # to the exact-Schur addition front for this iteration.
         if proposed_removals.size:
+            exact_evaluated=0
             trial_active=active.copy()
             trial_active[proposed_additions]=True
-            trial_active[proposed_removals]=False
-            if ngsolve_growth_topology(fes.mesh,trial_active).valid:
+            expanded_removals=np.unique(np.concatenate([
+                removal_members[int(element)]
+                for element in proposed_removals]))
+            trial_active[expanded_removals]=False
+            if valid_active_set(trial_active):
+                exact_evaluated+=1
                 trial_state,trial_response,trial_iterations=\
                     solve_hdiv_mmm_active_elements(
                         charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,
@@ -2475,15 +2789,130 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     actual=np.inf
                 if actual<current_ratio-ratio_tolerance:
                     selected=proposed_additions
-                    removed_elements=proposed_removals
+                    removed_elements=expanded_removals
                     predicted_ratio=tsvd_proposal.predicted_max_band_ratio
-                    exact_evaluated=1
                     selection_model=\
                         "signed-magnetization-aca-qr-tsvd-full-resolve"
                     mixed_accepted=True
 
+            if not mixed_accepted:
+                # The additive magnetization deletion column is only a cheap
+                # proposal; it is not an exact active-system downdate.  A bad
+                # first signed-TSVD choice must therefore not terminate a
+                # topology iteration while another exposed face improves the
+                # fully re-solved system.  Rank a bounded union of negative
+                # TSVD/QR representatives and predicted single removals, then
+                # solve those alternatives exactly.  This fallback runs only
+                # after the global deletion proposal was rejected, preserving
+                # the fast one-solve path for the normal case.
+                negative_representatives=representative_elements[
+                    representative_directions<0]
+                predicted_removals=[]
+                for element in removal_candidates:
+                    material=removal_material_response.get(int(element))
+                    if material is not None:
+                        predicted_removals.append((
+                            ratio(objective_response-material),int(element)))
+                predicted_removals.sort(key=lambda item:(item[0],item[1]))
+                front_limit=min(int(exact_candidate_limit),max(1,
+                    len(negative_representatives),
+                    2*int(tsvd_proposal.numerical_rank)+2))
+                alternate_pool=set(map(int,negative_representatives))
+                alternate_pool.update(
+                    element for _,element in predicted_removals[:front_limit])
+                alternate_order=sorted(alternate_pool,key=lambda element:(
+                    ratio(objective_response-removal_material_response[element])
+                    if element in removal_material_response else np.inf,
+                    element))[:front_limit]
+                best_alternate=None
+                for element in alternate_order:
+                    expanded=np.asarray(
+                        removal_members[int(element)],dtype=np.int64)
+                    alternate_active=active.copy()
+                    alternate_active[expanded]=False
+                    if not valid_active_set(alternate_active):
+                        continue
+                    exact_evaluated+=1
+                    alternate_state,alternate_response,alternate_iterations=\
+                        solve_hdiv_mmm_active_elements(
+                            charge_gram=charge_gram,fes=fes,
+                            inv_chi=inv_chi,rhs=rhs,
+                            response_matrix=response_matrix,
+                            active_elements=alternate_active,
+                            incident_response=incident_response,
+                            solve_tolerance=solve_tolerance,
+                            solve_max_iterations=solve_max_iterations,
+                            mass_riesz=mass_riesz)
+                    try:
+                        (alternate_state,alternate_response,
+                         alternate_scale)=calibrate_source(
+                             alternate_state,alternate_response)
+                        alternate_objective=transform_response(
+                            alternate_response)
+                        alternate_ratio=ratio(alternate_objective)
+                    except (RuntimeError,ValueError):
+                        continue
+                    if (alternate_ratio<current_ratio-ratio_tolerance and
+                            (best_alternate is None or
+                             alternate_ratio<best_alternate[0])):
+                        best_alternate=(
+                            alternate_ratio,expanded,alternate_active,
+                            alternate_state,alternate_response,
+                            alternate_iterations,alternate_scale,
+                            alternate_objective,int(element))
+                        break
+                if best_alternate is not None:
+                    (actual,removed_elements,trial_active,trial_state,
+                     trial_response,trial_iterations,trial_scale,
+                     trial_objective,alternate_element)=best_alternate
+                    selected=np.empty(0,dtype=np.int64)
+                    material=removal_material_response.get(alternate_element)
+                    predicted_ratio=(current_ratio if material is None else
+                        ratio(objective_response-material))
+                    selection_model=(
+                        "signed-magnetization-aca-qr-tsvd-"
+                        "alternate-removal-exact")
+                    mixed_accepted=True
+
+        if not mixed_accepted and len(lin.candidate_elements)==0:
+            # The cheap signed model requested deletion only, but its complete
+            # active-set re-solve did not improve.  Pay for insertion Schur
+            # columns only in this misprediction case so cooperative additions
+            # remain discoverable without taxing the common accepted-removal
+            # path.
+            if fallback_addition_elements.size==0:
+                stop_reason=(
+                    "no_insertion_front_after_removal_rejection")
+                break
+            def fallback_addition_front(elements,approximate_delta,
+                                        approximate_state,
+                                        approximate_response):
+                elements=np.asarray(elements,dtype=np.int64).reshape(-1)
+                preferred=np.intersect1d(
+                    elements,fallback_addition_elements).astype(np.int64)
+                if preferred.size:
+                    return preferred[:int(exact_candidate_limit)]
+                return np.empty(0,dtype=np.int64)
+            lin=linearize_hdiv_mmm_element_generation(
+                charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
+                response_matrix=linear_response_matrix,
+                active_elements=active,candidate_elements=candidates,
+                incident_response=linear_incident_response,
+                solve_tolerance=solve_tolerance,
+                solve_max_iterations=solve_max_iterations,
+                candidate_batch_size=candidate_batch_size,
+                mass_riesz=mass_riesz,
+                cluster_coarse_size=cluster_coarse_size,
+                cluster_deflation_size=cluster_deflation_size,
+                recycle_size=recycle_size,
+                candidate_selector=fallback_addition_front)
+            if len(lin.candidate_elements)==0:
+                stop_reason="full_solve_rejected_removal_only_tsvd";break
+
         def evaluate_bundle(elements):
             block=hdiv_mmm_block_insertion_response(lin,elements)
+            if objective_projection is not None:
+                return objective_response+block.response_delta
             inserted=lin.response+block.response_delta
             try:
                 _,calibrated,_=calibrate_source(lin.state,inserted)
@@ -2508,8 +2937,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 maximum_new_elements=maximum_cap,
                 improvement_capture=float(batch_improvement_capture),
                 ratio_tolerance=ratio_tolerance,
-                bundle_is_valid=lambda elements:ngsolve_growth_topology(
-                    fes.mesh,np.isin(np.arange(len(active)),elements)|active).valid)
+                bundle_is_valid=lambda elements:valid_active_set(
+                    np.isin(np.arange(len(active)),elements)|active))
             selected=exact.selected_elements
             predicted_ratio=exact.predicted_max_band_ratio
             exact_evaluated=exact.evaluated_bundles
@@ -2520,7 +2949,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             # remains tied to a fresh full solve and the topology gate.
             trial_active=active.copy();trial_active[selected]=True
             trial_topology=ngsolve_growth_topology(fes.mesh,trial_active)
-            if not trial_topology.valid:
+            if not trial_topology.valid or not valid_active_set(trial_active):
                 stop_reason="topology_gate_rejected_exact_bundle";break
             trial_state,trial_response,trial_iterations=\
                 solve_hdiv_mmm_active_elements(
@@ -2562,7 +2991,11 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             float(tsvd_proposal.relative_truncation_error),
             int(len(tsvd_proposal.selected_elements)),
             np.asarray(removed_elements,dtype=np.int64),
-            int(lin.available_candidate_count),int(len(removal_candidates))))
+            int(lin.available_candidate_count),int(len(removal_candidates)),
+            int(lin.candidate_coupling_rank),
+            float(lin.candidate_coupling_relative_truncation_error),
+            int(max(lin.schur_iterations,default=0)),
+            int(len(lin.adjoint_iterations))))
         if iteration_callback is not None:
             iteration_callback(history[-1])
         converged=current_ratio<=1.0+ratio_tolerance
@@ -2725,7 +3158,8 @@ def solve_shape_lp(parameters, linearization: ShapeLinearization, *, move_limit,
             raise ValueError("parameter_bounds must be (lower,upper)")
         lower=np.broadcast_to(np.asarray(parameter_bounds[0],dtype=float),q.shape).copy()
         upper=np.broadcast_to(np.asarray(parameter_bounds[1],dtype=float),q.shape).copy()
-        if np.any(lower>upper) or np.any(q<lower) or np.any(q>upper):
+        if (np.any(np.isnan(lower)) or np.any(np.isnan(upper))
+                or np.any(lower>upper) or np.any(q<lower) or np.any(q>upper)):
             raise ValueError("invalid shape parameter bounds or current parameters outside them")
     lower=np.maximum(lower,q-move); upper=np.minimum(upper,q+move)
     if np.any(lower>upper):
@@ -2734,15 +3168,19 @@ def solve_shape_lp(parameters, linearization: ShapeLinearization, *, move_limit,
     static_rows=[]; static_rhs=[]
     if laplacian is not None:
         L=np.atleast_2d(np.asarray(laplacian,dtype=float))
-        if L.shape[1]!=n or curvature_limit is None:
+        if L.shape[1]!=n or curvature_limit is None or not np.all(np.isfinite(L)):
             raise ValueError("shape laplacian requires n columns and curvature_limit")
         limit=np.broadcast_to(np.asarray(curvature_limit,dtype=float),(L.shape[0],))
-        if np.any(limit<0.0): raise ValueError("curvature_limit must be nonnegative")
+        if np.any(limit<0.0) or not np.all(np.isfinite(limit)):
+            raise ValueError("curvature_limit must be finite and nonnegative")
         static_rows.extend([L,-L]); static_rhs.extend([limit,limit])
     if A_ub is not None:
+        if b_ub is None:
+            raise ValueError("shape A_ub requires b_ub")
         extra=np.atleast_2d(np.asarray(A_ub,dtype=float))
         rhs=np.asarray(b_ub,dtype=float).reshape(-1)
-        if extra.shape!=(rhs.size,n):
+        if (extra.shape!=(rhs.size,n) or not np.all(np.isfinite(extra))
+                or not np.all(np.isfinite(rhs))):
             raise ValueError("shape A_ub/b_ub mismatch")
         static_rows.append(extra); static_rhs.append(rhs)
     elif b_ub is not None:

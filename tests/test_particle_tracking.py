@@ -6,6 +6,7 @@ import pytest
 pytest.importorskip("scipy.integrate")
 
 from radia.particle_tracking import (
+    FIVE_MOMENTUM_OFFSETS,
     ParticleSpecies,
     SPEED_OF_LIGHT_M_S,
     TrackingBox,
@@ -13,6 +14,8 @@ from radia.particle_tracking import (
     speed_from_kinetic_voltage,
     track_lorentz_ivp,
     track_two_momentum_exit_dispersion,
+    fit_five_momentum_exit_optics,
+    track_five_momentum_exit_optics,
     uniform_magnetic_trajectory,
     velocity_from_kinetic_voltage,
 )
@@ -146,6 +149,82 @@ def test_two_momentum_exit_dispersion_detects_magnetic_separation():
     )
     assert abs(result["eta_m"]) > 1.0e-4
     assert result["coincident_exit_error_m"] > 1.0e-7
+
+
+def test_five_momentum_fit_recovers_quadratic_exit_optics():
+    offsets = np.asarray(FIVE_MOMENTUM_OFFSETS)
+    positions = 2.0e-4 + 3.0e-3 * offsets + 4.0 * offsets**2
+    angles = -1.0e-4 - 5.0e-4 * offsets + 0.2 * offsets**2
+
+    result = fit_five_momentum_exit_optics(offsets, positions, angles)
+
+    np.testing.assert_allclose(
+        result["linear_regression_weights"],
+        (-400.0, -200.0, 0.0, 200.0, 400.0),
+        atol=1.0e-12,
+    )
+    assert result["x0_m"] == pytest.approx(2.0e-4)
+    assert result["psi0_rad"] == pytest.approx(-1.0e-4)
+    assert result["eta_m"] == pytest.approx(3.0e-3)
+    assert result["eta_prime_rad"] == pytest.approx(-5.0e-4)
+    assert result["x_quadratic_m"] == pytest.approx(4.0)
+    assert result["psi_quadratic_rad"] == pytest.approx(0.2)
+    assert result["max_x_residual_m"] < 1.0e-14
+    assert result["max_psi_residual_rad"] < 1.0e-14
+    assert result["pass_all"]
+
+
+def test_five_momenta_have_zero_exit_optics_in_zero_field():
+    result = track_five_momentum_exit_optics(
+        ELECTRON,
+        (0.0, 0.1, 0.0),
+        (2.0, 0.0, 0.0),
+        np.linspace(0.0, 1.0, 21),
+        TrackingPlane((0.5, 0.0, 0.0), (1.0, 0.0, 0.0), direction=1),
+        reference_exit_point_m=(0.5, 0.1, 0.0),
+        transverse_direction=(0.0, 1.0, 0.0),
+        longitudinal_direction=(1.0, 0.0, 0.0),
+        magnetic_flux_density_t=_zero,
+    )
+
+    assert result["x0_m"] == pytest.approx(0.0, abs=1.0e-12)
+    assert result["psi0_rad"] == pytest.approx(0.0, abs=1.0e-12)
+    assert result["eta_m"] == pytest.approx(0.0, abs=1.0e-12)
+    assert result["eta_prime_rad"] == pytest.approx(0.0, abs=1.0e-12)
+    assert len(result["tracks"]) == 5
+    assert result["pass_all"]
+
+
+def test_five_momentum_fit_rejects_a_noncanonical_sample_count():
+    with pytest.raises(ValueError, match="exactly five"):
+        fit_five_momentum_exit_optics(
+            (-1.0e-3, 0.0, 1.0e-3),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+        )
+
+
+@pytest.mark.parametrize(
+    "offsets, message",
+    [
+        ((-1.0e-3, 0.0, -5.0e-4, 5.0e-4, 1.0e-3), "strictly increasing"),
+        ((-1.0e-3, -5.0e-4, 2.0e-4, 5.0e-4, 1.0e-3), "exactly one zero"),
+    ],
+)
+def test_five_momentum_track_rejects_invalid_offsets_before_tracking(
+        offsets, message):
+    with pytest.raises(ValueError, match=message):
+        track_five_momentum_exit_optics(
+            ELECTRON,
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            np.linspace(0.0, 1.0, 21),
+            TrackingPlane((0.5, 0.0, 0.0), (1.0, 0.0, 0.0), direction=1),
+            reference_exit_point_m=(0.5, 0.0, 0.0),
+            transverse_direction=(0.0, 1.0, 0.0),
+            relative_momentum_offsets=offsets,
+            magnetic_flux_density_t=_zero,
+        )
 
 
 @pytest.mark.parametrize(

@@ -20,6 +20,7 @@ import numpy as np
 
 FieldMap = Callable[[object, object, object], tuple[object, object, object]]
 SPEED_OF_LIGHT_M_S = 299_792_458.0
+FIVE_MOMENTUM_OFFSETS = (-1.0e-3, -5.0e-4, 0.0, 5.0e-4, 1.0e-3)
 
 
 @dataclass(frozen=True)
@@ -481,3 +482,217 @@ def track_two_momentum_exit_dispersion(
         "minus_track": tracks["minus"],
         "plus_track": tracks["plus"],
     }
+
+
+def fit_five_momentum_exit_optics(
+    relative_momentum_offsets: Sequence[float],
+    transverse_positions_m: Sequence[float],
+    transverse_angles_rad: Sequence[float],
+    *,
+    x0_limit_m: float = 1.0e-3,
+    psi0_limit_rad: float = 1.0e-3,
+    eta_limit_m: float = 5.0e-3,
+    eta_prime_limit_rad: float = 1.0e-3,
+) -> dict[str, Any]:
+    """Fit the canonical five-particle quadratic exit-optics metrics.
+
+    ``x(delta)`` and ``psi(delta)`` are fitted in the basis
+    ``(1, delta, delta**2)``.  For the canonical offsets
+    ``[-0.001, -0.0005, 0, 0.0005, 0.001]`` the linear coefficient has
+    weights ``[-400, -200, 0, 200, 400]``, matching the shared COMSOL/Radia
+    acceptance contract.  ``x0`` and ``psi0`` are the actually tracked
+    central-particle values, not the fitted intercepts.
+    """
+    offsets = np.asarray(relative_momentum_offsets, dtype=float).reshape(-1)
+    positions = np.asarray(transverse_positions_m, dtype=float).reshape(-1)
+    angles = np.asarray(transverse_angles_rad, dtype=float).reshape(-1)
+    if offsets.shape != (5,) or positions.shape != (5,) or angles.shape != (5,):
+        raise ValueError("five-particle optics requires exactly five samples")
+    if not np.all(np.isfinite(np.r_[offsets, positions, angles])):
+        raise ValueError("five-particle offsets and exit states must be finite")
+    if not np.all(np.diff(offsets) > 0.0):
+        raise ValueError("relative momentum offsets must be strictly increasing")
+    central = np.flatnonzero(offsets == 0.0)
+    if central.size != 1:
+        raise ValueError("five-particle offsets must contain exactly one zero")
+
+    limits = np.asarray(
+        [x0_limit_m, psi0_limit_rad, eta_limit_m, eta_prime_limit_rad],
+        dtype=float,
+    )
+    if not np.all(np.isfinite(limits)) or np.any(limits <= 0.0):
+        raise ValueError("five-particle acceptance limits must be finite and positive")
+
+    design = np.column_stack((np.ones(5), offsets, offsets * offsets))
+    position_coefficients, *_ = np.linalg.lstsq(design, positions, rcond=None)
+    angle_coefficients, *_ = np.linalg.lstsq(design, angles, rcond=None)
+    position_residual = positions - design @ position_coefficients
+    angle_residual = angles - design @ angle_coefficients
+    center = int(central[0])
+    response = np.asarray(
+        [
+            positions[center],
+            angles[center],
+            position_coefficients[1],
+            angle_coefficients[1],
+        ],
+        dtype=float,
+    )
+    passed = np.abs(response) <= limits
+    # The first-order regression weights are useful evidence that the exact
+    # five-point contract, rather than a two-particle central difference, ran.
+    linear_weights = np.linalg.pinv(design)[1]
+    return {
+        "schema": "radia-five-momentum-exit-optics/v1",
+        "relative_momentum_offsets": offsets.tolist(),
+        "linear_regression_weights": linear_weights.tolist(),
+        "x0_m": float(response[0]),
+        "psi0_rad": float(response[1]),
+        "eta_m": float(response[2]),
+        "eta_prime_rad": float(response[3]),
+        "x_fitted_intercept_m": float(position_coefficients[0]),
+        "psi_fitted_intercept_rad": float(angle_coefficients[0]),
+        "x_quadratic_m": float(position_coefficients[2]),
+        "psi_quadratic_rad": float(angle_coefficients[2]),
+        "max_x_residual_m": float(np.max(np.abs(position_residual))),
+        "max_psi_residual_rad": float(np.max(np.abs(angle_residual))),
+        "limits": {
+            "x0_m": float(limits[0]),
+            "psi0_rad": float(limits[1]),
+            "eta_m": float(limits[2]),
+            "eta_prime_rad": float(limits[3]),
+        },
+        "pass_x0": bool(passed[0]),
+        "pass_psi0": bool(passed[1]),
+        "pass_eta": bool(passed[2]),
+        "pass_eta_prime": bool(passed[3]),
+        "pass_all": bool(np.all(passed)),
+    }
+
+
+def track_five_momentum_exit_optics(
+    species: ParticleSpecies,
+    initial_position_m: Sequence[float],
+    nominal_velocity_m_s: Sequence[float],
+    times_s: Sequence[float],
+    exit_plane: TrackingPlane,
+    *,
+    reference_exit_point_m: Sequence[float],
+    transverse_direction: Sequence[float],
+    longitudinal_direction: Sequence[float] | None = None,
+    relative_momentum_offsets: Sequence[float] = FIVE_MOMENTUM_OFFSETS,
+    electric_field_v_m: FieldMap | None = None,
+    magnetic_flux_density_t: FieldMap | None = None,
+    relativistic: bool = False,
+    stop_box: TrackingBox | None = None,
+    x0_limit_m: float = 1.0e-3,
+    psi0_limit_rad: float = 1.0e-3,
+    eta_limit_m: float = 5.0e-3,
+    eta_prime_limit_rad: float = 1.0e-3,
+    rtol: float = 1.0e-11,
+    atol: float = 1.0e-14,
+) -> dict[str, Any]:
+    """Track five momenta and evaluate ``x0, psi0, eta, eta_prime``.
+
+    All particles start at the same position and in the same direction; only
+    momentum is scaled.  Each trajectory is recorded on one common exit
+    plane.  Position is measured from ``reference_exit_point_m`` along the
+    transverse direction, while
+    ``psi = atan2(v dot e_transverse, v dot e_longitudinal)``.
+    """
+    offsets = np.asarray(relative_momentum_offsets, dtype=float).reshape(-1)
+    if offsets.shape != (5,) or not np.all(np.isfinite(offsets)):
+        raise ValueError("relative_momentum_offsets must contain five finite values")
+    if not np.all(np.diff(offsets) > 0.0):
+        raise ValueError("relative momentum offsets must be strictly increasing")
+    if np.count_nonzero(offsets == 0.0) != 1:
+        raise ValueError("relative momentum offsets must contain exactly one zero")
+    if np.any(1.0 + offsets <= 0.0):
+        raise ValueError("every relative momentum scale must be positive")
+    limits = np.asarray(
+        [x0_limit_m, psi0_limit_rad, eta_limit_m, eta_prime_limit_rad],
+        dtype=float,
+    )
+    if not np.all(np.isfinite(limits)) or np.any(limits <= 0.0):
+        raise ValueError("five-particle acceptance limits must be finite and positive")
+    reference = np.asarray(reference_exit_point_m, dtype=float)
+    transverse = np.asarray(transverse_direction, dtype=float)
+    longitudinal = (
+        exit_plane.unit_normal
+        if longitudinal_direction is None
+        else np.asarray(longitudinal_direction, dtype=float)
+    )
+    if (
+        reference.shape != (3,)
+        or transverse.shape != (3,)
+        or longitudinal.shape != (3,)
+        or not np.all(np.isfinite(np.r_[reference, transverse, longitudinal]))
+    ):
+        raise ValueError("reference point and exit directions must be finite 3-vectors")
+    longitudinal_norm = float(np.linalg.norm(longitudinal))
+    if longitudinal_norm == 0.0:
+        raise ValueError("longitudinal_direction must be nonzero")
+    longitudinal = longitudinal / longitudinal_norm
+    transverse = transverse - np.dot(transverse, longitudinal) * longitudinal
+    transverse_norm = float(np.linalg.norm(transverse))
+    if transverse_norm == 0.0:
+        raise ValueError("transverse and longitudinal directions must not be parallel")
+    transverse /= transverse_norm
+
+    common = dict(
+        electric_field_v_m=electric_field_v_m,
+        magnetic_flux_density_t=magnetic_flux_density_t,
+        relativistic=relativistic,
+        stop_box=stop_box,
+        stop_plane=exit_plane,
+        rtol=rtol,
+        atol=atol,
+    )
+    tracks = []
+    positions = []
+    angles = []
+    for offset in offsets:
+        velocity = _momentum_scaled_velocity(
+            nominal_velocity_m_s, 1.0 + float(offset), relativistic=relativistic
+        )
+        track = track_lorentz_ivp(
+            species, initial_position_m, velocity, times_s, **common
+        )
+        event = track["stop_event"]
+        if not track["success"] or event is None or event["face"] != "plane":
+            raise RuntimeError(
+                f"momentum offset {offset:+.6g} did not reach the exit plane: "
+                f"{track['message']}"
+            )
+        event_position = np.asarray(event["position_m"], dtype=float)
+        event_velocity = np.asarray(event["velocity_m_s"], dtype=float)
+        displacement = event_position - reference
+        positions.append(float(np.dot(displacement, transverse)))
+        angles.append(
+            float(
+                np.arctan2(
+                    np.dot(event_velocity, transverse),
+                    np.dot(event_velocity, longitudinal),
+                )
+            )
+        )
+        tracks.append(track)
+
+    result = fit_five_momentum_exit_optics(
+        offsets,
+        positions,
+        angles,
+        x0_limit_m=x0_limit_m,
+        psi0_limit_rad=psi0_limit_rad,
+        eta_limit_m=eta_limit_m,
+        eta_prime_limit_rad=eta_prime_limit_rad,
+    )
+    result.update(
+        transverse_positions_m=positions,
+        transverse_angles_rad=angles,
+        reference_exit_point_m=reference.tolist(),
+        transverse_direction=transverse.tolist(),
+        longitudinal_direction=longitudinal.tolist(),
+        tracks=tracks,
+    )
+    return result

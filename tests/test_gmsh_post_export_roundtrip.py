@@ -10,6 +10,7 @@ field data lands as GMSH post-processing views. Pure NGSolve + gmsh (no Cubit).
 """
 import os
 import math
+import numpy as np
 import pytest
 
 ng = pytest.importorskip("ngsolve")
@@ -19,7 +20,12 @@ from ngsolve.meshes import MakeStructured3DMesh
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from radia.gmsh_post_export import GmshPostExport, _get_gmsh_ref_points
+from radia.gmsh_post_export import (
+    GmshPostExport,
+    _get_gmsh_ref_points,
+    export_element_activation_animation,
+    export_nodal_deformation_animation,
+)
 
 
 def test_gmsh_reference_points_use_element_dimension_stride():
@@ -114,6 +120,98 @@ def test_mesh_only_roundtrip():
     assert 5 in vtypes, "expected Hex8 (type 5) in %s" % vtypes  # order-1 hex
     assert n_nodes == 27
     assert n_views == 0
+
+
+def test_element_activation_animation_roundtrip():
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=1, nz=1)
+    out = os.path.join(_TMP, "rt_element_activation_animation.msh")
+    artifact = export_element_activation_animation(
+        mesh, [[True, False], [True, True], [True, True]], out)
+    _assert_launch_companions(out)
+    assert artifact["active_counts"] == [1, 2, 2]
+
+    gmsh.initialize()
+    try:
+        gmsh.open(out)
+        tags = gmsh.view.getTags()
+        assert len(tags) == 1
+        for step, expected in enumerate((1, 2, 2)):
+            kind, element_tags, values, time, ncomp = (
+                gmsh.view.getModelData(tags[0], step))
+            assert kind == "ElementData"
+            assert len(element_tags) == expected
+            assert len(values) == expected
+            assert time == pytest.approx(float(step))
+            assert ncomp == 1
+    finally:
+        gmsh.finalize()
+
+
+def test_element_activation_animation_rejects_removal():
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=1, nz=1)
+    with pytest.raises(ValueError, match="removes active elements"):
+        export_element_activation_animation(
+            mesh, [[True, True], [True, False]],
+            os.path.join(_TMP, "rt_nonmonotone_activation.msh"))
+
+
+@pytest.mark.parametrize("invalid", ([True, 0.5], [True, np.nan]))
+def test_element_activation_animation_rejects_nonbinary_masks(invalid):
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=1, nz=1)
+    with pytest.raises(ValueError, match="boolean or binary"):
+        export_element_activation_animation(
+            mesh, [invalid],
+            os.path.join(_TMP, "rt_invalid_activation.msh"))
+
+
+def test_nodal_deformation_animation_roundtrip():
+    mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)
+    nodes = np.asarray([vertex.point for vertex in mesh.vertices], dtype=float)
+    displacement = np.column_stack((
+        0.01 * nodes[:, 0], -0.02 * nodes[:, 1], 0.03 * nodes[:, 2]))
+    out = os.path.join(_TMP, "rt_nodal_deformation_animation.msh")
+    artifact = export_nodal_deformation_animation(
+        mesh, [np.zeros_like(displacement), displacement], out)
+    geo_path, _, _ = _assert_launch_companions(out)
+    assert artifact["steps"] == 2
+    assert artifact["maximum_displacement_m"][1] > 0.0
+    with open(geo_path, "r", encoding="utf-8") as stream:
+        assert "View[0].VectorType = 5;" in stream.read()
+
+    gmsh.initialize()
+    try:
+        gmsh.open(out)
+        tags = gmsh.view.getTags()
+        assert len(tags) == 1
+        kind, node_tags, values, time_value, ncomp = (
+            gmsh.view.getModelData(tags[0], 1))
+        assert kind == "NodeData"
+        assert ncomp == 3
+        assert time_value == pytest.approx(1.0)
+        assert len(node_tags) == len(nodes)
+        np.testing.assert_allclose(np.asarray(values), displacement)
+    finally:
+        gmsh.finalize()
+
+
+def test_curved_nodal_deformation_samples_ngsolve_callable():
+    mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)
+    mesh.Curve(2)
+    displacement = CF((0.01 * x, -0.02 * y, 0.03 * z))
+    out = os.path.join(_TMP, "rt_curved_nodal_deformation.msh")
+    export_nodal_deformation_animation(mesh, [displacement], out)
+
+    gmsh.initialize()
+    try:
+        gmsh.open(out)
+        tags = gmsh.view.getTags()
+        assert len(tags) == 1
+        kind, node_tags, values, _, ncomp = gmsh.view.getModelData(tags[0], 0)
+        assert kind == "NodeData" and ncomp == 3
+        assert len(node_tags) > mesh.nv
+        assert np.all(np.isfinite(np.asarray(values)))
+    finally:
+        gmsh.finalize()
 
 
 if __name__ == "__main__":

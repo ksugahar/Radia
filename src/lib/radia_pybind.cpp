@@ -3871,6 +3871,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  out["response"] = to_numpy_2d(
                      reduced.response,reduced.n_response,reduced.n_candidate);
                  out["iters"] = py::cast(reduced.iterations);
+                 out["coupling_mode_iters"] =
+                     py::cast(reduced.coupling_mode_iterations);
+                 out["coupling_rank"] = reduced.coupling_rank;
+                 out["coupling_relative_truncation_error"] =
+                     reduced.coupling_relative_truncation_error;
                  out["operator_s"] = reduced.operator_s;
                  out["solve_s"] = reduced.solve_s;
                  out["contraction_s"] = reduced.contraction_s;
@@ -3881,7 +3886,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
              py::arg("solve_batch_size") = 64,
              py::arg("mass_riesz") = true,
-             "Fuse candidate A*e columns, constrained active solves, and reduced Schur/response contractions.")
+             "Fuse candidate A*e columns, native coupling-row TSVD, constrained active solves, and reduced Schur/response contractions.")
         .def("apply_configured_mass_riesz",
              [](RadHACApKChargeGram& s, F64Array rhs_a) {
                  const auto input = array_1d_view<double>(rhs_a, "rhs");

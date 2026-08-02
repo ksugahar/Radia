@@ -91,6 +91,53 @@ class CubitHexRemeshRequest:
 
 
 @dataclass(frozen=True)
+class ShapeModelEvaluation:
+    """Objective and physical responses from one fully solved shape."""
+    objective: float
+    response: np.ndarray
+
+
+@dataclass(frozen=True)
+class TopologyPreservingShapeState:
+    """Real iron geometry; ``reference_parameters`` own the current mesh."""
+    mesh: object
+    model: object
+    reference_parameters: np.ndarray
+    parameters: np.ndarray
+    evaluation: ShapeModelEvaluation
+
+
+@dataclass(frozen=True)
+class TopologyPreservingShapeIteration:
+    iteration: int
+    objective_before: float
+    objective_after: float
+    max_band_ratio_before: float
+    max_band_ratio_after: float
+    accepted_scale: float
+    maximum_parameter_change: float
+    route: str
+    minimum_jacobian: float
+    maximum_condition: float
+    nonlinear_resolves: int
+
+
+@dataclass(frozen=True)
+class TopologyPreservingShapeResult:
+    state: TopologyPreservingShapeState
+    history: tuple[TopologyPreservingShapeIteration, ...]
+    converged: bool
+
+
+@dataclass(frozen=True)
+class CubitShapeRemeshRequest:
+    iteration: int
+    shape_parameters: np.ndarray
+    journal_path: Path
+    mesh_path: Path
+
+
+@dataclass(frozen=True)
 class CubitHexRemeshBackend:
     """Batch Cubit adapter; CAD/journal policy remains application-owned."""
     executable: str
@@ -111,6 +158,91 @@ class CubitHexRemeshBackend:
             raise RuntimeError(f"Cubit remesh failed ({completed.returncode}):\n{tail}")
         if not output.is_file(): raise RuntimeError(f"Cubit did not create mesh: {output}")
         return self.load_mesh(output)
+
+
+def elastic_normal_deformation_modes(mesh, scalar_boundary_modes, *,
+        movable_boundaries, fixed_boundaries, order=1, shear_modulus=1.0,
+        bulk_modulus=0.1, inverse="sparsecholesky"):
+    """Extend boundary-normal shape modes into the volume by elasticity.
+
+    NGSolve owns boundary normals, H1 orientation, weak assembly, and the
+    volume-field solve.  Caller owns ``ngsolve.TaskManager``.
+    """
+    import ngsolve as ng
+
+    modes = tuple(scalar_boundary_modes)
+    if not modes:
+        raise ValueError("at least one scalar boundary mode is required")
+    order_value = float(order)
+    shear = float(shear_modulus)
+    bulk = float(bulk_modulus)
+    if (not np.isfinite(order_value) or order_value < 1.0
+            or order_value != np.floor(order_value)):
+        raise ValueError("elastic extension order must be a positive integer")
+    if (not np.isfinite(shear) or not np.isfinite(bulk)
+            or shear <= 0.0 or bulk < 0.0):
+        raise ValueError(
+            "elastic extension moduli must satisfy shear>0 and bulk>=0")
+    movable = str(movable_boundaries)
+    fixed = str(fixed_boundaries)
+    if not movable:
+        raise ValueError("movable_boundaries must be named")
+    dirichlet = movable if not fixed else movable + "|" + fixed
+    fes = ng.VectorH1(mesh, order=int(order_value), dirichlet=dirichlet)
+    u, v = fes.TnT()
+    form = ng.BilinearForm(fes)
+    form += (2.0 * shear * ng.InnerProduct(
+        ng.Sym(ng.Grad(u)), ng.Sym(ng.Grad(v)))
+        + bulk * ng.div(u) * ng.div(v)) * ng.dx
+    form.Assemble()
+    inverse_operator = form.mat.Inverse(fes.FreeDofs(), inverse=str(inverse))
+    normal = ng.specialcf.normal(mesh.dim)
+    boundary = mesh.Boundaries(movable)
+    result = []
+    for scalar in modes:
+        field = ng.GridFunction(fes)
+        field.Set(scalar * normal, definedon=boundary)
+        residual = -form.mat * field.vec
+        field.vec.data += inverse_operator * residual
+        result.append(field)
+    return tuple(result)
+
+
+def combine_deformation_modes(displacement_modes, coefficients):
+    """Form one GetTrafo field from a superposed set of shape modes."""
+    import ngsolve as ng
+
+    modes = tuple(displacement_modes)
+    coeff = np.asarray(coefficients, dtype=float).reshape(-1)
+    if len(modes) != coeff.size or not modes:
+        raise ValueError(
+            "displacement modes and coefficients must be non-empty and match")
+    if not np.all(np.isfinite(coeff)):
+        raise ValueError("deformation coefficients must be finite")
+    space = modes[0].space
+    if any(mode.space is not space for mode in modes):
+        raise ValueError("all displacement modes must share one NGSolve space")
+    field = ng.GridFunction(space)
+    field.vec[:] = 0.0
+    for value, mode in zip(coeff, modes):
+        if value != 0.0:
+            field.vec.data += float(value) * mode.vec
+    return field
+
+
+def relative_gettrafo_displacements(mesh, deformation):
+    """Maximum nodal displacement divided by cell diameter, per element."""
+    sampled = sample_affine_gettrafo_cells(mesh, (deformation,))
+    relative = []
+    for nodes, values in zip(sampled.nodes, sampled.node_displacements):
+        diameter = float(np.max(np.linalg.norm(
+            nodes[:, None, :] - nodes[None, :, :], axis=2)))
+        if not np.isfinite(diameter) or diameter <= 0.0:
+            raise ValueError(
+                "degenerate cell encountered while scaling deformation")
+        relative.append(
+            float(np.max(np.linalg.norm(values[0], axis=1))) / diameter)
+    return np.asarray(relative, dtype=float)
 
 
 def sample_affine_gettrafo_cells(mesh, displacement_modes) -> AffineGetTrafoCells:
@@ -226,6 +358,24 @@ def local_trust_region(element_sizes, *, fraction=0.1, minimum=None, maximum=Non
     if minimum is not None: bounds=np.maximum(bounds,float(minimum))
     if maximum is not None: bounds=np.minimum(bounds,float(maximum))
     return bounds
+
+
+def reference_aware_condition_limit(reference_conditions, *, requested=20.0,
+                                    margin=1.25):
+    """Return an absolute condition limit that admits the base mesh."""
+    conditions = np.asarray(reference_conditions, dtype=float).reshape(-1)
+    if (conditions.size == 0 or not np.all(np.isfinite(conditions))
+            or np.any(conditions < 1.0)):
+        raise ValueError(
+            "reference conditions must be finite and at least one")
+    if not np.isfinite(requested) or float(requested) < 1.0:
+        raise ValueError(
+            "requested condition limit must be finite and at least one")
+    if not np.isfinite(margin) or float(margin) <= 1.0:
+        raise ValueError(
+            "condition margin must be finite and greater than one")
+    return float(max(
+        float(requested), float(margin) * float(np.max(conditions))))
 
 
 def route_mesh_update(jacobian_determinants, jacobian_conditions, relative_displacements, *,
@@ -358,6 +508,226 @@ def backtrack_ngsolve_target_deformation(mesh, deformation_factory,
     return DeformationAcceptance(False,0.0,last,trials),None
 
 
+def _shape_band_ratio(response, target, band):
+    values = np.asarray(response, dtype=float).reshape(-1)
+    if values.size == 0:
+        return 0.0
+    target = np.asarray(target, dtype=float).reshape(-1)
+    band = np.asarray(band, dtype=float).reshape(-1)
+    if (target.shape != values.shape or band.shape != values.shape
+            or np.any(band <= 0)
+            or not np.all(np.isfinite(np.r_[values, target, band]))):
+        raise ValueError(
+            "shape evaluation response/target/band must match and be finite "
+            "with positive bands")
+    return float(np.max(np.abs((values - target) / band)))
+
+
+def _accept_perturbative_shape_trial(
+        current, trial, linearization, delta, scale, *, armijo,
+        objective_tolerance, band_tolerance):
+    """Accept only a fully re-solved physical shape trial."""
+    current_ratio = _shape_band_ratio(
+        current.response, linearization.response_target,
+        linearization.response_band)
+    trial_ratio = _shape_band_ratio(
+        trial.response, linearization.response_target,
+        linearization.response_band)
+    predicted_response = (
+        np.asarray(linearization.response, dtype=float)
+        + float(scale)
+        * np.asarray(linearization.response_jacobian, dtype=float) @ delta)
+    predicted_ratio = _shape_band_ratio(
+        predicted_response, linearization.response_target,
+        linearization.response_band)
+    if current_ratio > 1.0 + band_tolerance:
+        expected = max(0.0, current_ratio - predicted_ratio)
+        required = float(armijo) * max(expected, band_tolerance)
+        return (
+            trial_ratio <= current_ratio - required,
+            current_ratio,
+            trial_ratio,
+        )
+    if trial_ratio > 1.0 + band_tolerance:
+        return False, current_ratio, trial_ratio
+    predicted_change = (
+        float(scale)
+        * float(np.asarray(linearization.objective_gradient, dtype=float) @ delta))
+    allowed = float(current.objective) + float(objective_tolerance)
+    if predicted_change < 0.0:
+        allowed += float(armijo) * predicted_change
+    return float(trial.objective) <= allowed, current_ratio, trial_ratio
+
+
+def optimize_topology_preserving_shape(
+        initial_state: TopologyPreservingShapeState, *, linearize_step,
+        deformation_factory, rebuild_model, evaluate_model, move_limit,
+        parameter_bounds=None, laplacian=None, curvature_limit=None,
+        A_ub=None, b_ub=None, cubit_backend=None,
+        cubit_work_directory=None, max_iterations=20,
+        parameter_tolerance=1e-4, objective_tolerance=1e-10,
+        armijo=1e-4, band_tolerance=1e-8, minimum_scale=1/64,
+        contraction=0.5, minimum_jacobian_ratio=0.2,
+        maximum_condition=20.0, refine_threshold=0.25,
+        rebuild_threshold=0.5, integration_order=2,
+        iteration_callback=None):
+    """Run clay-like, topology-preserving HDiv-MMM shape optimization.
+
+    Every trial is fully re-solved.  Safe steps stay as an NGSolve
+    deformation; a quality-limit crossing requests one application-owned
+    Cubit rebuild without changing the accepted iron topology.
+    """
+    from .topology_optimization import solve_shape_lp
+
+    max_iterations_value = float(max_iterations)
+    if (not np.isfinite(max_iterations_value) or max_iterations_value < 1.0
+            or max_iterations_value != np.floor(max_iterations_value)):
+        raise ValueError("max_iterations must be a positive integer")
+    for value, name in (
+            (parameter_tolerance, "parameter_tolerance"),
+            (objective_tolerance, "objective_tolerance"),
+            (band_tolerance, "band_tolerance")):
+        if not np.isfinite(value) or float(value) < 0.0:
+            raise ValueError(f"{name} must be finite and nonnegative")
+    if not (0 < contraction < 1 and 0 < minimum_scale <= 1):
+        raise ValueError(
+            "invalid topology-preserving shape backtracking controls")
+    if not (0 < armijo <= 1):
+        raise ValueError("armijo must be in (0,1]")
+    state = initial_state
+    history = []
+    converged = False
+    q = np.asarray(state.parameters, dtype=float).reshape(-1)
+    qref = np.asarray(state.reference_parameters, dtype=float).reshape(-1)
+    if (q.size == 0 or qref.shape != q.shape
+            or not np.all(np.isfinite(q)) or not np.all(np.isfinite(qref))):
+        raise ValueError(
+            "shape state requires matching finite non-empty parameter vectors")
+    work = (None if cubit_work_directory is None
+            else Path(cubit_work_directory))
+    if work is not None:
+        work.mkdir(parents=True, exist_ok=True)
+
+    for iteration in range(int(max_iterations_value)):
+        linearization = linearize_step(state)
+        update = solve_shape_lp(
+            q, linearization, move_limit=move_limit,
+            parameter_bounds=parameter_bounds, laplacian=laplacian,
+            curvature_limit=curvature_limit, A_ub=A_ub, b_ub=b_ub)
+        if float(np.max(np.abs(update.delta))) <= float(parameter_tolerance):
+            converged = True
+            break
+        mesh = state.mesh
+        if getattr(mesh, "deformation", None) is not None:
+            mesh.UnsetDeformation()
+        reference_determinants, _ = sample_trafo_quality(
+            mesh, integration_order=integration_order)
+        scale = 1.0
+        accepted = None
+        nonlinear_resolves = 0
+        while scale >= minimum_scale:
+            candidate = q + scale * update.delta
+            deformation = deformation_factory(mesh, qref, candidate)
+            relative = relative_gettrafo_displacements(mesh, deformation)
+            mesh.SetDeformation(deformation)
+            try:
+                ratios, conditions = sample_trafo_quality(
+                    mesh, integration_order=integration_order,
+                    reference_determinants=reference_determinants)
+                decision = route_mesh_update(
+                    ratios, conditions, relative,
+                    refine_threshold=refine_threshold,
+                    rebuild_threshold=rebuild_threshold,
+                    minimum_jacobian=minimum_jacobian_ratio,
+                    maximum_condition=maximum_condition,
+                    topology_changed=False)
+                unsafe = (np.any(ratios <= minimum_jacobian_ratio)
+                          or np.any(conditions >= 2 * maximum_condition))
+                needs_cubit = decision.route != "ngsolve_deform"
+                if unsafe or (needs_cubit and cubit_backend is None):
+                    mesh.UnsetDeformation()
+                    scale *= contraction
+                    continue
+                trial_model = rebuild_model(
+                    mesh, candidate, "ngsolve_deform")
+                trial_evaluation = evaluate_model(trial_model)
+                nonlinear_resolves += 1
+                ok, before_ratio, after_ratio = (
+                    _accept_perturbative_shape_trial(
+                        state.evaluation, trial_evaluation, linearization,
+                        update.delta, scale, armijo=armijo,
+                        objective_tolerance=objective_tolerance,
+                        band_tolerance=band_tolerance))
+            except Exception:
+                if getattr(mesh, "deformation", None) is not None:
+                    mesh.UnsetDeformation()
+                raise
+            if not ok:
+                mesh.UnsetDeformation()
+                scale *= contraction
+                continue
+            route = "ngsolve_deform"
+            next_mesh = mesh
+            next_model = trial_model
+            next_evaluation = trial_evaluation
+            next_reference = qref.copy()
+            if needs_cubit:
+                mesh.UnsetDeformation()
+                if work is None:
+                    raise ValueError(
+                        "cubit_work_directory is required with cubit_backend")
+                request = CubitShapeRemeshRequest(
+                    iteration, candidate.copy(),
+                    work / f"shape_{iteration:04d}.jou",
+                    work / f"shape_{iteration:04d}.vol")
+                next_mesh = cubit_backend.rebuild(request)
+                next_model = rebuild_model(
+                    next_mesh, candidate, "cubit_rebuild")
+                next_evaluation = evaluate_model(next_model)
+                nonlinear_resolves += 1
+                remesh_ok, before_ratio, after_ratio = (
+                    _accept_perturbative_shape_trial(
+                        state.evaluation, next_evaluation, linearization,
+                        update.delta, scale, armijo=armijo,
+                        objective_tolerance=objective_tolerance,
+                        band_tolerance=band_tolerance))
+                if not remesh_ok:
+                    scale *= contraction
+                    continue
+                next_reference = candidate.copy()
+                route = "cubit_rebuild"
+            accepted = (
+                candidate, next_mesh, next_model, next_evaluation,
+                next_reference, decision, before_ratio, after_ratio,
+                scale, route)
+            break
+        if accepted is None:
+            current_deformation = deformation_factory(mesh, qref, q)
+            if np.max(np.abs(q - qref)) > 0.0:
+                mesh.SetDeformation(current_deformation)
+            break
+        (candidate, next_mesh, next_model, next_evaluation, next_reference,
+         decision, before_ratio, after_ratio, accepted_scale, route) = accepted
+        change = float(np.max(np.abs(candidate - q)))
+        objective_before = float(state.evaluation.objective)
+        state = TopologyPreservingShapeState(
+            next_mesh, next_model, next_reference, candidate.copy(),
+            next_evaluation)
+        history.append(TopologyPreservingShapeIteration(
+            iteration, objective_before, float(next_evaluation.objective),
+            before_ratio, after_ratio, float(accepted_scale), change, route,
+            decision.minimum_jacobian, decision.maximum_condition,
+            nonlinear_resolves))
+        if iteration_callback is not None:
+            iteration_callback(history[-1], state)
+        q = candidate.copy()
+        qref = next_reference.copy()
+        if change <= float(parameter_tolerance):
+            converged = True
+            break
+    return TopologyPreservingShapeResult(state, tuple(history), converged)
+
+
 def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
         linearize_step, deformation_factory, rebuild_model, evaluate_objective,
         element_sizes, cubit_backend: CubitHexRemeshBackend,
@@ -437,6 +807,12 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
 __all__=["SheetMetalUpdate","MeshUpdateDecision","DeformationAcceptance",
          "AffineGetTrafoCells","HexSheetTopologyState","HexSheetTopologyIteration",
          "HexSheetTopologyResult","CubitHexRemeshRequest","CubitHexRemeshBackend",
+         "ShapeModelEvaluation","TopologyPreservingShapeState",
+         "TopologyPreservingShapeIteration","TopologyPreservingShapeResult",
+         "CubitShapeRemeshRequest","elastic_normal_deformation_modes",
+         "combine_deformation_modes","relative_gettrafo_displacements",
+         "reference_aware_condition_limit",
+         "optimize_topology_preserving_shape",
          "sample_affine_gettrafo_cells","solve_sheet_metal_lp","local_trust_region",
          "route_mesh_update","apply_ngsolve_mesh_route","sample_trafo_quality",
          "backtrack_ngsolve_deformation","backtrack_ngsolve_target_deformation",

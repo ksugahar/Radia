@@ -1,10 +1,137 @@
 import numpy as np
+import pytest
 from types import SimpleNamespace
 
 from radia.sheet_metal_optimization import (apply_ngsolve_mesh_route,
     backtrack_ngsolve_deformation, backtrack_ngsolve_target_deformation,
+    combine_deformation_modes, elastic_normal_deformation_modes,
+    optimize_topology_preserving_shape, relative_gettrafo_displacements,
     route_mesh_update, sample_trafo_quality,
     sample_affine_gettrafo_cells, solve_sheet_metal_lp, local_trust_region)
+from radia.sheet_metal_optimization import (
+    ShapeModelEvaluation, TopologyPreservingShapeState)
+from radia.topology_optimization import ShapeLinearization
+
+
+def test_real_elastic_normal_modes_are_gettrafo_ready_without_gray_material():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2)
+    with ng.TaskManager():
+        modes = elastic_normal_deformation_modes(
+            mesh, [ng.CF(.01)], movable_boundaries="top",
+            fixed_boundaries="bottom")
+    assert len(modes) == 1
+    np.testing.assert_allclose(
+        modes[0](mesh(.5, .5, 1.0)), [0, 0, .01], atol=2e-14)
+    np.testing.assert_allclose(
+        modes[0](mesh(.5, .5, 0.0)), [0, 0, 0], atol=2e-14)
+    deformation = combine_deformation_modes(modes, [2.0])
+    relative = relative_gettrafo_displacements(mesh, deformation)
+    assert relative.shape == (mesh.ne,)
+    assert np.all(relative > 0)
+    accepted = backtrack_ngsolve_deformation(mesh, deformation, relative)
+    assert accepted.accepted and mesh.deformation is not None
+    mesh.UnsetDeformation()
+
+
+def test_shape_deformation_inputs_reject_nonfinite_values():
+    with pytest.raises(ValueError, match="coefficients must be finite"):
+        combine_deformation_modes([object()], [np.nan])
+    with pytest.raises(ValueError, match="moduli"):
+        elastic_normal_deformation_modes(
+            object(), [1.0], movable_boundaries="top", fixed_boundaries="",
+            shear_modulus=np.nan)
+
+
+def test_topology_preserving_shape_driver_resolves_every_trial(monkeypatch):
+    import radia.sheet_metal_optimization as sm
+
+    class Mesh:
+        deformation = None
+
+        def SetDeformation(self, value):
+            self.deformation = value
+
+        def UnsetDeformation(self):
+            self.deformation = None
+
+    mesh = Mesh()
+    calls = {"solve": 0}
+    monkeypatch.setattr(
+        sm, "sample_trafo_quality",
+        lambda mesh, **kwargs: (np.ones(2), np.ones(2)))
+    monkeypatch.setattr(
+        sm, "relative_gettrafo_displacements",
+        lambda mesh, deformation: np.full(2, .02))
+    initial = TopologyPreservingShapeState(
+        mesh, {"q": 0.0}, np.array([0.]), np.array([0.]),
+        ShapeModelEvaluation(1.0, np.empty(0)))
+
+    def linearize(state):
+        q = float(state.parameters[0])
+        return ShapeLinearization(
+            (q - 1.)**2, np.array([2 * (q - 1.)]), np.empty(0),
+            np.zeros((0, 1)), np.empty(0), np.empty(0))
+
+    def rebuild(active_mesh, parameters, route):
+        calls["solve"] += 1
+        return {"q": float(parameters[0]), "route": route}
+
+    result = optimize_topology_preserving_shape(
+        initial, linearize_step=linearize,
+        deformation_factory=lambda mesh, reference, candidate: float(
+            candidate[0] - reference[0]),
+        rebuild_model=rebuild,
+        evaluate_model=lambda model: ShapeModelEvaluation(
+            (model["q"] - 1.)**2, np.empty(0)),
+        move_limit=.25, parameter_bounds=([-1.], [1.]), max_iterations=4)
+    np.testing.assert_allclose(result.state.parameters, [1.0], atol=1e-12)
+    assert len(result.history) == 4 and calls["solve"] == 4
+    assert all(item.route == "ngsolve_deform" for item in result.history)
+    assert all(item.nonlinear_resolves == 1 for item in result.history)
+    objectives = [item.objective_after for item in result.history]
+    assert objectives == sorted(objectives, reverse=True)
+    assert objectives[-1] == 0.0
+
+
+def test_topology_preserving_shape_clears_deformation_after_solver_error(
+        monkeypatch):
+    import radia.sheet_metal_optimization as sm
+
+    class Mesh:
+        deformation = None
+
+        def SetDeformation(self, value):
+            self.deformation = value
+
+        def UnsetDeformation(self):
+            self.deformation = None
+
+    mesh = Mesh()
+    monkeypatch.setattr(
+        sm, "sample_trafo_quality",
+        lambda mesh, **kwargs: (np.ones(1), np.ones(1)))
+    monkeypatch.setattr(
+        sm, "relative_gettrafo_displacements",
+        lambda mesh, deformation: np.full(1, 0.01))
+    initial = TopologyPreservingShapeState(
+        mesh, object(), np.array([0.0]), np.array([0.0]),
+        ShapeModelEvaluation(1.0, np.empty(0)))
+    linearization = ShapeLinearization(
+        1.0, np.array([-1.0]), np.empty(0), np.zeros((0, 1)),
+        np.empty(0), np.empty(0))
+
+    with pytest.raises(RuntimeError, match="trial solve failed"):
+        optimize_topology_preserving_shape(
+            initial, linearize_step=lambda state: linearization,
+            deformation_factory=lambda mesh, reference, candidate: object(),
+            rebuild_model=lambda mesh, parameters, route: (_ for _ in ()).throw(
+                RuntimeError("trial solve failed")),
+            evaluate_model=lambda model: None, move_limit=0.1,
+            max_iterations=1)
+    assert mesh.deformation is None
 
 
 def test_hex_topology_driver_prefers_deformation_then_uses_cubit(monkeypatch,tmp_path):
