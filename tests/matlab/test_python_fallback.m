@@ -39,6 +39,27 @@ verifyEqual(testCase, result.backend, "python-fallback");
 verifyEqual(testCase, result.python.execution_mode, "InProcess");
 end
 
+function testStreamFunctionHasNamedFallback(testCase)
+result = radia.python.streamFunction( ...
+    "abe_reduce_node_potential_scales", ...
+    {eye(2), [1; 3]});
+verifyEqual(testCase, result.value(:), [1/3; 1], "AbsTol", 1e-14);
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.stream_function");
+end
+
+function testTopologyFamiliesHaveNamedFallbacks(testCase)
+shape = radia.python.sheetMetalOptimization( ...
+    "route_mesh_update", {[1, 1], [1, 1], [0.01, 0.02]});
+verifyEqual(testCase, shape.backend, "python-fallback");
+verifyEqual(testCase, shape.module, "radia.sheet_metal_optimization");
+topology = radia.python.topologyOptimization( ...
+    "solve_lp_update", {[0.5], [-1], [1], 1}, ...
+    Keywords=struct("move_limit", 0.1));
+verifyEqual(testCase, topology.backend, "python-fallback");
+verifyEqual(testCase, topology.module, "radia.topology_optimization");
+end
+
 function testHarmonicBalanceHasNamedFallback(testCase)
 result = radia.python.harmonicBalance("periodic_phase", {8});
 verifyEqual(testCase, result.value, (0:7) * pi / 4, "AbsTol", 2e-15);

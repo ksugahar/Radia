@@ -29,7 +29,10 @@ from radia.isochronous_topopt import (  # noqa: E402
     gradient_pair_points, iron_only_verification_ready,
     iron_only_mesh, optimize_density, orbit_arc_points, uniform_field_load,
     verify_design_iron_only, track_sector_orbit, sector_linear_optics,
-    combined_function_linear_optics, design_achromatic_gradient_profile,
+    combined_function_exit_metrics,
+    combined_function_exit_metrics_from_field_response,
+    combined_function_linear_optics,
+    design_achromatic_gradient_profile,
     straightened_bend_validation,
     isochronous_increment_targets, isochronous_total_field_bands,
     isochronous_profile_metrics, restore_projected_volume,
@@ -54,6 +57,123 @@ def test_combined_function_sector_map_and_analytic_gradient_chain():
     fd=(plus.dispersion[-1]-minus.dispersion[-1])/(2*step)
     np.testing.assert_allclose(optics.endpoint_jacobian[:,0],fd,
                                rtol=2e-9,atol=2e-11)
+
+
+def test_combined_function_exit_metrics_match_sector_and_score_drift():
+    length = 8.0
+    bend_angle = np.pi / 6.0
+    curvature = bend_angle / length
+    radius = 1.0 / curvature
+    score_drift = 0.3
+
+    metrics = combined_function_exit_metrics(
+        [curvature], [0.0], [length],
+        reference_curvature=curvature,
+        downstream_drift=score_drift,
+    )
+
+    assert metrics.x0_m == pytest.approx(0.0, abs=1.0e-14)
+    assert metrics.psi0_rad == pytest.approx(0.0, abs=1.0e-14)
+    assert metrics.eta_m == pytest.approx(
+        radius * (1.0 - np.cos(bend_angle))
+        + score_drift * np.sin(bend_angle),
+        abs=2.0e-14,
+    )
+    assert metrics.eta_prime_rad == pytest.approx(
+        np.sin(bend_angle), abs=2.0e-14)
+
+
+def test_positive_curvature_error_bends_central_orbit_opposite_dispersion():
+    metrics = combined_function_exit_metrics(
+        [0.08], [0.0], [0.2], reference_curvature=0.05)
+    assert metrics.psi0_rad < 0.0
+    assert metrics.x0_m < 0.0
+    assert metrics.eta_prime_rad > 0.0
+    assert metrics.eta_m > 0.0
+
+
+def test_combined_function_four_response_jacobian_is_analytic():
+    curvature = np.array([0.05, 0.07, 0.06])
+    gradient = np.array([-0.01, 0.02, -0.015])
+    lengths = np.array([0.7, 1.1, 0.9])
+    reference = np.full(3, 0.06)
+    curvature_jacobian = np.array([
+        [0.02, -0.01],
+        [-0.03, 0.015],
+        [0.01, 0.025],
+    ])
+    gradient_jacobian = np.array([
+        [0.08, -0.04],
+        [-0.02, 0.06],
+        [0.03, 0.01],
+    ])
+    metrics = combined_function_exit_metrics(
+        curvature, gradient, lengths,
+        reference_curvature=reference,
+        downstream_drift=0.3,
+        curvature_jacobian=curvature_jacobian,
+        gradient_jacobian=gradient_jacobian,
+    )
+
+    # Finite differences are used only here as a regression check of the
+    # production Frechet derivative, never by the optimizer.
+    step = 1.0e-6
+    finite_difference = np.empty_like(metrics.response_jacobian)
+    for parameter in range(curvature_jacobian.shape[1]):
+        plus = combined_function_exit_metrics(
+            curvature + step * curvature_jacobian[:, parameter],
+            gradient + step * gradient_jacobian[:, parameter],
+            lengths,
+            reference_curvature=reference,
+            downstream_drift=0.3,
+        )
+        minus = combined_function_exit_metrics(
+            curvature - step * curvature_jacobian[:, parameter],
+            gradient - step * gradient_jacobian[:, parameter],
+            lengths,
+            reference_curvature=reference,
+            downstream_drift=0.3,
+        )
+        finite_difference[:, parameter] = (
+            plus.response - minus.response) / (2.0 * step)
+
+    np.testing.assert_allclose(
+        metrics.response_jacobian,
+        finite_difference,
+        rtol=2.0e-8,
+        atol=2.0e-10,
+    )
+
+
+def test_hdiv_field_response_fuses_into_four_optics_rows_with_explicit_signs():
+    lengths = np.array([0.4, 0.6])
+    rigidity = 2.0
+    bz = np.array([-0.10, -0.14])
+    gradient = np.array([3.0, -2.0])
+    field_jacobian = np.array([
+        [0.2, -0.1],
+        [0.1, 0.3],
+        [1.0, -2.0],
+        [-0.5, 0.4],
+    ])
+    fused = combined_function_exit_metrics_from_field_response(
+        np.r_[bz, gradient], lengths, rigidity,
+        reference_curvature=0.06,
+        downstream_drift=0.2,
+        field_response_jacobian=field_jacobian,
+        curvature_sign=-1.0,
+        gradient_sign=-1.0,
+    )
+    direct = combined_function_exit_metrics(
+        -bz / rigidity, -gradient / rigidity, lengths,
+        reference_curvature=0.06,
+        downstream_drift=0.2,
+        curvature_jacobian=-field_jacobian[:2] / rigidity,
+        gradient_jacobian=-field_jacobian[2:] / rigidity,
+    )
+    np.testing.assert_allclose(fused.response, direct.response)
+    np.testing.assert_allclose(
+        fused.response_jacobian, direct.response_jacobian)
 
 
 def test_analytic_achromatic_gradient_design_has_zero_endpoint_eta():
@@ -235,6 +355,36 @@ def test_native_flat_tet_field_functional_rows_match_exact_batch(broken_problem)
     assert rows.flags.c_contiguous
     np.testing.assert_allclose(rows@coefficients,expected,
                                rtol=2e-13,atol=2e-13)
+
+
+def test_native_flat_tet_field_rows_are_finite_on_coplanar_panel_extension():
+    """A point in a face plane but outside the face has a finite field.
+
+    A topology removal can place a new pole end face at the same longitudinal
+    station as an orbit sample.  The quadratic surface-charge kernel must use
+    the analytic coplanar exterior limit instead of forming ``0/0`` from its
+    normal inverse-cube moment.
+    """
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    parent=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    mesh=iron_only_mesh(
+        parent,np.array([True,False]),tetrahedralize_hex=True)
+    fes=ng.HDiv(mesh,order=1)
+    point=np.array([[0.25,-0.25,0.0]],dtype=float)
+    weights=np.array([[[0.0,0.0,1.0]],[[0.3,-0.2,0.4]]],dtype=float)
+    epsilon=1.0e-7
+    with TaskManager():
+        prob=DensityAdjointVIM(fes,eps=1e-7)
+        rows=np.asarray(
+            prob.demag._G.configured_field_functional_rows(point,weights))
+        plus=np.asarray(prob.demag._G.configured_field_functional_rows(
+            point+np.array([[0.0,0.0,epsilon]]),weights))
+        minus=np.asarray(prob.demag._G.configured_field_functional_rows(
+            point-np.array([[0.0,0.0,epsilon]]),weights))
+    assert rows.flags.c_contiguous and np.all(np.isfinite(rows))
+    np.testing.assert_allclose(
+        rows,0.5*(plus+minus),rtol=2e-8,atol=2e-10)
 
 
 def test_warm_start_reproduces_and_saves_iterations(problem):

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <array>
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <map>
 #include <vector>
@@ -1479,6 +1480,74 @@ static void edge_Jmoments(const double A[3], const double B[3], const double r[3
     t2[0]=v3dot(th,e1);  t2[1]=v3dot(th,e2);
 }
 
+// Exact coplanar exterior limit of INT_T 1/|r-r'|^3 dS'.  The quadratic
+// surface-charge field normally obtains this moment as (n.TriField)/h.  That
+// quotient is 0/0 when an observation lies in the panel plane but outside the
+// triangle, even though the physical field is smooth there.  In two
+// dimensions, div_{r'}((r'-p)/|r'-p|^3)=-1/|r'-p|^3, so the finite limit is a
+// sum of elementary edge integrals.  Points on/in the triangle deliberately
+// stay on the ordinary one-sided path because their surface field is singular
+// or discontinuous.
+static bool coplanar_outside_inverse_cube_moment(
+    const double V[3][3], const double r[3], double& moment)
+{
+    double edge01[3],edge02[3],normal[3];
+    for(int k=0;k<3;++k){edge01[k]=V[1][k]-V[0][k];edge02[k]=V[2][k]-V[0][k];}
+    v3cross(edge01,edge02,normal);
+    const double normal_length=v3nrm(normal);
+    if(normal_length<1e-300)return false;
+    for(double& value:normal)value/=normal_length;
+    double offset[3];for(int k=0;k<3;++k)offset[k]=r[k]-V[0][k];
+    const double height=v3dot(offset,normal);
+    double scale=0.0;
+    for(int vertex=0;vertex<3;++vertex)
+        for(int k=0;k<3;++k)
+            scale=std::max(scale,std::fabs(V[vertex][k]));
+    for(int k=0;k<3;++k)scale=std::max(scale,std::fabs(r[k]));
+    for(int edge=0;edge<3;++edge){
+        double side[3];for(int k=0;k<3;++k)side[k]=V[(edge+1)%3][k]-V[edge][k];
+        scale=std::max(scale,v3nrm(side));
+    }
+    if(scale<1e-300)return false;
+    const double tolerance=32.0*std::numeric_limits<double>::epsilon()*scale;
+    if(std::fabs(height)>tolerance)return false;
+    double projection[3];for(int k=0;k<3;++k)projection[k]=r[k]-height*normal[k];
+    double closest[3];ClosestPointTriangle(projection,V[0],V[1],V[2],closest);
+    double separation[3];for(int k=0;k<3;++k)separation[k]=projection[k]-closest[k];
+    if(v3nrm(separation)<=tolerance)return false;
+
+    double centroid[3]={0.0,0.0,0.0};
+    for(int vertex=0;vertex<3;++vertex)for(int k=0;k<3;++k)
+        centroid[k]+=V[vertex][k]/3.0;
+    double total=0.0;
+    for(int edge=0;edge<3;++edge){
+        const double* A=V[edge];const double* B=V[(edge+1)%3];
+        double tangent[3];for(int k=0;k<3;++k)tangent[k]=B[k]-A[k];
+        const double length=v3nrm(tangent);if(length<1e-300)return false;
+        for(double& value:tangent)value/=length;
+        double outward[3];edge_outnormal(A,B,normal,centroid,outward);
+        double q[3];for(int k=0;k<3;++k)q[k]=A[k]-projection[k];
+        const double perpendicular=v3dot(q,outward);
+        const double u1=v3dot(q,tangent),u2=u1+length;
+        if(std::fabs(perpendicular)<=tolerance){
+            // An exterior point can lie on an edge-line extension.  Its edge
+            // contribution has the finite zero limit when both endpoints are
+            // on the same side; crossing the segment would be singular.
+            if(u1*u2<=0.0)return false;
+            continue;
+        }
+        const double perpendicular2=perpendicular*perpendicular;
+        const double R1=std::hypot(perpendicular,u1);
+        const double R2=std::hypot(perpendicular,u2);
+        const double edge_integral=(u2/(perpendicular2*R2)
+                                   -u1/(perpendicular2*R1));
+        total-=perpendicular*edge_integral;
+    }
+    if(!std::isfinite(total)||total<=0.0)return false;
+    moment=total;
+    return true;
+}
+
 // INT_T (sigma0 + s.r' + r'^T S r')(r-r')/R^3 dS' (S symmetric) via the in-plane/normal split.
 void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3])
@@ -1494,7 +1563,10 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
     double Fc[3]; TriField(V,r,Fc);
     double I0=TriPotential(V,r);
     double M1[3]; TriMoment1(V,r,M1);
-    double J3_0=v3dot(n,Fc)/h;                                 // INT_T 1/R^3
+    double J3_0=0.0;
+    const bool coplanar_outside=
+        coplanar_outside_inverse_cube_moment(V,r,J3_0);
+    if(!coplanar_outside)J3_0=v3dot(n,Fc)/h;                    // INT_T 1/R^3
     double intxi1[3]={0,0,0};                                  // INT_T xi/R^3
     double xixi[3][3];                                         // INT_T xi(x)xi/R^3 = P I0 - SUM (Gxi)(x)m
     for (int a=0;a<3;a++) for (int b=0;b<3;b++) xixi[a][b]=((a==b?1.0:0.0)-n[a]*n[b])*I0;
@@ -1656,7 +1728,12 @@ void QuadTriFieldDirectional(
         const int index=PotentialMomentIndex(k==0?1:0,k==1?1:0,k==2?1:0);
         M1[k]={moments[index],dmoments[index]};
     }
-    const auto J30=vd_dot(geometry.n,field0)/geometry.h;
+    double coplanar_J30=0.0;
+    const bool coplanar_outside=
+        coplanar_outside_inverse_cube_moment(V,r,coplanar_J30);
+    const auto J30=(coplanar_outside
+        ?ValueDirectional{coplanar_J30,0.0}
+        :vd_dot(geometry.n,field0)/geometry.h);
     ValueDirectional intxi1[3],xixi[3][3],inplane[3];
     for(int a=0;a<3;++a)for(int b=0;b<3;++b)
         xixi[a][b]=((a==b?1.0:0.0)-geometry.n[a]*geometry.n[b])*I0;
@@ -1709,7 +1786,13 @@ void QuadTriFieldDirectional(
     ValueDirectional normal_scale=constant*J30+vd_dot(slope,J31);
     for(int a=0;a<3;++a)for(int b=0;b<3;++b)
         normal_scale=normal_scale+hessian[a][b]*J32[a][b];
-    normal_scale=geometry.h*normal_scale;
+    if(coplanar_outside){
+        // At h=0 the normal field is zero, while its directional derivative is
+        // h' times the finite weighted inverse-cube moment.  The derivative of
+        // that moment is multiplied by h and therefore vanishes in this limit.
+        normal_scale={geometry.h.value*normal_scale.value,
+                      geometry.h.direction*normal_scale.value};
+    }else normal_scale=geometry.h*normal_scale;
     for(int k=0;k<3;++k){
         const auto out=inplane[k]+geometry.n[k]*normal_scale;
         value[k]=out.value;direction[k]=out.direction;

@@ -25,7 +25,10 @@ import pytest
 
 from radia.stream_function import (
     aca_tsvd, pseudo_inverse_solve, radia_field_kernel,
-    RegularizedTSVD, pseudo_inverse_solve_regularized,
+    RegularizedTSVD, StreamTSVD, pseudo_inverse_solve_regularized,
+    abe_nearest_field_distance_scales, abe_reduce_node_potential_scales,
+    solve_abe_current_potential,
+    solve_abe_bounded_current_potential,
 )
 
 # f2py reference (LAB-only network drive).
@@ -227,6 +230,182 @@ def test_aca_tsvd_validates_args():
         aca_tsvd(0, 5, lambda i, j: 0.0, modes=1, kmax=1)
     with pytest.raises(TypeError):
         aca_tsvd(5, 5, 123, modes=1, kmax=1)  # not callable
+
+
+# --------------------------------------------------------------------------
+# Improved DUCAS / Abe node-current-potential selection
+# --------------------------------------------------------------------------
+def test_abe_distance_weights_are_nearest_distance_squared_not_area():
+    nodes = np.array([[0.0, 0.0], [2.0, 0.0], [0.0, 3.0]])
+    fields = np.array([[0.0, 1.0], [4.0, 0.0]])
+    got = abe_nearest_field_distance_scales(nodes, fields, normalize=False)
+    assert np.allclose(got, [1.0, 4.0, 4.0])
+
+
+def test_abe_distance_weights_reject_touching_source_and_field_meshes():
+    with pytest.raises(ValueError, match="coincides"):
+        abe_nearest_field_distance_scales([[0.0, 0.0]], [[0.0, 0.0]])
+    got = abe_nearest_field_distance_scales(
+        [[0.0, 0.0]], [[0.0, 0.0]], distance_floor=0.25,
+        normalize=False)
+    assert got.tolist() == pytest.approx([0.25 ** 2])
+
+
+def test_abe_node_scale_reduction_matches_weighted_component_average():
+    """Abe eqs. 24--25: tied full nodes share their averaged delta scale."""
+    sparse = pytest.importorskip("scipy.sparse")
+    R = sparse.csr_matrix(np.array([
+        [1.0, 0.0],
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [0.0, 1.0],
+    ]))
+    got = abe_reduce_node_potential_scales(R, [1.0, 3.0, 2.0, 4.0])
+    assert np.allclose(got, [2.0 / 3.0, 1.0])
+
+
+def test_abe_weighted_initial_potential_matches_dense_formula():
+    """The public solve is exactly Abe eqs. 9--16, including T0 and W_B."""
+    A = np.array([
+        [2.0, -1.0, 0.5, 0.0],
+        [0.0, 1.5, -0.5, 1.0],
+        [1.0, 0.0, 0.0, -2.0],
+    ])
+    R = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    delta = np.array([0.4, 1.0, 0.7])
+    wb = np.array([2.0, 0.5, 1.5])
+    initial = np.array([0.2, -0.1, -0.1, 0.3])
+    external = np.array([0.05, -0.02, 0.01])
+    target = np.array([0.8, -0.4, 0.6])
+    weighted = wb[:, None] * (A @ R) * delta[None, :]
+    rhs = wb * (target - external - A @ initial)
+    q = np.linalg.pinv(weighted, rcond=1.0e-14) @ rhs
+    expected = initial + R @ (delta * q)
+    result = solve_abe_current_potential(
+        A, target, reduction=R, field_weights=wb,
+        independent_potential_scales=delta, initial_potential=initial,
+        external_field=external, method="dense")
+    assert np.linalg.norm(result.potential - expected) < 1.0e-11
+    assert np.linalg.norm(result.reconstructed_field -
+                          (external + A @ expected)) < 1.0e-12
+    assert result.converged
+
+
+def test_abe_mode_strength_selection_is_not_a_contiguous_prefix():
+    """Strong mode 3 survives while weak mode 2 is omitted (Abe eq. 19)."""
+    A = np.diag([9.0, 5.0, 2.0])
+    target = np.array([1.0, 1.0e-3, 1.0])
+    result = solve_abe_current_potential(
+        A, target, minimum_mode_strength=0.1, method="dense")
+    assert result.selected_modes.tolist() == [0, 2]
+    assert np.allclose(result.reconstructed_field, [1.0, 0.0, 1.0],
+                       atol=1.0e-13)
+    assert result.diagnostics.rejection_reason[1] == \
+        "mode_strength_below_threshold"
+
+
+def test_abe_initial_potential_retains_unselected_high_order_content():
+    """T0's unselected content remains while selected modes correct B."""
+    A = np.diag([9.0, 5.0, 2.0])
+    initial = np.array([0.0, 0.4, 0.0])
+    target = A @ initial + np.array([9.0, 0.0, 4.0])
+    result = solve_abe_current_potential(
+        A, target, initial_potential=initial,
+        allowed_modes=[0, 2], method="dense")
+    assert result.selected_modes.tolist() == [0, 2]
+    assert np.allclose(result.potential, [1.0, 0.4, 2.0], atol=1.0e-13)
+
+
+def test_abe_residual_target_stops_before_unneeded_modes():
+    """Residual quality, not a fixed k, determines the accumulated modes."""
+    A = np.diag([9.0, 5.0, 2.0])
+    target = np.array([1.0, 1.0e-2, 1.0e-3])
+    result = solve_abe_current_potential(
+        A, target, residual_rms=1.0e-2, method="dense")
+    assert result.selected_modes.tolist() == [0]
+    assert result.converged
+    assert result.stop_reason == "residual_target_met"
+    assert result.diagnostics.rejection_reason[1] == \
+        "not_needed_after_residual_target"
+
+
+def test_abe_potential_limit_fails_loudly_after_field_fit():
+    """A field fit outside the engineering current limit is not 'converged'."""
+    A = np.diag([9.0, 5.0, 2.0])
+    result = solve_abe_current_potential(
+        A, [18.0, 0.0, 0.0], maximum_abs_potential=1.0,
+        method="dense")
+    assert not result.converged
+    assert result.stop_reason == "maximum_abs_potential_exceeded"
+    assert result.peak_abs_potential == pytest.approx(2.0)
+
+
+def test_abe_precomputed_factor_reuses_identical_weighted_operator():
+    A = np.diag([9.0, 5.0, 2.0])
+    first = solve_abe_current_potential(A, [1.0, 0.2, -0.3], method="dense")
+    second = solve_abe_current_potential(
+        A, [-0.4, 0.7, 0.1], precomputed_factor=first.factor,
+        method="dense")
+    direct = solve_abe_current_potential(A, [-0.4, 0.7, 0.1], method="dense")
+    assert second.factor is first.factor
+    assert np.linalg.norm(second.potential - direct.potential) < 1.0e-13
+
+
+def test_abe_rejects_malformed_precomputed_factor_and_fractional_modes():
+    A = np.diag([3.0, 2.0])
+    malformed = StreamTSVD(
+        U=np.eye(2), S=np.array([]), V=np.eye(2), k_aca=0, method="dense")
+    with pytest.raises(ValueError, match="at least one mode"):
+        solve_abe_current_potential(
+            A, [1.0, 0.0], precomputed_factor=malformed)
+    with pytest.raises(ValueError, match="integer mode indices"):
+        solve_abe_current_potential(
+            A, [1.0, 0.0], allowed_modes=[0.5], method="dense")
+
+
+def test_abe_bounded_iteration_requires_a_physical_acceptance_target():
+    with pytest.raises(ValueError, match="acceptance criterion"):
+        solve_abe_bounded_current_potential(
+            np.eye(2), [1.0, 0.0], lower_potential=0.0,
+            method="dense")
+
+
+def test_abe_positive_only_iteration_redistributes_clipped_solution():
+    """Abe's positive-iron loop repeatedly solves the post-clip error."""
+    A = np.array([[1.0, -1.0]])
+    result = solve_abe_bounded_current_potential(
+        A, [1.0], lower_potential=0.0, residual_rms=1.0e-9,
+        max_iterations=64, method="dense")
+    assert result.converged
+    assert result.stop_reason == "bounded_residual_target_met"
+    assert result.iterations > 1
+    assert np.all(result.solution.potential >= 0.0)
+    assert result.solution.potential[0] == pytest.approx(1.0, abs=2.0e-9)
+    assert result.solution.potential[1] == pytest.approx(0.0, abs=1.0e-14)
+    assert np.any(result.clipped_dof_history > 0)
+
+
+def test_abe_bounded_iteration_reports_unattainable_capacity():
+    result = solve_abe_bounded_current_potential(
+        np.array([[1.0]]), [2.0], lower_potential=0.0,
+        upper_potential=1.0, residual_rms=1.0e-10,
+        max_iterations=10, method="dense")
+    assert not result.converged
+    assert result.stop_reason == "bounded_stagnation"
+    assert result.solution.potential.tolist() == [1.0]
+    assert result.solution.residual_rms == pytest.approx(1.0)
+
+
+def test_abe_bounded_iteration_rejects_post_clip_constraint_violation():
+    with pytest.raises(ValueError, match="already reduced response"):
+        solve_abe_bounded_current_potential(
+            np.eye(2), [1.0, 0.0], reduction=np.eye(2),
+            lower_potential=0.0, method="dense")
 
 
 # --------------------------------------------------------------------------

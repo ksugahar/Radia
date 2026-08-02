@@ -774,7 +774,9 @@ def _build_problem(args, eval_scale=1.0):
                 comps=comps, Ac=Ac, Af=Af, Am=Am_R, Bc=Bc, Bm=Bm, reg=reg,
                 base=base, target_cf=target_cf, evalm=evalm, cpts=cpts,
                 mpts=mpts, eval_scale=eval_scale, confine=confine, S=S,
-                md=md, n_constraint=len(cpts), n_measure=len(mpts))
+                md=md, n_constraint=len(cpts), n_measure=len(mpts),
+                node_points=np.array([list(v.point) for v in coil.vertices]),
+                abe_field_points=cpts)
 
 
 # ==========================================================================
@@ -946,6 +948,12 @@ def _build_shielded_problem(args, eval_scale=1.0):
     return dict(
         # _solve_and_metrics-compatible:
         Af=A_stack, Am=Am_f, Bc=B_stack, Bm=Bm, reg=reg, md=md,
+        base=base,
+        # Factor the weighted operator, but retain the physical field map so
+        # ABE residual tolerances and result metadata remain in tesla.
+        abe_response=np.vstack([Ac_f, Ae_f]), abe_target=B_stack,
+        abe_field_weights=np.r_[np.ones(Ac_f.shape[0]),
+                                np.full(Ae_f.shape[0], w)],
         # shield-specific (run_design uses these for split reporting):
         is_shielded=True,
         n_primary=n_fp, n_shield=n_fs,
@@ -962,14 +970,130 @@ def _build_shielded_problem(args, eval_scale=1.0):
         eval_scale=eval_scale, confine=confine, S=S_block,
         n_constraint=len(cpts), n_measure=len(mpts),
         n_external=len(epts), n_external_measure=len(e_mpts),
+        node_points=np.vstack([
+            np.array([list(v.point) for v in coil_p.vertices]),
+            np.array([list(v.point) for v in coil_s.vertices])]),
+        abe_field_points=np.vstack([cpts, epts]),
     )
 
 
-def _solve_and_metrics(P, alpha):
+def _parse_abe_allowed_modes(text):
+    """Parse the literature's one-based, non-contiguous mode notation."""
+    if not text:
+        return None
+    modes = set()
+    for token in str(text).split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "-" in token:
+            parts = token.split("-", 1)
+            if len(parts) != 2:
+                raise ValueError(f"invalid Abe mode range {token!r}")
+            first, last = (int(part) for part in parts)
+            if first < 1 or last < first:
+                raise ValueError(f"invalid Abe mode range {token!r}")
+            modes.update(range(first - 1, last))
+        else:
+            mode = int(token)
+            if mode < 1:
+                raise ValueError("Abe mode numbers are one-based and positive")
+            modes.add(mode - 1)
+    if not modes:
+        raise ValueError("--abe-allowed-modes contains no mode number")
+    return np.asarray(sorted(modes), dtype=np.int64)
+
+
+def _solve_abe_problem(P, args):
+    """Apply improved DUCAS to an already NGSolve-assembled FE response."""
+    from radia.stream_function import (
+        abe_nearest_field_distance_scales,
+        abe_reduce_node_potential_scales,
+        solve_abe_current_potential,
+    )
+    if float(args.alpha) != 0.0:
+        raise ValueError(
+            "--inverse-method abe uses its node weights and physical mode "
+            "selection; --alpha must be 0 (use regularized for Tikhonov)")
+
+    scale_mode = getattr(args, "abe_node_weights", "uniform")
+    independent_scales = np.ones(P["n_free"], dtype=float)
+    if scale_mode == "nearest-distance2":
+        node_points = np.asarray(P["node_points"], dtype=float)
+        if node_points.shape[0] != P["R"].shape[0]:
+            raise ValueError(
+                "--abe-node-weights nearest-distance2 currently requires "
+                "--order 1: Radia will not infer high-order NGSolve DOF "
+                "coordinates in Python")
+        full_scales = abe_nearest_field_distance_scales(
+            node_points, P["abe_field_points"],
+            distance_floor=getattr(args, "abe_distance_floor", None))
+        independent_scales = abe_reduce_node_potential_scales(
+            P["R"], full_scales)
+
+    initial = None
+    initial_path = getattr(args, "abe_initial_potential", "")
+    if initial_path:
+        initial = np.asarray(np.load(initial_path), dtype=float).reshape(-1)
+        if initial.shape != (P["n_free"],):
+            raise ValueError(
+                "--abe-initial-potential must contain the independent FE "
+                f"potential with length {P['n_free']}; got {initial.shape}")
+
+    uniform_scale = np.all(independent_scales == 1.0)
+    abe_response = np.asarray(P.get("abe_response", P["Af"]), dtype=float)
+    abe_target = np.asarray(P.get("abe_target", P["Bc"]), dtype=float)
+    result = solve_abe_current_potential(
+        abe_response, abe_target,
+        field_weights=P.get("abe_field_weights", None),
+        independent_potential_scales=independent_scales,
+        initial_potential=initial,
+        allowed_modes=_parse_abe_allowed_modes(
+            getattr(args, "abe_allowed_modes", "")),
+        minimum_mode_strength=float(getattr(
+            args, "abe_min_mode_strength", 0.0)),
+        minimum_target_correlation=float(getattr(
+            args, "abe_min_target_correlation", 0.0)),
+        residual_peak_to_peak=getattr(args, "abe_residual_peak_to_peak", None),
+        residual_rms=getattr(args, "abe_residual_rms", None),
+        modes=P["base"].modes, kmax=min(abe_response.shape), aca_eps=1.0e-10,
+        precomputed_factor=P["base"] if uniform_scale else None)
+    P["_last_abe_solution"] = result
+    P["_last_abe_residual_target_specified"] = bool(
+        getattr(args, "abe_residual_peak_to_peak", None) is not None or
+        getattr(args, "abe_residual_rms", None) is not None)
+    return result.potential
+
+
+def _abe_result_metadata(P):
+    result = P.get("_last_abe_solution")
+    if result is None:
+        return {"inverse_method": "regularized"}
+    target_specified = bool(P.get("_last_abe_residual_target_specified", False))
+    return {
+        "inverse_method": "abe",
+        "abe_selected_modes": (result.selected_modes + 1).tolist(),
+        "abe_selected_mode_count": int(result.selected_modes.size),
+        "abe_stop_reason": result.stop_reason,
+        "abe_solve_converged": bool(result.converged),
+        "abe_residual_target_specified": target_specified,
+        "abe_residual_target_met": (bool(result.converged)
+                                     if target_specified else None),
+        "abe_residual_peak_to_peak_T": result.residual_peak_to_peak,
+        "abe_residual_rms_T": result.residual_rms,
+        "abe_residual_max_abs_T": result.residual_max_abs,
+        "abe_peak_abs_potential_A": result.peak_abs_potential,
+    }
+
+
+def _solve_and_metrics(P, alpha, args=None):
     """Solve psi at a given alpha; return (psi_full, fit_rms, homogeneity, peak)."""
     Bc, Bm, Af, Am, reg, md = (P["Bc"], P["Bm"], P["Af"], P["Am"],
                                P["reg"], P["md"])
-    psi_f = reg.solve(Bc, alpha=alpha * md) if alpha > 0 else reg.solve(Bc)
+    if args is not None and getattr(args, "inverse_method", "regularized") == "abe":
+        psi_f = _solve_abe_problem(P, args)
+    else:
+        psi_f = reg.solve(Bc, alpha=alpha * md) if alpha > 0 else reg.solve(Bc)
     fit_rms = float(np.linalg.norm(Af @ psi_f - Bc) / (np.linalg.norm(Bc) + 1e-30))
     # true homogeneity = field error at the INTERIOR measure points (not
     # constraints) -> captures the between-constraint deviation.  Af/Am are
@@ -2492,7 +2616,7 @@ def run_design(args):
         else:
             P = _build_problem(args)
         t1 = time.perf_counter()
-        psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
+        psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha, args)
 
         if P.get("is_shielded"):
             # Split combined psi_f into primary ([:n_fp]) and shield ([n_fp:])
@@ -2552,6 +2676,7 @@ def run_design(args):
             "t_solve_s": round(t2 - t1, 3),
             "t_total_s": round(time.perf_counter() - t0, 3),
         }
+        result.update(_abe_result_metadata(P))
         # Material-aware (iron) metadata
         if getattr(args, "iron_vol", None):
             result.update({
@@ -2652,6 +2777,10 @@ def run_pareto(args):
     alpha (Tikhonov L-curve), linf (minimax IRLS trajectory) or geometry
     (eval-region scale sweep)."""
     from ngsolve import TaskManager
+    if getattr(args, "inverse_method", "regularized") == "abe":
+        raise ValueError(
+            "--inverse-method abe is a physical eigenmode-selection solve, "
+            "not an alpha/IRLS Pareto sweep; use --method design or manufacture")
     t0 = time.perf_counter()
     with TaskManager():
         if args.pareto_lever == "geometry":
@@ -2710,7 +2839,7 @@ def run_manufacture(args):
     with TaskManager():
         P = _build_problem(args)
         t1 = time.perf_counter()
-        psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
+        psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha, args)
         psi = P["R"] @ psi_f
         gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
         peak_J = _peak_current_density(P["fes"], P["coil"], gfu)
@@ -2917,6 +3046,7 @@ def run_manufacture(args):
                     "is too small (extend it) -- that, not the connectors, is "
                     "the dominant single-current error.",
         }
+        result.update(_abe_result_metadata(P))
         if greedy_trace is not None:
             result.update({
                 "greedy_turns": True,
@@ -3215,6 +3345,38 @@ def build_argparser():
                          "for gradient and solenoid (recommended).")
     ap.add_argument("--alpha", type=float, default=0.0,
                     help="Tikhonov weight (design; 0 = exact-fit min-seminorm)")
+    ap.add_argument("--inverse-method", choices=["regularized", "abe"],
+                    default="regularized",
+                    help="inverse design: regularized = cached minimum-"
+                         "seminorm REGCOIL/Tikhonov path; abe = improved "
+                         "DUCAS current-potential eigenmode selection with "
+                         "physical residual stopping and non-contiguous modes")
+    ap.add_argument("--abe-min-mode-strength", type=float, default=0.0,
+                    help="Abe mode threshold |u_i^T B|/sqrt(M), in weighted "
+                         "field units (used only with --inverse-method abe)")
+    ap.add_argument("--abe-min-target-correlation", type=float, default=0.0,
+                    help="minimum |u_i^T B|/||B|| for an Abe field mode")
+    ap.add_argument("--abe-residual-rms", type=float, default=None,
+                    help="stop Abe mode accumulation at this physical field "
+                         "RMS residual in tesla")
+    ap.add_argument("--abe-residual-peak-to-peak", type=float, default=None,
+                    help="stop Abe mode accumulation at this physical field "
+                         "peak-to-peak residual in tesla")
+    ap.add_argument("--abe-allowed-modes", default="",
+                    help="one-based non-contiguous allowed eigenmodes, e.g. "
+                         "'1,7,17,37' or ranges '1-5,9'; empty = all")
+    ap.add_argument("--abe-node-weights",
+                    choices=["uniform", "nearest-distance2"],
+                    default="uniform",
+                    help="improved-DUCAS node weights: uniform or squared "
+                         "distance to the nearest field-evaluation point "
+                         "(Abe eq.20; nearest-distance2 currently order=1)")
+    ap.add_argument("--abe-distance-floor", type=float, default=None,
+                    help="positive minimum source-to-evaluation distance in "
+                         "metres for nearest-distance2 weights")
+    ap.add_argument("--abe-initial-potential", default="",
+                    help=".npy file containing the independent FE current "
+                         "potential T0; unselected high-order content is kept")
     ap.add_argument("--eval-max", type=int, default=400,
                     help="cap on constraint / measure points (subsample)")
     # ---- pareto mode ----

@@ -7469,7 +7469,7 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
     const int n_face = m_operatorNFace;
     const int nc = static_cast<int>(candidate_dofs.size());
     if (!std::isfinite(inv_chi) || inv_chi < 0.0 ||
-        !std::isfinite(tol) || tol <= 0.0 || maxit < 1)
+        !std::isfinite(tol) || tol <= 0.0 || tol >= 1.0 || maxit < 1)
         throw std::runtime_error(
             "ReduceConfiguredCandidateSchur: invalid material or solver parameters");
     if (nc < 1 || n_response < 1 || solve_batch_size < 1)
@@ -7519,11 +7519,67 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
             });
     }
     const auto solve_started = Clock::now();
-    std::vector<double> active_solutions(static_cast<size_t>(nc)*n_face, 0.0);
-    result.iterations.reserve(static_cast<size_t>(nc));
-    for (int begin = 0; begin < nc; begin += solve_batch_size) {
-        const int count = std::min(solve_batch_size, nc-begin);
-        const auto first = coupling.begin()+static_cast<size_t>(begin)*n_face;
+    // A broken-element mass matrix has no active/candidate cross block, hence
+    // A_aE is entirely the charge interaction B_a^T G B_E.  BDM1 contains a
+    // substantial divergence-free local subspace, so its 36 coefficient
+    // columns are often a much smaller-rank collection of active RHS vectors.
+    // Compute a thin native TSVD once, solve only its orthonormal right-singular
+    // rows, then reconstruct A_aa^-1 A_aE.  This is algebraically exact for the
+    // retained row space and keeps the final whole-element full solve as the
+    // physical acceptance gate.
+    std::vector<double> solve_rhs = coupling;
+    std::vector<double> left_singular;
+    std::vector<double> singular_values;
+    int coupling_rank = nc;
+#ifdef HAVE_LAPACK
+    {
+        double coupling_square = 0.0;
+        for (double value : coupling) coupling_square += value*value;
+        if (coupling_square == 0.0) {
+            coupling_rank = 0;
+            solve_rhs.clear();
+        }
+        else {
+            std::vector<double> factor_input = coupling;
+            singular_values.assign(static_cast<size_t>(nc), 0.0);
+            left_singular.assign(static_cast<size_t>(nc)*nc, 0.0);
+            std::vector<double> right_singular(
+                static_cast<size_t>(nc)*n_face, 0.0);
+            const int info = LAPACKE_dgesdd(
+                LAPACK_ROW_MAJOR, 'S', nc, n_face, factor_input.data(), n_face,
+                singular_values.data(), left_singular.data(), nc,
+                right_singular.data(), n_face);
+            if (info != 0)
+                throw std::runtime_error(
+                    "ReduceConfiguredCandidateSchur: coupling TSVD failed");
+            const double scale = singular_values.front();
+            const double relative_cutoff = std::max(1.0e-13, 1.0e-2*tol);
+            coupling_rank = 0;
+            double total_square = 0.0, discarded_square = 0.0;
+            for (double value : singular_values) total_square += value*value;
+            for (int mode = 0; mode < nc; ++mode) {
+                const double value = singular_values[static_cast<size_t>(mode)];
+                if (value > relative_cutoff*scale)
+                    ++coupling_rank;
+                else
+                    discarded_square += value*value;
+            }
+            solve_rhs.assign(
+                right_singular.begin(),right_singular.begin()+
+                static_cast<size_t>(coupling_rank)*n_face);
+            result.coupling_relative_truncation_error =
+                std::sqrt(discarded_square/total_square);
+        }
+    }
+#endif
+    result.coupling_rank = coupling_rank;
+    std::vector<double> solved_modes(
+        static_cast<size_t>(coupling_rank)*n_face, 0.0);
+    result.coupling_mode_iterations.reserve(
+        static_cast<size_t>(coupling_rank));
+    for (int begin = 0; begin < coupling_rank; begin += solve_batch_size) {
+        const int count = std::min(solve_batch_size, coupling_rank-begin);
+        const auto first = solve_rhs.begin()+static_cast<size_t>(begin)*n_face;
         std::vector<double> chunk(first, first+static_cast<size_t>(count)*n_face);
         std::vector<int> iterations;
         double pmin = 0.0, pmax = 0.0, coarse_setup_s = 0.0, projection_s = 0.0;
@@ -7535,10 +7591,37 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
             coarse_dim, recycle_dim, coarse_setup_s, projection_s,
             mass_riesz, nullptr);
         std::copy(solved.begin(), solved.end(),
-                  active_solutions.begin()+static_cast<size_t>(begin)*n_face);
-        result.iterations.insert(
-            result.iterations.end(), iterations.begin(), iterations.end());
+                  solved_modes.begin()+static_cast<size_t>(begin)*n_face);
+        result.coupling_mode_iterations.insert(
+            result.coupling_mode_iterations.end(),
+            iterations.begin(), iterations.end());
     }
+    // ``iters`` predates coupling compression and is candidate-length public
+    // output.  Keep its shape stable as a conservative upper-bound summary;
+    // exact retained-mode counts are exposed separately.
+    const int iteration_upper_bound = result.coupling_mode_iterations.empty()
+        ? 0 : *std::max_element(result.coupling_mode_iterations.begin(),
+                                result.coupling_mode_iterations.end());
+    result.iterations.assign(static_cast<size_t>(nc), iteration_upper_bound);
+    std::vector<double> active_solutions(static_cast<size_t>(nc)*n_face, 0.0);
+#ifdef HAVE_LAPACK
+    if (!left_singular.empty() && coupling_rank > 0) {
+        std::vector<double> scaled_left(
+            static_cast<size_t>(nc)*coupling_rank, 0.0);
+        for (int row = 0; row < nc; ++row)
+            for (int mode = 0; mode < coupling_rank; ++mode)
+                scaled_left[static_cast<size_t>(row)*coupling_rank+mode] =
+                    left_singular[static_cast<size_t>(row)*nc+mode]*
+                    singular_values[static_cast<size_t>(mode)];
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+            nc, n_face, coupling_rank, 1.0,
+            scaled_left.data(), coupling_rank,
+            solved_modes.data(), n_face, 0.0,
+            active_solutions.data(), n_face);
+    }
+    else
+#endif
+        active_solutions.swap(solved_modes);
     result.solve_s = std::chrono::duration<double>(
         Clock::now()-solve_started).count();
 
@@ -7560,15 +7643,17 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
                                 candidate_dofs[static_cast<size_t>(p)]];
     }
 #ifdef HAVE_LAPACK
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-        nc, nc, n_face, -1.0, coupling.data(), n_face,
-        active_solutions.data(), n_face, 1.0, result.schur.data(), nc);
-    cblas_dgemv(CblasRowMajor, CblasNoTrans, nc, n_face,
-        -1.0, coupling.data(), n_face, state.data(), 1,
-        1.0, result.rhs.data(), 1);
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-        n_response, nc, n_face, -1.0, adjoints.data(), n_face,
-        coupling.data(), n_face, 1.0, result.response.data(), nc);
+    if (coupling_rank > 0) {
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+            nc, nc, n_face, -1.0, coupling.data(), n_face,
+            active_solutions.data(), n_face, 1.0, result.schur.data(), nc);
+        cblas_dgemv(CblasRowMajor, CblasNoTrans, nc, n_face,
+            -1.0, coupling.data(), n_face, state.data(), 1,
+            1.0, result.rhs.data(), 1);
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+            n_response, nc, n_face, -1.0, adjoints.data(), n_face,
+            coupling.data(), n_face, 1.0, result.response.data(), nc);
+    }
 #else
     for (int p = 0; p < nc; ++p) {
         for (int face = 0; face < n_face; ++face)

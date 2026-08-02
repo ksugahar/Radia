@@ -566,6 +566,194 @@ class GmshPostExport:
             "Expected CoefficientFunction, GridFunction, or numpy.ndarray.")
 
 
+def export_element_activation_animation(
+        mesh, active_steps, filename, *, field_name="Iron shape",
+        times=None, require_monotone=True):
+    """Write a Gmsh v4.1 time-series view of element activation.
+
+    The design-superset mesh is written once and every accepted topology is a
+    separate ``ElementData`` time step.  Only active volume elements receive
+    data, so inactive candidate cells remain hidden in the Gmsh view.
+    """
+    import os
+
+    filename = os.fspath(filename)
+    if not filename.lower().endswith(".msh"):
+        filename += ".msh"
+    if getattr(mesh, "dim", None) != 3:
+        raise ValueError("element activation animation requires a 3-D volume mesh")
+
+    raw_steps = list(active_steps)
+    if not raw_steps:
+        raise ValueError("active_steps must contain at least one design state")
+    masks = []
+    for step in raw_steps:
+        raw = np.asarray(step)
+        if raw.dtype == bool:
+            mask = raw.reshape(-1).copy()
+        else:
+            try:
+                numeric = np.asarray(step, dtype=float).reshape(-1)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "active steps must contain only boolean or binary values") from exc
+            if (not np.all(np.isfinite(numeric))
+                    or np.any((numeric != 0.0) & (numeric != 1.0))):
+                raise ValueError(
+                    "active steps must contain only boolean or binary values")
+            mask = numeric.astype(bool)
+        masks.append(mask)
+    if any(mask.size != int(mesh.ne) for mask in masks):
+        sizes = [int(mask.size) for mask in masks]
+        raise ValueError(
+            f"each active step must have mesh.ne={mesh.ne} entries; got {sizes}")
+    if any(not np.any(mask) for mask in masks):
+        raise ValueError("every animation step must contain at least one active element")
+    if require_monotone:
+        for index, (previous, current) in enumerate(zip(masks, masks[1:]), 1):
+            removed = np.flatnonzero(previous & ~current)
+            if removed.size:
+                raise ValueError(
+                    f"animation step {index} removes active elements "
+                    f"{removed[:8].tolist()}")
+
+    if times is None:
+        step_times = np.arange(len(masks), dtype=float)
+    else:
+        step_times = np.asarray(times, dtype=float).reshape(-1)
+        if step_times.size != len(masks):
+            raise ValueError(
+                f"times has {step_times.size} entries for {len(masks)} steps")
+        if not np.all(np.isfinite(step_times)):
+            raise ValueError("times must contain only finite values")
+
+    nodes, mat_names, elem_data = _extract_mesh_data_grouped(mesh, False)
+    mat_elem_map, elem_id_map, n_elems = _assign_element_ids(
+        mat_names, elem_data)
+    if n_elems != int(mesh.ne) or len(elem_id_map) != int(mesh.ne):
+        raise RuntimeError(
+            "Gmsh export omitted volume elements; activation indices would "
+            f"be ambiguous ({n_elems} exported, mesh.ne={mesh.ne})")
+    bboxes = _compute_material_bboxes(nodes, mat_names, elem_data)
+    payload = GmshPostExport(mesh)._build_single_mesh_payload(
+        nodes, mat_names, elem_data, mat_elem_map, n_elems, 3, bboxes,
+        float(step_times[0]), 0)
+    payload.data_fields = []
+    for step, (mask, time_value) in enumerate(zip(masks, step_times)):
+        items = [
+            (elem_id_map[int(element)], 1.0)
+            for element in np.flatnonzero(mask)
+        ]
+        payload.data_fields.append(DataField(
+            kind="$ElementData", name=str(field_name), ncomp=1,
+            items=items, time=float(time_value), timestep=step))
+
+    parent = os.path.dirname(os.path.abspath(filename))
+    os.makedirs(parent, exist_ok=True)
+    with open(filename, "w", encoding="utf-8") as stream:
+        _emit_v41_msh(stream, payload)
+    opt_path = write_companion_opt(filename, view_ncomps=[1])
+    geo_path = _geo_filename_for_msh(filename)
+    return {
+        "msh": os.path.abspath(filename),
+        "geo": os.path.abspath(geo_path),
+        "msh_opt": os.path.abspath(opt_path),
+        "geo_opt": os.path.abspath(geo_path + ".opt"),
+        "steps": len(masks),
+        "active_counts": [int(np.count_nonzero(mask)) for mask in masks],
+        "field_name": str(field_name),
+    }
+
+
+def export_nodal_deformation_animation(
+        mesh, displacement_steps, filename, *, field_name="Shape displacement",
+        times=None, displacement_factor=1.0):
+    """Write a moving-mesh Gmsh animation as vector ``NodeData`` steps.
+
+    Each step may be an array in exported Gmsh-node order or an NGSolve
+    callable vector field.  The callable form is the stable contract for
+    curved/high-order meshes because the exporter samples every generated
+    Lagrange node through the NGSolve mesh map.
+    """
+    import os
+
+    filename = os.fspath(filename)
+    if not filename.lower().endswith(".msh"):
+        filename += ".msh"
+    if getattr(mesh, "dim", None) != 3:
+        raise ValueError("nodal deformation animation requires a 3-D volume mesh")
+    raw_steps = list(displacement_steps)
+    if not raw_steps:
+        raise ValueError("displacement_steps must not be empty")
+    if times is None:
+        step_times = np.arange(len(raw_steps), dtype=float)
+    else:
+        step_times = np.asarray(times, dtype=float).reshape(-1)
+        if (step_times.size != len(raw_steps)
+                or not np.all(np.isfinite(step_times))):
+            raise ValueError(
+                "times must provide one finite value per displacement step")
+    factor = float(displacement_factor)
+    if not np.isfinite(factor) or factor <= 0.0:
+        raise ValueError("displacement_factor must be positive and finite")
+
+    nodes, mat_names, elem_data = _extract_mesh_data_grouped(mesh, False)
+    expected = (len(nodes), 3)
+    steps = []
+    for value in raw_steps:
+        if callable(value):
+            try:
+                sampled = np.asarray(
+                    [value(mesh(*point)) for point in nodes], dtype=float)
+            except Exception as exc:
+                raise ValueError(
+                    "callable displacement steps must evaluate to finite "
+                    "three-vectors at every exported node") from exc
+        else:
+            sampled = np.asarray(value, dtype=float)
+        if sampled.shape != expected or not np.all(np.isfinite(sampled)):
+            raise ValueError(
+                f"each displacement step must have shape {expected}, or be "
+                "an NGSolve-callable vector field evaluated at exported "
+                f"nodes; got {sampled.shape}")
+        steps.append(np.ascontiguousarray(sampled))
+    mat_elem_map, _, n_elems = _assign_element_ids(mat_names, elem_data)
+    bboxes = _compute_material_bboxes(nodes, mat_names, elem_data)
+    payload = GmshPostExport(mesh)._build_single_mesh_payload(
+        nodes, mat_names, elem_data, mat_elem_map, n_elems, 3, bboxes,
+        float(step_times[0]), 0)
+    payload.data_fields = []
+    for step, (values, time_value) in enumerate(zip(steps, step_times)):
+        payload.data_fields.append(DataField(
+            kind="$NodeData", name=str(field_name), ncomp=3,
+            items=[(index + 1, tuple(vector))
+                   for index, vector in enumerate(values)],
+            time=float(time_value), timestep=step))
+    parent = os.path.dirname(os.path.abspath(filename))
+    os.makedirs(parent, exist_ok=True)
+    with open(filename, "w", encoding="utf-8") as stream:
+        _emit_v41_msh(stream, payload)
+    opt_path = write_companion_opt(filename, view_ncomps=[3])
+    geo_path = _geo_filename_for_msh(filename)
+    displacement_options = (
+        "View[0].VectorType = 5;\n"
+        f"View[0].DisplacementFactor = {factor:.15g};\n")
+    for option_path in (opt_path, geo_path, geo_path + ".opt"):
+        with open(option_path, "a", encoding="utf-8") as stream:
+            stream.write("// Animate the vector view as mesh displacement\n")
+            stream.write(displacement_options)
+    return {
+        "msh": os.path.abspath(filename),
+        "geo": os.path.abspath(geo_path),
+        "msh_opt": os.path.abspath(opt_path),
+        "geo_opt": os.path.abspath(geo_path + ".opt"),
+        "steps": len(steps),
+        "field_name": str(field_name),
+        "maximum_displacement_m": [
+            float(np.max(np.linalg.norm(value, axis=1))) for value in steps],
+    }
+
+
 # ============================================================
 # Internal: mesh extraction
 # ============================================================

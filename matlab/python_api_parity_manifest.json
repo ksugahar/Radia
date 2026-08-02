@@ -80,18 +80,34 @@
     },
     {
       "id": "machines-applications",
-      "patterns": ["maglev/**/*.py", "maglev/*.py", "magnet.py", "motor_*.py", "pcb_design.py", "stream_function.py", "streamfunction_*.py"],
+      "patterns": ["maglev/**/*.py", "maglev/*.py", "magnet.py", "motor_*.py", "pcb_design.py", "streamfunction_*.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/machines.m"],
       "notes": "Production human applications have Simulink blocks; reusable Python design/model APIs are not yet all native MATLAB APIs."
     },
     {
+      "id": "stream-function-python",
+      "patterns": ["stream_function.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/streamFunction.m"],
+      "notes": "MATLAB has a native ACA-TSVD surface; improved-DUCAS/Abe mode selection and Python callback-backed current-potential operations retain a named module-level Python fallback outside Simulink step time."
+    },
+    {
       "id": "optimization-matlab",
-      "patterns": ["hcurl_topology_optimization.py", "magnetic_shield_optimization.py", "sheet_metal_optimization.py", "topology_optimization.py"],
+      "patterns": ["hcurl_topology_optimization.py", "magnetic_shield_optimization.py"],
       "classification": "matlab-native",
       "matlab": ["matlab/+radia/+topopt/optimizeHCurlEddyBubbleHexSheet.m", "matlab/+radia/+topopt/optimizeVIMLP.m"],
       "notes": "MATLAB owns the production optimization loops and uses the same MEX operators."
+    },
+    {
+      "id": "topology-optimization-python",
+      "patterns": ["sheet_metal_optimization.py", "topology_optimization.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/sheetMetalOptimization.m", "matlab/+radia/+python/topologyOptimization.m"],
+      "notes": "MATLAB owns validated production loops and MEX kernels. NGSolve GridFunction/GetTrafo callbacks and the full Python HDiv-MMM orchestration remain available through named module-level fallbacks outside Simulink step time."
     },
     {
       "id": "isochronous-topopt",
@@ -105,8 +121,8 @@
       "id": "particle-tracking",
       "patterns": ["particle_tracking.py"],
       "classification": "matlab-native",
-      "matlab": ["matlab/+radia/+tracking/trackLorentz.m", "matlab/+radia/+tracking/twoMomentumExitDispersion.m"],
-      "notes": "MATLAB ode113 and SciPy DOP853 integrate the same SI momentum-state relativistic Lorentz equation and expose the same symmetric two-momentum exit-dispersion criterion."
+      "matlab": ["matlab/+radia/+tracking/trackLorentz.m", "matlab/+radia/+tracking/twoMomentumExitDispersion.m", "matlab/+radia/+tracking/fitFiveMomentumExitOptics.m", "matlab/+radia/+tracking/trackFiveMomentumExitOptics.m"],
+      "notes": "MATLAB ode113 and SciPy DOP853 integrate the same SI momentum-state relativistic Lorentz equation. MATLAB exposes the symmetric two-momentum criterion and the canonical five-momentum quadratic exit-optics fit/tracking contract, including stop-box termination and acceptance diagnostics."
     },
     {
       "id": "harmonic-balance-python",
