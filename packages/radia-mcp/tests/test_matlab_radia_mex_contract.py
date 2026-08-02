@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 324
+    assert contract["command_count"] == 332
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -29,6 +29,16 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "simulink.state_space.update" in contract["command_names"]
     assert "simulink.state_space.snapshot" in contract["command_names"]
     assert "simulink.state_space.restore" in contract["command_names"]
+    assert {
+        "ih.eddy.create",
+        "ih.eddy.output",
+        "ih.eddy.destroy",
+        "ih.thermal.create",
+        "ih.thermal.output",
+        "ih.thermal.update",
+        "ih.thermal.reset",
+        "ih.thermal.destroy",
+    }.issubset(contract["command_names"])
     assert "hdiv.field_evaluator.from_cloud" in contract["command_names"]
     assert "hacapk.charge_gram.configure_charge_map" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]

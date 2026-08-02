@@ -1,7 +1,7 @@
 {
   "radia_version": "4.95.30",
   "schema": "radia.validation.production-replacement-proof.v1",
-  "executed_at_utc": "2026-07-31T08:22:32.353873+00:00",
+  "executed_at_utc": "2026-08-02T03:15:12.082950+00:00",
   "execution_version": {
     "radia": "4.95.30",
     "matlab": "2026a",
@@ -12,11 +12,11 @@
       "status": "pass",
       "shared_model_identity_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9",
       "artifact_sha256_by_role": {
-        "manifest": "346ba82368d77738e91284f943a248c662b8ec57ea1bdd4a91f2db227363c57e",
-        "gate": "2c805e9d28923b1056e2bb714b3cfd7228d5198e16b941f848dc7a8dd890bc5b",
-        "ngsolve_age": "44759324710cc1817afe47ab24cd7c4176e5d958f969ebb3c3789c4443bd6070",
-        "hdiv_mmm_hcurl_eddy_bubble": "d4a060243ba2464309eb000683943478addebd0045e7f9863e74217d01992b7a",
-        "dual_lane": "817229c05086064b5986509a81a675ec51202257c02b026fb785a3ade031be35"
+        "manifest": "6025310d147e209c41740f2da203af6347a926175259b0f240880d5d9b5cb7c6",
+        "gate": "e69928dcc70c2336718b384eb1eaaa738c86735c652c488eea867496141255e3",
+        "ngsolve_age": "b57ceac492389602745542c959c9247296eadea494ed1f8cef5fed072b68db0a",
+        "hdiv_mmm_hcurl_eddy_bubble": "8b09327b98c984cfdf84ea410ffed18718be1b3ee72b93fb1e360997ded2b249",
+        "dual_lane": "92d8220f4f8de0a211ee2d536eedeaaf562b2eb3654ee5438c213d3f032b8fae"
       },
       "checks": {
         "both_lanes_solved": true,
@@ -29,9 +29,9 @@
     },
     "native_motor_angle_family": {
       "status": "pass",
-      "test_count": 74,
+      "test_count": 77,
       "artifact_sha256_by_role": {
-        "matlab": "d5a69f914a286377174c840876ed6d7576d0d2e813fb337e42b222c6df4dcd4e"
+        "matlab": "02179fe4d9b939519b0c130fc40b74f9e621ecd360e05da4745c41399aaf74c9"
       },
       "checks": {
         "standalone_batch": true,
@@ -45,5 +45,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "b92990d9959f7d2e1195f02fdebeb67b3b8f6e844bd74ea8aa33471e46a309f2"
+  "proof_payload_sha256": "27c4d3e03bc4b5987eb8e23dcf8456aecc5a30a12bad000302acebeef65e5da5"
 }

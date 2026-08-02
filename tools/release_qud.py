@@ -275,8 +275,10 @@ def cmd_simulink_candidate(args):
     package_sha256 = _sha256_file(package)
     success_marker = (
         "RADIA_SIMULINK_RELEASE_OK"
-        if manifest.get("schema")
-        == "radia.simulink.library-release-manifest.v1"
+        if manifest.get("schema") in {
+            "radia.simulink.library-release-manifest.v1",
+            "radia.simulink.library-release-manifest.v2",
+        }
         else "RADIA_IH_RELEASE_OK"
     )
     state_path = _simulink_state_path(package_sha256)

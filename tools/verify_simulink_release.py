@@ -19,12 +19,50 @@ REQUIRED_MEMBERS = {
     "matlab/IH_VERSION",
     "matlab/install_radia_ih.m",
     "matlab/radia_ih.slx",
+    "matlab/radia_ih_eddy_sfun.m",
+    "matlab/radia_ih_thermal_sfun.m",
+    "matlab/verify_radia_ih_release.m",
+    "matlab/+radia/setup.m",
+    "matlab/+radia/+internal/pythonProcessPath.m",
+    "matlab/+radia/+simulink/ihEddySFunction.m",
+    "matlab/+radia/+simulink/ihThermalSFunction.m",
+    "matlab/+radia/+simulink/validateIHNativeConfig.m",
+    "matlab/radia_mex.mexw64",
+    "matlab/mkl_avx2.2.dll",
+    "matlab/mkl_core.2.dll",
+    "matlab/mkl_def.2.dll",
+    "matlab/mkl_intel_thread.2.dll",
+    "matlab/mkl_rt.2.dll",
+}
+LEGACY_REQUIRED_MEMBERS = {
+    "manifest.json",
+    "matlab/IH_VERSION",
+    "matlab/install_radia_ih.m",
+    "matlab/radia_ih.slx",
     "matlab/verify_radia_ih_release.m",
     "matlab/+radia/+simulink/validateIHNativeConfig.m",
     "matlab/radia_ih_eddy_sfun.mexw64",
     "matlab/radia_ih_thermal_sfun.mexw64",
 }
 FULL_REQUIRED_MEMBERS = {
+    "manifest.json",
+    "matlab/install_radia_simulink.m",
+    "matlab/verify_radia_simulink_release.m",
+    "matlab/radia_simulink_library.slx",
+    "matlab/radia_ih.slx",
+    "matlab/radia_streamfunction_optimization.slx",
+    "matlab/radia_mex.mexw64",
+    "matlab/radia_ih_eddy_sfun.m",
+    "matlab/radia_ih_thermal_sfun.m",
+    "matlab/+radia/+simulink/ihEddySFunction.m",
+    "matlab/+radia/+simulink/ihThermalSFunction.m",
+    "matlab/mkl_avx2.2.dll",
+    "matlab/mkl_core.2.dll",
+    "matlab/mkl_def.2.dll",
+    "matlab/mkl_intel_thread.2.dll",
+    "matlab/mkl_rt.2.dll",
+}
+LEGACY_FULL_REQUIRED_MEMBERS = {
     "manifest.json",
     "matlab/install_radia_simulink.m",
     "matlab/verify_radia_simulink_release.m",
@@ -66,9 +104,17 @@ def verify_archive(archive: Path) -> dict:
             raise RuntimeError(f"Unsafe ZIP members: {', '.join(unsafe)}")
         manifest = json.loads(bundle.read("manifest.json"))
         schema = manifest.get("schema")
-        if schema == "radia.simulink.ih-release-manifest.v1":
+        preview_v1 = schema == "radia.simulink.ih-release-manifest.v1"
+        preview_v2 = schema == "radia.simulink.ih-release-manifest.v2"
+        full_v1 = schema == "radia.simulink.library-release-manifest.v1"
+        full_v2 = schema == "radia.simulink.library-release-manifest.v2"
+        if preview_v1:
+            required_members = LEGACY_REQUIRED_MEMBERS
+        elif preview_v2:
             required_members = REQUIRED_MEMBERS
-        elif schema == "radia.simulink.library-release-manifest.v1":
+        elif full_v1:
+            required_members = LEGACY_FULL_REQUIRED_MEMBERS
+        elif full_v2:
             required_members = FULL_REQUIRED_MEMBERS
         else:
             raise RuntimeError("Unsupported Simulink release manifest schema")
@@ -85,14 +131,21 @@ def verify_archive(archive: Path) -> dict:
             raise RuntimeError("Simulink release runtime compatibility is invalid")
         if manifest.get("required_matlab_products") != ["MATLAB", "Simulink"]:
             raise RuntimeError("Simulink release product requirements are invalid")
-        if schema == "radia.simulink.ih-release-manifest.v1":
+        if preview_v1 or preview_v2:
             if manifest.get("release_channel") != "preview":
                 raise RuntimeError("The first IH release must declare preview channel")
-            if manifest.get("backend") != "native-mex-sfunction" or \
+            expected_backend = (
+                "native-mex-sfunction"
+                if preview_v1
+                else "matlab-level2+radia-mex-handles"
+            )
+            if manifest.get("backend") != expected_backend or \
                     manifest.get("python_fallback") is not False:
                 raise RuntimeError("IH release backend contract is invalid")
             if manifest.get("operator_assembly") != "preassembled":
                 raise RuntimeError("IH release must declare its assembly boundary")
+            if preview_v2:
+                _verify_level2_ih_contract(manifest)
         else:
             if manifest.get("release_channel") != "production":
                 raise RuntimeError("The full library must declare production channel")
@@ -100,17 +153,22 @@ def verify_archive(archive: Path) -> dict:
                     manifest.get("entry_model") != \
                     "matlab/radia_simulink_library.slx":
                 raise RuntimeError("The full library entry contract is invalid")
-            if manifest.get("backend") != \
-                    "native-mex-sfunction-and-mex-handle" or \
+            expected_backend = (
+                "native-mex-sfunction-and-mex-handle"
+                if full_v1 else "application-specific"
+            )
+            if manifest.get("backend") != expected_backend or \
                     manifest.get("python_per_step") is not False or \
                     manifest.get("python_fallback_per_step") is not False:
                 raise RuntimeError("The full library backend contract is invalid")
-            if set(manifest.get("required_mex", [])) != {
-                "matlab/radia_mex.mexw64",
-                "matlab/radia_ih_eddy_sfun.mexw64",
-                "matlab/radia_ih_thermal_sfun.mexw64",
-            }:
-                raise RuntimeError("The full library MEX inventory is invalid")
+            if full_v2:
+                _verify_level2_ih_contract(manifest)
+            elif set(manifest.get("required_mex", [])) != {
+                    "matlab/radia_mex.mexw64",
+                    "matlab/radia_ih_eddy_sfun.mexw64",
+                    "matlab/radia_ih_thermal_sfun.mexw64",
+                }:
+                    raise RuntimeError("The full library MEX inventory is invalid")
             toolbox_requirements = manifest.get("feature_toolbox_requirements", {})
             if toolbox_requirements != {
                 "adjoint_topology_optimization": ["Optimization Toolbox"],
@@ -136,6 +194,27 @@ def verify_archive(archive: Path) -> dict:
     return manifest
 
 
+def _verify_level2_ih_contract(manifest: dict) -> None:
+    if manifest.get("ih_backend") != "matlab-level2+radia-mex-handles":
+        raise RuntimeError("The IH Level-2 backend declaration is invalid")
+    if set(manifest.get("required_mex", [])) != {
+        "matlab/radia_mex.mexw64",
+    }:
+        raise RuntimeError("The IH standalone MEX inventory is invalid")
+    if set(manifest.get("required_matlab_sfunctions", [])) != {
+        "matlab/radia_ih_eddy_sfun.m",
+        "matlab/radia_ih_thermal_sfun.m",
+        "matlab/+radia/+simulink/ihEddySFunction.m",
+        "matlab/+radia/+simulink/ihThermalSFunction.m",
+    }:
+        raise RuntimeError("The IH Level-2 S-Function inventory is invalid")
+    if manifest.get("standalone_mex_debug_api") is not True:
+        raise RuntimeError("The IH standalone MEX debug contract is invalid")
+    if manifest.get("python_runtime_required_for_native_mex") is not True or \
+            manifest.get("python_per_step") is not False:
+        raise RuntimeError("The IH native runtime dependency contract is invalid")
+
+
 def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
     if not matlab.is_file():
         raise FileNotFoundError(f"MATLAB executable does not exist: {matlab}")
@@ -143,7 +222,10 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
     scratch.mkdir(parents=True, exist_ok=True)
     manifest = verify_archive(archive)
     full_library = (
-        manifest.get("schema") == "radia.simulink.library-release-manifest.v1"
+        manifest.get("schema") in {
+            "radia.simulink.library-release-manifest.v1",
+            "radia.simulink.library-release-manifest.v2",
+        }
     )
     verification_function = (
         "verify_radia_simulink_release"
