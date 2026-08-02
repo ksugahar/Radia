@@ -5,6 +5,34 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.33 - Native IH lifecycle and electromagnetic design bridges
+
+Released 2026-08-02.
+
+- Migrated the production induction-heating Eddy and Thermal blocks to
+  readable Level-2 MATLAB S-Functions backed by independent checked native
+  MEX object handles, with lifecycle, saved-model, library, and package tests.
+- Added a Radia-to-Xsuite field bridge, a continuous-P1 electrostatic surface
+  BEM solver, and an analytic rectangular-prism demagnetizing-factor reference
+  with stored convergence evidence.
+- Strengthened reduced Eddy-current modeling with physical vector-potential
+  excitation, symmetric coordinate equilibration, and a finite-slab solver;
+  added residual-closed harmonic balance for hysteretic periodic states.
+- Added fail-closed Motor evidence gates for BDM1 HEX torque, armature
+  reaction, and absolute demagnetization attribution, including malformed and
+  inconsistent-artifact diagnostics.
+
+## 4.95.32 - Accelerator topology and MATLAB parity
+
+Released 2026-08-01.
+
+- Added accelerator topology-optimization, particle-tracking, and coil-audit
+  capabilities with corresponding MATLAB entry points and focused tests.
+- Expanded the native MEX parity surface, including ChargeGram lifecycle
+  support and the matching MATLAB tracking workflow.
+- Added the public accelerator-fundamentals MCP knowledge layer and its
+  searchable, non-redistributive textbook guide.
+
 ## 4.95.31 - Native streaming lifecycle fix
 
 Released 2026-07-31.

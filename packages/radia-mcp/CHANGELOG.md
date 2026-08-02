@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.27] - 2026-08-02
+
+- Added fail-closed Motor evidence tools for BDM1 HEX torque, armature
+  reaction, and absolute demagnetization attribution, with strict mesh,
+  angle-grid, metric-range, and cross-artifact identity checks.
+- Updated MATLAB/MEX release knowledge for the Level-2 induction-heating
+  object-handle lifecycle and expanded the generated command inventory to the
+  complete current native surface.
+
 ## [1.4.26] - 2026-08-01
 
 - Added a public-safe accelerator-fundamentals layer to
