@@ -112,6 +112,57 @@ inverse (small singular values amplify noise).  Sweeping `k_modes`
 traces the **L-curve** of residual `||A ψ − B||` vs solution norm
 `||ψ||`.
 
+## Improved DUCAS: TSVD is a magnetic-field mode design method
+
+A fixed prefix `1..k` is useful as a numerical baseline, but it is not the
+complete current-potential design rule.  In improved DUCAS (Abe, 2013), write
+
+    W_B B_TG = W_B A R Delta q
+    psi       = psi0 + R Delta q
+
+where `R` enforces equipotential boundary and connection constraints,
+`W_B` weights field accuracy, and `Delta` scales independent current
+potentials.  After the SVD of `W_B A R Delta`, the target strength of mode `i`
+is
+
+    D_i = u_i^T W_B B_TG,
+    P_i = |D_i| / sqrt(M).
+
+The selected set is therefore allowed to be **non-contiguous**.  A mode is
+retained only when its field distribution is admissible, its `P_i` is
+significant, its singular value is numerically safe, and its potential/current
+is physically realizable.  Modes are accumulated until the checked physical
+field residual meets the requested peak-to-peak and RMS tolerances.  If no
+admissible set meets the target, the correct action is to enlarge/redesign the
+source surface or accept a field tolerance—not to invert progressively smaller
+singular values without limit.
+
+Two design levers make the current paths manufacturable without sacrificing
+the selected low-order field content:
+
+1. **Node weights.** Use `delta_i proportional to d_i^2`, with `d_i` the
+   distance from current-potential node `i` to its nearest field-evaluation
+   point, then average through `R`.  This compensates the distance dependence
+   that otherwise concentrates contours near the target.  FE area is not
+   weighted again because it is already present in `A`.
+2. **Initial current potential.** Start from a smooth `psi0`.  Selected modes
+   correct its target-field error; unselected high-order content remains and
+   can smooth valleys, peaks and contour routing with little field effect.
+
+These levers complement, rather than replace, REGCOIL-style physical
+regularization.  Improved DUCAS exposes interpretable magnetic-field modes;
+H1, current-norm or inductance seminorms select a low-current/low-energy member
+of the feasible family.  For difficult geometry, compare the field-error vs
+current-norm Pareto front rather than treating an arbitrary TSVD cutoff as a
+physical optimum.
+
+For passive ferromagnetic placement, negative inferred volume is not silently
+accepted.  Clip to the realizable nonnegative/capacity bounds, recompute the
+actual field error, and solve that new error with the **same precomputed SVD**.
+The repeated bounded solve is the continuous planning layer; HDiv-MMM must
+still convert its signed demand to full-strength add/remove candidates and
+re-solve the magnetic system after each material batch.
+
 ## Path-A compensated iteration (new 2026-05-30)
 
 Kuijpers et al. Compumag 2023 [525] observe that **the deviation of the

@@ -1,8 +1,9 @@
 # API reference — `radia.stream_function`
 
-The public API is intentionally small.  Six functions + two dataclasses
-cover the kernel-agnostic (ACA+)+TSVD pipeline plus the
-regularisation-folded form; everything else is in the demo files.
+The public API has two layers: the kernel-agnostic ACA+--QR--TSVD factor and
+the improved-DUCAS/Abe current-potential inverse-design contract.  The latter
+keeps the physical evidence for every eigenmode instead of reducing TSVD to a
+single prefix length.
 
 ## `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method="aca_qr_tsvd")`
 
@@ -49,6 +50,74 @@ Convenience: `aca_tsvd` then `pseudo_inverse_solve` in one call.
 
 **Returns** `(φ, result)` — basis coefficients and the cached
 factorisation (for reuse).
+
+## Improved DUCAS / Abe current-potential solve
+
+### `solve_abe_current_potential(response, target_field, **options)`
+
+Solves the weighted node-current-potential equations
+
+> `W_B B_TG = W_B A R diag(delta') q`, and
+> `T = T0 + R diag(delta') q`.
+
+This is not a blind first-`k` TSVD.  Every magnetic-field eigenmode records
+its singular value, target strength `u_i.T @ (W_B B_TG)`, normalized strength,
+target correlation, peak potential contribution and rejection reason.  Modes
+may be non-contiguous through `allowed_modes`; accumulation stops when the
+requested physical peak-to-peak and/or RMS field residual is reached.
+
+The returned `AbeCurrentPotentialSolution` contains the full potential,
+reconstructed field, checked `A @ T` residual, selected zero-based modes,
+`StreamTSVD` factor and `AbeCurrentPotentialModeDiagnostics`.  Supplying the
+same `precomputed_factor` makes repeated right-hand-side correction a cheap
+mode sum without another ACA/TSVD factorisation.
+
+Key options are:
+
+| Option | Meaning |
+|---|---|
+| `reduction=R` | independent-to-full boundary/connection constraint map |
+| `field_weights=W_B` | positive field-accuracy multipliers |
+| `node_potential_scales` / `independent_potential_scales` | improved-DUCAS geometric current-potential weights |
+| `initial_potential=T0` | smooth/manufacturable seed; unselected high-order content is retained |
+| `allowed_modes` | arbitrary zero-based mode mask/list, including non-contiguous symmetry modes |
+| `minimum_mode_strength` | threshold on `abs(u_i.T W_B B_TG)/sqrt(M)` |
+| `residual_peak_to_peak`, `residual_rms` | physical field stopping criteria |
+| `maximum_abs_potential` | fail-loud engineering feasibility limit |
+
+### `abe_nearest_field_distance_scales(node_points, field_points, ...)`
+
+Constructs the improved-DUCAS starting weight `delta_i proportional to d_i^2`,
+where `d_i` is the distance from current-potential node `i` to its nearest
+magnetic-field evaluation point (Abe 2013, eq. 20).  This is deliberately not
+an element-area weight: the response assembly already contains area.
+
+### `abe_reduce_node_potential_scales(R, node_potential_scales)`
+
+Averages full-node scales into independent potentials through `R` and
+normalizes the largest scale to one (Abe 2013, eqs. 24--25).  Sparse `R` stays
+sparse.
+
+### `solve_abe_bounded_current_potential(response, target_field, **options)`
+
+Repeats the same precomputed current-potential solve after enforcing lower and
+upper potential/material bounds.  With `lower_potential=0`, negative inferred
+material is removed, the actual post-clip error field is recomputed, and that
+new error is solved again.  The return value
+`AbeBoundedCurrentPotentialSolution` includes clip, potential-change and
+physical-residual histories and fails loud on stagnation or capacity limits.
+At least one of `residual_peak_to_peak` or `residual_rms` is required so the
+bounded iteration has an explicit physical acceptance criterion.
+Apply equality constraints first and pass the reduced response: clipping
+full-node potentials independently could violate `R`.
+
+The panel exposes the same route with `--inverse-method abe`, one-based
+`--abe-allowed-modes`, optional `--abe-initial-potential`, and
+`--abe-node-weights nearest-distance2`.  The latter is currently limited to
+`--order 1`; Radia does not reconstruct high-order NGSolve DOF coordinates in
+Python.  Result JSON separates `abe_solve_converged` from
+`abe_residual_target_met`; the latter is null unless a physical residual target
+was explicitly supplied.
 
 ## `radia_field_kernel(obs_points, sources, component=2, field="b")`
 

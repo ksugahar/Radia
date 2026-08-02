@@ -71,6 +71,74 @@ verifyEqual(testCase,result.minus_track.stop_event.face,"plane");
 verifySize(testCase,result.minus_track.stop_event.velocity_m_s,[3,1]);
 end
 
+function testFiveMomentumFitRecoversQuadraticOptics(testCase)
+offsets=[-1e-3;-5e-4;0;5e-4;1e-3];
+positions=2e-4+3e-3*offsets+4*offsets.^2;
+angles=-1e-4-5e-4*offsets+0.2*offsets.^2;
+result=radia.tracking.fitFiveMomentumExitOptics( ...
+    offsets,positions,angles);
+verifyEqual(testCase,result.schema,"radia-five-momentum-exit-optics/v1");
+verifyEqual(testCase,result.linear_regression_weights, ...
+    [-400,-200,0,200,400],"AbsTol",2e-12);
+verifyEqual(testCase,result.x0_m,2e-4,"AbsTol",1e-15);
+verifyEqual(testCase,result.psi0_rad,-1e-4,"AbsTol",1e-15);
+verifyEqual(testCase,result.eta_m,3e-3,"AbsTol",1e-12);
+verifyEqual(testCase,result.eta_prime_rad,-5e-4,"AbsTol",1e-12);
+verifyEqual(testCase,result.x_quadratic_m,4,"AbsTol",1e-9);
+verifyEqual(testCase,result.psi_quadratic_rad,0.2,"AbsTol",1e-9);
+verifyLessThan(testCase,result.max_x_residual_m,1e-14);
+verifyLessThan(testCase,result.max_psi_residual_rad,1e-14);
+verifyTrue(testCase,result.pass_all);
+end
+
+function testFiveMomentaHaveZeroExitOpticsWithoutField(testCase)
+plane=struct("point_m",[0.5;0;0],"normal",[1;0;0],"direction",1);
+result=radia.tracking.trackFiveMomentumExitOptics( ...
+    -1.602176634e-19,9.1093837139e-31,[0;0.1;0],[2;0;0], ...
+    linspace(0,1,21).',plane,ReferenceExitPointM=[0.5;0.1;0], ...
+    TransverseDirection=[0;1;0],LongitudinalDirection=[1;0;0]);
+verifyEqual(testCase,result.x0_m,0,"AbsTol",1e-12);
+verifyEqual(testCase,result.psi0_rad,0,"AbsTol",1e-12);
+verifyEqual(testCase,result.eta_m,0,"AbsTol",1e-12);
+verifyEqual(testCase,result.eta_prime_rad,0,"AbsTol",1e-12);
+verifyEqual(testCase,numel(result.tracks),5);
+verifyTrue(testCase,result.pass_all);
+for index=1:5
+    verifyEqual(testCase,result.tracks(index).stop_event.face,"plane");
+end
+end
+
+function testFiveMomentumFitRejectsInvalidContracts(testCase)
+verifyError(testCase,@()radia.tracking.fitFiveMomentumExitOptics( ...
+    [-1e-3;0;1e-3],zeros(3,1),zeros(3,1)), ...
+    "radia:tracking:FiveMomentumSamples");
+verifyError(testCase,@()radia.tracking.fitFiveMomentumExitOptics( ...
+    [-1e-3;0;0;5e-4;1e-3],zeros(5,1),zeros(5,1)), ...
+    "radia:tracking:MomentumOffsets");
+verifyError(testCase,@()radia.tracking.fitFiveMomentumExitOptics( ...
+    [-1e-3;-5e-4;0;5e-4;1e-3],zeros(5,1),zeros(5,1), ...
+    EtaLimitM=NaN),"radia:tracking:AcceptanceLimits");
+end
+
+function testFiveMomentumTrackingHonorsStopBox(testCase)
+plane=struct("point_m",[0.5;0;0],"normal",[1;0;0],"direction",1);
+box=struct("minimum_m",[-1;-1;-1],"maximum_m",[0.25;1;1]);
+operation=@()radia.tracking.trackFiveMomentumExitOptics( ...
+    -1.602176634e-19,9.1093837139e-31,[0;0;0],[2;0;0], ...
+    linspace(0,1,21).',plane,ReferenceExitPointM=[0.5;0;0], ...
+    TransverseDirection=[0;1;0],StopBox=box);
+verifyError(testCase,operation,"radia:tracking:ExitNotReached");
+end
+
+function testFiveMomentumTrackingRejectsParallelDirections(testCase)
+plane=struct("point_m",[0.5;0;0],"normal",[1;0;0],"direction",1);
+operation=@()radia.tracking.trackFiveMomentumExitOptics( ...
+    -1.602176634e-19,9.1093837139e-31,[0;0;0],[2;0;0], ...
+    linspace(0,1,21).',plane,ReferenceExitPointM=[0.5;0;0], ...
+    TransverseDirection=[2;0;0]);
+verifyError(testCase,operation,"radia:tracking:TransverseDirection");
+end
+
 function testComponentFieldAdapter(testCase)
 field=radia.tracking.fieldFromComponents( ...
     @(x,y,z)x+y+z,@(x,y,z)x-y,@(x,y,z)z);

@@ -70,6 +70,8 @@ __all__ = [
     "sector_linear_optics", "isochronous_increment_targets",
     "isochronous_total_field_bands", "isochronous_profile_metrics",
     "CombinedFunctionLinearOptics", "combined_function_linear_optics",
+    "CombinedFunctionExitMetrics", "combined_function_exit_metrics",
+    "combined_function_exit_metrics_from_field_response",
     "StraightenedBendValidation", "straightened_bend_validation",
     "AchromaticGradientDesign", "design_achromatic_gradient_profile",
     "iron_only_mesh", "verify_design_iron_only",
@@ -239,6 +241,29 @@ class CombinedFunctionLinearOptics:
     vertical_trace: float
     radial_stable: bool
     vertical_stable: bool
+
+
+@dataclass(frozen=True)
+class CombinedFunctionExitMetrics:
+    """Four exit responses used by the five-particle acceptance contract.
+
+    ``reference_orbit_error`` is the central-particle displacement/slope from
+    the prescribed design orbit.  ``response`` is ordered as
+    ``(x0, psi0, eta, eta_prime)`` and ``response_jacobian`` has one column
+    per caller-supplied field/design parameter.  The Jacobian is assembled
+    from matrix-exponential Frechet derivatives; finite differences are not
+    part of the optimization path.
+    """
+    s: np.ndarray
+    reference_orbit_error: np.ndarray
+    x0_m: float
+    psi0_rad: float
+    eta_m: float
+    eta_prime_rad: float
+    response: np.ndarray
+    response_jacobian: np.ndarray
+    downstream_drift_m: float
+    optics: CombinedFunctionLinearOptics
 
 
 @dataclass(frozen=True)
@@ -468,6 +493,184 @@ def combined_function_linear_optics(curvature, normalized_gradient,
         dradial,dvertical,radial_trace,vertical_trace,
         bool(abs(radial_trace)<2.0-tolerance),
         bool(abs(vertical_trace)<2.0-tolerance))
+
+
+def combined_function_exit_metrics(
+        curvature, normalized_gradient, segment_lengths, *,
+        reference_curvature, downstream_drift=0.0,
+        curvature_jacobian=None, gradient_jacobian=None):
+    """Return analytic ``x0, psi0, eta, eta_prime`` exit responses.
+
+    The prescribed design orbit has curvature ``reference_curvature``.  The
+    central-orbit error ``q`` produced by the realized field obeys
+
+    ``q'' + (h**2 + k1) q = h_reference - h``.
+
+    Positive momentum error drives dispersion outward through ``+h``.  A
+    positive field-curvature error bends the central particle inward, so its
+    forcing has the opposite sign.
+
+    Dispersion obeys the usual
+    ``eta'' + (h**2 + k1) eta = h`` equation and is delegated to
+    :func:`combined_function_linear_optics`.  Both states are transported
+    through an optional straight downstream drift to the common score plane.
+    Optional curvature/gradient Jacobians have shape
+    ``(n_segment, n_parameter)`` and are propagated analytically.
+
+    For a field convention ``Bz = -B0 + x*G`` with positive design curvature,
+    callers normally use ``h = -Bz/B_rho`` and ``k1 = -G/B_rho``.
+    """
+    from scipy.linalg import expm, expm_frechet
+
+    h = np.asarray(curvature, dtype=float).reshape(-1)
+    k = np.asarray(normalized_gradient, dtype=float).reshape(-1)
+    ds = np.asarray(segment_lengths, dtype=float).reshape(-1)
+    href = np.asarray(reference_curvature, dtype=float)
+    if href.ndim == 0:
+        href = np.full(h.shape, float(href))
+    else:
+        href = href.reshape(-1)
+    drift = float(downstream_drift)
+    if h.size == 0 or k.shape != h.shape or ds.shape != h.shape:
+        raise ValueError(
+            "combined-function exit metrics require matching non-empty "
+            "segment arrays")
+    if href.shape != h.shape:
+        raise ValueError(
+            "reference_curvature must be scalar or match the segment arrays")
+    if (np.any(ds <= 0.0) or drift < 0.0
+            or not np.all(np.isfinite(np.r_[h, k, ds, href, drift]))):
+        raise ValueError(
+            "combined-function exit metrics inputs must be finite, with "
+            "positive lengths and nonnegative downstream drift")
+
+    optics = combined_function_linear_optics(
+        h, k, ds,
+        curvature_jacobian=curvature_jacobian,
+        gradient_jacobian=gradient_jacobian)
+
+    supplied = (curvature_jacobian is not None
+                or gradient_jacobian is not None)
+    if supplied:
+        raw = (curvature_jacobian if curvature_jacobian is not None
+               else gradient_jacobian)
+        raw = np.asarray(raw, dtype=float)
+        n_parameter = raw.shape[1]
+        dh = (np.zeros((h.size, n_parameter))
+              if curvature_jacobian is None
+              else np.asarray(curvature_jacobian, dtype=float))
+        dk = (np.zeros((h.size, n_parameter))
+              if gradient_jacobian is None
+              else np.asarray(gradient_jacobian, dtype=float))
+    else:
+        n_parameter = 0
+        dh = np.zeros((h.size, 0))
+        dk = np.zeros((h.size, 0))
+
+    state = np.array([0.0, 0.0, 1.0])
+    derivative_state = np.zeros((3, n_parameter))
+    history = [state[:2].copy()]
+    stations = [0.0]
+    for segment, (hi, ki, hrefi, length) in enumerate(zip(h, k, href, ds)):
+        generator = np.array([
+            [0.0, 1.0, 0.0],
+            [-(hi * hi + ki), 0.0, hrefi - hi],
+            [0.0, 0.0, 0.0],
+        ])
+        scaled = generator * length
+        propagator = expm(scaled)
+        old_state = state
+        old_derivative_state = derivative_state
+        state = propagator @ old_state
+        for parameter in range(n_parameter):
+            dhi = dh[segment, parameter]
+            dki = dk[segment, parameter]
+            derivative_generator = np.zeros((3, 3))
+            derivative_generator[1, 0] = -(2.0 * hi * dhi + dki)
+            derivative_generator[1, 2] = -dhi
+            derivative_propagator = expm_frechet(
+                scaled, derivative_generator * length, compute_expm=False)
+            derivative_state[:, parameter] = (
+                propagator @ old_derivative_state[:, parameter]
+                + derivative_propagator @ old_state)
+        history.append(state[:2].copy())
+        stations.append(stations[-1] + length)
+
+    orbit_score = np.array([state[0] + drift * state[1], state[1]])
+    orbit_jacobian = derivative_state[:2].copy()
+    orbit_jacobian[0] += drift * orbit_jacobian[1]
+    dispersion_score = np.array([
+        optics.dispersion[-1, 0]
+        + drift * optics.dispersion[-1, 1],
+        optics.dispersion[-1, 1],
+    ])
+    dispersion_jacobian = optics.endpoint_jacobian.copy()
+    dispersion_jacobian[0] += drift * dispersion_jacobian[1]
+    response = np.r_[orbit_score, dispersion_score]
+    response_jacobian = np.vstack((orbit_jacobian, dispersion_jacobian))
+    return CombinedFunctionExitMetrics(
+        s=np.asarray(stations),
+        reference_orbit_error=np.asarray(history),
+        x0_m=float(response[0]),
+        psi0_rad=float(response[1]),
+        eta_m=float(response[2]),
+        eta_prime_rad=float(response[3]),
+        response=response,
+        response_jacobian=response_jacobian,
+        downstream_drift_m=drift,
+        optics=optics,
+    )
+
+
+def combined_function_exit_metrics_from_field_response(
+        field_response, segment_lengths, magnetic_rigidity, *,
+        reference_curvature, downstream_drift=0.0,
+        field_response_jacobian=None, curvature_sign=1.0,
+        gradient_sign=1.0):
+    """Fuse HDiv-MMM field rows directly into the four optics responses.
+
+    ``field_response`` is the row-major vector
+    ``[B_0 ... B_(n-1), G_0 ... G_(n-1)]`` produced by the HDiv-MMM response
+    matrix, where ``G=dB/dx``.  Its optional Jacobian therefore has shape
+    ``(2*n_segment, n_parameter)``.  Sign arguments make the electromagnetic
+    coordinate convention explicit; no silent field-axis assumption is made.
+    """
+    values = np.asarray(field_response, dtype=float).reshape(-1)
+    lengths = np.asarray(segment_lengths, dtype=float).reshape(-1)
+    rigidity = float(magnetic_rigidity)
+    curvature_sign = float(curvature_sign)
+    gradient_sign = float(gradient_sign)
+    if (lengths.size == 0 or values.shape != (2 * lengths.size,)
+            or not np.isfinite(rigidity) or rigidity == 0.0
+            or not np.all(np.isfinite(
+                np.r_[values, lengths, curvature_sign, gradient_sign]))):
+        raise ValueError(
+            "field response must contain finite B/G rows for every segment "
+            "and magnetic_rigidity must be finite and nonzero")
+    jacobian = None
+    curvature_jacobian = None
+    gradient_jacobian = None
+    if field_response_jacobian is not None:
+        jacobian = np.asarray(field_response_jacobian, dtype=float)
+        if (jacobian.ndim != 2
+                or jacobian.shape[0] != values.size
+                or not np.all(np.isfinite(jacobian))):
+            raise ValueError(
+                "field_response_jacobian needs finite shape "
+                "(2*n_segment, n_parameter)")
+        curvature_jacobian = (
+            curvature_sign * jacobian[:lengths.size] / rigidity)
+        gradient_jacobian = (
+            gradient_sign * jacobian[lengths.size:] / rigidity)
+    return combined_function_exit_metrics(
+        curvature_sign * values[:lengths.size] / rigidity,
+        gradient_sign * values[lengths.size:] / rigidity,
+        lengths,
+        reference_curvature=reference_curvature,
+        downstream_drift=downstream_drift,
+        curvature_jacobian=curvature_jacobian,
+        gradient_jacobian=gradient_jacobian,
+    )
 
 
 def straightened_bend_validation(s, bz, gradient, magnetic_rigidity, *,

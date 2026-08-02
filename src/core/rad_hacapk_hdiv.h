@@ -512,9 +512,14 @@ public:
         std::vector<double> schur;       // row-major [n_candidate,n_candidate]
         std::vector<double> rhs;         // [n_candidate]
         std::vector<double> response;    // row-major [n_response,n_candidate]
-        std::vector<int> iterations;     // one active solve count per candidate DOF
+        // Backward-compatible candidate-length upper-bound diagnostics.
+        std::vector<int> iterations;
+        // Actual active solve count for each retained coupling TSVD mode.
+        std::vector<int> coupling_mode_iterations;
         int n_candidate = 0;
         int n_response = 0;
+        int coupling_rank = 0;
+        double coupling_relative_truncation_error = 0.0;
         double operator_s = 0.0;
         double solve_s = 0.0;
         double contraction_s = 0.0;
