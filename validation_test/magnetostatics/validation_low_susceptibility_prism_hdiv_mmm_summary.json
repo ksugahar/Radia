@@ -1,12 +1,12 @@
 {
   "schema": "radia.validation.magnetostatics.low-chi-prism-hdiv-mmm.v1",
-  "executed_at_utc": "2026-07-31T12:55:04.399795+00:00",
+  "executed_at_utc": "2026-08-02T03:37:07.414782+00:00",
   "execution_version": {
     "producer": "validation_low_susceptibility_prism_hdiv_mmm.py",
     "python": "3.12.10",
     "ngsolve": "6.2.2604",
-    "radia_solver_source_head": "327ce4aa8905089c2c0dccf2576d0f6815ea7b98",
-    "analytic_formula_sha256": "4a4612c0849a24f02149a89fd9a7a6cc480c31a068701c8734e33b2d79cb1d4c"
+    "radia_solver_source_head": "bdab0c07fc47649fd23fefa3e7d6d28cdb2caf9e",
+    "analytic_formula_sha256": "5d966dbf6b5c2f15fb0daef07515ad697ab50a029f881500bc380be566be0a0c"
   },
   "physics_identity_digest": "b7eeea892c986330a2c4f5a718424fdc34671413e37f54de1ce2d247441fa6c7",
   "identity": {
@@ -35,19 +35,15 @@
       "ndof": 609,
       "iterations": 5,
       "M_avg_A_per_m": [
-        4924.561765817912,
-        0.00015783850788302306,
-        2.0957058777328774e-05
+        4924.5617658179135,
+        0.0001578385077784907,
+        2.0957058602339072e-05
       ],
       "B_avg_T": [
-        0.16089805748268426,
-        5.156988686916347e-09,
-        6.847208357153374e-10
-      ],
-      "timing_s": {
-        "mesh": 0.015586800000164658,
-        "solve": 0.29398240000591613
-      }
+        0.16089805748268432,
+        5.156988683501007e-09,
+        6.847208299979752e-10
+      ]
     },
     {
       "maxh_m": 0.003,
@@ -57,18 +53,14 @@
       "iterations": 4,
       "M_avg_A_per_m": [
         4924.598245113795,
-        0.0003558135702039856,
-        0.00020754472577131982
+        0.00035581357025668456,
+        0.00020754472574423607
       ],
       "B_avg_T": [
         0.16089924935479902,
-        1.1625341501284123e-08,
-        6.781018252054655e-09
-      ],
-      "timing_s": {
-        "mesh": 0.03747450000082608,
-        "solve": 0.8353819000039948
-      }
+        1.1625341503005933e-08,
+        6.78101825116976e-09
+      ]
     },
     {
       "maxh_m": 0.0015,
@@ -77,19 +69,15 @@
       "ndof": 26025,
       "iterations": 6,
       "M_avg_A_per_m": [
-        4924.649975358902,
-        0.007363049333359745,
-        -0.015050474072488182
+        4924.6499753589005,
+        0.007363049333340028,
+        -0.015050474072483605
       ],
       "B_avg_T": [
-        0.16090093951452217,
-        2.4056969761450266e-07,
-        -4.917375713033939e-07
-      ],
-      "timing_s": {
-        "mesh": 0.18355180000071414,
-        "solve": 5.491331600002013
-      }
+        0.1609009395145221,
+        2.405696976138585e-07,
+        -4.917375713032444e-07
+      ]
     }
   ],
   "analytic_reference": {
@@ -99,14 +87,9 @@
     "scope": "low-susceptibility convergence reference"
   },
   "metrics": {
-    "last_relative_refinement_change": 1.0504349621883114e-05,
-    "analytic_relative_error": 4.508288491165034e-05,
-    "transverse_to_axial_average_ratio": 3.4022797754951344e-06
-  },
-  "timing_breakdown_s": {
-    "solve_maxh_0.0015": 5.491331600002013,
-    "solve_maxh_0.003": 0.8353819000039948,
-    "solve_maxh_0.006": 0.29398240000591613
+    "last_relative_refinement_change": 1.0504349621538116e-05,
+    "analytic_relative_error": 4.5082884911305324e-05,
+    "transverse_to_axial_average_ratio": 3.4022797754925416e-06
   },
   "checks": {
     "tet_mesh_refines_monotonically": true,

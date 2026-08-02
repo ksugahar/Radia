@@ -129,7 +129,10 @@ def solve_parallel_slab_reduced(
     off_diagonal = np.full(elements, -1.0 / h + gamma_squared * (h / 6.0), dtype=complex)
     boundary_value = complex(slab.surface_field_a_per_m)
     rhs = np.zeros(elements - 1, dtype=complex)
-    rhs[[0, -1]] -= off_diagonal[[0, -1]] * boundary_value
+    # Accumulate the two boundary contributions separately.  For the minimum
+    # two-element mesh they both address the same interior degree of freedom.
+    rhs[0] -= off_diagonal[0] * boundary_value
+    rhs[-1] -= off_diagonal[-1] * boundary_value
     try:
         from scipy.sparse import diags
         from scipy.sparse.linalg import spsolve

@@ -8,7 +8,6 @@ import math
 import platform
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -80,11 +79,8 @@ def solve_level(maxh_m: float) -> dict[str, object]:
             Pnt(+0.5 * sx, +0.5 * sy, +0.5 * sz),
         ).mat("magnetic_body")
     )
-    mesh_started = time.perf_counter()
     mesh = ng.Mesh(geometry.GenerateMesh(maxh=maxh_m))
-    mesh_duration = time.perf_counter() - mesh_started
 
-    solve_started = time.perf_counter()
     with ng.TaskManager():
         result = vim.Solve(
             mesh,
@@ -94,7 +90,6 @@ def solve_level(maxh_m: float) -> dict[str, object]:
             tol=1.0e-9,
             maxit=4000,
         )
-    solve_duration = time.perf_counter() - solve_started
     m_avg = np.asarray(result["M_avg"], dtype=float)
     b_avg = MU_0 * MU_R / (MU_R - 1.0) * m_avg
     return {
@@ -105,7 +100,6 @@ def solve_level(maxh_m: float) -> dict[str, object]:
         "iterations": int(result["iters"]),
         "M_avg_A_per_m": m_avg.tolist(),
         "B_avg_T": b_avg.tolist(),
-        "timing_s": {"mesh": mesh_duration, "solve": solve_duration},
     }
 
 
@@ -164,12 +158,6 @@ def main() -> int:
             "last_relative_refinement_change": last_relative_change,
             "analytic_relative_error": analytic_relative_error,
             "transverse_to_axial_average_ratio": transverse_ratio,
-        },
-        "timing_breakdown_s": {
-            f"solve_maxh_{level['maxh_m']}": level["timing_s"]["solve"]
-            for level in sorted(
-                levels, key=lambda item: item["timing_s"]["solve"], reverse=True
-            )
         },
         "checks": checks,
         "pass": all(checks.values()),

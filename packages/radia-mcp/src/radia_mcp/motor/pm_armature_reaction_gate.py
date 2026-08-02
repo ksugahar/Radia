@@ -26,6 +26,20 @@ def _finite(value: Any, name: str) -> float:
     return parsed
 
 
+def _nonnegative(value: Any, name: str) -> float:
+    parsed = _finite(value, name)
+    if parsed < 0.0:
+        raise ValueError(f"{name} must be nonnegative")
+    return parsed
+
+
+def _correlation(value: Any, name: str) -> float:
+    parsed = _finite(value, name)
+    if parsed < -1.0 or parsed > 1.0:
+        raise ValueError(f"{name} must lie in [-1, 1]")
+    return parsed
+
+
 def pm_armature_reaction_hdiv_hex_gate(
     summary: Mapping[str, Any],
     *,
@@ -54,19 +68,19 @@ def pm_armature_reaction_hdiv_hex_gate(
         parsed_levels.append({
             "hex_count": int(level.get("hex_element_count", 0)),
             "space": dict(level.get("discrete_space") or {}),
-            "incremental_error": _finite(
+            "incremental_error": _nonnegative(
                 level.get("delta_B_normalized_rms_difference"),
                 f"levels[{index}].delta_B_normalized_rms_difference",
             ),
-            "correlation": _finite(
+            "correlation": _correlation(
                 level.get("delta_B_waveform_correlation"),
                 f"levels[{index}].delta_B_waveform_correlation",
             ),
-            "absolute_zero_error": _finite(
+            "absolute_zero_error": _nonnegative(
                 level.get("zero_current_B_normalized_rms_difference"),
                 f"levels[{index}].zero_current_B_normalized_rms_difference",
             ),
-            "absolute_load_error": _finite(
+            "absolute_load_error": _nonnegative(
                 level.get("loaded_B_normalized_rms_difference"),
                 f"levels[{index}].loaded_B_normalized_rms_difference",
             ),
@@ -97,7 +111,7 @@ def pm_armature_reaction_hdiv_hex_gate(
         ),
         "matching_hex_refinement_strictly_increases": all(
             left < right for left, right in zip(counts, counts[1:])
-        ),
+        ) and counts[0] > 0,
         "finite_section_coil_is_reconstructed_by_tensor_quadrature": all(
             level["coil_representation"] == "finite_section_gauss_filaments"
             and level["quadrature"] == [8, 8]
@@ -189,15 +203,15 @@ def pm_absolute_demag_three_way_gate(
     fem = fem if isinstance(fem, Mapping) else {}
 
     bdm1_errors = [
-        _finite(value, f"hdiv.bdm1_source_nrms[{index}]")
+        _nonnegative(value, f"hdiv.bdm1_source_nrms[{index}]")
         for index, value in enumerate(hdiv.get("bdm1_source_nrms") or [])
     ]
     bdm2_errors = [
-        _finite(value, f"hdiv.bdm2_source_nrms[{index}]")
+        _nonnegative(value, f"hdiv.bdm2_source_nrms[{index}]")
         for index, value in enumerate(hdiv.get("bdm2_source_nrms") or [])
     ]
     fem_outer_errors = [
-        _finite(value, f"independent_fem.source_nrms_outer_p2[{index}]")
+        _nonnegative(value, f"independent_fem.source_nrms_outer_p2[{index}]")
         for index, value in enumerate(fem.get("source_nrms_outer_p2") or [])
     ]
     if len(bdm1_errors) < 3 or len(bdm2_errors) < 3:
@@ -205,16 +219,18 @@ def pm_absolute_demag_three_way_gate(
     if len(fem_outer_errors) < 3:
         raise ValueError("independent FEM outer-radius errors require at least three levels")
 
-    fem_p3_error = _finite(fem.get("source_nrms_p3"), "independent_fem.source_nrms_p3")
-    fem_p2_p3 = _finite(
+    fem_p3_error = _nonnegative(
+        fem.get("source_nrms_p3"), "independent_fem.source_nrms_p3"
+    )
+    fem_p2_p3 = _nonnegative(
         fem.get("p2_p3_same_mesh_nrms"),
         "independent_fem.p2_p3_same_mesh_nrms",
     )
-    bdm2_vs_fem = _finite(
+    bdm2_vs_fem = _nonnegative(
         hdiv.get("bdm2_final_vs_fem_nrms"),
         "hdiv.bdm2_final_vs_fem_nrms",
     )
-    relative_step = _finite(
+    relative_step = _nonnegative(
         hdiv.get("bdm2_final_relative_step"),
         "hdiv.bdm2_final_relative_step",
     )
