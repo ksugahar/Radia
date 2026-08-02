@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import json
 
+import pytest
+
 from radia_mcp.motor.pm_armature_reaction_gate import (
     pm_armature_reaction_hdiv_hex_gate,
 )
@@ -93,3 +95,18 @@ def test_mcp_tool_preserves_partial_status_and_rejects_overclaim() -> None:
     response = json.loads(motor_pm_armature_reaction_hdiv_hex_gate(json.dumps(payload)))
     assert response["status"] == "needs_attention"
     assert "scope_does_not_overclaim_retirement" in response["issues"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("delta_B_normalized_rms_difference", -0.01, "nonnegative"),
+        ("delta_B_waveform_correlation", 1.01, r"\[-1, 1\]"),
+    ],
+)
+def test_rejects_nonphysical_error_metrics(field, value, message) -> None:
+    artifact = _fixture()
+    artifact["levels"][-1][field] = value
+
+    with pytest.raises(ValueError, match=message):
+        pm_armature_reaction_hdiv_hex_gate(artifact)

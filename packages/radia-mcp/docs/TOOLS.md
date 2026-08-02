@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **895 tools** across 48 MCP servers.
+Total: **898 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -21,7 +21,7 @@ Total: **895 tools** across 48 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 6 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 6 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 52 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 55 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -616,6 +616,7 @@ Module: `radia_mcp.motor.server`
 | `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
 | `motor_force_report_method_metadata_gate` | Gate a force report using independent methods and action-reaction. |
 | `motor_force_rotation_covariance_gate` | Check that a planar force vector follows a rotated excitation/geometry. |
+| `motor_hdiv_hex_torque_gate` | Gate converged BDM1-lane HDiv-MMM motor torque on HEX meshes. |
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
@@ -629,6 +630,8 @@ Module: `radia_mcp.motor.server`
 | `motor_permanent_magnet_force_pair_gate` | Gate attraction/repulsion reversal for a facing permanent-magnet pair. |
 | `motor_phase_flux_park_alignment_gate` | Gate a PM-only three-phase flux sweep in the rotating d/q frame. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
+| `motor_pm_absolute_demag_three_way_gate` | Attribute segmented-PM absolute demag error with BDM orders and H1 FEM. |
+| `motor_pm_armature_reaction_hdiv_hex_gate` | Gate PM armature-reaction increments separately from absolute demag error. |
 | `motor_rotating_circuit_transient_gate` | Gate rotating-circuit identities and endpoint state before FFT use. |
 | `motor_status` | (no description) |
 | `motor_thermal_handoff_gate` | Validate one motor-loss table for both LPTN and 3D all-hex thermal paths. |

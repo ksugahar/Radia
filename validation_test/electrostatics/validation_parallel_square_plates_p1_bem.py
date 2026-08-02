@@ -7,7 +7,6 @@ import json
 import platform
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -82,9 +81,7 @@ def solve_level(n: int) -> dict[str, float | int]:
         np.full(len(positive), VOLTAGE_V),
         np.full(len(negative), -VOLTAGE_V),
     ]
-    started = time.perf_counter()
     result = solve_prescribed_potential_p1(vertices, triangles, potential)
-    duration = time.perf_counter() - started
     positive_ids = np.arange(len(positive), dtype=np.int64)
     negative_ids = np.arange(len(positive), len(vertices), dtype=np.int64)
     positive_charge = result.charge_on_vertices(positive_ids)
@@ -97,7 +94,6 @@ def solve_level(n: int) -> dict[str, float | int]:
         "negative_charge_c": negative_charge,
         "charge_balance_c": positive_charge + negative_charge,
         "capacitance_f": positive_charge / (2.0 * VOLTAGE_V),
-        "duration_s": duration,
     }
 
 
@@ -130,10 +126,6 @@ def main() -> int:
         "metrics": {
             "relative_last_refinement_change": relative_last_change,
             "maximum_charge_imbalance_c": max_balance,
-        },
-        "timing_breakdown_s": {
-            f"solve_n{row['subdivisions_per_side']}": row["duration_s"]
-            for row in sorted(levels, key=lambda item: item["duration_s"], reverse=True)
         },
         "checks": checks,
         "pass": all(checks.values()),

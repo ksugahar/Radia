@@ -1,10 +1,10 @@
 {
   "schema": "radia-validation-xsuite-dipole/v1",
-  "executed_at_utc": "2026-07-31T09:43:00.963271+00:00",
+  "executed_at_utc": "2026-08-02T03:29:06.603618+00:00",
   "execution_version": {
     "producer": "validation_radia_xsuite_dipole.py",
-    "radia": "4.95.29",
-    "radia_git_head": "04b37e15a6906acdaa4f5ac5bb9d0801801ab431",
+    "radia": "4.95.32",
+    "radia_git_head": "e66648879c50779c2bcd3c43ba946447ce7d2872",
     "xtrack": "0.109.1"
   },
   "case": "fixed_magnet_external_field_to_xsuite_spatial_boris",
@@ -43,13 +43,6 @@
     "magnetic_tracking_preserves_momentum": true,
     "tracking_boundary_has_no_exit": true,
     "particle_count_closes": true
-  },
-  "timing_seconds": {
-    "model_construction": 8.179999713320285e-05,
-    "zero_field_control": 0.45115769999392796,
-    "coarse_tracking": 1.670457100000931,
-    "fine_tracking": 3.308758700004546,
-    "total": 5.49094150000019
   },
   "limitations": [
     "magnetic_field_only",

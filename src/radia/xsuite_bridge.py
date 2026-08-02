@@ -203,4 +203,3 @@ def radia_magnetic_fieldmap(
 ) -> RadiaBatchFieldMap:
     """Construct a vectorized Xsuite field-map callable from a Radia object."""
     return RadiaBatchFieldMap(radia_object, evaluator=evaluator)
-

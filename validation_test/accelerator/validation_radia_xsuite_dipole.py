@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -65,26 +64,17 @@ def _run(fieldmap, n_steps: int):
 
 
 def main() -> int:
-    started = time.perf_counter()
     rad.UtiDelAll()
-    t0 = time.perf_counter()
     magnet = rad.magnet_box(
         center=[0.0, 0.0, 0.0],
         dimensions=[0.04, 0.04, 0.08],
         magnetization=[0.0, 9.5e5, 0.0],
     )
-    model_seconds = time.perf_counter() - t0
 
     fieldmap = radia_magnetic_fieldmap(magnet)
-    t0 = time.perf_counter()
     off_particles, off = _run(_zero_field, 1200)
-    zero_seconds = time.perf_counter() - t0
-    t0 = time.perf_counter()
     on_coarse_particles, on_coarse = _run(fieldmap, 600)
-    coarse_seconds = time.perf_counter() - t0
-    t0 = time.perf_counter()
     on_fine_particles, on_fine = _run(fieldmap, 1200)
-    fine_seconds = time.perf_counter() - t0
 
     off_xy = np.column_stack((off_particles.x, off_particles.y))
     coarse_xy = np.column_stack((on_coarse_particles.x, on_coarse_particles.y))
@@ -125,13 +115,6 @@ def main() -> int:
         "maximum_relative_momentum_drift": momentum_drift,
         "boundary_exit_events": on_fine["boundary_exit_events"],
         "checks": checks,
-        "timing_seconds": {
-            "model_construction": model_seconds,
-            "zero_field_control": zero_seconds,
-            "coarse_tracking": coarse_seconds,
-            "fine_tracking": fine_seconds,
-            "total": time.perf_counter() - started,
-        },
         "limitations": [
             "magnetic_field_only",
             "electrostatic_acceleration_not_yet_in_this_bridge",
@@ -147,4 +130,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

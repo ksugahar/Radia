@@ -31,6 +31,15 @@ def _relative_l2(left: Sequence[float], right: Sequence[float]) -> float:
     return numerator / denominator
 
 
+def _positive_integer(value: Any, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    parsed = int(value)
+    if parsed <= 0 or parsed != float(value):
+        raise ValueError(f"{name} must be a positive integer")
+    return parsed
+
+
 def hdiv_hex_motor_torque_gate(
     summary: Mapping[str, Any],
     *,
@@ -55,12 +64,21 @@ def hdiv_hex_motor_torque_gate(
             level.get("torque_virtual_work_Nm"),
             f"levels[{index}].torque_virtual_work_Nm",
         )
+        angles = _finite_vector(level.get("angles_deg"), f"levels[{index}].angles_deg")
         if len(moment) != len(virtual):
             raise ValueError("moment and virtual-work torque arrays must have equal length")
+        if len(moment) != len(angles):
+            raise ValueError("angle and torque arrays must have equal length")
+        if any(left >= right for left, right in zip(angles, angles[1:])):
+            raise ValueError("each angle grid must be strictly increasing")
         parsed_levels.append(
             {
-                "hex_element_count": int(level.get("hex_element_count", 0)),
-                "ndof": int(level.get("ndof", 0)),
+                "hex_element_count": _positive_integer(
+                    level.get("hex_element_count"),
+                    f"levels[{index}].hex_element_count",
+                ),
+                "ndof": _positive_integer(level.get("ndof"), f"levels[{index}].ndof"),
+                "angles": angles,
                 "moment": moment,
                 "virtual": virtual,
                 "space": dict(level.get("discrete_space") or {}),
@@ -105,6 +123,9 @@ def hdiv_hex_motor_torque_gate(
         ),
         "all_levels_use_bdm1_project_lane_on_hex": all(
             level["space"] == _SPACE for level in parsed_levels
+        ),
+        "all_levels_share_the_same_angle_grid": all(
+            level["angles"] == final["angles"] for level in parsed_levels
         ),
         "hex_elements_and_dofs_strictly_increase": monotone,
         "operator_built_once_per_level": all(
