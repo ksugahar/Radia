@@ -109,6 +109,22 @@
       "notes": "MATLAB ode113 and SciPy DOP853 integrate the same SI momentum-state relativistic Lorentz equation and expose the same symmetric two-momentum exit-dispersion criterion."
     },
     {
+      "id": "harmonic-balance-python",
+      "patterns": ["harmonic_balance.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/harmonicBalance.m"],
+      "notes": "Waveform helpers and batch solves have a named fallback. Python callable composition remains an explicit batch boundary and is forbidden per Simulink step."
+    },
+    {
+      "id": "xsuite-bridge",
+      "patterns": ["xsuite_bridge.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/xsuiteBridge.m"],
+      "notes": "Xtrack particles and Boris integrators remain Python ecosystem objects; MATLAB's independent native Lorentz tracker remains available through radia.tracking."
+    },
+    {
       "id": "mesh-cad-io",
       "patterns": ["cubit_bem_extractor.py", "gmsh_post_export.py", "netgen_mesh_import.py", "peec_mesh_import.py", "setup_cubit.py", "step_mesh_builder.py"],
       "classification": "python-fallback",

@@ -39,6 +39,28 @@ verifyEqual(testCase, result.backend, "python-fallback");
 verifyEqual(testCase, result.python.execution_mode, "InProcess");
 end
 
+function testHarmonicBalanceHasNamedFallback(testCase)
+result = radia.python.harmonicBalance("periodic_phase", {8});
+verifyEqual(testCase, result.value, (0:7) * pi / 4, "AbsTol", 2e-15);
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.harmonic_balance");
+end
+
+function testXsuiteBridgeHasNamedFallback(testCase)
+boundary = radia.python.xsuiteBridge( ...
+    "AxisAlignedBox", {[-1, -1, -1], [1, 1, 1]});
+x = [0; 0; 2];
+y = zeros(3, 1);
+z = zeros(3, 1);
+result = radia.python.xsuiteBridge( ...
+    "first_box_exit_events", {x, y, z, boundary.value});
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.xsuite_bridge");
+verifyEqual(testCase, result.value.particle_index, 0);
+verifyEqual(testCase, result.value.step_index, 2);
+verifyEqual(testCase, result.value.position_m, {2, 0, 0});
+end
+
 function testExternalPythonUsesChildSafeDllPathAndRestoresMatlabPath(testCase)
 if ~ispc
     return

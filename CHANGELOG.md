@@ -14,7 +14,8 @@ Released 2026-08-02.
   MEX object handles, with lifecycle, saved-model, library, and package tests.
 - Added a Radia-to-Xsuite field bridge, a continuous-P1 electrostatic surface
   BEM solver, and an analytic rectangular-prism demagnetizing-factor reference
-  with stored convergence evidence.
+  with stored convergence evidence. Named MATLAB batch fallbacks cover the
+  Xsuite bridge and callback-driven harmonic-balance API.
 - Strengthened reduced Eddy-current modeling with physical vector-potential
   excitation, symmetric coordinate equilibration, and a finite-slab solver;
   added residual-closed harmonic balance for hysteretic periodic states.
