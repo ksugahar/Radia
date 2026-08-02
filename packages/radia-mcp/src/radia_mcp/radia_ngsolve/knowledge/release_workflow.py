@@ -50,7 +50,7 @@ to PyPI and verifies the release on four machines:
 | cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.pyd + check-vol CLI            |
 | radia-mcp         | `radia-mcp-v`           | MCP servers (radia-ngsolve, cubit, build123d,     |
 |                   |                         | gmsh, electromagnet, ih, peec, ...)               |
-| Radia Simulink library | Radia GitHub Release asset | `.slx`, MATLAB support, standalone MEX, MEX S-Functions, runtime DLLs, manifest and checksums |
+| Radia Simulink library | Radia GitHub Release asset | `.slx`, MATLAB support, Level-2 MATLAB S-Functions, standalone MEX handles, runtime DLLs, manifest and checksums |
 
 The packages may be released independently when only one changed, but
 the release gate treats the deployment as QUD: two editable machines
@@ -108,7 +108,7 @@ table is the AI-readable summary.
 The production human interface is released as a full Radia Simulink library
 ZIP. Build it only from the final pushed commit. The package contains
 `radia_simulink_library.slx`, application/support `.m` and `.slx` files,
-standalone `radia_mex`, native IH MEX S-Functions, required runtime DLLs,
+standalone `radia_mex`, readable IH Level-2 MATLAB S-Functions, required runtime DLLs,
 `manifest.json`, and an external `SHA256SUMS.txt`.
 
 ```powershell

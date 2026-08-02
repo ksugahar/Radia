@@ -58,9 +58,9 @@ if ~isempty(missing)
         "Native IH configuration is missing: %s", strjoin(missing, ", "));
 end
 if ~isfield(config, "backend") || ...
-        string(config.backend) ~= "native-mex-sfunction"
+        string(config.backend) ~= "matlab-level2+radia-mex-handles"
     error("radia:simulink:IHConfigBackend", ...
-        "IH configuration backend must be native-mex-sfunction.");
+        "IH configuration backend must be matlab-level2+radia-mex-handles.");
 end
 diagnosticOnly = isfield(config, "diagnostic_only") && ...
     logical(config.diagnostic_only);

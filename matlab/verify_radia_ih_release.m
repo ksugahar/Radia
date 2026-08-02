@@ -1,16 +1,24 @@
 function report = verify_radia_ih_release()
 %VERIFY_RADIA_IH_RELEASE Verify an extracted native IH preview package.
 matlabRoot = fileparts(mfilename("fullpath"));
-addpath(matlabRoot, "-begin");
-cleanupPath = onCleanup(@() rmpath(matlabRoot));
+pathWasPresent = isPathEntry(matlabRoot);
+if ~pathWasPresent
+    addpath(matlabRoot, "-begin");
+end
+cleanupPath = onCleanup(@() removePathIfAdded(matlabRoot, pathWasPresent));
 
 required = ["radia_ih.slx","IH_VERSION","install_radia_ih.m", ...
-    "radia_ih_eddy_sfun." + mexext, ...
-    "radia_ih_thermal_sfun." + mexext];
+    "radia_mex." + mexext, "radia_ih_eddy_sfun.m", ...
+    "radia_ih_thermal_sfun.m"];
 missing = required(~isfile(fullfile(matlabRoot, required)));
 if ~isempty(missing)
     error("radia:simulink:IHReleaseMissing", ...
         "IH release is missing: %s", strjoin(missing, ", "));
+end
+setupInfo = radia.setup(RequireMex=true, Force=true);
+if ~setupInfo.mex_available
+    error("radia:simulink:IHReleaseMex", ...
+        "The IH preview package did not load radia_mex.");
 end
 radia.simulink.requireIHNativeRuntime();
 
@@ -22,13 +30,13 @@ if string(get_param("radia_ih/Eddy", "FunctionName")) ~= ...
         string(get_param("radia_ih/Thermal", "FunctionName")) ~= ...
         "radia_ih_thermal_sfun"
     error("radia:simulink:IHReleaseBackend", ...
-        "radia_ih.slx is not wired to both native MEX S-Functions.");
+        "radia_ih.slx is not wired to both Level-2 MATLAB S-Functions.");
 end
 
 workspace = get_param("radia_ih", "ModelWorkspace");
 config = workspace.getVariable("radia_ih_config");
 if ~isfield(config, "diagnostic_only") || ~config.diagnostic_only || ...
-        string(config.backend) ~= "native-mex-sfunction"
+        string(config.backend) ~= "matlab-level2+radia-mex-handles"
     error("radia:simulink:IHReleaseConfig", ...
         "The tracked model must contain the native diagnostic configuration.");
 end
@@ -55,7 +63,7 @@ report = struct( ...
     "passed", true, ...
     "ih_version", strtrim(string(fileread(fullfile(matlabRoot,"IH_VERSION")))), ...
     "matlab_release", string(version("-release")), ...
-    "backend", "native-mex-sfunction", ...
+    "backend", "matlab-level2+radia-mex-handles", ...
     "python_fallback", false, ...
     "sample_time_s", config.sample_time_s, ...
     "final_heat_density_W_per_m3", heat(end), ...
@@ -69,5 +77,15 @@ end
 function closeIfLoaded(name)
 if bdIsLoaded(name)
     close_system(name, 0);
+end
+end
+
+function present = isPathEntry(folder)
+present = any(strcmpi(split(string(path), pathsep), string(folder)));
+end
+
+function removePathIfAdded(folder, pathWasPresent)
+if ~pathWasPresent && isPathEntry(folder)
+    rmpath(folder);
 end
 end

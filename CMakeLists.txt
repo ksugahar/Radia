@@ -686,6 +686,8 @@ if(RADIA_BUILD_MATLAB_MEX)
 		R2018a
 		SRC
 			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_ih_mex_commands.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_runtime.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
 			${CORE_DIR}/rad_cln.cpp
@@ -701,52 +703,9 @@ if(RADIA_BUILD_MATLAB_MEX)
 			# RADIA_MEX_NO_PYTHON feature below.
 			${RADIA_LIB_SOURCES}
 	)
-	matlab_add_mex(
-		NAME radia_ih_thermal_sfun
-		R2018a
-		SRC
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal_sfun.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
-	)
-	matlab_add_mex(
-		NAME radia_ih_eddy_sfun
-		R2018a
-		SRC
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_eddy_sfun.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
-	)
-	target_include_directories(radia_ih_eddy_sfun PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
-		${Matlab_ROOT_DIR}/simulink/include
-	)
-	target_compile_features(radia_ih_eddy_sfun PRIVATE cxx_std_17)
-	if(MSVC)
-		target_compile_options(radia_ih_eddy_sfun PRIVATE /O2 /W3)
-		target_link_options(radia_ih_eddy_sfun PRIVATE /NODEFAULTLIB:LIBCMT)
-	endif()
-	add_custom_command(TARGET radia_ih_eddy_sfun POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"$<TARGET_FILE:radia_ih_eddy_sfun>"
-			"${CMAKE_CURRENT_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:radia_ih_eddy_sfun>"
-		COMMENT "Copying native IH Eddy S-Function to matlab"
-	)
-	target_include_directories(radia_ih_thermal_sfun PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
-		${Matlab_ROOT_DIR}/simulink/include
-	)
-	target_compile_features(radia_ih_thermal_sfun PRIVATE cxx_std_17)
-	if(MSVC)
-		target_compile_options(radia_ih_thermal_sfun PRIVATE /O2 /W3)
-		target_link_options(radia_ih_thermal_sfun PRIVATE /NODEFAULTLIB:LIBCMT)
-	endif()
-	add_custom_command(TARGET radia_ih_thermal_sfun POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"$<TARGET_FILE:radia_ih_thermal_sfun>"
-			"${CMAKE_CURRENT_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:radia_ih_thermal_sfun>"
-		COMMENT "Copying native IH Thermal S-Function to matlab"
-	)
 	target_include_directories(radia_mex PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src/matlab
+		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
 		${CORE_DIR}
 		${LIB_DIR}
 		${ACOUSTIC_DIR}

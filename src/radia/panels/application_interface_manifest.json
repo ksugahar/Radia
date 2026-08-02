@@ -84,8 +84,8 @@
       "state": "active-simulink-block",
       "block": "radia_simulink_library/Applications/Induction Heating",
       "design": "radia.ih_design.IHDesignSpec",
-      "backend": "native-mex-sfunction",
-      "backend_policy": "Eddy and Thermal execute through native C/C++ MEX S-Functions; Python is not a production fallback.",
+      "backend": "matlab-level2+radia-mex-handles",
+      "backend_policy": "Readable Level-2 MATLAB Eddy and Thermal S-Functions own ports and lifecycle; separate checked radia_mex object handles own native numerical state. Initialization may locate NGSolve runtime DLLs through the configured Python installation, but Python is not a per-step fallback.",
       "notebook": null,
       "headless": [
         "src/radia/panels/calc_inductance.py",

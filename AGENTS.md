@@ -168,10 +168,19 @@ production interface for Radia applications is a masked block in the single
   canonical `.m` generator, a direct load/update regression test, and an
   explicit backend declaration. It demonstrates block composition and signal
   wiring; it does not replace the result-bearing docs notebook that owns the
-  numerical evidence. A production IH sample must use native Eddy/Thermal
-  MEX S-Functions and must not be a LUT or lumped-state-space surrogate.
+  numerical evidence. A production IH sample must use readable Level-2 MATLAB
+  Eddy/Thermal S-Functions backed by native object-handle MEX kernels and must
+  not be a LUT or lumped-state-space surrogate.
 - Blocks must delegate to tested `radia.*` APIs, MEX/ROM handles, or validated
   headless application entry points. They must not reimplement solver logic.
+- Every operation exposed through Radia's Python API MUST also be possible from
+  MATLAB with the same numerical meaning, state transition, error behavior, and
+  artifact contract. MATLAB may reach the shared C++ kernel through a standalone
+  MEX ABI or use an explicit Python fallback at a non-step-time boundary, but it
+  must not provide a reduced or behaviorally different substitute. When users
+  configure, generate, inject, or observe time-domain waveforms, prefer a
+  Level-2 MATLAB S-Function so the signal flow, sampling, state lifecycle, and
+  diagnostics remain visible and editable in Simulink.
 - Radia follows the same high-level-orchestration / narrow-native-kernel design
   used by NGSolve's Python / pybind11 boundary. The default Simulink execution
   layer is a readable Level-2 MATLAB S-Function; Level-1 S-Functions are
@@ -187,8 +196,8 @@ production interface for Radia applications is a masked block in the single
   code, zero-copy native state, native resource ownership tied directly to the
   Simulink engine, or reproducible end-to-end measurements demonstrate a
   material benefit that cannot be obtained through the standalone MEX ABI.
-  IH Eddy/Thermal remains an explicit native MEX S-Function exception. Every
-  block declares its backend and passes lifecycle and numerical-parity tests;
+  IH Eddy/Thermal follows this default through separate native object handles.
+  Every block declares its backend and passes lifecycle and numerical-parity tests;
   MATLAB and C++ implementations must never silently substitute for one another.
 - When conversion or reconstruction of a native solver object would materially
   affect performance, use an explicit handle ABI: `create` returns an opaque,
@@ -198,11 +207,12 @@ production interface for Radia applications is a masked block in the single
   loudly. A MATLAB handle class or Level-2 MATLAB S-Function owns the token and
   guarantees cleanup through `delete` / `Terminate` / `onCleanup`; never expose
   a raw pointer as the public ABI or rely only on `mexLock` for lifetime safety.
-- IH is an explicit exception to the generic fallback rule: its production
-  Eddy and Thermal path is native C/C++ MEX S-Function only. Python fallback
-  is not permitted for IH production execution. Lightweight constitutive
-  blocks such as the BH evaluator may use a MATLAB S-Function, but they must
-  remain separate from the native Eddy/Thermal numerical kernels.
+- IH production uses Level-2 MATLAB S-Functions for ports and lifecycle, with
+  independent native C/C++ MEX object handles for Eddy and Thermal numerical
+  state. Eddy receives current, angle, and temperature distribution and emits
+  heat distribution; Thermal receives that heat distribution, ambient
+  temperature, and angle and emits the accepted temperature distribution.
+  Python fallback is not permitted per time step.
 - The initial application-block backend may be the validated Python/headless
   CLI, launched only on an explicit trigger or update. MEX/ROM is an optional
   later backend promotion, not a prerequisite for the Simulink interface. Move
