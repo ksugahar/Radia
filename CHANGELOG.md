@@ -5,6 +5,23 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.34 - Stream-function and topology design workflows
+
+Released 2026-08-03.
+
+- Added weighted and bounded Abe/DUCAS current-potential design with checked
+  TSVD modes, physical-field residuals, and shield-aware stream-function
+  application integration.
+- Added native candidate-Schur reduction for HDiv magnetic-material topology
+  design, including rank-zero handling, signed addition/removal moves,
+  through-thickness coupling groups, and checked full-solve acceptance.
+- Added topology-preserving sheet-metal shape optimization, isochronous
+  combined-function optics, five-momentum particle tracking, and matching
+  native MATLAB tracking entry points plus explicit batch fallback APIs.
+- Added GMSH topology/shape animation export and hardened coplanar panel-field
+  derivatives, solver convergence checks, finite-input validation, and focused
+  Python/MATLAB regression coverage.
+
 ## 4.95.33 - Native IH lifecycle and electromagnetic design bridges
 
 Released 2026-08-02.
