@@ -5,6 +5,7 @@ arguments
 end
 matlabRoot = fileparts(mfilename("fullpath"));
 addpath(matlabRoot);
+radia.setup(RequireMex=true, Force=true);
 radia.simulink.requireIHNativeRuntime();
 model = radia.simulink.openIH(Open=options.Open);
 end

@@ -4,9 +4,11 @@ Radia's final human-facing application interface is the single **Radia**
 Simulink library. Its Electromagnet, PCB PEEC, Motor, Stream Function, and
 Induction Heating blocks share one Library Browser entry. Electromagnet, PCB
 PEEC, Motor, and Stream Function launch the validated Python/headless CLI once
-on an explicit rising trigger. Induction Heating instead uses separate native
-Eddy and Thermal MEX S-Functions and has no Python fallback in its simulation
-loop.
+on an explicit rising trigger. Induction Heating instead uses separate readable
+Level-2 MATLAB Eddy and Thermal S-Functions backed by checked `radia_mex`
+object handles and has no Python fallback in its simulation loop. Initialization
+uses the configured Python installation to locate the shared NGSolve runtime;
+the per-step Eddy and Thermal paths remain native.
 
 The additional `Applications/Stream Function Optimization` subsystem keeps
 that explicit batch boundary and adds MATLAB-native MMA/SQP over preassembled
@@ -443,6 +445,11 @@ The preview accepts linear or temperature-linearized operator data only.
 Nonlinear BH iteration is not implemented and `bh_mode="nonlinear"` fails
 loudly rather than substituting the dense linear solve.
 
+The Level-2 MATLAB wrappers own typed ports, fixed sample time, `Outputs` /
+`Update` ordering, initialization, and termination. The independently callable
+`radia_mex('ih.*', ...)` commands own only native numerical state, which keeps
+the fast kernel directly testable outside Simulink.
+
 The first distributable native IH package is a preview runtime. Its model ships
 with a one-DOF diagnostic configuration and accepts checked MAT/JSON files that
 contain preassembled native operators. `radia.simulink.makeIHNativeConfig`
@@ -825,9 +832,9 @@ environment = radia.rl.Environment( ...
 ```
 
 The callbacks own an explicit native solver state and advance it exactly once
-per environment step. IH production models use the distributed Eddy and
-Thermal MEX S-Functions; the retired lumped thermal plant and IH LUT helpers
-are not RL backends. `toFunctionEnv` connects the same checked callback
+per environment step. IH production models use the distributed Level-2 MATLAB
+Eddy and Thermal S-Functions with standalone MEX handles; the retired lumped
+thermal plant and IH LUT helpers are not RL backends. `toFunctionEnv` connects the same checked callback
 contract to MATLAB Reinforcement Learning Toolbox when it is installed.
 
 ## Native NGSolve field and matrix handles
@@ -876,7 +883,7 @@ materialized in the optimization loop.
 ## Binding policy
 
 The executable parity audit compares three pybind11 surfaces with the
-`radia_mex` command table: 94 public top-level names, 27 underscore-prefixed
+`radia_mex` command table: 102 public top-level names, 27 underscore-prefixed
 numerical kernels, and 119 stateful class members. All 240 entries are covered
 by the current 324-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`

@@ -131,8 +131,9 @@ verifyEqual(testCase,data.schema,"radia.simulink.material-dictionary.v1");
 end
 
 function testLibraryContainsTypedMaterialBlock(testCase)
-assumeTrue(testCase,exist("radia_ih_eddy_sfun."+mexext,"file") == 3, ...
-    "The packaged native IH MEX runtime is required to rebuild the library.");
+assumeTrue(testCase,exist("radia_mex","file") == 3 && ...
+    exist("radia_ih_eddy_sfun","file") == 2, ...
+    "The IH MEX ABI and Level-2 MATLAB wrappers are required to rebuild the library.");
 root = freshRoot();
 cleanup = onCleanup(@() cleanupLibrary(root)); %#ok<NASGU>
 path = radia.simulink.buildLibrary(OutputDirectory=root);

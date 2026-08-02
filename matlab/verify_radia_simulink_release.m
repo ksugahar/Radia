@@ -1,13 +1,16 @@
 function report = verify_radia_simulink_release()
 %VERIFY_RADIA_SIMULINK_RELEASE Verify an extracted full Radia library package.
 matlabRoot = fileparts(mfilename("fullpath"));
-addpath(matlabRoot, "-begin");
-cleanupPath = onCleanup(@() removePathIfPresent(matlabRoot));
+pathWasPresent = isPathEntry(matlabRoot);
+if ~pathWasPresent
+    addpath(matlabRoot, "-begin");
+end
+cleanupPath = onCleanup(@() removePathIfAdded(matlabRoot, pathWasPresent));
 
 required = ["radia_simulink_library.slx", "radia_ih.slx", ...
     "radia_streamfunction_optimization.slx", "install_radia_simulink.m", ...
-    "radia_mex." + mexext, "radia_ih_eddy_sfun." + mexext, ...
-    "radia_ih_thermal_sfun." + mexext];
+    "radia_mex." + mexext, "radia_ih_eddy_sfun.m", ...
+    "radia_ih_thermal_sfun.m"];
 missing = required(~isfile(fullfile(matlabRoot, required)));
 if ~isempty(missing)
     error("radia:simulink:ReleaseMissing", ...
@@ -73,7 +76,6 @@ end
 clear cleanupHandle
 
 ih = verify_radia_ih_release();
-addpath(matlabRoot, "-begin");
 report = struct( ...
     "passed", true, ...
     "matlab_release", string(version("-release")), ...
@@ -102,9 +104,12 @@ if bdIsLoaded(name)
 end
 end
 
-function removePathIfPresent(folder)
-entries = split(string(path), pathsep);
-if any(strcmpi(entries, string(folder)))
+function present = isPathEntry(folder)
+present = any(strcmpi(split(string(path), pathsep), string(folder)));
+end
+
+function removePathIfAdded(folder, pathWasPresent)
+if ~pathWasPresent && isPathEntry(folder)
     rmpath(folder);
 end
 end

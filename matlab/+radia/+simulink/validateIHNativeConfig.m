@@ -20,10 +20,12 @@ for name = required
             "Native IH configuration is missing required field '%s'.", name);
     end
 end
-if string(config.schema) ~= "radia.ih.simulink.native_sfunction.v1"
+schema = string(config.schema);
+if ~isscalar(schema) || schema ~= "radia.ih.simulink.native_sfunction.v1"
     error("radia:simulink:IHConfigSchema", ...
         "Native IH configuration schema must be radia.ih.simulink.native_sfunction.v1.");
 end
+config.schema = char(schema);
 
 nUnknown = positiveInteger(config.n_eddy_unknown, "n_eddy_unknown");
 nHeat = positiveInteger(config.n_heat, "n_heat");
@@ -38,9 +40,9 @@ if mode ~= "linear"
         "The IH native preview supports only bh_mode='linear'.");
 end
 if isfield(config, "backend") && ...
-        string(config.backend) ~= "native-mex-sfunction"
+        string(config.backend) ~= "matlab-level2+radia-mex-handles"
     error("radia:simulink:IHConfigBackend", ...
-        "IH configuration backend must be native-mex-sfunction.");
+        "IH configuration backend must be matlab-level2+radia-mex-handles.");
 end
 if isfield(config, "python_fallback") && logical(config.python_fallback)
     error("radia:simulink:IHConfigBackend", ...
@@ -135,7 +137,7 @@ config = optionalPositive(config, "thermal_tolerance", 1e-10, false);
 config = optionalPositive(config, "thermal_max_iterations", 500, true);
 config = optionalNonnegative(config, "convection_W_per_m2K", 0);
 config.configured = true;
-config.backend = "native-mex-sfunction";
+config.backend = 'matlab-level2+radia-mex-handles';
 config.python_fallback = false;
 config.distributed_field = true;
 config.surrogate = false;

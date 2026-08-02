@@ -21,6 +21,7 @@
 #include "rad_average_field.h"
 #include "rad_equivalence_source.h"
 #include "rad_stream_function.h"
+#include "radia_ih_mex_commands.h"
 
 #include <core/taskmanager.hpp>
 #include <bdbequations.hpp>
@@ -798,6 +799,7 @@ void CheckRadia(int error_code) {
 }
 
 void Cleanup() {
+    CleanupIHHandles();
     std::lock_guard<std::mutex> guard(registry_mutex);
     energy_registry.clear();
     bem_registry.clear();
@@ -1404,6 +1406,14 @@ mxArray* Commands() {
         "simulink.state_space.restore",
         "simulink.state_space.reset",
         "simulink.state_space.destroy",
+        "ih.eddy.create",
+        "ih.eddy.output",
+        "ih.eddy.destroy",
+        "ih.thermal.create",
+        "ih.thermal.output",
+        "ih.thermal.update",
+        "ih.thermal.reset",
+        "ih.thermal.destroy",
         "hcurl.eddy_cln.native_basis",
         "hcurl.topopt.operator.create", "hcurl.topopt.operator.destroy",
         "hcurl.topopt.operator.info", "hcurl.topopt.operator.matvec",
@@ -1555,25 +1565,31 @@ mxArray* Commands() {
 
 void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     CheckArity(nrhs, 1, nlhs, 1, "info = radia_mex('api.info')");
-    const char* fields[] = {"api_version", "handle_count", "taskmanager_max_threads"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 3, fields);
+    const char* fields[] = {
+        "api_version", "handle_count", "ih_handle_count",
+        "taskmanager_max_threads"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 4, fields);
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
+    std::size_t base_count = 0;
     {
         std::lock_guard<std::mutex> guard(registry_mutex);
-        mxSetField(plhs[0], 0, "handle_count",
-                   mxCreateDoubleScalar(static_cast<double>(energy_registry.size() +
-                                                           bem_registry.size() +
-                                                           peec_registry.size() +
-                                                           charge_gram_registry.size() +
-                                                           charge_gram_derivative_registry.size() +
-                                                           hcurl_topology_registry.size() +
-                                                           field_registry.size() +
-                                                           planar_registry.size() +
-                                                           coefficient_registry.size() +
-                                                           gridfunction_registry.size() +
-                                                           vector_registry.size() +
-                                                           state_space_registry.size())));
+        base_count =
+            energy_registry.size() + bem_registry.size() +
+            peec_registry.size() + charge_gram_registry.size() +
+            charge_gram_derivative_registry.size() +
+            hcurl_topology_registry.size() + field_registry.size() +
+            planar_registry.size() + coefficient_registry.size() +
+            gridfunction_registry.size() + linear_form_registry.size() +
+            vector_registry.size() + mesh_registry.size() +
+            fespace_registry.size() + bilinear_form_registry.size() +
+            matrix_registry.size() + solver_registry.size() +
+            state_space_registry.size();
     }
+    const std::size_t ih_count = IHHandleCount();
+    mxSetField(plhs[0], 0, "handle_count", mxCreateDoubleScalar(
+        static_cast<double>(base_count + ih_count)));
+    mxSetField(plhs[0], 0, "ih_handle_count",
+               mxCreateDoubleScalar(static_cast<double>(ih_count)));
     mxSetField(plhs[0], 0, "taskmanager_max_threads",
                mxCreateDoubleScalar(ngcore::TaskManager::GetMaxThreads()));
 }
@@ -9806,6 +9822,8 @@ bool DispatchChargeGramCreate(const std::string& command, int nlhs,
 
 void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
               const mxArray* prhs[]) {
+    if (DispatchIHCommand(command, nlhs, plhs, nrhs, prhs))
+        return;
     if (command == "axifem.q1_magnetic_element_matrices") {
         AxiFEMQ1MagneticElementMatrices(nlhs, plhs, nrhs, prhs);
         return;

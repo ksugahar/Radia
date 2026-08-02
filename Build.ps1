@@ -14,7 +14,7 @@
 # Options:
 #   -Rebuild    Clean build directory before building
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
-#   -MatlabMexOnly  Configure and build radia_mex plus native IH MEX S-Functions
+#   -MatlabMexOnly  Configure and build the shared radia_mex native gateway
 #   -Test       Run source-tree import test + pytest after build
 #   -Verbose    Show detailed build output
 #
@@ -252,7 +252,7 @@ if /I "%MATLAB_MEX_ONLY%"=="True" (
     echo ========================================
     echo   Building MATLAB MEX targets
     echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target radia_mex radia_ih_eddy_sfun radia_ih_thermal_sfun -j
+    "$CMAKE_EXE" --build . --config Release --target radia_mex -j
     if errorlevel 1 (
         echo ERROR: MATLAB MEX target build failed
         exit /b 1
@@ -399,9 +399,7 @@ try {
     }
     if ($MatlabMexOnly) {
         $RequiredMexArtifacts = @(
-            "$PROJECT_DIR\matlab\radia_mex.mexw64",
-            "$PROJECT_DIR\matlab\radia_ih_eddy_sfun.mexw64",
-            "$PROJECT_DIR\matlab\radia_ih_thermal_sfun.mexw64"
+            "$PROJECT_DIR\matlab\radia_mex.mexw64"
         )
         $MissingMexArtifacts = $RequiredMexArtifacts | Where-Object { -not (Test-Path $_) }
         if ($MissingMexArtifacts) {

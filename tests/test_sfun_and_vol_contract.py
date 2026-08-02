@@ -4,48 +4,38 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_native_sfunctions_have_lifecycle_hooks_and_error_status():
-    for name in ("radia_ih_eddy_sfun.cpp", "radia_ih_thermal_sfun.cpp"):
-        text = (ROOT / "src" / "radia" / "simulink" / name).read_text(encoding="utf-8")
-        assert "mdlStart" in text
-        assert "mdlTerminate" in text
-        assert "ssSetErrorStatus" in text
-        assert "static thread_local char message" in text
-        assert "ssSetErrorStatus(S, error.what())" not in text
-        assert "SS_OPTION_EXCEPTION_FREE_CODE" in text
-    thermal = (ROOT / "src" / "radia" / "simulink" / "radia_ih_thermal_sfun.cpp").read_text(
-        encoding="utf-8"
-    )
-    assert "mdlUpdate" in thermal
-    outputs = thermal.split("static void mdlOutputs", 1)[1].split("#define MDL_UPDATE", 1)[0]
-    assert "advance_thermal" not in outputs
-    assert "ssSetInputPortDirectFeedThrough(S, port, 0)" in thermal
+def test_level2_sfunctions_own_native_handle_lifecycle():
+    package = ROOT / "matlab" / "+radia" / "+simulink"
+    for name, prefix in (("ihEddySFunction.m", "ih.eddy"),
+                         ("ihThermalSFunction.m", "ih.thermal")):
+        text = (package / name).read_text(encoding="utf-8")
+        assert 'RegBlockMethod("Start"' in text
+        assert 'RegBlockMethod("Terminate"' in text
+        assert f"'{prefix}.create'" in text
+        assert f"'{prefix}.destroy'" in text
+        assert "native_handle_low" in text and "native_handle_high" in text
+    thermal = (package / "ihThermalSFunction.m").read_text(encoding="utf-8")
+    assert 'RegBlockMethod("Update"' in thermal
+    assert "DirectFeedthrough = false" in thermal
 
 
 def test_thermal_sfunction_updates_once_per_discrete_step_and_transports_rotation():
-    text = (
-        ROOT / "src" / "radia" / "simulink" / "radia_ih_thermal_sfun.cpp"
-    ).read_text(encoding="utf-8")
-    outputs = text.split("static void mdlOutputs", 1)[1].split("#define MDL_UPDATE", 1)[0]
-    update = text.split("static void mdlUpdate", 1)[1].split("static void mdlTerminate", 1)[0]
-    assert "advance_thermal" not in outputs
-    assert "advance_thermal" in update
-    assert "transport_periodic" in update
-    assert "ssSetInputPortDirectFeedThrough(S, port, 0)" in text
-    assert "ssSetDWorkUsedAsDState(S, 0, 1)" in text
-    assert "mdlInitializeConditions" in text
+    wrapper = (ROOT / "matlab" / "+radia" / "+simulink" / "ihThermalSFunction.m").read_text(encoding="utf-8")
+    runtime = (ROOT / "src" / "radia" / "simulink" / "radia_ih_runtime.cpp").read_text(encoding="utf-8")
+    outputs = wrapper.split("function outputs", 1)[1].split("function update", 1)[0]
+    update = wrapper.split("function update", 1)[1].split("function terminate", 1)[0]
+    assert "ih.thermal.update" not in outputs
+    assert "ih.thermal.update" in update
+    assert "advance_thermal" in runtime
+    assert "transport_periodic" in runtime
+    assert "initializeConditions" in wrapper
 
 
 def test_eddy_sfunction_rotates_heat_and_rejects_implicit_angle_support():
-    text = (
-        ROOT / "src" / "radia" / "simulink" / "radia_ih_eddy_sfun.cpp"
-    ).read_text(encoding="utf-8")
+    text = (ROOT / "src" / "radia" / "simulink" / "radia_ih_runtime.cpp").read_text(encoding="utf-8")
     assert "transport_periodic" in text
-    assert "-(angle - c->angle_origin_rad)" in text
-    assert "rotation_mode is 'none'" in text
-    assert "heat_cell_weights" in text
-    assert "does not yet implement nonlinear BH iteration" in text
-    assert "must contain finite values" in text
+    assert "-(angle - config_.angle_origin_rad)" in text
+    assert "changing angle requires periodic rotation" in text
 
 
 def test_vol_checker_is_a_native_simulink_preflight_dependency():
@@ -56,27 +46,17 @@ def test_vol_checker_is_a_native_simulink_preflight_dependency():
 
 
 def test_native_ih_rotation_is_applied_to_both_fields():
-    eddy = (ROOT / "src" / "radia" / "simulink" / "radia_ih_eddy_sfun.cpp").read_text(
-        encoding="utf-8"
-    )
-    thermal = (
-        ROOT / "src" / "radia" / "simulink" / "radia_ih_thermal_sfun.cpp"
-    ).read_text(encoding="utf-8")
-    assert "transport_periodic(" in eddy
-    assert "-(angle - c->angle_origin_rad)" in eddy
-    assert "angle[0] - context->state.previous_angle_rad" in thermal
-    assert "transport_periodic(" in thermal
+    runtime = (ROOT / "src" / "radia" / "simulink" / "radia_ih_runtime.cpp").read_text(encoding="utf-8")
+    assert runtime.count("transport_periodic(") >= 3
+    assert "-(angle - config_.angle_origin_rad)" in runtime
+    assert "angle - state_.previous_angle_rad" in runtime
 
 
 def test_native_ih_recompute_policy_distinguishes_current_and_material_changes():
-    eddy = (ROOT / "src" / "radia" / "simulink" / "radia_ih_eddy_sfun.cpp").read_text(
-        encoding="utf-8"
-    )
-    assert "!c->matrix_temperature_slope.empty() && temperature_changed" in eddy
-    assert "const double scale = current * current" in eddy
-    assert "if (material_changed)" in eddy
+    eddy = (ROOT / "src" / "radia" / "simulink" / "radia_ih_runtime.cpp").read_text(encoding="utf-8")
+    assert "!config_.matrix_temperature_slope.empty() && temperature_changed" in eddy
+    assert "heat *= current * current" in eddy
     assert "current_requires_solve" not in eddy
-    assert "does not yet implement nonlinear BH iteration" in eddy
 
 
 def test_legacy_ih_lut_and_lumped_interfaces_are_removed():

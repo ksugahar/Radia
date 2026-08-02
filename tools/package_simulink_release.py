@@ -17,9 +17,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRED_MEX = ("radia_ih_eddy_sfun.mexw64", "radia_ih_thermal_sfun.mexw64")
+REQUIRED_MEX = ("radia_mex.mexw64",)
+REQUIRED_MATLAB_SFUNCTIONS = (
+    "radia_ih_eddy_sfun.m",
+    "radia_ih_thermal_sfun.m",
+    "+radia/+simulink/ihEddySFunction.m",
+    "+radia/+simulink/ihThermalSFunction.m",
+)
 REQUIRED_MODELS = ("radia_ih.slx",)
-FULL_REQUIRED_MEX = (*REQUIRED_MEX, "radia_mex.mexw64")
+FULL_REQUIRED_MEX = REQUIRED_MEX
 FULL_REQUIRED_MODELS = (
     "radia_simulink_library.slx",
     "radia_ih.slx",
@@ -37,9 +43,15 @@ PACKAGE_FILES = (
     "IH_VERSION",
     "install_radia_ih.m",
     "radia_ih.slx",
+    "radia_ih_eddy_sfun.m",
+    "radia_ih_thermal_sfun.m",
     "verify_radia_ih_release.m",
+    "+radia/setup.m",
+    "+radia/+internal/pythonProcessPath.m",
     "+radia/+simulink/buildIHNativeModel.m",
     "+radia/+simulink/configureIHNativeModel.m",
+    "+radia/+simulink/ihEddySFunction.m",
+    "+radia/+simulink/ihThermalSFunction.m",
     "+radia/+simulink/loadIHNativeConfig.m",
     "+radia/+simulink/makeIHNativeConfig.m",
     "+radia/+simulink/makeIHNativeSmokeConfig.m",
@@ -151,9 +163,8 @@ def build_package(
             raise FileNotFoundError(f"Required Simulink model is missing: {model}")
     for name in required_mex:
         validate_native_binary(mex_dir / name)
-    if full_library:
-        for name in FULL_RUNTIME_DLLS:
-            validate_native_binary(mex_dir / name)
+    for name in FULL_RUNTIME_DLLS:
+        validate_native_binary(mex_dir / name)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     package_version = radia_version() if full_library else version()
@@ -180,9 +191,8 @@ def build_package(
         shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
         for name in required_mex:
             shutil.copy2(mex_dir / name, stage / "matlab" / name)
-        if full_library:
-            for name in FULL_RUNTIME_DLLS:
-                shutil.copy2(mex_dir / name, stage / "matlab" / name)
+        for name in FULL_RUNTIME_DLLS:
+            shutil.copy2(mex_dir / name, stage / "matlab" / name)
 
         files = []
         for path in sorted(stage.rglob("*")):
@@ -194,9 +204,9 @@ def build_package(
                 })
         manifest = {
             "schema": (
-                "radia.simulink.library-release-manifest.v1"
+                "radia.simulink.library-release-manifest.v2"
                 if full_library
-                else "radia.simulink.ih-release-manifest.v1"
+                else "radia.simulink.ih-release-manifest.v2"
             ),
             "package": package_name,
             "version": package_version,
@@ -209,10 +219,11 @@ def build_package(
             "mex_extension": "mexw64",
             "required_matlab_products": ["MATLAB", "Simulink"],
             "backend": (
-                "native-mex-sfunction-and-mex-handle"
+                "application-specific"
                 if full_library
-                else "native-mex-sfunction"
+                else "matlab-level2+radia-mex-handles"
             ),
+            "ih_backend": "matlab-level2+radia-mex-handles",
             "operator_assembly": (
                 "application-specific" if full_library else "preassembled"
             ),
@@ -222,14 +233,17 @@ def build_package(
                 else "matlab/radia_ih.slx"
             ),
             "required_mex": [f"matlab/{name}" for name in required_mex],
-            "required_runtime_dll": (
-                [f"matlab/{name}" for name in FULL_RUNTIME_DLLS]
-                if full_library
-                else []
-            ),
+            "required_matlab_sfunctions": [
+                f"matlab/{name}" for name in REQUIRED_MATLAB_SFUNCTIONS
+            ],
+            "required_runtime_dll": [
+                f"matlab/{name}" for name in FULL_RUNTIME_DLLS
+            ],
             "python_per_step": False,
+            "python_runtime_required_for_native_mex": True,
             "python_runtime_required_for_headless_application_blocks": full_library,
             "dt_order": "eddy;transport(theta_prev,theta_now);thermal",
+            "standalone_mex_debug_api": True,
             "files": files,
         }
         if full_library:
@@ -272,8 +286,11 @@ def build_package(
             *(f"matlab/{name}" for name in required_mex),
             *(f"matlab/{name}" for name in required_models),
         }
+        required.update(f"matlab/{name}" for name in FULL_RUNTIME_DLLS)
+        required.update(
+            f"matlab/{name}" for name in REQUIRED_MATLAB_SFUNCTIONS
+        )
         if full_library:
-            required.update(f"matlab/{name}" for name in FULL_RUNTIME_DLLS)
             required.update(
                 {
                     "matlab/install_radia_simulink.m",

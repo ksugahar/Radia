@@ -31,6 +31,99 @@ for index = 1:numel(excluded)
 end
 end
 
+function testIHHandleCommandsAndLifecycle(testCase)
+commands = string(radia.internal.callMex('api.commands'));
+required = [ ...
+    "ih.eddy.create", "ih.eddy.output", "ih.eddy.destroy", ...
+    "ih.thermal.create", "ih.thermal.output", "ih.thermal.update", ...
+    "ih.thermal.reset", "ih.thermal.destroy"];
+verifyTrue(testCase, all(ismember(required, commands)));
+
+before = radia.apiInfo();
+config = radia.simulink.makeIHNativeSmokeConfig();
+eddy = radia.internal.callMex('ih.eddy.create', config);
+eddyCleanup = onCleanup(@() destroyIHHandle('ih.eddy.destroy', eddy));
+created = radia.apiInfo();
+verifyEqual(testCase, created.ih_handle_count, before.ih_handle_count + 1);
+verifyEqual(testCase, created.handle_count, before.handle_count + 1);
+
+heat = radia.internal.callMex( ...
+    'ih.eddy.output', eddy, 2.0, 0.0, config.initial_temperature_K);
+verifyEqual(testCase, heat, 4.0, "AbsTol", 1e-13);
+
+thermal = radia.internal.callMex('ih.thermal.create', config);
+thermalCleanup = onCleanup( ...
+    @() destroyIHHandle('ih.thermal.destroy', thermal));
+created = radia.apiInfo();
+verifyEqual(testCase, created.ih_handle_count, before.ih_handle_count + 2);
+verifyError(testCase, ...
+    @() radia.internal.callMex('ih.thermal.output', eddy), ...
+    "radia:mex:Exception");
+verifyError(testCase, ...
+    @() radia.internal.callMex( ...
+        'ih.eddy.output', thermal, 1.0, 0.0, config.initial_temperature_K), ...
+    "radia:mex:Exception");
+
+initial = radia.internal.callMex('ih.thermal.output', thermal);
+verifyEqual(testCase, initial, config.initial_temperature_K, ...
+    "AbsTol", 1e-13);
+radia.internal.callMex('ih.thermal.update', thermal, heat, 293.15, 0.0);
+advanced = radia.internal.callMex('ih.thermal.output', thermal);
+verifyEqual(testCase, advanced, 293.55, "AbsTol", 1e-12);
+radia.internal.callMex('ih.thermal.reset', thermal);
+verifyEqual(testCase, ...
+    radia.internal.callMex('ih.thermal.output', thermal), ...
+    config.initial_temperature_K, "AbsTol", 1e-13);
+
+radia.internal.callMex('ih.eddy.destroy', eddy);
+verifyError(testCase, ...
+    @() radia.internal.callMex( ...
+        'ih.eddy.output', eddy, 1.0, 0.0, config.initial_temperature_K), ...
+    "radia:mex:Exception");
+radia.internal.callMex('ih.thermal.destroy', thermal);
+clear thermalCleanup eddyCleanup
+after = radia.apiInfo();
+verifyEqual(testCase, after.ih_handle_count, before.ih_handle_count);
+verifyEqual(testCase, after.handle_count, before.handle_count);
+end
+
+function testIHHandleCreateRejectsInvalidConfig(testCase)
+before = radia.apiInfo();
+config = radia.simulink.makeIHNativeSmokeConfig();
+
+invalid = config;
+invalid.bh_mode = 'nonlinear';
+verifyError(testCase, ...
+    @() radia.internal.callMex('ih.eddy.create', invalid), ...
+    "radia:mex:Exception");
+
+invalid = config;
+invalid.heat_cell_weights = 0;
+verifyError(testCase, ...
+    @() radia.internal.callMex('ih.eddy.create', invalid), ...
+    "radia:mex:Exception");
+
+invalid = config;
+invalid.thermal_tolerance = 0;
+verifyError(testCase, ...
+    @() radia.internal.callMex('ih.thermal.create', invalid), ...
+    "radia:mex:Exception");
+
+invalid = config;
+invalid.initial_temperature_K = 0;
+verifyError(testCase, ...
+    @() radia.internal.callMex('ih.thermal.create', invalid), ...
+    "radia:mex:Exception");
+
+invalid = config;
+invalid.mass_row_ptr = [0; 2];
+verifyError(testCase, ...
+    @() radia.internal.callMex('ih.thermal.create', invalid), ...
+    "radia:mex:Exception");
+
+verifyEqual(testCase, radia.apiInfo().ih_handle_count, before.ih_handle_count);
+end
+
 function testNGSolveSpacesP1ToP6(testCase)
 expectedHCurl = [6, 14, 29, 53, 88, 136];
 expectedHDiv = [12, 30, 60, 105, 168, 252];
@@ -1547,6 +1640,15 @@ contractions = manager.directionalDerivativeContractionsMany( ...
 verifySize(testCase, contractions, [2,1]);
 verifyEqual(testCase, contractions, zeros(2,1), "AbsTol", 1e-14);
 clear cleanup
+end
+
+function destroyIHHandle(command, handle)
+try
+    if handle ~= 0
+        radia.internal.callMex(command, handle);
+    end
+catch
+end
 end
 
 function testHACApKPlanar2DCellEdgeFarBlock(testCase)

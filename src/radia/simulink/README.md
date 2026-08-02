@@ -10,10 +10,12 @@ The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
 Function, and Induction Heating are built by
 `matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
 Function retain their explicit-trigger application boundary. Induction
-Heating is separate: its runtime block contains native Eddy and Thermal C/C++
-MEX S-Functions and does not launch the Python CLI. The first distributable IH
-package is a preview for preassembled operators; native `.vol` operator
-assembly remains its production gate.
+Heating is separate: readable Level-2 MATLAB Eddy and Thermal S-Functions own
+its ports and lifecycle, while checked `radia_mex` handles own native numerical
+state. Initialization locates NGSolve's runtime through the configured Python
+installation, but no Python solver or per-step fallback is launched. The first
+distributable IH package is a preview for preassembled operators; native `.vol`
+operator assembly remains its production gate.
 
 For a field-producing mode, the runner overrides `--msh-output` with a path in
 the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
@@ -96,18 +98,19 @@ kernels.
 
 ## Induction-heating native preview
 
-The tracked `matlab/radia_ih.slx` model separates Eddy and Thermal native MEX
-S-Functions and closes the temperature feedback explicitly:
+The tracked `matlab/radia_ih.slx` model separates readable Level-2 MATLAB Eddy
+and Thermal S-Functions and closes the temperature feedback explicitly:
 
 ```matlab
 addpath('matlab');
 install_radia_ih();
 ```
 
-The S-Functions consume checked row-major electromagnetic operators, a
+The wrappers call independent `radia_mex('ih.*', ...)` object-handle commands
+that consume checked row-major electromagnetic operators, a
 heat-to-temperature projection, thermal CSR matrices, cell weights, and an
 explicit rotation mode. Thermal publishes only the accepted DWork state and
-advances it in `mdlUpdate`, so the closed loop has a real one-step delay.
+advances it in `Update`, so the closed loop has a real one-step delay.
 Rotation transports the accepted workpiece temperature conservatively before
 the implicit thermal solve; Eddy maps the stationary-source heat distribution
 back into workpiece coordinates.

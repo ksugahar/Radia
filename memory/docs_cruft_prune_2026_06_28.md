@@ -44,7 +44,9 @@ Promote the distilled rule/API/result instead.
 ## IH Simulink Native-Only Contract (2026-07-23)
 
 The production induction-heating interface is the masked Simulink application
-block containing `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun`. A heat/power
+block containing readable Level-2 MATLAB `radia_ih_eddy_sfun` and
+`radia_ih_thermal_sfun` wrappers backed by independent native MEX object
+handles. A heat/power
 LUT, lumped thermal plant, or generic discrete state-space block is not an
 independent validation route and must not be restored as an IH example, test
 fixture, RL environment, or fallback.
@@ -60,5 +62,20 @@ distributed native operator. It checks current-squared scaling, asymmetric
 multi-cell rotation, weighted thermal conservation, temperature feedback,
 temperature-dependent operator updates, MAT/JSON loading, fail-fast config
 validation, and singular-operator lifecycle recovery. Thermal state advances
-only in `mdlUpdate`; advancing it in `mdlOutputs` can apply `dt` more than once
-when Simulink reevaluates outputs at one simulation time.
+only in the Level-2 `Update` callback; advancing it in `Outputs` can apply `dt`
+more than once when Simulink reevaluates outputs at one simulation time.
+
+### TEAM36 native boundary (2026-08-02)
+
+A TEAM36-scaled heat-capacity fixture tests wiring only and must never be
+tracked or described as solver-accuracy evidence. Full MATLAB/MEX parity needs
+the native handle to own the H1Henrotte and thermal FE objects (or an equivalent
+checked element-operator contract), execute the nonlinear permeability,
+resistivity, heat-capacity, conductivity, and radiation iterations at every
+accepted step, and conservatively transfer fields between the noncoincident EM
+and thermal meshes. Python trajectory playback is not a substitute.
+
+A future native-handle golden must come from the canonical nonlinear solver,
+retain only public-safe unattributed regression values, and exercise the full
+field-transfer path. Until that gate passes, the current linear MEX runtime is
+a checked execution boundary, not a claim of nonlinear solver parity.

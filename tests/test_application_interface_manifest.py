@@ -36,6 +36,12 @@ def test_application_manifest_has_no_notebook_workbenches():
         assert application["notebook"] is None
         assert "adapter" not in application
 
+    ih = applications["radia-ih"]
+    assert ih["backend"] == "matlab-level2+radia-mex-handles"
+    assert "Level-2 MATLAB" in ih["backend_policy"]
+    assert "radia_mex object handles" in ih["backend_policy"]
+    assert "not a per-step fallback" in ih["backend_policy"]
+
     export_menu = applications["radia-export-menu"]
     assert export_menu["state"] == "active-cubit-toolbar"
     assert export_menu["notebook"] is None

@@ -8,13 +8,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_package_builder_requires_native_ih_assets():
-    text = (ROOT / "tools" / "package_simulink_release.py").read_text(encoding="utf-8")
-    assert "radia_ih.slx" in text
-    assert "radia_ih_eddy_sfun.mexw64" in text
-    assert "radia_ih_thermal_sfun.mexw64" in text
-    assert "validateIHNativeConfig.m" in text
-    assert "manifest.json" in text
-    assert "SHA256SUMS.txt" in text
+    module = load_module(
+        "package_simulink_release_assets",
+        ROOT / "tools" / "package_simulink_release.py",
+    )
+    assert module.REQUIRED_MEX == ("radia_mex.mexw64",)
+    assert set(module.REQUIRED_MATLAB_SFUNCTIONS) == {
+        "radia_ih_eddy_sfun.m",
+        "radia_ih_thermal_sfun.m",
+        "+radia/+simulink/ihEddySFunction.m",
+        "+radia/+simulink/ihThermalSFunction.m",
+    }
+    assert "radia_ih.slx" in module.REQUIRED_MODELS
+    assert any(
+        name.endswith("validateIHNativeConfig.m")
+        for name in module.PACKAGE_FILES
+    )
+    assert not any(name.startswith("radia_ih_") for name in module.REQUIRED_MEX)
 
 
 def test_package_builder_fails_when_mex_is_missing(tmp_path):
@@ -49,19 +59,31 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     )
     mex_dir = tmp_path / "mex"
     mex_dir.mkdir()
-    for name in package_module.REQUIRED_MEX:
+    for name in (
+        *package_module.REQUIRED_MEX,
+        *package_module.FULL_RUNTIME_DLLS,
+    ):
         (mex_dir / name).write_bytes(fake_x64_pe())
     archive, sums = package_module.build_package(mex_dir, tmp_path / "out")
     manifest = verify_module.verify_archive(archive)
     assert sums.read_text(encoding="ascii").split()[0] == \
         package_module.sha256(archive)
     assert manifest["release_channel"] == "preview"
+    assert manifest["schema"] == "radia.simulink.ih-release-manifest.v2"
+    assert manifest["backend"] == "matlab-level2+radia-mex-handles"
+    assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
+    assert manifest["standalone_mex_debug_api"] is True
+    assert manifest["python_runtime_required_for_native_mex"] is True
+    assert manifest["python_per_step"] is False
     assert manifest["operator_assembly"] == "preassembled"
     assert (tmp_path / "out" / "manifest.json").is_file()
     assert len(sums.read_text(encoding="ascii").splitlines()) == 2
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
     assert "matlab/radia_ih.slx" in names
+    assert "matlab/radia_ih_eddy_sfun.m" in names
+    assert "matlab/+radia/+simulink/ihEddySFunction.m" in names
+    assert "matlab/radia_ih_eddy_sfun.mexw64" not in names
     assert not any("LUT" in name or "makeIHPlant" in name for name in names)
     assert "matlab/radia_simulink_library.slx" not in names
 
@@ -89,12 +111,15 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     )
     manifest = verify_module.verify_archive(archive)
     assert manifest["schema"] == (
-        "radia.simulink.library-release-manifest.v1"
+        "radia.simulink.library-release-manifest.v2"
     )
     assert manifest["release_channel"] == "production"
     assert manifest["entry_model"] == "matlab/radia_simulink_library.slx"
     assert manifest["python_per_step"] is False
     assert manifest["python_fallback_per_step"] is False
+    assert manifest["backend"] == "application-specific"
+    assert manifest["ih_backend"] == "matlab-level2+radia-mex-handles"
+    assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
     assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
     assert manifest["feature_toolbox_requirements"] == {
         "adjoint_topology_optimization": ["Optimization Toolbox"],
@@ -158,7 +183,10 @@ def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
     )
     mex_dir = tmp_path / "mex"
     mex_dir.mkdir()
-    for name in package_module.REQUIRED_MEX:
+    for name in (
+        *package_module.REQUIRED_MEX,
+        *package_module.FULL_RUNTIME_DLLS,
+    ):
         (mex_dir / name).write_bytes(fake_x64_pe())
     archive, _ = package_module.build_package(mex_dir, tmp_path / "out")
     matlab = tmp_path / "matlab.exe"

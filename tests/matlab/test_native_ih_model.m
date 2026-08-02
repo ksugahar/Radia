@@ -39,7 +39,7 @@ verifyEqual(testCase,string(get_param(modelName+"/Thermal","FunctionName")), ...
     "radia_ih_thermal_sfun");
 verifyEqual(testCase,string(get_param(modelName+"/IH Parameters","Mask")),"on");
 contract=get_param(modelName+"/IH Parameters","UserData");
-verifyEqual(testCase,string(contract.backend),"native-mex-sfunction");
+verifyEqual(testCase,string(contract.backend),"matlab-level2+radia-mex-handles");
 verifyFalse(testCase,contract.python_fallback);
 workspace=get_param(modelName,"ModelWorkspace");
 config=workspace.getVariable("radia_ih_config");

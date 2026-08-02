@@ -1,9 +1,11 @@
 # Radia IH Simulink Preview
 
-`radia_ih.slx` is the first native induction-heating runtime preview. It contains separate
-native Eddy and Thermal MEX S-Functions, explicit current/angle/ambient source
-blocks, a visible temperature-feedback loop, and an `IH Parameters` block.
-The extracted model and its simulation loop do not call Python.
+`radia_ih.slx` is the first native induction-heating runtime preview. It contains
+separate readable Level-2 MATLAB Eddy and Thermal S-Functions backed by checked
+`radia_mex` object handles, explicit current/angle/ambient source blocks, a
+visible temperature-feedback loop, and an `IH Parameters` block. Initialization
+uses the configured Python installation only to locate NGSolve's shared runtime
+DLLs. Eddy and Thermal steps execute in MEX and never call Python per step.
 This package targets 64-bit Windows and is generated and gated with MATLAB and
 Simulink R2026a.
 
