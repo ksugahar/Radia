@@ -18,6 +18,11 @@ arguments
     options.CoilVolLabelContract (1,1) string = ""
 end
 
+% Users re-point the geometry paths more than any other field; repair an
+% unambiguous .vol/.step crossing here, before the required-field and
+% check-vol gates see the spec.
+[spec, geometryRoleNotes] = radia.simulink.normalizeIHGeometryRoles(spec);
+
 required = ["frequency","current","wp_vol"];
 missing = required(~isfield(spec, required));
 if ~isempty(missing)
@@ -79,6 +84,7 @@ end
 
 config = spec;
 config.schema = "radia.ih.simulink.native_sfunction.v1";
+config.geometry_role_notes = geometryRoleNotes;
 config.n_heat = options.NHeat;
 config.n_temperature = options.NTemperature;
 config.temperature_cell_weights = options.CellWeights;

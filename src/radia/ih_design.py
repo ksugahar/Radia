@@ -8,8 +8,10 @@ no Qt/PySide dependency.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import permutations
 from pathlib import Path
 import sys
+import warnings
 
 
 METHOD_PEEC_IND = "PEEC inductance (coil only, STEP)"
@@ -96,6 +98,26 @@ FEM_SOLVERS = {
     "iccg (fallback)": "iccg",
 }
 
+# Geometry-input slots and the file extensions each accepts.  These path
+# fields are the inputs users re-point most often between runs, and the
+# extension identifies a file's role uniquely -- so a crossed pair
+# (e.g. the coil .step typed into wp_vol and the workpiece .vol into
+# peec_step) is repaired deterministically at the spec boundary instead
+# of failing later inside a mesh or STEP reader.  See
+# IHDesignSpec.normalize_geometry_roles.
+GEOMETRY_SLOT_EXTENSIONS: dict[str, tuple[str, ...]] = {
+    "wp_vol": (".vol", ".vol.gz"),
+    "coil_vol": (".vol", ".vol.gz"),
+    "em_vol": (".vol", ".vol.gz"),
+    "peec_step": (".step", ".stp"),
+    "qsurf_sol": (".sol",),
+}
+
+
+def _fits_slot(slot: str, value: str) -> bool:
+    low = value.lower()
+    return any(low.endswith(ext) for ext in GEOMETRY_SLOT_EXTENSIONS[slot])
+
 
 def _panels_dir() -> Path:
     return Path(__file__).resolve().parent / "panels"
@@ -152,18 +174,6 @@ class IHDesignSpec:
     # not a panel knob.
     wp_loop_dof: str | bool = "auto"
 
-    # calc_inductance weak-path genus-1 loop DOF (Takahashi-validated
-    # 2026-07-17).  "auto" (default) applies it whenever it can: with the
-    # "Dense LU (small)" solver preset (= intree-dense backend) + linear
-    # SIBC + order 1, a genus-1 workpiece gets the solved shorted-turn
-    # current automatically; inapplicable cases skip with a recorded
-    # wp_loop_dof_skip_reason + caveat.  "on" makes unmet prerequisites
-    # fail loud.  There is deliberately no "off" (the un-extended genus-1
-    # solve is a known +25-30% over-estimate), and the incident potential
-    # is basis-determined in calc_inductance (P1 -> surface-Poisson),
-    # not a panel knob.
-    wp_loop_dof: str = "auto"
-
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
     esim_max_iter: int = 30
@@ -203,6 +213,10 @@ class IHDesignSpec:
     csv_output: str = ""
     vtu_prefix: str = ""
 
+    # Repairs applied by normalize_geometry_roles, newest last.  Kept on
+    # the spec so the Simulink runner / MCP callers can surface them.
+    geometry_role_notes: tuple[str, ...] = ()
+
     def __post_init__(self) -> None:
         # Preserve the pre-dropdown constructor contract without reviving the
         # removed unextended genus-1 route.
@@ -210,6 +224,66 @@ class IHDesignSpec:
             self.wp_loop_dof = "on" if self.wp_loop_dof else "auto"
         if self.wp_loop_dof not in {"auto", "on"}:
             raise ValueError("wp_loop_dof must be auto or on")
+        self.geometry_role_notes = tuple(self.geometry_role_notes or ())
+        self.normalize_geometry_roles()
+
+    def normalize_geometry_roles(self) -> tuple[str, ...]:
+        """Repair geometry file inputs whose values were crossed.
+
+        The .vol / .step / .sol path fields are the inputs users
+        re-point most often, and a file's extension identifies its role
+        uniquely.  Filled slots whose value does not match the slot's
+        accepted extensions are re-assigned when exactly ONE arrangement
+        of the same values fits every slot (e.g. wp_vol="coil.step" +
+        peec_step="wp.vol" becomes wp_vol="wp.vol" +
+        peec_step="coil.step").  Each repair is recorded in
+        ``geometry_role_notes`` and emitted as a UserWarning so it shows
+        in run logs.  Without a unique arrangement this raises
+        immediately, naming every offending slot and its expected
+        extensions, instead of failing later inside a mesh or STEP
+        reader.  Values are never moved into slots the user left empty
+        -- that would silently change the selected method.
+        """
+        filled = {
+            slot: str(getattr(self, slot)).strip()
+            for slot in GEOMETRY_SLOT_EXTENSIONS
+            if str(getattr(self, slot)).strip()
+        }
+        wrong = [s for s, v in filled.items() if not _fits_slot(s, v)]
+        if not wrong:
+            return ()
+        fixes = {
+            arrangement
+            for arrangement in permutations(filled[s] for s in wrong)
+            if all(_fits_slot(s, v) for s, v in zip(wrong, arrangement))
+        }
+        if len(fixes) != 1:
+            lines = [
+                f"  {slot}={filled[slot]!r} expects "
+                f"{' / '.join(GEOMETRY_SLOT_EXTENSIONS[slot])}"
+                for slot in wrong
+            ]
+            hint = ""
+            if any(_fits_slot("peec_step", filled[s]) for s in wrong):
+                hint = ("\n  Hint: a .step coil belongs in peec_step "
+                        "(PEEC methods); meshes are .vol.")
+            raise ValueError(
+                "Geometry inputs do not match their slots and no unique "
+                "reassignment of the same values fits:\n"
+                + "\n".join(lines) + hint
+            )
+        notes = []
+        for slot, value in zip(wrong, next(iter(fixes))):
+            if value != filled[slot]:
+                notes.append(
+                    "geometry input reassigned by extension: "
+                    f"{slot} <- {value!r} (was {filled[slot]!r})"
+                )
+            setattr(self, slot, value)
+        self.geometry_role_notes = self.geometry_role_notes + tuple(notes)
+        for note in notes:
+            warnings.warn(note, UserWarning, stacklevel=2)
+        return tuple(notes)
 
     def impedance_model_cli(self) -> str:
         return "esim" if self.impedance_model.startswith("Nonlinear ESIM") else "sibc"
@@ -342,6 +416,9 @@ class IHDesignSpec:
         command contract.
         """
 
+        # Idempotent: covers specs whose path fields were mutated after
+        # construction (construction itself normalizes in __post_init__).
+        self.normalize_geometry_roles()
         py = python or sys.executable
         if self.method in THERMAL_METHODS:
             return self._build_thermal_command(py, panels_dir)
