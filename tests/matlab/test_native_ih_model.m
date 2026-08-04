@@ -46,8 +46,48 @@ config=workspace.getVariable("radia_ih_config");
 verifyEqual(testCase,string(config.dt_order), ...
     "eddy;transport(theta_prev,theta_now);thermal");
 verifyEqual(testCase,string(get_param(modelName,"Solver")),"FixedStepDiscrete");
+% Off-screen traces looked like an empty scope (temperature ~293 K vs
+% the Manual [-10 10] default axes); the builder must emit Auto axes.
+scopeNames=["Heat Density","Temperature"];
+for scopeIndex=1:numel(scopeNames)
+    scopeConfiguration=get_param( ...
+        modelName+"/"+scopeNames(scopeIndex),"ScopeConfiguration");
+    verifyEqual(testCase,string(scopeConfiguration.AxesScaling),"Auto");
+end
+% Scopes read the [min mean max] reductions, never the raw field vector
+% (a real configuration has thousands of DOFs and the raw plot is
+% unreadable); the outports keep the full vectors.
+verifyEqual(testCase,scopeSourceName(modelName+"/Heat Density"), ...
+    "Heat Stats");
+verifyEqual(testCase,scopeSourceName(modelName+"/Temperature"), ...
+    "Temperature Stats");
+verifyEqual(testCase,scopeSourceName(modelName+"/temperature_K"), ...
+    "Thermal");
+% The config_file mask callback runs in the base workspace, so it must
+% read the dialog value through get_param(gcb, ...) -- a bare
+% config_file reference errored on every OK press.
+parametersMask=Simulink.Mask.get(modelName+"/IH Parameters");
+configParameter=parametersMask.getParameter("config_file");
+verifyEqual(testCase,string(configParameter.Evaluate),"off");
+verifyTrue(testCase,contains(string(configParameter.Callback), ...
+    "get_param(gcb, 'config_file')"));
+config=radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.05);
+callbackPath=fullfile(outputDirectory,"cb_config.mat");
+save(callbackPath,"config");
+set_param(modelName+"/IH Parameters","config_file",char(callbackPath));
+callbackText=replace(string(configParameter.Callback),"gcb", ...
+    "'"+modelName+"/IH Parameters'");
+evalin("base",callbackText);
+verifyEqual(testCase,string(get_param(modelName,"FixedStep")), ...
+    string(compose("%.17g",0.05)));
 set_param(modelName,"SimulationCommand","update");
 sim(modelName,"StopTime","0.2");
+end
+
+function name = scopeSourceName(blockPath)
+ports=get_param(blockPath,"PortHandles");
+line=get_param(ports.Inport(1),"Line");
+name=string(get_param(get_param(line,"SrcBlockHandle"),"Name"));
 end
 
 function testTrackedModelLoadsAndUpdates(testCase)
