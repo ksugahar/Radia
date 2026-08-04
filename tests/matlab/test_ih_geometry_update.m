@@ -242,7 +242,7 @@ radia.simulink.updateIHGeometry(model);
 % restarts because the record was lost.
 writelines("{this is not json", configFile + ".fingerprint.json");
 warned = warning("off", "radia:simulink:IHGeometryUpdateSidecarCorrupt");
-restore = onCleanup(@() warning(warned)); %#ok<NASGU>
+restore = onCleanup(@() warning(warned));
 status = radia.simulink.updateIHGeometry(model);
 verifyTrue(testCase, status.rebuilt);
 verifyEqual(testCase, status.revision, 1);
@@ -265,7 +265,7 @@ verifyEqual(testCase, string(status.reason), "up-to-date");
 verifyEqual(testCase, string(workspace.getVariable("radia_ih_config")), ...
     "SENTINEL");
 % Hand-editing the configuration file must reload it (no rebuild).
-config = radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.05); %#ok<NASGU>
+config = radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.05);
 save(configFile, "config");
 status = radia.simulink.updateIHGeometry(model);
 verifyEqual(testCase, string(status.reason), "reloaded");
@@ -277,6 +277,34 @@ verifyEqual(testCase, string(get_param(model, "FixedStep")), ...
 % And the refreshed artifact hash makes the next update skip again.
 status = radia.simulink.updateIHGeometry(model);
 verifyEqual(testCase, string(status.reason), "up-to-date");
+end
+
+function testDirectConfigureInvalidatesGeometryRevision(testCase)
+[work, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+radia.simulink.updateIHGeometry(model);
+original = load(configFile, "config");
+
+alternateFile = fullfile(work, "alternate.mat");
+config = radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.037);
+save(alternateFile, "config");
+radia.simulink.configureIHNativeModel(model, alternateFile);
+workspace = get_param(model, "ModelWorkspace");
+verifyTrue(testCase, isnan(workspace.getVariable( ...
+    "radia_ih_geometry_revision")));
+
+% A direct API load must invalidate the old geometry-owned marker.  The
+% next update reloads the configured artifact without rebuilding it.
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "reloaded");
+verifyFalse(testCase, status.rebuilt);
+verifyEqual(testCase, runCount(runsFile), 1);
+loaded = workspace.getVariable("radia_ih_config");
+verifyEqual(testCase, loaded.sample_time_s, original.config.sample_time_s);
+verifyEqual(testCase, workspace.getVariable( ...
+    "radia_ih_geometry_revision"), status.revision);
 end
 
 function testUnconfiguredBlockIsInert(testCase)
