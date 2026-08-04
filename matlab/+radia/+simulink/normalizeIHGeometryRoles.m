@@ -21,13 +21,10 @@ arguments
     spec (1,1) struct
 end
 
+extensions = radia.simulink.ihGeometryExtensions();
 slotNames = ["wp_vol", "coil_vol", "em_vol", "peec_step", "qsurf_sol"];
-slotExtensions = { ...
-    [".vol", ".vol.gz"], ...
-    [".vol", ".vol.gz"], ...
-    [".vol", ".vol.gz"], ...
-    [".step", ".stp"], ...
-    ".sol"};
+slotExtensions = {extensions.vol, extensions.vol, extensions.vol, ...
+    extensions.step, extensions.sol};
 
 notes = strings(0, 1);
 filled = strings(0, 1);
@@ -77,8 +74,7 @@ if numel(validOrders) ~= 1
             strjoin(string(filledExtensions{wrong(k)}), " / "));
     end
     hint = "";
-    stepExtensions = [".step", ".stp"];
-    if any(arrayfun(@(k) fitsSlot(stepExtensions, filledValues(k)), wrong))
+    if any(arrayfun(@(k) fitsSlot(extensions.step, filledValues(k)), wrong))
         hint = newline + "  Hint: a .step coil belongs in peec_step " + ...
             "(PEEC methods); meshes are .vol.";
     end

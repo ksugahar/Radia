@@ -21,26 +21,25 @@ if getSimulinkBlockHandle(blockPath) < 0
 end
 
 role = lower(strtrim(role));
+known = radia.simulink.ihGeometryExtensions();
 switch role
     case "workpiece"
         parameterName = "wp_vol";
         titleText = "Select workpiece mesh";
-        filterSpec = { ...
-            '*.vol;*.vol.gz', 'Netgen mesh (*.vol, *.vol.gz)'; ...
-            '*.*', 'All files (*.*)'};
-        extensions = [".vol", ".vol.gz"];
+        accepted = known.vol;
+        filterLabel = 'Netgen mesh (*.vol, *.vol.gz)';
     case "coil"
         parameterName = "coil_file";
         titleText = "Select coil geometry";
-        filterSpec = { ...
-            '*.step;*.stp;*.vol;*.vol.gz', ...
-            'Coil geometry (*.step, *.stp, *.vol, *.vol.gz)'; ...
-            '*.*', 'All files (*.*)'};
-        extensions = [".step", ".stp", ".vol", ".vol.gz"];
+        accepted = [known.step, known.vol];
+        filterLabel = 'Coil geometry (*.step, *.stp, *.vol, *.vol.gz)';
     otherwise
         error("radia:simulink:IHGeometryBrowseRole", ...
             "Geometry role must be 'workpiece' or 'coil'; got: %s", role);
 end
+filterSpec = { ...
+    char(strjoin("*" + string(accepted), ";")), filterLabel; ...
+    '*.*', 'All files (*.*)'};
 
 currentValue = strtrim(string(get_param(blockPath, parameterName)));
 startLocation = string(pwd);
@@ -61,10 +60,10 @@ if isequal(fileName, 0) || isequal(folderName, 0)
 end
 
 selectedPath = string(fullfile(string(folderName), string(fileName)));
-if ~any(endsWith(lower(selectedPath), extensions))
+if ~any(endsWith(lower(selectedPath), accepted))
     error("radia:simulink:IHGeometryBrowseExtension", ...
         "Selected %s file must end in %s; got: %s", ...
-        role, strjoin(extensions, " / "), selectedPath);
+        role, strjoin(accepted, " / "), selectedPath);
 end
 if ~isfile(selectedPath)
     error("radia:simulink:IHGeometryBrowseMissing", ...

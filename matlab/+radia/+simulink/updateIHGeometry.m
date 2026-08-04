@@ -190,8 +190,9 @@ function [wpPath, coilRole, coilPath, notes] = classifyGeometryPair(a, b)
 %   deterministically and reported; two STEP files cannot form a valid
 %   pair and error immediately.
 notes = strings(0, 1);
-volExtensions = [".vol", ".vol.gz"];
-stepExtensions = [".step", ".stp"];
+extensions = radia.simulink.ihGeometryExtensions();
+volExtensions = extensions.vol;
+stepExtensions = extensions.step;
 aIsVol = fitsExtension(a, volExtensions);
 bIsVol = fitsExtension(b, volExtensions);
 aIsStep = fitsExtension(a, stepExtensions);
