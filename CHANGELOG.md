@@ -5,6 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.38 - IH geometry-update hardening
+
+Released 2026-08-04.
+
+- Required absolute workpiece, coil, and configuration paths so model update
+  hooks cannot resolve geometry against an unrelated MATLAB working directory.
+- Made corrupted fingerprint sidecars recover by rebuilding from the real
+  geometry sources instead of blocking every later model update.
+- Avoided repeated loading of large IH operator configurations when the
+  artifact hash and model-workspace revision prove that the accepted state is
+  current, while still reloading a hand-edited configuration without assembly.
+- Invalidated the geometry revision whenever `configureIHNativeModel` is called
+  directly, preventing a later update from accepting a different workspace
+  configuration as current.
+
 ## 4.95.37 - IH configuration and field-scope fixes
 
 Released 2026-08-04.

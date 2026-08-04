@@ -111,6 +111,10 @@ if numel(config.heat_to_temperature_projection) ~= ...
 end
 config = radia.simulink.validateIHNativeConfig(config);
 workspace.assignin("radia_ih_config", config);
+% A direct configuration load supersedes any Geometry Update proof left in
+% the workspace. updateIHGeometry stamps the accepted revision again after
+% it loads the geometry-owned artifact.
+workspace.assignin("radia_ih_geometry_revision", NaN);
 set_param(modelName, "SolverType", "Fixed-step", ...
     "Solver", "FixedStepDiscrete", ...
     "FixedStep", compose("%.17g", config.sample_time_s));
