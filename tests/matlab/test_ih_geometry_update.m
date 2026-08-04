@@ -218,6 +218,67 @@ verifyEqual(testCase,status.revision,2);
 verifyEqual(testCase,runCount(runsFile),2);
 end
 
+function testRelativePathsError(testCase)
+[~, cleanupDir, ~, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+% The InitFcn hook runs from an arbitrary working directory, so a
+% relative path would silently resolve differently between sessions.
+configureBlock(model, "wp.vol", coil, command, configFile, "on");
+verifyError(testCase, ...
+    @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateRelativePath");
+end
+
+function testCorruptSidecarRecoversByRebuilding(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+radia.simulink.updateIHGeometry(model);
+% A crash mid-write must not brick every later diagram update: the
+% unreadable sidecar degrades to "no record" (with a warning) and the
+% next update rebuilds from the real sources.  The revision counter
+% restarts because the record was lost.
+writelines("{this is not json", configFile + ".fingerprint.json");
+warned = warning("off", "radia:simulink:IHGeometryUpdateSidecarCorrupt");
+restore = onCleanup(@() warning(warned)); %#ok<NASGU>
+status = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, status.rebuilt);
+verifyEqual(testCase, status.revision, 1);
+verifyEqual(testCase, runCount(runsFile), 2);
+end
+
+function testFreshSkipsReloadUntilConfigContentChanges(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+radia.simulink.updateIHGeometry(model);
+workspace = get_param(model, "ModelWorkspace");
+% Plant a sentinel: a skipped reload must leave the workspace variable
+% untouched (a real configuration carries dense operator matrices, so
+% reloading on every diagram update costs seconds for nothing).
+workspace.assignin("radia_ih_config", "SENTINEL");
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "up-to-date");
+verifyEqual(testCase, string(workspace.getVariable("radia_ih_config")), ...
+    "SENTINEL");
+% Hand-editing the configuration file must reload it (no rebuild).
+config = radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.05); %#ok<NASGU>
+save(configFile, "config");
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "reloaded");
+verifyFalse(testCase, status.rebuilt);
+verifyEqual(testCase, runCount(runsFile), 1);
+verifyTrue(testCase, isstruct(workspace.getVariable("radia_ih_config")));
+verifyEqual(testCase, string(get_param(model, "FixedStep")), ...
+    string(compose("%.17g", 0.05)));
+% And the refreshed artifact hash makes the next update skip again.
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "up-to-date");
+end
+
 function testUnconfiguredBlockIsInert(testCase)
 [model, closer] = freshModel(); %#ok<ASGLU>
 radia.simulink.addIHGeometryUpdateBlock(model);

@@ -18,13 +18,24 @@ function status = updateIHGeometry(modelName, options)
 %   update; the mask's "Rebuild now" button calls it with Force=true.
 %
 %   status fields: engaged, rebuilt, revision, reason, notes,
-%   config_file, files.
+%   config_file, files.  reason is one of:
+%     "no-geometry-update-block" / "unconfigured"  (nothing to do)
+%     "up-to-date"  inputs unchanged AND the workspace provably holds
+%                   this configuration already (artifact hash +
+%                   revision marker) -- nothing ran
+%     "reloaded"    inputs unchanged but the configuration file content
+%                   changed (or the workspace lost it) -- reloaded
+%                   without running the assemble command
+%     "rebuilt"     inputs changed -- assemble command ran
 %
-%   Fail-loud contract (no fallbacks): a missing geometry file, a
-%   failing assemble command, a command that does not produce the
-%   configuration file, and a stale state with auto-rebuild disabled
-%   (unless Force=true was explicitly requested) are all immediate
-%   errors.
+%   All three paths (workpiece, coil, config_file) must be ABSOLUTE:
+%   the update hook runs from an arbitrary working directory.
+%
+%   Fail-loud contract (no fallbacks): a relative path, a missing
+%   geometry file, a failing assemble command, a command that does not
+%   produce the configuration file, and a stale state with auto-rebuild
+%   disabled (unless Force=true was explicitly requested) are all
+%   immediate errors.
 
 arguments
     modelName (1,1) string
@@ -69,6 +80,18 @@ if strlength(configFile) == 0
         "Geometry Update needs the configuration file the assemble " + ...
         "command writes (config_file).");
 end
+% The InitFcn hook fires from whatever working directory MATLAB happens
+% to be in, so relative paths would resolve differently between
+% sessions (wrong file hashed, sidecar scattered).  Require absolute.
+pathValues = [wpValue, coilValue, configFile];
+for pathIndex = 1:numel(pathValues)
+    if ~java.io.File(char(pathValues(pathIndex))).isAbsolute()
+        error("radia:simulink:IHGeometryUpdateRelativePath", ...
+            "Geometry Update requires ABSOLUTE paths (the update hook " + ...
+            "runs from an arbitrary working directory); got: %s", ...
+            pathValues(pathIndex));
+    end
+end
 
 [wpPath, coilRole, coilPath, notes] = classifyGeometryPair(wpValue, coilValue);
 status.engaged = true;
@@ -86,21 +109,37 @@ fingerprint = struct( ...
     "files", radia.simulink.fileFingerprint([wpPath; coilPath]));
 
 sidecarPath = configFile + ".fingerprint.json";
+stored = readSidecar(sidecarPath);
 previousRevision = 0;
 fresh = false;
-if ~options.Force && isfile(sidecarPath) && isfile(configFile)
-    stored = jsondecode(fileread(sidecarPath));
+if ~isempty(stored)
     previousRevision = storedRevision(stored);
-    fresh = sameFingerprint(stored, fingerprint);
-elseif isfile(sidecarPath)
-    stored = jsondecode(fileread(sidecarPath));
-    previousRevision = storedRevision(stored);
+    if ~options.Force && isfile(configFile)
+        fresh = sameFingerprint(stored, fingerprint);
+    end
 end
 
 if fresh
+    % Inputs unchanged -> never re-run the assemble command.  Reloading
+    % the configuration is still skipped only when BOTH the artifact
+    % hash and the model-workspace revision marker prove the workspace
+    % already holds exactly this configuration (a real config carries
+    % dense operator matrices -- reloading it on every diagram update
+    % costs seconds and doubles peak memory for nothing).
+    workspace = get_param(modelName, "ModelWorkspace");
+    artifact = radia.simulink.fileFingerprint(configFile);
+    if canSkipReload(workspace, stored, artifact, previousRevision)
+        status.revision = previousRevision;
+        status.reason = "up-to-date";
+        return
+    end
     radia.simulink.configureIHNativeModel(modelName, configFile);
+    workspace.assignin("radia_ih_geometry_revision", previousRevision);
+    record = stored;
+    record.artifact = artifact;
+    writeJson(sidecarPath, record);
     status.revision = previousRevision;
-    status.reason = "up-to-date";
+    status.reason = "reloaded";
     return
 end
 
@@ -131,9 +170,12 @@ end
 radia.simulink.configureIHNativeModel(modelName, configFile);
 
 record = fingerprint;
+record.artifact = radia.simulink.fileFingerprint(configFile);
 record.revision = previousRevision + 1;
 record.generated_by = "radia.simulink.updateIHGeometry";
 writeJson(sidecarPath, record);
+workspace = get_param(modelName, "ModelWorkspace");
+workspace.assignin("radia_ih_geometry_revision", record.revision);
 
 status.rebuilt = true;
 status.revision = record.revision;
@@ -179,6 +221,55 @@ end
 
 function tf = fitsExtension(value, extensions)
 tf = any(endsWith(lower(string(value)), lower(string(extensions))));
+end
+
+function stored = readSidecar(sidecarPath)
+%READSIDECAR Sidecar record, or empty when missing or unreadable.
+%   The sidecar is OUR cache metadata, not user input: a corrupted file
+%   (e.g. a crash mid-write) must degrade to "no record" -- forcing a
+%   rebuild from the real sources -- instead of blocking every diagram
+%   update behind a cryptic jsondecode error.
+stored = struct([]);
+if ~isfile(sidecarPath)
+    return
+end
+try
+    stored = jsondecode(fileread(sidecarPath));
+catch decodeError
+    warning("radia:simulink:IHGeometryUpdateSidecarCorrupt", ...
+        "Fingerprint sidecar is unreadable and will be rebuilt " + ...
+        "(%s): %s", decodeError.message, sidecarPath);
+    stored = struct([]);
+end
+if ~isstruct(stored) || ~isscalar(stored)
+    stored = struct([]);
+end
+end
+
+function tf = canSkipReload(workspace, stored, artifact, revision)
+%CANSKIPRELOAD True when the model workspace provably already holds the
+%   configuration the sidecar describes: the artifact hash matches the
+%   config file on disk AND the workspace revision marker (assigned
+%   together with every configure) matches the sidecar revision.  Any
+%   doubt -> false -> reload (the safe direction).
+tf = false;
+if ~isfield(stored, "artifact")
+    return
+end
+storedArtifact = stored.artifact;
+if ~isfield(storedArtifact, "sha256") || ...
+        ~strcmp(char(string(storedArtifact.sha256)), artifact.sha256)
+    return
+end
+if ~workspace.hasVariable("radia_ih_config") || ...
+        ~workspace.hasVariable("radia_ih_geometry_revision")
+    return
+end
+marker = workspace.getVariable("radia_ih_geometry_revision");
+if ~(isscalar(marker) && isnumeric(marker) && double(marker) == revision)
+    return
+end
+tf = true;
 end
 
 function revision = storedRevision(stored)
