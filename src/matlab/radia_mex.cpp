@@ -665,6 +665,16 @@ mxArray* RealColumn(const std::vector<double>& values) {
     return result;
 }
 
+mxArray* Int32Column(const std::vector<int>& values) {
+    static_assert(sizeof(int) == sizeof(std::int32_t));
+    mxArray* result = mxCreateNumericMatrix(
+        values.size(), 1, mxINT32_CLASS, mxREAL);
+    auto* data = static_cast<std::int32_t*>(mxGetData(result));
+    std::transform(values.begin(), values.end(), data,
+                   [](int value) { return static_cast<std::int32_t>(value); });
+    return result;
+}
+
 mxArray* RealMatrixOutput(const std::vector<double>& values,
                           std::size_t rows, std::size_t cols) {
     mxArray* result = mxCreateDoubleMatrix(rows, cols, mxREAL);
@@ -1499,6 +1509,8 @@ mxArray* Commands() {
         "hacapk.charge_gram.geometry_mass_apply", "hacapk.charge_gram.mass_riesz",
         "hacapk.charge_gram.apply_configured_linear_material_operator",
         "hacapk.charge_gram.apply_configured_linear_material_operator_many",
+        "hacapk.charge_gram.configured_linear_material_element_blocks",
+        "hacapk.charge_gram.configured_linear_material_candidate_clusters",
         "hacapk.charge_gram.reduce_configured_candidate_schur",
         "hacapk.charge_gram.solve_configured_linear_material",
         "hacapk.charge_gram.solve_configured_linear_material_auto_prec",
@@ -7797,6 +7809,41 @@ void ChargeGramLinearMaterialApply(const std::string& command, int nlhs,
     plhs[0] = RealMatrixOutput(y, nrhs_value, n_face);
 }
 
+void ChargeGramConfiguredLinearMaterialElementBlocks(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+        "values = radia_mex('hacapk.charge_gram."
+        "configured_linear_material_element_blocks', handle, inv_chi, "
+        "candidate_dofs, block_offsets)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    const double inv_chi = Scalar(prhs[2], "inv_chi");
+    auto candidate_dofs = IntegerVector(prhs[3], "candidate_dofs");
+    auto block_offsets = IntegerVector(prhs[4], "block_offsets");
+    plhs[0] = RealColumn(
+        holder.manager->ConfiguredLinearMaterialElementBlocks(
+            inv_chi, candidate_dofs, block_offsets));
+}
+
+void ChargeGramConfiguredLinearMaterialCandidateClusters(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 5, nlhs, 1,
+        "result = radia_mex('hacapk.charge_gram."
+        "configured_linear_material_candidate_clusters', handle, "
+        "candidate_dofs, block_offsets, requested_clusters)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    auto candidate_dofs = IntegerVector(prhs[2], "candidate_dofs");
+    auto block_offsets = IntegerVector(prhs[3], "block_offsets");
+    const int requested_clusters =
+        PositiveInteger(prhs[4], "requested_clusters");
+    int n_cluster = 0;
+    auto labels = holder.manager->ConfiguredLinearMaterialCandidateClusters(
+        candidate_dofs, block_offsets, requested_clusters, n_cluster);
+    const char* fields[] = {"labels", "n_cluster"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 2, fields);
+    mxSetField(plhs[0], 0, "labels", Int32Column(labels));
+    mxSetField(plhs[0], 0, "n_cluster", mxCreateDoubleScalar(n_cluster));
+}
+
 void ChargeGramReduceConfiguredCandidateSchur(
     int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     CheckArity(nrhs, 12, nlhs, 1,
@@ -10223,6 +10270,18 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         command ==
             "hacapk.charge_gram.apply_configured_linear_material_operator_many") {
         ChargeGramLinearMaterialApply(command, nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hacapk.charge_gram."
+                   "configured_linear_material_element_blocks") {
+        ChargeGramConfiguredLinearMaterialElementBlocks(
+            nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hacapk.charge_gram."
+                   "configured_linear_material_candidate_clusters") {
+        ChargeGramConfiguredLinearMaterialCandidateClusters(
+            nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command ==

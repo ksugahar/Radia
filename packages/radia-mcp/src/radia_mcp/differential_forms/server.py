@@ -16,14 +16,16 @@ electromagnetism:
 - Finite Element Exterior Calculus (Arnold-Falk-Winther 2006:
   P_r Λ^k and P_r^- Λ^k families, Koszul complex, cochain projections,
   Hodge Laplacian)
+- Visual differential geometry (intrinsic metric, curvature, parallel
+  transport, holonomy, Cartan moving frames, geometry-first QA)
 - Bibliography of source PDFs
 
 Usage:
     mcp-server-differential-forms              # Start MCP server (stdio)
     mcp-server-differential-forms --selftest   # Run self-test
 
-This server is read-only: every tool returns structured documentation
-strings.  No solver, no symbolic computation.  Companion knowledge:
+This server is read-only: tools return documentation or diagnostic JSON and
+never write project data.  No solver, no symbolic computation.  Companion knowledge:
 - `radia_mcp.radia_ngsolve` — concrete FEM examples
 - `radia_mcp.electromagnet` — accelerator-magnet workflow
 - `radia_mcp.ih` — induction heating with edge/face element coupling
@@ -32,20 +34,22 @@ strings.  No solver, no symbolic computation.  Companion knowledge:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
 
+from ..common import register_status_tool
 from .basics_knowledge import get_basics_documentation
-from .maxwell_knowledge import get_maxwell_documentation
-from .whitney_knowledge import get_whitney_documentation
-from .de_rham_knowledge import get_de_rham_documentation
-from .homology_knowledge import get_homology_documentation
-from .feec_knowledge import get_feec_documentation
 from .bibliography_knowledge import get_bibliography_documentation
-from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation
-from .forces_knowledge import get_forces_documentation
-from .em_force_ngsolve_recipe_knowledge import get_em_force_ngsolve_recipe
+from .de_rham_knowledge import get_de_rham_documentation
 from .em_force_extras_knowledge import get_em_force_extras
+from .em_force_ngsolve_recipe_knowledge import get_em_force_ngsolve_recipe
+from .feec_knowledge import get_feec_documentation
+from .forces_knowledge import get_forces_documentation
 from .gauge_invariance_gate import gauge_invariance_gate as build_gauge_invariance_gate
+from .homology_knowledge import get_homology_documentation
+from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation
+from .maxwell_knowledge import get_maxwell_documentation
+from .visual_geometry_gate import visual_geometry_gate as build_visual_geometry_gate
+from .visual_geometry_knowledge import get_visual_geometry_documentation
+from .whitney_knowledge import get_whitney_documentation
 
 mcp = FastMCP("mcp-server-differential-forms")
 
@@ -56,9 +60,42 @@ def differential_forms_gauge_invariance_gate(summary_json: str) -> str:
     return build_gauge_invariance_gate(summary_json)
 
 
+@mcp.tool()
+def differential_forms_geometry_gate(summary_json: str) -> str:
+    """Gate de Rham, pullback, Hodge, Cartan, surface, and dF invariants."""
+    return build_visual_geometry_gate(summary_json)
+
+
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def differential_forms_visual_geometry(topic: str = "all") -> str:
+    """
+    Visual differential geometry as a Radia reasoning and QA layer.
+
+    Topics:
+      "all"
+      "five_acts"          - Space, metric, curvature, parallel transport,
+                             and forms as a five-stage dependency map
+      "intrinsic_metric"   - Intrinsic/extrinsic geometry, metric, Hodge,
+                             pullback, and the NGSolve ownership boundary
+      "curvature_holonomy" - Curvature, Gauss-Bonnet, parallel transport,
+                             and separation from cohomology and gauge loops
+      "forms_stokes"       - Forms as integrands, generalized Stokes,
+                             H1/HCurl/HDiv/L2, and exact incidence checks
+      "cartan"              - Moving frames, connection 1-forms, structure
+                             equations, and explicit sign conventions
+      "maxwell"             - Spacetime electromagnetic 2-form, dF = 0,
+                             constitutive Hodge, and vector-proxy guard
+      "radia_workflow"      - Geometry-first implementation workflow and
+                             symptom-to-structure diagnosis table
+      "qa"                  - Input contract for the executable geometry gate
+      "source_scope"        - Attribution and implementation-source boundary
+    """
+    return get_visual_geometry_documentation(topic)
+
 
 @mcp.tool()
 def differential_forms_basics(topic: str = "all") -> str:
@@ -372,21 +409,37 @@ def differential_forms_starter(level: str = "intro") -> str:
 
     Args:
       level: "intro"        - For users new to differential forms
+             "geometry"     - For geometry and coordinate-map diagnostics
              "fem"          - For users with FEM background
              "research"     - For users doing PDE / numerical analysis
     """
     if level == "intro":
         return (
             "Suggested learning path through this MCP server:\n"
-            "  1. differential_forms_basics('tangent_vectors')\n"
-            "  2. differential_forms_basics('wedge_product')\n"
-            "  3. differential_forms_basics('exterior_derivative')\n"
-            "  4. differential_forms_basics('stokes')\n"
-            "  5. differential_forms_maxwell('maxwell')\n"
-            "  6. differential_forms_maxwell('hodge')\n"
-            "  7. differential_forms_maxwell('twisted')\n"
-            "Goal: understand how Maxwell's equations become four lines\n"
-            "       (dF = 0, dG = J, F = ⋆G, plus material law).\n"
+            "  1. differential_forms_visual_geometry('five_acts')\n"
+            "  2. differential_forms_visual_geometry('intrinsic_metric')\n"
+            "  3. differential_forms_basics('tangent_vectors')\n"
+            "  4. differential_forms_basics('wedge_product')\n"
+            "  5. differential_forms_basics('exterior_derivative')\n"
+            "  6. differential_forms_basics('stokes')\n"
+            "  7. differential_forms_maxwell('maxwell')\n"
+            "  8. differential_forms_maxwell('hodge')\n"
+            "  9. differential_forms_maxwell('twisted')\n"
+            "Goal: separate metric-free topology from metric/material laws,\n"
+            "      then read Maxwell through dF = 0 and dG = J.\n"
+        )
+    if level == "geometry":
+        return (
+            "Suggested geometry-first diagnostic path:\n"
+            "  1. differential_forms_visual_geometry('five_acts')\n"
+            "  2. differential_forms_visual_geometry('intrinsic_metric')\n"
+            "  3. differential_forms_visual_geometry('curvature_holonomy')\n"
+            "  4. differential_forms_visual_geometry('cartan')\n"
+            "  5. differential_forms_visual_geometry('forms_stokes')\n"
+            "  6. differential_forms_visual_geometry('radia_workflow')\n"
+            "  7. differential_forms_visual_geometry('qa')\n"
+            "Goal: identify which failures belong to topology, metric,\n"
+            "      connection, orientation, or constitutive structure.\n"
         )
     if level == "fem":
         return (
@@ -406,17 +459,20 @@ def differential_forms_starter(level: str = "intro") -> str:
     if level == "research":
         return (
             "Suggested deep-dive for PDE / numerical analyst:\n"
-            "  1. differential_forms_feec('overview')\n"
-            "  2. differential_forms_feec('cochain_projection')\n"
-            "  3. differential_forms_feec('koszul')\n"
-            "  4. differential_forms_feec('hodge_laplacian')\n"
-            "  5. differential_forms_homology('chain_complex')\n"
-            "  6. differential_forms_homology('euler_poincare')\n"
-            "  7. differential_forms_bibliography()\n"
+            "  1. differential_forms_visual_geometry('cartan')\n"
+            "  2. differential_forms_visual_geometry('curvature_holonomy')\n"
+            "  3. differential_forms_feec('overview')\n"
+            "  4. differential_forms_feec('cochain_projection')\n"
+            "  5. differential_forms_feec('koszul')\n"
+            "  6. differential_forms_feec('hodge_laplacian')\n"
+            "  7. differential_forms_homology('chain_complex')\n"
+            "  8. differential_forms_homology('euler_poincare')\n"
+            "  9. differential_forms_bibliography()\n"
             "  → Then read Arnold-Falk-Winther 2006 in full (155 p).\n"
         )
     return (
-        f"Unknown level '{level}'. Available: 'intro', 'fem', 'research'."
+        f"Unknown level '{level}'. Available: 'intro', 'geometry', 'fem', "
+        "'research'."
     )
 
 
@@ -477,7 +533,7 @@ def verify_with_mathematica(identity: str = "dsquared") -> str:
 register_status_tool(
     mcp,
     server_name='mcp-server-differential-forms',
-    description='Differential forms / exterior calculus for EM: de Rham complex, cohomology, EM forces theory',
+    description='Visual differential geometry / exterior calculus for EM: Cartan, de Rham, cohomology, EM forces theory',
     subpackage='radia_mcp.differential_forms',
     related_servers=["fem", "mathematica"],
 )
@@ -487,6 +543,7 @@ def main():
     if "--selftest" in sys.argv:
         print("Differential-forms MCP server self-test:")
         tools = [
+            ("visual_geometry", differential_forms_visual_geometry),
             ("basics", differential_forms_basics),
             ("maxwell", differential_forms_maxwell),
             ("whitney", differential_forms_whitney),

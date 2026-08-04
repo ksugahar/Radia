@@ -3829,6 +3829,44 @@ PYBIND11_MODULE(_radia_pybind, m) {
              }, py::arg("inv_chi"), py::arg("x"),
              py::arg("respect_constraints") = true,
              "Apply row-major batches of inv_chi*M+B.T*G*B with the native symmetric H-matrix multi-RHS kernel.")
+        .def("configured_linear_material_element_blocks",
+             [](RadHACApKChargeGram& s, double inv_chi,
+                I32Array candidate_a, I32Array offsets_a) {
+                 auto candidates = to_1d_vector<int>(
+                     candidate_a, "candidate_dofs");
+                 auto offsets = to_1d_vector<int>(
+                     offsets_a, "block_offsets");
+                 std::vector<double> values;
+                 {
+                     py::gil_scoped_release release;
+                     values = s.ConfiguredLinearMaterialElementBlocks(
+                         inv_chi, candidates, offsets);
+                 }
+                 return to_numpy_1d(values);
+             }, py::arg("inv_chi"), py::arg("candidate_dofs"),
+             py::arg("block_offsets"),
+             "Return packed exact row-major element blocks of inv_chi*M+B.T*G*B from local charge supports.")
+        .def("configured_linear_material_candidate_clusters",
+             [](RadHACApKChargeGram& s, I32Array candidate_a,
+                I32Array offsets_a, int requested_clusters) {
+                 auto candidates = to_1d_vector<int>(
+                     candidate_a, "candidate_dofs");
+                 auto offsets = to_1d_vector<int>(
+                     offsets_a, "block_offsets");
+                 std::vector<int> labels;
+                 int n_cluster = 0;
+                 {
+                     py::gil_scoped_release release;
+                     labels = s.ConfiguredLinearMaterialCandidateClusters(
+                         candidates, offsets, requested_clusters, n_cluster);
+                 }
+                 py::dict out;
+                 out["labels"] = to_numpy_1d(labels);
+                 out["n_cluster"] = n_cluster;
+                 return out;
+             }, py::arg("candidate_dofs"), py::arg("block_offsets"),
+             py::arg("requested_clusters"),
+             "Assign packed HDiv element blocks to dominant nodes of the native charge H-matrix cluster tree.")
         .def("reduce_configured_candidate_schur",
              [](RadHACApKChargeGram& s, double inv_chi,
                 I32Array candidate_a, F64Array rhs_a, F64Array state_a,

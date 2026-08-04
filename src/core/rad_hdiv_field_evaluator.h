@@ -33,6 +33,12 @@ public:
         std::vector<int> image_masks,
         std::vector<double> image_signs,
         const FieldEvaluatorOptions& options = {});
+    static std::shared_ptr<HDivFieldEvaluator> FromPolynomialTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {});
 
     static std::shared_ptr<HDivFieldEvaluator> FromCloud(
         std::vector<double> xyz,

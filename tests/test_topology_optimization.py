@@ -36,10 +36,46 @@ from radia.topology_optimization import (
     ngsolve_discontinuous_element_dof_blocks,
     select_collaborative_element_batch,
     select_tsvd_element_candidates,
+    select_tsvd_exact_block_batch,
     solve_hdiv_mmm_active_elements,
     solve_element_generation_lp,
     solve_shape_lp,
 )
+
+
+def test_empty_insertion_side_tsvd_front_is_a_clean_no_update():
+    update=select_tsvd_exact_block_batch(
+        current_response=[2.0],response_target=[0.0],response_band=[1.0],
+        candidate_elements=[3],candidate_volumes=[1.0],
+        proposal_elements=[],representative_elements=[],
+        evaluate_bundle_response=lambda _:np.array([0.0]),
+        volume_budget=1.0)
+    assert update.selected_elements.size==0
+    assert update.evaluated_bundles==0
+    assert update.predicted_max_band_ratio==pytest.approx(2.0)
+    assert "no insertion-side" in update.status
+
+    deferred_removal=select_tsvd_exact_block_batch(
+        current_response=[2.0],response_target=[0.0],response_band=[1.0],
+        candidate_elements=[],candidate_volumes=[],
+        proposal_elements=[3],representative_elements=[3],
+        evaluate_bundle_response=lambda _:np.array([0.0]),
+        volume_budget=1.0)
+    assert deferred_removal.selected_elements.size==0
+    assert deferred_removal.evaluated_bundles==0
+
+
+def test_screened_adjoint_correction_is_lifted_through_candidate_row_space():
+    import radia.topology_optimization as topopt
+    skeleton=np.array([[1.0,2.0,-1.0],[0.5,-1.0,3.0]])
+    interpolation=np.array([[1.0,0.0],[0.0,1.0],[2.0,-.5],[-1.0,3.0]])
+    direct=interpolation@skeleton
+    sampled_correction=np.array([[.2,-.1,.4],[-.3,.5,.1]])
+    expected=direct+interpolation@sampled_correction
+    partial=direct.copy();partial[[0,1]]+=sampled_correction
+    actual=topopt._interpolate_screened_response_correction(
+        direct,partial,[0,1],np.ones(4))
+    np.testing.assert_allclose(actual,expected,rtol=0,atol=2e-14)
 
 
 def _element_centroids(mesh):
@@ -100,6 +136,17 @@ def test_binary_generation_lp_enforces_predecessor_selection():
         volume_budget=2.0,maximum_new_elements=2,
         candidate_objective_change=[0.0,-1.0],predecessor_pairs=[(1,0)])
     np.testing.assert_array_equal(update.selected,[True,True])
+
+
+def test_binary_generation_lp_enforces_mutually_exclusive_terminal_states():
+    update=solve_element_generation_lp(
+        current_response=[2.0],response_target=[0.0],response_band=[1.0],
+        candidate_response_delta=[[-1.1,-1.2]],candidate_volumes=[1.0,2.0],
+        volume_budget=3.0,maximum_new_elements=2,
+        candidate_objective_change=[-1.0,-1.0],
+        candidate_exclusion_groups=[7,7])
+    assert np.count_nonzero(update.selected)==1
+    assert update.predicted_max_band_ratio>=0.8-1e-10
 
 
 def test_ngsolve_hdiv_linear_form_shape_tangent_includes_spatial_kernel_motion():
@@ -330,6 +377,27 @@ def test_native_hdiv_mmm_boundary_insertions_match_exact_active_resolves():
         assert np.asarray(batched).flags.c_contiguous
     blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     active_dofs=blocks[0]
+    candidate_blocks=tuple(blocks[int(element)]
+                           for element in result.candidate_elements)
+    candidate_dofs=np.concatenate(candidate_blocks).astype(np.int32)
+    block_offsets=np.asarray(np.r_[0,np.cumsum(
+        [len(block) for block in candidate_blocks])],dtype=np.int32)
+    packed=np.asarray(gram.configured_linear_material_element_blocks(
+        .2,candidate_dofs,block_offsets))
+    packed_offset=0
+    for block in candidate_blocks:
+        basis=np.zeros((len(block),fes.ndof),dtype=float)
+        basis[np.arange(len(block)),block]=1.0
+        applied=np.asarray(
+            gram.apply_configured_linear_material_operator_many(
+                .2,np.ascontiguousarray(basis),
+                respect_constraints=False))
+        expected=applied[:,block].T
+        next_offset=packed_offset+len(block)**2
+        local=packed[packed_offset:next_offset].reshape(
+            len(block),len(block))
+        packed_offset=next_offset
+        np.testing.assert_allclose(local,expected,rtol=3e-13,atol=3e-13)
     assert result.candidate_response_delta.shape==(2,len(result.candidate_elements))
     assert result.available_candidate_count==len(result.candidate_elements)
     assert set(result.native_reduction_timings)=={
@@ -361,6 +429,90 @@ def test_native_hdiv_mmm_boundary_insertions_match_exact_active_resolves():
     np.testing.assert_allclose(screened.candidate_response_delta[:,0],
                                result.candidate_response_delta[:,0],
                                rtol=2e-12,atol=2e-12)
+
+
+def test_large_hdiv_mmm_candidate_screen_uses_one_shared_hmatrix_batch():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=5,ny=5,nz=1)
+    # Production Lego growth uses broken mapped-HEX BDM1 (36 DOFs/cell).
+    fes=ng.HDiv(mesh,order=1,discontinuous=True)
+    with ng.TaskManager():
+        _,native,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+
+    class CountingChargeGram:
+        def __init__(self,inner):
+            self.inner=inner
+            self.operator_batches=[]
+
+        def __getattr__(self,name):
+            return getattr(self.inner,name)
+
+        def apply_configured_linear_material_operator_many(
+                self,inv_chi,rows,*,respect_constraints=True):
+            self.operator_batches.append(
+                (int(np.asarray(rows).shape[0]),bool(respect_constraints)))
+            return self.inner.apply_configured_linear_material_operator_many(
+                inv_chi,rows,respect_constraints=respect_constraints)
+
+    gram=CountingChargeGram(native)
+    active=np.zeros(mesh.ne,dtype=bool)
+    active[[6,7,8,11,12,13,16,17,18]]=True
+    candidates=ngsolve_boundary_growth_candidates(mesh,active)
+    assert len(candidates)==12
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    probe=blocks[int(candidates[0])]
+    local=np.asarray(native.configured_linear_material_element_blocks(
+        .2,np.asarray(probe,dtype=np.int32),
+        np.asarray([0,len(probe)],dtype=np.int32))).reshape(
+            len(probe),len(probe))
+    basis=np.zeros((len(probe),fes.ndof),dtype=float)
+    basis[np.arange(len(probe)),probe]=1.0
+    applied=np.asarray(native.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(basis),respect_constraints=False))
+    np.testing.assert_allclose(local,applied[:,probe].T,
+                               rtol=3e-13,atol=3e-13)
+    rng=np.random.default_rng(20260807)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    active_state,_,_=solve_hdiv_mmm_active_elements(
+        charge_gram=native,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        solve_tolerance=1e-11)
+    screened=linearize_hdiv_mmm_element_generation(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        candidate_elements=candidates,solve_tolerance=1e-11,
+        candidate_batch_size=64,
+        candidate_selector=lambda elements,delta,state,response:[],
+        active_state=active_state,screen_with_adjoint=False)
+    assert screened.candidate_elements.size==0
+    assert screened.state_iterations==0
+    assert screened.adjoint_iterations==tuple()
+    # The reused state is the only unconstrained global H-matrix apply.  Exact
+    # candidate A_ee blocks come from their local charge supports; production
+    # proposal adjoints are deferred to a rejected-proposal fallback.
+    unconstrained=[count for count,respect in gram.operator_batches
+                   if not respect]
+    assert unconstrained==[1]
+    gram.operator_batches.clear()
+    working=linearize_hdiv_mmm_element_generation(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        candidate_elements=candidates,solve_tolerance=1e-11,
+        candidate_batch_size=64,
+        candidate_selector=lambda elements,delta,state,response:[],
+        active_state=active_state,screen_with_adjoint=True,
+        screen_adjoint_rows=[1])
+    assert working.state_iterations==0
+    assert len(working.adjoint_iterations)==1
+    unconstrained=[count for count,respect in gram.operator_batches
+                   if not respect]
+    assert unconstrained==[2]
 
 
 def test_native_hdiv_mmm_block_schur_bundle_matches_exact_active_resolve():
@@ -412,7 +564,7 @@ def test_native_bdm1_candidate_schur_tsvd_solves_only_charge_coupling_rank():
     linearization=linearize_hdiv_mmm_element_generation(
         charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
         response_matrix=response_matrix,active_elements=active,
-        solve_tolerance=1e-10,candidate_batch_size=128)
+        solve_tolerance=1e-12,candidate_batch_size=128)
     candidate_width=len(linearization.candidate_dof_blocks[0])
     assert candidate_width==36
     assert 0<linearization.candidate_coupling_rank<candidate_width
@@ -430,7 +582,7 @@ def test_native_bdm1_candidate_schur_tsvd_solves_only_charge_coupling_rank():
     exact_state,exact_response,_=solve_hdiv_mmm_active_elements(
         charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
         response_matrix=response_matrix,
-        active_elements=np.ones(mesh.ne,dtype=bool),solve_tolerance=1e-10)
+        active_elements=np.ones(mesh.ne,dtype=bool),solve_tolerance=1e-12)
     np.testing.assert_allclose(
         linearization.response+linearization.candidate_response_delta[:,0],
         exact_response,rtol=3e-10,atol=3e-10)
@@ -576,6 +728,86 @@ def test_tsvd_magnetization_sign_selects_addition_or_removal():
     assert remove.added_volume==-1.0
 
 
+def test_clustered_tsvd_removal_front_preserves_spatial_modes():
+    import radia.topology_optimization as topopt
+    elements=np.arange(10,16,dtype=np.int64)
+    # Three spatial clusters contain locally near-parallel columns.  A global
+    # response-only rank decision may keep only the first cluster; the native
+    # tree front must retain at least one column from all three.
+    delta=np.array([
+        [1.0,.9, .05,.04, .01,.02],
+        [.02,.01, 1.0,.8, .04,.03],
+        [.01,.02, .03,.04, 1.0,.9]])
+    labels=np.array([0,0,1,1,2,2])
+    front=topopt._clustered_tsvd_candidate_front(
+        candidate_elements=elements,candidate_response_delta=delta,
+        response_band=np.ones(3),cluster_labels=labels,
+        signed_coefficients=-np.array([3.,2.,5.,4.,7.,6.]),
+        selected_elements=[11],representative_elements=[10],
+        relative_tolerance=1e-6,front_limit=4)
+    assert 11 in front and 10 in front
+    assert len(front)<=4
+    np.testing.assert_array_equal(
+        np.unique(labels[np.searchsorted(elements,front)]),[0,1,2])
+
+
+def test_adjoint_corrected_removal_response_uses_local_schur_action():
+    import radia.topology_optimization as topopt
+    A=np.array([[4.,1.,0.],[1.,3.,.5],[0.,.5,2.]])
+    state=np.array([.2,-.4,.7])
+    C=np.array([[1.,2.,-.5],[-.3,.1,1.2]])
+    adjoints=np.linalg.solve(A,C.T)
+    block=np.array([1,2],dtype=np.int32)
+    class LocalBlockGram:
+        @staticmethod
+        def configured_linear_material_element_blocks(inv_chi,dofs,offsets):
+            del inv_chi,offsets
+            return A[np.ix_(dofs,dofs)].reshape(-1)
+    observed=topopt._adjoint_corrected_removal_material_response(
+        charge_gram=LocalBlockGram(),inv_chi=.2,dof_blocks=(block,),
+        state=state,response_matrix=C,
+        screen_context={"adjoints":adjoints,"adjoint_rows":np.array([0,1])},
+        response_band=np.ones(2))
+    expected=adjoints[block].T@(A[np.ix_(block,block)]@state[block])
+    np.testing.assert_allclose(observed[:,0],expected,rtol=2e-15,atol=2e-15)
+
+
+def test_native_candidate_blocks_follow_charge_hmatrix_cluster_tree():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=4,ny=2,nz=1)
+    fes=ng.HDiv(mesh,order=1,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,_=build_charge_gram(
+            fes,eps=1e-9,leafsize=4,eta=1.0,
+            internal_interfaces=True)
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    packed=np.concatenate(blocks).astype(np.int32)
+    offsets=np.asarray(np.r_[0,np.cumsum([len(block) for block in blocks])],
+                       dtype=np.int32)
+    membership=gram.configured_linear_material_candidate_clusters(
+        packed,offsets,4)
+    labels=np.asarray(membership["labels"],dtype=np.int64)
+    assert labels.shape==(mesh.ne,)
+    assert 1<int(membership["n_cluster"])<=4
+    assert np.unique(labels).size>1
+    assert np.all((labels>=0)&(labels<int(membership["n_cluster"])))
+
+
+def test_tsvd_keeps_cumulative_terminal_depths_mutually_exclusive():
+    update=select_tsvd_element_candidates(
+        current_response=[2.0],response_target=[0.0],response_band=[1.0],
+        candidate_elements=[10,11],candidate_response_delta=[[1.1,1.2]],
+        candidate_volumes=[1.0,2.0],volume_budget=0.0,
+        candidate_material_active=[True,True],
+        candidate_volume_changes=[1.0,2.0],
+        candidate_exclusion_groups=[3,3],relative_tolerance=1e-10,
+        improvement_capture=1.0)
+    assert len(update.selected_elements)==1
+    np.testing.assert_array_equal(update.selected_directions,[-1])
+
+
 def test_boundary_removal_is_outermost_and_preserves_seed():
     from ngsolve.meshes import MakeStructured3DMesh
     mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
@@ -633,6 +865,187 @@ def test_hdiv_mmm_generation_driver_accepts_purely_collaborative_pair():
     assert result.history[0].collaborative_bundles_evaluated==3
     assert result.history[0].superposed_max_band_ratio>=9e7
     np.testing.assert_allclose(result.response,[current+1.0],atol=3e-11)
+
+
+def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
+        monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    active=np.array([False,True,False])
+    target_active=np.array([True,True,False])
+    rng=np.random.default_rng(20260806)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+
+    def force_global_addition(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        material=np.asarray(kwargs["candidate_material_active"],dtype=bool)
+        wanted=int(elements[(elements==0)&~material][0])
+        coefficients=np.zeros(len(elements))
+        coefficients[np.flatnonzero(elements==wanted)[0]]=1.0
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.array([wanted],dtype=np.int64),
+            selected_directions=np.array([1],dtype=np.int8),
+            representative_elements=np.array([wanted],dtype=np.int64),
+            representative_directions=np.array([1],dtype=np.int8),
+            predicted_response=np.asarray(kwargs["response_target"],dtype=float),
+            predicted_max_band_ratio=0.0,added_volume=1.0,
+            numerical_rank=1,aca_rank=1,singular_values=np.ones(1),
+            signed_coefficients=coefficients,relative_truncation_error=0.0,
+            status="forced global addition")
+
+    monkeypatch.setattr(
+        topopt,"select_tsvd_element_candidates",force_global_addition)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([False,True,False]),
+        maximum_batch_elements=1,max_iterations=1,solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    np.testing.assert_array_equal(result.history[0].added_elements,[0])
+    assert result.history[0].selection_model==(
+        "all-candidate-aca-qr-tsvd-direct-full-resolve")
+    assert result.history[0].collaborative_bundles_evaluated==1
+    assert result.history[0].candidate_coupling_rank==0
+    assert result.history[0].native_reduction_timings["solve_s"]==0.0
+
+
+def test_hdiv_mmm_generation_uses_qr_representative_adjoint_rows(monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=4,ny=4,nz=4)
+    centers=_element_centroids(mesh)
+    active=np.all((centers>.25)&(centers<.75),axis=1)
+    candidates=ngsolve_boundary_growth_candidates(mesh,active)
+    assert candidates.size>8
+    wanted=int(candidates[0])
+    target_active=active.copy();target_active[wanted]=True
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260808)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(4,fes.ndof))
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+
+    def force_wanted(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        coefficients=np.zeros(len(elements))
+        coefficients[np.flatnonzero(elements==wanted)[0]]=1.0
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.array([wanted],dtype=np.int64),
+            selected_directions=np.array([1],dtype=np.int8),
+            representative_elements=np.array([wanted],dtype=np.int64),
+            representative_directions=np.array([1],dtype=np.int8),
+            predicted_response=np.asarray(kwargs["response_target"],dtype=float),
+            predicted_max_band_ratio=0.0,added_volume=float(volumes[wanted]),
+            numerical_rank=1,aca_rank=1,singular_values=np.ones(1),
+            signed_coefficients=coefficients,relative_truncation_error=0.0,
+            status="forced QR-row proposal")
+
+    monkeypatch.setattr(topopt,"select_tsvd_element_candidates",force_wanted)
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(4,1e-8),
+        volume_max=float(volumes@active+volumes[wanted]),
+        fixed_active_elements=active,max_iterations=1,
+        solve_tolerance=1e-11,proposal_adjoint_count=4)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    assert result.history[0].response_adjoint_count==4
+    assert result.history[0].screened_candidate_count==0
+
+
+def test_hdiv_mmm_generation_shrinks_all_candidate_volume_trust_region(
+        monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    active=np.array([False,True,False])
+    target_active=np.array([True,True,False])
+    rng=np.random.default_rng(20260807)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    first_budget=float(volumes[0]+volumes[2])
+
+    def force_budget_dependent_batch(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        material=np.asarray(kwargs["candidate_material_active"],dtype=bool)
+        additions=elements[~material]
+        wanted=int(additions[additions==0][0])
+        selected=(additions if float(kwargs["volume_budget"])>
+                  .75*first_budget else np.array([wanted],dtype=np.int64))
+        coefficients=np.zeros(len(elements))
+        coefficients[np.isin(elements,selected)]=1.0
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.asarray(selected,dtype=np.int64),
+            selected_directions=np.ones(len(selected),dtype=np.int8),
+            representative_elements=np.asarray(selected,dtype=np.int64),
+            representative_directions=np.ones(len(selected),dtype=np.int8),
+            predicted_response=np.asarray(kwargs["response_target"],dtype=float),
+            predicted_max_band_ratio=0.0,
+            added_volume=float(np.sum(volumes[selected])),
+            numerical_rank=1,aca_rank=1,singular_values=np.ones(1),
+            signed_coefficients=coefficients,relative_truncation_error=0.0,
+            status="forced volume-trust proposal")
+
+    monkeypatch.setattr(
+        topopt,"select_tsvd_element_candidates",force_budget_dependent_batch)
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([False,True,False]),
+        max_iterations=1,solve_tolerance=1e-11,
+        minimum_model_agreement=.999,proposal_trust_region_trials=3)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    np.testing.assert_array_equal(result.history[0].added_elements,[0])
+    assert result.history[0].selection_model==(
+        "all-candidate-aca-qr-tsvd-adaptive-trust-full-resolve")
+    assert result.history[0].collaborative_bundles_evaluated==2
 
 
 def test_hdiv_mmm_generation_driver_commits_exact_whole_element_batch():
@@ -698,11 +1111,69 @@ def test_hdiv_mmm_generation_removes_negative_magnetization_candidate():
     np.testing.assert_array_equal(result.history[0].added_elements,[])
     np.testing.assert_array_equal(result.history[0].removed_elements,[1])
     assert result.history[0].selection_model==\
-        "signed-magnetization-aca-qr-tsvd-full-resolve"
+        "all-candidate-aca-qr-tsvd-direct-full-resolve"
     assert result.history[0].candidate_coupling_rank==0
     assert result.history[0].native_reduction_timings["solve_s"]==0.0
     np.testing.assert_array_equal(result.active_elements,target_active)
     np.testing.assert_allclose(result.response,target,rtol=0,atol=4e-11)
+
+
+def test_hdiv_mmm_projected_adjoint_removal_is_not_double_transformed(
+        monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260809)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    raw_rows=rng.normal(size=(3,fes.ndof))
+    projection=np.array([[1.,-.2,.3],[.1,.7,-.4]])
+    current=np.array([True,True,False])
+    target_active=np.array([True,False,False])
+    _,target_raw,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=raw_rows,active_elements=target_active,
+        solve_tolerance=1e-11)
+    target=projection@target_raw
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    def force_removal(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        material=np.asarray(kwargs["candidate_material_active"],dtype=bool)
+        wanted=int(elements[(elements==1)&material][0])
+        coefficients=np.zeros(len(elements))
+        coefficients[np.flatnonzero(elements==wanted)[0]]=-1.0
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.array([wanted],dtype=np.int64),
+            selected_directions=np.array([-1],dtype=np.int8),
+            representative_elements=np.array([wanted],dtype=np.int64),
+            representative_directions=np.array([-1],dtype=np.int8),
+            predicted_response=np.asarray(kwargs["response_target"],dtype=float),
+            predicted_max_band_ratio=0.0,added_volume=-float(volumes[wanted]),
+            numerical_rank=1,aca_rank=1,singular_values=np.ones(1),
+            signed_coefficients=coefficients,relative_truncation_error=0.0,
+            status="forced projected deletion")
+    monkeypatch.setattr(topopt,"select_tsvd_element_candidates",force_removal)
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=raw_rows,active_elements=current,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([True,False,False]),
+        predecessor_elements=np.array([-1,0,1]),max_iterations=1,
+        solve_tolerance=1e-11,
+        response_transform=lambda values:projection@values,
+        response_transform_jacobian=lambda values:projection)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    np.testing.assert_array_equal(result.history[0].removed_elements,[1])
+    np.testing.assert_allclose(result.objective_response,target,
+                               rtol=0,atol=5e-11)
 
 
 def test_hdiv_mmm_generation_exactly_checks_alternate_removal_after_bad_tsvd(
@@ -837,6 +1308,55 @@ def test_hdiv_mmm_generation_removes_through_thickness_group_as_one_move():
     assert result.converged and len(result.history)==1
     np.testing.assert_array_equal(
         np.sort(result.history[0].removed_elements),target_group)
+    np.testing.assert_array_equal(result.active_elements,target_active)
+
+
+def test_hdiv_mmm_generation_removes_complete_coupled_predecessor_chain():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=1,ny=1,nz=3)
+    centers=_element_centroids(mesh)
+    order=np.argsort(centers[:,2])
+    outer,middle,root=map(int,order)
+    predecessor=np.full(mesh.ne,-1,dtype=np.int64)
+    predecessor[outer]=middle;predecessor[middle]=root
+    active=np.ones(mesh.ne,dtype=bool)
+    target_active=active.copy();target_active[[outer,middle]]=False
+    fixed_active=np.zeros(mesh.ne,dtype=bool);fixed_active[root]=True
+    coupling=np.full(mesh.ne,-1,dtype=np.int64)
+    coupling[[outer,middle]]=0
+    raw=ngsolve_boundary_removal_candidates(
+        mesh,active,fixed_active_elements=fixed_active,
+        predecessor_elements=predecessor)
+    np.testing.assert_array_equal(raw,[outer])
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260809)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=fixed_active,
+        predecessor_elements=predecessor,
+        removal_coupling_groups=coupling,max_iterations=1,
+        solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(
+        np.sort(result.history[0].removed_elements),
+        np.sort([outer,middle]))
     np.testing.assert_array_equal(result.active_elements,target_active)
 
 

@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **898 tools** across 48 MCP servers.
+Total: **900 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -39,7 +39,7 @@ Total: **898 tools** across 48 MCP servers.
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
-| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
+| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 15 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
@@ -878,7 +878,7 @@ Module: `radia_mcp.team_benchmark.server`
 
 ## `mcp-server-differential-forms`
 
-_Differential forms / exterior calculus for EM: de Rham complex, cohomology, EM forces theory_
+_Visual differential geometry / exterior calculus for EM: Cartan, de Rham, cohomology, EM forces theory_
 
 Module: `radia_mcp.differential_forms.server`
 
@@ -892,10 +892,12 @@ Module: `radia_mcp.differential_forms.server`
 | `differential_forms_feec` | Finite Element Exterior Calculus (Arnold-Falk-Winther 2006). |
 | `differential_forms_forces` | Electromagnetic forces in differential-form language. |
 | `differential_forms_gauge_invariance_gate` | Gate physical B/loss invariance without treating A as invariant. |
+| `differential_forms_geometry_gate` | Gate de Rham, pullback, Hodge, Cartan, surface, and dF invariants. |
 | `differential_forms_homology` | Chain complex, homology, Betti numbers, tree-cotree gauge. |
 | `differential_forms_mathematica_recipes` | Wolfram Language recipes for symbolic verification, pairing |
 | `differential_forms_maxwell` | Maxwell's equations in differential-form language. |
 | `differential_forms_status` | (no description) |
+| `differential_forms_visual_geometry` | Visual differential geometry as a Radia reasoning and QA layer. |
 | `differential_forms_whitney` | Whitney elements: discrete differential forms on a simplicial mesh. |
 
 ## `mcp-server-mathematica`

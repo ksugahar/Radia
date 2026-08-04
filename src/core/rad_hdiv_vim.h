@@ -99,10 +99,16 @@ void TetVolFieldLinear(const double V[4][3], const double r[3], double rho0,
                        const double g[3], double out[3]);                          /* linear volume charge */
 void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,
                           const double g[3], const double Q[3][3], double out[3]); /* quadratic volume charge */
+void TetVolFieldCubic(const double V[4][3], const double r[3],
+                      const double coefficient[20], double out[3]);              /* total-degree <= 3 volume charge */
+void TetVolFieldCubicBasis(const double V[4][3], const double r[3],
+                           double out[20][3]);                                   /* fields of physical monomials */
 void LinTriField(const double V[3][3], const double r[3], double sigma0,
                  const double s[3], double out[3]);                                /* linear surface charge */
 void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
+void QuadTriFieldBasis(const double V[3][3], const double r[3],
+                       double out[10][3]);                                        /* fields of physical monomials */
 /* Forward geometry/coefficient derivative of the same exact affine TET/TRI
  * field kernels.  Both value and direction exclude 1/(4*pi).  These routines
  * differentiate the closed-form moment formulas; no finite-difference or

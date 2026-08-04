@@ -23,7 +23,8 @@ function status = updateIHGeometry(modelName, options)
 %   Fail-loud contract (no fallbacks): a missing geometry file, a
 %   failing assemble command, a command that does not produce the
 %   configuration file, and a stale state with auto-rebuild disabled
-%   are all immediate errors.
+%   (unless Force=true was explicitly requested) are all immediate
+%   errors.
 
 arguments
     modelName (1,1) string
@@ -103,7 +104,7 @@ if fresh
     return
 end
 
-if ~autoRebuild
+if ~autoRebuild && ~options.Force
     error("radia:simulink:IHGeometryUpdateStale", ...
         "Geometry inputs changed but auto rebuild is off.  Press " + ...
         "'Rebuild now' on the Geometry Update block or enable " + ...
@@ -190,11 +191,12 @@ end
 
 function tf = sameFingerprint(stored, current)
 tf = false;
-if ~isfield(stored, "command") || ~isfield(stored, "files") || ...
-        ~isfield(stored, "coil_role")
+if ~isfield(stored, "schema") || ~isfield(stored, "command") || ...
+        ~isfield(stored, "files") || ~isfield(stored, "coil_role")
     return
 end
-if ~strcmp(char(string(stored.command)), current.command) || ...
+if ~strcmp(char(string(stored.schema)), current.schema) || ...
+        ~strcmp(char(string(stored.command)), current.command) || ...
         ~strcmp(char(string(stored.coil_role)), current.coil_role)
     return
 end
@@ -204,7 +206,9 @@ if numel(storedFiles) ~= numel(current.files)
 end
 for index = 1:numel(current.files)
     storedEntry = storedFiles(index);
-    if ~isfield(storedEntry, "sha256") || ...
+    if ~isfield(storedEntry, "path") || ~isfield(storedEntry, "sha256") || ...
+            ~strcmp(char(string(storedEntry.path)), ...
+                current.files(index).path) || ...
             ~strcmp(char(string(storedEntry.sha256)), ...
                 current.files(index).sha256)
         return

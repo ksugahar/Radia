@@ -24,6 +24,12 @@ def test_package_builder_requires_native_ih_assets():
         name.endswith("validateIHNativeConfig.m")
         for name in module.PACKAGE_FILES
     )
+    assert {
+        "+radia/+simulink/addIHGeometryUpdateBlock.m",
+        "+radia/+simulink/fileFingerprint.m",
+        "+radia/+simulink/normalizeIHGeometryRoles.m",
+        "+radia/+simulink/updateIHGeometry.m",
+    } <= set(module.PACKAGE_FILES)
     assert not any(name.startswith("radia_ih_") for name in module.REQUIRED_MEX)
 
 

@@ -39,9 +39,9 @@ import sys
 # Note: QAction lives in QtGui in Qt6 / PySide6 (was QtWidgets in Qt5).
 from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, \
     QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGroupBox, \
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMenu, \
+    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, \
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, \
-    QVBoxLayout, QWidget
+    QVBoxLayout
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 
@@ -245,8 +245,8 @@ def _elf_labels_for_dim(dim_idx):
                 "MMS - Magnetic shell",
                 "MMT - Magnetic thin",
                 "MMP - Permanent magnet",
-                "MWL - Winding/coil",
-                "MWV - Vector winding",
+                "MWL - Nonlinear magnet (fixed local axis)",
+                "MWV - Nonlinear magnet (direction vectors)",
                 "MCL - Coil line",
                 "MCO - Current conductor",
                 "MAB - Armature block",
@@ -256,8 +256,8 @@ def _elf_labels_for_dim(dim_idx):
             "MMB - Magnetic body",
             "MMT - Magnetic thin",
             "MMP - Permanent magnet",
-            "MWL - Winding/coil",
-            "MWV - Vector winding",
+            "MWL - Nonlinear magnet (fixed local axis)",
+            "MWV - Nonlinear magnet (direction vectors)",
             "MCL - Coil line",
             "MCO - Current conductor",
             "MAB - Armature block",

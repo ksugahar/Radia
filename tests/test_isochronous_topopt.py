@@ -32,10 +32,14 @@ from radia.isochronous_topopt import (  # noqa: E402
     combined_function_exit_metrics,
     combined_function_exit_metrics_from_field_response,
     combined_function_linear_optics,
+    combined_function_transfer_map,
+    combined_function_transfer_map_from_field_response,
+    design_combined_function_transfer_map_target,
     design_achromatic_gradient_profile,
     straightened_bend_validation,
     isochronous_increment_targets, isochronous_total_field_bands,
     isochronous_profile_metrics, restore_projected_volume,
+    transfer_map_reachability,
 )
 
 
@@ -174,6 +178,107 @@ def test_hdiv_field_response_fuses_into_four_optics_rows_with_explicit_signs():
     np.testing.assert_allclose(fused.response, direct.response)
     np.testing.assert_allclose(
         fused.response_jacobian, direct.response_jacobian)
+
+
+def test_combined_function_transfer_map_matches_uniform_sector():
+    radius = 2.3
+    angle = 0.41
+    length = radius * angle
+    result = combined_function_transfer_map(
+        [1.0 / radius], [0.0], [length])
+    matrix = result.matrix
+    expected_radial = np.array([
+        [np.cos(angle), radius * np.sin(angle)],
+        [-np.sin(angle) / radius, np.cos(angle)],
+    ])
+    np.testing.assert_allclose(matrix[:2, :2], expected_radial,
+                               rtol=2e-14, atol=2e-14)
+    np.testing.assert_allclose(
+        matrix[:2, 5],
+        [radius * (1.0 - np.cos(angle)), np.sin(angle)],
+        rtol=2e-14, atol=2e-14)
+    np.testing.assert_allclose(
+        matrix[2:4, 2:4], [[1.0, length], [0.0, 1.0]],
+        rtol=2e-14, atol=2e-14)
+    np.testing.assert_allclose(
+        matrix[4, [0, 1, 5]],
+        [np.sin(angle),
+         radius * (1.0 - np.cos(angle)),
+         radius * (angle - np.sin(angle))],
+        rtol=2e-14, atol=2e-14)
+    assert matrix.flags.c_contiguous
+    assert result.response.shape == (13,)
+    assert result.response_jacobian.shape == (13, 0)
+
+
+def test_transfer_map_field_chain_uses_analytic_frechet_jacobian():
+    lengths = np.array([0.4, 0.6, 0.5])
+    rigidity = 2.0
+    field = np.array([-0.10, -0.14, -0.11, 3.0, -2.0, 0.5])
+    field_jacobian = np.array([
+        [0.2, -0.1], [0.1, 0.3], [-0.05, 0.12],
+        [1.0, -2.0], [-0.5, 0.4], [0.3, 0.8],
+    ])
+    analytic = combined_function_transfer_map_from_field_response(
+        field, lengths, rigidity,
+        field_response_jacobian=field_jacobian,
+        curvature_sign=-1.0, gradient_sign=-1.0)
+
+    # Finite differences are a regression oracle only; production topology
+    # sensitivities are the Frechet derivatives returned above.
+    step = 1.0e-6
+    finite_difference = np.empty_like(analytic.response_jacobian)
+    for parameter in range(field_jacobian.shape[1]):
+        plus = combined_function_transfer_map_from_field_response(
+            field + step * field_jacobian[:, parameter], lengths, rigidity,
+            curvature_sign=-1.0, gradient_sign=-1.0)
+        minus = combined_function_transfer_map_from_field_response(
+            field - step * field_jacobian[:, parameter], lengths, rigidity,
+            curvature_sign=-1.0, gradient_sign=-1.0)
+        finite_difference[:, parameter] = (
+            plus.response - minus.response) / (2.0 * step)
+    np.testing.assert_allclose(
+        analytic.response_jacobian, finite_difference,
+        rtol=3.0e-8, atol=3.0e-10)
+
+
+def test_transfer_map_reachability_rejects_uncontrolled_matrix_entry():
+    failed = transfer_map_reachability(
+        [0.0, 0.0], [[1.0, 0.0], [0.0, 0.0]],
+        [1.0, 1.0], [1.0, 1.0], acceptance_ratio=0.5)
+    assert failed.numerical_rank == 1
+    np.testing.assert_allclose(failed.predicted_response, [1.0, 0.0])
+    np.testing.assert_allclose(failed.residual, [0.0, -1.0])
+    assert not failed.reachable
+
+    passed = transfer_map_reachability(
+        [0.0, 0.0], [[1.0], [0.0]], [1.0, 0.0], [1.0, 1.0])
+    assert passed.reachable
+
+
+def test_ideal_optics_calculates_realisable_achromatic_transfer_target():
+    radial = np.array([[0.0, -3.0], [1.0 / 3.0, 0.0]])
+    vertical = np.array([[0.0, 4.0], [-0.25, 0.0]])
+    design = design_combined_function_transfer_map_target(
+        length=8.0, bend_angle=np.pi / 6.0,
+        radial_matrix=radial, vertical_matrix=vertical,
+        n_segments=16, normalized_gradient_limit=12.0)
+    np.testing.assert_allclose(
+        design.transfer_map.matrix[:2, :2], radial,
+        rtol=0.0, atol=2e-10)
+    np.testing.assert_allclose(
+        design.transfer_map.matrix[2:4, 2:4], vertical,
+        rtol=0.0, atol=2e-10)
+    np.testing.assert_allclose(
+        design.transfer_map.matrix[:2, 5], 0.0,
+        rtol=0.0, atol=2e-11)
+    np.testing.assert_allclose(
+        design.transfer_map.matrix[4, :2], 0.0,
+        rtol=0.0, atol=2e-11)
+    assert design.matrix[4, 5] > 0.0
+    assert design.maximum_scaled_residual < 1e-9
+    assert design.transfer_map.optics.radial_stable
+    assert design.transfer_map.optics.vertical_stable
 
 
 def test_analytic_achromatic_gradient_design_has_zero_endpoint_eta():
@@ -355,6 +460,51 @@ def test_native_flat_tet_field_functional_rows_match_exact_batch(broken_problem)
     assert rows.flags.c_contiguous
     np.testing.assert_allclose(rows@coefficients,expected,
                                rtol=2e-13,atol=2e-13)
+
+
+def test_native_affine_hex_bdm1_field_functional_rows_match_exact_batch():
+    """Affine HEX BDM1 rows and direct fields share the analytic TET/TRI source."""
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh=MakeStructured3DMesh(
+        hexes=True,nx=2,ny=1,nz=1,
+        mapping=lambda x,y,z:(1.3*x-.2*y,.7*y+.1*z,.45*z))
+    fes=ng.HDiv(mesh,order=1,discontinuous=True)
+    points=np.array([
+        [.41,.27,.451],
+        [1.05,.18,.49],
+        [-.08,.33,.22],
+        [.62,-.07,.12],
+    ],dtype=float)
+    rng=np.random.default_rng(20260803)
+    weights=rng.normal(size=(3,len(points),3))
+    coefficients=rng.normal(size=fes.ndof)
+    with TaskManager():
+        problem=DensityAdjointVIM(
+            fes,eps=1e-7,internal_interfaces=True)
+        rows=np.asarray(
+            problem.demag._G.configured_field_functional_rows(points,weights))
+        evaluator=problem.demag._G.create_field_evaluator(coefficients)
+        field=np.asarray(evaluator.field(points,"direct"))/(4.0*np.pi)
+    expected=np.einsum("rpc,pc->r",weights,field)
+    np.testing.assert_allclose(rows@coefficients,expected,
+                               rtol=3e-12,atol=3e-12)
+    assert dict(evaluator.stats())["source_representation"]=="analytic-tet"
+
+    # Independent NGSolve/Piola reciprocity is reliable once targets are well
+    # separated from the body.  It checks the affine trilinear-to-physical
+    # cubic conversion, not merely agreement between two users of that source.
+    far_points=np.array([[.2,.1,2.8],[1.1,.6,3.2],[-.7,.4,2.5]])
+    far_weights=rng.normal(size=(len(far_points),3))
+    with TaskManager():
+        far_row=np.asarray(problem.demag._G.configured_field_functional_rows(
+            far_points,far_weights[None,:,:]))[0]
+        reciprocal=np.zeros(fes.ndof)
+        for axis in range(3):
+            reciprocal+=field_functional_load(
+                fes,far_points,far_weights[:,axis],axis=axis,scale=1.0,
+                bonus_intorder=14).vec.FV().NumPy()
+    np.testing.assert_allclose(far_row,reciprocal,rtol=3e-9,atol=3e-11)
 
 
 def test_native_flat_tet_field_rows_are_finite_on_coplanar_panel_extension():

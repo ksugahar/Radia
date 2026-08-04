@@ -70,6 +70,10 @@ __all__ = [
     "sector_linear_optics", "isochronous_increment_targets",
     "isochronous_total_field_bands", "isochronous_profile_metrics",
     "CombinedFunctionLinearOptics", "combined_function_linear_optics",
+    "CombinedFunctionTransferMap", "combined_function_transfer_map",
+    "combined_function_transfer_map_from_field_response",
+    "TransferMapReachability", "transfer_map_reachability",
+    "TransferMapTargetDesign", "design_combined_function_transfer_map_target",
     "CombinedFunctionExitMetrics", "combined_function_exit_metrics",
     "combined_function_exit_metrics_from_field_response",
     "StraightenedBendValidation", "straightened_bend_validation",
@@ -241,6 +245,56 @@ class CombinedFunctionLinearOptics:
     vertical_trace: float
     radial_stable: bool
     vertical_stable: bool
+
+
+@dataclass(frozen=True)
+class CombinedFunctionTransferMap:
+    """First-order bend map and analytic field/design sensitivities.
+
+    The state ordering is ``(x, x', y, y', ell, delta)``.  The returned
+    6-by-6 matrix contains the horizontal and vertical betatron blocks, the
+    horizontal dispersion column, and the geometric path-length row.
+    ``matrix_jacobian[p]`` is the derivative of the complete matrix with
+    respect to design parameter ``p``.  The magnetic model has no RF or
+    velocity-slip input, so ``R56`` is the geometric contribution only.
+
+    ``response`` packs the entries requested through ``response_entries``;
+    this is the row-major numerical contract consumed by the HDiv-MMM
+    add/remove LP.  The default entries are the two complete 2-by-2 blocks and
+    ``R16, R26, R51, R52, R56``.  No particle or design finite difference is
+    used.
+    """
+    matrix: np.ndarray
+    matrix_jacobian: np.ndarray
+    response: np.ndarray
+    response_jacobian: np.ndarray
+    response_entries: tuple[tuple[int, int], ...]
+    optics: CombinedFunctionLinearOptics
+
+
+@dataclass(frozen=True)
+class TransferMapReachability:
+    """TSVD reachability certificate for one linearized topology step."""
+    numerical_rank: int
+    singular_values: np.ndarray
+    parameter_step: np.ndarray
+    predicted_response: np.ndarray
+    residual: np.ndarray
+    max_normalized_residual: float
+    reachable: bool
+
+
+@dataclass(frozen=True)
+class TransferMapTargetDesign:
+    """Ideal-optics target subsequently realized by HDiv-MMM topology."""
+    matrix: np.ndarray
+    segment_lengths: np.ndarray
+    curvature: np.ndarray
+    normalized_gradient: np.ndarray
+    transfer_map: CombinedFunctionTransferMap
+    maximum_scaled_residual: float
+    iterations: int
+    status: str
 
 
 @dataclass(frozen=True)
@@ -464,6 +518,10 @@ def combined_function_linear_optics(curvature, normalized_gradient,
         vertical_propagator=expm(vertical_generator*length)
         for parameter in range(n_parameter):
             dhi=dh[segment,parameter];dki=dk[segment,parameter]
+            if dhi == 0.0 and dki == 0.0:
+                dprop.append(np.zeros((3,3)))
+                dvertical_prop.append(np.zeros((2,2)))
+                continue
             derivative=np.zeros((3,3))
             derivative[1,0]=-(2.0*hi*dhi+dki)
             derivative[1,2]=dhi
@@ -493,6 +551,371 @@ def combined_function_linear_optics(curvature, normalized_gradient,
         dradial,dvertical,radial_trace,vertical_trace,
         bool(abs(radial_trace)<2.0-tolerance),
         bool(abs(vertical_trace)<2.0-tolerance))
+
+
+_DEFAULT_TRANSFER_RESPONSE_ENTRIES = (
+    (0, 0), (0, 1), (0, 5),
+    (1, 0), (1, 1), (1, 5),
+    (2, 2), (2, 3),
+    (3, 2), (3, 3),
+    (4, 0), (4, 1), (4, 5),
+)
+
+
+def combined_function_transfer_map(
+        curvature, normalized_gradient, segment_lengths, *,
+        curvature_jacobian=None, gradient_jacobian=None,
+        response_entries=None, stability_tolerance=1e-10):
+    """Return the 6-by-6 first-order map of a combined-function bend.
+
+    The horizontal-longitudinal generator for one constant segment is
+
+    ``x' = px``, ``px' = -(h**2+k1)x + h*delta``,
+    ``ell' = h*x``, ``delta' = 0``.
+
+    Exact matrix exponentials are multiplied in traversal order.  Their
+    derivatives use ``expm_frechet`` and therefore form an analytic chain from
+    HDiv-MMM field/gradient response rows to every selected transfer-matrix
+    entry.  ``response_entries`` uses zero-based ``(row, column)`` pairs in the
+    standard state order ``(x,x',y,y',ell,delta)``.
+    """
+    from scipy.linalg import expm, expm_frechet
+
+    h = np.asarray(curvature, dtype=float).reshape(-1)
+    k = np.asarray(normalized_gradient, dtype=float).reshape(-1)
+    ds = np.asarray(segment_lengths, dtype=float).reshape(-1)
+    if h.size == 0 or k.shape != h.shape or ds.shape != h.shape:
+        raise ValueError(
+            "combined-function transfer map requires matching non-empty "
+            "segment arrays")
+    if np.any(ds <= 0.0) or not np.all(np.isfinite(np.r_[h, k, ds])):
+        raise ValueError(
+            "combined-function transfer-map inputs must be finite and "
+            "lengths positive")
+
+    supplied = (curvature_jacobian is not None
+                or gradient_jacobian is not None)
+    if supplied:
+        raw = (curvature_jacobian if curvature_jacobian is not None
+               else gradient_jacobian)
+        raw = np.asarray(raw, dtype=float)
+        if raw.ndim != 2 or raw.shape[0] != h.size:
+            raise ValueError(
+                "combined-function transfer-map Jacobians need shape "
+                "(n_segment,n_parameter)")
+        n_parameter = raw.shape[1]
+        dh = (np.zeros((h.size, n_parameter))
+              if curvature_jacobian is None
+              else np.asarray(curvature_jacobian, dtype=float))
+        dk = (np.zeros((h.size, n_parameter))
+              if gradient_jacobian is None
+              else np.asarray(gradient_jacobian, dtype=float))
+        if (dh.shape != (h.size, n_parameter)
+                or dk.shape != (h.size, n_parameter)
+                or not np.all(np.isfinite(np.r_[dh.ravel(), dk.ravel()]))):
+            raise ValueError(
+                "curvature and gradient transfer-map Jacobians must have "
+                "matching finite shapes")
+    else:
+        n_parameter = 0
+        dh = np.zeros((h.size, 0))
+        dk = np.zeros((h.size, 0))
+
+    entries = (_DEFAULT_TRANSFER_RESPONSE_ENTRIES
+               if response_entries is None else
+               tuple(tuple(int(value) for value in pair)
+                     for pair in response_entries))
+    if (not entries or any(len(pair) != 2 for pair in entries)
+            or any(row < 0 or row >= 6 or column < 0 or column >= 6
+                   for row, column in entries)
+            or len(set(entries)) != len(entries)):
+        raise ValueError(
+            "response_entries must contain unique 6-by-6 matrix indices")
+
+    # Local order: (x, x', ell, delta).  This augments the usual dispersion
+    # propagator by the geometric path-length equation ell' = h*x.
+    horizontal = np.eye(4)
+    dhorizontal = np.zeros((n_parameter, 4, 4))
+    for segment, (hi, ki, length) in enumerate(zip(h, k, ds)):
+        generator = np.array([
+            [0.0, 1.0, 0.0, 0.0],
+            [-(hi * hi + ki), 0.0, 0.0, hi],
+            [hi, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+        ])
+        scaled = generator * length
+        propagator = expm(scaled)
+        old_horizontal = horizontal
+        old_dhorizontal = dhorizontal.copy()
+        horizontal = propagator @ old_horizontal
+        for parameter in range(n_parameter):
+            dhi = dh[segment, parameter]
+            dki = dk[segment, parameter]
+            if dhi == 0.0 and dki == 0.0:
+                dhorizontal[parameter] = (
+                    propagator @ old_dhorizontal[parameter])
+                continue
+            derivative = np.zeros((4, 4))
+            derivative[1, 0] = -(2.0 * hi * dhi + dki)
+            derivative[1, 3] = dhi
+            derivative[2, 0] = dhi
+            dpropagator = expm_frechet(
+                scaled, derivative * length, compute_expm=False)
+            dhorizontal[parameter] = (
+                propagator @ old_dhorizontal[parameter]
+                + dpropagator @ old_horizontal)
+
+    optics = combined_function_linear_optics(
+        h, k, ds,
+        curvature_jacobian=(dh if supplied else None),
+        gradient_jacobian=(dk if supplied else None),
+        stability_tolerance=stability_tolerance)
+    matrix = np.eye(6)
+    matrix_jacobian = np.zeros((n_parameter, 6, 6))
+    horizontal_indices = np.array([0, 1, 4, 5], dtype=np.int64)
+    matrix[np.ix_(horizontal_indices, horizontal_indices)] = horizontal
+    matrix[2:4, 2:4] = optics.vertical_matrix
+    for parameter in range(n_parameter):
+        matrix_jacobian[parameter][
+            np.ix_(horizontal_indices, horizontal_indices)
+        ] = dhorizontal[parameter]
+        matrix_jacobian[parameter, 2:4, 2:4] = (
+            optics.vertical_matrix_jacobian[parameter])
+    response = np.asarray(
+        [matrix[row, column] for row, column in entries], dtype=float)
+    response_jacobian = np.asarray(
+        [matrix_jacobian[:, row, column] for row, column in entries],
+        dtype=float).reshape(len(entries), n_parameter)
+    return CombinedFunctionTransferMap(
+        matrix=matrix,
+        matrix_jacobian=matrix_jacobian,
+        response=response,
+        response_jacobian=response_jacobian,
+        response_entries=entries,
+        optics=optics)
+
+
+def combined_function_transfer_map_from_field_response(
+        field_response, segment_lengths, magnetic_rigidity, *,
+        field_response_jacobian=None, curvature_sign=1.0,
+        gradient_sign=1.0, response_entries=None,
+        stability_tolerance=1e-10):
+    """Fuse row-major HDiv-MMM ``[B..., dB/dx...]`` rows into a bend map."""
+    values = np.asarray(field_response, dtype=float).reshape(-1)
+    lengths = np.asarray(segment_lengths, dtype=float).reshape(-1)
+    rigidity = float(magnetic_rigidity)
+    curvature_sign = float(curvature_sign)
+    gradient_sign = float(gradient_sign)
+    if (lengths.size == 0 or values.shape != (2 * lengths.size,)
+            or not np.isfinite(rigidity) or rigidity == 0.0
+            or not np.all(np.isfinite(
+                np.r_[values, lengths, curvature_sign, gradient_sign]))):
+        raise ValueError(
+            "field response must contain finite B/G rows for every segment "
+            "and magnetic_rigidity must be finite and nonzero")
+    curvature_jacobian = None
+    gradient_jacobian = None
+    if field_response_jacobian is not None:
+        jacobian = np.asarray(field_response_jacobian, dtype=float)
+        if (jacobian.ndim != 2 or jacobian.shape[0] != values.size
+                or not np.all(np.isfinite(jacobian))):
+            raise ValueError(
+                "field_response_jacobian needs finite shape "
+                "(2*n_segment,n_parameter)")
+        curvature_jacobian = (
+            curvature_sign * jacobian[:lengths.size] / rigidity)
+        gradient_jacobian = (
+            gradient_sign * jacobian[lengths.size:] / rigidity)
+    return combined_function_transfer_map(
+        curvature_sign * values[:lengths.size] / rigidity,
+        gradient_sign * values[lengths.size:] / rigidity,
+        lengths,
+        curvature_jacobian=curvature_jacobian,
+        gradient_jacobian=gradient_jacobian,
+        response_entries=response_entries,
+        stability_tolerance=stability_tolerance)
+
+
+def design_combined_function_transfer_map_target(*, length, bend_angle,
+        radial_matrix, vertical_matrix, n_segments=16,
+        normalized_gradient_limit=None, initial_normalized_gradient=None,
+        endpoint_tolerance=1e-9, symplectic_tolerance=1e-8,
+        max_iterations=1000):
+    """Calculate a realizable achromatic map before electromagnetic design.
+
+    The caller supplies stable, symplectic horizontal and vertical 2-by-2
+    betatron blocks.  A piecewise-constant combined-function profile is then
+    found whose full map has those blocks and ``R16=R26=0`` while preserving
+    the specified total bend angle.  Only this ideal one-dimensional optics
+    problem is solved here; the returned gradient profile is *not* prescribed
+    to the magnet.  HDiv-MMM topology optimization instead matches the
+    returned 6-by-6 matrix through
+    :func:`combined_function_transfer_map_from_field_response`.
+
+    The nonlinear least-squares Jacobian is assembled from exact matrix-
+    exponential Frechet derivatives.  Finite differences are not used.
+    """
+    from scipy.optimize import least_squares
+
+    length = float(length)
+    angle = float(bend_angle)
+    count = int(n_segments)
+    tolerance = float(endpoint_tolerance)
+    symplectic = float(symplectic_tolerance)
+    radial = np.asarray(radial_matrix, dtype=float)
+    vertical = np.asarray(vertical_matrix, dtype=float)
+    if (not np.isfinite(length) or length <= 0.0
+            or not np.isfinite(angle) or angle == 0.0 or count < 4
+            or radial.shape != (2, 2) or vertical.shape != (2, 2)
+            or not np.all(np.isfinite(np.r_[radial.ravel(), vertical.ravel()]))
+            or not np.isfinite(tolerance) or tolerance <= 0.0
+            or not np.isfinite(symplectic) or symplectic <= 0.0
+            or int(max_iterations) <= 0):
+        raise ValueError("invalid transfer-map target specification")
+    determinants = np.array([np.linalg.det(radial), np.linalg.det(vertical)])
+    if np.any(np.abs(determinants - 1.0) > symplectic):
+        raise ValueError(
+            "target radial and vertical blocks must be symplectic "
+            "(determinant one)")
+
+    lengths = np.full(count, length / count)
+    curvature = np.full(count, angle / length)
+    identity = np.eye(count)
+    entries = (
+        (0, 0), (0, 1), (1, 0), (1, 1), (0, 5), (1, 5),
+        (2, 2), (2, 3), (3, 2), (3, 3),
+    )
+    target = np.r_[radial.ravel(), 0.0, 0.0, vertical.ravel()]
+    # Balance dimensionally different matrix entries at one-percent relative
+    # accuracy while keeping zero diagonal and dispersion targets observable.
+    # A pure length nondimensionalization makes R16/R26 too cheap and can trap
+    # the ideal-optics solve on a non-achromatic local branch.
+    def block_scale(block):
+        return np.array([
+            max(1e-2, 1e-2 * abs(block[0, 0])),
+            max(1e-3 * length, 1e-2 * abs(block[0, 1])),
+            max(1e-3 / length, 1e-2 * abs(block[1, 0])),
+            max(1e-2, 1e-2 * abs(block[1, 1])),
+        ])
+    scale = np.r_[block_scale(radial),
+                  1e-4 * length, 1e-4,
+                  block_scale(vertical)]
+
+    def evaluate(values):
+        return combined_function_transfer_map(
+            curvature, values, lengths,
+            gradient_jacobian=identity, response_entries=entries)
+
+    def residual(values):
+        return (evaluate(values).response - target) / scale
+
+    def residual_jacobian(values):
+        return evaluate(values).response_jacobian / scale[:, None]
+
+    if initial_normalized_gradient is None:
+        initial = np.zeros(count)
+    else:
+        initial = np.asarray(
+            initial_normalized_gradient, dtype=float).reshape(-1)
+        if initial.shape != (count,) or not np.all(np.isfinite(initial)):
+            raise ValueError(
+                "initial_normalized_gradient must match n_segments")
+    if normalized_gradient_limit is None:
+        lower = np.full(count, -np.inf)
+        upper = np.full(count, np.inf)
+    else:
+        limit = float(normalized_gradient_limit)
+        if not np.isfinite(limit) or limit <= 0.0:
+            raise ValueError(
+                "normalized_gradient_limit must be positive and finite")
+        lower = np.full(count, -limit)
+        upper = np.full(count, limit)
+        initial = np.clip(initial, lower, upper)
+    result = least_squares(
+        residual, initial, jac=residual_jacobian,
+        bounds=(lower, upper), max_nfev=int(max_iterations),
+        xtol=1e-12, ftol=1e-12, gtol=1e-12)
+    ideal = combined_function_transfer_map(
+        curvature, result.x, lengths)
+    requested = np.eye(6)
+    requested[:2, :2] = radial
+    requested[:2, 5] = 0.0
+    requested[2:4, 2:4] = vertical
+    # A closed-dispersion symplectic map fixes R51 and R52 to zero.  R56 is
+    # not specified by the endpoint betatron blocks; retain the geometric
+    # value calculated by the realizable ideal profile.
+    requested[4, 0] = 0.0
+    requested[4, 1] = 0.0
+    requested[4, 5] = ideal.matrix[4, 5]
+    maximum = float(np.max(np.abs(residual(result.x))))
+    if (not result.success or maximum > tolerance
+            or not ideal.optics.radial_stable
+            or not ideal.optics.vertical_stable):
+        raise RuntimeError(
+            "transfer-map target design failed: %s; scaled residual=%.3e; "
+            "traces=(%.6g,%.6g)" % (
+                result.message, maximum, ideal.optics.radial_trace,
+                ideal.optics.vertical_trace))
+    return TransferMapTargetDesign(
+        matrix=requested,
+        segment_lengths=lengths,
+        curvature=curvature,
+        normalized_gradient=np.asarray(result.x, dtype=float),
+        transfer_map=ideal,
+        maximum_scaled_residual=maximum,
+        iterations=int(result.nfev),
+        status=str(result.message))
+
+
+def transfer_map_reachability(current_response, response_jacobian,
+                              target_response, response_band, *,
+                              relative_tolerance=1e-10,
+                              acceptance_ratio=1.0):
+    """Project a target transfer map onto one linearized design space.
+
+    This is a necessary reachability gate for topology optimization.  It solves
+    the band-scaled, unconstrained least-squares problem by TSVD and reports the
+    residual orthogonal to the candidate-response column space.  A failed gate
+    means the current design variables cannot reproduce the requested map even
+    before 0/1, volume, predecessor, and connectivity constraints are imposed.
+    """
+    response = np.asarray(current_response, dtype=float).reshape(-1)
+    target = np.asarray(target_response, dtype=float).reshape(-1)
+    band = np.asarray(response_band, dtype=float).reshape(-1)
+    jacobian = np.asarray(response_jacobian, dtype=float)
+    tolerance = float(relative_tolerance)
+    acceptance = float(acceptance_ratio)
+    if (response.size == 0 or target.shape != response.shape
+            or band.shape != response.shape or np.any(band <= 0.0)
+            or jacobian.ndim != 2 or jacobian.shape[0] != response.size
+            or not np.all(np.isfinite(
+                np.r_[response, target, band, jacobian.ravel()]))
+            or not np.isfinite(tolerance) or tolerance < 0.0
+            or not np.isfinite(acceptance) or acceptance < 0.0):
+        raise ValueError("invalid transfer-map reachability inputs")
+    scaled = jacobian / band[:, None]
+    rhs = (target - response) / band
+    u, singular_values, vh = np.linalg.svd(scaled, full_matrices=False)
+    threshold = (tolerance * singular_values[0]
+                 if singular_values.size else 0.0)
+    rank = int(np.count_nonzero(singular_values > threshold))
+    if rank:
+        parameter_step = (vh[:rank].T
+                          @ ((u[:, :rank].T @ rhs)
+                             / singular_values[:rank]))
+    else:
+        parameter_step = np.zeros(jacobian.shape[1], dtype=float)
+    predicted = response + jacobian @ parameter_step
+    residual = predicted - target
+    ratio = float(np.max(np.abs(residual / band)))
+    return TransferMapReachability(
+        numerical_rank=rank,
+        singular_values=singular_values,
+        parameter_step=np.asarray(parameter_step, dtype=float),
+        predicted_response=np.asarray(predicted, dtype=float),
+        residual=np.asarray(residual, dtype=float),
+        max_normalized_residual=ratio,
+        reachable=bool(ratio <= acceptance))
 
 
 def combined_function_exit_metrics(

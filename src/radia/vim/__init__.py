@@ -225,6 +225,10 @@ from ._slab_eddy import (  # noqa: F401  (exact 1-D HDiv-MMM/HCurl-eddy validati
     slab_surface_model,
     solve_parallel_slab_reduced,
 )
+from ._transient import (  # noqa: F401  (backward-Euler HDiv/HCurl transient driver)
+    save_transient_artifact,
+    solve_hdiv_hcurl_transient,
+)
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
     """
@@ -397,5 +401,6 @@ __all__ = [
     "ConductiveSlab", "parallel_slab_exact_response",
     "slab_surface_model", "solve_parallel_slab_reduced",
     "refine_parallel_slab_reduced",
+    "solve_hdiv_hcurl_transient", "save_transient_artifact",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]

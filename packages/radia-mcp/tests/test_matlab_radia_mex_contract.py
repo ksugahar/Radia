@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 332
+    assert contract["command_count"] == 334
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -41,6 +41,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     }.issubset(contract["command_names"])
     assert "hdiv.field_evaluator.from_cloud" in contract["command_names"]
     assert "hacapk.charge_gram.configure_charge_map" in contract["command_names"]
+    assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
+    assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]
     assert contract["command_groups"]["radia-core"] >= 70
     assert contract["pybind_public_count"] == 94
@@ -54,7 +56,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["command_groups"]["axifem"] == 2
     assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
     assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
-    assert contract["pybind_class_surface_count"] == 119
+    assert contract["pybind_class_surface_count"] == 121
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
     assert contract["pybind_class_missing_commands"] == []
     assert contract["pybind_class_unmapped"] == []
@@ -166,14 +168,14 @@ def test_root_readme_publishes_native_topology_mex_parity():
     matlab_readme = " ".join(
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
-    assert "119 stateful class members" in matlab_readme
-    assert "All 240 entries are covered by the current 324-command gateway" in matlab_readme
+    assert "121 stateful class members" in matlab_readme
+    assert "All 242 entries are covered by the current 334-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
-    assert "| Stateful pybind11 class surface | 119 / 119 covered |" in parity_doc
-    assert "| MEX gateway commands | 324 |" in parity_doc
+    assert "| Stateful pybind11 class surface | 121 / 121 covered |" in parity_doc
+    assert "| MEX gateway commands | 334 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():

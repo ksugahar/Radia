@@ -21,6 +21,7 @@ Each entry:
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 # Order roughly follows logical groupings (general → application)
@@ -452,9 +453,11 @@ CATALOG: dict[str, dict[str, Any]] = {
     "differential-forms": {
         "subpackage": "radia_mcp.differential_forms",
         "entry_point": "mcp-server-differential-forms",
-        "description": "Differential forms / exterior calculus for EM: "
-                       "de Rham complex, cohomology, EM forces theory",
-        "primary_tools": ["differential_forms_usage", "forces_knowledge"],
+        "description": "Visual differential geometry / exterior calculus "
+                       "for EM: Cartan, de Rham, cohomology, EM forces theory",
+        "primary_tools": ["differential_forms_visual_geometry",
+                          "differential_forms_geometry_gate",
+                          "differential_forms_maxwell"],
         "related": ["fem", "mathematica"],
         "tags": ["theory"],
     },

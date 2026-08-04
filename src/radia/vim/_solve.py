@@ -112,7 +112,8 @@ from . import _image
 from ._vim import build_charge_gram, _volume_vertex_counts
 from ._capabilities import validate_hdiv_configuration
 from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi,
-                         _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi)
+                         _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi,
+                         _validate_bh_table)
 
 
 class _OperatorBackedResult(dict):
@@ -557,6 +558,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                          % (sorted(_PRECONDITIONERS), preconditioner))
     if (mu_r is None) == (bh_table is None):
         raise ValueError("vim.Solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
+    if bh_table is not None:
+        _validate_bh_table(bh_table)
 
     # AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved geometry as
     # B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with geometry order

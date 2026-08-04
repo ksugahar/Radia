@@ -1,16 +1,16 @@
 """
 Bibliography of the source PDFs distilled into this MCP server.
 
-Each entry includes: file path, language, length (pages), and which
+Each entry includes: public-safe corpus locator, language, length (pages), and which
 topics of this server it informs.
 """
 
 BIBLIOGRAPHY = """
 # Source bibliography for radia_mcp.differential_forms
 
-The knowledge in this MCP server was distilled from the following six
-canonical sources.  Each entry includes the original file path, language,
-length, and a one-line orientation.
+The knowledge in this MCP server was distilled from the following curated
+sources.  Each entry includes a public-safe corpus locator, language, length,
+and a one-line orientation.
 
 ## 1. A. Bossavit, "Computational Electromagnetism"
 (Variational Formulations, Complementarity, Edge Elements),
@@ -419,10 +419,34 @@ the need to compute material derivatives of the state variable.
 IPM motor cogging-torque minimization case study.  Foundation for
 the new subpackage `radia_mcp.topology_optimization`.
 
+## 21. T. Needham, "Visual Differential Geometry and Forms:
+A Mathematical Drama in Five Acts", Princeton University Press, 2021.
+
+Japanese translation: "ビジュアル微分幾何・微分形式 5幕からなる数学劇",
+supervising translator S. Yamada, translator H. Kawabe, Maruzen Publishing,
+issued 2026-07-31, ISBN 978-4-621-31240-7.
+
+Path:
+  public-safe curated corpus
+  differential geometry and differential forms textbook collection
+
+Pages: 636 (Japanese PDF edition)
+Language: Japanese translation of the English original
+Relevance: PRIMARY VISUAL-GEOMETRY SOURCE.  Organizes the subject as five
+acts: space, metric, curvature, parallel transport, and differential forms.
+Provides the geometric route from intrinsic curvature and holonomy through
+generalized Stokes, de Rham cohomology, Maxwell's electromagnetic 2-form,
+and Cartan moving frames and structure equations.
+
+Informs: visual_geometry, basics, maxwell, de_rham, homology.  The finite-
+element spaces, Piola maps, NGSolve ownership rules, and executable QA gate
+are Radia's computational synthesis and are not attributed to this book.
+
 ## Cross-reference
 
 | Topic in this server | Primary source | Supplementary |
 |----------------------|----------------|----------------|
+| visual_geometry      | Needham 2021, Acts I-V | Bossavit Ch.1/5, Arnold-Falk-Winther 2006 |
 | basics               | 微分形式.pdf §1-5 | Arnold-Falk-Winther §2 |
 | maxwell              | 微分形式.pdf §6-7 + Bossavit Ch.1 | Kameari fig.6, 新しい計算電磁気学 4.5/5.2 |
 | whitney              | Bossavit Ch.5 §5.2 | Kameari §3-5, Whitney 1957 IV.27, 新しい計算電磁気学 5.4 |
