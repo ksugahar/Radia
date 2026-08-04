@@ -7,6 +7,18 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.28] - 2026-08-04
+
+- Added a public-safe visual differential-geometry knowledge and validation
+  layer connecting intrinsic/extrinsic geometry, Gauss-Bonnet, holonomy,
+  differential forms, and the H1/HCurl/HDiv/L2 de Rham sequence to Radia
+  electromagnetic workflows.
+- Expanded the generated MATLAB/MEX contract to 334 commands with complete
+  121/121 numerical-class coverage, including configured ChargeGram material
+  element and candidate-cluster inspection.
+- Enforced the package's provenance and internal-path boundary in the local
+  pre-push matrix, matching the GitHub policy-lint workflow before publication.
+
 ## [1.4.27] - 2026-08-02
 
 - Added fail-closed Motor evidence tools for BDM1 HEX torque, armature
