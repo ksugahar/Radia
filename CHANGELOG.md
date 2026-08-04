@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.37 - IH configuration and field-scope fixes
+
+Released 2026-08-04.
+
+- Fixed the standalone and library IH `config_file` mask callbacks to read
+  literal dialog paths through `get_param(gcb, ...)`, eliminating the
+  base-workspace lookup failure on every mask confirmation.
+- Made the standalone heat-density and temperature scopes auto-scale and feed
+  them compact `[min mean max]` field summaries while retaining the complete
+  distributed vectors on the model outports.
+- Regenerated both tracked Simulink artifacts and added regression coverage for
+  the standalone and Radia-library mask contracts, scope settings, and wiring.
+
 ## 4.95.36 - IH geometry replacement controls
 
 Released 2026-08-04.
