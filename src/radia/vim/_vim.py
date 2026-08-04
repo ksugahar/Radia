@@ -950,10 +950,23 @@ def _broken_hex_face_charge_basis(fes, p):
         P = np.asarray([
             [x ** i * y ** j * z ** k for i, j, k in xyz_mons]
             for x, y, z in physical_points], dtype=float)
-        local_to_physical = np.linalg.lstsq(Q, P, rcond=None)[0]
+        # Restricted to an affine facet, the local tensor space
+        # Q_p(u,v) is a subspace of physical total-degree <= 2p
+        # polynomials.  Embed local monomials in that larger physical basis:
+        # Q = P @ physical_to_local.  The old reverse least-squares fit
+        # P ~= Q @ local_to_physical projected physical u^2/v^2 terms into
+        # Q1 and corrupted the normal-charge coefficients by O(10%).
+        physical_to_local = np.linalg.lstsq(P, Q, rcond=None)[0]
+        embedding_residual = np.linalg.norm(
+            P @ physical_to_local - Q) / max(np.linalg.norm(Q), 1e-300)
+        if embedding_residual > 5e-12:
+            raise RuntimeError(
+                "vim.ChargeGram: physical-to-local HEX facet embedding "
+                "failed on facet %d (relative residual=%g)"
+                % (nr, embedding_residual))
         D = np.column_stack(
             [values[dofs] / owners for values in moment_vectors])
-        C = D @ np.linalg.pinv(local_to_physical)
+        C = D @ physical_to_local
         condition = np.linalg.cond(C)
         if not np.isfinite(condition) or condition > 1e12:
             raise RuntimeError(

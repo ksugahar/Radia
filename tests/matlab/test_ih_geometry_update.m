@@ -22,7 +22,7 @@ writelines("mesh v1", wp);
 coil = fullfile(work, "coil.step");
 writelines("step v1", coil);
 golden = fullfile(work, "golden.mat");
-config = radia.simulink.makeIHNativeSmokeConfig(); %#ok<NASGU>
+config = radia.simulink.makeIHNativeSmokeConfig();
 save(golden, "config");
 configFile = fullfile(work, "config.mat");
 runsFile = fullfile(work, "runs.txt");
@@ -81,7 +81,7 @@ verifyTrue(testCase, contains( ...
 % The coil STEP typed into the workpiece box and vice versa.
 configureBlock(model, coil, wp, command, configFile, "on");
 warned = warning("off", "radia:simulink:IHGeometryRolesReassigned");
-restore = onCleanup(@() warning(warned)); %#ok<NASGU>
+restore = onCleanup(@() warning(warned));
 status = radia.simulink.updateIHGeometry(model);
 verifyTrue(testCase, status.rebuilt);
 verifyEqual(testCase, string(status.files(1)), string(wp));
@@ -97,6 +97,31 @@ configureBlock(model, wp, coil, command, configFile, "off");
 verifyError(testCase, ...
     @() radia.simulink.updateIHGeometry(model), ...
     "radia:simulink:IHGeometryUpdateStale");
+end
+
+function testForceRebuildOverridesAutoOff(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "off");
+status=radia.simulink.updateIHGeometry(model,Force=true);
+verifyTrue(testCase,status.rebuilt);
+verifyEqual(testCase,status.revision,1);
+verifyEqual(testCase,runCount(runsFile),1);
+end
+
+function testSameContentAtNewPathRebuildsForProvenance(testCase)
+[work, cleanupDir, wp, coil, ~, configFile, runsFile, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model,wp,coil,command,configFile,"on");
+radia.simulink.updateIHGeometry(model);
+replacement=fullfile(work,"wp_repointed.vol");copyfile(wp,replacement);
+configureBlock(model,replacement,coil,command,configFile,"on");
+status=radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase,status.rebuilt);
+verifyEqual(testCase,status.revision,2);
+verifyEqual(testCase,runCount(runsFile),2);
 end
 
 function testUnconfiguredBlockIsInert(testCase)

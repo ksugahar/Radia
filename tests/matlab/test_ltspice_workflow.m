@@ -139,6 +139,71 @@ verifyTrue(testCase,raw.isComplex()); verifyEqual(testCase,raw.Data.analysis,"ac
 vout=raw.getTrace("V(out)"); verifyLessThan(testCase,angle(vout(end)),0);
 end
 
+function testPyLTSpiceRawCompatibilityAndRoundTrip(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_ac_rc.cir");
+result=radia.ltspice.run(fixture,RawFormat="ascii"); raw=radia.ltspice.RawRead(result.raw_file);
+verifyEqual(testCase,raw.get_trace_names(),raw.getTraceNames());
+trace=raw.get_trace("V(out)"); verifyClass(testCase,trace,"radia.ltspice.Trace");
+verifyEqual(testCase,trace.get_wave(0),raw.getWave("V(out)",0));
+writer=radia.ltspice.RawWrite(); writer.PlotName="AC Analysis";
+writer.add_traces_from_raw(raw,{"frequency","V(out)"}); output=fullfile("C:\temp","radia_raw_roundtrip.raw"); writer.save(output);
+copy=radia.ltspice.RawRead(output); verifyEqual(testCase,copy.getTrace("V(out)"),raw.getTrace("V(out)"),"RelTol",1e-14);
+csv=fullfile("C:\temp","radia_raw_export.csv"); raw.to_csv(csv,{"frequency","V(out)"},0); verifyTrue(testCase,isfile(csv));
+end
+
+function testRawIndicesAreZeroBasedAndAliasesAreSafe(testCase)
+fixture=fullfile("C:\temp","radia_ltspice_alias_fixture.raw");
+writeAliasRawFixture(fixture);raw=radia.ltspice.RawRead(fixture);
+verifyEqual(testCase,raw.getTrace(0),[0;1]);
+verifyEqual(testCase,raw.getTrace(1),[1;2]);
+verifyEqual(testCase,raw.get_trace(1).Name,"V(in)");
+verifyTrue(testCase,any(raw.getTraceNames()=="V(diff)"));
+verifyEqual(testCase,raw.getTrace("V(diff)"),[4;8]);
+verifyError(testCase,@()raw.getTrace(-1),"radia:ltspice:TraceNotFound");
+verifyError(testCase,@()raw.getTrace("V(bad)"), ...
+    "radia:ltspice:AliasEvaluation");
+writer=radia.ltspice.RawWrite();
+writer.addTracesFromRaw(raw,{"time","V(in)"});
+verifyEqual(testCase,writer.get_trace(0).Name,"time");
+verifyEqual(testCase,writer.get_trace(1).Name,"V(in)");
+end
+
+function testUnsupportedSimRunnerCompatibilityOptionsFailLoudly(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+runner=radia.ltspice.SimRunner();runner.add_command_line_switch("-FastAccess");
+verifyError(testCase,@()runner.run_now(fixture), ...
+    "radia:ltspice:UnsupportedCompatibility");
+verifyError(testCase,@()runner.create_raw_file_with( ...
+    "combined.raw",{"V(out)"},[]), ...
+    "radia:ltspice:UnsupportedCompatibility");
+end
+
+function testPyLTSpiceEditorAliases(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir"); editor=radia.ltspice.SpiceEditor(fixture);
+verifyTrue(testCase,any(editor.get_components()=="R1")); verifyEqual(testCase,editor.get_parameter("Rval"),"1000");
+editor.set_parameters(struct("Rval",2200)); verifyEqual(testCase,editor.get_parameter("Rval"),"2200");
+verifyEqual(testCase,editor.get_component_nodes("R1"),["in";"out"]);
+end
+
+function testAscGraphicalEditingCompatibility(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.asc");editor=radia.ltspice.AscEditor(fixture);
+[position,rotation]=editor.get_component_position("R1");verifyEqual(testCase,position,[160,80]);verifyEqual(testCase,rotation,"R90");
+editor.set_component_position("R1",[192,112],"R0");editor.set_component_attribute("R1","SpiceLine","temp=25");editor.addWire([0,0],[16,0]);editor.set_parameter("gain",2);
+output=fullfile("C:\temp","radia_asc_editor_compat.asc");editor.save_as(output);text=string(fileread(output));
+verifyTrue(testCase,contains(text,"SYMBOL res 192 112 R0"));verifyTrue(testCase,contains(text,"SYMATTR SpiceLine temp=25"));verifyTrue(testCase,contains(text,"WIRE 0 0 16 0"));verifyEqual(testCase,editor.get_parameter("gain"),"2");
+end
+
+function testSteppedLogQueriesAndRawStepConditions(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_step_rc.cir");result=radia.ltspice.run(fixture,RawFormat="binary");
+log=radia.ltspice.LTSpiceLogReader(result.log_file);verifyTrue(testCase,log.has_steps());verifyEqual(testCase,log.get_step_vars(),"rval");verifyEqual(testCase,log.steps_with_parameter_equal_to("rval",2000),1);
+raw=radia.ltspice.RawRead(result.raw_file);verifyEqual(testCase,raw.get_steps(struct("rval",1000)),0);
+end
+
+function testAsynchronousSimRunnerTask(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");runner=radia.ltspice.SimRunner(OutputFolder="C:\temp\radia_ltspice_async_test");
+task=runner.run(fixture);verifyClass(testCase,task,"radia.ltspice.RunTask");verifyTrue(testCase,task.wait(30));files=task.wait_results();verifyTrue(testCase,isfile(files{1}));verifyTrue(testCase,isfile(files{2}));verifyEqual(testCase,task.Status,"completed");
+end
+
 function testNoiseAndFFTAnalysisAPIs(testCase)
 folder=fullfile(fileparts(mfilename("fullpath")),"fixtures");
 noise=radia.ltspice.runNoise(fullfile(folder,"ltspice_noise_rc.cir"));
@@ -174,4 +239,29 @@ end
 function score = scoreTrial(result, ~)
 index = find(result.waveform.names == "V(out)", 1);
 score = result.waveform.values(end, index);
+end
+
+
+function writeAliasRawFixture(path)
+lines=[ ...
+    "Title: Radia alias regression"; ...
+    "Date: 2026-08-04"; ...
+    "Plotname: Transient Analysis"; ...
+    "Flags: real"; ...
+    "Alias: V(diff)=2*(V(out)-V(in))"; ...
+    "Alias: V(bad)=V(out);1"; ...
+    "No. Variables: 3"; ...
+    "No. Points: 2"; ...
+    "Variables:"; ...
+    "0 time time"; ...
+    "1 V(in) voltage"; ...
+    "2 V(out) voltage"; ...
+    "Values:"; ...
+    "0 0"; ...
+    "1"; ...
+    "3"; ...
+    "1 1"; ...
+    "2"; ...
+    "6"];
+writelines(lines,path,Encoding="UTF-8");
 end

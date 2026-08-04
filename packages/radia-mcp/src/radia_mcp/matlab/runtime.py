@@ -254,6 +254,8 @@ _PYBIND_CLASS_COMMANDS = {
     "_ChargeGramHMatrix.apply_configured_geometry_mass": ("hacapk.charge_gram.geometry_mass_apply",),
     "_ChargeGramHMatrix.apply_configured_linear_material_operator": ("hacapk.charge_gram.apply_configured_linear_material_operator",),
     "_ChargeGramHMatrix.apply_configured_linear_material_operator_many": ("hacapk.charge_gram.apply_configured_linear_material_operator_many",),
+    "_ChargeGramHMatrix.configured_linear_material_element_blocks": ("hacapk.charge_gram.configured_linear_material_element_blocks",),
+    "_ChargeGramHMatrix.configured_linear_material_candidate_clusters": ("hacapk.charge_gram.configured_linear_material_candidate_clusters",),
     "_ChargeGramHMatrix.reduce_configured_candidate_schur": ("hacapk.charge_gram.reduce_configured_candidate_schur",),
     "_ChargeGramHMatrix.apply_configured_mass_riesz": ("hacapk.charge_gram.mass_riesz",),
     "_ChargeGramHMatrix.solve_configured_linear_material_mass_riesz": ("hacapk.charge_gram.solve_configured_linear_material",),

@@ -27,6 +27,36 @@ for k = 1:nVariables
     types(k) = string(tokens{2});
 end
 
+rawProperties=struct();aliases=struct();aliasNames=strings(0,1);
+aliasFormulas=strings(0,1);backannotations=strings(0,1);
+for k=1:variablesLine-1
+    line=strtrim(lines(k));
+    splitAt=strfind(line,":");
+    if isempty(splitAt)
+        continue
+    end
+    label=strtrim(extractBefore(line,splitAt(1)));
+    value=strtrim(extractAfter(line,splitAt(1)));
+    key=matlab.lang.makeValidName(char(label)); rawProperties.(key)=value;
+    if strcmpi(label,"Alias")
+        pair=regexp(char(value),'^([^=]+)=(.*)$','tokens','once');
+        if ~isempty(pair)
+            aliasNames(end+1,1)=string(strtrim(pair{1})); %#ok<AGROW>
+            aliasFormulas(end+1,1)=string(strtrim(pair{2})); %#ok<AGROW>
+        end
+    elseif strcmpi(label,"Backannotation")
+        backannotations(end+1,1)=value; %#ok<AGROW>
+    end
+end
+
+if ~isempty(aliasNames)
+    aliasKeys=matlab.lang.makeUniqueStrings(matlab.lang.makeValidName( ...
+        cellstr(aliasNames),"ReplacementStyle","hex"));
+    for k=1:numel(aliasKeys)
+        aliases.(aliasKeys{k})=aliasFormulas(k);
+    end
+end
+
 isComplex=any(contains(lines,"Flags:") & contains(lines,"complex"));
 if isComplex, values=complex(zeros(nPoints,nVariables)); else, values=zeros(nPoints,nVariables); end
 cursor = valuesLine + 1;
@@ -70,7 +100,12 @@ data = struct( ...
     "names", names, ...
     "types", types, ...
     "values", values, ...
-    "signals", signals);
+    "signals", signals, ...
+    "raw_properties", rawProperties, ...
+    "aliases", aliases, ...
+    "alias_names", aliasNames, ...
+    "alias_formulas", aliasFormulas, ...
+    "backannotations", backannotations);
 end
 
 function value = readHeaderInteger(lines, label)

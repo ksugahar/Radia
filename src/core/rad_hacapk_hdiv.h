@@ -508,6 +508,25 @@ public:
     std::vector<double> ApplyConfiguredLinearMaterialOperatorMany(
         double inv_chi, const std::vector<double>& x, int nrhs,
         bool respect_constraints = true);
+    // Exact row-major element-local blocks of A=inv_chi*M+B^T*G*B for a
+    // packed candidate-DOF list.  block_offsets partitions candidate_dofs;
+    // the returned values concatenate square blocks in that order.  Only the
+    // charge supports touched by each block are evaluated, so topology
+    // screening does not require one global H-matrix matvec per local DOF.
+    std::vector<double> ConfiguredLinearMaterialElementBlocks(
+        double inv_chi, const std::vector<int>& candidate_dofs,
+        const std::vector<int>& block_offsets);
+    // Assign each packed element block to the dominant node of the preserved
+    // charge H-matrix cluster tree.  Candidate HDiv DOFs are lifted to charge
+    // space through the configured B map; absolute B weights make the result
+    // orientation independent.  The returned labels are deterministic
+    // integers in [0,n_cluster), one per block.  This is a topology-screening
+    // primitive only: accepted material moves are still checked by the full
+    // configured operator solve.
+    std::vector<int> ConfiguredLinearMaterialCandidateClusters(
+        const std::vector<int>& candidate_dofs,
+        const std::vector<int>& block_offsets, int requested_clusters,
+        int& n_cluster_out);
     struct CandidateSchurReduction {
         std::vector<double> schur;       // row-major [n_candidate,n_candidate]
         std::vector<double> rhs;         // [n_candidate]
@@ -564,8 +583,8 @@ public:
     std::shared_ptr<rad_hdiv::HDivFieldEvaluator> CreateConfiguredFieldEvaluator(
         const std::vector<double>& magnetization,
         const rad_hdiv::FieldEvaluatorOptions& options = {}) const;
-    // Exact flat-TET observation rows without constructing one global field
-    // evaluator per HDiv basis vector.  weights is row-major
+    // Exact flat-TET or affine-HEX observation rows without constructing one
+    // global field evaluator per HDiv basis vector.  weights is row-major
     // [n_rows,n_observations,3]; the return is row-major
     // [n_rows,ConfiguredNFace()] and maps magnetization coefficients directly
     // to H-field functionals (the Laplace 1/(4*pi) normalization is included).
