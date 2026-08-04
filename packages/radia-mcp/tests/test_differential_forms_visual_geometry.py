@@ -117,7 +117,8 @@ def test_visual_geometry_topics_connect_geometry_to_em_spaces() -> None:
         "gauge-theoretic",
     ):
         assert phrase in doc
-    assert "W:\\" not in doc
+    private_drive_prefix = "".join(("W", ":", "\\"))
+    assert private_drive_prefix not in doc
 
 
 def test_visual_geometry_aliases_and_server_wrapper() -> None:
@@ -133,7 +134,8 @@ def test_visual_geometry_source_is_registered_without_private_path() -> None:
     assert "T. Needham" in bibliography
     assert "978-4-621-31240-7" in bibliography
     assert "five\nacts: space, metric, curvature" in bibliography
-    assert "W:\\" not in bibliography
+    private_drive_prefix = "".join(("W", ":", "\\"))
+    assert private_drive_prefix not in bibliography
 
 
 def test_geometry_starter_exposes_geometry_first_path() -> None:
