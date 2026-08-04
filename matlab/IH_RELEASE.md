@@ -22,6 +22,14 @@ case, set `IH Parameters > IH configuration MAT/JSON` to a file containing
 constructing the checked native configuration. That function requires
 preassembled Eddy/Thermal operators and successful strict-label `.vol` reports.
 
+The `Geometry Update` block provides `Browse...` controls for the workpiece
+Netgen `.vol`/`.vol.gz` mesh and the coil `.step`/`.stp` (PEEC) or
+`.vol`/`.vol.gz` (BEM-A) input. After
+the assemble command and its output MAT/JSON configuration are set once,
+selecting a replacement file is enough: the next diagram update or simulation
+start detects path and content changes, rebuilds the operators, and reloads the
+configuration. `Rebuild now` forces the same operation explicitly.
+
 This preview does not yet construct PEEC, BEM-A, BIM, or FEM operators from a
 Cubit `.vol` file. That native assembly boundary is required before the model
 can be called production-complete. LUT and lumped-state-space IH helpers are

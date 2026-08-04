@@ -89,6 +89,100 @@ verifyEqual(testCase, string(status.files(2)), string(coil));
 verifyNotEmpty(testCase, status.notes);
 end
 
+function testBrowseButtonsAreRegisteredBesideGeometryFields(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+mask = Simulink.Mask.get(block);
+wpButton = mask.getDialogControl("browse_wp_vol");
+coilButton = mask.getDialogControl("browse_coil_file");
+verifyNotEmpty(testCase, wpButton);
+verifyNotEmpty(testCase, coilButton);
+verifyEqual(testCase, string(wpButton.Prompt), "Browse...");
+verifyEqual(testCase, string(coilButton.Prompt), "Browse...");
+verifyEqual(testCase, string(wpButton.Row), "current");
+verifyEqual(testCase, string(coilButton.Row), "current");
+verifyTrue(testCase, contains(string(wpButton.Callback), "workpiece"));
+verifyTrue(testCase, contains(string(coilButton.Callback), "coil"));
+end
+
+function testBrowseAssignsAbsoluteWorkpieceAndCoilPaths(testCase)
+[~, cleanupDir, wp, coil] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+
+selectedWp = radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) selectPath(wp));
+selectedCoil = radia.simulink.browseIHGeometryFile( ...
+    block, "coil", DialogFcn=@(~, ~, ~) selectPath(coil));
+
+verifyEqual(testCase, string(get_param(block, "wp_vol")), selectedWp);
+verifyEqual(testCase, string(get_param(block, "coil_file")), selectedCoil);
+verifyTrue(testCase, isfile(selectedWp));
+verifyTrue(testCase, isfile(selectedCoil));
+verifyTrue(testCase, isAbsolutePath(selectedWp));
+verifyTrue(testCase, isAbsolutePath(selectedCoil));
+end
+
+function testBrowseCancelLeavesPathUnchanged(testCase)
+[~, cleanupDir, wp] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+set_param(block, "wp_vol", char(wp));
+selected = radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) deal(0, 0));
+verifyEqual(testCase, selected, "");
+verifyEqual(testCase, string(get_param(block, "wp_vol")), string(wp));
+end
+
+function testBrowseAcceptsCompressedWorkpieceAndMeshedCoil(testCase)
+[work, cleanupDir] = fixture(); %#ok<ASGLU>
+wp = fullfile(work, "wp.vol.gz");
+coil = fullfile(work, "coil.vol");
+writelines("compressed mesh placeholder", wp);
+writelines("coil mesh", coil);
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+
+selectedWp = radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) selectPath(wp));
+selectedCoil = radia.simulink.browseIHGeometryFile( ...
+    block, "coil", DialogFcn=@(~, ~, ~) selectPath(coil));
+
+verifyTrue(testCase, endsWith(lower(selectedWp), ".vol.gz"));
+verifyTrue(testCase, endsWith(lower(selectedCoil), ".vol"));
+verifyEqual(testCase, string(get_param(block, "wp_vol")), selectedWp);
+verifyEqual(testCase, string(get_param(block, "coil_file")), selectedCoil);
+end
+
+function testBrowseRejectsWrongExtension(testCase)
+[work, cleanupDir] = fixture(); %#ok<ASGLU>
+wrong = fullfile(work, "workpiece.msh");
+writelines("mesh", wrong);
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+verifyError(testCase, @() radia.simulink.browseIHGeometryFile( ...
+    block, "workpiece", DialogFcn=@(~, ~, ~) selectPath(wrong)), ...
+    "radia:simulink:IHGeometryBrowseExtension");
+end
+
+function testBrowseRejectsMissingFile(testCase)
+[work, cleanupDir] = fixture(); %#ok<ASGLU>
+missing = fullfile(work, "missing.step");
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+verifyError(testCase, @() radia.simulink.browseIHGeometryFile( ...
+    block, "coil", DialogFcn=@(~, ~, ~) selectPath(missing)), ...
+    "radia:simulink:IHGeometryBrowseMissing");
+end
+
+function testBrowseRejectsUnknownRole(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+verifyError(testCase, ...
+    @() radia.simulink.browseIHGeometryFile(block, "rotor"), ...
+    "radia:simulink:IHGeometryBrowseRole");
+end
+
 function testStaleWithAutoOffErrors(testCase)
 [~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
 [model, closer] = freshModel(); %#ok<ASGLU>
@@ -142,4 +236,15 @@ configureBlock(model, other, coil, command, configFile, "on");
 verifyError(testCase, ...
     @() radia.simulink.updateIHGeometry(model), ...
     "radia:simulink:IHGeometryUpdateTwoSteps");
+end
+
+function [fileName, folderName] = selectPath(path)
+[folderName, stem, extension] = fileparts(path);
+fileName = stem + extension;
+folderName = folderName + filesep;
+end
+
+function tf = isAbsolutePath(path)
+tf = ~isempty(regexp(char(path), '^[A-Za-z]:[\\/]', 'once')) || ...
+    startsWith(path, "\\");
 end

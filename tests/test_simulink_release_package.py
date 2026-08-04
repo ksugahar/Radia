@@ -26,6 +26,7 @@ def test_package_builder_requires_native_ih_assets():
     )
     assert {
         "+radia/+simulink/addIHGeometryUpdateBlock.m",
+        "+radia/+simulink/browseIHGeometryFile.m",
         "+radia/+simulink/fileFingerprint.m",
         "+radia/+simulink/normalizeIHGeometryRoles.m",
         "+radia/+simulink/updateIHGeometry.m",
