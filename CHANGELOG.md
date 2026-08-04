@@ -5,6 +5,25 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.35 - Transient VIM and production MATLAB integration
+
+Released 2026-08-04.
+
+- Added an HDiv magnetic / HCurl eddy backward-Euler transient driver with
+  moving-system providers, accepted-state rollback, and explicit source-work,
+  motion-work, stored-energy, and dissipation ledgers.
+- Strengthened HDiv-MMM topology and shape optimization with clustered native
+  candidate screening, collaborative whole-element addition/removal, exact
+  affine-HEX field evaluation, and expanded isochronous design constraints.
+- Completed the MATLAB PyLTSpice compatibility surface and added an IH Geometry
+  Update block that normalizes `.vol`/`.step` roles, fingerprints content, and
+  rebuilds native Eddy/Thermal operators only when geometry changes.
+- Extended standalone MEX parity with configured ChargeGram material-element
+  and candidate-cluster inspection, then regenerated and tested the native IH
+  and full Radia Simulink models.
+- Added executable visual differential-geometry guidance to radia-mcp and made
+  the local pre-push gate run the same public-boundary lint as GitHub CI.
+
 ## 4.95.34 - Stream-function and topology design workflows
 
 Released 2026-08-03.

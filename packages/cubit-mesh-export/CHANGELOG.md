@@ -6,6 +6,15 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.5 - MEG nonlinear-magnet labels
+
+Released 2026-08-04.
+
+- Corrected the Cubit MEG exporter help contract so `MWL` denotes a nonlinear
+  magnet with a fixed local axis and `MWV` denotes a nonlinear magnet with
+  direction vectors; the plugin help, Radia Cubit menu, and public docs now
+  agree.
+
 ## 0.14.4 - Production `.vol` preflight
 
 Released 2026-07-22.

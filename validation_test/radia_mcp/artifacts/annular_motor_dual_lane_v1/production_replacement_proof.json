@@ -1,7 +1,7 @@
 {
   "radia_version": "4.95.30",
   "schema": "radia.validation.production-replacement-proof.v1",
-  "executed_at_utc": "2026-08-04T04:47:52.003322+00:00",
+  "executed_at_utc": "2026-08-04T05:34:12.000755+00:00",
   "execution_version": {
     "radia": "4.95.30",
     "matlab": "2026a",
@@ -31,7 +31,7 @@
       "status": "pass",
       "test_count": 77,
       "artifact_sha256_by_role": {
-        "matlab": "8318f4e3d3f94e28bfe223b50a590cefbe182867236d77394992bfd463787ba5"
+        "matlab": "f90264f304d5f1a7500ef56844d811530b3b6c12acc01ad2fb305a3cbbc9f710"
       },
       "checks": {
         "standalone_batch": true,
@@ -45,5 +45,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "10a2d21101baafdfef0fbd33f8127c93e48c992d24be3a17457134d90f38df32"
+  "proof_payload_sha256": "bf7732d50ae9fd2dfb2e5cd1d7d3d45a72bd6ba13b91c7093df83958302435c5"
 }
