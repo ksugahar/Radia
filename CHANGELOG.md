@@ -5,6 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.39 - IH geometry and field-display consolidation
+
+Released 2026-08-04.
+
+- Centralized the accepted IH `.vol`, `.vol.gz`, `.step`, `.stp`, and `.sol`
+  suffixes so geometry normalization, browse dialogs, and update-time role
+  checks cannot drift apart.
+- Published the reusable `Utilities/Field Stats` Simulink block for compact
+  `[min mean max]` display of distributed heat-density and temperature signals.
+- Regenerated the standalone IH model and the Radia library from their checked
+  builders, carrying the current geometry-update controls, mask callbacks,
+  field reductions, and native Eddy/Thermal S-Function wiring.
+- Expanded MATLAB regressions to lock the saved-model and public-library
+  contracts for geometry replacement and field display.
+
 ## 4.95.38 - IH geometry-update hardening
 
 Released 2026-08-04.
