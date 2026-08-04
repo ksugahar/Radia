@@ -519,6 +519,11 @@ end
 ihPath="radia_simulink_library/Applications/Induction Heating";
 verifyEqual(testCase,string(get_param(ihPath,"BlockType")),"SubSystem");
 verifyEqual(testCase,string(get_param(ihPath,"Mask")),"on");
+ihMask=Simulink.Mask.get(ihPath);
+ihConfigParameter=ihMask.getParameter("config_file");
+verifyEqual(testCase,string(ihConfigParameter.Evaluate),"off");
+verifyTrue(testCase,contains(string(ihConfigParameter.Callback), ...
+    "get_param(gcb, 'config_file')"));
 verifyEqual(testCase,string(get_param( ...
     ihPath+"/Eddy Level-2 S-Function","FunctionName")), ...
     "radia_ih_eddy_sfun");
