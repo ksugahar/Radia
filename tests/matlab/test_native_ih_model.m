@@ -106,6 +106,25 @@ verifyEqual(testCase,string(get_param(geometryBlock,"Mask")),"on");
 mask = Simulink.Mask.get(geometryBlock);
 verifyNotEmpty(testCase,mask.getDialogControl("browse_wp_vol"));
 verifyNotEmpty(testCase,mask.getDialogControl("browse_coil_file"));
+% The tracked model must carry the display fixes: Auto scope axes and
+% the [min mean max] reductions in front of both scopes, with the
+% outports still fed the raw field vectors.
+for scopeName=["Heat Density","Temperature"]
+    scopeConfiguration=get_param("radia_ih/"+scopeName, ...
+        "ScopeConfiguration");
+    verifyEqual(testCase,string(scopeConfiguration.AxesScaling),"Auto");
+end
+verifyEqual(testCase,scopeSourceName("radia_ih/Heat Density"), ...
+    "Heat Stats");
+verifyEqual(testCase,scopeSourceName("radia_ih/Temperature"), ...
+    "Temperature Stats");
+verifyEqual(testCase,scopeSourceName("radia_ih/temperature_K"),"Thermal");
+% And the repaired config_file mask contract (base-workspace callback).
+parametersMask=Simulink.Mask.get("radia_ih/IH Parameters");
+configParameter=parametersMask.getParameter("config_file");
+verifyEqual(testCase,string(configParameter.Evaluate),"off");
+verifyTrue(testCase,contains(string(configParameter.Callback), ...
+    "get_param(gcb, 'config_file')"));
 end
 
 function testPhysicalConfigRequiresVolReports(testCase)

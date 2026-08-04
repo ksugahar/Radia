@@ -72,10 +72,10 @@ end
 % thousands of overlapping lines and is unreadable, so each scope shows
 % the [min mean max] reduction instead.  The outports still carry the
 % untouched full vectors.
-addVectorStatsSubsystem(options.ModelName, "Heat Stats", ...
-    [700 55 770 105]);
-addVectorStatsSubsystem(options.ModelName, "Temperature Stats", ...
-    [700 145 770 195]);
+radia.simulink.addFieldStatsBlock(options.ModelName, ...
+    BlockName="Heat Stats", Position=[700 55 770 105]);
+radia.simulink.addFieldStatsBlock(options.ModelName, ...
+    BlockName="Temperature Stats", Position=[700 145 770 195]);
 
 parameterPath = options.ModelName + "/IH Parameters";
 add_block("simulink/Ports & Subsystems/Subsystem", parameterPath, ...
@@ -134,43 +134,5 @@ end
 
 function connect(modelName, source, destination)
 add_line(modelName, source, destination, "autorouting", "smart");
-end
-
-function addVectorStatsSubsystem(modelName, blockName, position)
-% [min mean max] display reduction for an N-wide field vector.  The
-% mean is the arithmetic mean over DOFs (a display aid; the reported
-% volume-weighted T_mean stays owned by the result artifacts).
-path = modelName + "/" + blockName;
-add_block("simulink/Ports & Subsystems/Subsystem", path, ...
-    Position=position);
-delete_line(path, "In1/1", "Out1/1");
-set_param(path + "/In1", "Position", [40 128 70 142]);
-set_param(path + "/Out1", "Position", [420 138 450 152]);
-add_block("simulink/Math Operations/MinMax", path + "/Min", ...
-    Function="min", Inputs="1", Position=[170 40 210 70]);
-add_block("simulink/Math Operations/Sum", path + "/Sum", ...
-    Inputs="+", CollapseMode="All dimensions", ...
-    Position=[170 100 210 130]);
-add_block("simulink/Signal Attributes/Width", path + "/Width", ...
-    Position=[170 160 210 190]);
-add_block("simulink/Math Operations/Divide", path + "/Mean", ...
-    Inputs="*/", Position=[250 118 290 152]);
-add_block("simulink/Math Operations/MinMax", path + "/Max", ...
-    Function="max", Inputs="1", Position=[170 220 210 250]);
-add_block("simulink/Signal Routing/Mux", path + "/Mux", ...
-    Inputs="3", Position=[340 40 350 250]);
-add_line(path, "In1/1", "Min/1", "autorouting", "smart");
-add_line(path, "In1/1", "Sum/1", "autorouting", "smart");
-add_line(path, "In1/1", "Width/1", "autorouting", "smart");
-add_line(path, "In1/1", "Max/1", "autorouting", "smart");
-add_line(path, "Sum/1", "Mean/1", "autorouting", "smart");
-add_line(path, "Width/1", "Mean/2", "autorouting", "smart");
-set_param(add_line(path, "Min/1", "Mux/1", "autorouting", "smart"), ...
-    "Name", "min");
-set_param(add_line(path, "Mean/1", "Mux/2", "autorouting", "smart"), ...
-    "Name", "mean");
-set_param(add_line(path, "Max/1", "Mux/3", "autorouting", "smart"), ...
-    "Name", "max");
-add_line(path, "Mux/1", "Out1/1", "autorouting", "smart");
 end
 end
