@@ -3,14 +3,19 @@ function status = updateIHGeometry(modelName, options)
 %   status = updateIHGeometry(modelName) drives the "Geometry Update"
 %   block (Tag RadiaIHGeometryUpdate, see addIHGeometryUpdateBlock):
 %   it reads the block's workpiece/coil file paths, fingerprints their
-%   CONTENT (SHA-256) together with the assemble command, and compares
-%   against the sidecar written next to the configuration file.  When
-%   anything changed, the assemble command is executed (this is the
+%   CONTENT (SHA-256) together with the configured assembler, and
+%   compares against the sidecar written next to the configuration
+%   file.  When anything changed, the assembler runs (this is the
 %   explicit-update boundary where expensive mesh/basis/matrix
 %   construction is allowed), the refreshed configuration is loaded
 %   through radia.simulink.configureIHNativeModel, and the sidecar is
 %   rewritten with an incremented revision.  When nothing changed the
-%   configuration is only (re)loaded -- no command runs.
+%   configuration is only (re)loaded -- no assembler runs.
+%
+%   The assembler is EITHER assemble_fcn -- a MATLAB function name,
+%   preferred, called in-process as fcn(wpVol, coilFile, configFile)
+%   and required to write configFile -- OR assemble_command, a shell
+%   command for CLI assemblers.  Setting both is an error.
 %
 %   The model InitFcn installed by addIHGeometryUpdateBlock calls this
 %   on every diagram update / simulation start, so re-pointing or
@@ -44,7 +49,7 @@ end
 
 status = struct("engaged", false, "rebuilt", false, "revision", 0, ...
     "reason", "", "notes", strings(0, 1), "config_file", "", ...
-    "files", strings(0, 1));
+    "files", strings(0, 1), "assembler", "");
 
 blocks = find_system(modelName, "LookUnderMasks", "all", ...
     "FollowLinks", "on", "Tag", "RadiaIHGeometryUpdate");
@@ -61,11 +66,13 @@ block = blocks{1};
 
 wpValue = strtrim(string(get_param(block, "wp_vol")));
 coilValue = strtrim(string(get_param(block, "coil_file")));
+assembleFcn = strtrim(string(get_param(block, "assemble_fcn")));
 command = strtrim(string(get_param(block, "assemble_command")));
 configFile = strtrim(string(get_param(block, "config_file")));
 autoRebuild = strcmpi(string(get_param(block, "auto_rebuild")), "on");
 
 if strlength(wpValue) == 0 && strlength(coilValue) == 0 && ...
+        strlength(assembleFcn) == 0 && ...
         strlength(command) == 0 && strlength(configFile) == 0
     % Block placed but not configured yet: nothing to watch.
     status.reason = "unconfigured";
@@ -104,6 +111,7 @@ end
 
 fingerprint = struct( ...
     "schema", "radia.ih.simulink.geometry_fingerprint.v1", ...
+    "assemble_fcn", char(assembleFcn), ...
     "command", char(command), ...
     "coil_role", char(coilRole), ...
     "files", radia.simulink.fileFingerprint([wpPath; coilPath]));
@@ -150,21 +158,38 @@ if ~autoRebuild && ~options.Force
         "auto_rebuild.\n  workpiece: %s\n  coil (%s): %s", ...
         wpPath, coilRole, coilPath);
 end
-if strlength(command) == 0
+hasFcn = strlength(assembleFcn) > 0;
+hasCommand = strlength(command) > 0;
+if hasFcn && hasCommand
+    error("radia:simulink:IHGeometryUpdateAmbiguousAssemble", ...
+        "Set either assemble_fcn (MATLAB, preferred) or " + ...
+        "assemble_command, not both.");
+end
+if ~hasFcn && ~hasCommand
     error("radia:simulink:IHGeometryUpdateCommand", ...
-        "Geometry inputs changed but no assemble command is set on " + ...
-        "the Geometry Update block.");
+        "Geometry inputs changed but no assembler is set on the " + ...
+        "Geometry Update block (assemble_fcn or assemble_command).");
 end
 
-[exitCode, output] = system(char(command));
-if exitCode ~= 0
-    error("radia:simulink:IHGeometryUpdateAssemble", ...
-        "Assemble command failed (exit %d):\n  %s\n--- output tail ---\n%s", ...
-        exitCode, command, tailOf(output, 2000));
+if hasFcn
+    % In-process MATLAB assembler (preferred): errors propagate with
+    % their own stack, no shell quoting, and the function runs on the
+    % MATLAB path like any other .m code.
+    feval(char(assembleFcn), wpPath, coilPath, configFile);
+    status.assembler = "matlab-function";
+else
+    [exitCode, output] = system(char(command));
+    if exitCode ~= 0
+        error("radia:simulink:IHGeometryUpdateAssemble", ...
+            "Assemble command failed (exit %d):\n  %s\n" + ...
+            "--- output tail ---\n%s", ...
+            exitCode, command, tailOf(output, 2000));
+    end
+    status.assembler = "shell-command";
 end
 if ~isfile(configFile)
     error("radia:simulink:IHGeometryUpdateArtifact", ...
-        "Assemble command exited 0 but did not write the " + ...
+        "The assembler finished but did not write the " + ...
         "configuration file: %s", configFile);
 end
 radia.simulink.configureIHNativeModel(modelName, configFile);
@@ -283,12 +308,16 @@ end
 
 function tf = sameFingerprint(stored, current)
 tf = false;
+% A sidecar written before the assemble_fcn field existed compares as
+% different once, forcing one deterministic rebuild that upgrades it.
 if ~isfield(stored, "schema") || ~isfield(stored, "command") || ...
+        ~isfield(stored, "assemble_fcn") || ...
         ~isfield(stored, "files") || ~isfield(stored, "coil_role")
     return
 end
 if ~strcmp(char(string(stored.schema)), current.schema) || ...
         ~strcmp(char(string(stored.command)), current.command) || ...
+        ~strcmp(char(string(stored.assemble_fcn)), current.assemble_fcn) || ...
         ~strcmp(char(string(stored.coil_role)), current.coil_role)
     return
 end

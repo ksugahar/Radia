@@ -218,6 +218,51 @@ verifyEqual(testCase,status.revision,2);
 verifyEqual(testCase,runCount(runsFile),2);
 end
 
+function testMatlabAssembleFcnRebuilds(testCase)
+[work, cleanupDir, wp, coil, ~, configFile] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+% A MATLAB assembler on the path (preferred over a shell command:
+% in-process, errors propagate with their own stack).
+fcnDir = fullfile(work, "fcn");
+mkdir(fcnDir);
+writelines([ ...
+    "function test_geometry_assemble(wpVol, coilFile, configFile) %#ok<INUSL>"; ...
+    "config = radia.simulink.makeIHNativeSmokeConfig(); %#ok<NASGU>"; ...
+    "save(configFile, ""config"");"; ...
+    "end"], fullfile(fcnDir, "test_geometry_assemble.m"));
+addpath(fcnDir);
+restorePath = onCleanup(@() rmpath(fcnDir)); %#ok<NASGU>
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_fcn", "test_geometry_assemble", ...
+    "config_file", char(configFile), "auto_rebuild", "on");
+
+status = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, status.rebuilt);
+verifyEqual(testCase, string(status.assembler), "matlab-function");
+verifyTrue(testCase, isfile(configFile));
+workspace = get_param(model, "ModelWorkspace");
+verifyTrue(testCase, workspace.hasVariable("radia_ih_config"));
+
+status = radia.simulink.updateIHGeometry(model);
+verifyEqual(testCase, string(status.reason), "up-to-date");
+end
+
+function testAmbiguousAssemblerErrors(testCase)
+[~, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_fcn", "some_assembler", ...
+    "assemble_command", char(command), ...
+    "config_file", char(configFile), "auto_rebuild", "on");
+verifyError(testCase, ...
+    @() radia.simulink.updateIHGeometry(model), ...
+    "radia:simulink:IHGeometryUpdateAmbiguousAssemble");
+end
+
 function testRelativePathsError(testCase)
 [~, cleanupDir, ~, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
 [model, closer] = freshModel(); %#ok<ASGLU>

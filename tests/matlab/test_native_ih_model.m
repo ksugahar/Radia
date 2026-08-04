@@ -70,7 +70,7 @@ parametersMask=Simulink.Mask.get(modelName+"/IH Parameters");
 configParameter=parametersMask.getParameter("config_file");
 verifyEqual(testCase,string(configParameter.Evaluate),"off");
 verifyTrue(testCase,contains(string(configParameter.Callback), ...
-    "get_param(gcb, 'config_file')"));
+    "onIHConfigFileChanged"));
 config=radia.simulink.makeIHNativeSmokeConfig(SampleTime_s=0.05);
 callbackPath=fullfile(outputDirectory,"cb_config.mat");
 save(callbackPath,"config");
@@ -124,7 +124,7 @@ parametersMask=Simulink.Mask.get("radia_ih/IH Parameters");
 configParameter=parametersMask.getParameter("config_file");
 verifyEqual(testCase,string(configParameter.Evaluate),"off");
 verifyTrue(testCase,contains(string(configParameter.Callback), ...
-    "get_param(gcb, 'config_file')"));
+    "onIHConfigFileChanged"));
 end
 
 function testPhysicalConfigRequiresVolReports(testCase)

@@ -2,9 +2,10 @@ function blockPath = addFieldStatsBlock(parentPath, options)
 %ADDFIELDSTATSBLOCK Place the [min mean max] field-vector reduction block.
 %   blockPath = addFieldStatsBlock(parentPath) adds a one-in / one-out
 %   subsystem that reduces an N-wide field vector to the 3-wide
-%   [min mean max] signal with named channels, built from base Simulink
-%   blocks only (MinMax / Sum over all dimensions / Width / Divide /
-%   Mux).  Wire it between a distributed-field port (temperature, heat
+%   [min mean max] signal with named channels.  The computation lives
+%   in readable .m code (radia.simulink.fieldStatsSFunction behind the
+%   radia_field_stats_sfun Level-2 wrapper) rather than a
+%   primitive-block web.  Wire it between a distributed-field port (temperature, heat
 %   density) and a scope: a real IH configuration carries thousands of
 %   DOFs (measured 2026-08-04: 3122 temperature DOFs) and a scope fed
 %   the raw vector draws thousands of overlapping lines.  The mean is
@@ -27,30 +28,20 @@ add_block("simulink/Ports & Subsystems/Subsystem", blockPath, ...
 delete_line(blockPath, "In1/1", "Out1/1");
 set_param(blockPath + "/In1", "Position", [40 128 70 142]);
 set_param(blockPath + "/Out1", "Position", [420 138 450 152]);
-add_block("simulink/Math Operations/MinMax", blockPath + "/Min", ...
-    Function="min", Inputs="1", Position=[170 40 210 70]);
-add_block("simulink/Math Operations/Sum", blockPath + "/Sum", ...
-    Inputs="+", CollapseMode="All dimensions", ...
-    Position=[170 100 210 130]);
-add_block("simulink/Signal Attributes/Width", blockPath + "/Width", ...
-    Position=[170 160 210 190]);
-add_block("simulink/Math Operations/Divide", blockPath + "/Mean", ...
-    Inputs="*/", Position=[250 118 290 152]);
-add_block("simulink/Math Operations/MinMax", blockPath + "/Max", ...
-    Function="max", Inputs="1", Position=[170 220 210 250]);
+% The reduction itself is readable .m code (fieldStatsSFunction via the
+% radia_field_stats_sfun wrapper); the Mux only routes and names the
+% three channels for scope legends.
+add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function", ...
+    blockPath + "/Stats", FunctionName="radia_field_stats_sfun", ...
+    Position=[170 80 300 210]);
 add_block("simulink/Signal Routing/Mux", blockPath + "/Mux", ...
     Inputs="3", Position=[340 40 350 250]);
-add_line(blockPath, "In1/1", "Min/1", "autorouting", "smart");
-add_line(blockPath, "In1/1", "Sum/1", "autorouting", "smart");
-add_line(blockPath, "In1/1", "Width/1", "autorouting", "smart");
-add_line(blockPath, "In1/1", "Max/1", "autorouting", "smart");
-add_line(blockPath, "Sum/1", "Mean/1", "autorouting", "smart");
-add_line(blockPath, "Width/1", "Mean/2", "autorouting", "smart");
-set_param(add_line(blockPath, "Min/1", "Mux/1", "autorouting", "smart"), ...
+add_line(blockPath, "In1/1", "Stats/1", "autorouting", "smart");
+set_param(add_line(blockPath, "Stats/1", "Mux/1", "autorouting", "smart"), ...
     "Name", "min");
-set_param(add_line(blockPath, "Mean/1", "Mux/2", "autorouting", "smart"), ...
+set_param(add_line(blockPath, "Stats/2", "Mux/2", "autorouting", "smart"), ...
     "Name", "mean");
-set_param(add_line(blockPath, "Max/1", "Mux/3", "autorouting", "smart"), ...
+set_param(add_line(blockPath, "Stats/3", "Mux/3", "autorouting", "smart"), ...
     "Name", "max");
 add_line(blockPath, "Mux/1", "Out1/1", "autorouting", "smart");
 

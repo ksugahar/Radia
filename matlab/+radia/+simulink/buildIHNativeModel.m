@@ -87,13 +87,11 @@ mask = Simulink.Mask.create(parameterPath);
 mask.Description = "Native IH preview configuration with preassembled operators. MAT files contain config or radia_ih_config; JSON is also supported.";
 configParameter = mask.addParameter(Type="edit", Name="config_file", ...
     Prompt="IH configuration MAT/JSON", Value="", Evaluate="off");
-% Mask callbacks run in the base workspace, where mask parameter
-% variables are NOT defined -- the dialog value must be read back with
-% get_param(gcb, ...).  Referencing bare config_file made every OK
-% press fail with "'config_file' is not recognized".
-configParameter.Callback = ...
-    "radia.simulink.configureIHNativeModel(string(bdroot(gcb)), " + ...
-    "string(get_param(gcb, 'config_file')));";
+% Thin callback: the .slx stores only a named .m entry point (inline
+% mask-callback code is invisible to diffs and cannot be tested; and
+% mask callbacks run in the base workspace where bare mask variables
+% like config_file do not exist).
+configParameter.Callback = "radia.simulink.onIHConfigFileChanged(gcb);";
 mask.Display = "disp('IH Parameters');";
 set_param(parameterPath, "UserData", struct( ...
     "backend", "matlab-level2+radia-mex-handles", ...
