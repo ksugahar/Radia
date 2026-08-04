@@ -50,6 +50,7 @@ PACKAGE_FILES = (
     "+radia/+internal/pythonProcessPath.m",
     "+radia/+simulink/buildIHNativeModel.m",
     "+radia/+simulink/addIHGeometryUpdateBlock.m",
+    "+radia/+simulink/browseIHGeometryFile.m",
     "+radia/+simulink/configureIHNativeModel.m",
     "+radia/+simulink/fileFingerprint.m",
     "+radia/+simulink/ihEddySFunction.m",

@@ -61,6 +61,11 @@ verifyEqual(testCase,string(get_param("radia_ih/Eddy","FunctionName")), ...
     "radia_ih_eddy_sfun");
 verifyEqual(testCase,string(get_param("radia_ih/Thermal","FunctionName")), ...
     "radia_ih_thermal_sfun");
+geometryBlock = "radia_ih/Geometry Update";
+verifyEqual(testCase,string(get_param(geometryBlock,"Mask")),"on");
+mask = Simulink.Mask.get(geometryBlock);
+verifyNotEmpty(testCase,mask.getDialogControl("browse_wp_vol"));
+verifyNotEmpty(testCase,mask.getDialogControl("browse_coil_file"));
 end
 
 function testPhysicalConfigRequiresVolReports(testCase)

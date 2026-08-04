@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.36 - IH geometry replacement controls
+
+Released 2026-08-04.
+
+- Added native `Browse...` controls to the standalone IH Geometry Update block
+  for workpiece `.vol`/`.vol.gz` meshes and coil `.step`/`.stp` or
+  `.vol`/`.vol.gz` geometry, with canonical absolute-path assignment and
+  cancel-safe mask behavior.
+- Regenerated the tracked `radia_ih.slx` model and expanded MATLAB and package
+  regression coverage for mask wiring, accepted geometry roles, invalid or
+  missing selections, saved-model loading, and release archive contents.
+
 ## 4.95.35 - Transient VIM and production MATLAB integration
 
 Released 2026-08-04.
