@@ -75,6 +75,13 @@ addBHBlock(materials,"Temperature-Dependent BH",[45 35 285 105]);
 addMaterialDatabaseBlock(materials,"Material Database",[45 125 285 195]);
 addMaterialDictionaryBlock(materials,"Material Dictionary",[45 215 285 285]);
 
+utilities=addEmptySubsystem(name,"Utilities",[470 570 730 660]);
+% Reduce a distributed field port (temperature / heat density) to
+% [min mean max] before wiring it to a scope; a raw N-wide vector with
+% thousands of DOFs is unreadable on a scope.
+radia.simulink.addFieldStatsBlock(utilities,BlockName="Field Stats", ...
+    Position=[45 35 285 105]);
+
 addEmptySubsystem(name,"LTspice",[70 305 310 405]);
 add_block("simulink/User-Defined Functions/Level-2 MATLAB S-Function",name+"/LTspice/LTspice Circuit", ...
  "FunctionName","radia_ltspice_sfun","Parameters","'', {'control'}, {'V(out)'}, 1e-3, 'C:\temp\radia_ltspice_block', inf, 300, ''",Position=[45 35 200 85]);
