@@ -46,8 +46,8 @@ The plugin extracts the ELF prefix from the first 3 characters of each Cubit blo
 | `MMS` | Magnetic shell |
 | `MMT` | Magnetic thin (line/surface elements) |
 | `MMP` | Magnetic permanent magnet |
-| `MWL` | Winding/coil (standard) |
-| `MWV` | Winding with direction vectors |
+| `MWL` | Nonlinear magnet with fixed local axis |
+| `MWV` | Nonlinear magnet with direction vectors |
 | `MCO` | Current conductor |
 
 If the block name does not match any valid prefix, `MMB` is used as default.

@@ -7454,6 +7454,265 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
     return y;
 }
 
+std::vector<double>
+RadHACApKChargeGram::ConfiguredLinearMaterialElementBlocks(
+    double inv_chi, const std::vector<int>& candidate_dofs,
+    const std::vector<int>& block_offsets)
+{
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialElementBlocks: charge map and mass matrix must be configured");
+    if (!std::isfinite(inv_chi) || inv_chi < 0.0)
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialElementBlocks: inv_chi must be finite and nonnegative");
+    if (block_offsets.size() < 2 || block_offsets.front() != 0 ||
+        block_offsets.back() != static_cast<int>(candidate_dofs.size()))
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialElementBlocks: offsets must start at zero and end at candidate size");
+    const int n_face = m_operatorNFace;
+    std::vector<unsigned char> seen(static_cast<size_t>(n_face), 0);
+    for (int dof : candidate_dofs) {
+        if (dof < 0 || dof >= n_face || seen[static_cast<size_t>(dof)])
+            throw std::runtime_error(
+                "ConfiguredLinearMaterialElementBlocks: candidate DOFs must be unique and in range");
+        seen[static_cast<size_t>(dof)] = 1;
+    }
+    const int n_block = static_cast<int>(block_offsets.size()) - 1;
+    std::vector<size_t> value_offsets(static_cast<size_t>(n_block) + 1, 0);
+    for (int block = 0; block < n_block; ++block) {
+        const int begin = block_offsets[static_cast<size_t>(block)];
+        const int end = block_offsets[static_cast<size_t>(block) + 1];
+        if (begin < 0 || end <= begin ||
+            end > static_cast<int>(candidate_dofs.size()))
+            throw std::runtime_error(
+                "ConfiguredLinearMaterialElementBlocks: offsets must define nonempty increasing blocks");
+        const size_t width = static_cast<size_t>(end - begin);
+        value_offsets[static_cast<size_t>(block) + 1] =
+            value_offsets[static_cast<size_t>(block)] + width * width;
+    }
+    std::vector<double> values(value_offsets.back(), 0.0);
+    {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(n_block), [&](size_t block_index) {
+            const int block = static_cast<int>(block_index);
+            const int begin = block_offsets[block_index];
+            const int end = block_offsets[block_index + 1];
+            const int width = end - begin;
+            const size_t output_begin = value_offsets[block_index];
+            double* output = values.data() + output_begin;
+
+            std::unordered_map<int, int> local_face;
+            local_face.reserve(static_cast<size_t>(2 * width));
+            for (int local = 0; local < width; ++local)
+                local_face.emplace(
+                    candidate_dofs[static_cast<size_t>(begin + local)], local);
+
+            // Exact element-local material mass from the configured CSR.
+            for (int local_row = 0; local_row < width; ++local_row) {
+                const int row = candidate_dofs[static_cast<size_t>(
+                    begin + local_row)];
+                for (int k = m_operatorMassIndptr[static_cast<size_t>(row)];
+                     k < m_operatorMassIndptr[static_cast<size_t>(row) + 1]; ++k) {
+                    const auto found = local_face.find(
+                        m_operatorMassIndices[static_cast<size_t>(k)]);
+                    if (found != local_face.end())
+                        output[static_cast<size_t>(local_row) * width +
+                               found->second] +=
+                            inv_chi * m_operatorMassData[static_cast<size_t>(k)];
+                }
+            }
+
+            // For each vector-charge component, gather only the scalar-charge
+            // modes touched by this element, form its exact small G block, and
+            // contract B_e^T G_e B_e.  No global H-matrix matvec is performed.
+            for (int component = 0; component < m_operatorChargeComponents;
+                 ++component) {
+                std::vector<int> charges;
+                std::unordered_map<int, int> local_charge;
+                for (int local = 0; local < width; ++local) {
+                    const int face = candidate_dofs[static_cast<size_t>(
+                        begin + local)];
+                    const size_t mapped = static_cast<size_t>(component) *
+                        n_face + static_cast<size_t>(face);
+                    for (int k = m_operatorBTIndptr[mapped];
+                         k < m_operatorBTIndptr[mapped + 1]; ++k) {
+                        const int charge =
+                            m_operatorBTIndices[static_cast<size_t>(k)];
+                        if (local_charge.emplace(
+                                charge, static_cast<int>(charges.size())).second)
+                            charges.push_back(charge);
+                    }
+                }
+                const int n_charge = static_cast<int>(charges.size());
+                if (n_charge == 0) continue;
+                std::vector<double> local_b(
+                    static_cast<size_t>(n_charge) * width, 0.0);
+                for (int local = 0; local < width; ++local) {
+                    const int face = candidate_dofs[static_cast<size_t>(
+                        begin + local)];
+                    const size_t mapped = static_cast<size_t>(component) *
+                        n_face + static_cast<size_t>(face);
+                    for (int k = m_operatorBTIndptr[mapped];
+                         k < m_operatorBTIndptr[mapped + 1]; ++k) {
+                        const int charge =
+                            m_operatorBTIndices[static_cast<size_t>(k)];
+                        const int q = local_charge.find(charge)->second;
+                        local_b[static_cast<size_t>(q) * width + local] +=
+                            m_operatorBTData[static_cast<size_t>(k)];
+                    }
+                }
+                std::vector<double> gb(
+                    static_cast<size_t>(n_charge) * width, 0.0);
+                for (int q = 0; q < n_charge; ++q)
+                    for (int r = 0; r < n_charge; ++r) {
+                        const double g = GetInteractionMatrixElement(
+                            charges[static_cast<size_t>(q)],
+                            charges[static_cast<size_t>(r)]);
+                        const double* b_row = local_b.data() +
+                            static_cast<size_t>(r) * width;
+                        double* gb_row = gb.data() +
+                            static_cast<size_t>(q) * width;
+                        for (int column = 0; column < width; ++column)
+                            gb_row[column] += g * b_row[column];
+                    }
+                for (int row = 0; row < width; ++row)
+                    for (int column = 0; column < width; ++column) {
+                        double value = 0.0;
+                        for (int q = 0; q < n_charge; ++q)
+                            value += local_b[static_cast<size_t>(q) * width + row] *
+                                     gb[static_cast<size_t>(q) * width + column];
+                        output[static_cast<size_t>(row) * width + column] += value;
+                    }
+            }
+            for (int row = 0; row < width; ++row)
+                for (int column = row + 1; column < width; ++column) {
+                    const size_t rc = static_cast<size_t>(row) * width + column;
+                    const size_t cr = static_cast<size_t>(column) * width + row;
+                    const double symmetric = 0.5 * (output[rc] + output[cr]);
+                    output[rc] = symmetric;
+                    output[cr] = symmetric;
+                }
+        });
+    }
+    if (!std::all_of(values.begin(), values.end(),
+                     [](double value) { return std::isfinite(value); }))
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialElementBlocks: non-finite local block");
+    return values;
+}
+
+std::vector<int>
+RadHACApKChargeGram::ConfiguredLinearMaterialCandidateClusters(
+    const std::vector<int>& candidate_dofs,
+    const std::vector<int>& block_offsets, int requested_clusters,
+    int& n_cluster_out)
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialCandidateClusters: charge map must be configured");
+    if (requested_clusters < 1)
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialCandidateClusters: requested_clusters must be positive");
+    if (block_offsets.size() < 2 || block_offsets.front() != 0 ||
+        block_offsets.back() != static_cast<int>(candidate_dofs.size()))
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialCandidateClusters: offsets must start at zero and end at candidate size");
+    const int n_face = m_operatorNFace;
+    std::vector<unsigned char> seen(static_cast<size_t>(n_face), 0);
+    for (int dof : candidate_dofs) {
+        if (dof < 0 || dof >= n_face || seen[static_cast<size_t>(dof)])
+            throw std::runtime_error(
+                "ConfiguredLinearMaterialCandidateClusters: candidate DOFs must be unique and in range");
+        seen[static_cast<size_t>(dof)] = 1;
+    }
+    const int n_block = static_cast<int>(block_offsets.size()) - 1;
+    for (int block = 0; block < n_block; ++block)
+        if (block_offsets[static_cast<size_t>(block)] < 0 ||
+            block_offsets[static_cast<size_t>(block) + 1] <=
+                block_offsets[static_cast<size_t>(block)] ||
+            block_offsets[static_cast<size_t>(block) + 1] >
+                static_cast<int>(candidate_dofs.size()))
+            throw std::runtime_error(
+                "ConfiguredLinearMaterialCandidateClusters: offsets must define nonempty increasing blocks");
+
+    auto* leaf = static_cast<st_cHACApK_leafmtxp>(m_leafmtxp);
+    auto* ctl = static_cast<st_cHACApK_lcontrol>(m_control);
+    if (!leaf || !leaf->st_clt_root || !ctl || !ctl->lod)
+        throw std::runtime_error(
+            "ConfiguredLinearMaterialCandidateClusters: H-matrix cluster tree is unavailable");
+
+    // Use actual tree nodes, not a geometric reconstruction in Python.  The
+    // same largest-node splitting rule is used by the cluster Ritz solver, so
+    // screening and H-matvec share one spatial hierarchy and permutation.
+    std::vector<st_cHACApK_cluster> clusters;
+    clusters.push_back(leaf->st_clt_root);
+    while (static_cast<int>(clusters.size()) < requested_clusters) {
+        int split = -1, largest = -1;
+        for (int i = 0; i < static_cast<int>(clusters.size()); ++i) {
+            const auto node = clusters[static_cast<size_t>(i)];
+            if (node && node->nnson > 0 &&
+                static_cast<int>(clusters.size()) + node->nnson - 1 <=
+                    requested_clusters &&
+                node->nsize > largest) {
+                split = i;
+                largest = node->nsize;
+            }
+        }
+        if (split < 0) break;
+        const auto node = clusters[static_cast<size_t>(split)];
+        clusters.erase(clusters.begin() + split);
+        for (int child = 1; child <= node->nnson; ++child)
+            clusters.push_back(node->pc_sons[child]);
+    }
+    n_cluster_out = static_cast<int>(clusters.size());
+    std::vector<int> charge_cluster(static_cast<size_t>(m_ndof), -1);
+    for (int cluster = 0; cluster < n_cluster_out; ++cluster) {
+        const auto node = clusters[static_cast<size_t>(cluster)];
+        for (int pos = node->nstrt; pos < node->nstrt + node->nsize; ++pos) {
+            if (pos < 1 || pos > m_ndof)
+                throw std::runtime_error(
+                    "ConfiguredLinearMaterialCandidateClusters: invalid cluster range");
+            const int charge = ctl->lod[pos] - 1;
+            if (charge < 0 || charge >= m_ndof)
+                throw std::runtime_error(
+                    "ConfiguredLinearMaterialCandidateClusters: invalid cluster permutation");
+            charge_cluster[static_cast<size_t>(charge)] = cluster;
+        }
+    }
+
+    std::vector<int> labels(static_cast<size_t>(n_block), 0);
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    ngcore::ParallelFor(ngcore::IntRange(n_block), [&](size_t block_index) {
+        std::vector<double> weights(static_cast<size_t>(n_cluster_out), 0.0);
+        const int begin = block_offsets[block_index];
+        const int end = block_offsets[block_index + 1];
+        for (int local = begin; local < end; ++local) {
+            const int face = candidate_dofs[static_cast<size_t>(local)];
+            for (int component = 0; component < m_operatorChargeComponents;
+                 ++component) {
+                const size_t mapped = static_cast<size_t>(component) * n_face +
+                    static_cast<size_t>(face);
+                for (int entry = m_operatorBTIndptr[mapped];
+                     entry < m_operatorBTIndptr[mapped + 1]; ++entry) {
+                    const int charge =
+                        m_operatorBTIndices[static_cast<size_t>(entry)];
+                    const int cluster =
+                        charge_cluster[static_cast<size_t>(charge)];
+                    if (cluster >= 0)
+                        weights[static_cast<size_t>(cluster)] += std::fabs(
+                            m_operatorBTData[static_cast<size_t>(entry)]);
+                }
+            }
+        }
+        const auto best = std::max_element(weights.begin(), weights.end());
+        if (best == weights.end() || !(*best > 0.0))
+            throw std::runtime_error(
+                "ConfiguredLinearMaterialCandidateClusters: candidate block has no charge support");
+        labels[block_index] = static_cast<int>(best - weights.begin());
+    });
+    return labels;
+}
+
 RadHACApKChargeGram::CandidateSchurReduction
 RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
     double inv_chi, const std::vector<int>& candidate_dofs,
@@ -8447,7 +8706,241 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
         if (!std::isfinite(value))
             throw std::invalid_argument(
                 "ConfiguredFieldFunctionalRows: weights must be finite");
-    if (!m_highorder || m_curved || m_hexmode || m_wedgemode)
+    if (m_hexmode) {
+        // An affine HEX BDM1 charge is a physical cubic polynomial in the
+        // cell and a physical quadratic polynomial on each quad facet.  Split
+        // the cell into the canonical six Kuhn tetrahedra and every facet into
+        // two triangles, then reuse the exact analytic TET/TRI field kernels.
+        // This is essential near a long pole face: ordinary volume quadrature
+        // of the reciprocal 1/r^3 dipole field is not convergent at practical
+        // orders when the orbit lies only a fraction of an element away.
+        for (int a = 0; a < m_ndof; ++a) {
+            const int* e = &m_expo[static_cast<size_t>(3*a)];
+            const int degree = e[0]+e[1]+e[2];
+            if ((m_kind[static_cast<size_t>(a)] == 0 && degree > 3) ||
+                (m_kind[static_cast<size_t>(a)] == 1 &&
+                 (degree > 2 || e[2] != 0)))
+                throw std::runtime_error(
+                    "ConfiguredFieldFunctionalRows: affine HEX supports "
+                    "volume degree <= 3 and facet degree <= 2");
+        }
+
+        std::vector<double> cell_forms(static_cast<size_t>(m_n_el)*12);
+        std::vector<double> cell_inv_jac(static_cast<size_t>(m_n_el));
+        std::vector<double> cell_corners(static_cast<size_t>(m_n_el)*24);
+        for (int host = 0; host < m_n_el; ++host) {
+            const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
+            double forms[3][4], inv_jac = 0.0;
+            if (!HexAffineInverseForms(nodes, forms, inv_jac))
+                throw std::runtime_error(
+                    "ConfiguredFieldFunctionalRows: exact HEX rows require "
+                    "flat affine Q1 geometry");
+            std::copy_n(&forms[0][0], 12,
+                        &cell_forms[static_cast<size_t>(host)*12]);
+            cell_inv_jac[static_cast<size_t>(host)] = inv_jac;
+            for (int vertex = 0; vertex < 8; ++vertex) {
+                double X[3], J[3][3];
+                HexQ2Map(nodes, HEXREF_V[vertex], X, J);
+                std::copy_n(X, 3,
+                    &cell_corners[(static_cast<size_t>(host)*8+vertex)*3]);
+            }
+        }
+
+        std::vector<double> face_forms(static_cast<size_t>(m_hex_n_bf)*8);
+        std::vector<double> face_inv_jac(static_cast<size_t>(m_hex_n_bf));
+        std::vector<double> face_corners(static_cast<size_t>(m_hex_n_bf)*12);
+        for (int host = 0; host < m_hex_n_bf; ++host) {
+            const double* nodes = &m_quadNodes[static_cast<size_t>(host)*27];
+            double forms[2][4], inv_jac = 0.0;
+            if (!QuadAffineInverseForms(nodes, forms, inv_jac))
+                throw std::runtime_error(
+                    "ConfiguredFieldFunctionalRows: exact HEX rows require "
+                    "flat affine quad facets");
+            std::copy_n(&forms[0][0], 8,
+                        &face_forms[static_cast<size_t>(host)*8]);
+            face_inv_jac[static_cast<size_t>(host)] = inv_jac;
+            for (int vertex = 0; vertex < 4; ++vertex) {
+                double X[3], T[3][2];
+                QuadQ2Map(nodes, QUADREF_V[vertex], X, T);
+                std::copy_n(X, 3,
+                    &face_corners[(static_cast<size_t>(host)*4+vertex)*3]);
+            }
+        }
+
+        std::vector<std::vector<std::pair<int, double>>> charge_by_face(
+            static_cast<size_t>(m_operatorNFace));
+        for (int a = 0; a < m_ndof; ++a) {
+            for (int entry = m_operatorBIndptr[static_cast<size_t>(a)];
+                 entry < m_operatorBIndptr[static_cast<size_t>(a)+1]; ++entry) {
+                const int face = m_operatorBIndices[static_cast<size_t>(entry)];
+                if (face < 0 || face >= m_operatorNFace)
+                    throw std::runtime_error(
+                        "ConfiguredFieldFunctionalRows: charge-map column is out of range");
+                const double value = m_operatorBData[static_cast<size_t>(entry)];
+                if (value != 0.0)
+                    charge_by_face[static_cast<size_t>(face)].emplace_back(a, value);
+            }
+        }
+
+        struct WeightedRow {
+            int row;
+            double value[3];
+        };
+        std::vector<std::vector<WeightedRow>> rows_by_observation(
+            static_cast<size_t>(n_observations));
+        for (int row = 0; row < n_rows; ++row)
+            for (int observation = 0; observation < n_observations; ++observation) {
+                const size_t offset =
+                    (static_cast<size_t>(row)*n_observations+observation)*3;
+                if (weights[offset] != 0.0 || weights[offset+1] != 0.0 ||
+                        weights[offset+2] != 0.0)
+                    rows_by_observation[static_cast<size_t>(observation)].push_back(
+                        {row,{weights[offset],weights[offset+1],weights[offset+2]}});
+            }
+
+        // Convert every reference tensor-product charge mode to the shared
+        // physical monomial ordering once.  Observation evaluation below is
+        // then grouped by geometry host, so all local modes reuse the same
+        // analytic triangle/tetrahedron moments.
+        std::vector<double> mode_polynomial(static_cast<size_t>(m_ndof)*20,0.0);
+        for(int a=0;a<m_ndof;++a){
+            const int host=m_host[static_cast<size_t>(a)];
+            const bool volume=m_kind[static_cast<size_t>(a)]==0;
+            const double* forms=volume
+                ?&cell_forms[static_cast<size_t>(host)*12]
+                :&face_forms[static_cast<size_t>(host)*8];
+            double* polynomial=&mode_polynomial[static_cast<size_t>(a)*20];
+            polynomial[0]=volume
+                ?cell_inv_jac[static_cast<size_t>(host)]
+                :face_inv_jac[static_cast<size_t>(host)];
+            int degree=0;
+            const int axes=volume?3:2;
+            const int* e=&m_expo[static_cast<size_t>(3*a)];
+            for(int axis=0;axis<axes;++axis)
+                for(int power=0;power<e[axis];++power)
+                    HexPolyMulLinear(polynomial,degree,&forms[4*axis],20);
+        }
+
+        constexpr double inv_four_pi =
+            0.079577471545947667884441881686257181;
+        std::vector<double> charge_rows(
+            static_cast<size_t>(n_rows)*m_ndof,0.0);
+        ngcore::RegionTaskManager task_manager;
+        const int n_hosts=m_n_el+m_hex_n_bf;
+        ngcore::ParallelFor(ngcore::IntRange(n_hosts), [&](int combined_host) {
+            const bool volume=combined_host<m_n_el;
+            const int host=volume?combined_host:combined_host-m_n_el;
+            const auto& host_charges=volume
+                ?m_cellCharges[static_cast<size_t>(host)]
+                :m_faceCharges[static_cast<size_t>(host)];
+            if(host_charges.empty())return;
+            const int n_basis=volume?20:10;
+            auto evaluate_base=[&](const double target[3],double out[20][3]){
+                double correction[20][3]={};
+                for(int index=0;index<20;++index)
+                    for(int k=0;k<3;++k)out[index][k]=0.0;
+                const int count=volume?6:2;
+                for(int sub=0;sub<count;++sub){
+                    double term[20][3]={};
+                    if(volume){
+                        double vertices[4][3];
+                        const double* corners=&cell_corners[static_cast<size_t>(host)*24];
+                        for(int local=0;local<4;++local)for(int k=0;k<3;++k)
+                            vertices[local][k]=corners[3*HEXREF_TETS[sub][local]+k];
+                        rad_hdiv::TetVolFieldCubicBasis(vertices,target,term);
+                    }else{
+                        double vertices[3][3];
+                        const double* corners=&face_corners[static_cast<size_t>(host)*12];
+                        for(int local=0;local<3;++local)for(int k=0;k<3;++k)
+                            vertices[local][k]=corners[3*QUADREF_TRIS[sub][local]+k];
+                        rad_hdiv::QuadTriFieldBasis(vertices,target,term);
+                    }
+                    for(int index=0;index<n_basis;++index)
+                        for(int k=0;k<3;++k){
+                        const double next=out[index][k]+term[index][k];
+                        correction[index][k]+=
+                            std::fabs(out[index][k])>=std::fabs(term[index][k])
+                            ?(out[index][k]-next)+term[index][k]
+                            :(term[index][k]-next)+out[index][k];
+                        out[index][k]=next;
+                    }
+                }
+                for(int index=0;index<n_basis;++index)
+                    for(int k=0;k<3;++k)out[index][k]+=correction[index][k];
+            };
+            std::vector<double> sums(
+                static_cast<size_t>(host_charges.size())*n_rows,0.0);
+            std::vector<double> corrections(sums.size(),0.0);
+            for(int observation=0;observation<n_observations;++observation){
+                const double* target=&observations[static_cast<size_t>(observation)*3];
+                double total[20][3];evaluate_base(target,total);
+                for(size_t image=0;image<m_image_masks.size();++image){
+                    const int mask=m_image_masks[image];
+                    double reflected[3]={target[0],target[1],target[2]};
+                    double term[20][3];
+                    for(int k=0;k<3;++k)if(mask&(1<<k))reflected[k]=-reflected[k];
+                    evaluate_base(reflected,term);
+                    for(int index=0;index<n_basis;++index)
+                        for(int k=0;k<3;++k){
+                        if(mask&(1<<k))term[index][k]=-term[index][k];
+                        total[index][k]+=m_image_signs[image]*term[index][k];
+                    }
+                }
+                for(const auto& weighted:
+                        rows_by_observation[static_cast<size_t>(observation)]){
+                    double projected[20];
+                    for(int index=0;index<n_basis;++index)
+                        projected[index]=weighted.value[0]*total[index][0]
+                            +weighted.value[1]*total[index][1]
+                            +weighted.value[2]*total[index][2];
+                    for(size_t local=0;local<host_charges.size();++local){
+                        const int a=host_charges[local];
+                        const double* polynomial=
+                            &mode_polynomial[static_cast<size_t>(a)*20];
+                        double term=0.0;
+                        for(int index=0;index<n_basis;++index)
+                            term+=polynomial[index]*projected[index];
+                        const size_t slot=local*static_cast<size_t>(n_rows)
+                            +weighted.row;
+                        double& sum=sums[slot];
+                        double& correction=corrections[slot];
+                        const double next=sum+term;
+                        correction+=std::fabs(sum)>=std::fabs(term)
+                            ?(sum-next)+term:(term-next)+sum;
+                        sum=next;
+                    }
+                }
+            }
+            for(size_t local=0;local<host_charges.size();++local){
+                const int a=host_charges[local];
+                for(int row=0;row<n_rows;++row){
+                    const size_t slot=local*static_cast<size_t>(n_rows)+row;
+                    charge_rows[static_cast<size_t>(row)*m_ndof+a]=inv_four_pi*
+                        (sums[slot]+corrections[slot]);
+                }
+            }
+        });
+
+        std::vector<double> output(
+            static_cast<size_t>(n_rows)*m_operatorNFace,0.0);
+        ngcore::ParallelFor(
+            ngcore::IntRange(n_rows*m_operatorNFace),[&](int linear){
+                const int face=linear%m_operatorNFace;
+                const int row=linear/m_operatorNFace;
+                double sum=0.0,correction=0.0;
+                for(const auto& item:charge_by_face[static_cast<size_t>(face)]){
+                    const double term=item.second*charge_rows[
+                        static_cast<size_t>(row)*m_ndof+item.first];
+                    const double next=sum+term;
+                    correction+=std::fabs(sum)>=std::fabs(term)
+                        ?(sum-next)+term:(term-next)+sum;
+                    sum=next;
+                }
+                output[static_cast<size_t>(linear)]=sum+correction;
+            });
+        return output;
+    }
+    if (!m_highorder || m_curved || m_wedgemode)
         throw std::runtime_error(
             "ConfiguredFieldFunctionalRows: exact sparse observation rows currently require flat affine TET geometry");
     for (int a = 0; a < m_ndof; ++a) {
@@ -8951,96 +9444,112 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             std::move(volume), std::move(surface), m_image_masks, m_image_signs, options);
     }
 
-    // Straight affine HEX RT0: retain an exact near-field representation.
-    // A fixed tensor cloud is adequate for Gram far blocks, but it is not a
-    // field evaluator near a long/thin pole face: four Gauss points along a
-    // one-metre face produced O(10%) orbit-field errors at a 50-mm gap.  RT0
-    // has one constant reference charge per cell/facet, so an affine HEX can
-    // be split into the same six Kuhn tets and each affine quad into two
-    // triangles.  q_ref dxi = rho dx and q_ref du dv = sigma dS give the
-    // physical constant densities below.  The existing analytic TET/TRI
-    // kernel then becomes the single exact numerical source for every target,
-    // including points close to the pole face.
-    bool analytic_hex_rt0 = m_hexmode;
-    for (int a = 0; analytic_hex_rt0 && a < m_ndof; ++a) {
+    // Straight affine HEX BDM1: retain an exact near-field representation.
+    // The reference volume charge has total degree <= 3 and each reference
+    // facet charge has degree <= 2.  Under an affine map these remain physical
+    // linear/quadratic polynomials, so the canonical 6-TET / 2-TRI split can
+    // reuse the analytic kernels.  The old fixed tensor cloud is adequate for
+    // smooth Gram far blocks but is not a convergent near-pole field evaluator.
+    bool analytic_hex = m_hexmode;
+    bool configured_hex_rt0 = m_hexmode;
+    for (int a = 0; analytic_hex && a < m_ndof; ++a) {
         const int* e = &m_expo[static_cast<size_t>(3*a)];
-        analytic_hex_rt0 = e[0] == 0 && e[1] == 0 && e[2] == 0;
+        const int degree = e[0]+e[1]+e[2];
+        configured_hex_rt0 = configured_hex_rt0 && degree == 0;
+        analytic_hex = m_kind[static_cast<size_t>(a)] == 0
+            ? degree <= 3
+            : (degree <= 2 && e[2] == 0);
     }
-    const bool configured_hex_rt0 = analytic_hex_rt0;
-    if (analytic_hex_rt0) {
+    if (analytic_hex) {
         std::vector<double> volume;
         std::vector<double> surface;
-        volume.reserve(static_cast<size_t>(m_n_el)*6*16);
+        volume.reserve(static_cast<size_t>(m_n_el)*6*32);
         surface.reserve(static_cast<size_t>(m_hex_n_bf)*2*22);
-        const double center3[3] = {0.5, 0.5, 0.5};
-        const double center2[2] = {0.5, 0.5};
-        const double affine_tol = 2.0e-11;
-
-        for (int host = 0; analytic_hex_rt0 && host < m_n_el; ++host) {
+        for (int host = 0; analytic_hex && host < m_n_el; ++host) {
             const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
-            double ignored[3], J0[3][3];
-            HexQ2Map(nodes, center3, ignored, J0);
-            const double det = HexDet3(J0);
-            double scale = 0.0;
-            for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j)
-                scale = std::max(scale, std::fabs(J0[i][j]));
-            if (!(std::fabs(det) > 1.0e-300) || !std::isfinite(det)) {
-                analytic_hex_rt0 = false;
+            double forms[3][4], inv_jac = 0.0;
+            if (!HexAffineInverseForms(nodes, forms, inv_jac)) {
+                analytic_hex = false;
                 break;
             }
             double corners[8][3];
             for (int vertex = 0; vertex < 8; ++vertex) {
                 double J[3][3];
                 HexQ2Map(nodes, HEXREF_V[vertex], corners[vertex], J);
-                for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j)
-                    if (std::fabs(J[i][j]-J0[i][j]) >
-                            affine_tol*std::max(1.0, scale))
-                        analytic_hex_rt0 = false;
             }
-            if (!analytic_hex_rt0) break;
-            double coefficient = 0.0;
-            for (int charge_id : m_cellCharges[static_cast<size_t>(host)])
-                coefficient += charge[static_cast<size_t>(charge_id)];
-            if (coefficient == 0.0) continue;
-            const double rho = coefficient/std::fabs(det);
+            double polynomial[20] = {};
+            for (int charge_id : m_cellCharges[static_cast<size_t>(host)]) {
+                const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
+                const int* e = &m_expo[static_cast<size_t>(3*charge_id)];
+                double mode[20] = {};
+                mode[0] = factor;
+                int degree = 0;
+                for (int axis = 0; axis < 3; ++axis)
+                    for (int power = 0; power < e[axis]; ++power)
+                        HexPolyMulLinear(mode,degree,forms[axis],20);
+                for (int index = 0; index < 20; ++index)
+                    polynomial[index] += mode[index];
+            }
+            bool empty = true;
+            for (double value : polynomial) empty = empty && value == 0.0;
+            if (empty) continue;
             for (int sub = 0; sub < 6; ++sub) {
                 const size_t offset = volume.size();
-                volume.resize(offset+16, 0.0);
+                volume.resize(offset+32, 0.0);
                 for (int local = 0; local < 4; ++local)
                     for (int axis = 0; axis < 3; ++axis)
                         volume[offset+3*local+axis] =
                             corners[HEXREF_TETS[sub][local]][axis];
-                volume[offset+12] = rho;
+                std::copy_n(polynomial,20,volume.data()+offset+12);
             }
         }
 
-        for (int host = 0; analytic_hex_rt0 && host < m_hex_n_bf; ++host) {
+        for (int host = 0; analytic_hex && host < m_hex_n_bf; ++host) {
             const double* nodes = &m_quadNodes[static_cast<size_t>(host)*27];
-            double ignored[3], T0[3][2];
-            QuadQ2Map(nodes, center2, ignored, T0);
-            const double jacobian = HexSurfJ(T0);
-            double scale = 0.0;
-            for (int i = 0; i < 3; ++i) for (int j = 0; j < 2; ++j)
-                scale = std::max(scale, std::fabs(T0[i][j]));
-            if (!(jacobian > 1.0e-300) || !std::isfinite(jacobian)) {
-                analytic_hex_rt0 = false;
+            double forms[2][4], inv_jac = 0.0;
+            if (!QuadAffineInverseForms(nodes, forms, inv_jac)) {
+                analytic_hex = false;
                 break;
             }
             double corners[4][3];
             for (int vertex = 0; vertex < 4; ++vertex) {
                 double T[3][2];
                 QuadQ2Map(nodes, QUADREF_V[vertex], corners[vertex], T);
-                for (int i = 0; i < 3; ++i) for (int j = 0; j < 2; ++j)
-                    if (std::fabs(T[i][j]-T0[i][j]) >
-                            affine_tol*std::max(1.0, scale))
-                        analytic_hex_rt0 = false;
             }
-            if (!analytic_hex_rt0) break;
-            double coefficient = 0.0;
-            for (int charge_id : m_faceCharges[static_cast<size_t>(host)])
-                coefficient += charge[static_cast<size_t>(charge_id)];
-            if (coefficient == 0.0) continue;
-            const double sigma = coefficient/jacobian;
+            double sigma0 = 0.0, slope[3] = {0.0, 0.0, 0.0};
+            double hessian[3][3] = {};
+            for (int charge_id : m_faceCharges[static_cast<size_t>(host)]) {
+                const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
+                const int* e = &m_expo[static_cast<size_t>(3*charge_id)];
+                const int i = e[0], j = e[1];
+                if (i == 0 && j == 0) {
+                    sigma0 += factor;
+                } else if (i+j == 1) {
+                    const int axis = i ? 0 : 1;
+                    sigma0 += factor*forms[axis][0];
+                    for (int k = 0; k < 3; ++k)
+                        slope[k] += factor*forms[axis][k+1];
+                } else {
+                    const int first = i == 2 ? 0 : (j == 2 ? 1 : 0);
+                    const int second = i == 2 ? 0 : (j == 2 ? 1 : 1);
+                    const double* f = forms[first];
+                    const double* s = forms[second];
+                    sigma0 += factor*f[0]*s[0];
+                    for (int k = 0; k < 3; ++k)
+                        slope[k] += factor*(f[0]*s[k+1]+s[0]*f[k+1]);
+                    for (int r = 0; r < 3; ++r)
+                        for (int c = 0; c < 3; ++c)
+                            hessian[r][c] += first == second
+                                ? factor*f[r+1]*f[c+1]
+                                : 0.5*factor*(f[r+1]*s[c+1]+s[r+1]*f[c+1]);
+                }
+            }
+            bool empty = sigma0 == 0.0;
+            for (int k = 0; k < 3; ++k) empty = empty && slope[k] == 0.0;
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c)
+                    empty = empty && hessian[r][c] == 0.0;
+            if (empty) continue;
             for (int sub = 0; sub < 2; ++sub) {
                 const size_t offset = surface.size();
                 surface.resize(offset+22, 0.0);
@@ -9048,12 +9557,17 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                     for (int axis = 0; axis < 3; ++axis)
                         surface[offset+3*local+axis] =
                             corners[QUADREF_TRIS[sub][local]][axis];
-                surface[offset+9] = sigma;
+                surface[offset+9] = sigma0;
+                for (int k = 0; k < 3; ++k)
+                    surface[offset+10+k] = slope[k];
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 3; ++c)
+                        surface[offset+13+3*r+c] = hessian[r][c];
             }
         }
-        if (analytic_hex_rt0) {
+        if (analytic_hex) {
             if (!volume.empty() || !surface.empty())
-                return rad_hdiv::HDivFieldEvaluator::FromTet(
+                return rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
                     std::move(volume), std::move(surface),
                     m_image_masks, m_image_signs, options);
             return rad_hdiv::HDivFieldEvaluator::FromCloud(

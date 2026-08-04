@@ -1433,6 +1433,97 @@ void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,
     }
 }
 
+// General total-degree <= 3 physical polynomial density.  coefficient uses
+// PotentialMomentIndex(ax,ay,az), i.e. increasing total degree and then ax,ay.
+// Integration by parts gives
+//   int_V rho grad'(1/R) = int_dV rho n/R - int_V grad(rho)/R.
+// The existing analytic triangle/tetrahedron potential moments therefore close
+// the cubic field without target or source quadrature.
+void TetVolFieldCubic(const double V[4][3], const double r[3],
+                      const double coefficient[20], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double cen[3]={0,0,0};
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]+=0.25*V[i][k];
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    for(int fi=0;fi<4;++fi){
+        double face[3][3];
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k)
+            face[j][k]=V[FACES[fi][j]][k];
+        double e1[3],e2[3],normal[3];
+        for(int k=0;k<3;++k){e1[k]=face[1][k]-face[0][k];e2[k]=face[2][k]-face[0][k];}
+        v3cross(e1,e2,normal);const double norm=v3nrm(normal);
+        if(norm<1e-300)continue;
+        for(double& value:normal)value/=norm;
+        double fc[3]={0,0,0};
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k)fc[k]+=face[j][k]/3.0;
+        double outward[3];for(int k=0;k<3;++k)outward[k]=fc[k]-cen[k];
+        if(v3dot(outward,normal)<0.0)for(double& value:normal)value=-value;
+        double moments[35]={};TriPotentialMomentsUpTo4(face,r,moments);
+        double weighted=0.0;
+        for(int index=0;index<20;++index)weighted+=coefficient[index]*moments[index];
+        for(int k=0;k<3;++k)out[k]+=normal[k]*weighted;
+    }
+    double volume_moments[20]={};TetPotentialMomentsUpTo3(V,r,volume_moments);
+    for(int total=1;total<=3;++total)
+        for(int ax=0;ax<=total;++ax)
+            for(int ay=0;ay<=total-ax;++ay){
+                const int az=total-ax-ay;
+                const int alpha[3]={ax,ay,az};
+                const double value=coefficient[PotentialMomentIndex(ax,ay,az)];
+                if(value==0.0)continue;
+                for(int k=0;k<3;++k)if(alpha[k]>0){
+                    int lower[3]={ax,ay,az};--lower[k];
+                    out[k]-=value*alpha[k]*volume_moments[
+                        PotentialMomentIndex(lower[0],lower[1],lower[2])];
+                }
+            }
+}
+
+// All 20 physical-monomial fields in one geometry pass.  This is the batched
+// form used by affine-HEX observation rows: the expensive triangle/tetrahedron
+// moments depend on (V,r), not on the individual charge coefficient.  The
+// ordering is PotentialMomentIndex(ax,ay,az), identical to coefficient[].
+void TetVolFieldCubicBasis(const double V[4][3], const double r[3],
+                           double out[20][3])
+{
+    for(int index=0;index<20;++index)
+        for(int k=0;k<3;++k)out[index][k]=0.0;
+    double cen[3]={0,0,0};
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]+=0.25*V[i][k];
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    for(int fi=0;fi<4;++fi){
+        double face[3][3];
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k)
+            face[j][k]=V[FACES[fi][j]][k];
+        double e1[3],e2[3],normal[3];
+        for(int k=0;k<3;++k){e1[k]=face[1][k]-face[0][k];e2[k]=face[2][k]-face[0][k];}
+        v3cross(e1,e2,normal);const double norm=v3nrm(normal);
+        if(norm<1e-300)continue;
+        for(double& value:normal)value/=norm;
+        double fc[3]={0,0,0};
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k)fc[k]+=face[j][k]/3.0;
+        double outward[3];for(int k=0;k<3;++k)outward[k]=fc[k]-cen[k];
+        if(v3dot(outward,normal)<0.0)for(double& value:normal)value=-value;
+        double moments[35]={};TriPotentialMomentsUpTo4(face,r,moments);
+        for(int index=0;index<20;++index)
+            for(int k=0;k<3;++k)out[index][k]+=normal[k]*moments[index];
+    }
+    double volume_moments[20]={};TetPotentialMomentsUpTo3(V,r,volume_moments);
+    for(int total=1;total<=3;++total)
+        for(int ax=0;ax<=total;++ax)
+            for(int ay=0;ay<=total-ax;++ay){
+                const int az=total-ax-ay;
+                const int alpha[3]={ax,ay,az};
+                const int index=PotentialMomentIndex(ax,ay,az);
+                for(int k=0;k<3;++k)if(alpha[k]>0){
+                    int lower[3]={ax,ay,az};--lower[k];
+                    out[index][k]-=alpha[k]*volume_moments[
+                        PotentialMomentIndex(lower[0],lower[1],lower[2])];
+                }
+            }
+}
+
 // INT_T (sigma0 + s.r')(r-r')/R^3 dS' (linear surface charge)
 // = (sigma0 + s.r_p) F_const - SUM_e (s.m_e) G_e - I0 s_par.
 void LinTriField(const double V[3][3], const double r[3], double sigma0, const double s[3], double out[3])
@@ -1552,6 +1643,28 @@ static bool coplanar_outside_inverse_cube_moment(
 void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3])
 {
+    double basis[10][3];
+    QuadTriFieldBasis(V,r,basis);
+    double coefficient[10]={};
+    coefficient[0]=sigma0;
+    for(int axis=0;axis<3;++axis)
+        coefficient[PotentialMomentIndex(axis==0,axis==1,axis==2)]=s[axis];
+    for(int a=0;a<3;++a)for(int b=a;b<3;++b){
+        int exponent[3]={0,0,0};++exponent[a];++exponent[b];
+        coefficient[PotentialMomentIndex(exponent[0],exponent[1],exponent[2])]=
+            a==b?S[a][a]:S[a][b]+S[b][a];
+    }
+    for(int k=0;k<3;++k){
+        out[k]=0.0;
+        for(int index=0;index<10;++index)out[k]+=coefficient[index]*basis[index][k];
+    }
+}
+
+void QuadTriFieldBasis(const double V[3][3], const double r[3],
+                       double out[10][3])
+{
+    for(int index=0;index<10;++index)
+        for(int k=0;k<3;++k)out[index][k]=0.0;
     double e1u[3],e2u[3],n[3];
     for (int k=0;k<3;k++){ e1u[k]=V[1][k]-V[0][k]; e2u[k]=V[2][k]-V[0][k]; }
     v3cross(e1u,e2u,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
@@ -1570,7 +1683,6 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
     double intxi1[3]={0,0,0};                                  // INT_T xi/R^3
     double xixi[3][3];                                         // INT_T xi(x)xi/R^3 = P I0 - SUM (Gxi)(x)m
     for (int a=0;a<3;a++) for (int b=0;b<3;b++) xixi[a][b]=((a==b?1.0:0.0)-n[a]*n[b])*I0;
-    double inplane[3]={0,0,0};
     for (int i=0;i<3;i++){
         const double* A=V[i]; const double* B=V[(i+1)%3];
         double m[3]; edge_outnormal(A,B,n,cen,m);
@@ -1582,31 +1694,54 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
         double Gxi3[3]; for (int k=0;k<3;k++) Gxi3[k]=Gxi[0]*e1[k]+Gxi[1]*e2[k];
         for (int k=0;k<3;k++) intxi1[k]-=m[k]*Jl[0];
         for (int a=0;a<3;a++) for (int b=0;b<3;b++) xixi[a][b]-=Gxi3[a]*m[b];
-        // in-plane: m_e * INT_edge sigma/R dl ; sigma = sigma0 + s.r' + r'^T S r' as a poly c0+c1 l+c2 l^2
-        // along r'(l) = A + l*th  (th = unit edge tangent)
-        double sA=v3dot(s,A);
+        // In-plane edge terms for every physical monomial.  Along
+        // r'(l)=A+l*tt they are polynomials through degree two.
         double tt[3]; for (int k=0;k<3;k++) tt[k]=B[k]-A[k]; double Lt=v3nrm(tt); for(int k=0;k<3;k++) tt[k]/=Lt;
-        double AStA=0, AStt=0, ttStt=0;
-        for (int a=0;a<3;a++) for (int b=0;b<3;b++){ AStA+=A[a]*S[a][b]*A[b]; AStt+=A[a]*S[a][b]*tt[b]; ttStt+=tt[a]*S[a][b]*tt[b]; }
-        double c0=sigma0+sA+AStA;
-        double c1=v3dot(s,tt)+2.0*AStt;
-        double c2=ttStt;
-        double esig=c0*Jl[0]+c1*Jl[1]+c2*Jl[2];
-        for (int k=0;k<3;k++) inplane[k]+=m[k]*esig;
+        double edge_basis[10]={};
+        edge_basis[0]=Jl[0];
+        for(int axis=0;axis<3;++axis)
+            edge_basis[PotentialMomentIndex(axis==0,axis==1,axis==2)]=
+                A[axis]*Jl[0]+tt[axis]*Jl[1];
+        for(int a=0;a<3;++a)for(int b=a;b<3;++b){
+            int exponent[3]={0,0,0};++exponent[a];++exponent[b];
+            const int index=PotentialMomentIndex(exponent[0],exponent[1],exponent[2]);
+            edge_basis[index]=A[a]*A[b]*Jl[0]
+                +(A[a]*tt[b]+A[b]*tt[a])*Jl[1]+tt[a]*tt[b]*Jl[2];
+        }
+        for(int index=0;index<10;++index)
+            for(int k=0;k<3;++k)out[index][k]+=m[k]*edge_basis[index];
     }
     double J3_1[3]; for (int k=0;k<3;k++) J3_1[k]=intxi1[k]+r_p[k]*J3_0;          // INT_T r'/R^3
     double J3_2[3][3];                                                            // INT_T r'(x)r'/R^3
     for (int a=0;a<3;a++) for (int b=0;b<3;b++)
         J3_2[a][b]=xixi[a][b] + r_p[a]*intxi1[b] + intxi1[a]*r_p[b] + r_p[a]*r_p[b]*J3_0;
-    // in-plane: - (P s I0 + 2 P S M1)
-    double sn=v3dot(s,n); double Psn[3]; for (int k=0;k<3;k++) Psn[k]=s[k]-sn*n[k];
-    double SM1[3]; for (int a=0;a<3;a++){ SM1[a]=S[a][0]*M1[0]+S[a][1]*M1[1]+S[a][2]*M1[2]; }
-    double SM1n=v3dot(SM1,n); double PSM1[3]; for (int k=0;k<3;k++) PSM1[k]=SM1[k]-SM1n*n[k];
-    for (int k=0;k<3;k++) inplane[k]-=(Psn[k]*I0 + 2.0*PSM1[k]);
-    // normal: h n [sigma0 J3_0 + s.J3_1 + S:J3_2]
-    double SJ2=0; for (int a=0;a<3;a++) for (int b=0;b<3;b++) SJ2+=S[a][b]*J3_2[a][b];
-    double nrmscal=h*(sigma0*J3_0 + v3dot(s,J3_1) + SJ2);
-    for (int k=0;k<3;k++) out[k]=inplane[k]+n[k]*nrmscal;
+    // Interior derivative and normal terms, again one column per physical
+    // monomial coefficient.
+    for(int axis=0;axis<3;++axis){
+        const int index=PotentialMomentIndex(axis==0,axis==1,axis==2);
+        for(int k=0;k<3;++k){
+            const double projected=(k==axis?1.0:0.0)-n[k]*n[axis];
+            out[index][k]-=projected*I0;
+            out[index][k]+=n[k]*h*J3_1[axis];
+        }
+    }
+    for(int a=0;a<3;++a)for(int b=a;b<3;++b){
+        int exponent[3]={0,0,0};++exponent[a];++exponent[b];
+        const int index=PotentialMomentIndex(exponent[0],exponent[1],exponent[2]);
+        for(int k=0;k<3;++k){
+            double derivative=0.0;
+            if(a==b)
+                derivative=2.0*((k==a?1.0:0.0)-n[k]*n[a])*M1[a];
+            else
+                derivative=((k==a?1.0:0.0)-n[k]*n[a])*M1[b]
+                          +((k==b?1.0:0.0)-n[k]*n[b])*M1[a];
+            out[index][k]-=derivative;
+            const double j2=a==b?J3_2[a][a]
+                :0.5*(J3_2[a][b]+J3_2[b][a]);
+            out[index][k]+=n[k]*h*j2;
+        }
+    }
+    for(int k=0;k<3;++k)out[0][k]+=n[k]*h*J3_0;
 }
 
 // Forward-mode copy of the exact Wilton/Graglia triangle field.  Keeping the

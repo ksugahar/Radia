@@ -59,6 +59,34 @@ def _tensor_tangent_cfs(gfH, chi0, Msat, Id):
 _MU0 = 4e-7 * pi
 
 
+def _validate_bh_table(table, *, context="vim.Solve"):
+    """Validate the public soft-iron ``[[H, B], ...]`` contract.
+
+    The nonlinear HDiv law is an origin-anchored, single-valued soft-iron
+    curve in SI units. A negative-H recoil line can be interpolated
+    syntactically, but it belongs to the separate ``mu_r + B_r`` permanent-
+    magnet route and must fail loudly here.
+    """
+    tables = table if isinstance(table, dict) else {None: table}
+    for region, values in tables.items():
+        label = f"{context}: bh_table" if region is None else f"{context}: bh_table[{region!r}]"
+        arr = np.asarray(values, dtype=float)
+        if arr.ndim != 2 or arr.shape[1] != 2 or arr.shape[0] < 2:
+            raise ValueError(f"{label} must be [[H,B], ...] with at least two rows (A/m, T)")
+        if not np.isfinite(arr).all():
+            raise ValueError(f"{label} must contain only finite values (A/m, T)")
+        scale_h = max(1.0, float(np.max(np.abs(arr[:, 0]))))
+        scale_b = max(1.0, float(np.max(np.abs(arr[:, 1]))))
+        if not np.isclose(arr[0, 0], 0.0, rtol=0.0, atol=1e-12 * scale_h):
+            raise ValueError(f"{label} must start at H=0 for soft iron; use mu_r+B_r for recoil PM")
+        if not np.isclose(arr[0, 1], 0.0, rtol=0.0, atol=1e-12 * scale_b):
+            raise ValueError(f"{label} must start at B=0 for soft iron")
+        if np.any(np.diff(arr[:, 0]) <= 0.0):
+            raise ValueError(f"{label} H values must be strictly increasing")
+        if np.any(np.diff(arr[:, 1]) < -1e-12 * scale_b):
+            raise ValueError(f"{label} B values must be non-decreasing")
+
+
 def _bh_table_funcs(Harr, Barr):
     """Build M(H) + the PCHIP B(H)/B'(H) from a REAL [[H,B]] table (the same data Radia's MatSatIsoTab
     consumes): monotone C1 interpolation -> smooth dM/dH for Newton.  M(H) = B(|H|)/mu0 - |H|.

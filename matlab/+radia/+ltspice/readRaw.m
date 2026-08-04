@@ -24,4 +24,24 @@ valid=matlab.lang.makeUniqueStrings(matlab.lang.makeValidName(cellstr(data.names
 signals=struct();
 for k=1:numel(valid), signals.(valid{k})=data.values(:,k); end
 data.signals=signals;
+if ~isfield(data,'raw_properties'),data.raw_properties=struct();end
+if ~isfield(data,'aliases'),data.aliases=struct();end
+if ~isfield(data,'alias_names'),data.alias_names=string(fieldnames(data.aliases));end
+if ~isfield(data,'alias_formulas')
+    keys=fieldnames(data.aliases);
+    data.alias_formulas=strings(numel(keys),1);
+    for k=1:numel(keys)
+        data.alias_formulas(k)=string(data.aliases.(keys{k}));
+    end
+end
+if ~isfield(data,'backannotations'),data.backannotations=strings(0,1);end
+if isfield(data.raw_properties,'Plotname')
+    data.plot_name=string(data.raw_properties.Plotname);
+elseif data.analysis=="ac"
+    data.plot_name="AC Analysis";
+elseif data.analysis=="transient"
+    data.plot_name="Transient Analysis";
+else
+    data.plot_name="";
+end
 end

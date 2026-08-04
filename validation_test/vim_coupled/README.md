@@ -9,6 +9,7 @@ at the physical harmonic coupling scales (magnetic row `-K/mu0`, eddy row
 |------|-----------|---------------|
 | `test_sphere_alpha_lane.py` | exact complex polarizability `alpha(omega)` of a conducting permeable sphere (`radia.analytical_formulas.sphere_complex_polarizability`) | eddy-branch transition shape (mu_r=1), coupled static + transition (mu_r=100), vanishing DC current from a static magnetization |
 | `test_torus_cohomology_tau.py` | short-circuited ring law `(R+sL) I = -s Phi_ext` with the closed-form ring R and L evaluated on the MEASURED mesh cross-section | the genus-1 (H1 cohomology) loop class: single-pole shape, the CALIBRATION-FREE time constant `tau = L/R`, flux-freeze plateau, and the cycle-class DC zero |
+| `test_hdiv_hcurl_transient_validation.py` | eleven-step moving manufactured transient with a changing magnetic operator | production-form snapshot/artifact contract, Joule-loss observables, and the discrete energy-balance gate |
 
 Protocol notes (both lanes are documented compromises, re-examine before
 tightening):

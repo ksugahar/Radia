@@ -1,6 +1,9 @@
 """radia_mcp.differential_forms — MCP server for differential forms in computational electromagnetism.
 
-Knowledge base distilled from six canonical sources:
+Knowledge base distilled from a curated computational-geometry bibliography,
+including:
+  - T. Needham, "Visual Differential Geometry and Forms" (Princeton U.P.,
+    2021; Japanese translation, Maruzen, 2026)
   - A. Bossavit, "Computational Electromagnetism" (Academic Press, 1998)
   - D.N. Arnold, R.S. Falk, R. Winther, "Finite element exterior calculus,
     homological techniques, and applications", Acta Numerica 15 (2006)
