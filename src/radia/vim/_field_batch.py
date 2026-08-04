@@ -8,9 +8,10 @@ M is linear per tet (NGSolve HDiv order=1 on tets = full (P1)^3, BDM1-type), so
     * BDM1 tetrahedra use linear boundary charge and constant volume charge,
     * BDM2 tetrahedra use quadratic boundary charge and linear volume charge,
 
-and both pieces have closed forms in the C++ TET production kernel.  HEX and
-WEDGE use their tensor-product or prism-polynomial charge bases and mapped
-quadrature clouds.  Solve-time
+and both pieces have closed forms in the C++ TET production kernel.  Affine HEX
+sources use an exact six-TET physical-polynomial decomposition; curved HEX and
+WEDGE sources use their tensor-product or prism-polynomial charge bases and
+mapped quadrature clouds.  Solve-time
 materialization stores the immutable C++ source evaluator in the result.  Its
 NumPy-buffer API performs no per-call source packing, evaluates all IMA terms in
 one TaskManager region, and selects a quadrupole treecode for sufficiently large
