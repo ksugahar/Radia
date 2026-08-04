@@ -78,6 +78,11 @@ set_param(parameterPath, "UserData", struct( ...
     "configuration", "model-workspace-or-file"), ...
     "UserDataPersistent", "on");
 
+% Geometry watch/rebuild: re-pointing or editing the .vol/.step inputs
+% triggers the assemble command at the next update (InitFcn hook).
+radia.simulink.addIHGeometryUpdateBlock(options.ModelName, ...
+    Position=[185 345 365 425]);
+
 connect(options.ModelName, "Coil Current/1", "Eddy/1");
 connect(options.ModelName, "Workpiece Angle/1", "Eddy/2");
 connect(options.ModelName, "Workpiece Angle/1", "Thermal/3");
