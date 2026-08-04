@@ -19,25 +19,26 @@ radia-mcp-matrix.yml, build-test.yml "Run basic tests"), fast-first.
 
 Gates:
   1. policy-lint        -- the 8 static policies (CblasColMajor etc.)
-  2. version-consistency-- pyproject == __init__ for radia / radia-mcp / cme
-  3. tools-md-drift     -- regenerate docs/TOOLS.md and diff (WIP-aware)
-  4. radia-mcp-matrix   -- compile + meta_health + the FAST radia-mcp
+  2. publish-boundary   -- radia-mcp provenance/internal-path lint + selftest
+  3. version-consistency-- pyproject == __init__ for radia / radia-mcp / cme
+  4. tools-md-drift     -- regenerate docs/TOOLS.md and diff (WIP-aware)
+  5. radia-mcp-matrix   -- compile + meta_health + the FAST radia-mcp
                            pytest run UNDER minimal-dep simulation
                            (RADIA_MCP_FORCE_MINIMAL=1), which is what the
                            ubuntu matrix actually runs -- this is the gate
                            that catches heavy-import collection errors
                            (ngsolve/netgen imported at module level)
-  5. toplevel-collect   -- `pytest tests/ --collect-only` for the lightweight
+  6. toplevel-collect   -- `pytest tests/ --collect-only` for the lightweight
                            debug/CI suite
-  6. toplevel-run       -- (only with --full) actually run the lightweight
+  7. toplevel-run       -- (only with --full) actually run the lightweight
                            tests/ suite with reruns
-  7. validation-collect -- (only with --validation) collect the heavy
+  8. validation-collect -- (only with --validation) collect the heavy
                            validation_test/ suite
-  8. validation-run     -- (only with --validation --full) run the heavy
+  9. validation-run     -- (only with --validation --full) run the heavy
                            validation_test/ suite
 
 Usage:
-    python tools/ci_preflight.py            # gates 1-5 (~2 min)
+    python tools/ci_preflight.py            # gates 1-6 (~3 min)
     python tools/ci_preflight.py --full     # also run lightweight tests/
     python tools/ci_preflight.py --validation  # also collect validation_test/
     python tools/ci_preflight.py --fix      # auto-regenerate TOOLS.md on drift
@@ -107,7 +108,29 @@ def gate_policy_lint():
 
 
 # ======================================================================
-# Gate 2: version consistency  (pyproject == __init__)
+# Gate 2: radia-mcp publish boundary (same commands as GitHub CI)
+# ======================================================================
+def gate_publish_boundary_lint():
+    script = os.path.join(MCP, "tools", "policy_lint.py")
+    rc, out = _sh([sys.executable, script, "--selftest"], timeout=120)
+    if rc != 0:
+        tail = out.strip().splitlines()[-8:]
+        return False, "publish-boundary selftest failed: " + " | ".join(tail)
+
+    rc, out = _sh([sys.executable, script], timeout=180)
+    if rc == 0:
+        return True, "radia-mcp provenance and internal-path scan passes"
+    findings = [
+        line.strip()
+        for line in out.splitlines()
+        if "finding(s)" in line or "lab-local absolute" in line
+    ]
+    detail = " | ".join(findings[-6:]) or out.strip()[-500:]
+    return False, f"radia-mcp publish-boundary lint failed: {detail}"
+
+
+# ======================================================================
+# Gate 3: version consistency  (pyproject == __init__)
 # ======================================================================
 def _ver_in(path, key="version"):
     import re
@@ -140,7 +163,7 @@ def gate_version_consistency():
 
 
 # ======================================================================
-# Gate 3: TOOLS.md drift  (WIP-aware)
+# Gate 4: TOOLS.md drift  (WIP-aware)
 # ======================================================================
 def gate_tools_md(fix=False):
     gen = os.path.join("packages", "radia-mcp", "scripts", "gen_tools_doc.py")
@@ -206,7 +229,7 @@ def gate_tools_md(fix=False):
 
 
 # ======================================================================
-# Gate 4: radia-mcp matrix  (compile + health + minimal-dep pytest)
+# Gate 5: radia-mcp matrix  (compile + health + minimal-dep pytest)
 # ======================================================================
 def gate_radia_mcp_matrix():
     # 4a compile
@@ -257,7 +280,7 @@ def gate_radia_mcp_matrix():
 
 
 # ======================================================================
-# Gate 5: top-level collect-only  (CI "Run basic tests" import check)
+# Gate 6: top-level collect-only  (CI "Run basic tests" import check)
 # ======================================================================
 def gate_toplevel_collect():
     cmd = [sys.executable, "-m", "pytest", "tests/", "--collect-only", "-q",
@@ -274,7 +297,7 @@ def gate_toplevel_collect():
 
 
 # ======================================================================
-# Gate 6: top-level run  (--full only; lightweight tests/)
+# Gate 7: top-level run  (--full only; lightweight tests/)
 # ======================================================================
 def gate_toplevel_run():
     cmd = [sys.executable, "-m", "pytest", "tests/", "-q", "--no-header",
@@ -291,7 +314,7 @@ def gate_toplevel_run():
 
 
 # ======================================================================
-# Gate 7: validation collect  (manual heavy validation_test/ import check)
+# Gate 8: validation collect  (manual heavy validation_test/ import check)
 # ======================================================================
 def gate_validation_collect():
     cmd = [sys.executable, "-m", "pytest", "validation_test/",
@@ -306,7 +329,7 @@ def gate_validation_collect():
 
 
 # ======================================================================
-# Gate 8: validation run  (manual heavy validation_test/ run)
+# Gate 9: validation run  (manual heavy validation_test/ run)
 # ======================================================================
 def gate_validation_run():
     cmd = [sys.executable, "-m", "pytest", "validation_test/", "-q",
@@ -323,6 +346,7 @@ def gate_validation_run():
 
 ALL_GATES = [
     ("policy",          "Policy Lint (8 static policies)",        gate_policy_lint),
+    ("publish-boundary","radia-mcp publish-boundary lint",        gate_publish_boundary_lint),
     ("version",         "Version consistency (pyproject==init)",  gate_version_consistency),
     ("tools-md",        "TOOLS.md drift gate",                    gate_tools_md),
     ("radia-mcp",       "radia-mcp matrix (minimal-dep pytest)",  gate_radia_mcp_matrix),
@@ -354,7 +378,7 @@ def _gates_for_changes(changed):
     or src/ changed."""
     sel = {"policy", "version"}
     if any(f.startswith("packages/radia-mcp/") for f in changed):
-        sel |= {"tools-md", "radia-mcp"}
+        sel |= {"publish-boundary", "tools-md", "radia-mcp"}
     if any(f.startswith("tests/") or f.startswith("src/") for f in changed):
         sel |= {"toplevel-collect"}
     return [g for g in ALL_GATES if g[0] in sel]
