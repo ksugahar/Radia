@@ -441,6 +441,13 @@ transport from the previous angle to the current angle, then one implicit
 thermal step. A linear magnetic configuration reuses its Eddy solution under a
 current-only change and rescales heat by current squared.
 
+The standalone model's `Geometry Update` mask has `Browse...` controls for the
+workpiece `.vol`/`.vol.gz` mesh and coil `.step`/`.stp` (PEEC) or
+`.vol`/`.vol.gz` (BEM-A) geometry. Once
+its assemble command and output configuration are configured, replacing either
+file is detected by path and SHA-256 content at the next model update or run;
+operator assembly never runs once per simulation time step.
+
 The preview accepts linear or temperature-linearized operator data only.
 Nonlinear BH iteration is not implemented and `bh_mode="nonlinear"` fails
 loudly rather than substituting the dense linear solve.

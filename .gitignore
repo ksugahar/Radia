@@ -470,6 +470,7 @@ p_convergence_sphere.png
 cubit[0-9]*.jou
 *.sat
 *.slxc
+*.slx.autosave
 slprj/
 
 # Simulink Agentic Toolkit machine-local scan cache. The portable policy and
