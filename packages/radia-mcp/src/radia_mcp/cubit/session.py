@@ -281,6 +281,12 @@ class CubitSession:
         self._lock = threading.Lock()
         self._ready_info: dict | None = None
 
+        # Ownership tag (MathWorks pattern): True when THIS process
+        # spawned the Cubit runner; False when we merely attached to a
+        # daemon another process started.  Recovery paths must never
+        # kill a live session we do not own.
+        self._owned = False
+
         # gui-mode (file-drop) state
         self._drop_dir: Path | None = None
         self._outbox: Path | None = None
@@ -324,15 +330,17 @@ class CubitSession:
             return self._start_gui_bootstrap()
         return self._start_stdio_daemon()
 
-    def shutdown(self, timeout_s: float = 3.0) -> None:
+    def shutdown(self, timeout_s: float = 3.0) -> dict:
         """Politely ask Cubit to exit, then force-kill after timeout.
 
-        Handles both the normal case (``self._proc`` is OUR child) and
-        the Phase-1 attached case (daemon was started by a previous
-        process; we're only a client).  In the attached case, the
-        daemon's PID is in ``pid.lock`` and we kill it via
-        ``os.kill`` / ``TerminateProcess``.
+        This is the EXPLICIT stop path (`cubit_session_shutdown` tool),
+        so it may also kill an attached daemon another process started --
+        but it reports what it did, so the caller can tell the user which
+        process was stopped (``stopped``: "owned-child" |
+        "attached-daemon" | "none"; ``pid`` when known).
         """
+        report: dict = {"stopped": "none", "pid": None,
+                        "owned": self._owned}
         # Best-effort polite shutdown via live transport
         try:
             self._lock_free_shutdown_op(timeout_s=timeout_s)
@@ -340,6 +348,7 @@ class CubitSession:
             pass
         # Kill our own child process
         if self._proc is not None:
+            report["pid"] = self._proc.pid
             try:
                 self._proc.wait(timeout=timeout_s)
             except Exception:
@@ -349,6 +358,7 @@ class CubitSession:
                     self._proc.kill()
                 except Exception:
                     pass
+            report["stopped"] = "owned-child"
         # Kill an attached daemon (not our child) via pid.lock
         if self._drop_dir is not None:
             pid_file = self._drop_dir / "pid.lock"
@@ -356,6 +366,12 @@ class CubitSession:
                 try:
                     pid = int(pid_file.read_text(encoding="utf-8").strip())
                     if pid > 0 and _is_pid_alive(pid):
+                        if report["stopped"] == "none":
+                            report["stopped"] = "attached-daemon"
+                            report["pid"] = pid
+                            report["note"] = (
+                                "stopped a daemon this process did not "
+                                "start (explicit shutdown request)")
                         if sys.platform == "win32":
                             import ctypes
                             h = ctypes.windll.kernel32.OpenProcess(
@@ -380,6 +396,8 @@ class CubitSession:
         self._outbox = None
         self._proc = None
         self._ready_info = None
+        self._owned = False
+        return report
 
     def is_alive(self) -> bool:
         # Our own child
@@ -453,6 +471,14 @@ class CubitSession:
 
         Used by the recovery path in `call()`. Does NOT re-enter the lock
         (caller is holding it).
+
+        Ownership rule (MathWorks pattern, 2026-08-05): a recovery path
+        may kill only a session THIS process spawned.  An attached daemon
+        that is still alive belongs to whoever started it (another VSCode
+        window's live geometry, potentially) -- we DETACH from it and
+        leave its pid.lock/ready markers intact for its other clients.
+        Killing an attached-but-hung daemon requires the explicit
+        `cubit_session_shutdown` tool, not an implicit retry path.
         """
         proc = self._proc
         if proc is not None and proc.poll() is None:
@@ -460,37 +486,37 @@ class CubitSession:
                 proc.kill()
             except Exception:
                 pass
-        # Phase-1: if we attached to a pre-existing daemon, kill it via
-        # pid.lock so the next ensure_started spawns fresh.  Leaving a
-        # broken daemon alive would break every subsequent call.
         if self._drop_dir is not None:
             pid_file = self._drop_dir / "pid.lock"
-            if pid_file.exists():
+            attached_alive = False
+            if not self._owned and pid_file.exists():
                 try:
                     pid = int(pid_file.read_text(encoding="utf-8").strip())
-                    if pid > 0 and _is_pid_alive(pid):
-                        if sys.platform == "win32":
-                            import ctypes
-                            h = ctypes.windll.kernel32.OpenProcess(0x0001, False, pid)
-                            if h:
-                                ctypes.windll.kernel32.TerminateProcess(h, 1)
-                                ctypes.windll.kernel32.CloseHandle(h)
-                        else:
-                            os.kill(pid, 9)
+                    attached_alive = pid > 0 and _is_pid_alive(pid)
                 except (OSError, ValueError):
-                    pass
-                try: pid_file.unlink()
-                except OSError: pass
-            ready = self._drop_dir / "ready"
-            if ready.exists():
-                try: ready.unlink()
-                except OSError: pass
+                    attached_alive = False
+            if attached_alive:
+                # Detach only: keep pid.lock + ready for the daemon's
+                # other clients; the retry will re-attach (or surface
+                # the error if the daemon is truly hung).
+                pass
+            else:
+                # Dead daemon (or our own killed child): clean the
+                # markers so the next ensure_started spawns fresh.
+                if pid_file.exists():
+                    try: pid_file.unlink()
+                    except OSError: pass
+                ready = self._drop_dir / "ready"
+                if ready.exists():
+                    try: ready.unlink()
+                    except OSError: pass
         # Per-process state: cleared.  The per-user drop-dir on disk
         # persists (it's _user_daemon_dir()) so the next spawn reuses it.
         self._drop_dir = None
         self._outbox = None
         self._proc = None
         self._ready_info = None
+        self._owned = False
 
     # ---- mode: gui (file drop) ----
 
@@ -536,6 +562,7 @@ class CubitSession:
             self._drop_dir = drop
             self._outbox = outbox
             self._proc = None  # not OUR child; we're just a client
+            self._owned = False
             self._ready_info = existing
             self._last_license_warmup = {"status": "skipped",
                                           "reason": "attached to existing daemon"}
@@ -553,11 +580,14 @@ class CubitSession:
                 "status": "error", "reason": f"warmup module: {exc}"}
 
         # Clear stale artifacts from any previous spawn in this dir
+        startup_error_path = drop / "startup_error.txt"
         try:
             if ready_path.exists():
                 ready_path.unlink()
             if pid_file.exists():
                 pid_file.unlink()
+            if startup_error_path.exists():
+                startup_error_path.unlink()
             for f in outbox.iterdir():
                 try: f.unlink()
                 except OSError: pass
@@ -574,27 +604,37 @@ class CubitSession:
         env["CUBIT_DROP_DIR"] = str(drop)
 
         # Detach the Cubit subprocess so it outlives THIS MCP server
-        # process.  DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP + DEVNULL
-        # pipes mean: no orphan child on VSCode exit, Cubit keeps running,
-        # and the next MCP server process finds it via pid.lock + attaches.
+        # process.  DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP mean: no
+        # orphan child on VSCode exit, Cubit keeps running, and the next
+        # MCP server process finds it via pid.lock + attaches.
         creationflags = 0
         if sys.platform == "win32":
             creationflags = (
                 getattr(subprocess, "DETACHED_PROCESS", 0) |
                 getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-        self._proc = subprocess.Popen(
-            [str(gui_exe), "-nojournal", str(bootstrap_path)],
-            # stdin=DEVNULL: prevent Cubit from inheriting the MCP server's
-            # stdio pipe (Claude Code JSON-RPC). Without it Cubit hangs at
-            # startup (resp=False, declining threads). Confirmed 2026-04-25.
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=env,
-            bufsize=0,
-            creationflags=creationflags,
-            close_fds=True,
-        )
+        # Cubit's own console output goes to log FILES in the drop dir
+        # (MathWorks matlab_stdout.log pattern), NOT to pipes (pipes
+        # block/break when the parent exits -- the detached child must
+        # outlive us) and NOT to DEVNULL (which threw away exactly the
+        # output needed when bootstrap dies before writing `ready`).
+        stdout_log = drop / "cubit_stdout.log"
+        stderr_log = drop / "cubit_stderr.log"
+        with open(stdout_log, "wb") as out_f, open(stderr_log, "wb") as err_f:
+            self._proc = subprocess.Popen(
+                [str(gui_exe), "-nojournal", str(bootstrap_path)],
+                # stdin=DEVNULL: prevent Cubit from inheriting the MCP
+                # server's stdio pipe (Claude Code JSON-RPC). Without it
+                # Cubit hangs at startup (resp=False, declining threads).
+                # Confirmed 2026-04-25.
+                stdin=subprocess.DEVNULL,
+                stdout=out_f,
+                stderr=err_f,
+                env=env,
+                bufsize=0,
+                creationflags=creationflags,
+                close_fds=True,
+            )
+        self._owned = True
         # Write PID lock immediately so a sibling VSCode racing to spawn
         # can also attach (once ready marker appears).
         try:
@@ -613,7 +653,33 @@ class CubitSession:
                          != "no_rlm_activate")
         budget = CUBIT_READY_TIMEOUT_S if warmup_ok else 60.0
         deadline = time.time() + budget
+
+        def _startup_diag() -> str:
+            """Real in-process failure evidence, best first (MathWorks
+            mcp_startup_error.txt pattern + log-artifact pointers)."""
+            parts = []
+            if startup_error_path.exists():
+                try:
+                    parts.append("bootstrap error:\n"
+                                 + startup_error_path.read_text(
+                                       encoding="utf-8", errors="replace"))
+                except OSError:
+                    pass
+            try:
+                tail = stderr_log.read_bytes()[-2000:]
+                if tail.strip():
+                    parts.append("cubit stderr tail:\n"
+                                 + tail.decode("utf-8", errors="replace"))
+            except OSError:
+                pass
+            parts.append(f"logs: {stdout_log} / {stderr_log}")
+            return "\n".join(parts)
+
         while time.time() < deadline:
+            if startup_error_path.exists():
+                raise CubitSessionError(
+                    "Cubit bootstrap failed during startup.\n"
+                    + _startup_diag())
             if ready_path.exists():
                 try:
                     info = json.loads(ready_path.read_text(encoding="utf-8"))
@@ -625,10 +691,11 @@ class CubitSession:
             if self._proc.poll() is not None:
                 raise CubitSessionError(
                     f"Cubit exited during bootstrap "
-                    f"(rc={self._proc.returncode}).")
+                    f"(rc={self._proc.returncode}).\n" + _startup_diag())
             time.sleep(0.15)
         raise CubitSessionError(
-            f"Cubit did not signal ready within 60 s. drop={drop}")
+            f"Cubit did not signal ready within {budget:.0f} s. "
+            f"drop={drop}\n" + _startup_diag())
 
     def _call_via_filedrop(self, req: dict, timeout_s: float) -> dict:
         assert self._drop_dir is not None and self._outbox is not None
@@ -682,6 +749,7 @@ class CubitSession:
             env=env,
             bufsize=0,
         )
+        self._owned = True
         self._start_stderr_drain()
 
         line = self._proc.stdout.readline()
@@ -804,10 +872,15 @@ class CubitSession:
             return _SINGLETON
 
     @classmethod
-    def reset(cls) -> None:
-        """Shutdown and drop the singleton. Next `get()` will relaunch."""
+    def reset(cls) -> dict:
+        """Shutdown and drop the singleton. Next `get()` will relaunch.
+
+        Returns the shutdown report ({"stopped": ..., "pid": ...}); an
+        empty dict when no singleton existed."""
         global _SINGLETON
+        report: dict = {}
         with _SESSION_LOCK:
             if _SINGLETON is not None:
-                _SINGLETON.shutdown()
+                report = _SINGLETON.shutdown()
                 _SINGLETON = None
+        return report
