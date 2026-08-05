@@ -895,15 +895,190 @@ def field_stats(msh_path: str | Path,
 
 
 # ======================================================================
+# Public API: structural + field diff
+# ======================================================================
+
+def _rel_delta(a: float | None, b: float | None) -> float | None:
+    if a is None or b is None:
+        return None if a is b else math.inf
+    scale = max(abs(a), abs(b), 1e-300)
+    return abs(a - b) / scale
+
+
+def diff_msh(msh_a: str | Path, msh_b: str | Path,
+             rel_tol: float = 1e-9) -> dict[str, Any]:
+    """Compare two MSH v4.1 files: structure and field statistics.
+
+    Built for before/after checks (re-export, node-order fix, solver
+    change): reports node/element/physical/view structure differences
+    and, for common views, the relative drift of per-view min/max/mean.
+    Field values are compared through statistics, not tag-by-tag.
+    """
+    results = {}
+    for key, p in (("a", Path(msh_a)), ("b", Path(msh_b))):
+        info = inspect_msh(p)
+        if not info.get("ok"):
+            return {"ok": False,
+                    "error": f"cannot inspect {key}: "
+                             f"{info.get('error') or info.get('parse_errors')}",
+                    key: str(p)}
+        stats = field_stats(p)
+        results[key] = (info, stats)
+
+    (ia, fa), (ib, fb) = results["a"], results["b"]
+    differences: list[str] = []
+
+    nodes_a = ia.get("nodes", {}).get("count")
+    nodes_b = ib.get("nodes", {}).get("count")
+    if nodes_a != nodes_b:
+        differences.append(f"node count: {nodes_a} vs {nodes_b}")
+
+    by_type_a = {t["name"]: t["count"]
+                 for t in ia.get("elements", {}).get("by_type", [])}
+    by_type_b = {t["name"]: t["count"]
+                 for t in ib.get("elements", {}).get("by_type", [])}
+    for name in sorted(set(by_type_a) | set(by_type_b)):
+        ca, cb = by_type_a.get(name, 0), by_type_b.get(name, 0)
+        if ca != cb:
+            differences.append(f"element {name}: {ca} vs {cb}")
+
+    phys_a = {(p["dim"], p["name"]) for p in ia.get("physical_names") or []}
+    phys_b = {(p["dim"], p["name"]) for p in ib.get("physical_names") or []}
+    only_phys_a = sorted(f"dim{d} {n}" for d, n in phys_a - phys_b)
+    only_phys_b = sorted(f"dim{d} {n}" for d, n in phys_b - phys_a)
+    if only_phys_a:
+        differences.append(f"physical names only in a: {only_phys_a}")
+    if only_phys_b:
+        differences.append(f"physical names only in b: {only_phys_b}")
+
+    bbox_max_delta = None
+    box_a, box_b = ia.get("bbox"), ib.get("bbox")
+    if box_a and box_b:
+        bbox_max_delta = max(
+            abs(box_a[k][i] - box_b[k][i])
+            for k in ("min", "max") for i in range(3))
+        if bbox_max_delta > 0:
+            differences.append(f"bbox max coordinate delta: {bbox_max_delta:.3e}")
+
+    views_a = {(v["section"], v["name"]): v for v in fa.get("views", [])}
+    views_b = {(v["section"], v["name"]): v for v in fb.get("views", [])}
+    only_view_a = sorted(name for _, name in set(views_a) - set(views_b))
+    only_view_b = sorted(name for _, name in set(views_b) - set(views_a))
+    if only_view_a:
+        differences.append(f"views only in a: {only_view_a}")
+    if only_view_b:
+        differences.append(f"views only in b: {only_view_b}")
+
+    structural_diff_count = len(differences)
+
+    common_views = []
+    fields_match: bool | None = None
+    if set(views_a) & set(views_b):
+        fields_match = True
+    for key in sorted(set(views_a) & set(views_b)):
+        va, vb = views_a[key], views_b[key]
+        entry: dict[str, Any] = {
+            "section": key[0], "name": key[1],
+            "a": {"steps": va["steps"], "components": va["components"],
+                  **va["overall"]},
+            "b": {"steps": vb["steps"], "components": vb["components"],
+                  **vb["overall"]},
+        }
+        if va["steps"] != vb["steps"]:
+            differences.append(
+                f"view \"{key[1]}\": {va['steps']} vs {vb['steps']} steps")
+            structural_diff_count += 1
+        if va["components"] != vb["components"]:
+            differences.append(
+                f"view \"{key[1]}\": {va['components']} vs "
+                f"{vb['components']} components")
+            structural_diff_count += 1
+        deltas = [d for d in (_rel_delta(va["overall"]["min"], vb["overall"]["min"]),
+                              _rel_delta(va["overall"]["max"], vb["overall"]["max"]))
+                  if d is not None]
+        max_rel = max(deltas) if deltas else None
+        entry["max_rel_delta"] = max_rel
+        if max_rel is not None and max_rel > rel_tol:
+            fields_match = False
+            differences.append(
+                f"view \"{key[1]}\": min/max drift rel {max_rel:.3e} "
+                f"(a: [{va['overall']['min']}, {va['overall']['max']}], "
+                f"b: [{vb['overall']['min']}, {vb['overall']['max']}])")
+        common_views.append(entry)
+
+    identical_structure = structural_diff_count == 0
+    return {
+        "ok": True,
+        "a": str(msh_a),
+        "b": str(msh_b),
+        "identical_structure": identical_structure,
+        "fields_match": fields_match,
+        "rel_tol": rel_tol,
+        "differences": _cap(differences),
+        "nodes": {"a": nodes_a, "b": nodes_b},
+        "elements": {"a": by_type_a, "b": by_type_b},
+        "bbox_max_delta": bbox_max_delta,
+        "views": {"only_a": only_view_a, "only_b": only_view_b,
+                  "common": common_views},
+    }
+
+
+# ======================================================================
 # Public API: validate .geo
 # ======================================================================
 
-def validate_geo(geo_path: str | Path) -> dict[str, Any]:
+def _count_views_light(msh: Path) -> int:
+    """Count distinct (section, name) view groups without a full parse.
+
+    GMSH folds consecutive same-named data sections of one file into one
+    view with multiple time steps, so the group count is the number of
+    views that file contributes after a Merge.
+    """
+    groups: set[tuple[str, str]] = set()
+    section: str | None = None
+    state = 0  # 0 idle, 1 expect numStringTags, 2 expect view name
+    try:
+        with open(msh, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                s = raw.strip()
+                if not s:
+                    continue
+                if s.startswith("$End"):
+                    section, state = None, 0
+                    continue
+                if s.startswith("$"):
+                    name = s[1:]
+                    section = name if name in _DATA_SECTIONS else None
+                    state = 1 if section else 0
+                    continue
+                if state == 1 and section:
+                    try:
+                        n_str = int(s)
+                    except ValueError:
+                        state = 0
+                        continue
+                    if n_str <= 0:
+                        groups.add((section, ""))
+                        state = 0
+                    else:
+                        state = 2
+                    continue
+                if state == 2 and section:
+                    groups.add((section, s.strip('"')))
+                    state = 0
+    except OSError:
+        return 0
+    return len(groups)
+
+
+def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
     """Validate a .geo launch/companion file before opening it in GMSH.
 
     Checks that every ``Merge "..."`` target exists on disk and that no
-    known-invalid GMSH 4.x option names are used.  Also reports the max
-    ``View[N]`` index and whether ``Mesh.NumSubEdges`` is set.
+    known-invalid GMSH 4.x option names are used.  With ``deep=True``
+    (default) the merged .msh files are scanned for their view count so
+    out-of-range ``View[N]`` references -- the classic "opens black"
+    bug -- are caught, and the exact-autoload sidecars are reported.
     """
     path = Path(geo_path)
     if not path.is_file():
@@ -960,16 +1135,54 @@ def validate_geo(geo_path: str | Path) -> dict[str, Any]:
         warnings.append(
             "no Merge lines found: this .geo does not load any data file")
 
-    status = "ok" if all(checks.values()) else "needs_attention"
-    return {
-        "ok": status == "ok",
+    result: dict[str, Any] = {
         "path": str(path),
-        "status": status,
-        "checks": checks,
         "merge_targets": merge_targets,
         "invalid_options": invalid_options,
         "max_view_index": max_view_index,
         "numsubedges": numsubedges,
+    }
+
+    if deep:
+        total_views = 0
+        for entry in merge_targets:
+            if not entry["exists"]:
+                continue
+            resolved = Path(entry["resolved"])
+            if resolved.suffix.lower() in (".msh", ".pos"):
+                n = _count_views_light(resolved)
+                entry["views"] = n
+                total_views += n
+        result["merged_views_total"] = total_views
+        if max_view_index >= 0:
+            in_range = max_view_index < total_views
+            checks["view_indices_in_range"] = in_range
+            if not in_range:
+                errors.append(
+                    f"View[{max_view_index}] is referenced but the merged "
+                    f"files only contribute {total_views} view(s) -- "
+                    f"out-of-range view options are silently ignored and "
+                    f"the intended field stays invisible")
+
+        geo_opt = Path(str(path) + ".opt")
+        sidecars = {"geo_opt": geo_opt.is_file()}
+        msh_targets = [Path(e["resolved"]) for e in merge_targets
+                       if e["exists"] and e["resolved"].lower().endswith(".msh")]
+        if msh_targets:
+            sidecars["msh_opt"] = all(
+                Path(str(t) + ".opt").is_file() for t in msh_targets)
+        result["sidecars"] = sidecars
+        if not geo_opt.is_file():
+            warnings.append(
+                f"no exact-autoload sidecar {geo_opt.name}: display options "
+                f"must live inline in the .geo for double-click launches")
+
+    status = "ok" if all(checks.values()) else "needs_attention"
+    result.update({
+        "ok": status == "ok",
+        "status": status,
+        "checks": checks,
         "errors": _cap(errors),
         "warnings": warnings,
-    }
+    })
+    return result

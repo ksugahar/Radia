@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **911 tools** across 48 MCP servers.
+Total: **912 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 83 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 22 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 23 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -240,6 +240,7 @@ Module: `radia_mcp.gmsh.server`
 |---|---|
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
+| `gmsh_diff_msh` | Compare two MSH v4.1 files: structure + field statistics. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_exec` | Execute Python code in a PERSISTENT gmsh session (stateful evaluate). |
 | `gmsh_export_animation` | Export a time-stepped post-view animation as GIF (gmsh subprocess). |
