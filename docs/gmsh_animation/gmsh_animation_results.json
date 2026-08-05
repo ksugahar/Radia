@@ -1,11 +1,11 @@
 {
   "schema": "radia.docs.gmsh_animation.inspect.v1",
-  "generated_at_utc": "2026-06-27T15:41:25Z",
+  "generated_at_utc": "2026-08-05T05:10:48Z",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_version": "4.95.2"
+    "radia_version": "4.95.40"
   },
   "example_dir": "docs/gmsh_animation",
   "files": {
