@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **900 tools** across 48 MCP servers.
+Total: **901 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 82 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 83 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
@@ -69,6 +69,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_batch_try` | Dry-run a recipe in a fresh headless Cubit subprocess. |
 | `cubit_boundary_layer_candidate_gate` | Select a non-inverted boundary-layer sweep candidate with export closure. |
 | `cubit_boundary_layer_journal_recovery_gate` | Gate three-parameter, pairwise, headless recovery of a failed journal. |
+| `cubit_check_vol` | Run the canonical `check-vol` gate on an exported Netgen `.vol` mesh. |
 | `cubit_checkpoint` | Save the current Cubit session state as a named checkpoint. |
 | `cubit_conformal_hex_pyramid_tet_interface_gate` | Gate a conformal hex-pyramid-tet interface and independent volume sum. |
 | `cubit_cpp_sdk_guide` | Get documentation on building Cubit C++ SDK plugins. |
