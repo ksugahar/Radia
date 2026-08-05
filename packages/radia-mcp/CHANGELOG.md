@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.29] - 2026-08-05
+
+- Added headless GMSH v4.1 inspection, validation, PNG/GIF rendering, and
+  invalid-option lint tools, plus Cubit `check-vol` and entity/label probes.
+- Ported the official MathWorks MATLAB MCP execution patterns and documented
+  the MagLev and electromagnet-topology Simulink production interfaces.
+- Kept solver-backed `check-vol` numerical checks in the validation lane and
+  refreshed the generated public tool inventory.
+
 ## [1.4.28] - 2026-08-04
 
 - Added a public-safe visual differential-geometry knowledge and validation

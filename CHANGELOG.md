@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.41 - Simulink MagLev and electromagnet topology
+
+Released 2026-08-05.
+
 - Added the generated `radia_maglev.slx` production composition and the
   `Applications/Magnetic Levitation` library block. The model advances a
   position-dependent common-basis HCurl/CLN state from `-dI/dt`, height, and
@@ -12,6 +16,11 @@ All notable changes to the `radia` package.  Format: each release lists
   without per-step Python.
 - Added family-file mask handling, diagnostic smoke data, MATLAB model tests,
   release-package gates, and MCP interface documentation for MagLev.
+- Added `radia_electromagnet.slx` and its library subsystem for VIM
+  density-topology optimization with one state solve and one adjoint solve per
+  gradient, selectable MMA/SQP optimization, and complete Simulink histories.
+- Corrected GMSH reference maps and high-order node ordering for tetrahedra,
+  hexahedra, prisms, and pyramids, with positive-Jacobian round-trip tests.
 
 ## 4.95.40 - Native IH geometry-to-operator assembly
 
