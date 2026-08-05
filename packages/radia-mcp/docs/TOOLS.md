@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **920 tools** across 48 MCP servers.
+Total: **930 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 85 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 29 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 37 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -168,6 +168,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_curved_shell_step_semantics_gate` | Diagnose topology-preserving curved STEP mass loss across CAD kernels. |
 | `build123d_curved_step_topology_crosscheck_gate` | Gate curved STEP mass and exact topology across independent imports. |
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
+| `build123d_doctor` | One-shot environment diagnosis for the build123d MCP stack |
 | `build123d_drafted_housing_cross_kernel_gate` | Gate drafted housing mass/topology across B-rep, STEP, Cubit, and Gmsh. |
 | `build123d_drafted_housing_source_replay_gate` | Gate tagged draft/fillet/hole source and headless mesh-companion replay. |
 | `build123d_dual_api_perforated_board_gate` | Gate equivalent Builder/Algebra perforated boards through two CAD imports. |
@@ -196,6 +197,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_patterned_compound_translation_gate` | Diagnose dominant curved-body STEP bias without solver-ready overclaim. |
 | `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
 | `build123d_platonic_solid_family_gate` | Gate all five Platonic solids by topology, analytic volume and CAD replay. |
+| `build123d_probe` | Probe a STEP/BREP file with the SAME vocabulary as `cubit_probe`. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
 | `build123d_reflection_rotation_handoff_gate` | Gate reflection failures and a proper-rotation two-body STEP handoff. |
 | `build123d_repeated_cavity_dual_api_gate` | Gate dual APIs and four STEP imports for a repeated-feature cavity solid. |
@@ -243,18 +245,25 @@ Module: `radia_mcp.gmsh.server`
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory and summarize the health. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
+| `gmsh_cut_plane_extract` | Cut a view with the plane A*x+B*y+C*z+D=0 and save the section DATA. |
 | `gmsh_detect` | Detect gmsh capabilities on this machine (detect_matlab_toolboxes twin). |
 | `gmsh_diff_msh` | Compare two MSH v4.1 files: structure + field statistics. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_exec` | Execute Python code in a PERSISTENT gmsh session (stateful evaluate). |
 | `gmsh_export_animation` | Export a time-stepped post-view animation as GIF (gmsh subprocess). |
 | `gmsh_field_stats` | Per-view, per-time-step field statistics for an MSH v4.1 file. |
+| `gmsh_harmonic_to_time` | Expand a complex (re/im) view into a time-domain animation view. |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
+| `gmsh_integrate` | Integrate a view over its elements (per time step). |
+| `gmsh_isosurface` | Extract the isosurface of a scalar view (e.g. the saturation front). |
+| `gmsh_line_profile` | Sample a view along a straight line; optionally plot a PNG graph. |
+| `gmsh_math_eval` | Create a derived view with Plugin(MathEval) and save it. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
 | `gmsh_mesh_quality` | Scaled-Jacobian quality distribution for all 3D elements. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
 | `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
+| `gmsh_probe` | Probe post-processing views at arbitrary points (interpolated). |
 | `gmsh_probe_options` | Ask gmsh ITSELF whether option names exist (subprocess probe). |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_render` | Render a .msh or .geo file to PNG headlessly (gmsh subprocess). |
@@ -262,6 +271,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
 | `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
 | `gmsh_status` | (no description) |
+| `gmsh_streamlines` | Trace streamlines of a vector view (field lines) from a seed line. |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `gmsh_validate_geo` | Validate a .geo launch/companion file BEFORE opening it in GMSH. |
 | `gmsh_validate_msh` | Validate MSH v4.1 structural consistency; optional Jacobian check. |

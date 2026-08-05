@@ -173,6 +173,30 @@ Guess", "Mesh Export Consistency Check Policy"):
   local diagnostics under the per-user drop dir and the local failure
   log.
 
+## Cross-server API compatibility (cubit ↔ build123d ↔ external CAD)
+
+`mcp-server-cubit` and `mcp-server-build123d` share one hardening layer
+(`radia_mcp.common.server_hardening`: annotation presets, error-kind
+contract, gate hiding, all-calls JSONL log) and one **probe contract**:
+
+| Concept | build123d (CAD side) | Cubit (mesh side) | History-based CAD (e.g. CST) |
+|---|---|---|---|
+| Replayable history | the Python script | `.jou` journal (`cubit_session_journal`) | history list |
+| Named bodies | `part.label` → STEP names | entity names → blocks | component/solid names |
+| Per-body probe | `build123d_probe(path, "entities")` | `cubit_probe("entities")` | volume-evidence rows |
+| Naming audit | `build123d_probe(path, "labels")` | `cubit_probe("labels")` | — |
+
+Both `entities` probes emit the SAME core keys per body —
+`{id, centroid, bbox_min, bbox_max, extent, volume}` (faces:
+`{id, center, bbox_min, bbox_max, extent, area}`) — locked by
+`PROBE_SOLID_CORE_KEYS` / `PROBE_FACE_CORE_KEYS` in
+`radia_mcp.common.server_hardening` and the
+`test_b3d_cubit_probe_compat.py` contract test, so an agent can author a
+labeled STEP, mesh it, and compare per-body volumes/centroids directly
+(verified end-to-end: identical to 2e-16 relative on a 2-solid
+assembly). External-CAD evidence rows (Cubit/CST) connect through the
+build123d volume-crosscheck tools with mandatory units.
+
 ## Cross-references
 
 - `mcp-server-gmsh` — mesh post/visualization (`.msh v4.1`)
