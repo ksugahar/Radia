@@ -6,6 +6,10 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Normalize transport-only label whitespace reported by NGSolve so strict
+  `check-vol` contracts treat Windows CRLF `.vol.gz` files identically to their
+  uncompressed `.vol` sources, including conductor-face adjacency checks.
+
 ## 0.14.5 - MEG nonlinear-magnet labels
 
 Released 2026-08-04.

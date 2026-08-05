@@ -125,6 +125,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 # use the gui-script (radia-vol-viewer-gui.exe) for the Windows file
 # association so no console window flashes on double-click.
 radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
+radia-ih-assemble = "radia.simulink.ih_operator_assembly:main"
 # Desktop PySide and notebook-workbench entry points are retired. Human
 # production operation uses the Radia Simulink library. Python/MCP use the
 # headless calc_*.py and DesignSpec contracts.
@@ -166,6 +167,7 @@ radia = [
     "simulink/*.m",
     "simulink/*.cpp",
     "simulink/*.md",
+    "simulink/contracts/*.json",
     "CONVENTIONS.md",
 ]
 

@@ -68,6 +68,11 @@ def _labels(value):
     return {str(part).strip() for part in value if str(part).strip()}
 
 
+def _mesh_label(value):
+    """Normalize transport whitespace without changing label semantics."""
+    return str(value).strip()
+
+
 def _load_label_contract(contract):
     if contract is None or contract == "":
         return {}
@@ -108,7 +113,8 @@ def _mesh_label_inventory(mesh):
         getter = getattr(mesh, method, None)
         if getter is None:
             return []
-        return sorted({str(value) for value in getter() if str(value)})
+        return sorted({_mesh_label(value) for value in getter()
+                       if _mesh_label(value)})
 
     return {
         "materials": names("GetMaterials"),
@@ -352,13 +358,13 @@ def _face_adjacency_quality(mesh, conductive_materials, air_materials,
 
     face_to_volume = {}
     for element in mesh.Elements(ng.VOL):
-        record = (_element_number(element), str(element.mat))
+        record = (_element_number(element), _mesh_label(element.mat))
         for face in element.faces:
             face_to_volume.setdefault(_node_number(face), []).append(record)
 
     face_to_boundary = {}
     for element in mesh.Elements(ng.BND):
-        record = (_element_number(element), str(element.mat))
+        record = (_element_number(element), _mesh_label(element.mat))
         for face in element.faces:
             face_to_boundary.setdefault(_node_number(face), []).append(record)
 
@@ -549,8 +555,8 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         elif orientation_sign == -1:
             negative_orientation_element_count += 1
 
-    materials = sorted(set(mesh.GetMaterials()))
-    boundaries = sorted(set(mesh.GetBoundaries()))
+    materials = sorted({_mesh_label(value) for value in mesh.GetMaterials()})
+    boundaries = sorted({_mesh_label(value) for value in mesh.GetBoundaries()})
     missing_materials = sorted(_labels(required_materials) - set(materials))
     missing_boundaries = sorted(_labels(required_boundaries) - set(boundaries))
     adjacency, adjacency_warnings = _face_adjacency_quality(
