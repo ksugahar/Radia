@@ -43,10 +43,22 @@ def test_application_manifest_has_no_notebook_workbenches():
     assert "radia_mex object handles" in ih["backend_policy"]
     assert "not a per-step fallback" in ih["backend_policy"]
 
+    electromagnet = applications["radia-em"]
+    assert electromagnet["optimization_sample"] == (
+        "matlab/radia_electromagnet.slx"
+    )
+    assert electromagnet["optimization_block"].endswith(
+        "/Electromagnet Topology Optimization"
+    )
+    assert "one state solve and one adjoint solve" in (
+        electromagnet["optimization_backend"]
+    )
+
     maglev = applications["radia-maglev"]
     assert maglev["backend"] == "matlab-level2-common-basis-cln"
     assert maglev["sample"] == "matlab/radia_maglev.slx"
     assert "never called per step" in maglev["backend_policy"]
+    assert maglev["optimization_scope"].startswith("control optimization only")
 
     export_menu = applications["radia-export-menu"]
     assert export_menu["state"] == "active-cubit-toolbar"
