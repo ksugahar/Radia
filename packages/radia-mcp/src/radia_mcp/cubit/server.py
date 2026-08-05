@@ -2881,6 +2881,225 @@ def cubit_snapshot(out_path: str,
 
 
 @mcp.tool()
+def cubit_doctor() -> str:
+	"""
+	One-shot environment diagnosis for the whole Cubit MCP stack.
+
+	Run this FIRST when anything is wrong (session won't start, license
+	errors, exports missing labels, stale plugin suspicion). Read-only:
+	launches nothing, consumes no license seat.
+
+	Checks: Cubit install discovery -> Learn-license renewals cache
+	freshness -> deployed Cubit plugin (.ccm) vs the cubit-mesh-export
+	bundled copy (hash) -> live daemon state -> drop-dir diagnostics
+	(startup_error.txt, log tails) -> check-vol dependency availability.
+
+	Returns JSON: per-check {status: ok|warn|error|skipped, ...detail}
+	plus an overall summary listing the problems found.
+	"""
+	import hashlib
+
+	checks: dict = {}
+	problems: list[str] = []
+
+	# --- 1. Cubit install ------------------------------------------------
+	bin_dir = _cs.find_cubit_install()
+	if bin_dir is None:
+		checks["install"] = {
+			"status": "error",
+			"detail": "Coreform Cubit not found (env > registry > glob)",
+			"fix": "Install Cubit or set CUBIT_BIN_DIR / CUBIT_INSTALL_DIR",
+		}
+		problems.append("install: Cubit not found")
+	else:
+		checks["install"] = {"status": "ok", "bin_dir": str(bin_dir)}
+
+	# --- 2. License renewals cache (no launch, no seat) ------------------
+	# The renewals cache exists only for Learn-edition (login) licenses;
+	# Pro / RLM-server machines have none and need no login -- absence is
+	# NOT a problem there, so it reports "skipped", not "warn".
+	try:
+		from .license_warmup import _needs_login
+		needs, info = _needs_login()
+		if not needs:
+			checks["license"] = {"status": "ok", **info}
+		elif info.get("reason") == "no renewals cache":
+			checks["license"] = {
+				"status": "skipped", **info,
+				"note": ("no Learn renewals cache -- normal on Pro/"
+				         "RLM-server machines; Learn users get a ~30 s "
+				         "login on first start"),
+			}
+		else:
+			checks["license"] = {
+				"status": "warn", **info,
+				"fix": ("Learn license cache is stale/expiring: first "
+				        "session start will re-login (~30 s, needs "
+				        "network) -- pre-warm via rlm_activate."),
+			}
+			problems.append(f"license: {info.get('reason')}")
+	except Exception as exc:
+		checks["license"] = {"status": "skipped",
+		                     "detail": f"warmup module: {exc}"}
+
+	# --- 3. Deployed plugin freshness vs cubit-mesh-export ---------------
+	def _sha256(p: Path) -> str:
+		h = hashlib.sha256()
+		h.update(p.read_bytes())
+		return h.hexdigest()
+
+	try:
+		import cubit_mesh_export as _cme
+		bundled = Path(_cme.__file__).parent / "cubit_mesh_export.ccm"
+		deployed = (Path(bin_dir) / "plugins" / "cubit_mesh_export.ccm"
+		            if bin_dir else None)
+		if not bundled.is_file():
+			checks["plugin"] = {"status": "skipped",
+			                    "detail": "no bundled .ccm in cubit_mesh_export"}
+		elif deployed is None:
+			checks["plugin"] = {"status": "skipped",
+			                    "detail": "no Cubit install to check against"}
+		elif not deployed.is_file():
+			checks["plugin"] = {
+				"status": "error",
+				"detail": f"plugin not deployed: {deployed}",
+				"fix": "run `cubit-plugin-install`",
+			}
+			problems.append("plugin: not deployed")
+		else:
+			same = _sha256(bundled) == _sha256(deployed)
+			checks["plugin"] = {
+				"status": "ok" if same else "warn",
+				"deployed": str(deployed),
+				"matches_bundled": same,
+			}
+			if not same:
+				checks["plugin"]["fix"] = (
+					"Deployed .ccm differs from the installed "
+					"cubit-mesh-export copy -- exports may drift (the "
+					"2026-04-14 sideset incident class). Re-run "
+					"`cubit-plugin-install`.")
+				problems.append("plugin: deployed .ccm is stale vs package")
+	except ImportError:
+		checks["plugin"] = {"status": "skipped",
+		                    "detail": "cubit-mesh-export not installed"}
+
+	# --- 4. Daemon state --------------------------------------------------
+	daemon = {"alive": False, "mode": None, "pid": None}
+	if _cs._SINGLETON is not None:
+		daemon["alive"] = _cs._SINGLETON.is_alive()
+		daemon["owned"] = _cs._SINGLETON._owned
+		if _cs._SINGLETON._proc is not None:
+			daemon["pid"] = _cs._SINGLETON._proc.pid
+	daemon["status"] = "ok"
+	checks["daemon"] = daemon
+
+	# --- 5. Drop-dir diagnostics -----------------------------------------
+	drop_diag: dict = {"status": "ok"}
+	try:
+		drop = _cs._user_daemon_dir()
+		drop_diag["drop_dir"] = str(drop)
+		startup_err = drop / "startup_error.txt"
+		if startup_err.is_file():
+			drop_diag["status"] = "warn"
+			drop_diag["startup_error"] = startup_err.read_text(
+				encoding="utf-8", errors="replace")[-1500:]
+			problems.append("drop-dir: startup_error.txt present "
+			                "(last spawn failed)")
+		stderr_log = drop / "cubit_stderr.log"
+		if stderr_log.is_file():
+			tail = stderr_log.read_bytes()[-800:]
+			if tail.strip():
+				drop_diag["stderr_tail"] = tail.decode("utf-8",
+				                                       errors="replace")
+	except Exception as exc:
+		drop_diag = {"status": "skipped", "detail": str(exc)}
+	checks["drop_dir"] = drop_diag
+
+	# --- 6. check-vol dependency -----------------------------------------
+	try:
+		import ngsolve  # noqa: F401
+		import cubit_mesh_export.check  # noqa: F401
+		checks["check_vol_deps"] = {"status": "ok"}
+	except ImportError as exc:
+		checks["check_vol_deps"] = {
+			"status": "warn",
+			"detail": f"cubit_check_vol unavailable: {exc}",
+		}
+		problems.append("check-vol: dependencies missing")
+
+	return json.dumps({
+		"status": "ok" if not problems else "problems_found",
+		"problems": problems,
+		"checks": checks,
+	}, ensure_ascii=False, indent=2, default=str)
+
+
+@mcp.tool()
+def cubit_session_journal(out_path: str = "",
+                          include_failed: bool = True) -> str:
+	"""
+	Export every Cubit command this MCP-server process sent to the live
+	session as a portable `.jou` journal.
+
+	The lab treats `.jou` as the single source of truth for geometry;
+	this tool turns an interactive LLM-driven session back into a
+	replayable, version-controllable journal. Failed commands are
+	included as comments (`# FAILED: ...`) so the record stays honest.
+
+	Scope: commands from THIS server process only -- attaching to a
+	daemon another process drove earlier does not recover its history.
+
+	Args:
+	    out_path: optional path to also write the journal file
+	        (absolute, or relative to the repo root).
+	    include_failed: include failed commands as comments (default on).
+
+	Returns JSON {n_commands, n_failed, journal, path?}.
+	"""
+	sess = _cs._SINGLETON
+	history = list(sess._command_history) if sess is not None else []
+	if not history:
+		return json.dumps({
+			"status": "ok", "n_commands": 0, "n_failed": 0,
+			"journal": "",
+			"note": ("no commands recorded in this server process yet "
+			         "(history is per-process, not per-daemon)"),
+		})
+	lines = [
+		"# Session journal exported by mcp-server-cubit",
+		f"# {time.strftime('%Y-%m-%d %H:%M:%S')}  "
+		f"({len(history)} commands)",
+		"# Replay: Cubit > Play Journal, or cubit_show(path=...)",
+	]
+	n_failed = 0
+	for entry in history:
+		if entry["ok"]:
+			lines.append(entry["line"])
+		else:
+			n_failed += 1
+			if include_failed:
+				lines.append(f"# FAILED: {entry['line']}")
+	journal = "\n".join(lines) + "\n"
+	result = {
+		"status": "ok",
+		"n_commands": len(history),
+		"n_failed": n_failed,
+		"journal": journal,
+	}
+	if out_path:
+		p = Path(out_path)
+		if not p.is_absolute():
+			p = PROJECT_ROOT / p
+		try:
+			p.write_text(journal, encoding="utf-8")
+			result["path"] = str(p)
+		except OSError as exc:
+			result["write_error"] = str(exc)
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def cubit_session_status() -> str:
 	"""Return diagnostic info about the Cubit session (pid, alive, bin_dir)."""
 	status = {
@@ -6057,6 +6276,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
+	"cubit_session_journal",
 }
 # Read-only tools that may reach the network.
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
@@ -6073,7 +6293,7 @@ def _classify_tool_annotations() -> list[str]:
 		"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
 		"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
 		"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
-		"_failures", "_checkpoints", "_audit",
+		"_failures", "_checkpoints", "_audit", "_doctor",
 	)
 	unclassified = []
 	for name, tool in mcp._tool_manager._tools.items():
@@ -6102,12 +6322,94 @@ if os.environ.get("RADIA_MCP_CUBIT_GATES", "1") == "0":
 		mcp._tool_manager.remove_tool(_name)
 
 
+# ============================================================
+# All-calls JSONL session log (MathWorks basetool + slog pattern)
+# ============================================================
+# One choke point wraps ToolManager.call_tool: every tool call is
+# appended as a JSON line {ts, tool, ms, ok, error?} to
+# <state_dir>/logs/cubit_tool_calls.jsonl -- making "silently wrong
+# mesh" sessions triageable after the fact.  Failures additionally go
+# through the existing per-kind failure log.  Disable with
+# RADIA_MCP_CUBIT_CALL_LOG=0.
+
+def _install_call_log() -> None:
+	if os.environ.get("RADIA_MCP_CUBIT_CALL_LOG", "1") == "0":
+		return
+	try:
+		log_dir = _fl.state_dir() / "logs"
+		log_dir.mkdir(parents=True, exist_ok=True)
+		log_path = log_dir / "cubit_tool_calls.jsonl"
+	except OSError:
+		return
+
+	orig_call_tool = mcp._tool_manager.call_tool
+
+	def _digest(arguments: dict) -> dict:
+		"""Compact argument record: keys + truncated repr (no huge
+		journal bodies / file contents in the log)."""
+		out = {}
+		for k, v in (arguments or {}).items():
+			r = repr(v)
+			out[k] = r if len(r) <= 200 else r[:200] + f"...({len(r)} ch)"
+		return out
+
+	async def logged_call_tool(name, arguments, context=None,
+	                           convert_result=False):
+		t0 = time.time()
+		record = {"ts": round(t0, 3), "tool": name,
+		          "args": _digest(arguments)}
+		try:
+			result = await orig_call_tool(
+				name, arguments, context=context,
+				convert_result=convert_result)
+			record["ok"] = True
+			return result
+		except Exception as exc:
+			record["ok"] = False
+			record["error"] = f"{type(exc).__name__}: {exc}"
+			raise
+		finally:
+			record["ms"] = round((time.time() - t0) * 1000, 1)
+			try:
+				with open(log_path, "a", encoding="utf-8") as f:
+					f.write(json.dumps(record, ensure_ascii=False,
+					                   default=str) + "\n")
+			except OSError:
+				pass
+
+	mcp._tool_manager.call_tool = logged_call_tool
+
+
+_install_call_log()
+
+
 def _is_closed_stdout_error(exc: BaseException) -> bool:
     """Windows raises EINVAL when a downstream PowerShell pipe closes early."""
     return isinstance(exc, BrokenPipeError) or (
         isinstance(exc, OSError)
         and getattr(exc, "errno", None) in {errno.EPIPE, errno.EINVAL}
     )
+
+
+def _maybe_eager_warmup() -> None:
+	"""Opt-in eager session start (MathWorks --initialize-matlab-on-
+	startup analog): RADIA_CUBIT_EAGER=1 hides the 30+ s license/startup
+	cost behind server init instead of the first tool call.  Failures
+	are logged to stderr only -- the first real call re-attempts and
+	surfaces the error through the normal contract."""
+	if os.environ.get("RADIA_CUBIT_EAGER", "0") != "1":
+		return
+	import threading
+
+	def _warm():
+		try:
+			_cs.CubitSession.get().ensure_started()
+		except Exception as exc:
+			print(f"[cubit eager warmup] {type(exc).__name__}: {exc}",
+			      file=sys.stderr)
+
+	threading.Thread(target=_warm, name="cubit-eager-warmup",
+	                 daemon=True).start()
 
 
 def main():
@@ -6122,6 +6424,7 @@ def main():
 				return
 			raise
 	else:
+		_maybe_eager_warmup()
 		mcp.run(transport="stdio")
 
 
