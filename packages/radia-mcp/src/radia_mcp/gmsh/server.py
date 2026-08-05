@@ -2,8 +2,11 @@
 GMSH MCP Server for Radia Project
 
 Provides tools for:
+- Inspecting and validating MSH v4.1 files (structure, NodeData, Jacobians)
+- Validating .geo launch files (Merge targets, invalid options)
+- Writing the shared .geo/.geo.opt/.msh.opt post-display launch artifact
 - GMSH visualization and post-processing documentation
-- .msh file format reference (v2.2, v4.1)
+- .msh file format reference (v4.1)
 - Linting Python scripts for GMSH policy violations
 - High-order element display guidance
 
@@ -33,6 +36,12 @@ from .gmsh_examples import get_gmsh_examples
 from .post_display import (
     build_gmsh_post_display_contract,
     gmsh_post_display_manifest_gate,
+    write_gmsh_post_launch_artifact,
+)
+from .msh_inspect import (
+    inspect_msh,
+    validate_geo,
+    validate_msh,
 )
 
 _RULE_REMEDIATIONS = {
@@ -513,6 +522,128 @@ def gmsh_post_display_gate(manifest: dict) -> dict:
 
 
 @mcp.tool()
+def gmsh_inspect_msh(msh_path: str) -> dict:
+    """
+    Inspect an MSH v4.1 file and summarize its structure.
+
+    Pure-Python parser (no gmsh dependency): reports version, physical
+    names, entity counts, node/element counts, element types with order,
+    bounding box, NodeData/ElementData views (name, components, time
+    steps), plus display hints (e.g. NumSubEdges=4 for order>=2 meshes).
+
+    Args:
+        msh_path: Path to the .msh file (absolute or relative to cwd).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return inspect_msh(p)
+
+
+@mcp.tool()
+def gmsh_validate_msh(msh_path: str, check_jacobians: bool = False,
+                      quadrature: str = "Gauss2") -> dict:
+    """
+    Validate MSH v4.1 structural consistency; optional Jacobian check.
+
+    Structural checks (pure Python, always available): v4.1 ASCII format,
+    balanced sections, header counts vs actual, unique node/element tags,
+    element node references exist, known element types, NodeData declared
+    counts vs data rows, data tags exist, numComponents in {1,3,9},
+    per-view component consistency across time steps.
+
+    With check_jacobians=True the gmsh Python API runs in a SUBPROCESS
+    and evaluates getJacobians on all 3D element types (repo policy for
+    high-order export verification): negative determinants = inverted
+    elements from wrong node ordering. Also returns the integrated
+    volume per element type for cross-checks against CAD volume.
+
+    Args:
+        msh_path: Path to the .msh file.
+        check_jacobians: Run the gmsh getJacobians subprocess check.
+        quadrature: Integration rule for the Jacobian check (e.g. Gauss2,
+                    Gauss4).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return validate_msh(p, check_jacobians=check_jacobians,
+                        quadrature=quadrature)
+
+
+@mcp.tool()
+def gmsh_validate_geo(geo_path: str) -> dict:
+    """
+    Validate a .geo launch/companion file BEFORE opening it in GMSH.
+
+    Catches the classic "Open GMSH doesn't work / window is black" bugs:
+    missing Merge targets, invalid GMSH 4.x option names (Mesh.Volumes,
+    Mesh.Surfaces, General.GraphicsSizeX/Y). Reports the max View[N]
+    index and whether Mesh.NumSubEdges is set for high-order display.
+
+    Args:
+        geo_path: Path to the .geo file.
+    """
+    p = Path(geo_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return validate_geo(p)
+
+
+@mcp.tool()
+def gmsh_write_post_launch_artifact(msh_path: str,
+                                    output_base: str | None = None,
+                                    title: str = "Gmsh post launch artifact",
+                                    camera_preset: str = "z_up_xz_from_positive_y",
+                                    cut_plane: dict | None = None,
+                                    views: list | None = None,
+                                    mesh: dict | None = None,
+                                    animation: dict | None = None) -> dict:
+    """
+    Write the shared .geo/.geo.opt/.msh.opt post-display launch artifact.
+
+    File-writing companion to gmsh_post_display_contract: emits case.geo
+    (launch target with Merge + display options), the exact autoload
+    sidecars case.geo.opt and case.msh.opt, plus case.display.json, and
+    returns the gated manifest. The .msh itself is NOT modified.
+
+    Args:
+        msh_path: Existing MSH v4.1 data file the artifact points at.
+        output_base: Base path for .geo/.opt outputs (default: msh stem).
+        title: Human-readable artifact title written into the .geo.
+        camera_preset: One of z_up_xz_from_positive_y, positive_y_oblique,
+                       front_xz, custom.
+        cut_plane: Optional {enabled, normal:[3], offset, whole_elements,
+                   only_volume} dict.
+        views: Optional list of view dicts ({index, name, kind:
+               scalar|vector|displacement, time_step, range, ...}).
+        mesh: Optional mesh display overrides ({surface_faces,
+              surface_edges, volume_faces, volume_edges, num_sub_edges}).
+        animation: Optional {delay, cycle, step, link_time_steps} dict.
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    if not p.is_file():
+        return {"ok": False, "error": f"msh file not found: {p}"}
+    base = None
+    if output_base is not None:
+        base = Path(output_base)
+        if not base.is_absolute():
+            base = PROJECT_ROOT / base
+    return write_gmsh_post_launch_artifact(
+        p,
+        output_base=base,
+        title=title,
+        camera_preset=camera_preset,
+        cut_plane=cut_plane,
+        views=views,
+        mesh=mesh,
+        animation=animation,
+    )
+
+
+@mcp.tool()
 def get_gmsh_lint_rules() -> str:
     """List all available GMSH lint rules with descriptions."""
     lines = [f"GMSH Lint Rules ({len(ALL_RULES)} rules):", ""]
@@ -569,6 +700,36 @@ def _selftest(audit_repo: bool = False):
         print("  fixture validation: PASSED")
         print()
 
+    # --- MSH v4.1 inspect/validate smoke (inline, no fixture needed) ---
+    import tempfile
+    tiny_msh = (
+        "$MeshFormat\n4.1 0 8\n$EndMeshFormat\n"
+        "$PhysicalNames\n1\n3 1 \"block\"\n$EndPhysicalNames\n"
+        "$Entities\n0 0 0 1\n1 0 0 0 1 1 1 1 1 0\n$EndEntities\n"
+        "$Nodes\n1 4 1 4\n3 1 0 4\n1\n2\n3\n4\n"
+        "0 0 0\n1 0 0\n0 1 0\n0 0 1\n$EndNodes\n"
+        "$Elements\n1 1 1 1\n3 1 4 1\n1 1 2 3 4\n$EndElements\n"
+        "$NodeData\n1\n\"T\"\n1\n0.0\n3\n0\n1\n4\n"
+        "1 1.0\n2 2.0\n3 3.0\n4 4.0\n$EndNodeData\n"
+    )
+    with tempfile.TemporaryDirectory() as td:
+        msh = Path(td) / "selftest.msh"
+        msh.write_text(tiny_msh, encoding="utf-8")
+        info = inspect_msh(msh)
+        vres = validate_msh(msh)
+        geo = Path(td) / "selftest.geo"
+        geo.write_text('Merge "selftest.msh";\nMesh.NumSubEdges = 4;\n',
+                       encoding="utf-8")
+        gres = validate_geo(geo)
+        print(f"  msh smoke: inspect ok={info['ok']}, "
+              f"validate={vres['status']}, geo={gres['status']}")
+        if not (info["ok"] and vres["ok"] and gres["ok"]):
+            print("  FAIL: inline MSH inspect/validate smoke failed")
+            for err in vres.get("errors", []) + gres.get("errors", []):
+                print(f"    {err}")
+            sys.exit(1)
+    print()
+
     audit_dirs = [
         "docs",
         "validation_test",
@@ -614,7 +775,8 @@ def _selftest(audit_repo: bool = False):
 register_status_tool(
     mcp,
     server_name='mcp-server-gmsh',
-    description='GMSH MSH v4.1 inspect/validate/convert/write_node_data',
+    description='GMSH MSH v4.1 inspect/validate + post-display '
+                'launch artifacts + visualization-only policy lint',
     subpackage='radia_mcp.gmsh',
     related_servers=["cubit"],
     optional_deps=["gmsh"],
