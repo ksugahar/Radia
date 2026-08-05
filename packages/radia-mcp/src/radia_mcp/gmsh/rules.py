@@ -12,6 +12,8 @@ import re
 from pathlib import Path
 from typing import List, Dict
 
+from .msh_inspect import INVALID_GEO_OPTIONS
+
 
 def check_gmsh_api_mesh_generation(filepath: str, lines: List[str]) -> List[Dict]:
     """CRITICAL: GMSH Python API must not be used for mesh generation."""
@@ -173,6 +175,29 @@ def check_meshio_import(filepath: str, lines: List[str]) -> List[Dict]:
     return findings
 
 
+def check_invalid_gmsh_option_names(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: option names that do not exist in GMSH 4.x (crash on merge/set)."""
+    findings = []
+    patterns = {
+        opt: re.compile(rf"{re.escape(opt)}\b") for opt in INVALID_GEO_OPTIONS
+    }
+    for i, line in enumerate(lines, 1):
+        stripped = line.split("#")[0]
+        for opt, pattern in patterns.items():
+            if pattern.search(stripped):
+                findings.append({
+                    "line": i,
+                    "severity": "HIGH",
+                    "rule": "invalid-gmsh-option",
+                    "message": (
+                        f"{opt} does not exist in GMSH 4.x "
+                        f"({INVALID_GEO_OPTIONS[opt]}). It fails on "
+                        f"gmsh.option.setNumber and crashes .geo merge."
+                    ),
+                })
+    return findings
+
+
 ALL_RULES = [
     check_gmsh_api_mesh_generation,
     check_gmsh_builder_import,
@@ -180,4 +205,5 @@ ALL_RULES = [
     check_numsubedges_missing,
     check_pip_gmsh_import,
     check_meshio_import,
+    check_invalid_gmsh_option_names,
 ]

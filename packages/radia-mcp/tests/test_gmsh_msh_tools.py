@@ -296,3 +296,87 @@ def test_validate_jacobians_detect_inverted_tet(tmp_path):
     assert jac["total_negative"] > 0
     assert result["checks"]["jacobians_positive"] is False
     assert result["ok"] is False
+
+
+# ======================================================================
+# Headless rendering (needs gmsh + an FLTK graphics context)
+# ======================================================================
+
+def _skip_if_no_graphics(result):
+    if not result.get("ran"):
+        pytest.skip(f"no gmsh graphics context: {result.get('error')}")
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_render_png_writes_image(tmp_path):
+    from radia_mcp.gmsh.render import render_png
+
+    msh = _write(tmp_path, _BASE_MSH)
+    out = tmp_path / "case.png"
+    result = render_png(msh, out, width=500, height=400)
+    _skip_if_no_graphics(result)
+
+    assert result["ok"] is True, result
+    assert out.is_file()
+    assert result["png_size"] is not None
+    assert result["png_size"][1] == 400
+    assert result["n_views"] == 1
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE or
+                    importlib.util.find_spec("PIL") is None,
+                    reason="gmsh or Pillow not installed")
+def test_export_animation_two_step_gif(tmp_path):
+    from radia_mcp.gmsh.render import export_animation
+
+    msh = _write(tmp_path, _BASE_MSH)
+    gif = tmp_path / "case.gif"
+    result = export_animation(msh, gif, keep_frames=True,
+                              width=400, height=300, delay_ms=100)
+    _skip_if_no_graphics(result)
+
+    assert result["ok"] is True, result
+    assert result["num_steps"] == 2
+    assert gif.is_file()
+    frames = sorted((tmp_path / "case_frames").glob("frame_*.png"))
+    assert len(frames) == 2
+
+
+# ======================================================================
+# Lint rule: invalid GMSH option names
+# ======================================================================
+
+def test_lint_flags_invalid_gmsh_option_names(tmp_path):
+    from radia_mcp.gmsh.rules import check_invalid_gmsh_option_names
+
+    script = tmp_path / "viewer.py"
+    script.write_text(
+        'import gmsh\n'
+        'gmsh.option.setNumber("Mesh.Volumes", 1)\n'
+        'gmsh.option.setNumber("General.GraphicsSizeX", 800)\n'
+        'gmsh.option.setNumber("Mesh.VolumeEdges", 1)  # valid\n'
+        'geo = "Mesh.SurfaceFaces = 1;"  # valid\n',
+        encoding="utf-8")
+    lines = script.read_text(encoding="utf-8").splitlines(keepends=True)
+    findings = check_invalid_gmsh_option_names(str(script), lines)
+
+    assert len(findings) == 2
+    assert {f["line"] for f in findings} == {2, 3}
+    assert all(f["rule"] == "invalid-gmsh-option" for f in findings)
+
+
+def test_knowledge_records_mcp_tooling():
+    from radia_mcp.gmsh.gmsh_knowledge import get_gmsh_documentation
+
+    workflow = get_gmsh_documentation("workflow")
+    assert "gmsh_inspect_msh" in workflow
+    assert "gmsh_validate_msh" in workflow
+    assert "gmsh_render" in workflow
+
+    high_order = get_gmsh_documentation("high_order")
+    assert "check_jacobians=True" in high_order
+    assert "AdaptVisualizationGrid" in high_order
+
+    pitfalls = get_gmsh_documentation("pitfalls")
+    assert "1b." in pitfalls
+    assert "gmsh_validate_msh" in pitfalls
