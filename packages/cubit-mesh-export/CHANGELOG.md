@@ -6,6 +6,13 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.7 - Cubit plugin release refresh
+
+Released 2026-08-05.
+
+- Rebuilt the bundled `cubit_mesh_export.ccm` with the current release
+  toolchain; the public Python API and mesh-format contracts are unchanged.
+
 ## 0.14.6 - Compressed VOL label normalization
 
 Released 2026-08-05.
