@@ -32,7 +32,11 @@ import numpy as np
 
 
 class GMSHCenterlineReader:
-    """Read 1D line elements from a GMSH v2.2 ASCII centerline mesh."""
+    """Read 1D line elements from a GMSH MSH v4.1 ASCII centerline mesh.
+
+    MSH v4.1 is the repository-wide standard; any other version (v2.2
+    included) raises with a re-export message instead of misparsing.
+    """
 
     def __init__(self, filename, unit_scale=1.0):
         self.filename = str(filename)
@@ -53,7 +57,9 @@ class GMSHCenterlineReader:
         i = 0
         while i < len(lines):
             line = lines[i].strip()
-            if line == "$PhysicalNames":
+            if line == "$MeshFormat":
+                self._check_format(lines, i + 1)
+            elif line == "$PhysicalNames":
                 i = self._read_physical_names(lines, i + 1)
             elif line == "$Nodes":
                 i = self._read_nodes(lines, i + 1)
@@ -62,6 +68,18 @@ class GMSHCenterlineReader:
             i += 1
 
         return self.nodes, self.edge_elements
+
+    def _check_format(self, lines, idx):
+        tokens = lines[idx].split()
+        version = tokens[0] if tokens else "?"
+        if not version.startswith("4"):
+            raise ValueError(
+                f"{self.filename}: MSH v{version} is not supported; the "
+                f"repository standard is v4.1 -- re-export the mesh")
+        if len(tokens) > 1 and tokens[1] != "0":
+            raise ValueError(
+                f"{self.filename}: binary MSH is not supported; "
+                f"re-export as ASCII")
 
     def _read_physical_names(self, lines, start_idx):
         num_names = int(lines[start_idx].strip())
@@ -78,34 +96,43 @@ class GMSHCenterlineReader:
         return idx
 
     def _read_nodes(self, lines, start_idx):
-        num_nodes = int(lines[start_idx].strip())
+        # v4.1: numBlocks numNodes minTag maxTag, then per block
+        # (dim tag parametric numInBlock) + tag lines + coordinate lines.
+        num_blocks = int(lines[start_idx].split()[0])
         idx = start_idx + 1
-        for _ in range(num_nodes):
-            parts = lines[idx].strip().split()
-            node_id = int(parts[0])
-            x, y, z = (float(parts[1]) * self.unit_scale,
-                       float(parts[2]) * self.unit_scale,
-                       float(parts[3]) * self.unit_scale)
-            self.nodes[node_id] = [x, y, z]
+        for _ in range(num_blocks):
+            n_in_block = int(lines[idx].split()[3])
             idx += 1
+            tags = [int(lines[idx + k]) for k in range(n_in_block)]
+            idx += n_in_block
+            for k in range(n_in_block):
+                parts = lines[idx + k].split()
+                self.nodes[tags[k]] = [
+                    float(parts[0]) * self.unit_scale,
+                    float(parts[1]) * self.unit_scale,
+                    float(parts[2]) * self.unit_scale,
+                ]
+            idx += n_in_block
 
         while idx < len(lines) and lines[idx].strip() != "$EndNodes":
             idx += 1
         return idx
 
     def _read_elements(self, lines, start_idx):
-        num_elements = int(lines[start_idx].strip())
+        # v4.1: numBlocks numElements minTag maxTag, then per block
+        # (dim tag elementType numInBlock) + "tag n1 n2 ..." lines.
+        num_blocks = int(lines[start_idx].split()[0])
         idx = start_idx + 1
-        for _ in range(num_elements):
-            parts = lines[idx].strip().split()
-            element_type = int(parts[1])
-            if element_type == 1:
-                num_tags = int(parts[2])
-                node_start_idx = 3 + num_tags
-                node1 = int(parts[node_start_idx])
-                node2 = int(parts[node_start_idx + 1])
-                self.edge_elements.append([node1, node2])
+        for _ in range(num_blocks):
+            block = lines[idx].split()
+            element_type = int(block[2])
+            n_in_block = int(block[3])
             idx += 1
+            if element_type == 1:  # line2
+                for k in range(n_in_block):
+                    parts = lines[idx + k].split()
+                    self.edge_elements.append([int(parts[1]), int(parts[2])])
+            idx += n_in_block
 
         while idx < len(lines) and lines[idx].strip() != "$EndElements":
             idx += 1
@@ -147,7 +174,7 @@ class GMSHCenterlineReader:
 
 
 def read_gmsh_centerline(filename, unit_scale=1.0):
-    """Read a GMSH v2.2 ASCII centerline mesh and return ``(nodes, edges)``."""
+    """Read a GMSH MSH v4.1 ASCII centerline mesh, return ``(nodes, edges)``."""
     reader = GMSHCenterlineReader(filename, unit_scale=unit_scale)
     return reader.read()
 

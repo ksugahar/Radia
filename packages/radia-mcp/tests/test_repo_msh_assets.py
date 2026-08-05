@@ -27,15 +27,7 @@ _KNOWN_LEGACY = {
     "docs/cubit_mesh_export/gmsh/gmsh_2nd_order/brick_layer.msh",
     "docs/cubit_mesh_export/gmsh/gmsh_2nd_order/hex20.msh",
     "docs/cubit_mesh_export/gmsh/gmsh_2nd_order/wedge15.msh",
-    # peec_integration: migration to v4.1 in flight (2026-08-05).
-    "docs/peec_integration/demos/gmsh_models/circular_coil.msh",
-    "docs/peec_integration/demos/gmsh_models/circular_coil_1d.msh",
-    "docs/peec_integration/demos/gmsh_models/circular_coil_with_ports.msh",
-    "docs/peec_integration/demos/gmsh_models/ferrite_core_hex.msh",
-    "validation_test/peec_integration/verification/cubit_mesh_generation/"
-    "circular_coil_centerline.msh",
-    "validation_test/peec_integration/verification/cubit_mesh_generation/"
-    "circular_wire_centerline.msh",
+    # (peec_integration was migrated to v4.1 on 2026-08-05.)
 }
 
 

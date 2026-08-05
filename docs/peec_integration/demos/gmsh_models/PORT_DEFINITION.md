@@ -17,7 +17,7 @@ PEECインダクタンス計算のためのポート指定方法
 ```
 Cubit: ポート領域をSidesetとして定義
   ↓
-GMSH v2.2 export: Physical groupとして保存
+GMSH v4.1 export: Physical groupとして保存
   ↓
 Python: Physical groupからポート要素を抽出
   ↓
@@ -62,11 +62,10 @@ cubit.cmd("sideset 2 add tri in surface with x_coord < -45")
 cubit.cmd("sideset 2 name 'port_negative'")
 ```
 
-### Step 2: GMSH v2.2形式でエクスポート
+### Step 2: GMSH v4.1形式でエクスポート
 
 ```python
-import cubit_mesh_export
-cubit_mesh_export.export_gmsh_v2(cubit, "coil_with_ports.msh")
+cubit.cmd('export gmsh "coil_with_ports.msh" overwrite')
 ```
 
 **出力**: Physical groupsとしてポート情報が保存される

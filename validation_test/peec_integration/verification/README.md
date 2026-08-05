@@ -44,7 +44,7 @@ coreform_cubit -nographics -batch -nojournal generate_circular_wire.py
 ```
 
 **Output**:
-- `circular_wire_centerline.msh` - GMSH v2.2 mesh with 1D edge elements
+- `circular_wire_centerline.msh` - GMSH v4.1 mesh with 1D edge elements
 - `circular_wire_params.txt` - Wire parameters (radius, length, sigma, segments)
 
 **Expected output**:
