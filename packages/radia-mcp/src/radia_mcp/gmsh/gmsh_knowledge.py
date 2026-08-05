@@ -1015,6 +1015,13 @@ python -m radia_mcp.gmsh.msh_inspect docs                   # directory audit
 | `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
 | `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |
 | `gmsh_write_post_launch_artifact` | Write case.geo + case.geo.opt + case.msh.opt + display.json contract files. |
+| `gmsh_probe` | Interpolated values of any view at arbitrary points ("what is B at the gap center?"); outside points report the distance to the data. |
+| `gmsh_line_profile` | n samples along a segment + optional matplotlib PNG (the "Bz along the axis" plot in one call). |
+| `gmsh_integrate` | Plugin(Integrate) with the element dimension pinned (default 3). MEASURED: dimension=-1 sums ALL dimensions, and the plugin integrates at piecewise-LINEAR accuracy even on high-order views (O(h^2) for nonlinear integrands; exact FE integrals stay on the NGSolve side). |
+| `gmsh_math_eval` | Derived views via Plugin(MathEval): abs/components/differences (v0..v8, w0..w8 of other_view). MEASURED: expressions apply to NODAL values, the view interpolates f(node values). |
+| `gmsh_isosurface` / `gmsh_cut_plane_extract` | Extract iso surfaces / plane sections as DATA (.pos) for downstream probe/stats/render -- unlike the render-time clip which is visual only. |
+| `gmsh_harmonic_to_time` | re/im two-step view -> n-step time animation (AC phasor -> rotating-field GIF together with gmsh_export_animation). |
+| `gmsh_streamlines` | Field lines by probe-driven arc-length RK4 (both directions, field magnitude as line color, polyline coords returnable). This build's Plugin(StreamLines) only re-emits seeds -- do not use it. |
 | `gmsh_exec` | Stateful evaluate in a PERSISTENT headless gmsh worker (matlab-mcp-core-server style): open a model once, interrogate it across calls; `result` variable + stdout come back. |
 | `gmsh_session_status` / `gmsh_session_shutdown` | Session lifecycle (lazy start on first exec; crash/hang kills only the worker and fails loudly). |
 
