@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **915 tools** across 48 MCP servers.
+Total: **919 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 85 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 24 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 28 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -243,6 +243,7 @@ Module: `radia_mcp.gmsh.server`
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory and summarize the health. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
+| `gmsh_detect` | Detect gmsh capabilities on this machine (detect_matlab_toolboxes twin). |
 | `gmsh_diff_msh` | Compare two MSH v4.1 files: structure + field statistics. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_exec` | Execute Python code in a PERSISTENT gmsh session (stateful evaluate). |
@@ -253,14 +254,17 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
 | `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
+| `gmsh_probe_options` | Ask gmsh ITSELF whether option names exist (subprocess probe). |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_render` | Render a .msh or .geo file to PNG headlessly (gmsh subprocess). |
+| `gmsh_run_file` | Open/run a file in the persistent gmsh session (run_matlab_file twin). |
 | `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
 | `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
 | `gmsh_status` | (no description) |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `gmsh_validate_geo` | Validate a .geo launch/companion file BEFORE opening it in GMSH. |
 | `gmsh_validate_msh` | Validate MSH v4.1 structural consistency; optional Jacobian check. |
+| `gmsh_verify` | Run ALL applicable gates on an artifact (run_matlab_test_file twin). |
 | `gmsh_write_post_launch_artifact` | Write the shared .geo/.geo.opt/.msh.opt post-display launch artifact. |
 | `lint_gmsh_directory` | Lint all Python scripts in a directory for GMSH policy violations. |
 | `lint_gmsh_script` | Lint a single Python script for GMSH policy violations. |
