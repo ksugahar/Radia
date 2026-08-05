@@ -16,8 +16,27 @@ with `scripts/gen_tools_doc.py` after adding/renaming tools.
 pip install radia-mcp
 mcp-server-cubit                    # stdio server
 mcp-server-cubit --selftest         # lightweight self-test
-# in Claude Code: register `cubit` in .mcp.json
 ```
+
+Client setup (stdio transport; the server needs no network port):
+
+```bash
+# Claude Code
+claude mcp add cubit -- mcp-server-cubit
+# remove again with: claude mcp remove cubit
+```
+
+```json
+// Claude Desktop / VS Code (mcp.json style)
+{ "mcpServers": { "cubit": { "command": "mcp-server-cubit" } } }
+```
+
+Environment knobs:
+
+| Variable | Effect |
+|---|---|
+| `CUBIT_BIN_DIR` / `CUBIT_INSTALL_DIR` | Override Coreform Cubit install discovery |
+| `RADIA_MCP_CUBIT_GATES=0` | Hide the ~40 CI/scenario `*_gate` tools in interactive sessions (83 → 48 tools) |
 
 Then in a session:
 
@@ -51,8 +70,10 @@ Run `cubit_status()` for the live, definitive list.
 ```
 Claude Code (MCP client)
     → mcp-server-cubit (system Python 3.12)
-        → daemon.py (Cubit's bundled Python 3.10, subprocess, JSON-RPC)
-            → cubit.cmd(...) → Cubit GUI or batch session
+        → GUI: bootstrap.py (file-drop JSON-RPC inside Cubit's Qt/Python)
+          batch: daemon.py (Cubit's bundled Python 3.10, stdio JSON-RPC)
+            → probe_ops.py (SHARED probe queries — no transport drift)
+                → cubit.cmd(...) / cubit API
 ```
 
 `cubit_show` / `cubit_exec` reuse one persistent Cubit process
@@ -60,6 +81,28 @@ Claude Code (MCP client)
 `cubit_mesh_auto` spawn fresh headless subprocesses for dry-runs.
 `cubit_check_vol` needs **no Cubit at all** — it runs the
 `cubit_mesh_export.check` engine (NGSolve) in the server's Python 3.12.
+
+Session robustness (MathWorks MATLAB-MCP patterns, 2026-08-05):
+
+- **Startup failures report the real error**: the GUI bootstrap writes
+  `startup_error.txt` on any in-process exception, Cubit's own console
+  goes to `cubit_stdout.log` / `cubit_stderr.log` in the per-user drop
+  dir, and the ready-poll surfaces those instead of a bare timeout.
+- **Ownership-tagged cleanup**: recovery paths only ever kill a Cubit
+  THIS process spawned; a live daemon another window started is detached
+  from, never terminated. The explicit `cubit_session_shutdown` tool is
+  the one way to stop a foreign/hung daemon, and it reports which
+  process it stopped.
+- **Errors carry `kind`**: `"input"` (fix your commands and retry),
+  `"environment"` (license/install/hung — tell the user), `"internal"`
+  (server bug — do not retry), plus a `log` pointer to the drop-dir
+  diagnostics. Server-level MCP `instructions` teach connecting models
+  the same contract.
+- **Every tool is annotation-classified** (read-only / read-only+web /
+  file-writing / session-destructive presets) so MCP clients can gate
+  permissions correctly.
+- **`cubit_snapshot` returns the PNG inline** as MCP image content —
+  the model sees the current view directly.
 
 ## Lab-specific workflows
 
@@ -102,6 +145,18 @@ Guess", "Mesh Export Consistency Check Policy"):
 | Visual debugging | `cubit_snapshot` | ✅ |
 | License-saving batch runs | ✅ (`-batch -nographics`) | ❌ |
 
+## Licensing boundary and data collection
+
+- This server drives **your own licensed Coreform Cubit install**: it
+  ships no Cubit binaries and no license/credentials, and must not be
+  used to share one Cubit license between users (Coreform RLM licensing
+  is per-user; each user activates their own seat).
+- The persistent session and headless batch runs each consume a license
+  seat while alive.
+- **This server sends no usage data anywhere.** The only records are
+  local diagnostics under the per-user drop dir and the local failure
+  log.
+
 ## Cross-references
 
 - `mcp-server-gmsh` — mesh post/visualization (`.msh v4.1`)
@@ -111,11 +166,14 @@ Guess", "Mesh Export Consistency Check Policy"):
 
 ## Source
 
-- `src/radia_mcp/cubit/server.py` — tool registration
-- `src/radia_mcp/cubit/session.py` + `daemon.py` — persistent session
-  (Python 3.12 client ↔ Cubit Python 3.10 JSON-RPC daemon)
+- `src/radia_mcp/cubit/server.py` — tool registration, instructions,
+  annotation presets
+- `src/radia_mcp/cubit/session.py` + `bootstrap.py` (GUI file-drop) +
+  `daemon.py` (batch stdio) — persistent session
+- `src/radia_mcp/cubit/probe_ops.py` — SHARED probe queries for both
+  runners (summary/quality/per_volume/entities/labels)
 - `src/radia_mcp/cubit/label_audit.py` — cubit-free block/sideset
-  convention audit (shared by daemon `probe("labels")` and tests)
+  convention audit (shared by `probe("labels")` and tests)
 - `src/radia_mcp/cubit/knowledge/` — sub-modules (export,
   netgen_workflow, scripting, cpp_sdk, custom_toolbar, ...)
 - `src/radia_mcp/cubit/vol_inventory.py`, `gmsh_v41.py`, `*_gate.py`
