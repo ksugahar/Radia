@@ -113,6 +113,15 @@ def test_timeout_kills_session_and_raises():
     assert out["result"] == 4
 
 
+def test_fltk_is_rejected_without_starting_a_session():
+    out = session_exec("gmsh.fltk.initialize()")
+    assert out["ok"] is False
+    assert "gmsh_render" in out["error"]
+    # the guard fires before any worker is started
+    from radia_mcp.gmsh.session import GmshSession
+    assert GmshSession.peek() is None
+
+
 def test_nonserializable_result_falls_back_to_repr():
     out = session_exec("result = object()")
     assert out["ok"] is True

@@ -530,6 +530,90 @@ def test_cli_exit_codes_and_modes(tmp_path, capsys):
 
 
 # ======================================================================
+# Mesh quality gate (needs gmsh)
+# ======================================================================
+
+_TET10_TEMPLATE = """$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$Nodes
+1 10 1 10
+3 1 0 10
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+{e01}
+0.5 0.5 0
+0 0.5 0
+0 0 0.5
+0 0.5 0.5
+0.5 0 0.5
+$EndNodes
+$Elements
+1 1 1 1
+3 1 11 1
+1 1 2 3 4 5 6 7 8 9 10
+$EndElements
+"""
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_mesh_quality_affine_tet10_is_perfect(tmp_path):
+    from radia_mcp.gmsh.msh_inspect import mesh_quality
+
+    msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0 0"))
+    q = mesh_quality(msh, threshold=0.5)
+    assert q["ran"] is True, q.get("error")
+    assert q["ok"] is True
+    bt = q["by_type"][0]
+    assert bt["min_scaled"] == pytest.approx(1.0)
+    assert bt["negative"] == 0
+    assert bt["below_threshold"] == 0
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_mesh_quality_flags_degrading_curved_element(tmp_path):
+    from radia_mcp.gmsh.msh_inspect import mesh_quality
+
+    # Mid-edge node pushed sideways: NOT inverted (sign gate passes)
+    # but the scaled Jacobian collapses to ~0.49.
+    msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0.12 0.05"))
+    v = validate_msh(msh, check_jacobians=True)
+    assert v["ok"] is True, "sign gate must PASS for this element"
+
+    q = mesh_quality(msh, threshold=0.5)
+    assert q["ok"] is False
+    bt = q["by_type"][0]
+    assert bt["negative"] == 0
+    assert bt["below_threshold"] == 1
+    assert bt["min_scaled"] == pytest.approx(0.4895, abs=0.01)
+    assert bt["worst"][0]["tag"] == 1
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_mesh_quality_counts_inverted_separately(tmp_path):
+    from radia_mcp.gmsh.msh_inspect import mesh_quality
+
+    msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0.3 0.15"))
+    q = mesh_quality(msh, threshold=0.5)
+    assert q["ok"] is False
+    bt = q["by_type"][0]
+    assert bt["negative"] == 1
+    assert bt["below_threshold"] == 0  # inverted, not double-counted
+
+
+# ======================================================================
 # Dynamic option probing (needs gmsh)
 # ======================================================================
 

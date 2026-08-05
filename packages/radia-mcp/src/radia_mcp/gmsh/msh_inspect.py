@@ -898,6 +898,115 @@ def field_stats(msh_path: str | Path,
 
 
 # ======================================================================
+# Public API: mesh quality gate (scaled Jacobian distribution)
+# ======================================================================
+
+_MESH_QUALITY_SCRIPT = r"""
+import json
+import sys
+
+msh_path, quadrature, threshold_s, worst_n_s, out_path = sys.argv[1:6]
+threshold = float(threshold_s)
+worst_n = int(worst_n_s)
+result = {"ok": False, "ran": False}
+try:
+    import numpy as np
+    import gmsh
+    gmsh.initialize(["-noconfig"])
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh_path)
+        by_type = []
+        total_neg = 0
+        total_below = 0
+        hist_edges = [0.0, 0.1, 0.3, 0.6, 0.9, 1.0]
+        hist_total = [0] * (len(hist_edges) - 1)
+        etypes, etags_all, _ = gmsh.model.mesh.getElements(3)
+        for et, etags in zip(etypes, etags_all):
+            name, _dim, order, _nn, _coords, _ = \
+                gmsh.model.mesh.getElementProperties(int(et))
+            local, weights = gmsh.model.mesh.getIntegrationPoints(
+                int(et), quadrature)
+            _jac, det, _pts = gmsh.model.mesh.getJacobians(int(et), local)
+            det = np.asarray(det, dtype=float).reshape(len(etags),
+                                                       len(weights))
+            e_min = det.min(axis=1)
+            e_max = det.max(axis=1)
+            neg = int((e_min <= 0.0).sum())
+            # Scaled Jacobian per element = min(detJ)/max(detJ) over its
+            # integration points: exactly 1 for affine elements, -> 0 as
+            # a curved element degenerates, negative when inverted.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                scaled = np.where(e_max > 0.0, e_min / e_max, -1.0)
+            below = int(((scaled < threshold) & (e_min > 0.0)).sum())
+            hist, _ = np.histogram(np.clip(scaled, 0.0, 1.0),
+                                   bins=hist_edges)
+            worst_idx = np.argsort(scaled)[:worst_n]
+            tags_arr = np.asarray(etags)
+            worst = [{"tag": int(tags_arr[i]),
+                      "scaled_jacobian": float(scaled[i]),
+                      "min_det": float(e_min[i])} for i in worst_idx]
+            by_type.append({
+                "type": int(et), "name": str(name), "order": int(order),
+                "n_elements": int(len(etags)),
+                "min_scaled": float(scaled.min()) if scaled.size else None,
+                "mean_scaled": float(scaled.mean()) if scaled.size else None,
+                "negative": neg,
+                "below_threshold": below,
+                "worst": worst,
+            })
+            total_neg += neg
+            total_below += below
+            hist_total = [a + int(b) for a, b in zip(hist_total, hist)]
+        result.update({
+            "ran": True,
+            "ok": total_neg == 0 and total_below == 0,
+            "applicable": bool(by_type),
+            "quadrature": quadrature,
+            "threshold": threshold,
+            "by_type": by_type,
+            "total_negative": total_neg,
+            "total_below_threshold": total_below,
+            "histogram": {"edges": hist_edges, "counts": hist_total},
+        })
+        if not by_type:
+            result["ok"] = True
+            result["note"] = "no 3D elements; quality gate not applicable"
+    finally:
+        gmsh.finalize()
+except Exception as exc:
+    result["error"] = f"{type(exc).__name__}: {exc}"
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(result, f)
+"""
+
+
+def mesh_quality(msh_path: str | Path,
+                 threshold: float = 0.1,
+                 quadrature: str = "Gauss4",
+                 worst_n: int = 10,
+                 timeout_s: float = 600.0) -> dict[str, Any]:
+    """Scaled-Jacobian quality distribution for all 3D elements.
+
+    Complements the sign-only Jacobian gate: an element can be
+    non-inverted yet nearly degenerate (scaled Jacobian ~ 0); this
+    reports per-type min/mean scaled Jacobian, a histogram, the
+    below-threshold count, and the worst elements by tag.  The .msh
+    counterpart of check-vol's scaled-Jacobian threshold for .vol.
+    """
+    path = Path(msh_path)
+    if not path.is_file():
+        return {"ok": False, "ran": False, "path": str(path),
+                "error": f"file not found: {path}"}
+    result = run_gmsh_json_subprocess(
+        _MESH_QUALITY_SCRIPT,
+        [str(path), quadrature, str(float(threshold)), str(int(worst_n))],
+        timeout_s=timeout_s, prefix="radia_mcp_gmsh_quality_")
+    result["path"] = str(path)
+    return result
+
+
+# ======================================================================
 # Public API: dynamic option-name verification
 # ======================================================================
 

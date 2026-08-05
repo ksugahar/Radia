@@ -337,6 +337,13 @@ def session_exec(code: str,
     The session keeps its globals (and gmsh models/views/options) across
     calls; assign to a variable named ``result`` to return a value.
     """
+    if "gmsh.fltk" in code:
+        return {"ok": False, "error": (
+            "gmsh.fltk is banned inside the persistent session: a GUI "
+            "context must not live in a server-owned worker process. "
+            "Use gmsh_render / gmsh_export_animation for screenshots "
+            "and animations (they run FLTK in an isolated one-shot "
+            "subprocess).")}
     session = GmshSession.get()
     out = session.call("exec", timeout_s=timeout_s, code=code)
     out["session_pid"] = session._proc.pid

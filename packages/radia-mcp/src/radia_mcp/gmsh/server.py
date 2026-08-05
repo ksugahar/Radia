@@ -44,6 +44,7 @@ from .msh_inspect import (
     diff_msh,
     field_stats,
     inspect_msh,
+    mesh_quality,
     probe_options,
     validate_geo,
     validate_msh,
@@ -921,6 +922,32 @@ def gmsh_verify(path: str, check_jacobians: bool = True,
         p = PROJECT_ROOT / p
     return verify_artifact(p, check_jacobians=check_jacobians,
                            check_options=check_options)
+
+
+@mcp.tool()
+def gmsh_mesh_quality(msh_path: str, threshold: float = 0.1,
+                      quadrature: str = "Gauss4") -> dict:
+    """
+    Scaled-Jacobian quality distribution for all 3D elements.
+
+    Complements the sign-only Jacobian gate of gmsh_validate_msh: a
+    high-order element can be non-inverted yet nearly degenerate.
+    Scaled Jacobian = min(detJ)/max(detJ) per element (1.0 for affine,
+    -> 0 as a curved element degenerates, negative when inverted).
+    Reports per-type min/mean, a histogram, the below-threshold count,
+    and the worst elements by tag. The .msh counterpart of check-vol's
+    scaled-Jacobian threshold. ok=True only when no element is
+    inverted or below the threshold.
+
+    Args:
+        msh_path: Path to the .msh file.
+        threshold: Minimum acceptable scaled Jacobian (default 0.1).
+        quadrature: Integration rule for sampling detJ (default Gauss4).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return mesh_quality(p, threshold=threshold, quadrature=quadrature)
 
 
 @mcp.tool()
