@@ -985,6 +985,7 @@ artifacts headlessly via mcp-server-gmsh:
 | `gmsh_validate_msh` | Structural consistency; `check_jacobians=True` adds the getJacobians inverted-element gate (repo policy for high-order exports) + per-type integrated volume. |
 | `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 4.x options. |
 | `gmsh_field_stats` | Per-view, per-step field statistics without a GUI: scalar min/max/mean/rms, vector magnitude stats + pooled component min/max, NaN/Inf counts (validate_msh also gates on finiteness). |
+| `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, per-view min/max relative drift). |
 | `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
 | `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |
 | `gmsh_write_post_launch_artifact` | Write case.geo + case.geo.opt + case.msh.opt + display.json contract files. |
@@ -1166,6 +1167,19 @@ inverted node ordering (negative det everywhere) is invisible.
 -- 0 negative determinants + per-type volume vs CAD. Real case 2026-08:
 all four docs/gmsh_animation TET10 meshes were fully inverted while
 animating perfectly in the GUI.
+
+## 1c. gmsh.open() Silently Changes Mesh Display Options
+**Problem**: A script sets display options, opens a view-bearing .msh,
+and the picture shows filled surfaces that were never requested (or a
+"hide everything" recipe still draws the mesh).
+**Cause**: `gmsh.open()` on a post-processing file adjusts mesh display
+options itself -- observed on gmsh 4.15.2: opening a .msh with NodeData
+flips `Mesh.SurfaceFaces` to 1.
+**Fix**: Set display options AFTER `gmsh.open()`, and override
+explicitly (`Mesh.SurfaceFaces = 0` etc.) when you need full control.
+The MCP `gmsh_render` applies its options after open; its `blank_check`
+result exposes the content fraction so an unexpectedly full/empty frame
+is visible programmatically.
 
 ## 2. Missing Elements in Output
 **Problem**: .msh file has no elements or missing elements.

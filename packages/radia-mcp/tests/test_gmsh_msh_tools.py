@@ -10,6 +10,7 @@ import importlib.util
 import pytest
 
 from radia_mcp.gmsh.msh_inspect import (
+    diff_msh,
     field_stats,
     inspect_msh,
     validate_geo,
@@ -271,6 +272,70 @@ def test_validate_geo_missing_file(tmp_path):
     assert result["ok"] is False
 
 
+def test_validate_geo_deep_counts_views_and_flags_out_of_range(tmp_path):
+    _write(tmp_path, _BASE_MSH)  # contributes ONE view ("T", 2 steps)
+    geo = tmp_path / "case.geo"
+    geo.write_text('Merge "case.msh";\n'
+                   "View[0].Visible = 1;\n"
+                   "View[3].Visible = 1;\n", encoding="utf-8")
+
+    result = validate_geo(geo)
+    assert result["merged_views_total"] == 1
+    assert result["merge_targets"][0]["views"] == 1
+    assert result["checks"]["view_indices_in_range"] is False
+    assert result["ok"] is False
+    assert any("View[3]" in e for e in result["errors"])
+    assert result["sidecars"]["geo_opt"] is False
+
+    # In-range references pass, and the sidecar report notices .geo.opt
+    geo.write_text('Merge "case.msh";\nView[0].Visible = 1;\n',
+                   encoding="utf-8")
+    (tmp_path / "case.geo.opt").write_text("// sidecar\n", encoding="utf-8")
+    result = validate_geo(geo)
+    assert result["ok"] is True
+    assert result["checks"]["view_indices_in_range"] is True
+    assert result["sidecars"]["geo_opt"] is True
+
+
+# ======================================================================
+# diff_msh
+# ======================================================================
+
+def test_diff_msh_identical(tmp_path):
+    a = _write(tmp_path, _BASE_MSH, "a.msh")
+    b = _write(tmp_path, _BASE_MSH, "b.msh")
+    result = diff_msh(a, b)
+
+    assert result["ok"] is True
+    assert result["identical_structure"] is True
+    assert result["fields_match"] is True
+    assert result["differences"] == []
+
+
+def test_diff_msh_detects_structure_change(tmp_path):
+    a = _write(tmp_path, _BASE_MSH, "a.msh")
+    b = _write(tmp_path, _TRI6_MSH, "b.msh")
+    result = diff_msh(a, b)
+
+    assert result["identical_structure"] is False
+    assert any("node count" in d for d in result["differences"])
+    assert any("tri6" in d for d in result["differences"])
+    assert result["views"]["only_a"] == ["T"]
+
+
+def test_diff_msh_detects_field_drift(tmp_path):
+    a = _write(tmp_path, _BASE_MSH, "a.msh")
+    drifted = _BASE_MSH.replace("4 4.5\n", "4 4.6\n")
+    b = _write(tmp_path, drifted, "b.msh")
+    result = diff_msh(a, b)
+
+    assert result["identical_structure"] is True
+    assert result["fields_match"] is False
+    common = result["views"]["common"][0]
+    assert common["max_rel_delta"] == pytest.approx(0.1 / 4.6, rel=1e-6)
+    assert any("drift" in d for d in result["differences"])
+
+
 # ======================================================================
 # Jacobian subprocess check (needs the gmsh Python package)
 # ======================================================================
@@ -395,6 +460,36 @@ def test_render_png_writes_image(tmp_path):
     assert result["png_size"] is not None
     assert result["png_size"][1] == 400
     assert result["n_views"] == 1
+    blank = result.get("blank_check", {})
+    if blank.get("ran"):
+        assert blank["looks_blank"] is False, result
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE or
+                    importlib.util.find_spec("PIL") is None,
+                    reason="gmsh or Pillow not installed")
+def test_render_png_flags_blank_image(tmp_path):
+    from radia_mcp.gmsh.render import render_png
+
+    msh = _write(tmp_path, _BASE_MSH)
+    out = tmp_path / "blank.png"
+    # hide the view AND all mesh display: nothing gets drawn.
+    # (gmsh.open() on a view-bearing .msh flips Mesh.SurfaceFaces to 1
+    # by itself -- observed on gmsh 4.15.2 -- so it must be overridden.)
+    result = render_png(msh, out, width=500, height=400,
+                        auto_mesh_display=False,
+                        options={"View[0].Visible": 0,
+                                 "Mesh.SurfaceFaces": 0,
+                                 "Mesh.VolumeEdges": 0,
+                                 "Mesh.SurfaceEdges": 0,
+                                 "Mesh.Lines": 0})
+    _skip_if_no_graphics(result)
+
+    assert result["ok"] is True
+    blank = result["blank_check"]
+    assert blank["ran"] is True
+    assert blank["looks_blank"] is True
+    assert "blank" in result.get("note", "")
 
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE or

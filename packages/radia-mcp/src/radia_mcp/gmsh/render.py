@@ -89,6 +89,26 @@ try:
             gmsh.write(cfg["png_out"])
             gmsh.fltk.finalize()
             result.update({"ok": True, "ran": True, "png": cfg["png_out"]})
+            # Self-check: an image that is one flat color (plus the tiny
+            # axes triad) means nothing was actually drawn.
+            try:
+                from PIL import Image
+                img = Image.open(cfg["png_out"]).convert("RGB")
+                w, h = img.size
+                colors = img.getcolors(maxcolors=1 << 22)
+                if colors:
+                    background = max(count for count, _ in colors)
+                    content = 1.0 - background / float(w * h)
+                else:
+                    content = 1.0
+                result["blank_check"] = {
+                    "ran": True,
+                    "content_fraction": round(content, 5),
+                    "looks_blank": content < 0.005,
+                }
+            except ImportError:
+                result["blank_check"] = {
+                    "ran": False, "error": "Pillow not installed"}
         else:
             targets = cfg.get("view_indices")
             if targets is None:
@@ -223,11 +243,21 @@ def render_png(path: str | Path,
     if result.get("ok"):
         size = _png_size(out)
         result["png_size"] = size
+        notes = []
         if size and size[0] < int(width):
-            result["note"] = (
+            notes.append(
                 f"exported width {size[0]} < requested {width}: the FLTK "
                 f"sidebar consumes part of the window on Windows builds; "
                 f"request a larger General.GraphicsWidth for exact sizes")
+        blank = result.get("blank_check") or {}
+        if blank.get("looks_blank"):
+            notes.append(
+                "image looks blank (content fraction "
+                f"{blank.get('content_fraction')}): nothing was drawn -- "
+                "check view visibility, mesh display options, and that the "
+                "file actually contains elements/views")
+        if notes:
+            result["note"] = " | ".join(notes)
     return result
 
 
