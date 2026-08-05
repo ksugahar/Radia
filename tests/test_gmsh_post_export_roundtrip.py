@@ -157,6 +157,26 @@ def test_volume_element_orientation_pyramid():
         _assert_positive_jacobians(out, expect_vol=base_area / 3.0, rel=1e-6)
 
 
+def test_export_passes_radia_mcp_verify_gate():
+    """Shipping gate: a fresh curved export passes the full radia-mcp
+    verification (structural + NaN/Inf + Jacobian gates on the .msh
+    plus the deep launch check on the companion .geo)."""
+    verify_mod = pytest.importorskip("radia_mcp.gmsh.verify")
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2)
+    mesh.Curve(2)
+    post = GmshPostExport(mesh)
+    post.add_scalar_field("phi", x + y + z)
+    out = os.path.join(_TMP, "rt_mcp_verify_gate.msh")
+    post.write(out)
+
+    result = verify_mod.verify_artifact(out, check_jacobians=True)
+    assert result["ok"], result
+    assert f"msh:{os.path.basename(out)}" in result["passed"]
+    geo_gates = [g for g in result["passed"] if g.startswith("geo:")]
+    assert geo_gates, "companion .geo gate did not run"
+
+
 def test_highorder_hex_roundtrip():
     """A curved (order-2) structured HEX mesh exports as Hex27 (gmsh type 12)
     and gmsh re-reads it with the right node count + 2 field views."""
