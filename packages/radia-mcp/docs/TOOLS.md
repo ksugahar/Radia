@@ -271,7 +271,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
 | `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
 | `gmsh_status` | (no description) |
-| `gmsh_streamlines` | Trace streamlines of a vector view (field lines) from a seed line. |
+| `gmsh_streamlines` | Trace field lines of a vector view from seeds on a line segment. |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `gmsh_validate_geo` | Validate a .geo launch/companion file BEFORE opening it in GMSH. |
 | `gmsh_validate_msh` | Validate MSH v4.1 structural consistency; optional Jacobian check. |
