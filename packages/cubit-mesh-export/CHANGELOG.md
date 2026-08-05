@@ -6,6 +6,10 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.6 - Compressed VOL label normalization
+
+Released 2026-08-05.
+
 - Normalize transport-only label whitespace reported by NGSolve so strict
   `check-vol` contracts treat Windows CRLF `.vol.gz` files identically to their
   uncompressed `.vol` sources, including conductor-face adjacency checks.
