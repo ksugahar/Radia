@@ -1,7 +1,6 @@
 from pathlib import Path
 import importlib.util
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
     "check_matlab_python_parity", ROOT / "tools" / "check_matlab_python_parity.py"
@@ -18,9 +17,18 @@ def test_every_python_module_has_a_checked_matlab_classification():
     assert result["counts"]["native-mex"] >= 4
     assert result["counts"]["python-fallback"] >= 80
     assert "acoustic-python" in result["python_fallback_families"]
-    axifem = next(
-        item for item in result["binary_extensions"] if item["python"] == "axifem.pyd"
+    ih_assembly = next(
+        item
+        for item in result["assignments"]
+        if item["python"] == "simulink/ih_operator_assembly.py"
     )
+    assert ih_assembly == {
+        "python": "simulink/ih_operator_assembly.py",
+        "rule": "simulink-ih-operator-assembly",
+        "classification": "python-fallback",
+        "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m"],
+    }
+    axifem = next(item for item in result["binary_extensions"] if item["python"] == "axifem.pyd")
     assert axifem["classification"] == "native-mex"
     assert axifem["status"] == "focused-native-commands"
     assert axifem["native_commands"] == [

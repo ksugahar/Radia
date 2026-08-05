@@ -188,6 +188,14 @@
       "notes": "Field Study and the other application workers are allowed only on explicit trigger/update; never once per Simulink time step."
     },
     {
+      "id": "simulink-ih-operator-assembly",
+      "patterns": ["simulink/ih_operator_assembly.py"],
+      "classification": "python-fallback",
+      "backend_contract": "process-python",
+      "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m"],
+      "notes": "Geometry, mesh, electromagnetic, and thermal operator assembly runs only at the explicit Simulink update boundary. The generated standalone MEX handles own every simulation step."
+    },
+    {
       "id": "retired-or-operator-ui",
       "patterns": ["ih_claude_proposer.py", "ih_notebook.py", "install_panels.py", "notebook_workbench.py", "panel_design_common.py", "simulink/__init__.py", "tools/**/*.py", "tools/*.py"],
       "classification": "private/not-applicable",

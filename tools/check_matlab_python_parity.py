@@ -60,7 +60,7 @@ def audit(repo_root: Path) -> dict:
                     )
             elif rule.get("backend_contract") == "process-python":
                 text = owner.read_text(encoding="utf-8", errors="ignore")
-                if "PythonExecutable" not in text:
+                if not any(token in text for token in ("PythonExecutable", "python_executable")):
                     errors.append(
                         f"{rule['id']}: {relative} lacks the explicit process-Python contract"
                     )
@@ -68,7 +68,8 @@ def audit(repo_root: Path) -> dict:
     for path in sorted(source_root.rglob("*.py")):
         relative = path.relative_to(source_root).as_posix()
         matches = [
-            rule for rule in rules
+            rule
+            for rule in rules
             if any(fnmatch.fnmatchcase(relative, pattern) for pattern in rule["patterns"])
         ]
         if not matches:
@@ -86,11 +87,7 @@ def audit(repo_root: Path) -> dict:
 
     counts = Counter(item["classification"] for item in assignments)
     fallback_rules = sorted(
-        {
-            item["rule"]
-            for item in assignments
-            if item["classification"] == "python-fallback"
-        }
+        {item["rule"] for item in assignments if item["classification"] == "python-fallback"}
     )
     return {
         "schema": manifest["schema"],
