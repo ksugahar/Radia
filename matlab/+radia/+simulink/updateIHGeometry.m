@@ -12,10 +12,11 @@ function status = updateIHGeometry(modelName, options)
 %   rewritten with an incremented revision.  When nothing changed the
 %   configuration is only (re)loaded -- no assembler runs.
 %
-%   The assembler is EITHER assemble_fcn -- a MATLAB function name,
-%   preferred, called in-process as fcn(wpVol, coilFile, configFile)
-%   and required to write configFile -- OR assemble_command, a shell
-%   command for CLI assemblers.  Setting both is an error.
+%   With both custom assembler fields empty, the built-in
+%   assembleIHOperatorsFromGeometry function runs Radia's shape-to-
+%   operator CLI.  Otherwise the assembler is EITHER assemble_fcn --
+%   called in-process as fcn(wpVol, coilFile, configFile) -- OR
+%   assemble_command, a shell command. Setting both is an error.
 %
 %   The model InitFcn installed by addIHGeometryUpdateBlock calls this
 %   on every diagram update / simulation start, so re-pointing or
@@ -33,8 +34,8 @@ function status = updateIHGeometry(modelName, options)
 %                   without running the assemble command
 %     "rebuilt"     inputs changed -- assemble command ran
 %
-%   All three paths (workpiece, coil, config_file) must be ABSOLUTE:
-%   the update hook runs from an arbitrary working directory.
+%   Geometry paths must be ABSOLUTE. A blank config_file is derived
+%   beside the workpiece from the two geometry names.
 %
 %   Fail-loud contract (no fallbacks): a relative path, a missing
 %   geometry file, a failing assemble command, a command that does not
@@ -72,8 +73,7 @@ configFile = strtrim(string(get_param(block, "config_file")));
 autoRebuild = strcmpi(string(get_param(block, "auto_rebuild")), "on");
 
 if strlength(wpValue) == 0 && strlength(coilValue) == 0 && ...
-        strlength(assembleFcn) == 0 && ...
-        strlength(command) == 0 && strlength(configFile) == 0
+        strlength(configFile) == 0
     % Block placed but not configured yet: nothing to watch.
     status.reason = "unconfigured";
     return
@@ -82,15 +82,10 @@ if strlength(wpValue) == 0 || strlength(coilValue) == 0
     error("radia:simulink:IHGeometryUpdateInputs", ...
         "Geometry Update needs both a workpiece file and a coil file.");
 end
-if strlength(configFile) == 0
-    error("radia:simulink:IHGeometryUpdateConfig", ...
-        "Geometry Update needs the configuration file the assemble " + ...
-        "command writes (config_file).");
-end
 % The InitFcn hook fires from whatever working directory MATLAB happens
 % to be in, so relative paths would resolve differently between
 % sessions (wrong file hashed, sidecar scattered).  Require absolute.
-pathValues = [wpValue, coilValue, configFile];
+pathValues = [wpValue, coilValue];
 for pathIndex = 1:numel(pathValues)
     if ~java.io.File(char(pathValues(pathIndex))).isAbsolute()
         error("radia:simulink:IHGeometryUpdateRelativePath", ...
@@ -101,6 +96,26 @@ for pathIndex = 1:numel(pathValues)
 end
 
 [wpPath, coilRole, coilPath, notes] = classifyGeometryPair(wpValue, coilValue);
+if strlength(configFile) == 0
+    configFile = derivedConfigFile(wpPath, coilPath);
+    set_param(block, "config_file", char(configFile));
+elseif ~java.io.File(char(configFile)).isAbsolute()
+    error("radia:simulink:IHGeometryUpdateRelativePath", ...
+        "Geometry Update requires an ABSOLUTE config_file path; got: %s", ...
+        configFile);
+end
+assemblyOptions = readAssemblyOptions(block);
+hasFcn = strlength(assembleFcn) > 0;
+hasCommand = strlength(command) > 0;
+if hasFcn && hasCommand
+    error("radia:simulink:IHGeometryUpdateAmbiguousAssemble", ...
+        "Set either assemble_fcn or assemble_command, not both.");
+end
+builtInFcn = "radia.simulink.assembleIHOperatorsFromGeometry";
+if ~hasFcn && ~hasCommand
+    assembleFcn = builtInFcn;
+    hasFcn = true;
+end
 status.engaged = true;
 status.notes = notes;
 status.config_file = char(configFile);
@@ -110,10 +125,11 @@ for k = 1:numel(notes)
 end
 
 fingerprint = struct( ...
-    "schema", "radia.ih.simulink.geometry_fingerprint.v1", ...
+    "schema", "radia.ih.simulink.geometry_fingerprint.v2", ...
     "assemble_fcn", char(assembleFcn), ...
     "command", char(command), ...
     "coil_role", char(coilRole), ...
+    "assembly_options", assemblyOptions, ...
     "files", radia.simulink.fileFingerprint([wpPath; coilPath]));
 
 sidecarPath = configFile + ".fingerprint.json";
@@ -158,25 +174,17 @@ if ~autoRebuild && ~options.Force
         "auto_rebuild.\n  workpiece: %s\n  coil (%s): %s", ...
         wpPath, coilRole, coilPath);
 end
-hasFcn = strlength(assembleFcn) > 0;
-hasCommand = strlength(command) > 0;
-if hasFcn && hasCommand
-    error("radia:simulink:IHGeometryUpdateAmbiguousAssemble", ...
-        "Set either assemble_fcn (MATLAB, preferred) or " + ...
-        "assemble_command, not both.");
-end
-if ~hasFcn && ~hasCommand
-    error("radia:simulink:IHGeometryUpdateCommand", ...
-        "Geometry inputs changed but no assembler is set on the " + ...
-        "Geometry Update block (assemble_fcn or assemble_command).");
-end
-
 if hasFcn
     % In-process MATLAB assembler (preferred): errors propagate with
     % their own stack, no shell quoting, and the function runs on the
     % MATLAB path like any other .m code.
-    feval(char(assembleFcn), wpPath, coilPath, configFile);
-    status.assembler = "matlab-function";
+    if assembleFcn == builtInFcn
+        feval(char(assembleFcn), wpPath, coilPath, configFile, assemblyOptions);
+        status.assembler = "radia-built-in-cli";
+    else
+        feval(char(assembleFcn), wpPath, coilPath, configFile);
+        status.assembler = "matlab-function";
+    end
 else
     [exitCode, output] = system(char(command));
     if exitCode ~= 0
@@ -205,6 +213,43 @@ workspace.assignin("radia_ih_geometry_revision", record.revision);
 status.rebuilt = true;
 status.revision = record.revision;
 status.reason = "rebuilt";
+end
+
+function configFile = derivedConfigFile(wpPath, coilPath)
+[folder, wpStem, wpExtension] = fileparts(wpPath);
+if strcmpi(wpExtension, ".gz") && endsWith(lower(wpStem), ".vol")
+    [~, wpStem] = fileparts(wpStem);
+end
+[~, coilStem, coilExtension] = fileparts(coilPath);
+if strcmpi(coilExtension, ".gz") && endsWith(lower(coilStem), ".vol")
+    [~, coilStem] = fileparts(coilStem);
+end
+wpStem = regexprep(string(wpStem), "[^A-Za-z0-9_.-]", "_");
+coilStem = regexprep(string(coilStem), "[^A-Za-z0-9_.-]", "_");
+configFile = string(fullfile(folder, ...
+    wpStem + "_" + coilStem + "_ih_native.json"));
+end
+
+function values = readAssemblyOptions(block)
+names = [ ...
+    "python_executable", "frequency_hz", "coil_sigma", ...
+    "workpiece_sigma", "workpiece_mu_r", "density", ...
+    "heat_capacity", "thermal_conductivity", "convection", ...
+    "initial_temperature_K", "sample_time_s", "workpiece_label", ...
+    "coil_body_label", "coil_source_label", "coil_sink_label", ...
+    "peec_n_peri", ...
+    "peec_proximity", "coupling_mode", "workpiece_bem_backend"];
+values = struct();
+parameters = get_param(block, "ObjectParameters");
+for index = 1:numel(names)
+    name = names(index);
+    if ~isfield(parameters, name)
+        error("radia:simulink:IHGeometryUpdateLegacyBlock", ...
+            "Geometry Update block lacks parameter '%s'. Rebuild the " + ...
+            "model from radia.simulink.buildIHNativeModel.", name);
+    end
+    values.(name) = get_param(block, name);
+end
 end
 
 function [wpPath, coilRole, coilPath, notes] = classifyGeometryPair(a, b)
@@ -312,13 +357,16 @@ tf = false;
 % different once, forcing one deterministic rebuild that upgrades it.
 if ~isfield(stored, "schema") || ~isfield(stored, "command") || ...
         ~isfield(stored, "assemble_fcn") || ...
+        ~isfield(stored, "assembly_options") || ...
         ~isfield(stored, "files") || ~isfield(stored, "coil_role")
     return
 end
 if ~strcmp(char(string(stored.schema)), current.schema) || ...
         ~strcmp(char(string(stored.command)), current.command) || ...
         ~strcmp(char(string(stored.assemble_fcn)), current.assemble_fcn) || ...
-        ~strcmp(char(string(stored.coil_role)), current.coil_role)
+        ~strcmp(char(string(stored.coil_role)), current.coil_role) || ...
+        ~strcmp(jsonencode(stored.assembly_options), ...
+                jsonencode(current.assembly_options))
     return
 end
 storedFiles = stored.files;

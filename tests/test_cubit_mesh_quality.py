@@ -1,5 +1,6 @@
 """Fast production gates for curved Cubit/Netgen volume meshes."""
 
+import gzip
 import json
 from pathlib import Path
 import importlib.util
@@ -194,6 +195,26 @@ def test_standalone_check_passes_without_optional_cad_sidecar(tmp_path):
     assert result["labels"]["materials"] == ["body"]
     assert result["labels"]["boundaries"] == ["outer"]
     assert result["quality"]["passed"]
+
+
+def test_compressed_crlf_vol_labels_are_transport_normalized(tmp_path):
+    _, vol_path = _save_box(tmp_path)
+    compressed = tmp_path / "box.vol.gz"
+    with vol_path.open("rb") as source, gzip.open(compressed, "wb") as target:
+        for line in source:
+            target.write(line.rstrip(b"\r\n") + b"\r\n")
+
+    result = check_consistency(
+        compressed,
+        required_materials=("body",),
+        required_boundaries=("outer",),
+    )
+
+    assert result["passed"]
+    assert result["labels"]["materials"] == ["body"]
+    assert result["labels"]["boundaries"] == ["outer"]
+    assert result["quality"]["materials"] == ["body"]
+    assert result["quality"]["boundaries"] == ["outer"]
 
 
 def test_auto_discovered_cad_sidecar_checks_geometry_and_metadata(tmp_path):

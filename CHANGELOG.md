@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Added `radia-ih-assemble`, a built-in workpiece `.vol` plus coil
+  STEP/BEM-A `.vol` path that runs strict versioned label contracts, the
+  existing unit-current BEM-SIBC solve, H1 FEM thermal assembly, power closure,
+  GMSH v4.1 export, and versioned run artifacts without a per-step Python path.
+- Connected the standalone IH Geometry Update block to the built-in assembler,
+  with editable physical settings, read-only `sibc/body/source/sink` labels,
+  content-and-setting fingerprints, and automatic configuration naming.
+- Added fail-loud cohomology gating for holed workpieces and normalized solver
+  copies for CRLF `.vol.gz` inputs while retaining original-file checks and
+  hashes.
+- Added focused, real-physics, MATLAB-mask, MEX S-Function, and saved-model
+  regressions for the complete geometry-to-Simulink path.
+
 ## 4.95.39 - IH geometry and field-display consolidation
 
 Released 2026-08-04.

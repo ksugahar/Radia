@@ -13,9 +13,9 @@ Function retain their explicit-trigger application boundary. Induction
 Heating is separate: readable Level-2 MATLAB Eddy and Thermal S-Functions own
 its ports and lifecycle, while checked `radia_mex` handles own native numerical
 state. Initialization locates NGSolve's runtime through the configured Python
-installation, but no Python solver or per-step fallback is launched. The first
-distributable IH package is a preview for preassembled operators; native `.vol`
-operator assembly remains its production gate.
+installation, but no Python solver or per-step fallback is launched. Physical
+operators can be assembled at the explicit model-update boundary from a checked
+workpiece `.vol` plus a coil `.step` (PEEC) or `.vol` (BEM-A).
 
 For a field-producing mode, the runner overrides `--msh-output` with a path in
 the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
@@ -115,11 +115,34 @@ Rotation transports the accepted workpiece temperature conservatively before
 the implicit thermal solve; Eddy maps the stationary-source heat distribution
 back into workpiece coordinates.
 
-The release model contains a one-DOF diagnostic configuration. Physical cases
-must supply preassembled operators through a checked MAT/JSON configuration.
-The preview does not yet assemble PEEC/BEM-A/BIM/FEM operators from Cubit
-`.vol` files. LUT and lumped-state-space helpers are neither reachable from
-`openIH` nor included in the native IH release package.
+The release model contains a one-DOF diagnostic configuration until geometry is
+assigned. The Geometry Update block then invokes the built-in assembler when
+both custom assembler fields are blank. Only the two absolute geometry paths
+are required; the output JSON name is derived beside the workpiece. Frequency,
+electrical properties, thermal properties, and solver settings remain editable
+because they cannot be inferred from shape. The fixed `sibc`, `body`, `source`,
+and `sink` contract labels are displayed read-only on the mask.
+
+The same operation is available without MATLAB:
+
+```powershell
+python -m pip install "radia[cubit]"  # provides the mandatory check-vol gate
+radia-ih-assemble workpiece.vol coil.step
+radia-ih-assemble workpiece.vol coil.vol -o native_ih.json
+```
+
+The CLI runs strict versioned label contracts and writes their `check-vol`
+reports, unit-current electromagnetic evidence, H1 thermal matrices, GMSH v4.1
+fields, `run.log`, and `result.json` into a persistent artifact directory. A
+STEP coil selects PEEC; a meshed coil selects BEM-A. For the scalar current port
+and a fixed linear material law, the unit-current response is an exact basis and
+the distributed loss scales with current squared. LUT and lumped-state-space
+helpers are not used. A `.vol.gz` input is checked and hashed in its original
+form; only the solver copy in the artifact directory is expanded with normalized
+line endings so Windows CRLF labels remain canonical. Temperature-dependent
+BH/Zs operator rebuilding and arbitrary-angle unstructured-mesh transport still
+require a separately assembled configuration; the shape-only CLI declares
+`rotation_mode="none"` rather than silently applying an invalid node ordering.
 
 For learning and design optimization, wrap a `sim` call or the fast waveform
 function in an objective and use:

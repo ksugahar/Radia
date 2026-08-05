@@ -511,8 +511,9 @@ The canonical human-facing interfaces are masked blocks in the single Radia
 Simulink library: Electromagnet, PCB PEEC, Motor, Stream Function, and
 Induction Heating. Electromagnet, PCB PEEC, Motor, and Stream Function delegate
 to the same `DesignSpec` and headless calculation used by Python/MCP. Induction
-Heating is the native exception: its Eddy and Thermal blocks are C/C++ MEX
-S-Functions with no Python fallback in the simulation loop.
+Heating is the native exception: readable Level-2 MATLAB Eddy and Thermal
+S-Functions own the Simulink lifecycle, while checked standalone MEX handles
+own numerical state. There is no Python fallback in the simulation loop.
 
 The **Reduced Models / Motor Angle Family** block owns a persistent native MEX
 handle for periodic angle interpolation, discrete state update, and quadratic
@@ -523,9 +524,10 @@ kept as the independent debugging and numerical-probe surface for the same C++
 kernel.
 
 The four batch blocks write `run.log` and `result.json`; field-producing runs
-also write a checked GMSH `.msh v4.1` artifact in the run directory. The IH
-preview currently exposes its field vectors directly in Simulink and does not
-claim that batch artifact contract.
+also write a checked GMSH `.msh v4.1` artifact in the run directory. IH geometry
+assembly follows the same evidence boundary: strict `check-vol` reports,
+electromagnetic evidence, GMSH fields, `run.log`, and `result.json` are written
+before the native Simulink runtime consumes the generated operators.
 
     addpath("matlab")
     radia.setup()
@@ -544,12 +546,16 @@ The native NGSolve MEX bridge above is a separately supported platform
 capability, not merely a future block backend.
 
 In MATLAB, `radia.simulink.openIH()` opens `radia_ih.slx`. The first native IH
-release is explicitly a preview runtime for checked, preassembled Eddy and
-Thermal operators. It proves the S-Function lifecycle, current and rotation
-inputs, conservative temperature transport, and closed thermal feedback. The
-remaining Cubit `.vol` to PEEC/BEM-A/BIM/FEM operator-assembly boundary is not
-claimed complete by that preview. LUT-only and lumped state-space models are
-not shipped as Radia IH interfaces.
+release combines checked, preassembled operators with a built-in explicit
+geometry-update path. Assign a workpiece `.vol`/`.vol.gz` and either a coil STEP
+file for PEEC or a labeled coil `.vol` for BEM-A; with both custom assembler
+fields blank, `radia-ih-assemble` runs the existing Radia/NGSolve BEM-SIBC solve
+at unit current and assembles the H1 FEM thermal operators. For a scalar current
+and fixed linear material law this is an exact distributed response basis, not
+a LUT or lumped state-space model. Temperature-dependent BH/Zs reconstruction,
+BIM/FEM Eddy selection, and arbitrary-angle transport on an unstructured mesh
+still require a separately assembled configuration and are not silently
+approximated.
 
 The Cubit toolbar is a separate, Cubit-embedded integration surface. Normal
 Radia Python workflows do not install or depend on Cubit's private PySide
