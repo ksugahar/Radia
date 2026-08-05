@@ -39,6 +39,7 @@ from .post_display import (
     write_gmsh_post_launch_artifact,
 )
 from .msh_inspect import (
+    diff_msh,
     field_stats,
     inspect_msh,
     validate_geo,
@@ -608,22 +609,53 @@ def gmsh_field_stats(msh_path: str, view_name: str | None = None) -> dict:
 
 
 @mcp.tool()
-def gmsh_validate_geo(geo_path: str) -> dict:
+def gmsh_validate_geo(geo_path: str, deep: bool = True) -> dict:
     """
     Validate a .geo launch/companion file BEFORE opening it in GMSH.
 
     Catches the classic "Open GMSH doesn't work / window is black" bugs:
     missing Merge targets, invalid GMSH 4.x option names (Mesh.Volumes,
-    Mesh.Surfaces, General.GraphicsSizeX/Y). Reports the max View[N]
-    index and whether Mesh.NumSubEdges is set for high-order display.
+    Mesh.Surfaces, General.GraphicsSizeX/Y). With deep=True (default)
+    the merged .msh files are scanned for their view count, so
+    out-of-range View[N] references (silently ignored by GMSH, field
+    stays invisible) are caught, and the exact-autoload sidecars
+    (.geo.opt / .msh.opt) are reported. Also reports Mesh.NumSubEdges.
 
     Args:
         geo_path: Path to the .geo file.
+        deep: Scan Merge targets for view counts and sidecars.
     """
     p = Path(geo_path)
     if not p.is_absolute():
         p = PROJECT_ROOT / p
-    return validate_geo(p)
+    return validate_geo(p, deep=deep)
+
+
+@mcp.tool()
+def gmsh_diff_msh(msh_a: str, msh_b: str, rel_tol: float = 1e-9) -> dict:
+    """
+    Compare two MSH v4.1 files: structure + field statistics.
+
+    Built for before/after verification (re-export, node-order fix,
+    solver change): reports node/element-type/physical-name/view
+    structure differences, bbox drift, and per-common-view relative
+    drift of the min/max statistics. identical_structure and
+    fields_match give the one-glance verdict; `differences` lists every
+    deviation in plain language. Field values are compared through
+    statistics, not tag-by-tag. Pure Python.
+
+    Args:
+        msh_a: First .msh file (reference).
+        msh_b: Second .msh file (candidate).
+        rel_tol: Relative tolerance for field min/max drift.
+    """
+    pa = Path(msh_a)
+    if not pa.is_absolute():
+        pa = PROJECT_ROOT / pa
+    pb = Path(msh_b)
+    if not pb.is_absolute():
+        pb = PROJECT_ROOT / pb
+    return diff_msh(pa, pb, rel_tol=rel_tol)
 
 
 @mcp.tool()
@@ -782,7 +814,7 @@ def gmsh_exec(code: str, timeout_s: float = 120.0) -> dict:
     One-shot gating stays with gmsh_inspect_msh / gmsh_validate_msh.
 
     Example:
-        gmsh_exec("gmsh.open(r'S:/path/case.msh')")
+        gmsh_exec("gmsh.open(r'C:/models/case.msh')")
         gmsh_exec("result = gmsh.model.getBoundingBox(-1, -1)")
         gmsh_exec("result = [gmsh.view.getTags(),
                              gmsh.option.getNumber('Mesh.NumSubEdges')]")
