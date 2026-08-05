@@ -55,6 +55,9 @@ PROTOCOL_VERSION = 2  # default (gui mode)
 # 2 – 3 s on this lab (measured on LAB 2026-04-21).
 LICENSE_WARMUP_TIMEOUT_S = 30.0
 CUBIT_READY_TIMEOUT_S = 15.0
+# Attach-time responsiveness probe: the bootstrap QTimer polls every
+# 200 ms, so a healthy idle daemon answers a ping in well under 1 s.
+ATTACH_PING_TIMEOUT_S = 3.0
 
 _SESSION_LOCK = threading.Lock()
 _SINGLETON: "CubitSession | None" = None
@@ -294,6 +297,13 @@ class CubitSession:
         # last license pre-warm result (None until first start)
         self._last_license_warmup: dict = {}
 
+        # Per-MCP-process command history for `cubit_session_journal`
+        # (the lab's .jou-first reproducibility policy: every live
+        # session must be exportable as a portable journal).  Bounded;
+        # records {ts, line, ok} for every op=="cmd" line sent.
+        self._command_history: list[dict] = []
+        self._command_history_max = 20000
+
         # batch-mode (stdio) stderr retention
         self._stderr_tail: list[bytes] = []
         self._stderr_tail_max = 200
@@ -453,8 +463,12 @@ class CubitSession:
                     "protocol_version": PROTOCOL_VERSION if self._mode == "gui" else 1,
                 }
                 if self._mode == "gui":
-                    return self._call_via_filedrop(req, timeout_s=timeout_s)
-                return self._call_via_stdio(req, timeout_s=timeout_s)
+                    resp = self._call_via_filedrop(req, timeout_s=timeout_s)
+                else:
+                    resp = self._call_via_stdio(req, timeout_s=timeout_s)
+                if op == "cmd":
+                    self._record_cmd_history(resp)
+                return resp
             except CubitSessionError as e:
                 if not _recover:
                     raise
@@ -465,6 +479,27 @@ class CubitSession:
         if isinstance(resp, dict):
             resp.setdefault("_recovered", True)
         return resp
+
+    def _record_cmd_history(self, resp) -> None:
+        """Append per-line results of an op=="cmd" response to the
+        session journal history (bounded)."""
+        if not isinstance(resp, dict):
+            return
+        per_line = resp.get("result")
+        if not isinstance(per_line, list):
+            return
+        now = time.time()
+        for step in per_line:
+            if not isinstance(step, dict) or "line" not in step:
+                continue
+            self._command_history.append({
+                "ts": now,
+                "line": str(step.get("line")),
+                "ok": bool(step.get("ok")),
+            })
+        if len(self._command_history) > self._command_history_max:
+            del self._command_history[:len(self._command_history)
+                                      - self._command_history_max]
 
     def _force_reset(self) -> None:
         """Tear down the current session without waiting for graceful exit.
@@ -541,13 +576,6 @@ class CubitSession:
         4. Record our PID into ``pid.lock`` so the next process can
            find + attach.
         """
-        gui_exe = _cubit_gui_exe(self._bin_dir)
-        bootstrap_path = Path(__file__).with_name("bootstrap.py")
-        if not bootstrap_path.exists():
-            raise CubitSessionError(
-                f"Bootstrap script missing: {bootstrap_path}. Expected "
-                "sibling of session.py.")
-
         # --- Per-user stable drop-dir ----------------------------------
         drop = _user_daemon_dir()
         drop.mkdir(parents=True, exist_ok=True)
@@ -563,12 +591,42 @@ class CubitSession:
             self._outbox = outbox
             self._proc = None  # not OUR child; we're just a client
             self._owned = False
+            # Responsiveness probe (MathWorks ping-before-handing-out-
+            # the-client): PID-alive passes for a HUNG or busy Cubit
+            # whose Qt loop is not polling the drop dir.  Fail loud NOW
+            # with a clear message instead of letting the first real
+            # call sit in a 60 s timeout.  Non-destructive: the daemon
+            # is left running (it may be mid-operation in another
+            # window); _ready_info stays unset so the next call re-pings.
+            ping_req = {"id": self._next_id, "op": "ping", "args": [],
+                        "protocol_version": PROTOCOL_VERSION}
+            self._next_id += 1
+            try:
+                self._call_via_filedrop(ping_req,
+                                        timeout_s=ATTACH_PING_TIMEOUT_S)
+            except CubitSessionError:
+                pid = existing.get("pid")
+                raise CubitSessionError(
+                    f"Attached Cubit daemon (pid={pid}) is alive but did "
+                    f"not answer a ping within {ATTACH_PING_TIMEOUT_S:.0f} s "
+                    "-- it is busy with a long operation or hung. Wait and "
+                    "retry, or force-stop it with cubit_session_shutdown "
+                    "if it is truly stuck.")
             self._ready_info = existing
             self._last_license_warmup = {"status": "skipped",
                                           "reason": "attached to existing daemon"}
             return existing
 
         # --- No live daemon: new spawn path ----------------------------
+        # Resolve the launcher only on the spawn path -- attaching to an
+        # already-running daemon must not require (or fail on) the exe.
+        gui_exe = _cubit_gui_exe(self._bin_dir)
+        bootstrap_path = Path(__file__).with_name("bootstrap.py")
+        if not bootstrap_path.exists():
+            raise CubitSessionError(
+                f"Bootstrap script missing: {bootstrap_path}. Expected "
+                "sibling of session.py.")
+
         # Step 1: license pre-warm
         try:
             from .license_warmup import warmup_license
