@@ -21,7 +21,15 @@ Use these blocks for plant model blocks.
 - Metadata quality: low
 - Guidance: Available from customer library. Select when intent matches.
 
+### Magnetic Levitation
+
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Applications/Magnetic Levitation
+- Metadata quality: low
+- Guidance: Available from customer library. Select when intent matches.
+
 ## Related Categories
 
 - [[uncategorized]]
+- [[signal-processing]]
 - [[power]]

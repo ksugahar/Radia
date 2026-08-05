@@ -28,6 +28,7 @@ REQUIRED_MODELS = ("radia_ih.slx",)
 FULL_REQUIRED_MEX = REQUIRED_MEX
 FULL_REQUIRED_MODELS = (
     "radia_simulink_library.slx",
+    "radia_electromagnet.slx",
     "radia_ih.slx",
     "radia_maglev.slx",
     "radia_streamfunction_optimization.slx",
@@ -274,6 +275,9 @@ def build_package(
             )
             manifest["feature_toolbox_requirements"] = {
                 "adjoint_topology_optimization": ["Optimization Toolbox"],
+                "electromagnet_topology_optimization": [
+                    "Optimization Toolbox"
+                ],
                 "stream_function_topology_optimization": [
                     "Optimization Toolbox"
                 ],

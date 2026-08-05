@@ -49,6 +49,7 @@ FULL_REQUIRED_MEMBERS = {
     "matlab/install_radia_simulink.m",
     "matlab/verify_radia_simulink_release.m",
     "matlab/radia_simulink_library.slx",
+    "matlab/radia_electromagnet.slx",
     "matlab/radia_ih.slx",
     "matlab/radia_maglev.slx",
     "matlab/radia_streamfunction_optimization.slx",
@@ -170,13 +171,18 @@ def verify_archive(archive: Path) -> dict:
                     "matlab/radia_ih_thermal_sfun.mexw64",
                 }:
                     raise RuntimeError("The full library MEX inventory is invalid")
-            toolbox_requirements = manifest.get("feature_toolbox_requirements", {})
-            if toolbox_requirements != {
+            expected_toolboxes = {
                 "adjoint_topology_optimization": ["Optimization Toolbox"],
                 "stream_function_topology_optimization": [
                     "Optimization Toolbox"
                 ],
-            }:
+            }
+            if full_v2:
+                expected_toolboxes["electromagnet_topology_optimization"] = [
+                    "Optimization Toolbox"
+                ]
+            toolbox_requirements = manifest.get("feature_toolbox_requirements", {})
+            if toolbox_requirements != expected_toolboxes:
                 raise RuntimeError("The full library toolbox contract is invalid")
 
         declared = set()

@@ -116,6 +116,13 @@ Use these blocks for uncategorized blocks.
 
 ## Low-Confidence Blocks
 
+### Electromagnet Topology Optimization
+
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Applications/Electromagnet Topology Optimization
+- Metadata quality: low
+- Guidance: Available from customer library. Select when intent matches.
+
 ### Stream Function Optimization
 
 - Library: radia_simulink_library
@@ -133,4 +140,5 @@ Use these blocks for uncategorized blocks.
 ## Related Categories
 
 - [[plant-models]]
+- [[signal-processing]]
 - [[power]]
