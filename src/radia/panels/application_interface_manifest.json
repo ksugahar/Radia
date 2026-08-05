@@ -96,6 +96,22 @@
       ]
     },
     {
+      "id": "radia-maglev",
+      "title": "Magnetic Levitation",
+      "state": "active-simulink-block",
+      "block": "radia_simulink_library/Applications/Magnetic Levitation",
+      "sample": "matlab/radia_maglev.slx",
+      "generator": "radia.simulink.buildMagLevModel",
+      "design": "radia.maglev.MovingHCurlCLNFamily",
+      "backend": "matlab-level2-common-basis-cln",
+      "backend_policy": "A readable Level-2 MATLAB S-Function advances a shared-coordinate, position-dependent HCurl/CLN reduced state and evaluates the exported Lorentz-force operator. Family assembly occurs before simulation and Python is never called per step.",
+      "notebook": null,
+      "headless": [
+        "src/radia/vim/_matlab_bridge.py",
+        "src/radia/maglev/position_cln.py"
+      ]
+    },
+    {
       "id": "radia-export-menu",
       "title": "Cubit Export Mesh",
       "state": "active-cubit-toolbar",

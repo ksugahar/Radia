@@ -32,6 +32,7 @@ Applications/PCB PEEC
 Applications/Motor
 Applications/Stream Function
 Applications/Induction Heating
+Applications/Magnetic Levitation
 ```
 
 Each standard application block consumes a versioned configuration JSON and
@@ -48,7 +49,7 @@ matlab -batch "addpath('matlab'); r=runtests('tests/matlab/test_simulink_workflo
 ```
 
 ============================================================
-## four_panels -- compatibility topic; five active blocks
+## four_panels -- compatibility topic; six active domain blocks
 ============================================================
 
 The historical topic name is retained for MCP clients. Current surfaces:
@@ -60,6 +61,7 @@ The historical topic name is retained for MCP clients. Current surfaces:
 | Motor | `Applications/Motor` | `radia.motor_design.MotorDesignSpec` | none |
 | Stream Function | `Applications/Stream Function` | `radia.streamfunction_design.StreamFunctionDesignSpec` | none |
 | Induction Heating | `Applications/Induction Heating` | `radia.ih_design.IHDesignSpec` | none |
+| Magnetic Levitation | `Applications/Magnetic Levitation` | `radia.maglev.MovingHCurlCLNFamily` | none |
 
 Do not restore deleted `*_notebook.py` adapters or packaged
 notebooks as compatibility aliases.

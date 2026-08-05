@@ -89,8 +89,9 @@ sl_refresh_customizations
 ```
 
 The Simulink Library Browser then shows one **Radia** library containing the
-Electromagnet, PCB PEEC, Motor, Stream Function, Induction Heating, LTspice,
-Optuna, Sheet Metal Optimization, and native Motor Angle Family blocks. For
+Electromagnet, PCB PEEC, Motor, Stream Function, Induction Heating, Magnetic
+Levitation, LTspice, Optuna, Sheet Metal Optimization, and native Motor Angle
+Family blocks. For
 the machine-readable setup and compatibility contract, ask the
 `mcp-server-radia-matlab` tool `matlab_simulink_library_contract`.
 
@@ -508,12 +509,19 @@ fallbacks.
 ## Simulink application blocks
 
 The canonical human-facing interfaces are masked blocks in the single Radia
-Simulink library: Electromagnet, PCB PEEC, Motor, Stream Function, and
-Induction Heating. Electromagnet, PCB PEEC, Motor, and Stream Function delegate
-to the same `DesignSpec` and headless calculation used by Python/MCP. Induction
+Simulink library: Electromagnet, PCB PEEC, Motor, Stream Function, Induction
+Heating, and Magnetic Levitation. Electromagnet, PCB PEEC, Motor, and Stream
+Function delegate to the same `DesignSpec` and headless calculation used by
+Python/MCP. Induction
 Heating is the native exception: readable Level-2 MATLAB Eddy and Thermal
 S-Functions own the Simulink lifecycle, while checked standalone MEX handles
 own numerical state. There is no Python fallback in the simulation loop.
+
+Magnetic Levitation is a moving common-basis HCurl/CLN plant. Its ordinary
+Simulink ports accept current derivative, mechanical height, and current, and
+return induced response plus the three-component Lorentz force. Open the
+tracked composition with `radia.simulink.openMagLev()`; family assembly occurs
+before simulation and Python is not called per step.
 
 The **Reduced Models / Motor Angle Family** block owns a persistent native MEX
 handle for periodic angle interpolation, discrete state update, and quadratic

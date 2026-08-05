@@ -60,6 +60,7 @@ Applications/PCB PEEC
 Applications/Motor
 Applications/Stream Function
 Applications/Induction Heating
+Applications/Magnetic Levitation
 Applications/Field Study
 Material Models/Material Dictionary
 Coupling/Winding Dictionary

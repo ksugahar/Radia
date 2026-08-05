@@ -126,6 +126,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert manifest["python_fallback_per_step"] is False
     assert manifest["backend"] == "application-specific"
     assert manifest["ih_backend"] == "matlab-level2+radia-mex-handles"
+    assert manifest["maglev_backend"] == "matlab-level2-common-basis-cln"
     assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
     assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
     assert manifest["feature_toolbox_requirements"] == {
@@ -140,6 +141,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
     assert verify_module.FULL_REQUIRED_MEMBERS <= names
+    assert "matlab/radia_maglev.slx" in names
     assert "matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
     assert "matlab/python_api_parity_manifest.json" in names
 
