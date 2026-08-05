@@ -29,6 +29,7 @@ FULL_REQUIRED_MEX = REQUIRED_MEX
 FULL_REQUIRED_MODELS = (
     "radia_simulink_library.slx",
     "radia_ih.slx",
+    "radia_maglev.slx",
     "radia_streamfunction_optimization.slx",
 )
 FULL_RUNTIME_DLLS = (
@@ -96,7 +97,10 @@ def commit() -> str:
         return github_sha.lower()
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+            [
+                "git", "-c", f"safe.directory={ROOT.as_posix()}",
+                "rev-parse", "HEAD",
+            ], cwd=ROOT, check=True,
             capture_output=True, text=True,
         )
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
@@ -252,6 +256,7 @@ def build_package(
             "files": files,
         }
         if full_library:
+            manifest["maglev_backend"] = "matlab-level2-common-basis-cln"
             manifest["application_batch_backend"] = (
                 "python-headless-or-native-as-declared-by-block"
             )

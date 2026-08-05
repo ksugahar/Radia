@@ -7,7 +7,7 @@ files only define the block contract and marshal MATLAB arrays.
 ## Application blocks
 
 The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
-Function, and Induction Heating are built by
+Function, Induction Heating, and Magnetic Levitation are built by
 `matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
 Function retain their explicit-trigger application boundary. Induction
 Heating is separate: readable Level-2 MATLAB Eddy and Thermal S-Functions own
@@ -83,7 +83,9 @@ stateful bridge and must not silently fall back to a linear model.
 The Simulink layer exposes physical model units, not individual internal
 matrix kernels:
 
-* MagLev LTI models use the existing MATLAB `ss` / Simulink State-Space block.
+* Moving MagLev models use the masked common-basis HCurl/CLN family block in
+  `matlab/radia_maglev.slx`; fixed-position LTI exports remain a lower-level
+  diagnostic and controller-composition surface.
 * Dynamic motor ROMs use `radia_motor_rom_sfun` or an FMI Co-Simulation FMU.
 * Fixed reduced IH and HCurl Eddy Bubble/CLN models can use
   `matlab/+radia/+simulink/stateSpaceMexSFunction.m`, backed by the native
@@ -91,6 +93,15 @@ matrix kernels:
   at `Start`; no Python process or per-step state-vector transfer is used.
 * Moving height-family models remain MATLAB S-functions because their reduced
   operators are interpolated as the mechanical state changes.
+
+## Magnetic-levitation model
+
+`matlab/radia_maglev.slx` wires consistent coil-current and current-derivative
+sources, mechanical height, the moving HCurl/CLN plant, induced response, and
+three-component Lorentz force. The tracked family is diagnostic smoke data.
+Engineering models load a shared-state-coordinate JSON family exported by
+`radia.vim.ExportHCurlEddyCLNFamilyJSON`; expensive field assembly remains an
+initialization operation and Python is never launched from a simulation step.
 
 The C ABI remains the canonical implementation boundary so that Python,
 Simulink, FMI, and other hosts cannot silently acquire different numerical

@@ -38,6 +38,7 @@ def test_simulink_library_registration_and_ltspice_scope():
     assert "Material Models/Material Dictionary" in contract["blocks"]
     assert "Coupling/Winding Dictionary" in contract["blocks"]
     assert "Applications/Field Study" in contract["blocks"]
+    assert "Applications/Magnetic Levitation" in contract["blocks"]
     assert "Coupling/Field Study Configuration" in contract["blocks"]
     materials = contract["material_dictionary"]
     assert materials["mesh_format"] == "Netgen .vol"

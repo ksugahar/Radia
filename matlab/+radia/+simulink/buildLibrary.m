@@ -66,9 +66,12 @@ addApplicationBlock(applications,"PCB PEEC","pcb",[45 100 345 150]);
 addApplicationBlock(applications,"Motor","motor",[45 170 345 220]);
 addApplicationBlock(applications,"Stream Function","streamfunction",[45 240 345 290]);
 addIHNativeBlock(applications,"Induction Heating",[45 310 345 360]);
-addApplicationBlock(applications,"Field Study","field",[45 500 345 550]);
 radia.simulink.addStreamFunctionOptimizationSubsystem(applications, ...
     "Stream Function Optimization",[45 380 345 470]);
+radia.simulink.addMagLevCLNBlock(applications, ...
+    BlockName="Magnetic Levitation",Position=[45 500 345 570], ...
+    FamilyExpression="radia.simulink.makeMagLevSmokeFamily()");
+addApplicationBlock(applications,"Field Study","field",[45 600 345 650]);
 
 materials=addEmptySubsystem(name,"Material Models",[70 570 330 660]);
 addBHBlock(materials,"Temperature-Dependent BH",[45 35 285 105]);

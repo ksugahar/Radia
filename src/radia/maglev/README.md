@@ -112,7 +112,17 @@ So the package defaults to Lorentz.  Maxwell stress is available
 
 ## Simulink integration
 
-Export the polarizability as a continuous-time LTI state-space model:
+The packaged `matlab/radia_maglev.slx` model is the human-facing dynamic
+interface. Open it with `radia.simulink.openMagLev()`. Its masked MagLev plant
+accepts `-dI/dt`, mechanical height, and coil current, then advances a
+common-basis HCurl/CLN family and returns the induced port response and the
+three-component Lorentz force. The tracked model carries diagnostic smoke data;
+replace that data with a family exported by
+`radia.vim.ExportHCurlEddyCLNFamilyJSON` for engineering use. Python is not
+called during a Simulink time step.
+
+For fixed-position diagnostics, export the polarizability as a continuous-time
+LTI state-space model:
 
 ```python
 from radia.maglev.simulink import export
@@ -126,8 +136,7 @@ Then in MATLAB:
 load('plant_lti.mat');
 sys = ss(A, B, C, D);
 bodeplot(sys);
-% Simulink: place "LTI System" block -> set sys reference -> connect
-%           to PM mechanics + controller in feedback loop
+% Lower-level fixed-position plant for custom controller studies.
 ```
 
 The state count is `n_foster + n_warburg + 1` (Foster bulk modes,

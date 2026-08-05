@@ -28,6 +28,7 @@ def test_application_manifest_has_no_notebook_workbenches():
         "radia-motor",
         "radia-streamfunction",
         "radia-ih",
+        "radia-maglev",
     }
     for application_id in expected_blocks:
         application = applications[application_id]
@@ -41,6 +42,11 @@ def test_application_manifest_has_no_notebook_workbenches():
     assert "Level-2 MATLAB" in ih["backend_policy"]
     assert "radia_mex object handles" in ih["backend_policy"]
     assert "not a per-step fallback" in ih["backend_policy"]
+
+    maglev = applications["radia-maglev"]
+    assert maglev["backend"] == "matlab-level2-common-basis-cln"
+    assert maglev["sample"] == "matlab/radia_maglev.slx"
+    assert "never called per step" in maglev["backend_policy"]
 
     export_menu = applications["radia-export-menu"]
     assert export_menu["state"] == "active-cubit-toolbar"
