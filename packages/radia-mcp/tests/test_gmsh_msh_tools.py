@@ -530,6 +530,90 @@ def test_cli_exit_codes_and_modes(tmp_path, capsys):
 
 
 # ======================================================================
+# Dynamic option probing (needs gmsh)
+# ======================================================================
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_probe_options_flags_missing_and_reports_kind():
+    from radia_mcp.gmsh.msh_inspect import probe_options
+
+    result = probe_options(["Mesh.NumSubEdges", "View[0].Visible",
+                            "General.Color.Background", "Mesh.Volumes"])
+    assert result["ran"] is True
+    assert result["ok"] is False
+    assert result["missing"] == ["Mesh.Volumes"]
+    opts = result["options"]
+    assert opts["Mesh.NumSubEdges"]["kind"] == "number"
+    assert opts["View[0].Visible"]["exists"] is True
+    assert opts["View[0].Visible"]["normalized"] == "View.Visible"
+    assert opts["General.Color.Background"]["kind"] == "color"
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_validate_geo_check_options_catches_typo(tmp_path):
+    _write(tmp_path, _BASE_MSH)
+    geo = tmp_path / "case.geo"
+    geo.write_text('Merge "case.msh";\n'
+                   "Mesh.NumSubEdgs = 4;\n"     # typo
+                   "View[0].IntervalsType = 2;\n", encoding="utf-8")
+
+    result = validate_geo(geo, check_options=True)
+    assert result["checks"]["option_names_exist"] is False
+    assert result["ok"] is False
+    assert any("NumSubEdgs" in e for e in result["errors"])
+
+    geo.write_text('Merge "case.msh";\nMesh.NumSubEdges = 4;\n'
+                   "View[0].IntervalsType = 2;\n", encoding="utf-8")
+    result = validate_geo(geo, check_options=True)
+    assert result["checks"]["option_names_exist"] is True
+    assert result["ok"] is True
+
+
+# ======================================================================
+# verify_artifact (one-call gate runner)
+# ======================================================================
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_verify_artifact_geo_runs_all_gates(tmp_path):
+    from radia_mcp.gmsh.verify import verify_artifact
+
+    _write(tmp_path, _BASE_MSH)
+    geo = tmp_path / "case.geo"
+    geo.write_text('Merge "case.msh";\nView[0].Visible = 1;\n',
+                   encoding="utf-8")
+
+    result = verify_artifact(geo)
+    assert result["ok"] is True
+    assert set(result["passed"]) == {"geo:case.geo", "msh:case.msh"}
+    assert result["failed"] == []
+    assert result["jacobians_checked"] is True
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_verify_artifact_msh_reports_failed_gate(tmp_path):
+    from radia_mcp.gmsh.verify import verify_artifact
+
+    inverted = _BASE_MSH.replace("2 1 2 3 4\n", "2 1 2 4 3\n")
+    msh = _write(tmp_path, inverted)
+
+    result = verify_artifact(msh)
+    assert result["ok"] is False
+    assert result["failed"] == ["msh:case.msh"]
+    gate = result["gates"][0]
+    assert "jacobians_positive" in gate["failed_checks"]
+
+
+def test_verify_artifact_rejects_unknown_type(tmp_path):
+    from radia_mcp.gmsh.verify import verify_artifact
+
+    other = tmp_path / "case.step"
+    other.write_text("dummy", encoding="utf-8")
+    result = verify_artifact(other)
+    assert result["ok"] is False
+    assert "unsupported artifact type" in result["error"]
+
+
+# ======================================================================
 # Lint fixtures lock (selftest companions)
 # ======================================================================
 
@@ -584,6 +668,20 @@ def test_render_png_writes_image(tmp_path):
     blank = result.get("blank_check", {})
     if blank.get("ran"):
         assert blank["looks_blank"] is False, result
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_render_png_with_structured_cut_plane(tmp_path):
+    from radia_mcp.gmsh.render import render_png
+
+    msh = _write(tmp_path, _BASE_MSH)
+    out = tmp_path / "cut.png"
+    result = render_png(msh, out, width=400, height=300,
+                        cut_plane={"enabled": True, "normal": [0, -1, 0],
+                                   "offset": 0.5})
+    _skip_if_no_graphics(result)
+    assert result["ok"] is True, result
+    assert out.is_file()
 
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE or

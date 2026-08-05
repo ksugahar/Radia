@@ -118,3 +118,36 @@ def test_nonserializable_result_falls_back_to_repr():
     assert out["ok"] is True
     assert out.get("result_repr") is True
     assert "object object" in out["result"]
+
+
+def test_run_file_opens_and_reports_state(tmp_path):
+    from radia_mcp.gmsh.session import session_run_file
+
+    msh = tmp_path / "tiny.msh"
+    msh.write_text(_TINY_MSH, encoding="utf-8")
+
+    out = session_run_file(msh)
+    assert out["ok"] is True
+    assert out["opened"] == str(msh)
+    assert out["n_views"] == 0
+    assert out["bbox"] is not None
+    assert out["bbox"][:3] == pytest.approx([0.0, 0.0, 0.0])
+    assert out["bbox"][3:] == pytest.approx([1.0, 1.0, 1.0])
+
+    follow_up = session_exec("result = len(gmsh.model.mesh.getNodes()[0])")
+    assert follow_up["result"] == 4
+
+    missing = session_run_file(tmp_path / "nope.geo")
+    assert missing["ok"] is False
+
+
+def test_detect_capabilities_reports_graphics_and_lanes():
+    from radia_mcp.gmsh.detect import detect_capabilities
+
+    caps = detect_capabilities()
+    assert caps["gmsh_package_installed"] is True
+    assert caps["gmsh_version"]
+    assert "rendering_available" in caps
+    assert isinstance(caps["build_features"], dict)
+    assert "gmsh_exec" in caps["lanes"]["session"]
+    assert "gmsh_verify" in caps["lanes"]["one_shot_gating"]

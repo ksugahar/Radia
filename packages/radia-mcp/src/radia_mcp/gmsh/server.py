@@ -38,11 +38,13 @@ from .post_display import (
     gmsh_post_display_manifest_gate,
     write_gmsh_post_launch_artifact,
 )
+from .detect import detect_capabilities
 from .msh_inspect import (
     audit_msh_directory,
     diff_msh,
     field_stats,
     inspect_msh,
+    probe_options,
     validate_geo,
     validate_msh,
 )
@@ -52,9 +54,11 @@ from .render import (
 )
 from .session import (
     session_exec,
+    session_run_file,
     session_shutdown,
     session_status,
 )
+from .verify import verify_artifact
 
 _RULE_REMEDIATIONS = {
     "numsubedges-missing": (
@@ -744,7 +748,8 @@ def gmsh_render(path: str,
                 width: int = 1000, height: int = 800,
                 numsubedges: int = 4,
                 camera_preset: str | None = None,
-                time_step: int | None = None) -> dict:
+                time_step: int | None = None,
+                cut_plane: dict | None = None) -> dict:
     """
     Render a .msh or .geo file to PNG headlessly (gmsh subprocess).
 
@@ -767,6 +772,9 @@ def gmsh_render(path: str,
         camera_preset: Optional preset (z_up_xz_from_positive_y,
                        positive_y_oblique, front_xz).
         time_step: Optional time step applied to all views before render.
+        cut_plane: Optional structured cut plane ({enabled, normal:[3],
+                   offset, whole_elements, only_volume}); views get
+                   Clip=1 automatically.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -778,7 +786,7 @@ def gmsh_render(path: str,
             out = PROJECT_ROOT / out
     return render_png(p, out, width=width, height=height,
                       numsubedges=numsubedges, camera_preset=camera_preset,
-                      time_step=time_step)
+                      time_step=time_step, cut_plane=cut_plane)
 
 
 @mcp.tool()
@@ -853,6 +861,83 @@ def gmsh_exec(code: str, timeout_s: float = 120.0) -> dict:
                    and the call fails loudly.
     """
     return session_exec(code, timeout_s=timeout_s)
+
+
+@mcp.tool()
+def gmsh_detect() -> dict:
+    """
+    Detect gmsh capabilities on this machine (detect_matlab_toolboxes twin).
+
+    One call reports: gmsh/Pillow package presence, gmsh version, build
+    features (OpenCASCADE, FLTK, MED, ...), whether an FLTK graphics
+    context can ACTUALLY be created (probed in a subprocess -- decides
+    upfront if gmsh_render / gmsh_export_animation will work), the
+    session state, and the tool-lane map (gating / rendering / session).
+    """
+    return detect_capabilities()
+
+
+@mcp.tool()
+def gmsh_run_file(path: str, timeout_s: float = 120.0) -> dict:
+    """
+    Open/run a file in the persistent gmsh session (run_matlab_file twin).
+
+    gmsh.open semantics: a .geo executes as a script (its .geo.opt
+    autoloads), .msh/.pos load models and views, .step loads geometry.
+    Starts the session lazily like gmsh_exec; returns the post-open
+    status (models, current model, view count, bounding box) so the
+    follow-up gmsh_exec calls can interrogate the loaded state.
+
+    Args:
+        path: File to open in the session (.geo/.msh/.pos/.step).
+        timeout_s: Hard per-call timeout.
+    """
+    p = Path(path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return session_run_file(p, timeout_s=timeout_s)
+
+
+@mcp.tool()
+def gmsh_verify(path: str, check_jacobians: bool = True,
+                check_options: bool = False) -> dict:
+    """
+    Run ALL applicable gates on an artifact (run_matlab_test_file twin).
+
+    The one-call "test runner" for GMSH artifacts: a .msh gets the
+    structural + NaN/Inf + (default) Jacobian gates plus its sibling
+    .geo deep check; a .geo gets the deep launch check plus every
+    merged .msh. Returns a structured pass/fail report (passed /
+    failed gate lists, failed checks and first errors per gate).
+
+    Args:
+        path: .msh or .geo artifact.
+        check_jacobians: Run the gmsh getJacobians gate per .msh.
+        check_options: Also probe every .geo option assignment against
+                       the gmsh option database.
+    """
+    p = Path(path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return verify_artifact(p, check_jacobians=check_jacobians,
+                           check_options=check_options)
+
+
+@mcp.tool()
+def gmsh_probe_options(names: list) -> dict:
+    """
+    Ask gmsh ITSELF whether option names exist (subprocess probe).
+
+    Complements the static invalid-option lint: any typo or removed
+    option is caught, existing options report kind (number/string/
+    color) and default value. View[N].X is normalized to the View.X
+    template. ok=True only when every requested name exists.
+
+    Args:
+        names: Option names to verify (e.g. ["Mesh.NumSubEdges",
+               "View[0].Visible"]).
+    """
+    return probe_options([str(n) for n in names])
 
 
 @mcp.tool()

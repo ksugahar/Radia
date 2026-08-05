@@ -107,6 +107,16 @@ def _handle(req):
                 out["result"] = repr(value)
                 out["result_repr"] = True
         return out
+    if op == "open":
+        path = req.get("path", "")
+        gmsh.open(path)
+        out = _status()
+        out["opened"] = path
+        try:
+            out["bbox"] = list(gmsh.model.getBoundingBox(-1, -1))
+        except Exception:
+            out["bbox"] = None
+        return out
     if op == "shutdown":
         return {"ok": True, "bye": True}
     return {"ok": False, "error": f"unknown op: {op!r}"}
@@ -329,6 +339,24 @@ def session_exec(code: str,
     """
     session = GmshSession.get()
     out = session.call("exec", timeout_s=timeout_s, code=code)
+    out["session_pid"] = session._proc.pid
+    return out
+
+
+def session_run_file(path: str | Path,
+                     timeout_s: float = DEFAULT_CALL_TIMEOUT_S) -> dict[str, Any]:
+    """Open/run a file in the persistent session (run_matlab_file twin).
+
+    ``gmsh.open`` semantics: a ``.geo`` executes as a script (with its
+    ``.geo.opt`` autoload), ``.msh``/``.pos`` load models and views,
+    ``.step`` loads geometry.  Returns the post-open session status
+    (models, current model, view count) plus the global bounding box.
+    """
+    p = Path(path)
+    if not p.is_file():
+        return {"ok": False, "error": f"file not found: {p}"}
+    session = GmshSession.get()
+    out = session.call("open", timeout_s=timeout_s, path=str(p))
     out["session_pid"] = session._proc.pid
     return out
 

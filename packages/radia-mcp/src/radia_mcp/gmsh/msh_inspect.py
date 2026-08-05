@@ -19,6 +19,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator
 
+import json
+import tempfile
+
 from ._gmsh_subprocess import run_gmsh_json_subprocess
 
 # MSH element type registry: code -> (name, nodes_per_element, dim, order).
@@ -895,6 +898,99 @@ def field_stats(msh_path: str | Path,
 
 
 # ======================================================================
+# Public API: dynamic option-name verification
+# ======================================================================
+
+_PROBE_OPTIONS_SCRIPT = r"""
+import json
+import sys
+
+names_path, out_path = sys.argv[1], sys.argv[2]
+with open(names_path, encoding="utf-8") as f:
+    names = json.load(f)
+result = {"ok": False, "ran": False, "options": {}}
+try:
+    import gmsh
+    gmsh.initialize(["-noconfig"])
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for name in names:
+            entry = {"exists": False}
+            try:
+                entry["default"] = gmsh.option.getNumber(name)
+                entry["exists"] = True
+                entry["kind"] = "number"
+            except Exception:
+                try:
+                    entry["default"] = gmsh.option.getString(name)
+                    entry["exists"] = True
+                    entry["kind"] = "string"
+                except Exception:
+                    try:
+                        entry["default"] = list(gmsh.option.getColor(name))
+                        entry["exists"] = True
+                        entry["kind"] = "color"
+                    except Exception:
+                        pass
+            result["options"][name] = entry
+        result["ok"] = True
+        result["ran"] = True
+    finally:
+        gmsh.finalize()
+except Exception as exc:
+    result["error"] = f"{type(exc).__name__}: {exc}"
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(result, f)
+"""
+
+
+def _normalize_option_name(name: str) -> str:
+    """``View[3].Visible`` -> ``View.Visible``: the gmsh option database
+    stores indexed options as templates without the index."""
+    return re.sub(r"\[\d+\]", "", name)
+
+
+def probe_options(names: list[str],
+                  timeout_s: float = 120.0) -> dict[str, Any]:
+    """Ask gmsh ITSELF whether option names exist (subprocess).
+
+    Complements the static ``INVALID_GEO_OPTIONS`` list: any typo or
+    removed option is caught, and existing options report their kind
+    (number/string/color) and default value.  ``ok`` is True only when
+    every requested name exists.
+    """
+    requested = [str(n) for n in names]
+    normalized: dict[str, list[str]] = {}
+    for name in requested:
+        normalized.setdefault(_normalize_option_name(name), []).append(name)
+
+    with tempfile.TemporaryDirectory(prefix="radia_mcp_gmsh_opts_") as work:
+        names_path = Path(work) / "names.json"
+        names_path.write_text(json.dumps(sorted(normalized)),
+                              encoding="utf-8")
+        raw = run_gmsh_json_subprocess(
+            _PROBE_OPTIONS_SCRIPT, [str(names_path)],
+            timeout_s=timeout_s, prefix="radia_mcp_gmsh_opts_")
+    if not raw.get("ran"):
+        return raw
+
+    options: dict[str, Any] = {}
+    missing: list[str] = []
+    for norm, originals in normalized.items():
+        entry = raw["options"].get(norm, {"exists": False})
+        for original in originals:
+            options[original] = {**entry, "normalized": norm}
+            if not entry.get("exists"):
+                missing.append(original)
+    return {"ok": not missing, "ran": True, "options": options,
+            "missing": sorted(missing)}
+
+
+_OPTION_ASSIGN_RE = re.compile(
+    r"^([A-Za-z]+(?:\.[A-Za-z0-9_\[\]]+)+)\s*=")
+
+
+# ======================================================================
 # Public API: directory audit
 # ======================================================================
 
@@ -1139,7 +1235,8 @@ def _count_views_light(msh: Path) -> int:
     return len(groups)
 
 
-def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
+def validate_geo(geo_path: str | Path, deep: bool = True,
+                 check_options: bool = False) -> dict[str, Any]:
     """Validate a .geo launch/companion file before opening it in GMSH.
 
     Checks that every ``Merge "..."`` target exists on disk and that no
@@ -1147,6 +1244,9 @@ def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
     (default) the merged .msh files are scanned for their view count so
     out-of-range ``View[N]`` references -- the classic "opens black"
     bug -- are caught, and the exact-autoload sidecars are reported.
+    ``check_options=True`` additionally probes EVERY option assignment
+    in the file against the gmsh option database (subprocess), catching
+    typos beyond the static known-invalid list.
     """
     path = Path(geo_path)
     if not path.is_file():
@@ -1159,6 +1259,7 @@ def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
     warnings: list[str] = []
     merge_targets: list[dict[str, Any]] = []
     invalid_options: list[dict[str, Any]] = []
+    option_assignments: list[dict[str, Any]] = []
     max_view_index = -1
     numsubedges: int | None = None
 
@@ -1166,6 +1267,10 @@ def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
         stripped = raw.split("//")[0].strip()
         if not stripped:
             continue
+
+        m = _OPTION_ASSIGN_RE.match(stripped)
+        if m:
+            option_assignments.append({"line": lineno, "name": m.group(1)})
 
         m = re.match(r'Merge\s+"([^"]+)"', stripped)
         if m:
@@ -1207,9 +1312,31 @@ def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
         "path": str(path),
         "merge_targets": merge_targets,
         "invalid_options": invalid_options,
+        "option_assignments": option_assignments,
         "max_view_index": max_view_index,
         "numsubedges": numsubedges,
     }
+
+    if check_options and option_assignments:
+        probe = probe_options([a["name"] for a in option_assignments])
+        if not probe.get("ran"):
+            checks["option_names_exist"] = False
+            errors.append(
+                f"check_options requested but the probe could not run: "
+                f"{probe.get('error')}")
+        else:
+            missing = set(probe["missing"])
+            checks["option_names_exist"] = not missing
+            for assignment in option_assignments:
+                info = probe["options"].get(assignment["name"], {})
+                assignment["exists"] = bool(info.get("exists"))
+                if info.get("kind"):
+                    assignment["kind"] = info["kind"]
+                if assignment["name"] in missing:
+                    errors.append(
+                        f"L{assignment['line']}: option "
+                        f"{assignment['name']} does not exist in this "
+                        f"gmsh (typo or removed)")
 
     if deep:
         total_views = 0

@@ -303,6 +303,34 @@ def _mesh_options_body(manifest: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def cut_plane_option_values(cut_plane: dict[str, Any] | None) -> dict[str, float]:
+    """Normalized cut-plane state as {gmsh option name: numeric value}.
+
+    Shared with the renderer: the same cut_plane dict accepted by the
+    launch-artifact contract can be applied through option.setNumber.
+    """
+    cut = _normalize_cut_plane(cut_plane)
+    if not cut["enabled"]:
+        return {"Mesh.Clip": 0.0}
+    normal = cut["normal"]
+    norm = sum(float(x) ** 2 for x in normal) ** 0.5
+    if norm <= 0:
+        raise ValueError("cut plane normal must be nonzero")
+    n = [float(x) / norm for x in normal]
+    return {
+        "General.Clip0A": n[0],
+        "General.Clip0B": n[1],
+        "General.Clip0C": n[2],
+        "General.Clip0D": float(cut["offset"]),
+        "General.ClipFactor": 5.0,
+        "General.ClipWholeElements": float(_bool(cut["whole_elements"])),
+        "General.ClipOnlyVolume": float(_bool(cut["only_volume"])),
+        "General.ClipOnlyDrawIntersectingVolume": float(
+            _bool(cut["only_draw_intersecting_volume"])),
+        "Mesh.Clip": 1.0,
+    }
+
+
 def _cut_plane_lines(cut_plane: dict[str, Any]) -> list[str]:
     if not cut_plane.get("enabled"):
         return ["Mesh.Clip = 0;"]

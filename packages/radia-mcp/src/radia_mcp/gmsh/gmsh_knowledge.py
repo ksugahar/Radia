@@ -256,7 +256,6 @@ Options can be set in:
 | `General.Verbosity` | 5 | Verbosity (0-99) |
 | `General.Terminal` | 0 | Terminal output |
 | `General.Orthographic` | 1 | Orthographic projection (1=ortho, 0=perspective) |
-| `General.ConfirmQuit` | 1 | Ask before quit (set 0 to disable) |
 | `General.SmallAxes` | 1 | Show small axes indicator in corner |
 | `General.Axes` | 0 | Show full axes (0=none, 1=simple axes, 2=box) |
 | `General.AxesMikado` | 0 | Mikado-style axes |
@@ -366,7 +365,8 @@ Mesh.Color.One         = {204,38,38};
 | `View.GlyphLocation` | 1 | Glyph location (1=centroid, 2=node) |
 | `View.Light` | 1 | Enable lighting |
 | `View.SmoothNormals` | 0 | Smooth normals |
-| `View.ArrowScale` | 20 | Arrow scale factor |
+| `View.ArrowSizeMax` | 20 | Max arrow size in pixels (`ArrowScale` was the pre-4.x name) |
+| `View.ArrowSizeMin` | 20 | Min arrow size in pixels (set = Max for fixed-size arrows) |
 
 ## Post-Processing Options
 | Option | Default | Description |
@@ -976,6 +976,19 @@ GMSH_RADIA_WORKFLOW = """
 
 ## 0. AI-Driven Inspection, Validation, Rendering (radia-mcp tools)
 
+The server follows the matlab-mcp-core-server verb structure (the
+MathWorks official MATLAB MCP server): a small set of core verbs over a
+lazily-started persistent engine session, with domain tools around it.
+
+| matlab-mcp-core-server | mcp-server-gmsh | Notes |
+|---|---|---|
+| detect_matlab_toolboxes | `gmsh_detect` | version, build features, REAL graphics probe, session state |
+| evaluate_matlab_code | `gmsh_exec` | stateful evaluate in the persistent worker |
+| run_matlab_file | `gmsh_run_file` | gmsh.open in the session (.geo executes, .msh/.step load) |
+| run_matlab_test_file | `gmsh_verify` | one-call structured pass/fail over all applicable gates |
+| check_matlab_code | `lint_gmsh_script` | static policy lint (+ `gmsh_probe_options` for dynamic option names) |
+| (session modes new/auto/existing) | lazy auto singleton | gmsh has no external attach; crash/hang kills only the worker |
+
 Before opening anything in the GUI, an agent can verify and render GMSH
 artifacts headlessly via mcp-server-gmsh:
 
@@ -1198,9 +1211,14 @@ is visible programmatically.
 **Fix**: Either define Physical Groups, or use `Mesh.SaveAll = 1`.
 By default, only elements in Physical Groups are saved.
 
-## 3. Quit Confirmation Dialog
-**Problem**: "Do you really want to quit?" dialog appears every time.
-**Fix**: Set `General.ConfirmQuit = 0` in `%APPDATA%/gmsh.conf`.
+## 3. Stale Option Names from Older GMSH Versions
+**Problem**: Recipes copied from old tutorials set options that no
+longer exist (e.g. `General.ConfirmQuit`, `View.ArrowScale`) -- gmsh
+warns "unknown option" or a .geo merge errors out.
+**Fix**: Verify names against the installed gmsh with the MCP
+`gmsh_probe_options` tool (or `gmsh_validate_geo(check_options=True)`
+for a whole .geo). Known renames: `View.ArrowScale` ->
+`View.ArrowSizeMin`/`ArrowSizeMax`; `General.ConfirmQuit` was removed.
 
 ## 4. Console Encoding on Windows (cp932)
 **Problem**: Unicode characters cause errors in Japanese Windows.

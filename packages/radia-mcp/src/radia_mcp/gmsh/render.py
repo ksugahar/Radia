@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from ._gmsh_subprocess import run_gmsh_json_subprocess
-from .post_display import CAMERA_PRESETS
+from .post_display import CAMERA_PRESETS, cut_plane_option_values
 
 _RENDER_SCRIPT = r"""
 import json
@@ -73,6 +73,10 @@ try:
                 gmsh.option.setNumber(f"View[{i}].AdaptVisualizationGrid", 1)
                 gmsh.option.setNumber(f"View[{i}].MaxRecursionLevel", 2)
                 gmsh.option.setNumber(f"View[{i}].TargetError", 1e-4)
+
+        if cfg.get("clip_views"):
+            for i in range(n_views):
+                gmsh.option.setNumber(f"View[{i}].Clip", 1)
 
         for name, val in (cfg.get("options") or {}).items():
             gmsh.option.setNumber(name, float(val))
@@ -201,6 +205,20 @@ def _run_render(cfg: dict[str, Any], timeout_s: float) -> dict[str, Any]:
             timeout_s=timeout_s, prefix="radia_mcp_gmsh_render_")
 
 
+def _merge_cut_plane(cut_plane: dict[str, Any] | None,
+                     options: dict[str, float] | None
+                     ) -> tuple[dict[str, float], bool]:
+    """Fold a structured cut_plane into raw options (user options win)."""
+    merged: dict[str, float] = {}
+    clip_views = False
+    if cut_plane is not None:
+        clip_options = cut_plane_option_values(cut_plane)
+        clip_views = clip_options.get("Mesh.Clip") == 1.0
+        merged.update(clip_options)
+    merged.update(options or {})
+    return merged, clip_views
+
+
 def render_png(path: str | Path,
                png_out: str | Path | None = None, *,
                width: int = 1000, height: int = 800,
@@ -208,6 +226,7 @@ def render_png(path: str | Path,
                camera_preset: str | None = None,
                rotation: list[float] | None = None,
                time_step: int | None = None,
+               cut_plane: dict[str, Any] | None = None,
                options: dict[str, float] | None = None,
                string_options: dict[str, str] | None = None,
                auto_mesh_display: bool = True,
@@ -217,6 +236,8 @@ def render_png(path: str | Path,
 
     Opening a ``.geo`` auto-loads its exact ``.geo.opt`` sidecar, so the
     launch artifact renders exactly as a user double-click would show it.
+    ``cut_plane`` takes the same structured dict as the post-display
+    contract ({enabled, normal, offset, ...}); views get Clip=1.
     """
     src = Path(path)
     if not src.is_file():
@@ -224,6 +245,7 @@ def render_png(path: str | Path,
     out = Path(png_out) if png_out is not None else src.with_suffix(".png")
     out.parent.mkdir(parents=True, exist_ok=True)
 
+    merged_options, clip_views = _merge_cut_plane(cut_plane, options)
     cfg = {
         "mode": "png",
         "path": str(src),
@@ -233,10 +255,11 @@ def render_png(path: str | Path,
         "numsubedges": int(numsubedges),
         "rotation": _resolve_rotation(camera_preset, rotation),
         "time_step": time_step,
-        "options": options or {},
+        "options": merged_options,
         "string_options": string_options or {},
         "auto_mesh_display": bool(auto_mesh_display),
         "adapt_views": bool(adapt_views),
+        "clip_views": clip_views,
     }
     result = _run_render(cfg, timeout_s)
     result["input"] = str(src)
@@ -271,6 +294,7 @@ def export_animation(path: str | Path,
                      numsubedges: int = 4,
                      camera_preset: str | None = None,
                      rotation: list[float] | None = None,
+                     cut_plane: dict[str, Any] | None = None,
                      options: dict[str, float] | None = None,
                      string_options: dict[str, str] | None = None,
                      adapt_views: bool = True,
@@ -297,6 +321,7 @@ def export_animation(path: str | Path,
         temp_frames = tempfile.mkdtemp(prefix="radia_mcp_gmsh_frames_")
         frames_dir = Path(temp_frames)
 
+    merged_options, clip_views = _merge_cut_plane(cut_plane, options)
     cfg = {
         "mode": "animation",
         "path": str(src),
@@ -309,11 +334,12 @@ def export_animation(path: str | Path,
         "view_indices": view_indices,
         "num_steps": num_steps,
         "delay_ms": int(delay_ms),
-        "options": options or {},
+        "options": merged_options,
         "string_options": string_options or {},
         "auto_mesh_display": False,
         "adapt_views": bool(adapt_views),
         "link_views": bool(link_views),
+        "clip_views": clip_views,
     }
     try:
         result = _run_render(cfg, timeout_s)
