@@ -1000,6 +1000,7 @@ artifacts headlessly via mcp-server-gmsh:
 | `gmsh_field_stats` | Per-view, per-step field statistics without a GUI: scalar min/max/mean/rms, vector magnitude stats + pooled component min/max, NaN/Inf counts (validate_msh also gates on finiteness). |
 | `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, per-view min/max relative drift). |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory (recursive), optional per-file Jacobian gate: one call answers "are the repo's mesh artifacts sound?". |
+| `gmsh_mesh_quality` | Scaled-Jacobian (min detJ / max detJ per element) distribution + threshold gate: catches non-inverted but degenerating curved elements the sign gate cannot see. |
 
 CLI twin for CI/hooks (exit 0 = ok, 1 = needs attention):
 
@@ -1023,10 +1024,33 @@ interactive interrogation of a loaded model. Never call gmsh.fltk inside
 the session -- screenshots belong to `gmsh_render`.
 
 Recommended order after any exporter change: inspect -> validate (with
-Jacobians for order>=2) -> validate the .geo -> render a PNG and look at
-it. The 2026-08 audit found all four docs/gmsh_animation TET10 meshes
-systematically inverted (every Gauss point det<=0) -- a bug invisible in
-GUI display, caught only by the Jacobian gate.
+Jacobians for order>=2) -> mesh_quality for curved meshes -> validate
+the .geo -> render a PNG and look at it. The 2026-08 audit found all
+four docs/gmsh_animation TET10 meshes systematically inverted (every
+Gauss point det<=0) -- a bug invisible in GUI display, caught only by
+the Jacobian gate. `gmsh_mesh_quality` extends that gate to
+non-inverted-but-degenerating curved elements (scaled Jacobian).
+
+### EM cross-section render recipe (one call)
+
+```python
+gmsh_render(
+    "em_case.msh",
+    camera_preset="positive_y_oblique",
+    cut_plane={"enabled": True, "normal": [-1, 0, 0], "offset": 0.0,
+               "whole_elements": True, "only_volume": True},
+    options={"Mesh.ColorCarousel": 2,      # color by physical group
+             "Mesh.VolumeFaces": 1, "Mesh.VolumeEdges": 1,
+             "Mesh.SurfaceFaces": 0, "Mesh.SurfaceEdges": 0},
+)
+```
+
+Interior cross-section at x=0 with per-material coloring -- the
+standard electromagnet/IH mesh-review view (white background and
+NumSubEdges=4 are already the tool defaults). Remember pitfall 1c:
+these explicit Mesh.* overrides matter because gmsh.open() may flip
+SurfaceFaces on its own. Hide air regions with a sibling .geo
+(`Hide { Volume{...}; }`) when they occlude the parts.
 
 ## 1. Field Visualization (Primary Use)
 
