@@ -13,11 +13,15 @@ This uses Radia's WORKING PEEC solver - no custom implementation needed!
 """
 
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+from pathlib import Path
+
+# Repo-local import path (works before `pip install radia`): put <repo>/src on
+# sys.path so `radia.peec_matrices` resolves from the source tree.
+_repo = next(p for p in Path(__file__).resolve().parents
+             if (p / "src" / "radia").exists())
+sys.path.insert(0, str(_repo / "src"))
 
 import numpy as np
-from pathlib import Path
 
 GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
 sys.path.insert(0, str(GMSH_MODELS))
@@ -30,7 +34,7 @@ print("=" * 70)
 
 # Import existing PEEC module
 try:
-    from peec_matrices import PEECBuilder
+    from radia.peec_matrices import PEECBuilder
     print("\nUsing C++ PEEC implementation (optimized)")
 except ImportError:
     print("\nERROR: PEEC C++ module not available")
@@ -44,7 +48,7 @@ if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
     print("\nGenerate with:")
     print("  cd gmsh_models")
-    print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_coil_cubit.py')
+    print("  python generate_coil_cubit.py   # drives Coreform Cubit headless")
     sys.exit(1)
 
 print(f"\n[1] Reading GMSH mesh fixture: {mesh_file.name}")

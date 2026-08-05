@@ -11,11 +11,11 @@ Coreform Cubit → .msh ファイル → Python (NGSolve) → PEEC 解析
 ## 1. Generate Mesh (Cubit → GMSH)
 
 ```bash
-# Run with Coreform Cubit's Python
-"${CUBIT_PATH:-<Coreform Cubit 2025.8+>/bin}/python3/python.exe" generate_coil_cubit.py
+# System Python 3.12; Cubit is auto-detected and driven headless
+python generate_coil_cubit.py
 ```
 
-**Output**: `circular_coil.msh` (GMSH v2.2 format, surface mesh only)
+**Output**: `circular_coil.msh` (GMSH v4.1 format, surface mesh only)
 
 ## 2. View Mesh in GMSH GUI
 
@@ -42,7 +42,7 @@ python demo_gmsh_to_peec.py
 |------|-------------|
 | `generate_coil_cubit.py` | Cubit script to generate toroidal coil surface mesh (basic) |
 | `generate_coil_with_ports.py` | Cubit script with PORT definitions for PEEC |
-| `circular_coil.msh` | Generated GMSH v2.2 mesh file (surface only) |
+| `circular_coil.msh` | Generated GMSH v4.1 mesh file (surface only) |
 | `circular_coil_with_ports.msh` | GMSH mesh with port physical groups |
 | `PORT_DEFINITION.md` | Guide for PEEC port specification |
 | `README.md` | This file |
@@ -65,12 +65,11 @@ python demo_gmsh_to_peec.py
 | Wire height | 4 mm | Axial direction |
 | Mesh size | 1 mm | Target element size |
 
-## Format: GMSH v2.2
+## Format: GMSH v4.1
 
-**Why v2.2**:
-- GMSH GUI visualization
-- Maximum compatibility
-- Simpler structure than v4.1
+All `.msh` files in this directory are **GMSH MSH v4.1 ASCII** (the lab-wide
+standard; v2.2 was retired repo-wide, see the GMSH .msh Format Version Policy
+2026-04-15). `gmsh_ascii_reader.py` reads v4.1 only.
 
 **Note**: For NGSolve FEM computation, use `export netgen "mesh.vol"` (.vol format) instead of .msh. The .msh format is used here for GMSH visualization and PEEC surface mesh input only.
 
