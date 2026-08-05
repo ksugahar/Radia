@@ -105,6 +105,34 @@ verifyTrue(testCase, contains(string(wpButton.Callback), "workpiece"));
 verifyTrue(testCase, contains(string(coilButton.Callback), "coil"));
 end
 
+function testMaskPublishesBuiltInAssemblySettings(testCase)
+[model, closer] = freshModel(); %#ok<ASGLU>
+block = radia.simulink.addIHGeometryUpdateBlock(model);
+mask = Simulink.Mask.get(block);
+names = ["frequency_hz", "coil_sigma", "workpiece_sigma", ...
+    "workpiece_mu_r", "density", "heat_capacity", ...
+    "thermal_conductivity", "convection", "initial_temperature_K", ...
+    "sample_time_s", "workpiece_label", "coil_source_label", ...
+    "coil_body_label", "coil_sink_label", "peec_n_peri", ...
+    "peec_proximity", ...
+    "coupling_mode", "workpiece_bem_backend", "python_executable"];
+for name = names
+    verifyNotEmpty(testCase, mask.getParameter(name));
+end
+verifyEqual(testCase, string(get_param(block, "frequency_hz")), "7000");
+verifyEqual(testCase, string(get_param(block, "workpiece_label")), "sibc");
+verifyEqual(testCase, string(mask.getParameter("workpiece_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(mask.getParameter("coil_body_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(mask.getParameter("coil_source_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(mask.getParameter("coil_sink_label").Enabled), ...
+    "off");
+verifyEqual(testCase, string(get_param(block, "assemble_fcn")), "");
+verifyTrue(testCase, contains(string(mask.Description), "built-in"));
+end
+
 function testBrowseAssignsAbsoluteWorkpieceAndCoilPaths(testCase)
 [~, cleanupDir, wp, coil] = fixture(); %#ok<ASGLU>
 [model, closer] = freshModel(); %#ok<ASGLU>
@@ -232,7 +260,7 @@ writelines([ ...
     "save(configFile, ""config"");"; ...
     "end"], fullfile(fcnDir, "test_geometry_assemble.m"));
 addpath(fcnDir);
-restorePath = onCleanup(@() rmpath(fcnDir)); %#ok<NASGU>
+restorePath = onCleanup(@() rmpath(fcnDir));
 block = model + "/Geometry Update";
 set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
     "assemble_fcn", "test_geometry_assemble", ...
@@ -247,6 +275,43 @@ verifyTrue(testCase, workspace.hasVariable("radia_ih_config"));
 
 status = radia.simulink.updateIHGeometry(model);
 verifyEqual(testCase, string(status.reason), "up-to-date");
+end
+
+function testBlankConfigIsDerivedAndPhysicalChangeRebuilds(testCase)
+[work, cleanupDir, wp, coil] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+fcnDir = fullfile(work, "derived-fcn");
+mkdir(fcnDir);
+writelines([ ...
+    "function test_geometry_json_assemble(wpVol, coilFile, configFile) %#ok<INUSD>"; ...
+    "config = radia.simulink.makeIHNativeSmokeConfig();"; ...
+    "fid = fopen(configFile, 'w');"; ...
+    "closer = onCleanup(@() fclose(fid)); %#ok<NASGU>"; ...
+    "fwrite(fid, jsonencode(config), 'char');"; ...
+    "end"], fullfile(fcnDir, "test_geometry_json_assemble.m"));
+addpath(fcnDir);
+restorePath = onCleanup(@() rmpath(fcnDir));
+block = model + "/Geometry Update";
+set_param(block, "wp_vol", char(wp), "coil_file", char(coil), ...
+    "assemble_fcn", "test_geometry_json_assemble", ...
+    "config_file", "", "auto_rebuild", "on");
+
+first = radia.simulink.updateIHGeometry(model);
+derived = string(first.config_file);
+verifyTrue(testCase, first.rebuilt);
+verifyTrue(testCase, isfile(derived));
+verifyTrue(testCase, endsWith(derived, "wp_coil_ih_native.json"));
+verifyEqual(testCase, string(get_param(block, "config_file")), derived);
+
+set_param(block, "frequency_hz", "8000");
+second = radia.simulink.updateIHGeometry(model);
+verifyTrue(testCase, second.rebuilt);
+verifyEqual(testCase, second.revision, 2);
+sidecar = jsondecode(fileread(derived + ".fingerprint.json"));
+verifyEqual(testCase, string(sidecar.schema), ...
+    "radia.ih.simulink.geometry_fingerprint.v2");
+verifyEqual(testCase, string(sidecar.assembly_options.frequency_hz), "8000");
 end
 
 function testAmbiguousAssemblerErrors(testCase)

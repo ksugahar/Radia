@@ -1,0 +1,13 @@
+{
+  "schema": "radia.vol-label-contract.v1",
+  "application": "radia-ih-workpiece",
+  "strict_labels": true,
+  "required": {
+    "materials": ["workpiece"],
+    "boundaries": ["sibc"]
+  },
+  "allowed": {
+    "materials": ["workpiece"],
+    "boundaries": ["sibc"]
+  }
+}

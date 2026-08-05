@@ -2302,7 +2302,7 @@ def _build_coil_bbox_mesh(filament_paths, expand=2.5, n_cells=18):
     Box-shaped overlay on top of the workpiece air domain.
     """
     from netgen.occ import Box, Pnt, OCCGeometry
-    from ngsolve import Mesh
+    from ngsolve import Mesh, TaskManager
 
     pts_list = []
     for path in filament_paths:
