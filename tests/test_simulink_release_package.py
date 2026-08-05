@@ -131,6 +131,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
     assert manifest["feature_toolbox_requirements"] == {
         "adjoint_topology_optimization": ["Optimization Toolbox"],
+        "electromagnet_topology_optimization": ["Optimization Toolbox"],
         "stream_function_topology_optimization": ["Optimization Toolbox"],
     }
     assert manifest["application_batch_backend"] == (
@@ -141,6 +142,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
     assert verify_module.FULL_REQUIRED_MEMBERS <= names
+    assert "matlab/radia_electromagnet.slx" in names
     assert "matlab/radia_maglev.slx" in names
     assert "matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
     assert "matlab/python_api_parity_manifest.json" in names

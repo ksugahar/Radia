@@ -98,8 +98,8 @@
       "id": "optimization-matlab",
       "patterns": ["hcurl_topology_optimization.py", "magnetic_shield_optimization.py"],
       "classification": "matlab-native",
-      "matlab": ["matlab/+radia/+topopt/optimizeHCurlEddyBubbleHexSheet.m", "matlab/+radia/+topopt/optimizeVIMLP.m"],
-      "notes": "MATLAB owns the production optimization loops and uses the same MEX operators."
+      "matlab": ["matlab/+radia/+topopt/optimizeHCurlEddyBubbleHexSheet.m", "matlab/+radia/+topopt/optimizeVIMLP.m", "matlab/+radia/+topopt/makeElectromagnetAdjointRunner.m"],
+      "notes": "MATLAB owns the production optimization loops and uses the same MEX operators. Electromagnet density topology uses one VIM state solve and one analytic adjoint solve per MMA/SQP gradient evaluation."
     },
     {
       "id": "topology-optimization-python",

@@ -46,6 +46,8 @@ assignin("base","radia_field_study_bus",defaultStudyRuntime);
 radia.simulink.makeFieldStudyBusObject(defaultStudyRuntime,Name="RadiaStudyBus");
 assignin("base","radia_adjoint_runner", ...
     radia.topopt.makeAdjointDemoRunner());
+assignin("base","radia_electromagnet_adjoint_runner", ...
+    radia.topopt.makeElectromagnetReferenceRunner());
 assignin("base","radia_streamfunction_adjoint_runner", ...
     radia.topopt.makeStreamFunctionAdjointDemoRunner());
 motorGrid=[0;pi];
@@ -62,16 +64,19 @@ assignin("base","radia_motor_angle_family", ...
 new_system(name,"Library");
 applications=addEmptySubsystem(name,"Applications",[70 40 410 285]);
 addApplicationBlock(applications,"Electromagnet","em",[45 30 345 80]);
-addApplicationBlock(applications,"PCB PEEC","pcb",[45 100 345 150]);
-addApplicationBlock(applications,"Motor","motor",[45 170 345 220]);
-addApplicationBlock(applications,"Stream Function","streamfunction",[45 240 345 290]);
-addIHNativeBlock(applications,"Induction Heating",[45 310 345 360]);
+radia.simulink.addElectromagnetOptimizationSubsystem(applications, ...
+    "Electromagnet Topology Optimization",[45 100 375 190]);
+addApplicationBlock(applications,"PCB PEEC","pcb",[45 220 345 270]);
+addApplicationBlock(applications,"Motor","motor",[45 290 345 340]);
+addApplicationBlock(applications,"Stream Function","streamfunction", ...
+    [45 360 345 410]);
+addIHNativeBlock(applications,"Induction Heating",[45 430 345 480]);
 radia.simulink.addStreamFunctionOptimizationSubsystem(applications, ...
-    "Stream Function Optimization",[45 380 345 470]);
+    "Stream Function Optimization",[45 500 345 590]);
 radia.simulink.addMagLevCLNBlock(applications, ...
-    BlockName="Magnetic Levitation",Position=[45 500 345 570], ...
+    BlockName="Magnetic Levitation",Position=[45 620 345 690], ...
     FamilyExpression="radia.simulink.makeMagLevSmokeFamily()");
-addApplicationBlock(applications,"Field Study","field",[45 600 345 650]);
+addApplicationBlock(applications,"Field Study","field",[45 720 345 770]);
 
 materials=addEmptySubsystem(name,"Material Models",[70 570 330 660]);
 addBHBlock(materials,"Temperature-Dependent BH",[45 35 285 105]);

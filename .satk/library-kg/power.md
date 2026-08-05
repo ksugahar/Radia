@@ -15,5 +15,6 @@ Use these blocks for power & motor blocks.
 
 ## Related Categories
 
-- [[plant-models]]
 - [[uncategorized]]
+- [[plant-models]]
+- [[signal-processing]]

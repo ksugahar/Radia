@@ -32,6 +32,10 @@
       "title": "Electromagnet",
       "state": "active-simulink-block",
       "block": "radia_simulink_library/Applications/Electromagnet",
+      "optimization_block": "radia_simulink_library/Applications/Electromagnet Topology Optimization",
+      "optimization_sample": "matlab/radia_electromagnet.slx",
+      "optimization_generator": "radia.simulink.buildElectromagnetOptimizationModel",
+      "optimization_backend": "MATLAB-native VIM density adjoint with one state solve and one adjoint solve per gradient evaluation, followed by MMA or SQP. The explicit batch-analysis trigger remains separate.",
       "design": "radia.em_design.EMDesignSpec",
       "notebook": null,
       "headless": [
@@ -105,6 +109,7 @@
       "design": "radia.maglev.MovingHCurlCLNFamily",
       "backend": "matlab-level2-common-basis-cln",
       "backend_policy": "A readable Level-2 MATLAB S-Function advances a shared-coordinate, position-dependent HCurl/CLN reduced state and evaluates the exported Lorentz-force operator. Family assembly occurs before simulation and Python is never called per step.",
+      "optimization_scope": "control optimization only; material topology optimization belongs to radia-em",
       "notebook": null,
       "headless": [
         "src/radia/vim/_matlab_bridge.py",
