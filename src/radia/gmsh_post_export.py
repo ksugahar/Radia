@@ -240,8 +240,13 @@ _GMSH_NODES_PER_TYPE = {
 }
 
 # GMSH reference coordinates -> NGSolve reference coordinates mapping.
-# GMSH TET: same as NGSolve (0,0,0)-(1,0,0)-(0,1,0)-(0,0,1)
-#   but vertex ordering differs (handled by _NGSOLVE_TO_GMSH_NODE_ORDER)
+# GMSH TET: identical reference simplex (0,0,0)-(1,0,0)-(0,1,0)-(0,0,1);
+#   with _NGSOLVE_TO_GMSH_NODE_ORDER['TET'] = [3,0,1,2] the GMSH corner i
+#   sits exactly at NGSolve reference vertex i, so the map is identity.
+#   (NGSolve lists tet vertices so that ref(1,0,0)->v[0], ref(0,1,0)->v[1],
+#   ref(0,0,1)->v[2], ref(0,0,0)->v[3]; writing corners in el.vertices
+#   order produced a NEGATIVE Jacobian for every element -- the 2026-08
+#   docs/gmsh_animation inversion incident.)
 # GMSH HEX: (-1,-1,-1) to (1,1,1); NGSolve: (0,0,0) to (1,1,1)
 #   transform: ng = (gmsh + 1) / 2
 # GMSH PYR: (-1,-1,0) base, (0,0,1) apex; NGSolve: (0,0,0)-(1,0,0)-(1,1,0)-(0,1,0)-(0,0,1)
@@ -251,23 +256,40 @@ def _gmsh_ref_to_ngsolve_ref(et_name, gmsh_x, gmsh_y, gmsh_z):
     """Convert GMSH reference coordinates to NGSolve reference coordinates.
 
     GMSH and NGSolve use different vertex numbering in reference space.
-    For TET: GMSH v0=(0,0,0) maps to NGSolve v[0] at ref(1,0,0).
-    The affine transform is: ng = (1-gx-gy-gz, gx, gy) for the
-    3 independent reference coordinates (4th is 1-sum).
+    For TET the two reference simplices coincide point-by-point under the
+    [3,0,1,2] corner permutation, so no coordinate transform is needed.
     """
     gx, gy, gz = gmsh_x, gmsh_y, gmsh_z
     if et_name == 'TET':
-        # GMSH (0,0,0)->ng(1,0,0), (1,0,0)->ng(0,1,0),
-        # (0,1,0)->ng(0,0,1), (0,0,1)->ng(0,0,0)
-        return (1 - gx - gy - gz, gx, gy)
+        # Identity: GMSH corner i == NGSolve reference vertex i under
+        # _NGSOLVE_TO_GMSH_NODE_ORDER['TET'] = [3,0,1,2].
+        return (gx, gy, gz)
     elif et_name == 'TRIG':
         return (1 - gx - gy, gx, 0)
-    elif et_name == 'HEX' or et_name == 'QUAD':
+    elif et_name == 'HEX':
+        # Must match _NGSOLVE_TO_GMSH_NODE_ORDER['HEX'] = [0,1,5,4,3,2,6,7]:
+        # the trilinear map with T(gmsh corner g) == NGSolve ref of
+        # el.vertices[perm[g]] swaps the y and z axes (probed 2026-08 on
+        # MakeStructured3DMesh; the previous identity-axes transform put
+        # every Hex27 high-order node on the wrong edge/face -> all
+        # Jacobian points negative, volume -7/9 for the unit cube).
+        return ((gx + 1) / 2, (gz + 1) / 2, (gy + 1) / 2)
+    elif et_name == 'QUAD':
         return ((gx + 1) / 2, (gy + 1) / 2, (gz + 1) / 2)
     elif et_name == 'PYRAMID':
-        return ((gx + 1) / 2, (gy + 1) / 2, gz)
+        # Bijection between the GMSH frustum-style reference pyramid
+        # (|gx|,|gy| <= 1-gz) and NGSolve's (0 <= x,y <= 1-z): shrink the
+        # xy square towards the apex.  Corners AND apex map exactly onto
+        # NGSolve reference vertices with the identity corner permutation
+        # (probed 2026-08 on a hand-built netgen pyramid: el.vertices[i]
+        # sits at NGSolve ref vertex i).
+        return ((gx + 1 - gz) / 2, (gy + 1 - gz) / 2, gz)
     elif et_name == 'PRISM':
-        return (gx, gy, (gz + 1) / 2)
+        # Must match _NGSOLVE_TO_GMSH_NODE_ORDER['PRISM'] = [0,2,1,3,5,4]:
+        # triangle barycentric cycle (1-gx-gy, gy) plus the (-1,1) -> (0,1)
+        # z rescale (probed 2026-08; the previous identity triangle map
+        # was inconsistent with the corner permutation).
+        return (1 - gx - gy, gy, (gz + 1) / 2)
     return (gx, gy, gz)
 
 
@@ -304,11 +326,21 @@ def _get_gmsh_ref_points(et_name, order):
 
     return gmsh_type, ng_pts
 
+# GMSH corner position i holds NGSolve el.vertices[perm[i]].
+# TET is [3,0,1,2] (NOT identity): NGSolve's el.vertices listing order is
+# NEGATIVELY oriented as a GMSH tet (det[v1-v0,v2-v0,v3-v0] = -det(trafo)),
+# so writing corners in listing order inverts every element.  [3,0,1,2]
+# places corners at GMSH==NGSolve reference positions and keeps det > 0.
+# Verified via gmsh getJacobians (0 negative points, volume vs CAD).
 _NGSOLVE_TO_GMSH_NODE_ORDER = {
-    'TET': [0, 1, 2, 3],
+    'TET': [3, 0, 1, 2],
     'HEX': [0, 1, 5, 4, 3, 2, 6, 7],
     'PRISM': [0, 2, 1, 3, 5, 4],
-    'PYRAMID': [3, 2, 1, 0, 4],
+    # PYRAMID is identity: NGSolve pyramid vertices are listed in
+    # reference order (base counter-clockwise + apex), matching GMSH.
+    # The previous [3,2,1,0,4] reversed the base cycle -> negative
+    # Jacobian on every PYR5 (2026-08 audit).
+    'PYRAMID': [0, 1, 2, 3, 4],
     'TRIG': [0, 1, 2],
     'QUAD': [0, 1, 2, 3],
 }
@@ -986,13 +1018,14 @@ def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
         ref_verts = [(1, 0, 0), (0, 1, 0), (0, 0, 0),
                      (1, 0, 1), (0, 1, 1), (0, 0, 1)]
 
-    # Map GMSH vertex index -> NGSolve el.vertices index -> ref coord
-    ngsolve_verts = [v.nr for v in el.vertices]
-    perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(et_name, list(range(len(ngsolve_verts))))
-    # inv_perm: gmsh_local_idx -> ngsolve_local_idx
-    inv_perm = [0] * len(perm)
-    for i, p in enumerate(perm):
-        inv_perm[p] = i
+    # Map GMSH corner index -> NGSolve el.vertices index -> ref coord.
+    # reordered[g] = verts[perm[g]], so GMSH local g corresponds to
+    # NGSolve local perm[g].  (The pre-2026-08 code indexed the INVERSE
+    # permutation here; every permutation in the table happened to be an
+    # involution back then, which made the mix-up unobservable.  The TET
+    # fix [3,0,1,2] is not an involution, so the direction matters.)
+    perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
+        et_name, list(range(len(reordered))))
 
     for e0_gmsh, e1_gmsh in edge_table:
         # Global node IDs for this edge
@@ -1004,8 +1037,8 @@ def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
             conn.append(cache[edge_key])
         else:
             # Map GMSH local index -> NGSolve local index -> ref coord
-            ng0 = inv_perm[e0_gmsh]
-            ng1 = inv_perm[e1_gmsh]
+            ng0 = perm[e0_gmsh]
+            ng1 = perm[e1_gmsh]
             ref_mid = tuple(0.5 * (ref_verts[ng0][k] + ref_verts[ng1][k])
                             for k in range(3))
 
@@ -1057,13 +1090,9 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
     n_verts = len(reordered)
     n_total = len(ng_ref_pts)
 
-    # NGSolve reference coords for vertices
-    # Map: GMSH local vertex i -> NGSolve el.vertices index
-    perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
-        et_name, list(range(n_verts)))
-    inv_perm = [0] * len(perm)
-    for i, p in enumerate(perm):
-        inv_perm[p] = i
+    # Vertex nodes come straight from `reordered` (already in GMSH corner
+    # order); ng_ref_pts[i] below is likewise already expressed in NGSolve
+    # reference coordinates, so no further permutation is needed here.
 
     # Evaluate trafo at all high-order reference points
     trafo = mesh.GetTrafo(el)
