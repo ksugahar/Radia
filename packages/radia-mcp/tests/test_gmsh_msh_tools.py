@@ -10,6 +10,7 @@ import importlib.util
 import pytest
 
 from radia_mcp.gmsh.msh_inspect import (
+    field_stats,
     inspect_msh,
     validate_geo,
     validate_msh,
@@ -296,6 +297,79 @@ def test_validate_jacobians_detect_inverted_tet(tmp_path):
     assert jac["total_negative"] > 0
     assert result["checks"]["jacobians_positive"] is False
     assert result["ok"] is False
+
+
+# ======================================================================
+# Field value statistics + NaN/Inf gating
+# ======================================================================
+
+def test_field_stats_scalar_two_steps(tmp_path):
+    result = field_stats(_write(tmp_path, _BASE_MSH))
+
+    assert result["ok"] is True
+    assert len(result["views"]) == 1
+    view = result["views"][0]
+    assert view["name"] == "T"
+    assert view["steps"] == 2
+    step0 = view["per_step"][0]
+    assert step0["metric"] == "value"
+    assert step0["min"] == 1.0
+    assert step0["max"] == 4.0
+    assert step0["mean"] == pytest.approx(2.5)
+    assert step0["rms"] == pytest.approx((30.0 / 4.0) ** 0.5)
+    assert step0["nan"] == 0
+    step1 = view["per_step"][1]
+    assert step1["time"] == 0.5
+    assert step1["max"] == 4.5
+    assert view["overall"]["min"] == 1.0
+    assert view["overall"]["max"] == 4.5
+
+
+def test_field_stats_vector_magnitude(tmp_path):
+    vec = _BASE_MSH.split("$NodeData")[0] + (
+        "$NodeData\n1\n\"D\"\n1\n0.0\n3\n0\n3\n4\n"
+        "1 3.0 4.0 0.0\n2 0.0 0.0 1.0\n3 1.0 0.0 0.0\n4 0.0 2.0 0.0\n"
+        "$EndNodeData\n")
+    result = field_stats(_write(tmp_path, vec))
+
+    view = result["views"][0]
+    assert view["components"] == 3
+    step = view["per_step"][0]
+    assert step["metric"] == "magnitude"
+    assert step["max"] == 5.0        # |(3,4,0)|
+    assert step["min"] == 1.0
+    assert step["comp_min"] == 0.0
+    assert step["comp_max"] == 4.0
+
+
+def test_field_stats_view_name_filter_lists_available(tmp_path):
+    msh = _write(tmp_path, _BASE_MSH)
+    ok = field_stats(msh, view_name="T")
+    assert ok["ok"] is True and len(ok["views"]) == 1
+
+    missing = field_stats(msh, view_name="nope")
+    assert missing["ok"] is False
+    assert "'T'" in missing["error"] or "T" in missing["error"]
+
+
+def test_validate_detects_nan_values(tmp_path):
+    broken = _BASE_MSH.replace("3 3.0\n", "3 nan\n", 1)
+    result = validate_msh(_write(tmp_path, broken))
+
+    assert result["ok"] is False
+    assert result["checks"]["data_values_finite"] is False
+    assert any("NaN" in e for e in result["errors"])
+
+    stats = field_stats(tmp_path / "case.msh")
+    assert stats["views"][0]["overall"]["nan"] == 1
+
+
+def test_validate_detects_wrong_row_width(tmp_path):
+    broken = _BASE_MSH.replace("3 3.0\n", "3 3.0 9.9\n", 1)
+    result = validate_msh(_write(tmp_path, broken))
+
+    assert result["ok"] is False
+    assert result["checks"]["data_row_width_matches"] is False
 
 
 # ======================================================================

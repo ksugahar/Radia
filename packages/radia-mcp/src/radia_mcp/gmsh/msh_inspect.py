@@ -278,13 +278,14 @@ def _parse_elements(body: list[str]) -> tuple[dict[str, Any], list[str]]:
     return out, errors
 
 
-def _parse_data_section(kind: str, body: list[str], start_line: int) -> tuple[dict[str, Any], list[str]]:
+def _parse_data_section(kind: str, body: list[str], start_line: int,
+                        parse_values: bool = False) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     view: dict[str, Any] = {
         "section": kind, "start_line": start_line, "name": "",
         "time": None, "step": None, "components": None,
         "declared": None, "data_rows": 0, "tags": [],
-        "header_ok": True,
+        "header_ok": True, "value_stats": None,
     }
     rows = [ln.strip() for ln in body if ln.strip()]
     idx = 0
@@ -319,15 +320,62 @@ def _parse_data_section(kind: str, body: list[str], start_line: int) -> tuple[di
             f"${kind} \"{view['name']}\" @L{start_line}: integer-tag block "
             f"needs >=3 entries (step, components, count), got {len(ints)}")
 
+    ncomp = view["components"]
+    stats: dict[str, Any] | None = None
+    if parse_values:
+        stats = {"nan": 0, "inf": 0, "bad_width_rows": 0,
+                 "comp_min": None, "comp_max": None,
+                 "min": None, "max": None, "s1": 0.0, "s2": 0.0,
+                 "n_finite_rows": 0}
+
     for row in rows[idx:]:
         view["data_rows"] += 1
-        tok = row.split(None, 1)[0]
+        toks = row.split()
         try:
-            view["tags"].append(int(tok))
-        except ValueError:
+            view["tags"].append(int(toks[0]))
+        except (ValueError, IndexError):
             errors.append(
                 f"${kind} \"{view['name']}\" @L{start_line}: non-integer "
-                f"tag {tok!r} in data row")
+                f"tag {toks[0] if toks else row!r} in data row")
+            continue
+        if stats is None:
+            continue
+
+        # ElementNodeData rows carry an extra per-element node count.
+        vals_start = 2 if kind == "ElementNodeData" else 1
+        try:
+            vals = [float(t) for t in toks[vals_start:]]
+        except ValueError:
+            stats["bad_width_rows"] += 1
+            continue
+        if ncomp:
+            expected = ncomp
+            if kind == "ElementNodeData" and len(toks) > 1:
+                try:
+                    expected = ncomp * int(toks[1])
+                except ValueError:
+                    expected = None
+            if expected is not None and len(vals) != expected:
+                stats["bad_width_rows"] += 1
+        stats["nan"] += sum(1 for v in vals if math.isnan(v))
+        stats["inf"] += sum(1 for v in vals if math.isinf(v))
+        finite = [v for v in vals if math.isfinite(v)]
+        if not finite:
+            continue
+        lo, hi = min(finite), max(finite)
+        stats["comp_min"] = lo if stats["comp_min"] is None else min(stats["comp_min"], lo)
+        stats["comp_max"] = hi if stats["comp_max"] is None else max(stats["comp_max"], hi)
+        if len(vals) == len(finite):
+            # scalar: signed value; vector/tensor: euclidean magnitude
+            metric = vals[0] if ncomp == 1 and len(vals) == 1 else \
+                math.sqrt(sum(v * v for v in vals))
+            stats["min"] = metric if stats["min"] is None else min(stats["min"], metric)
+            stats["max"] = metric if stats["max"] is None else max(stats["max"], metric)
+            stats["s1"] += metric
+            stats["s2"] += metric * metric
+            stats["n_finite_rows"] += 1
+
+    view["value_stats"] = stats
     return view, errors
 
 
@@ -335,7 +383,7 @@ def _parse_data_section(kind: str, body: list[str], start_line: int) -> tuple[di
 # Whole-file parse
 # ======================================================================
 
-def _parse_msh(path: Path) -> dict[str, Any]:
+def _parse_msh(path: Path, parse_values: bool = False) -> dict[str, Any]:
     """Parse an MSH file into an internal structure (ASCII v4.x only)."""
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
@@ -394,7 +442,8 @@ def _parse_msh(path: Path) -> dict[str, Any]:
             parsed["elements"], errs = _parse_elements(body)
             parsed["errors"].extend(errs)
         elif name in _DATA_SECTIONS:
-            view, errs = _parse_data_section(name, body, start_line)
+            view, errs = _parse_data_section(name, body, start_line,
+                                             parse_values=parse_values)
             parsed["views_raw"].append(view)
             parsed["errors"].extend(errs)
     return parsed
@@ -530,7 +579,7 @@ def validate_msh(msh_path: str | Path,
                 "checks": {}, "errors": [f"file not found: {path}"],
                 "warnings": []}
 
-    parsed = _parse_msh(path)
+    parsed = _parse_msh(path, parse_values=True)
     errors: list[str] = list(parsed["section_errors"]) + list(parsed["errors"])
     warnings: list[str] = list(parsed["warnings"])
     checks: dict[str, bool] = {
@@ -608,6 +657,8 @@ def validate_msh(msh_path: str | Path,
         count_ok = True
         tags_ok = True
         comp_ok = True
+        finite_ok = True
+        width_ok = True
         for view in views_raw:
             label = f"${view['section']} \"{view['name']}\" @L{view['start_line']}"
             if view["declared"] is not None and view["declared"] != view["data_rows"]:
@@ -620,6 +671,18 @@ def validate_msh(msh_path: str | Path,
                 errors.append(
                     f"{label}: numComponents={view['components']} "
                     f"(must be 1, 3, or 9)")
+            st = view.get("value_stats")
+            if st is not None:
+                if st["nan"] or st["inf"]:
+                    finite_ok = False
+                    errors.append(
+                        f"{label}: {st['nan']} NaN / {st['inf']} Inf data "
+                        f"value(s) -- GMSH renders these silently wrong")
+                if st["bad_width_rows"]:
+                    width_ok = False
+                    errors.append(
+                        f"{label}: {st['bad_width_rows']} data row(s) whose "
+                        f"value count does not match numComponents")
             if view["section"] == "NodeData" and node_tag_set:
                 missing = [t for t in view["tags"] if t not in node_tag_set]
                 if missing:
@@ -639,6 +702,8 @@ def validate_msh(msh_path: str | Path,
         checks["data_declared_counts_match"] = count_ok
         checks["data_components_valid"] = comp_ok
         checks["data_tags_exist"] = tags_ok
+        checks["data_values_finite"] = finite_ok
+        checks["data_row_width_matches"] = width_ok
         grouped = _group_views(views_raw)
         checks["view_components_consistent"] = all(
             g["components_consistent"] for g in grouped)
@@ -742,6 +807,91 @@ def _run_jacobian_check(msh_path: Path, quadrature: str,
     return run_gmsh_json_subprocess(
         _JACOBIAN_CHECK_SCRIPT, [str(msh_path), quadrature],
         timeout_s=timeout_s, prefix="radia_mcp_gmsh_jac_")
+
+
+# ======================================================================
+# Public API: field statistics
+# ======================================================================
+
+def field_stats(msh_path: str | Path,
+                view_name: str | None = None) -> dict[str, Any]:
+    """Per-view, per-time-step field value statistics for an MSH file.
+
+    Scalars report signed min/max/mean/rms; vectors and tensors report
+    Euclidean-magnitude statistics plus the pooled per-component
+    min/max.  NaN/Inf values are counted (and excluded from the stats).
+    """
+    path = Path(msh_path)
+    if not path.is_file():
+        return {"ok": False, "path": str(path),
+                "error": f"file not found: {path}"}
+
+    parsed = _parse_msh(path, parse_values=True)
+    if parsed["version"] is None or not str(parsed["version"]).startswith("4") \
+            or parsed["ascii"] is False:
+        return {"ok": False, "path": str(path),
+                "error": "not an ASCII MSH v4.x file",
+                "parse_errors": _cap(parsed["errors"])}
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for view in parsed["views_raw"]:
+        grouped.setdefault((view["section"], view["name"]), []).append(view)
+
+    if view_name is not None:
+        names = sorted({name for _, name in grouped})
+        grouped = {key: v for key, v in grouped.items() if key[1] == view_name}
+        if not grouped:
+            return {"ok": False, "path": str(path),
+                    "error": f"view {view_name!r} not found; "
+                             f"available: {names}"}
+
+    views_out = []
+    for (section, name), sections in grouped.items():
+        sections.sort(key=lambda v: (v["step"] if v["step"] is not None
+                                     else v["start_line"]))
+        per_step = []
+        overall_nan = overall_inf = 0
+        overall_min = overall_max = None
+        for view in sections:
+            st = view.get("value_stats") or {}
+            n = st.get("n_finite_rows", 0)
+            entry: dict[str, Any] = {
+                "step": view["step"], "time": view["time"],
+                "entities": view["data_rows"],
+                "nan": st.get("nan", 0), "inf": st.get("inf", 0),
+                "min": st.get("min"), "max": st.get("max"),
+                "mean": (st.get("s1", 0.0) / n) if n else None,
+                "rms": math.sqrt(st.get("s2", 0.0) / n) if n else None,
+            }
+            if (view["components"] or 1) > 1:
+                entry["comp_min"] = st.get("comp_min")
+                entry["comp_max"] = st.get("comp_max")
+                entry["metric"] = "magnitude"
+            else:
+                entry["metric"] = "value"
+            per_step.append(entry)
+            overall_nan += entry["nan"]
+            overall_inf += entry["inf"]
+            for bound, pick in (("min", min), ("max", max)):
+                val = entry[bound]
+                if val is None:
+                    continue
+                current = overall_min if bound == "min" else overall_max
+                new = val if current is None else pick(current, val)
+                if bound == "min":
+                    overall_min = new
+                else:
+                    overall_max = new
+        views_out.append({
+            "section": section, "name": name,
+            "components": sections[0]["components"],
+            "steps": len(sections),
+            "per_step": per_step,
+            "overall": {"min": overall_min, "max": overall_max,
+                        "nan": overall_nan, "inf": overall_inf},
+        })
+
+    return {"ok": True, "path": str(path), "views": views_out}
 
 
 # ======================================================================
