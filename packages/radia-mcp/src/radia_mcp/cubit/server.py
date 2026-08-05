@@ -3101,14 +3101,24 @@ def cubit_session_journal(out_path: str = "",
 
 @mcp.tool()
 def cubit_session_status() -> str:
-	"""Return diagnostic info about the Cubit session (pid, alive, bin_dir)."""
+	"""Return diagnostic info about the Cubit session: alive/pid/mode,
+	ownership, session-mode policy, drop dir, last license warmup, and
+	how many commands this process has recorded for
+	`cubit_session_journal`."""
 	status = {
 		"bin_dir": str(_cs.get_cubit_bin_dir() or "<not found>"),
 		"alive": False,
 		"pid": None,
 		"ready_info": None,
+		"session_mode": os.environ.get("RADIA_CUBIT_SESSION_MODE", "auto"),
 	}
 	if _cs._SINGLETON is not None:
+		sess = _cs._SINGLETON
+		status["owned"] = sess._owned
+		status["drop_dir"] = (str(sess._drop_dir)
+		                      if sess._drop_dir is not None else None)
+		status["license_warmup"] = sess._last_license_warmup or None
+		status["n_journal_commands"] = len(sess._command_history)
 		status["alive"] = _cs._SINGLETON.is_alive()
 		if _cs._SINGLETON._proc is not None:
 			status["pid"] = _cs._SINGLETON._proc.pid
@@ -6412,6 +6422,39 @@ def _maybe_eager_warmup() -> None:
 	                 daemon=True).start()
 
 
+def _setup_mode() -> int:
+	"""One-shot environment preparation (MathWorks --setup-matlab analog):
+	pre-warm the Cubit license, then print the full doctor report.
+	Exit 0 when the doctor finds no problems, 1 otherwise."""
+	print("=" * 70)
+	print("mcp-server-cubit --setup")
+	print("=" * 70)
+	bin_dir = _cs.find_cubit_install()
+	if bin_dir is None:
+		print("ERROR: Coreform Cubit not found "
+		      "(set CUBIT_BIN_DIR / CUBIT_INSTALL_DIR).")
+		return 1
+	print(f"Cubit install: {bin_dir}")
+	try:
+		from .license_warmup import warmup_license
+		warmup = warmup_license(Path(bin_dir),
+		                        timeout_s=_cs.LICENSE_WARMUP_TIMEOUT_S)
+		print("License warmup:", json.dumps(warmup, ensure_ascii=False,
+		                                    default=str))
+	except Exception as exc:
+		print(f"License warmup failed: {type(exc).__name__}: {exc}")
+	report = json.loads(cubit_doctor())
+	print("Doctor report:")
+	print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+	if report["status"] == "ok":
+		print("SETUP OK")
+		return 0
+	print("SETUP FOUND PROBLEMS:")
+	for p in report["problems"]:
+		print(f"  - {p}")
+	return 1
+
+
 def main():
 	"""Entry point for mcp-server-cubit command."""
 	if '--selftest' in sys.argv[1:]:
@@ -6423,6 +6466,10 @@ def main():
 			if _is_closed_stdout_error(exc):
 				return
 			raise
+	elif '--setup' in sys.argv[1:]:
+		from radia_mcp.common.utf8_stdout import use_utf8_stdout
+		use_utf8_stdout()
+		sys.exit(_setup_mode())
 	else:
 		_maybe_eager_warmup()
 		mcp.run(transport="stdio")

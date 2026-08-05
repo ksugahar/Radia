@@ -165,3 +165,50 @@ for _f in sorted(_TEST_ROOT.rglob("test_*.py")):
     if any(_module_absent(_m) or _project_import_has_absent_dependency(_m)
            for _m in _imported_modules(_src)):
         collect_ignore.append(_f.relative_to(_TEST_ROOT).as_posix())
+
+
+# ---------------------------------------------------------------------------
+# Cubit process-leak gate (MathWorks check-matlab-leaks pattern, 2026-08-05)
+# ---------------------------------------------------------------------------
+# The persistent Cubit session runners (radia_mcp/cubit daemon.py /
+# bootstrap.py) hold an RLM license seat while alive.  A test that spawns
+# one and fails before shutdown leaks the seat until someone notices.
+# This session-scoped gate snapshots OUR runner processes before the test
+# session and fails loudly if new ones survive it.  It matches only the
+# radia_mcp runner signature -- a Cubit GUI the user opened by hand is
+# never flagged.  Inactive when psutil is unavailable (minimal-dep CI).
+
+import pytest
+
+
+def _cubit_runner_processes() -> dict[int, str]:
+    try:
+        import psutil
+    except ImportError:
+        return {}
+    procs: dict[int, str] = {}
+    for proc in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            cmdline = " ".join(proc.info["cmdline"] or [])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if "radia_mcp" in cmdline and ("daemon.py" in cmdline
+                                       or "bootstrap.py" in cmdline):
+            procs[proc.info["pid"]] = cmdline
+    return procs
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cubit_process_leak_gate():
+    before = _cubit_runner_processes()
+    yield
+    leaked = {pid: cl for pid, cl in _cubit_runner_processes().items()
+              if pid not in before}
+    if leaked:
+        detail = "\n".join(f"  pid {pid}: {cl[:160]}"
+                           for pid, cl in leaked.items())
+        pytest.fail(
+            "Cubit runner processes LEAKED by this test session "
+            "(each holds a license seat):\n" + detail +
+            "\nTests that start a session must shut it down "
+            "(CubitSession.reset()).", pytrace=False)
