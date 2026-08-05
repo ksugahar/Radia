@@ -9,9 +9,12 @@ Date: 2026-02-13
 """
 
 import sys
-import os
-# Auto-detect Cubit installation
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'src', 'radia'))
+from pathlib import Path
+
+# Add Cubit to path (auto-detect via radia's install_panels helper)
+_repo = next(p for p in Path(__file__).resolve().parents
+             if (p / "src" / "radia").exists())
+sys.path.insert(0, str(_repo / "src" / "radia"))
 from install_panels import find_cubit_bin as _fcb
 _cubit_path = _fcb()
 if _cubit_path and _cubit_path not in sys.path:
@@ -19,7 +22,7 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 
 
-cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.init(['cubit', '-nojournal', '-batch', '-nographics'])
 
 print("=" * 70)
 print("Cubit: Generate Circular Coil Centerline for PEEC SIBC Validation")
@@ -82,7 +85,8 @@ print("\n[Step 3] Defining physical group...")
 
 cubit.cmd(f"block 1 add curve {centerline_curve_id}")
 cubit.cmd("block 1 name 'coil_centerline'")
-cubit.cmd("block 1 element type BEAM2")
+# NOTE: keep the default BAR element type.  `element type BEAM2` makes the
+# gmsh exporter skip the 1D elements (BEAM is not in its BAR mapping).
 
 print(f"  Block 1: 'coil_centerline' (1D edge elements)")
 
