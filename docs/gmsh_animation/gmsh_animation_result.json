@@ -1,17 +1,17 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T15:45:01Z",
-  "notebook": "docs/gmsh_animation/gmsh_animation.ipynb",
-  "notebook_sha256": "3c8cb76440ffaf4acba838d4d661af0d963e1e1eed89f0a82721da413b91c482",
+  "generated_at_utc": "2026-08-05T05:11:01Z",
+  "notebook": "gmsh_animation.ipynb",
+  "notebook_sha256": "3bd5a3abe72ce883adc073dbc9bb3f371afa77a6b279ea2fdb4f7a72752afe9d",
   "versions": {
     "python_version": "3.12.10",
-    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.28",
+    "radia_version": "4.95.40"
   },
   "summary": {
-    "path": "docs/gmsh_animation/gmsh_animation.ipynb",
+    "path": "gmsh_animation.ipynb",
     "cells": 4,
     "code_cells": 2,
     "executed_code_cells": 2,
@@ -19,6 +19,20 @@
     "output_count": 2,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
       "language_info"

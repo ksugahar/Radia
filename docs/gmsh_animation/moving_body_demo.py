@@ -28,9 +28,12 @@ import numpy as np
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_this_dir))
 sys.path.insert(0, os.path.join(_repo_root, "src"))
+sys.path.insert(0, _this_dir)
 
-from ngsolve import Mesh, CF, Integrate, BND
+from ngsolve import Mesh, CF, Integrate, BND, TaskManager
 from netgen.csg import CSGeometry, Cylinder, Plane, Pnt, Vec, OrthoBrick
+
+from tet10_orientation_fix import fix_msh_tet_orientation
 
 
 def create_stator_step(filename):
@@ -70,8 +73,8 @@ def create_rotor_vol(filename, order=2):
     rotor = cyl * bot * top
     geo.Add(rotor.bc("rotor_surface").mat("rotor"))
 
-    ng_mesh = geo.GenerateMesh(maxh=0.015)
     with TaskManager():
+        ng_mesh = geo.GenerateMesh(maxh=0.015)
         ng_mesh.Curve(order)
         ng_mesh.Save(filename)
         return filename
@@ -98,38 +101,32 @@ def create_animation_msh(rotor_vol, output_msh, n_steps=20,
     d = np.array(direction, dtype=float)
     d = d / np.linalg.norm(d)
 
-    # Get mesh node coordinates
     from radia.gmsh_post_export import GmshPostExport
 
     print(f"Rotor: {ne} elements")
     print(f"Displacement: {displacement} m in direction {d}")
     print(f"Frames: {n_steps}")
 
-    with open(output_msh, "w") as f:
-        # --- Write header ---
-        f.write("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
-
-        # --- Extract mesh data via GmshPostExport internals ---
+    # Write the mesh structure (TET10 for a Curve(2) .vol)
+    with TaskManager():
         post = GmshPostExport(mesh)
-        # Use write_mesh to get the mesh structure, then append NodeData
-        # Actually, write the full mesh first, then append time-stepped data
+        post.write_mesh(output_msh)
 
-    # Write mesh (static part) + displacement field per time step
-    # Strategy: write mesh once, then append $NodeData sections for each step
+    # GmshPostExport writes GMSH tet corners in NGSolve el.vertices order,
+    # which is an odd (inverted) permutation of the GMSH-positive ordering
+    # (all-negative getJacobians). Reorient in place; see
+    # tet10_orientation_fix.py. The root fix belongs in
+    # src/radia/gmsh_post_export.py (_NGSOLVE_TO_GMSH_NODE_ORDER['TET']).
+    stats = fix_msh_tet_orientation(output_msh)
+    print(f"Orientation fix: {stats['fixed']} of {stats['elements']} "
+          f"tets reoriented")
 
-    # First, write the mesh structure
-    post = GmshPostExport(mesh)
-    post.write_mesh(output_msh)
-
-    # Now read back and get node info for displacement
-    # We need node IDs and positions
-    from ngsolve import NodeId, VERTEX
-    from ngsolve import TaskManager
-    nv = mesh.nv
-    node_coords = np.zeros((nv, 3))
-    for v in mesh.vertices:
-        p = v.point
-        node_coords[v.nr] = [p[0], p[1], p[2]]
+    # Displacement NodeData must cover ALL nodes of the written .msh
+    # (vertices + TET10 mid-edge nodes), not just mesh.nv vertices --
+    # otherwise GMSH leaves mid-edge nodes behind in displacement views.
+    with open(output_msh, "r") as f:
+        lines = f.read().splitlines()
+    n_msh_nodes = int(lines[lines.index("$Nodes") + 1].split()[1])
 
     # Append $NodeData sections for each time step
     with open(output_msh, "a") as f:
@@ -146,9 +143,9 @@ def create_animation_msh(rotor_vol, output_msh, n_steps=20,
             f.write("3\n")  # num int tags
             f.write(f"{step}\n")  # timestep
             f.write("3\n")  # num components (vector)
-            f.write(f"{nv}\n")  # num nodes
+            f.write(f"{n_msh_nodes}\n")  # num nodes
 
-            for vid in range(nv):
+            for vid in range(n_msh_nodes):
                 f.write(f"{vid + 1} {dx[0]:.10e} {dx[1]:.10e} {dx[2]:.10e}\n")
 
             f.write("$EndNodeData\n")
