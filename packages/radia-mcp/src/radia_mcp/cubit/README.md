@@ -36,9 +36,17 @@ Environment knobs:
 | Variable | Effect |
 |---|---|
 | `CUBIT_BIN_DIR` / `CUBIT_INSTALL_DIR` | Override Coreform Cubit install discovery |
+| `RADIA_CUBIT_SESSION_MODE` | `auto` (default): attach to the live shared daemon, else spawn. `new`: always spawn a fresh daemon in a private per-process drop dir (hermetic CI; removed on shutdown). `existing`: attach only — fail loud when no shared daemon is running |
 | `RADIA_MCP_CUBIT_GATES=0` | Hide the CI/scenario `*_gate` tools in interactive sessions (85 → 50 tools) |
 | `RADIA_CUBIT_EAGER=1` | Start the Cubit session in the background at server startup (hides the 30+ s first-call cost) |
 | `RADIA_MCP_CUBIT_CALL_LOG=0` | Disable the all-calls JSONL log (`<state_dir>/logs/cubit_tool_calls.jsonl`) |
+
+One-shot environment preparation (license warmup + full doctor report,
+exit 1 when problems are found):
+
+```bash
+mcp-server-cubit --setup
+```
 
 First stop when anything misbehaves: `cubit_doctor()` — a read-only
 one-shot diagnosis of install discovery, license cache, deployed-plugin

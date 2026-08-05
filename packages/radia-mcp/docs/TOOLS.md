@@ -125,7 +125,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_scaffold_toolbar` | Generate a complete Coreform-Cubit custom-toolbar skeleton on disk. |
 | `cubit_session_journal` | Export every Cubit command this MCP-server process sent to the live |
 | `cubit_session_shutdown` | Stop the persistent Cubit daemon. Next `cubit_show` relaunches. |
-| `cubit_session_status` | Return diagnostic info about the Cubit session (pid, alive, bin_dir). |
+| `cubit_session_status` | Return diagnostic info about the Cubit session: alive/pid/mode, |
 | `cubit_show` | Load a file into the **persistent Cubit viewer** and optionally run |
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
 | `cubit_source_journal_replay_gate` | Gate synchronous, headless replay and expected mesh disposition. |

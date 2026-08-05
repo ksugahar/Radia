@@ -402,6 +402,12 @@ class CubitSession:
             if ready.exists():
                 try: ready.unlink()
                 except OSError: pass
+            # Session-mode "new" uses a private per-process drop dir --
+            # remove it entirely (the shared dir is named exactly
+            # "cubit-session" and is preserved).
+            if self._owned and self._drop_dir.name != "cubit-session":
+                import shutil
+                shutil.rmtree(self._drop_dir, ignore_errors=True)
         self._drop_dir = None
         self._outbox = None
         self._proc = None
@@ -576,8 +582,27 @@ class CubitSession:
         4. Record our PID into ``pid.lock`` so the next process can
            find + attach.
         """
-        # --- Per-user stable drop-dir ----------------------------------
-        drop = _user_daemon_dir()
+        # --- Session mode (MathWorks matlab-session-mode triad) ---------
+        #   auto     (default) attach to a live shared daemon, else spawn
+        #   new      always spawn a FRESH daemon in a private drop-dir
+        #            (hermetic runs -- never reuses / clobbers the shared
+        #            per-user daemon)
+        #   existing attach only; fail loud when no live shared daemon
+        session_mode = os.environ.get(
+            "RADIA_CUBIT_SESSION_MODE", "auto").strip().lower()
+        if session_mode not in ("auto", "new", "existing"):
+            raise CubitSessionError(
+                f"Invalid RADIA_CUBIT_SESSION_MODE={session_mode!r}: "
+                "expected auto | new | existing")
+
+        # --- Drop-dir ---------------------------------------------------
+        # auto/existing share the per-user stable dir; mode "new" gets a
+        # per-process private dir so it cannot fight the shared daemon
+        # over pid.lock / request files.
+        if session_mode == "new":
+            drop = _user_daemon_dir().parent / f"cubit-session-{os.getpid()}"
+        else:
+            drop = _user_daemon_dir()
         drop.mkdir(parents=True, exist_ok=True)
         outbox = drop / "out"
         outbox.mkdir(exist_ok=True)
@@ -585,7 +610,13 @@ class CubitSession:
         pid_file = drop / "pid.lock"
 
         # --- Attach to existing daemon if alive -------------------------
-        existing = _try_attach_existing_daemon(drop)
+        existing = (None if session_mode == "new"
+                    else _try_attach_existing_daemon(drop))
+        if session_mode == "existing" and existing is None:
+            raise CubitSessionError(
+                f"RADIA_CUBIT_SESSION_MODE=existing but no live shared "
+                f"Cubit daemon was found at {drop}. Start one (any "
+                "cubit_show/cubit_exec in auto mode), or switch the mode.")
         if existing is not None:
             self._drop_dir = drop
             self._outbox = outbox
