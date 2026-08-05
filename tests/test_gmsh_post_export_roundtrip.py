@@ -68,6 +68,95 @@ def _assert_launch_companions(msh_path):
     return geo_path, geo_opt_path, msh_opt_path
 
 
+def _assert_positive_jacobians(path, expect_vol=None, rel=1e-9):
+    """Gate: no negative getJacobians point on any 3D element; optionally
+    check the integrated volume against the exact value (repo policy:
+    negative determinants = inverted node ordering)."""
+    gmsh.initialize()
+    try:
+        gmsh.open(path)
+        total_neg = 0
+        vol = 0.0
+        etypes, _, _ = gmsh.model.mesh.getElements(3)
+        assert etypes, "no 3D elements in %s" % path
+        for et in etypes:
+            local, weights = gmsh.model.mesh.getIntegrationPoints(
+                int(et), "Gauss2")
+            _, det, _ = gmsh.model.mesh.getJacobians(int(et), local)
+            det = np.asarray(det, dtype=float)
+            w = np.asarray(weights, dtype=float)
+            total_neg += int((det <= 0.0).sum())
+            vol += float((det.reshape(-1, len(w)) * w).sum())
+    finally:
+        gmsh.finalize()
+    assert total_neg == 0, f"{total_neg} negative Jacobian points in {path}"
+    if expect_vol is not None:
+        assert vol == pytest.approx(expect_vol, rel=rel)
+
+
+def _shear(x, y, z):
+    # det J = 1 everywhere, so the mapped cube keeps volume exactly 1,
+    # while every element becomes asymmetric (catches orientation and
+    # high-order node placement bugs that symmetric cubes can hide).
+    return (x + 0.3 * y * y, y, z + 0.2 * x)
+
+
+def test_volume_element_orientation_tet_hex_prism():
+    """TET/HEX/PRISM exports must have strictly positive Jacobians and
+    exact volumes (locks the 2026-08 orientation fixes: TET corner
+    permutation [3,0,1,2], HEX y/z-swapped and PRISM barycentric-cycled
+    high-order reference transforms)."""
+    from netgen.occ import OCCGeometry, Sphere
+    from netgen.occ import Pnt as OccPnt
+    from ngsolve import Mesh
+
+    geo = OCCGeometry(Sphere(OccPnt(0, 0, 0), 1.0))
+    mesh = Mesh(geo.GenerateMesh(maxh=0.5))
+    mesh.Curve(2)
+    out = os.path.join(_TMP, "rt_orient_tet.msh")
+    GmshPostExport(mesh).write_mesh(out)
+    _assert_positive_jacobians(out, expect_vol=4.0 / 3.0 * math.pi, rel=5e-3)
+
+    for tag, kwargs in (("hex", dict(hexes=True)),
+                        ("prism", dict(hexes=False, prism=True))):
+        mesh = MakeStructured3DMesh(nx=2, ny=2, nz=2, mapping=_shear,
+                                    **kwargs)
+        mesh.Curve(2)
+        out = os.path.join(_TMP, f"rt_orient_{tag}.msh")
+        GmshPostExport(mesh).write_mesh(out)
+        _assert_positive_jacobians(out, expect_vol=1.0)
+
+
+def test_volume_element_orientation_pyramid():
+    """An asymmetric hand-built PYR5/PYR14 export has positive Jacobians
+    and the exact cone volume (locks the identity corner permutation and
+    the frustum-bijection reference transform)."""
+    from netgen.csg import Pnt
+    from netgen.meshing import Element2D, Element3D, FaceDescriptor
+    from netgen.meshing import Mesh as NgMesh
+    from netgen.meshing import MeshPoint
+    from ngsolve import Mesh
+
+    m = NgMesh(dim=3)
+    pts = [(0, 0, 0), (1.2, 0, 0), (1.1, 1.3, 0), (0, 1, 0),
+           (0.3, 0.2, 1.0)]
+    pids = [m.Add(MeshPoint(Pnt(*pt))) for pt in pts]
+    m.SetMaterial(1, "pyr")
+    m.Add(FaceDescriptor(surfnr=1, domin=1, bc=1))
+    m.Add(Element3D(1, pids))
+    m.Add(Element2D(1, [pids[3], pids[2], pids[1], pids[0]]))
+    for a, b in ((0, 1), (1, 2), (2, 3), (3, 0)):
+        m.Add(Element2D(1, [pids[a], pids[b], pids[4]]))
+    base_area = 1.33  # shoelace of the planar z=0 quad
+    for order, tag in ((1, "pyr1"), (2, "pyr2")):
+        mesh = Mesh(m)
+        if order >= 2:
+            mesh.Curve(order)
+        out = os.path.join(_TMP, f"rt_orient_{tag}.msh")
+        GmshPostExport(mesh).write_mesh(out)
+        _assert_positive_jacobians(out, expect_vol=base_area / 3.0, rel=1e-6)
+
+
 def test_highorder_hex_roundtrip():
     """A curved (order-2) structured HEX mesh exports as Hex27 (gmsh type 12)
     and gmsh re-reads it with the right node count + 2 field views."""
