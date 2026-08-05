@@ -51,10 +51,12 @@ CATALOG: dict[str, dict[str, Any]] = {
     "gmsh": {
         "subpackage": "radia_mcp.gmsh",
         "entry_point": "mcp-server-gmsh",
-        "description": "GMSH MSH v4.1 inspect/validate/convert/write_node_data",
-        "primary_tools": ["gmsh_usage", "gmsh_reference", "gmsh_audit_summary",
-                          "gmsh_numsubedges_remediation_plan",
-                          "gmsh_mesh_generation_remediation_plan"],
+        "description": "GMSH MSH v4.1 inspect/validate + post-display "
+                       "launch artifacts + visualization-only policy lint",
+        "primary_tools": ["gmsh_inspect_msh", "gmsh_validate_msh",
+                          "gmsh_validate_geo",
+                          "gmsh_write_post_launch_artifact",
+                          "gmsh_usage", "gmsh_reference"],
         "related": ["build123d", "cubit", "radia-ngsolve"],
         "audit_command": "mcp-server-gmsh --selftest --audit-repo",
         "tags": ["mesh"],
