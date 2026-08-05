@@ -157,6 +157,72 @@ def test_volume_element_orientation_pyramid():
         _assert_positive_jacobians(out, expect_vol=base_area / 3.0, rel=1e-6)
 
 
+def _probe_view(path, points):
+    gmsh.initialize()
+    try:
+        gmsh.open(path)
+        tag = gmsh.view.getTags()[0]
+        out = []
+        for pt in points:
+            vals, dist = gmsh.view.probe(tag, *pt)
+            assert dist == 0.0, f"probe point {pt} outside data"
+            out.append(np.asarray(vals, dtype=float))
+    finally:
+        gmsh.finalize()
+    return out
+
+
+def test_curved_nodal_cf_field_probes_exactly():
+    """CF fields are evaluated at EVERY emitted node of a curved mesh.
+
+    Locks the 2026-08 vertex-only NodeData bug: with mid-edge values
+    missing, gmsh's quadratic interpolation returned garbage (vertex
+    shape functions are negative at edge midpoints). A linear vector
+    field must now probe back exactly anywhere in the mesh."""
+    from netgen.occ import OCCGeometry, Sphere
+    from netgen.occ import Pnt as OccPnt
+    from ngsolve import Mesh
+
+    geo = OCCGeometry(Sphere(OccPnt(0, 0, 0), 1.0))
+    mesh = Mesh(geo.GenerateMesh(maxh=0.4))
+    mesh.Curve(2)
+    post = GmshPostExport(mesh)
+    post.add_vector_field("B", CF((y, -x, z)))
+    out = os.path.join(_TMP, "rt_curved_field_exact.msh")
+    post.write(out)
+
+    points = [(0.5, 0.0, 0.0), (0.1, 0.2, 0.3), (-0.3, 0.4, -0.2)]
+    for pt, vals in zip(points, _probe_view(out, points)):
+        np.testing.assert_allclose(vals[:3], (pt[1], -pt[0], pt[2]),
+                                   atol=1e-9)
+
+
+@pytest.mark.parametrize("kwargs", (dict(hexes=True),
+                                    dict(hexes=False),
+                                    dict(hexes=False, prism=True)))
+def test_vertex_array_field_expands_exactly(kwargs):
+    """Vertex-length arrays are embedded exactly onto order-2 nodes.
+
+    On straight-edged Curve(2) meshes the extra Lagrange nodes sit at
+    corner means, so a linear field given per-vertex must probe back
+    exactly -- this also locks the hex27 face/center and prism18 face
+    orderings of the P1->P2 fill tables."""
+    mesh = MakeStructured3DMesh(nx=2, ny=2, nz=2, **kwargs)
+    mesh.Curve(2)
+    data = np.array([1.0 + 2.0 * v.point[0] - v.point[1]
+                     + 0.5 * v.point[2] for v in mesh.vertices])
+    post = GmshPostExport(mesh)
+    post.add_scalar_field("phi", data)
+    tag = "".join(k for k in kwargs)
+    out = os.path.join(_TMP, f"rt_vertex_expand_{tag}.msh")
+    post.write(out)
+
+    points = [(0.51, 0.24, 0.77), (0.13, 0.88, 0.31)]
+    for pt, vals in zip(points, _probe_view(out, points)):
+        expect = 1.0 + 2.0 * pt[0] - pt[1] + 0.5 * pt[2]
+        np.testing.assert_allclose(vals[0], expect, atol=1e-9)
+
+
 def test_export_passes_radia_mcp_verify_gate():
     """Shipping gate: a fresh curved export passes the full radia-mcp
     verification (structural + NaN/Inf + Jacobian gates on the .msh
