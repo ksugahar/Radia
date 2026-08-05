@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **910 tools** across 48 MCP servers.
+Total: **911 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 83 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 21 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 22 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -243,6 +243,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_exec` | Execute Python code in a PERSISTENT gmsh session (stateful evaluate). |
 | `gmsh_export_animation` | Export a time-stepped post-view animation as GIF (gmsh subprocess). |
+| `gmsh_field_stats` | Per-view, per-time-step field statistics for an MSH v4.1 file. |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |

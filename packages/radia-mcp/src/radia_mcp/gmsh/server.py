@@ -39,6 +39,7 @@ from .post_display import (
     write_gmsh_post_launch_artifact,
 )
 from .msh_inspect import (
+    field_stats,
     inspect_msh,
     validate_geo,
     validate_msh,
@@ -583,6 +584,27 @@ def gmsh_validate_msh(msh_path: str, check_jacobians: bool = False,
         p = PROJECT_ROOT / p
     return validate_msh(p, check_jacobians=check_jacobians,
                         quadrature=quadrature)
+
+
+@mcp.tool()
+def gmsh_field_stats(msh_path: str, view_name: str | None = None) -> dict:
+    """
+    Per-view, per-time-step field statistics for an MSH v4.1 file.
+
+    Answers "what is |B| max?" / "did the solve produce NaN?" without
+    opening a GUI: scalars report signed min/max/mean/rms per step,
+    vectors/tensors report Euclidean-magnitude stats plus pooled
+    per-component min/max. NaN/Inf are counted (they render silently
+    wrong in GMSH) and excluded from the statistics. Pure Python.
+
+    Args:
+        msh_path: Path to the .msh file.
+        view_name: Restrict to one view (error lists available names).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return field_stats(p, view_name=view_name)
 
 
 @mcp.tool()
