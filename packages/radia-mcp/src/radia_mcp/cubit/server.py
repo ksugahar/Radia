@@ -779,6 +779,91 @@ def cubit_vol_inventory(path: str = "", text: str = "") -> str:
 
 
 @mcp.tool()
+def cubit_check_vol(vol_path: str,
+                    json_path: str = "",
+                    contract: str = "",
+                    strict_labels: bool = False,
+                    threshold_pct: float = 1.0,
+                    quality: bool = True,
+                    report_json: str = "") -> str:
+	"""
+	Run the canonical `check-vol` gate on an exported Netgen `.vol` mesh.
+
+	Lab policy requires every solver-bound `.vol` to pass this gate after
+	mesh export and BEFORE solver or Simulink initialization.  This tool
+	delegates to `cubit_mesh_export.check.check_consistency` (the same
+	engine as the `check-vol` CLI): NGSolve structural load, label
+	inventory/contract, curved-map quality, and CAD-sidecar consistency
+	(`<vol>.json` auto-discovered when present).
+
+	Runs in the MCP server's Python 3.12 -- no Cubit session or license
+	is needed, so it also validates `.vol` files produced by Netgen/OCC.
+
+	Args:
+	    vol_path: Path to the `.vol` mesh (absolute, or relative to repo root).
+	    json_path: Explicit CAD reference JSON (must exist if given);
+	        default auto-discovers `<vol_path>.json`.
+	    contract: Optional `radia.vol-label-contract.v1` JSON path.
+	    strict_labels: Enforce strict label naming (production modes).
+	    threshold_pct: CAD volume/area error threshold in percent (default 1.0).
+	    quality: Also run the curved-mapping quality check (default True).
+	    report_json: If given, write the `cubit-mesh-export.vol-check.v1`
+	        report there (index it from result.json in production runs).
+
+	Returns:
+	    JSON: {"passed": bool, "warnings": [...], mesh/labels/materials/
+	    boundaries/quality details}.  passed=false means the mesh must not
+	    proceed to a solver.
+	"""
+	try:
+		from cubit_mesh_export.check import check_consistency
+	except ImportError as exc:
+		return json.dumps({
+			"status": "error", "stage": "import",
+			"error": f"cubit-mesh-export (with ngsolve) is required: {exc}",
+			"hint": "pip install cubit-mesh-export  (LAB/100号機: editable install)",
+		})
+	p = Path(vol_path)
+	if not p.is_absolute():
+		p = PROJECT_ROOT / p
+	kwargs = {}
+	if json_path:
+		jp = Path(json_path)
+		kwargs["json_path"] = str(jp if jp.is_absolute() else PROJECT_ROOT / jp)
+	if contract:
+		cp = Path(contract)
+		kwargs["contract"] = str(cp if cp.is_absolute() else PROJECT_ROOT / cp)
+	try:
+		result = check_consistency(
+			str(p),
+			threshold=float(threshold_pct),
+			quality=bool(quality),
+			strict_labels=bool(strict_labels),
+			**kwargs,
+		)
+	except FileNotFoundError as exc:
+		return json.dumps({"status": "error", "stage": "input",
+		                   "error": str(exc)})
+	except Exception as exc:
+		return json.dumps({
+			"status": "error", "stage": "check",
+			"error": f"{type(exc).__name__}: {exc}",
+		})
+	if report_json:
+		from cubit_mesh_export.check import _write_report_json
+		rp = Path(report_json)
+		if not rp.is_absolute():
+			rp = PROJECT_ROOT / rp
+		try:
+			_write_report_json(str(rp), result)
+			result["report_json"] = str(rp)
+		except OSError as exc:
+			result["report_json_error"] = str(exc)
+	return json.dumps({"status": "ok", **result}, ensure_ascii=False,
+	                  indent=2, default=str)
+
+
+@mcp.tool()
 def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
 	"""Validate mixed-mesh topology and routing across export orders.
 
@@ -2644,6 +2729,18 @@ def cubit_probe(query: str = "summary") -> str:
 
 	Valid queries:
 	  "summary"  — {volumes, surfaces, curves, vertices, nodes, hexes, tets}
+	  "quality"  — scaled-Jacobian stats over all hexes+tets
+	  "entities" — Probe-Don't-Guess dump: every volume {id, centroid,
+	               extent, volume} and surface {id, center, extent, area}.
+	               ALWAYS run this before writing entity-classification
+	               predicates (webcut/subtract/imprint renumber entities).
+	  "labels"   — blocks/sidesets with names, ACTUAL element membership,
+	               and a convention audit (mixed blocks, unnamed blocks,
+	               casefold collisions, non-snake-case names). Run after
+	               every block/sideset command and before `export netgen`:
+	               Cubit 2025.12 silently no-ops wrong-kind adds (e.g.
+	               `add tri` on a hex mesh), so intended-but-absent
+	               membership only shows up here.
 	  "volume_count", "surface_count", "curve_count", "vertex_count"
 	  "node_count", "hex_count", "tet_count"
 
