@@ -312,7 +312,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
 | `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
 | `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
-| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
+| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
 | `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
