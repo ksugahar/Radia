@@ -5,6 +5,15 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.42 - Portable Simulink release verification
+
+Released 2026-08-05.
+
+- Made the four-machine Simulink release verifier execute electromagnet
+  topology numerics when Optimization Toolbox is available and otherwise
+  verify the documented fail-loud dependency gate, allowing the full library
+  to be checked on MATLAB hosts with different licensed feature sets.
+
 ## 4.95.41 - Simulink MagLev and electromagnet topology
 
 Released 2026-08-05.
