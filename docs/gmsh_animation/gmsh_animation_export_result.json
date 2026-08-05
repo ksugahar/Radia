@@ -1,17 +1,17 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-04T23:03:43Z",
-  "notebook": "docs/gmsh_animation/gmsh_animation_export.ipynb",
-  "notebook_sha256": "7d919a779887bf063845b45967c3d28a713b770a78f0611cd8f4fb68607c7348",
+  "generated_at_utc": "2026-08-05T05:11:03Z",
+  "notebook": "gmsh_animation_export.ipynb",
+  "notebook_sha256": "dbe0c02934ddd9d28f810954882ff1a4321c5109ed3e1527f8009106436a43a4",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.5"
+    "radia_mcp_version": "1.4.28",
+    "radia_version": "4.95.40"
   },
   "summary": {
-    "path": "docs/gmsh_animation/gmsh_animation_export.ipynb",
+    "path": "gmsh_animation_export.ipynb",
     "cells": 5,
     "code_cells": 4,
     "executed_code_cells": 4,
@@ -19,6 +19,20 @@
     "output_count": 5,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
       "language_info"
@@ -58,9 +72,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 390,
-          "text_sha256": "56b14d8877738f096a24473fa03cbfa81f9f31c6c4c53d7af13a8b07d5c563c1",
-          "text_preview": "opened: docs/gmsh_animation/animation.geo\ngeo sidecar: docs/gmsh_animation/animation.geo.opt\nraw msh sidecar: docs/gmsh_animation/rotor_animation.msh.opt\nframes: 21\ngif: docs/gmsh_animation/gmsh_animation_export.gif (244370 bytes)\nmp4: docs/gmsh_animation/gmsh_animation_export.mp4 (100406 bytes)\nchecks: geo=True, geo_opt=True, gif=True, mp4=True\n\nwrote gmsh_animation_export_results.json\n",
+          "text_chars": 389,
+          "text_sha256": "7acd02ab578dba0204635c87c66ee0c88524572ee767c0482696923140bae25a",
+          "text_preview": "opened: docs/gmsh_animation/animation.geo\ngeo sidecar: docs/gmsh_animation/animation.geo.opt\nraw msh sidecar: docs/gmsh_animation/rotor_animation.msh.opt\nframes: 21\ngif: docs/gmsh_animation/gmsh_animation_export.gif (245008 bytes)\nmp4: docs/gmsh_animation/gmsh_animation_export.mp4 (99798 bytes)\nchecks: geo=True, geo_opt=True, gif=True, mp4=True\n\nwrote gmsh_animation_export_results.json\n",
           "text_truncated": false
         }
       ]

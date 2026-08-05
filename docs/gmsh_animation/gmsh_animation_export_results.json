@@ -1,6 +1,6 @@
 {
   "schema": "radia.docs.gmsh_animation_export.v1",
-  "generated_at_utc": "2026-07-04T23:03:36Z",
+  "generated_at_utc": "2026-08-05T05:11:00Z",
   "versions": {
     "python_version": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0",
@@ -8,8 +8,8 @@
     "pillow_version": "12.1.1",
     "imageio_version": "2.37.3",
     "imageio_ffmpeg_version": "0.6.0",
-    "radia_version": "4.95.5",
-    "radia_mcp_version": "1.4.3"
+    "radia_version": "4.95.40",
+    "radia_mcp_version": "1.4.28"
   },
   "source": {
     "geo": {
@@ -70,20 +70,20 @@
   "artifacts": {
     "gif": {
       "path": "docs/gmsh_animation/gmsh_animation_export.gif",
-      "bytes": 244370,
+      "bytes": 245008,
       "exists": true
     },
     "mp4": {
       "path": "docs/gmsh_animation/gmsh_animation_export.mp4",
-      "bytes": 100406,
+      "bytes": 99798,
       "exists": true
     }
   },
   "timing_breakdown_s": {
-    "gmsh_open_and_fltk_s": 0.421,
-    "frame_export_s": 1.073,
-    "gif_mp4_encode_s": 0.477,
-    "total_s": 1.983
+    "gmsh_open_and_fltk_s": 0.527,
+    "frame_export_s": 1.112,
+    "gif_mp4_encode_s": 1.021,
+    "total_s": 2.668
   },
   "checks": {
     "opened_geo_not_msh": true,
