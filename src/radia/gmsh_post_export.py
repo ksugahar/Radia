@@ -512,6 +512,22 @@ class GmshPostExport:
         data_fields = []
         n_nodes = len(nodes)
         for name, ncomp, data, is_cell, material in self._fields:
+            if not isinstance(data, np.ndarray):
+                # CoefficientFunction, evaluated lazily now that the
+                # emitted node list is known.
+                if is_cell:
+                    data = _evaluate_cf(self.mesh, data, ncomp, True)
+                else:
+                    data = _evaluate_cf_at_points(self.mesh, data, ncomp,
+                                                  nodes)
+            elif not is_cell and len(data) < n_nodes:
+                # Vertex-length array on a mesh that emits high-order
+                # nodes: embed P1 data exactly (edge mid = corner mean,
+                # face/center = corner means). Leaving those nodes
+                # without data corrupts the quadratic view interpolation.
+                data = _expand_vertex_data_to_nodes(
+                    np.asarray(data), ncomp, n_nodes, elem_data,
+                    field_name=name)
             if is_cell:
                 if material is not None:
                     elem_ids = mat_elem_map.get(material, [])
@@ -582,16 +598,23 @@ class GmshPostExport:
             return list(self.mesh.GetMaterials())
 
     def _resolve_data(self, data, ncomp, cell_data):
-        """Convert CoefficientFunction/GridFunction/ndarray to numpy array."""
+        """Validate field data; keep CoefficientFunctions for lazy eval.
+
+        Arrays pass through.  A CoefficientFunction/GridFunction is kept
+        as-is and evaluated in write(): nodal fields are evaluated at
+        EVERY emitted node (including the high-order nodes of a curved
+        mesh -- vertex-only values corrupt the quadratic interpolation),
+        so the node list must exist first.
+        """
         if isinstance(data, np.ndarray):
             return data
 
         try:
             from ngsolve import CoefficientFunction
-            if isinstance(data, CoefficientFunction):
-                return _evaluate_cf(self.mesh, data, ncomp, cell_data)
         except ImportError:
-            pass
+            CoefficientFunction = ()
+        if isinstance(data, CoefficientFunction):
+            return data
 
         raise TypeError(
             f"Unsupported data type: {type(data)}. "
@@ -855,9 +878,13 @@ def _extract_mesh_data_grouped(mesh, is_surface):
         except ImportError:
             pass  # Fall back to Python path
 
-    # Python fallback for high-order (if C++ not available)
+    # Python fallback for high-order (if C++ not available).
+    # elem_ho_nodes is consumed ONLY by the surface (BND) branch below;
+    # the volume branch generates its own high-order nodes via
+    # _build_vol_ho_generic. Calling this for volume exports appended
+    # orphan surface mid-edge nodes that no element referenced.
     elem_ho_nodes = {}
-    if use_highorder:
+    if use_highorder and is_surface:
         elem_ho_nodes = _compute_highorder_nodes(
             mesh, nodes, curve_order, is_surface)
 
@@ -1849,32 +1876,105 @@ def _evaluate_cf(mesh, cf, ncomp, cell_data):
             verts = list(el.vertices)
             pts = np.array([list(mesh.vertices[v.nr].point) for v in verts])
             centroid = pts.mean(axis=0)
-            try:
-                mip = mesh(*centroid)
-                val = cf(mip)
-                if ncomp == 1:
-                    result[i] = float(val)
-                else:
-                    result[i, :] = list(val)[:ncomp]
-            except Exception:
-                pass
+            mip = mesh(*centroid)
+            val = cf(mip)
+            if ncomp == 1:
+                result[i] = float(val)
+            else:
+                result[i, :] = list(val)[:ncomp]
         return result
     else:
         nv = mesh.nv
-        result = np.zeros(nv) if ncomp == 1 else np.zeros((nv, ncomp))
+        points = [list(v.point) for v in mesh.vertices]
+        return _evaluate_cf_at_points(mesh, cf, ncomp, points)
 
-        for v in mesh.vertices:
-            pt = v.point
-            try:
-                mip = mesh(pt[0], pt[1], pt[2])
-                val = cf(mip)
-                if ncomp == 1:
-                    result[v.nr] = float(val)
-                else:
-                    result[v.nr, :] = list(val)[:ncomp]
-            except Exception:
-                pass
-        return result
+
+def _evaluate_cf_at_points(mesh, cf, ncomp, points):
+    """Evaluate a CoefficientFunction at explicit physical points.
+
+    Used to sample nodal fields at EVERY emitted .msh node (vertices
+    plus the high-order nodes of a curved export). Batch evaluation
+    through mesh(x_arr, y_arr, z_arr); a point that cannot be located
+    raises -- silently writing zeros produced corrupted quadratic
+    views (the 2026-08 vertex-only NodeData bug).
+    """
+    pts = np.asarray(points, dtype=float).reshape(-1, 3)
+    mips = mesh(pts[:, 0], pts[:, 1], pts[:, 2])
+    vals = np.asarray(cf(mips), dtype=float)
+    if ncomp == 1:
+        return vals.reshape(-1)
+    return vals.reshape(-1, ncomp)
+
+
+# P1 -> high-order node fill rules per gmsh element type:
+# (n_corners, edge pairs, quad faces, has volume center).
+# Values on the extra Lagrange nodes of an order-2 element are the
+# corner means (exact for P1 data). Order >= 3 layouts are not listed:
+# pass a CoefficientFunction instead.
+_HO_FILL_RULES = {
+    9: (3, [(0, 1), (1, 2), (2, 0)], [], False),                # tri6
+    16: (4, [(0, 1), (1, 2), (2, 3), (3, 0)], [], False),       # quad8
+    10: (4, [(0, 1), (1, 2), (2, 3), (3, 0)],
+         [(0, 1, 2, 3)], False),                                # quad9
+    11: (4, _TET_EDGES_GMSH, [], False),                        # tet10
+    17: (8, _HEX_EDGES_GMSH, [], False),                        # hex20
+    12: (8, _HEX_EDGES_GMSH,
+         [(0, 3, 2, 1), (0, 1, 5, 4), (0, 4, 7, 3),
+          (1, 2, 6, 5), (2, 3, 7, 6), (4, 5, 6, 7)], True),     # hex27
+    18: (6, _PRISM_EDGES_GMSH, [], False),                      # prism15
+    13: (6, _PRISM_EDGES_GMSH,
+         [(0, 1, 4, 3), (0, 3, 5, 2), (1, 2, 5, 4)], False),    # prism18
+}
+
+
+def _expand_vertex_data_to_nodes(data, ncomp, n_nodes, elem_data,
+                                 field_name=""):
+    """Embed vertex (P1) field data onto every emitted node.
+
+    Exact for P1 data: each extra order-2 Lagrange node value is the
+    mean of its parent corner values (edge midpoint = 2-corner mean,
+    quad face node = 4-corner mean, hex center = 8-corner mean).
+    Fails loudly for element layouts without a fill rule (order >= 3):
+    those exports must pass a CoefficientFunction instead.
+    """
+    n_vertex = len(data)
+    shape = (n_nodes,) if ncomp == 1 else (n_nodes, ncomp)
+    out = np.full(shape, np.nan)
+    out[:n_vertex] = data
+
+    for _mat, gmsh_type, conn, _oi in elem_data:
+        if not any(idx >= n_vertex for idx in conn):
+            continue  # linear element: corners only
+        rule = _HO_FILL_RULES.get(gmsh_type)
+        if rule is None:
+            raise ValueError(
+                f"field '{field_name}': cannot expand vertex-length data "
+                f"onto gmsh element type {gmsh_type}; pass a "
+                f"CoefficientFunction (or a full {n_nodes}-node array)")
+        n_corners, edges, faces, has_center = rule
+        pos = n_corners
+        for a, b in edges:
+            idx = conn[pos]
+            pos += 1
+            if idx >= n_vertex:
+                out[idx] = 0.5 * (out[conn[a]] + out[conn[b]])
+        for face in faces:
+            idx = conn[pos]
+            pos += 1
+            if idx >= n_vertex:
+                out[idx] = sum(out[conn[c]] for c in face) / len(face)
+        if has_center:
+            idx = conn[pos]
+            if idx >= n_vertex:
+                out[idx] = sum(out[conn[c]]
+                               for c in range(n_corners)) / n_corners
+
+    if np.isnan(out).any():
+        missing = int(np.isnan(np.atleast_2d(out.T)[0]).sum())
+        raise ValueError(
+            f"field '{field_name}': {missing} emitted node(s) not covered "
+            f"by the vertex-data expansion; pass a CoefficientFunction")
+    return out
 
 
 # ============================================================
