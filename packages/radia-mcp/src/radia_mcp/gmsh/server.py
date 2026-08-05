@@ -49,6 +49,16 @@ from .msh_inspect import (
     validate_geo,
     validate_msh,
 )
+from .post_process import (
+    cut_plane_extract,
+    harmonic_to_time,
+    integrate_view,
+    isosurface,
+    line_profile,
+    math_eval,
+    probe_field,
+    streamlines,
+)
 from .render import (
     export_animation,
     render_png,
@@ -922,6 +932,261 @@ def gmsh_verify(path: str, check_jacobians: bool = True,
         p = PROJECT_ROOT / p
     return verify_artifact(p, check_jacobians=check_jacobians,
                            check_options=check_options)
+
+
+@mcp.tool()
+def gmsh_probe(msh_path: str, points: list,
+               view_name: str | None = None,
+               step: int = -1) -> dict:
+    """
+    Probe post-processing views at arbitrary points (interpolated).
+
+    "What is B at the gap center?" without a GUI: returns per-view,
+    per-point interpolated values (all time steps with step=-1, split
+    per step). Points outside the mesh report found=false plus the
+    distance to the nearest element.
+
+    Args:
+        msh_path: .msh with NodeData/ElementData views.
+        points: List of [x, y, z] probe points.
+        view_name: Restrict to one view by name (default: all views).
+        step: Time step (-1 = all steps).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return probe_field(p, points, view=view_name, step=step)
+
+
+@mcp.tool()
+def gmsh_line_profile(msh_path: str, start: list, end: list, n: int = 100,
+                      view_name: str | None = None,
+                      plot_png: str | None = None) -> dict:
+    """
+    Sample a view along a straight line; optionally plot a PNG graph.
+
+    The classic "Bz along the axis" post plot in one call: n
+    interpolated samples between start and end, distances included,
+    and (with plot_png) a matplotlib graph -- scalars plot the value,
+    vectors plot the magnitude, one curve per time step.
+
+    Args:
+        msh_path: .msh with views.
+        start: Line start [x, y, z].
+        end: Line end [x, y, z].
+        n: Number of samples (>= 2).
+        view_name: Restrict to one view (default: first/all).
+        plot_png: Optional output PNG path for the graph.
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if plot_png is not None:
+        out = Path(plot_png)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return line_profile(p, start, end, n, view=view_name, plot_png=out)
+
+
+@mcp.tool()
+def gmsh_integrate(msh_path: str, view_name: str | None = None,
+                   dimension: int = 3) -> dict:
+    """
+    Integrate a view over its elements (per time step).
+
+    Total loss, total flux, stored energy: Plugin(Integrate) with the
+    dimension pinned (default 3 = volume elements only). CAUTION:
+    dimension=-1 SUMS integrals of every element dimension present
+    (volume + surface + line) -- verified behavior, rarely what a
+    physical quantity means. Accuracy note (measured): the plugin
+    integrates the view at piecewise-LINEAR accuracy even on
+    high-order elements, so nonlinear integrands carry O(h^2) error;
+    exact FE integrals belong to NGSolve Integrate on the solver side.
+
+    Args:
+        msh_path: .msh with views.
+        view_name: View to integrate (default: first).
+        dimension: Element dimension to integrate over (3, 2, 1; -1=all).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return integrate_view(p, view=view_name, dimension=dimension)
+
+
+@mcp.tool()
+def gmsh_math_eval(msh_path: str, expressions: list,
+                   view_name: str | None = None,
+                   other_view_name: str | None = None,
+                   result_name: str = "math_eval",
+                   out_file: str | None = None) -> dict:
+    """
+    Create a derived view with Plugin(MathEval) and save it.
+
+    |B| from components, differences between two solutions, scaled
+    fields: expressions use v0..v8 (view components) and w0..w8
+    (other view). NOTE: expressions apply to NODAL values and the
+    result interpolates f(node values) -- standard FEM post semantics
+    (interp(T^2) is the mean of squared vertex values, not
+    (interp T)^2). Output defaults to <stem>_math.pos next to the
+    input; feed it back to gmsh_probe / gmsh_field_stats / gmsh_render.
+
+    Args:
+        msh_path: Input .msh with views.
+        expressions: 1-9 expressions (one per output component), e.g.
+                     ["Sqrt(v0^2+v1^2+v2^2)"] or ["v0-w0"].
+        view_name: Source view (default: first).
+        other_view_name: Optional second view bound to w0..w8.
+        result_name: Name of the generated view.
+        out_file: Output .pos/.msh path (default: <stem>_math.pos).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if out_file is not None:
+        out = Path(out_file)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return math_eval(p, expressions, view=view_name,
+                     other_view=other_view_name, result_name=result_name,
+                     out_file=out)
+
+
+@mcp.tool()
+def gmsh_isosurface(msh_path: str, value: float,
+                    view_name: str | None = None,
+                    out_file: str | None = None) -> dict:
+    """
+    Extract the isosurface of a scalar view (e.g. the saturation front).
+
+    Plugin(Isosurface): returns the piece counts (triangles on volume
+    elements, lines on surface elements) and saves the extracted
+    surface for rendering or further processing.
+
+    Args:
+        msh_path: Input .msh with a scalar view.
+        value: Iso value.
+        view_name: Source view (default: first).
+        out_file: Output path (default: <stem>_iso.pos).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if out_file is not None:
+        out = Path(out_file)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return isosurface(p, value, view=view_name, out_file=out)
+
+
+@mcp.tool()
+def gmsh_cut_plane_extract(msh_path: str, normal: list, offset: float,
+                           view_name: str | None = None,
+                           out_file: str | None = None) -> dict:
+    """
+    Cut a view with the plane A*x+B*y+C*z+D=0 and save the section DATA.
+
+    Unlike the render-time clip (visual only), Plugin(CutPlane)
+    extracts the section as data: probe it, integrate it, render it,
+    or stats it downstream.
+
+    Args:
+        msh_path: Input .msh with views.
+        normal: Plane normal [A, B, C].
+        offset: Plane offset D.
+        view_name: Source view (default: first).
+        out_file: Output path (default: <stem>_cut.pos).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if out_file is not None:
+        out = Path(out_file)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return cut_plane_extract(p, normal, offset, view=view_name,
+                             out_file=out)
+
+
+@mcp.tool()
+def gmsh_harmonic_to_time(msh_path: str, n_steps: int = 20,
+                          view_name: str | None = None,
+                          real_step: int = 0, imag_step: int = 1,
+                          out_file: str | None = None) -> dict:
+    """
+    Expand a complex (re/im) view into a time-domain animation view.
+
+    AC field post: v(t_k) = re*cos(2*pi*k/n) - im*sin(2*pi*k/n)
+    (Plugin HarmonicToTime). The output feeds gmsh_export_animation
+    directly -- eddy-current phasor solutions become rotating-field
+    GIFs in two calls.
+
+    Args:
+        msh_path: .msh whose view carries re/im as two time steps.
+        n_steps: Number of time samples over one period.
+        view_name: Source view (default: first).
+        real_step: Step index holding the real part.
+        imag_step: Step index holding the imaginary part.
+        out_file: Output path (default: <stem>_time.pos).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if out_file is not None:
+        out = Path(out_file)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return harmonic_to_time(p, view=view_name, real_step=real_step,
+                            imag_step=imag_step, n_steps=n_steps,
+                            out_file=out)
+
+
+@mcp.tool()
+def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
+                     n_seeds: int = 10, view_name: str | None = None,
+                     step_size: float | None = None, max_steps: int = 400,
+                     both_directions: bool = True,
+                     return_points: bool = False,
+                     out_file: str | None = None) -> dict:
+    """
+    Trace field lines of a vector view from seeds on a line segment.
+
+    Probe-driven arc-length RK4 (this gmsh build's Plugin(StreamLines)
+    only re-emits seed points): unit-tangent integration marching in
+    both directions until the line leaves the data, |v| carried as the
+    line color. The polylines are saved as an SL view for rendering
+    (the classic magnetic field-line picture); return_points=True also
+    returns the coordinates for numeric analysis.
+
+    Args:
+        msh_path: .msh with a vector view.
+        seed_start: Seed segment start [x, y, z].
+        seed_end: Seed segment end [x, y, z].
+        n_seeds: Number of seeds along the segment.
+        view_name: Vector view (default: first).
+        step_size: Arc-length step (default: bbox diagonal / 200).
+        max_steps: Max integration steps per direction.
+        both_directions: Trace backward as well as forward.
+        return_points: Include polyline coordinates in the result.
+        out_file: Output path (default: <stem>_stream.pos).
+    """
+    p = Path(msh_path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if out_file is not None:
+        out = Path(out_file)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return streamlines(p, seed_start, seed_end, n_seeds=n_seeds,
+                       view=view_name, step_size=step_size,
+                       max_steps=max_steps, both_directions=both_directions,
+                       return_points=return_points, out_file=out)
 
 
 @mcp.tool()
