@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.40 - Native IH geometry-to-operator assembly
+
+Released 2026-08-05.
+
 - Added `radia-ih-assemble`, a built-in workpiece `.vol` plus coil
   STEP/BEM-A `.vol` path that runs strict versioned label contracts, the
   existing unit-current BEM-SIBC solve, H1 FEM thermal assembly, power closure,
