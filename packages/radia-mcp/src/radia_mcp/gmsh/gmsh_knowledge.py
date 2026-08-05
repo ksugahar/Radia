@@ -987,6 +987,13 @@ artifacts headlessly via mcp-server-gmsh:
 | `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
 | `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |
 | `gmsh_write_post_launch_artifact` | Write case.geo + case.geo.opt + case.msh.opt + display.json contract files. |
+| `gmsh_exec` | Stateful evaluate in a PERSISTENT headless gmsh worker (matlab-mcp-core-server style): open a model once, interrogate it across calls; `result` variable + stdout come back. |
+| `gmsh_session_status` / `gmsh_session_shutdown` | Session lifecycle (lazy start on first exec; crash/hang kills only the worker and fails loudly). |
+
+Lane split: one-shot subprocess tools (inspect/validate/render) for
+stateless gating and screenshots; the persistent `gmsh_exec` session for
+interactive interrogation of a loaded model. Never call gmsh.fltk inside
+the session -- screenshots belong to `gmsh_render`.
 
 Recommended order after any exporter change: inspect -> validate (with
 Jacobians for order>=2) -> validate the .geo -> render a PNG and look at

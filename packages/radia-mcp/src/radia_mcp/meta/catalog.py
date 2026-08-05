@@ -54,7 +54,8 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "GMSH MSH v4.1 inspect/validate + post-display "
                        "launch artifacts + visualization-only policy lint",
         "primary_tools": ["gmsh_inspect_msh", "gmsh_validate_msh",
-                          "gmsh_validate_geo",
+                          "gmsh_validate_geo", "gmsh_exec",
+                          "gmsh_render",
                           "gmsh_write_post_launch_artifact",
                           "gmsh_usage", "gmsh_reference"],
         "related": ["build123d", "cubit", "radia-ngsolve"],

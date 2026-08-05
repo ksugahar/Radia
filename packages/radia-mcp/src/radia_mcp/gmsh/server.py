@@ -47,6 +47,11 @@ from .render import (
     export_animation,
     render_png,
 )
+from .session import (
+    session_exec,
+    session_shutdown,
+    session_status,
+)
 
 _RULE_REMEDIATIONS = {
     "numsubedges-missing": (
@@ -735,6 +740,61 @@ def gmsh_export_animation(path: str,
                             num_steps=num_steps, delay_ms=delay_ms,
                             width=width, height=height,
                             camera_preset=camera_preset)
+
+
+@mcp.tool()
+def gmsh_exec(code: str, timeout_s: float = 120.0) -> dict:
+    """
+    Execute Python code in a PERSISTENT gmsh session (stateful evaluate).
+
+    matlab-mcp-core-server-style engine session: the first call lazily
+    starts a headless gmsh worker subprocess; later calls reuse it, so
+    models, options, and views persist (open a big .msh once, then
+    interrogate it across many calls). Assign to a variable named
+    `result` to return a JSON value; stdout is captured and returned.
+    The worker is import-isolated: a crash or hang kills only the
+    worker (the call raises loudly) and the next call starts fresh.
+
+    Do NOT use gmsh.fltk here (no GUI in a persistent server-owned
+    process) -- use gmsh_render / gmsh_export_animation for screenshots.
+    One-shot gating stays with gmsh_inspect_msh / gmsh_validate_msh.
+
+    Example:
+        gmsh_exec("gmsh.open(r'S:/path/case.msh')")
+        gmsh_exec("result = gmsh.model.getBoundingBox(-1, -1)")
+        gmsh_exec("result = [gmsh.view.getTags(),
+                             gmsh.option.getNumber('Mesh.NumSubEdges')]")
+
+    Args:
+        code: Python source executed in the session globals (gmsh is
+              pre-imported and initialized with -noconfig).
+        timeout_s: Hard per-call timeout; on expiry the worker is killed
+                   and the call fails loudly.
+    """
+    return session_exec(code, timeout_s=timeout_s)
+
+
+@mcp.tool()
+def gmsh_session_status() -> dict:
+    """
+    Report the persistent gmsh session state WITHOUT starting one.
+
+    Returns running flag, worker pid, gmsh/python versions, uptime,
+    call count, open model names, current model, and view count.
+    """
+    return session_status()
+
+
+@mcp.tool()
+def gmsh_session_shutdown() -> dict:
+    """
+    Shut down the persistent gmsh session (idempotent).
+
+    Graceful shutdown request first; the worker is killed only if it
+    does not exit within the timeout. The next gmsh_exec starts a
+    fresh session.
+    """
+    return session_shutdown()
 
 
 @mcp.tool()

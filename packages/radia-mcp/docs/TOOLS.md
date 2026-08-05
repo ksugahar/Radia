@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **907 tools** across 48 MCP servers.
+Total: **910 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 83 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 18 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 21 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -241,6 +241,7 @@ Module: `radia_mcp.gmsh.server`
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
+| `gmsh_exec` | Execute Python code in a PERSISTENT gmsh session (stateful evaluate). |
 | `gmsh_export_animation` | Export a time-stepped post-view animation as GIF (gmsh subprocess). |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
@@ -249,6 +250,8 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_render` | Render a .msh or .geo file to PNG headlessly (gmsh subprocess). |
+| `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
+| `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
 | `gmsh_status` | (no description) |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `gmsh_validate_geo` | Validate a .geo launch/companion file BEFORE opening it in GMSH. |
@@ -312,7 +315,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
 | `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
 | `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
-| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
+| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
 | `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
