@@ -13,17 +13,13 @@ Binary MSH and v2.2 are rejected loudly, never half-parsed.
 
 from __future__ import annotations
 
-import json
 import math
 import re
-import shutil
-import subprocess
-import sys
-import tempfile
 from collections import Counter
-from importlib import util as _importlib_util
 from pathlib import Path
 from typing import Any, Iterator
+
+from ._gmsh_subprocess import run_gmsh_json_subprocess
 
 # MSH element type registry: code -> (name, nodes_per_element, dim, order).
 # Covers every type emitted by cubit-mesh-export (order 1-3 gmsh export),
@@ -680,7 +676,7 @@ _JACOBIAN_CHECK_SCRIPT = r"""
 import json
 import sys
 
-msh_path, out_path, quadrature = sys.argv[1], sys.argv[2], sys.argv[3]
+msh_path, quadrature, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
 result = {"ok": False, "ran": False}
 try:
     import numpy as np
@@ -741,34 +737,11 @@ def _run_jacobian_check(msh_path: Path, quadrature: str,
     """Run the gmsh getJacobians check in a subprocess.
 
     Never imports gmsh in-process: gmsh keeps global state and a hard
-    crash on a corrupt file must not kill the MCP server.  Output goes
-    through temp files with stdin=DEVNULL (stdio-MCP pipe-hang pattern).
+    crash on a corrupt file must not kill the MCP server.
     """
-    if _importlib_util.find_spec("gmsh") is None:
-        return {"ok": False, "ran": False,
-                "error": "gmsh Python package not installed (pip install gmsh)"}
-
-    work = tempfile.mkdtemp(prefix="radia_mcp_gmsh_jac_")
-    out_json = str(Path(work) / "result.json")
-    log_path = Path(work) / "run.log"
-    cmd = [sys.executable, "-c", _JACOBIAN_CHECK_SCRIPT,
-           str(msh_path), out_json, quadrature]
-    try:
-        with open(log_path, "w", encoding="utf-8") as log:
-            proc = subprocess.run(
-                cmd, stdin=subprocess.DEVNULL, stdout=log,
-                stderr=subprocess.STDOUT, timeout=timeout_s, check=False)
-        if not Path(out_json).is_file():
-            tail = log_path.read_text(encoding="utf-8", errors="replace")[-1500:]
-            return {"ok": False, "ran": False,
-                    "error": f"gmsh subprocess exited {proc.returncode} "
-                             f"without result: {tail}"}
-        return json.loads(Path(out_json).read_text(encoding="utf-8"))
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "ran": False,
-                "error": f"gmsh subprocess timed out after {timeout_s}s"}
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
+    return run_gmsh_json_subprocess(
+        _JACOBIAN_CHECK_SCRIPT, [str(msh_path), quadrature],
+        timeout_s=timeout_s, prefix="radia_mcp_gmsh_jac_")
 
 
 # ======================================================================

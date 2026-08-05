@@ -43,6 +43,10 @@ from .msh_inspect import (
     validate_geo,
     validate_msh,
 )
+from .render import (
+    export_animation,
+    render_png,
+)
 
 _RULE_REMEDIATIONS = {
     "numsubedges-missing": (
@@ -57,6 +61,11 @@ _RULE_REMEDIATIONS = {
         "Keep the gmsh Python API out of computation/mesh-generation scripts. "
         "Use the `gmsh` launcher on PATH for viewer/inspection workflows, and "
         "prefer .msh v4.1 data plus a .geo launch file for Radia post."
+    ),
+    "invalid-gmsh-option": (
+        "Replace option names that do not exist in GMSH 4.x: Mesh.Volumes -> "
+        "Mesh.VolumeEdges/VolumeFaces, Mesh.Surfaces -> Mesh.SurfaceEdges/"
+        "SurfaceFaces, General.GraphicsSizeX/Y -> General.GraphicsWidth/Height."
     ),
 }
 
@@ -641,6 +650,91 @@ def gmsh_write_post_launch_artifact(msh_path: str,
         mesh=mesh,
         animation=animation,
     )
+
+
+@mcp.tool()
+def gmsh_render(path: str,
+                png_out: str | None = None,
+                width: int = 1000, height: int = 800,
+                numsubedges: int = 4,
+                camera_preset: str | None = None,
+                time_step: int | None = None) -> dict:
+    """
+    Render a .msh or .geo file to PNG headlessly (gmsh subprocess).
+
+    High-order aware by default: Mesh.NumSubEdges=4 renders curved
+    mesh edges curved, and every post view gets AdaptVisualizationGrid=1
+    so >8-node elements (TET10, HEX20, ...) are not silently skipped.
+    Opening a .geo auto-loads its .geo.opt sidecar, so the PNG shows
+    exactly what a user double-click would show. Uses -noconfig plus
+    explicit window geometry (immune to the stale off-screen-monitor
+    window position pitfall). Meshes with no views auto-enable
+    SurfaceFaces + physical-group coloring.
+
+    Args:
+        path: .msh or .geo file to render.
+        png_out: Output PNG path (default: alongside input).
+        width: Requested window width (exported PNG can be narrower by
+               the FLTK sidebar; the result reports the actual size).
+        height: Window height in pixels.
+        numsubedges: Subdivisions for curved high-order mesh display.
+        camera_preset: Optional preset (z_up_xz_from_positive_y,
+                       positive_y_oblique, front_xz).
+        time_step: Optional time step applied to all views before render.
+    """
+    p = Path(path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if png_out is not None:
+        out = Path(png_out)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return render_png(p, out, width=width, height=height,
+                      numsubedges=numsubedges, camera_preset=camera_preset,
+                      time_step=time_step)
+
+
+@mcp.tool()
+def gmsh_export_animation(path: str,
+                          gif_out: str | None = None,
+                          keep_frames: bool = False,
+                          num_steps: int | None = None,
+                          delay_ms: int = 40,
+                          width: int = 1000, height: int = 800,
+                          camera_preset: str | None = None) -> dict:
+    """
+    Export a time-stepped post-view animation as GIF (gmsh subprocess).
+
+    Codifies the lab animation recipe: links all views
+    (PostProcessing.Link=1, AnimationCycle=0), steps every view's
+    TimeStep explicitly, writes one PNG frame per step, and assembles
+    the GIF with Pillow. High-order views get AdaptVisualizationGrid=1
+    automatically. Works on a .geo launch artifact (auto-loads
+    .geo.opt) or directly on a time-stepped .msh.
+
+    Args:
+        path: .geo or .msh with time-stepped NodeData/ElementData views.
+        gif_out: Output GIF path (default: alongside input).
+        keep_frames: Keep per-step PNGs in a <gif stem>_frames dir.
+        num_steps: Number of steps (default: max NbTimeStep over views).
+        delay_ms: Per-frame delay in the GIF.
+        width: Requested window width in pixels.
+        height: Window height in pixels.
+        camera_preset: Optional camera preset (see gmsh_render).
+    """
+    p = Path(path)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    out = None
+    if gif_out is not None:
+        out = Path(gif_out)
+        if not out.is_absolute():
+            out = PROJECT_ROOT / out
+    return export_animation(p, out, keep_frames=keep_frames,
+                            num_steps=num_steps, delay_ms=delay_ms,
+                            width=width, height=height,
+                            camera_preset=camera_preset)
 
 
 @mcp.tool()

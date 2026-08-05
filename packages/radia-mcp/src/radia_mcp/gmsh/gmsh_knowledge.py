@@ -20,6 +20,11 @@ GMSH_RADIA_POLICY = """
 - Merging STEP geometry + .msh field data for overlay visualization
 - .geo companion files for display settings
 - Reading .msh format for field data (GmshPostExport output)
+- Headless inspection/validation/rendering through the radia-mcp tools
+  (`gmsh_inspect_msh`, `gmsh_validate_msh`, `gmsh_validate_geo`,
+  `gmsh_render`, `gmsh_export_animation`,
+  `gmsh_write_post_launch_artifact`) -- these run the gmsh API only in
+  a subprocess and only on existing files, never for mesh generation
 
 ## NOT Allowed
 - GMSH Python API (`gmsh.model.occ.*`) for geometry creation
@@ -904,6 +909,21 @@ elements. Default value (2) draws nearly straight edges.
 2. **In .geo file**: `Mesh.NumSubEdges = 4;`
 3. **GMSH console**: Type `Mesh.NumSubEdges = 4;`
 4. **GUI**: Tools -> Options -> Mesh -> NumSubEdges
+5. **MCP**: `gmsh_render` defaults to `numsubedges=4` (verified on a
+   Curve(3) Tri10 sphere: numsubedges=1 renders a faceted polyhedron,
+   4 renders the smooth sphere)
+
+## Verify High-Order Meshes Before Trusting the Picture
+
+Display looks fine even when the element node ordering is wrong -- the
+GUI never evaluates Jacobians. Gate every high-order export with
+`gmsh_validate_msh(path, check_jacobians=True)`: zero negative
+determinants and the integrated per-type volume matching CAD are the
+repo acceptance criteria (see "GMSH API Node Ordering Verification
+Policy"). NumSubEdges only affects MESH rendering; post views need
+`View[i].AdaptVisualizationGrid = 1` (>8-node elements are silently
+skipped otherwise), which `gmsh_render` / `gmsh_export_animation` set
+by default.
 
 For directories with many related high-order examples, keep one shared
 `_gmsh_display.geo` companion in that directory:
@@ -953,6 +973,26 @@ reference coordinates. H1 GridFunction approach is unreliable for p>=4.
 
 GMSH_RADIA_WORKFLOW = """
 # GMSH Workflow in Radia Project
+
+## 0. AI-Driven Inspection, Validation, Rendering (radia-mcp tools)
+
+Before opening anything in the GUI, an agent can verify and render GMSH
+artifacts headlessly via mcp-server-gmsh:
+
+| Tool | What it does |
+|------|--------------|
+| `gmsh_inspect_msh` | MSH v4.1 structure summary (element types/orders, views, time steps, bbox, display hints). Pure Python. |
+| `gmsh_validate_msh` | Structural consistency; `check_jacobians=True` adds the getJacobians inverted-element gate (repo policy for high-order exports) + per-type integrated volume. |
+| `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 4.x options. |
+| `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
+| `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |
+| `gmsh_write_post_launch_artifact` | Write case.geo + case.geo.opt + case.msh.opt + display.json contract files. |
+
+Recommended order after any exporter change: inspect -> validate (with
+Jacobians for order>=2) -> validate the .geo -> render a PNG and look at
+it. The 2026-08 audit found all four docs/gmsh_animation TET10 meshes
+systematically inverted (every Gauss point det<=0) -- a bug invisible in
+GUI display, caught only by the Jacobian gate.
 
 ## 1. Field Visualization (Primary Use)
 
@@ -1102,7 +1142,22 @@ GMSH_PITFALLS = """
 
 ## 1. Curved Elements Look Straight
 **Problem**: High-order elements display as straight-edged polygons.
-**Fix**: Set `Mesh.NumSubEdges = 4` (default is 2, too coarse).
+**Fix**: Set `Mesh.NumSubEdges = 4` (default is 2, too coarse). The MCP
+`gmsh_render` tool applies this by default. If the mesh STILL looks
+faceted at NumSubEdges=4, the mid-edge nodes probably lie on straight
+lines (a "linear high-order" export) -- confirm with `gmsh_inspect_msh`
+(element order) and re-export with real curving (`mesh.Curve(p)` /
+Cubit `export ... order N`).
+
+## 1b. High-Order Mesh Displays Fine but Is Actually Broken
+**Problem**: The GUI shows a plausible mesh, yet solvers or volume
+integrals misbehave; nobody notices for months.
+**Cause**: Rendering never evaluates Jacobians, so systematically
+inverted node ordering (negative det everywhere) is invisible.
+**Fix**: Gate exports with `gmsh_validate_msh(path, check_jacobians=True)`
+-- 0 negative determinants + per-type volume vs CAD. Real case 2026-08:
+all four docs/gmsh_animation TET10 meshes were fully inverted while
+animating perfectly in the GUI.
 
 ## 2. Missing Elements in Output
 **Problem**: .msh file has no elements or missing elements.
@@ -1244,6 +1299,11 @@ viewer, or hypothesising about launch paths. Reference incident
 producing python.exe with empty stdout; GetWindowRect returned
 (-2560, 497) - (-1166, 1957), MoveWindow rescued it. Documented in
 `memory/feedback_gmsh_gui_invisible_from_background.md`.
+
+Note: the MCP `gmsh_render` / `gmsh_export_animation` tools bake this
+prevention in (subprocess with `-noconfig` + explicit
+GraphicsPositionX/Y + Width/Height), so headless screenshots never
+inherit a stale off-screen geometry.
 """
 
 
@@ -1485,6 +1545,12 @@ gmsh.finalize()
 ```
 
 ## Programmatic PNG/GIF Export
+
+The MCP tool `gmsh_export_animation` packages this whole recipe (linked
+views, AnimationCycle=0, per-view TimeStep stepping, PNG frames, Pillow
+GIF assembly, subprocess isolation); `gmsh_render` does the single-frame
+PNG case. Reach for the raw pattern below only when a notebook or script
+needs custom per-frame logic.
 
 Gmsh can export post-processing animation frames reliably through the Python
 API when an FLTK/OpenGL context is initialized. A plain command-line
