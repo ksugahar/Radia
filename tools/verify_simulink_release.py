@@ -50,6 +50,7 @@ FULL_REQUIRED_MEMBERS = {
     "matlab/verify_radia_simulink_release.m",
     "matlab/radia_simulink_library.slx",
     "matlab/radia_ih.slx",
+    "matlab/radia_maglev.slx",
     "matlab/radia_streamfunction_optimization.slx",
     "matlab/radia_mex.mexw64",
     "matlab/radia_ih_eddy_sfun.m",

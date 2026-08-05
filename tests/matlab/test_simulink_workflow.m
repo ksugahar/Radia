@@ -544,6 +544,25 @@ verifyTrue(testCase,ihContract.distributed_field);
 verifyFalse(testCase,ihContract.surrogate);
 verifyEqual(testCase,string(ihContract.temperature_feedback), ...
     "previous-accepted-thermal-state");
+maglevPath="radia_simulink_library/Applications/Magnetic Levitation";
+verifyEqual(testCase,string(get_param(maglevPath,"BlockType")),"SubSystem");
+verifyEqual(testCase,string(get_param(maglevPath,"Mask")),"on");
+maglevMask=Simulink.Mask.get(maglevPath);
+maglevFamilyParameter=maglevMask.getParameter("family");
+verifyEqual(testCase,string(maglevFamilyParameter.Evaluate),"off");
+verifyTrue(testCase,contains(string(maglevFamilyParameter.Callback), ...
+    "onMagLevBlockFamilyChanged"));
+maglevPorts=get_param(maglevPath,"PortHandles");
+verifyEqual(testCase,numel(maglevPorts.Inport),3);
+verifyEqual(testCase,numel(maglevPorts.Outport),2);
+verifyEqual(testCase,string(get_param( ...
+    maglevPath+"/Moving HCurl CLN","FunctionName")), ...
+    "radia_hcurl_eddy_cln_family_sfunction");
+maglevContract=get_param(maglevPath,"UserData");
+verifyEqual(testCase,string(maglevContract.backend), ...
+    "matlab-level2-common-basis-cln");
+verifyFalse(testCase,maglevContract.python_per_step);
+verifyFalse(testCase,maglevContract.surrogate);
 fieldStatsPath="radia_simulink_library/Utilities/Field Stats";
 verifyEqual(testCase,string(get_param(fieldStatsPath,"BlockType")), ...
     "SubSystem");

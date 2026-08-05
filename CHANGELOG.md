@@ -5,6 +5,14 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Added the generated `radia_maglev.slx` production composition and the
+  `Applications/Magnetic Levitation` library block. The model advances a
+  position-dependent common-basis HCurl/CLN state from `-dI/dt`, height, and
+  coil current and emits induced response plus three-component Lorentz force
+  without per-step Python.
+- Added family-file mask handling, diagnostic smoke data, MATLAB model tests,
+  release-package gates, and MCP interface documentation for MagLev.
+
 ## 4.95.40 - Native IH geometry-to-operator assembly
 
 Released 2026-08-05.
