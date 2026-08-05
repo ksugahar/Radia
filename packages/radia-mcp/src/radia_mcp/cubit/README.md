@@ -1,6 +1,6 @@
 # `radia_mcp.cubit` — Cubit mesh scripting MCP server
 
-**83 MCP tools** — the largest subpackage in the radia-mcp wheel.
+**85 MCP tools** — the largest subpackage in the radia-mcp wheel.
 Production-grade workflow for Coreform Cubit hex/tet meshing via
 Python (`cubit.cmd`), STEP import, NGSolve `.vol` export with the
 canonical `check-vol` gate, a persistent Cubit session (daemon), and
@@ -36,7 +36,14 @@ Environment knobs:
 | Variable | Effect |
 |---|---|
 | `CUBIT_BIN_DIR` / `CUBIT_INSTALL_DIR` | Override Coreform Cubit install discovery |
-| `RADIA_MCP_CUBIT_GATES=0` | Hide the ~40 CI/scenario `*_gate` tools in interactive sessions (83 → 48 tools) |
+| `RADIA_MCP_CUBIT_GATES=0` | Hide the CI/scenario `*_gate` tools in interactive sessions (85 → 50 tools) |
+| `RADIA_CUBIT_EAGER=1` | Start the Cubit session in the background at server startup (hides the 30+ s first-call cost) |
+| `RADIA_MCP_CUBIT_CALL_LOG=0` | Disable the all-calls JSONL log (`<state_dir>/logs/cubit_tool_calls.jsonl`) |
+
+First stop when anything misbehaves: `cubit_doctor()` — a read-only
+one-shot diagnosis of install discovery, license cache, deployed-plugin
+freshness (hash vs the cubit-mesh-export copy), daemon state, drop-dir
+startup diagnostics, and check-vol dependencies.
 
 Then in a session:
 
@@ -48,11 +55,12 @@ Then in a session:
 > cubit_check_vol(vol_path="coil.vol")      # canonical check-vol gate
 ```
 
-## Tool families (83 total)
+## Tool families (85 total)
 
 | Family | Examples |
 |---|---|
-| **Live session** | `cubit_show`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_snapshot`, `cubit_session_status`, `cubit_session_shutdown` |
+| **Live session** | `cubit_show`, `cubit_exec`, `cubit_exec_safely`, `cubit_probe`, `cubit_snapshot`, `cubit_session_status`, `cubit_session_shutdown`, `cubit_session_journal` (export the session as a replayable `.jou`) |
+| **Environment** | `cubit_doctor` (one-shot install/license/plugin/daemon diagnosis) |
 | **Checkpoint / restore** | `cubit_checkpoint`, `cubit_restore`, `cubit_list_checkpoints` |
 | **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto`, `open_in_cubit` |
 | **Mesh race (variant exploration)** | `cubit_mesh_race`, `cubit_mesh_race_smart[_async]`, `cubit_mesh_race_review[_async]`, `cubit_mesh_race_status`, `cubit_mesh_apply_choice`, `cubit_mesh_race_with_human`, `cubit_curate_learned_recipes` |
