@@ -130,8 +130,41 @@ from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
 
+# Server-level instructions delivered to the client model at MCP
+# `initialize` time (MathWorks MATLAB MCP server pattern: a short embedded
+# operating doctrine, not per-tool docs -- those live in tool descriptions).
+_SERVER_INSTRUCTIONS = """\
+Coreform Cubit meshing MCP server (Sugahara lab). Capabilities: drive a
+persistent Cubit session (GUI or batch), headless mesh dry-runs and
+mesh-variant races, Netgen `.vol` export gates, lint, and a curated Cubit
+knowledge corpus.
+
+Session model: `cubit_show`/`cubit_exec` reuse ONE persistent Cubit daemon
+(first call may take 30+ s for license + startup; later calls are
+sub-second). The daemon deliberately survives client restarts. Use
+`cubit_session_status` to inspect it; do not spawn ad-hoc Cubit processes.
+
+Operating rules (lab doctrine -- follow these):
+1. Probe, don't guess: before writing entity-classification predicates,
+   run `cubit_probe(query="entities")` and derive predicates from the
+   printed centroids/bboxes/measures. Never hardcode entity IDs.
+2. Verify labels: after every block/sideset command run
+   `cubit_probe(query="labels")` -- Cubit silently no-ops wrong-kind adds,
+   so intended-but-absent membership only shows up there.
+3. Gate every solver-bound `.vol`: run `cubit_check_vol` after export and
+   before any solver use. A failed gate means stop, not proceed.
+4. Checkpoint before risky operations (`cubit_checkpoint` /
+   `cubit_restore`).
+5. Errors return JSON {"status":"error","kind":...}: kind="input" means
+   fix your commands and retry; kind="environment" means a
+   license/install problem -- report it to the user instead of retrying;
+   kind="internal" means a server bug -- do not retry with new inputs.
+Always inspect tool outputs before acting on them; on repeated failure ask
+the user rather than looping.
+"""
+
 # Create MCP server
-mcp = FastMCP("cubit-export")
+mcp = FastMCP("cubit-export", instructions=_SERVER_INSTRUCTIONS)
 
 # Project root (current working directory for pip-installed package)
 PROJECT_ROOT = Path.cwd()
@@ -819,9 +852,9 @@ def cubit_check_vol(vol_path: str,
 		from cubit_mesh_export.check import check_consistency
 	except ImportError as exc:
 		return json.dumps({
-			"status": "error", "stage": "import",
+			"status": "error", "stage": "import", "kind": "environment",
 			"error": f"cubit-mesh-export (with ngsolve) is required: {exc}",
-			"hint": "pip install cubit-mesh-export  (LAB/100号機: editable install)",
+			"hint": "pip install cubit-mesh-export",
 		})
 	p = Path(vol_path)
 	if not p.is_absolute():
@@ -843,10 +876,10 @@ def cubit_check_vol(vol_path: str,
 		)
 	except FileNotFoundError as exc:
 		return json.dumps({"status": "error", "stage": "input",
-		                   "error": str(exc)})
+		                   "kind": "input", "error": str(exc)})
 	except Exception as exc:
 		return json.dumps({
-			"status": "error", "stage": "check",
+			"status": "error", "stage": "check", "kind": "input",
 			"error": f"{type(exc).__name__}: {exc}",
 		})
 	if report_json:
@@ -2434,6 +2467,52 @@ def open_in_cubit(path: str = "",
 
 from . import session as _cs
 
+# Error `kind` classification for the LLM audience (MathWorks
+# UnexpectedErrorPrefixForLLM pattern, extended):
+#   "input"       -- the caller's commands/paths are wrong; fix + retry.
+#   "environment" -- license / install / hung-session problem; report to
+#                    the user instead of retrying with new inputs.
+#   "internal"    -- server/daemon bug; do not retry.
+_ENVIRONMENT_ERROR_NEEDLES = (
+    "license", "rlm", "could not locate coreform cubit", "did not signal",
+    "bootstrap", "exited during", "response timeout", "daemon died",
+)
+
+
+def _classify_error_kind(message: str) -> str:
+    low = message.lower()
+    if any(n in low for n in _ENVIRONMENT_ERROR_NEEDLES):
+        return "environment"
+    return "input"
+
+
+def _session_log_pointer() -> str | None:
+    """Where the full session diagnostics live (MathWorks 'for details,
+    see the server log in <path>' pattern)."""
+    try:
+        drop = _cs._user_daemon_dir()
+    except Exception:
+        return None
+    return str(drop)
+
+
+def _error_payload(stage: str, message: str, *, kind: str | None = None,
+                   hint: str | None = None) -> dict:
+    """Uniform error dict: status/stage/kind/error (+hint, +log)."""
+    payload = {
+        "status": "error",
+        "stage": stage,
+        "kind": kind or _classify_error_kind(message),
+        "error": message,
+    }
+    if hint:
+        payload["hint"] = hint
+    log = _session_log_pointer()
+    if log and payload["kind"] in ("environment", "internal"):
+        payload["log"] = (f"{log} (bootstrap.log / cubit_stderr.log / "
+                          "startup_error.txt hold the full record)")
+    return payload
+
 
 def _cubit_session_or_error():
     """Lazy-init the singleton; return (session, None) or (None, err_json)."""
@@ -2442,14 +2521,12 @@ def _cubit_session_or_error():
         sess.ensure_started()
         return sess, None
     except _cs.CubitSessionError as e:
-        err = {
-            "status": "error",
-            "stage": "session_init",
-            "error": str(e),
-            "hint": ("Ensure Coreform Cubit is installed. "
-                     "Override path with `set_cubit_bin_dir(path)` or "
-                     "`CUBIT_BIN_DIR` environment variable."),
-        }
+        err = _error_payload(
+            "session_init", str(e),
+            hint=("Ensure Coreform Cubit is installed. "
+                  "Override path with `set_cubit_bin_dir(path)` or "
+                  "`CUBIT_BIN_DIR` environment variable."),
+        )
         return None, json.dumps(err, indent=2)
 
 
@@ -2516,8 +2593,7 @@ def cubit_show(path: str = "", extra_commands: list = None) -> str:
 	try:
 		r = sess.call("cmd", cmds)
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc",
-		                   "error": str(e)})
+		return json.dumps(_error_payload("rpc", str(e)))
 	return json.dumps(r, indent=2)
 
 
@@ -2594,12 +2670,12 @@ def cubit_exec(commands: list) -> str:
 			"stage": "rpc",
 			"context": {"state_before": before},
 		})
-		return json.dumps({"status": "error", "stage": "rpc",
-		                   "error": str(e),
-		                   "hint": "Cubit daemon RPC failed. "
-		                           "Session auto-restarts on next call "
-		                           "(state lost). Consider cubit_checkpoint "
-		                           "before risky ops."})
+		return json.dumps(_error_payload(
+			"rpc", str(e),
+			hint="Cubit daemon RPC failed. An owned session auto-restarts "
+			     "on the next call (state lost -- consider cubit_checkpoint "
+			     "before risky ops); an attached session is left running -- "
+			     "use cubit_session_shutdown to force-stop a hung daemon."))
 	after = _probe_summary_safe(sess)
 
 	per_line = r.get("result") if isinstance(r, dict) else r
@@ -2728,13 +2804,15 @@ def cubit_probe(query: str = "summary") -> str:
 	Query the Cubit session for geometry/mesh statistics.
 
 	Valid queries:
-	  "summary"  — {volumes, surfaces, curves, vertices, nodes, hexes, tets}
-	  "quality"  — scaled-Jacobian stats over all hexes+tets
-	  "entities" — Probe-Don't-Guess dump: every volume {id, centroid,
-	               extent, volume} and surface {id, center, extent, area}.
-	               ALWAYS run this before writing entity-classification
-	               predicates (webcut/subtract/imprint renumber entities).
-	  "labels"   — blocks/sidesets with names, ACTUAL element membership,
+	  "summary"    — {volumes, surfaces, curves, vertices, nodes, hexes, tets}
+	  "quality"    — scaled-Jacobian stats over all hexes+tets
+	  "per_volume" — one row per volume: {id, scheme, hex, tet, meshed}
+	  "entities"   — Probe-Don't-Guess dump: every volume {id, centroid,
+	               bbox_min/max, extent, volume} and surface {id, center,
+	               bbox_min/max, extent, area}. ALWAYS run this before
+	               writing entity-classification predicates
+	               (webcut/subtract/imprint renumber entities).
+	  "labels"     — blocks/sidesets with names, ACTUAL element membership,
 	               and a convention audit (mixed blocks, unnamed blocks,
 	               casefold collisions, non-snake-case names). Run after
 	               every block/sideset command and before `export netgen`:
@@ -2743,6 +2821,10 @@ def cubit_probe(query: str = "summary") -> str:
 	               membership only shows up here.
 	  "volume_count", "surface_count", "curve_count", "vertex_count"
 	  "node_count", "hex_count", "tet_count"
+
+	Both session transports (GUI file-drop and batch stdio) dispatch to
+	the same shared implementation (probe_ops.py) — identical queries
+	everywhere.
 
 	Args:
 	    query: probe name, see list above.
@@ -2753,15 +2835,14 @@ def cubit_probe(query: str = "summary") -> str:
 	try:
 		r = sess.call("probe", [query])
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc",
-		                   "error": str(e)})
+		return json.dumps(_error_payload("rpc", str(e)))
 	return json.dumps(r, indent=2)
 
 
 @mcp.tool()
 def cubit_snapshot(out_path: str,
                    width: int = 800,
-                   height: int = 600) -> str:
+                   height: int = 600):
 	"""
 	Hardcopy the current Cubit view to a PNG file.
 
@@ -2769,11 +2850,16 @@ def cubit_snapshot(out_path: str,
 	a cheap "visual diff" after a command sequence.  GUI mode is
 	strongly recommended; batch-mode screenshots may be empty.
 
+	The captured PNG is returned INLINE as image content (so the model
+	sees the current view directly) in addition to being written to
+	`out_path` for reuse in documents.
+
 	Args:
 	    out_path: PNG output path (absolute or relative to project root).
 	    width, height: pixel dimensions (defaults 800x600).
 	"""
 	from pathlib import Path as _P
+	from mcp.server.fastmcp import Image as _Image
 	sess, err = _cubit_session_or_error()
 	if err is not None:
 		return err
@@ -2784,9 +2870,14 @@ def cubit_snapshot(out_path: str,
 	try:
 		r = sess.call("snapshot", [abs_path, int(width), int(height)])
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc",
-		                   "error": str(e)})
-	return json.dumps(r, indent=2)
+		return json.dumps(_error_payload("rpc", str(e)))
+	result_json = json.dumps(r, indent=2)
+	png = _P(abs_path)
+	if r.get("ok") and png.is_file() and png.stat().st_size > 0:
+		# Inline image + the JSON record (MathWorks figure-capture
+		# pattern: the model sees the view, nothing to chase on disk).
+		return [_Image(path=str(png)), result_json]
+	return result_json
 
 
 @mcp.tool()
@@ -2818,11 +2909,17 @@ def cubit_session_status() -> str:
 
 @mcp.tool()
 def cubit_session_shutdown() -> str:
-	"""Stop the persistent Cubit daemon. Next `cubit_show` relaunches."""
+	"""Stop the persistent Cubit daemon. Next `cubit_show` relaunches.
+
+	This is the EXPLICIT stop path: it also stops a daemon started by
+	another process (e.g. a hung session that recovery deliberately
+	left running). The report says which process was stopped
+	(stopped: "owned-child" | "attached-daemon" | "none", plus pid).
+	"""
 	if _cs._SINGLETON is None or not _cs._SINGLETON.is_alive():
 		return json.dumps({"status": "ok", "note": "no session running"})
-	_cs.CubitSession.reset()
-	return json.dumps({"status": "ok", "note": "session stopped"})
+	report = _cs.CubitSession.reset()
+	return json.dumps({"status": "ok", "note": "session stopped", **report})
 
 
 # ============================================================
@@ -2872,7 +2969,7 @@ def cubit_checkpoint(label: str) -> str:
 	try:
 		r = sess.call("cmd", [f'save as "{fwd}" overwrite'], timeout_s=120)
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+		return json.dumps(_error_payload("rpc", str(e)))
 	if not r.get("ok"):
 		return json.dumps({"status": "error", "stage": "save", "detail": r})
 	return json.dumps({
@@ -2911,7 +3008,7 @@ def cubit_restore(label: str) -> str:
 	try:
 		r = sess.call("cmd", [f'open "{fwd}"'], timeout_s=120)
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+		return json.dumps(_error_payload("rpc", str(e)))
 	if not r.get("ok"):
 		return json.dumps({"status": "error", "stage": "open", "detail": r})
 	return json.dumps({"status": "ok", "label": safe, "path": str(path)}, indent=2)
@@ -2989,7 +3086,7 @@ def cubit_mesh_diagnose() -> str:
 	try:
 		r = sess.call("probe", ["per_volume"], timeout_s=30)
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+		return json.dumps(_error_payload("rpc", str(e)))
 	if not r.get("ok"):
 		return json.dumps({"status": "error", "stage": "probe", "detail": r})
 	rows = r.get("result", [])
@@ -3051,7 +3148,7 @@ def cubit_suggest_next(goal: str = "mesh") -> str:
 	try:
 		summary = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
 	except _cs.CubitSessionError as e:
-		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+		return json.dumps(_error_payload("rpc", str(e)))
 	try:
 		per_vol = sess.call("probe", ["per_volume"], timeout_s=30).get("result", [])
 	except _cs.CubitSessionError:
@@ -3540,8 +3637,7 @@ def _run_batch(step_path: str | None, commands: list[str],
 		try:
 			r = sess.call("cmd", commands, timeout_s=timeout_s)
 		except _cs.CubitSessionError as e:
-			return {"status": "error", "stage": "rpc",
-			        "error": str(e), "per_line": per_line}
+			return {**_error_payload("rpc", str(e)), "per_line": per_line}
 		per_line.extend(r.get("result", []))
 		try:
 			smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
@@ -4395,7 +4491,7 @@ def _run_batch_with_quality(step_path: str | None, commands: list[str],
 		try:
 			r = sess.call("cmd", commands, timeout_s=timeout_s)
 		except _cs.CubitSessionError as e:
-			return {"status": "error", "stage": "rpc", "error": str(e)}
+			return _error_payload("rpc", str(e))
 		per_line.extend(r.get("result", []))
 		try:
 			smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
@@ -5851,6 +5947,17 @@ def _selftest(audit_repo: bool = False):
     print("=" * 70)
     print()
 
+    # --- Tool annotation classification (MathWorks preset discipline) ---
+    n_tools = len(mcp._tool_manager._tools)
+    print(f"  tool annotations: {n_tools} tools classified")
+    if _UNCLASSIFIED_TOOLS:
+        print("  WARNING: tools defaulted to READONLY without an explicit "
+              "entry or read-only name shape -- classify them in "
+              "_DESTRUCTIVE_TOOLS/_WRITING_TOOLS/_WEB_TOOLS if wrong:")
+        for name in _UNCLASSIFIED_TOOLS:
+            print(f"    - {name}")
+    print()
+
     # --- Fixtures validation ---
     fixtures_dir = (
         Path(__file__).parent.parent.parent.parent.parent / "tests"
@@ -5911,6 +6018,88 @@ register_status_tool(
     related_servers=["build123d"],
     audit_command="mcp-server-cubit --selftest --audit-repo",
 )
+
+
+# ============================================================
+# Tool annotations + optional gate hiding (MathWorks MCP pattern)
+# ============================================================
+# Every tool is classified through one of FOUR fully-specified presets
+# (MathWorks' annotations.go discipline: presets only, all hint fields
+# always set).  Classification is central so adding a tool forces a
+# conscious choice here; unclassified tools fall back to READONLY and
+# are reported by --selftest.
+
+from mcp.types import ToolAnnotations as _ToolAnnotations
+
+
+def _ann(read_only: bool, destructive: bool, idempotent: bool,
+         open_world: bool) -> _ToolAnnotations:
+	return _ToolAnnotations(
+		readOnlyHint=read_only, destructiveHint=destructive,
+		idempotentHint=idempotent, openWorldHint=open_world)
+
+
+_ANN_READONLY = _ann(True, False, True, False)
+_ANN_READONLY_WEB = _ann(True, False, False, True)   # fetches the web
+_ANN_WRITES = _ann(False, False, False, False)       # writes files; live session untouched
+_ANN_DESTRUCTIVE = _ann(False, True, False, False)   # mutates the live Cubit session / kills it
+
+# Tools that execute commands in (or overwrite / stop) the live session.
+_DESTRUCTIVE_TOOLS = {
+	"cubit_exec", "cubit_exec_safely", "cubit_show", "open_in_cubit",
+	"cubit_restore", "cubit_session_shutdown", "cubit_mesh_apply_choice",
+	"cubit_mesh_race_with_human",
+}
+# Tools that create/refresh files on disk but leave the live session alone.
+_WRITING_TOOLS = {
+	"cubit_checkpoint", "cubit_snapshot", "cubit_batch_try",
+	"cubit_mesh_auto", "cubit_mesh_race", "cubit_mesh_race_smart",
+	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
+	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
+	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
+}
+# Read-only tools that may reach the network.
+_WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
+
+
+def _classify_tool_annotations() -> list[str]:
+	"""Stamp annotation presets onto every registered tool.
+
+	Returns the names that fell back to the READONLY default without an
+	explicit entry AND without a recognizably read-only name shape --
+	surfaced by --selftest so new tools get a conscious classification.
+	"""
+	readonly_name_hints = (
+		"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
+		"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
+		"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
+		"_failures", "_checkpoints", "_audit",
+	)
+	unclassified = []
+	for name, tool in mcp._tool_manager._tools.items():
+		if name in _DESTRUCTIVE_TOOLS:
+			tool.annotations = _ANN_DESTRUCTIVE
+		elif name in _WRITING_TOOLS:
+			tool.annotations = _ANN_WRITES
+		elif name in _WEB_TOOLS:
+			tool.annotations = _ANN_READONLY_WEB
+		else:
+			tool.annotations = _ANN_READONLY
+			if not any(h in name for h in readonly_name_hints):
+				unclassified.append(name)
+	return unclassified
+
+
+_UNCLASSIFIED_TOOLS = _classify_tool_annotations()
+
+# Optional interactive-surface trim (MathWorks exposes 5 tools, not 83):
+# the ~40 scenario/CI gate tools are only needed by validation pipelines.
+# Set RADIA_MCP_CUBIT_GATES=0 to hide them in interactive sessions.
+# Default keeps every tool registered so docs/TOOLS.md stays stable.
+if os.environ.get("RADIA_MCP_CUBIT_GATES", "1") == "0":
+	for _name in [n for n in list(mcp._tool_manager._tools)
+	              if n.endswith("_gate")]:
+		mcp._tool_manager.remove_tool(_name)
 
 
 def _is_closed_stdout_error(exc: BaseException) -> bool:

@@ -41,14 +41,42 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import sys
 import traceback
 
-from PySide6.QtCore import QTimer
 
-import cubit  # Cubit-bundled module; present in the GUI's Python
+def _write_startup_error(text: str) -> None:
+    """Persist a startup failure where session.py's ready-poll can see it.
+
+    MathWorks MATLAB MCP pattern (mcp_startup_error.txt): the launching
+    client polls for this file alongside the ready marker, so a license
+    denial / Qt failure / import error surfaces as the REAL in-process
+    error instead of a generic ready-timeout.  Uses only the env var so
+    it works even before DROP is resolved.
+    """
+    drop = os.environ.get("CUBIT_DROP_DIR")
+    if not drop:
+        return
+    try:
+        p = pathlib.Path(drop)
+        p.mkdir(parents=True, exist_ok=True)
+        (p / "startup_error.txt").write_text(text, encoding="utf-8")
+    except OSError:
+        pass
+
+
+try:
+    from PySide6.QtCore import QTimer
+
+    import cubit  # Cubit-bundled module; present in the GUI's Python
+except Exception:
+    _write_startup_error(traceback.format_exc())
+    raise
 
 
 PROTOCOL_VERSION = 2  # file-drop variant of daemon.py's protocol 1
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _read_drop_dir() -> pathlib.Path:
@@ -65,7 +93,11 @@ def _read_drop_dir() -> pathlib.Path:
     return p
 
 
-DROP = _read_drop_dir()
+try:
+    DROP = _read_drop_dir()
+except Exception:
+    _write_startup_error(traceback.format_exc())
+    raise
 OUTBOX = DROP / "out"
 LOG = DROP / "bootstrap.log"
 
@@ -156,107 +188,13 @@ def _op_cmd(args: list) -> list:
 
 
 def _op_probe(args: list) -> object:
-    """Lab-common geometry queries. Mirror cubit_daemon._op_probe."""
-    query = args[0] if args else ""
-    q = str(query).strip().lower()
-    try:
-        if q in ("volume_count", "volumes"):
-            return int(cubit.get_volume_count())
-        if q in ("surface_count", "surfaces"):
-            return int(cubit.get_surface_count())
-        if q in ("vertex_count", "vertices"):
-            return int(cubit.get_vertex_count())
-        if q in ("curve_count", "curves"):
-            return int(cubit.get_curve_count())
-        if q in ("node_count", "nodes"):
-            return int(cubit.get_node_count())
-        if q in ("hex_count", "hexes", "hex"):
-            return int(cubit.get_hex_count())
-        if q in ("tet_count", "tets", "tet"):
-            return int(cubit.get_tet_count())
-        if q in ("summary",):
-            return {
-                "volumes": int(cubit.get_volume_count()),
-                "surfaces": int(cubit.get_surface_count()),
-                "curves": int(cubit.get_curve_count()),
-                "vertices": int(cubit.get_vertex_count()),
-                "nodes": int(cubit.get_node_count()),
-                "hexes": int(cubit.get_hex_count()),
-                "tets": int(cubit.get_tet_count()),
-            }
-        if q in ("quality_summary", "quality"):
-            # Per-element scaled-jacobian for hex+tet, summarize into
-            # min / max / mean / count<0.2 — small, stable proxy for
-            # mesh quality without full export.
-            try:
-                hex_ids = list(cubit.parse_cubit_list("hex", "all"))
-                tet_ids = list(cubit.parse_cubit_list("tet", "all"))
-            except Exception:
-                hex_ids = []
-                tet_ids = []
-            vals_hex = []
-            vals_tet = []
-            try:
-                if hex_ids:
-                    vals_hex = list(cubit.get_quality_values(
-                        "hex", [int(x) for x in hex_ids], "scaled jacobian"))
-            except Exception:
-                vals_hex = []
-            try:
-                if tet_ids:
-                    vals_tet = list(cubit.get_quality_values(
-                        "tet", [int(x) for x in tet_ids], "scaled jacobian"))
-            except Exception:
-                vals_tet = []
-            all_vals = [float(v) for v in vals_hex + vals_tet]
-            if not all_vals:
-                return {"hex_count": len(hex_ids), "tet_count": len(tet_ids),
-                        "min": None, "max": None, "mean": None,
-                        "below_0.2": 0}
-            below = sum(1 for v in all_vals if v < 0.2)
-            return {
-                "hex_count": int(len(hex_ids)),
-                "tet_count": int(len(tet_ids)),
-                "min": round(min(all_vals), 6),
-                "max": round(max(all_vals), 6),
-                "mean": round(sum(all_vals) / len(all_vals), 6),
-                "below_0.2": int(below),
-                "below_0.2_pct": round(100 * below / len(all_vals), 2),
-            }
-        if q in ("per_volume", "volumes_detail"):
-            # One row per volume: id / scheme / hex / tet / meshed
-            try:
-                vol_ids = list(cubit.parse_cubit_list("volume", "all"))
-            except Exception:
-                vol_ids = []
-            rows = []
-            for vid in vol_ids:
-                vid = int(vid)
-                try:
-                    scheme = cubit.get_volume_meshing_scheme(vid)
-                except Exception:
-                    scheme = None
-                try:
-                    n_hex = len(cubit.parse_cubit_list("hex", f"in volume {vid}"))
-                except Exception:
-                    n_hex = 0
-                try:
-                    n_tet = len(cubit.parse_cubit_list("tet", f"in volume {vid}"))
-                except Exception:
-                    n_tet = 0
-                rows.append({
-                    "id": vid,
-                    "scheme": str(scheme) if scheme is not None else None,
-                    "hex": int(n_hex),
-                    "tet": int(n_tet),
-                    "meshed": (n_hex + n_tet) > 0,
-                })
-            return rows
-    except Exception:
-        return {"error": traceback.format_exc()}
-    return {"error": f"Unknown probe query: {query!r}. "
-                     "Try: volume_count / surface_count / vertex_count / "
-                     "curve_count / node_count / hex_count / tet_count / summary"}
+    """Delegate to the SHARED probe implementation (probe_ops.op_probe)
+    used by both the GUI file-drop runner (this file) and the batch
+    stdio runner (daemon.py) -- single source, no query drift."""
+    if _HERE not in sys.path:
+        sys.path.insert(0, _HERE)
+    import probe_ops
+    return probe_ops.op_probe(cubit, args)
 
 
 def _op_snapshot(args: list) -> dict:
@@ -354,4 +292,8 @@ def _start() -> None:
     _install_ready_marker()
 
 
-_start()
+try:
+    _start()
+except Exception:
+    _write_startup_error(traceback.format_exc())
+    raise
