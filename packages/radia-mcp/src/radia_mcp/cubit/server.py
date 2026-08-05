@@ -2479,13 +2479,6 @@ _ENVIRONMENT_ERROR_NEEDLES = (
 )
 
 
-def _classify_error_kind(message: str) -> str:
-    low = message.lower()
-    if any(n in low for n in _ENVIRONMENT_ERROR_NEEDLES):
-        return "environment"
-    return "input"
-
-
 def _session_log_pointer() -> str | None:
     """Where the full session diagnostics live (MathWorks 'for details,
     see the server log in <path>' pattern)."""
@@ -2498,20 +2491,15 @@ def _session_log_pointer() -> str | None:
 
 def _error_payload(stage: str, message: str, *, kind: str | None = None,
                    hint: str | None = None) -> dict:
-    """Uniform error dict: status/stage/kind/error (+hint, +log)."""
-    payload = {
-        "status": "error",
-        "stage": stage,
-        "kind": kind or _classify_error_kind(message),
-        "error": message,
-    }
-    if hint:
-        payload["hint"] = hint
+    """Cubit-flavored wrapper over the shared error contract."""
+    from ..common.server_hardening import error_payload
     log = _session_log_pointer()
-    if log and payload["kind"] in ("environment", "internal"):
-        payload["log"] = (f"{log} (bootstrap.log / cubit_stderr.log / "
-                          "startup_error.txt hold the full record)")
-    return payload
+    return error_payload(
+        stage, message, kind=kind, hint=hint,
+        environment_needles=_ENVIRONMENT_ERROR_NEEDLES,
+        log=(f"{log} (bootstrap.log / cubit_stderr.log / "
+             "startup_error.txt hold the full record)") if log else None,
+    )
 
 
 def _cubit_session_or_error():
@@ -6258,20 +6246,15 @@ register_status_tool(
 # conscious choice here; unclassified tools fall back to READONLY and
 # are reported by --selftest.
 
-from mcp.types import ToolAnnotations as _ToolAnnotations
-
-
-def _ann(read_only: bool, destructive: bool, idempotent: bool,
-         open_world: bool) -> _ToolAnnotations:
-	return _ToolAnnotations(
-		readOnlyHint=read_only, destructiveHint=destructive,
-		idempotentHint=idempotent, openWorldHint=open_world)
-
-
-_ANN_READONLY = _ann(True, False, True, False)
-_ANN_READONLY_WEB = _ann(True, False, False, True)   # fetches the web
-_ANN_WRITES = _ann(False, False, False, False)       # writes files; live session untouched
-_ANN_DESTRUCTIVE = _ann(False, True, False, False)   # mutates the live Cubit session / kills it
+from ..common.server_hardening import (
+	ANN_DESTRUCTIVE as _ANN_DESTRUCTIVE,
+	ANN_READONLY as _ANN_READONLY,
+	ANN_READONLY_WEB as _ANN_READONLY_WEB,
+	ANN_WRITES as _ANN_WRITES,
+	classify_tool_annotations as _classify_tool_annotations_common,
+	hide_gate_tools as _hide_gate_tools,
+	install_call_log as _install_call_log_common,
+)
 
 # Tools that execute commands in (or overwrite / stop) the live session.
 _DESTRUCTIVE_TOOLS = {
@@ -6292,32 +6275,23 @@ _WRITING_TOOLS = {
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
 
 
-def _classify_tool_annotations() -> list[str]:
-	"""Stamp annotation presets onto every registered tool.
+_CUBIT_READONLY_HINTS = (
+	"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
+	"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
+	"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
+	"_failures", "_checkpoints", "_audit", "_doctor",
+)
 
-	Returns the names that fell back to the READONLY default without an
-	explicit entry AND without a recognizably read-only name shape --
-	surfaced by --selftest so new tools get a conscious classification.
-	"""
-	readonly_name_hints = (
-		"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
-		"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
-		"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
-		"_failures", "_checkpoints", "_audit", "_doctor",
+
+def _classify_tool_annotations() -> list[str]:
+	"""Stamp presets onto every tool via the shared hardening module."""
+	return _classify_tool_annotations_common(
+		mcp,
+		destructive=_DESTRUCTIVE_TOOLS,
+		writes=_WRITING_TOOLS,
+		web=_WEB_TOOLS,
+		readonly_name_hints=_CUBIT_READONLY_HINTS,
 	)
-	unclassified = []
-	for name, tool in mcp._tool_manager._tools.items():
-		if name in _DESTRUCTIVE_TOOLS:
-			tool.annotations = _ANN_DESTRUCTIVE
-		elif name in _WRITING_TOOLS:
-			tool.annotations = _ANN_WRITES
-		elif name in _WEB_TOOLS:
-			tool.annotations = _ANN_READONLY_WEB
-		else:
-			tool.annotations = _ANN_READONLY
-			if not any(h in name for h in readonly_name_hints):
-				unclassified.append(name)
-	return unclassified
 
 
 _UNCLASSIFIED_TOOLS = _classify_tool_annotations()
@@ -6326,10 +6300,7 @@ _UNCLASSIFIED_TOOLS = _classify_tool_annotations()
 # the ~40 scenario/CI gate tools are only needed by validation pipelines.
 # Set RADIA_MCP_CUBIT_GATES=0 to hide them in interactive sessions.
 # Default keeps every tool registered so docs/TOOLS.md stays stable.
-if os.environ.get("RADIA_MCP_CUBIT_GATES", "1") == "0":
-	for _name in [n for n in list(mcp._tool_manager._tools)
-	              if n.endswith("_gate")]:
-		mcp._tool_manager.remove_tool(_name)
+_hide_gate_tools(mcp, "RADIA_MCP_CUBIT_GATES")
 
 
 # ============================================================
@@ -6343,51 +6314,9 @@ if os.environ.get("RADIA_MCP_CUBIT_GATES", "1") == "0":
 # RADIA_MCP_CUBIT_CALL_LOG=0.
 
 def _install_call_log() -> None:
-	if os.environ.get("RADIA_MCP_CUBIT_CALL_LOG", "1") == "0":
-		return
-	try:
-		log_dir = _fl.state_dir() / "logs"
-		log_dir.mkdir(parents=True, exist_ok=True)
-		log_path = log_dir / "cubit_tool_calls.jsonl"
-	except OSError:
-		return
-
-	orig_call_tool = mcp._tool_manager.call_tool
-
-	def _digest(arguments: dict) -> dict:
-		"""Compact argument record: keys + truncated repr (no huge
-		journal bodies / file contents in the log)."""
-		out = {}
-		for k, v in (arguments or {}).items():
-			r = repr(v)
-			out[k] = r if len(r) <= 200 else r[:200] + f"...({len(r)} ch)"
-		return out
-
-	async def logged_call_tool(name, arguments, context=None,
-	                           convert_result=False):
-		t0 = time.time()
-		record = {"ts": round(t0, 3), "tool": name,
-		          "args": _digest(arguments)}
-		try:
-			result = await orig_call_tool(
-				name, arguments, context=context,
-				convert_result=convert_result)
-			record["ok"] = True
-			return result
-		except Exception as exc:
-			record["ok"] = False
-			record["error"] = f"{type(exc).__name__}: {exc}"
-			raise
-		finally:
-			record["ms"] = round((time.time() - t0) * 1000, 1)
-			try:
-				with open(log_path, "a", encoding="utf-8") as f:
-					f.write(json.dumps(record, ensure_ascii=False,
-					                   default=str) + "\n")
-			except OSError:
-				pass
-
-	mcp._tool_manager.call_tool = logged_call_tool
+	"""Wrap call_tool with the shared JSONL all-calls log."""
+	_install_call_log_common(mcp, "cubit_tool_calls.jsonl",
+	                         "RADIA_MCP_CUBIT_CALL_LOG")
 
 
 _install_call_log()

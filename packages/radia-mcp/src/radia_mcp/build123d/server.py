@@ -96,8 +96,46 @@ from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
+from ..common.server_hardening import (
+    classify_tool_annotations as _classify_tool_annotations_common,
+    error_payload as _error_payload_common,
+    hide_gate_tools as _hide_gate_tools,
+    install_call_log as _install_call_log_common,
+)
 
-mcp = FastMCP("mcp-server-build123d")
+# Server-level instructions delivered to the client model at MCP
+# `initialize` time (same MathWorks pattern as mcp-server-cubit).
+_SERVER_INSTRUCTIONS = """\
+build123d CAD-as-code MCP server (Sugahara lab). Capabilities: author
+parametric OCCT solids in Python (builder/algebra + lab `modeling`/
+`archetypes` helpers), STEP/BREP import-export, per-solid inspection,
+lint, headless dry-runs, and the STEP -> Cubit meshing handoff.
+
+Operating rules (lab doctrine -- follow these):
+1. Use the hardened helpers (`modeling.swept`, `modeling.coil`,
+   `archetypes.*`) instead of raw sweeps/lofts: OCCT sweeps of thin or
+   self-crossing profiles segfault or emit degenerate shells. When a
+   sweep must be raw, verify with `build123d_probe(query="entities")`
+   that every solid has finite, plausible volume.
+2. LABEL every solid (`part.label = "yoke"`). Labels ride the STEP into
+   Cubit entity names and into external-CAD evidence rows (the same
+   named-solid discipline as history-based CAD systems, e.g. CST).
+   `build123d_probe(query="labels")` audits unnamed/duplicate labels.
+3. The SCRIPT is the journal: keep geometry scripts replayable and
+   parametric -- the build123d script plays the same role as a Cubit
+   `.jou` or a history list. Do not hand-edit exported STEP.
+4. Before meshing or cross-tool claims, run the volume/mass crosscheck
+   tools (`build123d_volume_crosscheck*`); Cubit/CST evidence rows must
+   carry units.
+5. Errors return JSON {"status":"error","kind":...}: kind="input" means
+   fix the script/arguments and retry; kind="environment" means a
+   missing dependency (build123d/OCP/Cubit) -- report to the user;
+   kind="internal" means a server bug -- do not retry.
+Always inspect tool outputs before acting on them; on repeated failure
+ask the user rather than looping.
+"""
+
+mcp = FastMCP("mcp-server-build123d", instructions=_SERVER_INSTRUCTIONS)
 
 
 @mcp.tool()
@@ -1638,12 +1676,14 @@ def _execute_build123d_sync(
             "traceback": tb[-1200:],
             "stdout": captured.getvalue()[-400:],
         })
-        err_payload: dict = {
-            "status": "error",
-            "error": tb,
-            "stdout": captured.getvalue(),
-            "hint": _build123d_failure_hint(tb),
-        }
+        err_payload: dict = _error_payload_common(
+            "exec", tb,
+            hint=_build123d_failure_hint(tb),
+            environment_needles=("no module named 'build123d'",
+                                 "no module named 'ocp'",
+                                 "no module named 'cadquery'"),
+        )
+        err_payload["stdout"] = captured.getvalue()
         if preflight:
             err_payload["preflight"] = preflight
         return json.dumps(err_payload, indent=2)
@@ -4434,6 +4474,275 @@ def build123d_heal(step_in: str, step_out: str = "",
 
 
 
+# ============================================================
+# Cross-server probe (cubit <-> build123d <-> external-CAD compat)
+# ============================================================
+
+_PROBE_ENTITY_CAP = 300
+
+
+def _round6(vec):
+    return [round(float(v), 6) for v in vec]
+
+
+def _bbox_fields_b3d(bb):
+    """Emit the SAME bbox vocabulary as cubit probe_ops._bbox_fields:
+    bbox_min / bbox_max / extent (max - min per axis)."""
+    lo = (bb.min.X, bb.min.Y, bb.min.Z)
+    hi = (bb.max.X, bb.max.Y, bb.max.Z)
+    return {
+        "bbox_min": _round6(lo),
+        "bbox_max": _round6(hi),
+        "extent": _round6([h - l for l, h in zip(lo, hi)]),
+    }
+
+
+_GENERIC_CAD_LABELS = {"", "SOLID", "COMPOUND", "ASSEMBLY", "PART"}
+
+
+def _labeled_solids(shape):
+    """Collect (label, solid) pairs via assembly-children traversal.
+
+    Labels live on Part/Compound CHILDREN, not on extracted Solids
+    (verified build123d 0.10.0: `compound.solids()[i].label == ""` while
+    `compound.children[i].label` carries the name, and the names survive
+    a STEP round trip).  Generic auto-labels (SOLID/ASSEMBLY/...) are
+    treated as unnamed and inherit the nearest labeled ancestor.
+
+    Recursion STOPS at the deepest node that still resolves labels:
+    collecting `node.solids()` there yields WORLD-placed geometry,
+    whereas descending into the raw Solid leaves loses the parent
+    compound's Location (verified: a STEP child at Pos(3,0,0) reports
+    center x=3.0 via `child.solids()` but x=0.0 via its inner Solid)."""
+    out = []
+
+    def has_real_label(node) -> bool:
+        label = (getattr(node, "label", "") or "").strip()
+        if label and label.upper() not in _GENERIC_CAD_LABELS:
+            return True
+        return any(has_real_label(k)
+                   for k in (getattr(node, "children", []) or []))
+
+    def walk(node, inherited):
+        label = (getattr(node, "label", "") or "").strip()
+        if label.upper() in _GENERIC_CAD_LABELS:
+            label = inherited
+        kids = list(getattr(node, "children", []) or [])
+        if kids and any(has_real_label(k) for k in kids):
+            for k in kids:
+                walk(k, label)
+            return
+        try:
+            solids = node.solids()
+        except Exception:
+            solids = []
+        for s in solids:
+            out.append((label, s))
+
+    walk(shape, "")
+    return out
+
+
+def _load_cad_shape(p: Path):
+    suffix = p.suffix.lower()
+    if suffix in (".step", ".stp"):
+        from build123d import import_step
+        return import_step(str(p))
+    if suffix == ".brep":
+        from build123d import import_brep
+        return import_brep(str(p))
+    raise ValueError(f"Unsupported format: {suffix}. Use .step or .brep")
+
+
+@mcp.tool()
+def build123d_probe(path: str, query: str = "summary") -> str:
+    """
+    Probe a STEP/BREP file with the SAME vocabulary as `cubit_probe`.
+
+    This is the CAD-side half of the cross-server probe contract: run it
+    on the authored STEP, mesh in Cubit, run `cubit_probe` on the live
+    session, and compare per-body numbers directly (same field names:
+    centroid / bbox_min / bbox_max / extent / volume).
+
+    Valid queries:
+      "summary"  — {solids, faces, edges, vertices} counts
+      "entities" — Probe-Don't-Guess dump: every solid {id, label,
+                   centroid, bbox_min/max, extent, volume} and face
+                   {id, center, bbox_min/max, extent, area}. ALWAYS run
+                   this before writing entity-classification predicates
+                   or claiming a sweep produced a valid solid.
+      "labels"   — per-solid labels + naming audit (unnamed solids,
+                   casefold collisions, non-snake-case) — the named-solid
+                   discipline shared with Cubit blocks and history-based
+                   CAD systems (e.g. CST component/solid names). Labels
+                   ride the STEP into Cubit entity names.
+
+    Args:
+        path: .step/.stp/.brep file (absolute or relative to cwd).
+        query: probe name, see list above.
+    """
+    p = Path(path)
+    if not p.is_file():
+        return json.dumps(_error_payload_common(
+            "input", f"File not found: {p}"))
+    try:
+        shape = _load_cad_shape(p)
+    except ValueError as exc:
+        return json.dumps(_error_payload_common("input", str(exc)))
+    except Exception:
+        return json.dumps(_error_payload_common(
+            "load", traceback.format_exc(),
+            environment_needles=("no module named 'build123d'",
+                                 "no module named 'ocp'")))
+
+    q = query.strip().lower()
+    if q == "summary":
+        result = {
+            "solids": len(shape.solids()),
+            "faces": len(shape.faces()),
+            "edges": len(shape.edges()),
+            "vertices": len(shape.vertices()),
+        }
+    elif q in ("entities", "geometry"):
+        pairs = _labeled_solids(shape)
+        faces = shape.faces()
+        result = {
+            "solid_count": len(pairs),
+            "face_count": len(faces),
+            "solids": [],
+            "faces": [],
+        }
+        for i, (label, s) in enumerate(pairs[:_PROBE_ENTITY_CAP], 1):
+            c = s.center()
+            entry = {
+                "id": i,
+                "label": label,
+                "centroid": _round6((c.X, c.Y, c.Z)),
+                "volume": float(s.volume),
+            }
+            entry.update(_bbox_fields_b3d(s.bounding_box()))
+            result["solids"].append(entry)
+        for i, f in enumerate(faces[:_PROBE_ENTITY_CAP], 1):
+            c = f.center()
+            entry = {
+                "id": i,
+                "center": _round6((c.X, c.Y, c.Z)),
+                "area": float(f.area),
+            }
+            entry.update(_bbox_fields_b3d(f.bounding_box()))
+            result["faces"].append(entry)
+        if (len(pairs) > _PROBE_ENTITY_CAP
+                or len(faces) > _PROBE_ENTITY_CAP):
+            result["truncated"] = (
+                f"listing capped at {_PROBE_ENTITY_CAP} entities per kind")
+    elif q in ("labels", "names"):
+        from ..cubit.label_audit import is_strict_label
+        pairs = _labeled_solids(shape)
+        solids = [{"id": i, "label": label}
+                  for i, (label, _s) in enumerate(pairs, 1)]
+        errors, warnings = [], []
+        seen: dict = {}
+        for row in solids:
+            name = row["label"]
+            ref = f'solid {row["id"]}'
+            if not name:
+                warnings.append(f"{ref} is unnamed -- label it in the "
+                                "script (part.label = ...) so the name "
+                                "rides the STEP into Cubit")
+                continue
+            if not is_strict_label(name):
+                warnings.append(
+                    f'{ref} label "{name}" is outside strict naming '
+                    "(lower snake case)")
+            key = name.casefold()
+            if key in seen and seen[key][1] != name:
+                errors.append(
+                    f'casefold collision: {seen[key][0]} "{seen[key][1]}" '
+                    f'vs {ref} "{name}"')
+            seen.setdefault(key, (ref, name))
+        result = {"solids": solids,
+                  "audit": {"errors": errors, "warnings": warnings,
+                            "passed": not errors}}
+    else:
+        return json.dumps(_error_payload_common(
+            "input",
+            f"Unknown probe query: {query!r}. "
+            "Try: summary / entities / labels"))
+    return json.dumps({"status": "ok", "file": str(p), **result},
+                      ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build123d_doctor() -> str:
+    """
+    One-shot environment diagnosis for the build123d MCP stack
+    (mirror of `cubit_doctor`). Read-only, launches nothing.
+
+    Checks: build123d + OCP import/versions -> cadquery availability ->
+    Cubit handoff target (install discovery for the *_to_cubit_hex /
+    preview tools) -> failure-log state dir.
+    """
+    checks: dict = {}
+    problems: list = []
+
+    try:
+        import build123d as _b
+        checks["build123d"] = {"status": "ok",
+                               "version": getattr(_b, "__version__", "?")}
+    except ImportError as exc:
+        checks["build123d"] = {
+            "status": "error", "detail": str(exc),
+            "fix": "pip install build123d",
+        }
+        problems.append("build123d: not importable")
+
+    try:
+        import OCP  # noqa: N811
+        checks["ocp"] = {"status": "ok",
+                         "version": getattr(OCP, "__version__", "?")}
+    except ImportError as exc:
+        checks["ocp"] = {"status": "error", "detail": str(exc)}
+        problems.append("OCP: not importable")
+
+    try:
+        import cadquery as _cq
+        checks["cadquery"] = {"status": "ok",
+                              "version": getattr(_cq, "__version__", "?")}
+    except ImportError:
+        checks["cadquery"] = {
+            "status": "skipped",
+            "detail": "cadquery not installed (execute_cadquery / "
+                      "cadquery_to_cubit_hex unavailable)"}
+
+    try:
+        from ..cubit.session import find_cubit_install
+        bin_dir = find_cubit_install()
+        if bin_dir is None:
+            checks["cubit_handoff"] = {
+                "status": "warn",
+                "detail": "Coreform Cubit not found -- *_to_cubit_hex / "
+                          "preview_shape_in_cubit unavailable",
+            }
+            problems.append("cubit handoff: Cubit not found")
+        else:
+            checks["cubit_handoff"] = {"status": "ok",
+                                       "bin_dir": str(bin_dir)}
+    except Exception as exc:
+        checks["cubit_handoff"] = {"status": "skipped", "detail": str(exc)}
+
+    try:
+        state = _fl.state_dir()
+        checks["state_dir"] = {"status": "ok", "path": str(state)}
+    except Exception as exc:
+        checks["state_dir"] = {"status": "skipped", "detail": str(exc)}
+
+    return json.dumps({
+        "status": "ok" if not problems else "problems_found",
+        "problems": problems,
+        "checks": checks,
+    }, ensure_ascii=False, indent=2, default=str)
+
+
 register_status_tool(
     mcp,
     server_name='mcp-server-build123d',
@@ -4444,11 +4753,61 @@ register_status_tool(
 )
 
 
+# ============================================================
+# Tool annotations + gate hiding + call log (shared hardening)
+# ============================================================
+
+_DESTRUCTIVE_TOOLS = {
+    # Arbitrary Python execution (MathWorks classifies eval as destructive)
+    "execute_build123d", "execute_cadquery", "build123d_try",
+    "build123d_try_race",
+}
+_WRITING_TOOLS = {
+    # Write STEP/preview files and/or spawn a Cubit batch process;
+    # no persistent live state is mutated.
+    "build123d_to_cubit_hex", "cadquery_to_cubit_hex",
+    "preview_shape_in_cubit", "preview_text", "preview_extrude",
+    "preview_boolean", "section_along_path", "generate_helix_coil",
+    "build123d_heal", "build123d_examples_refresh",
+}
+_WEB_TOOLS = {"build123d_web_docs", "build123d_examples",
+              "build123d_discussions"}
+
+_B3D_READONLY_HINTS = (
+    "_gate", "_usage", "_api", "_lookup", "_ask", "_examples",
+    "_failures", "_suggest", "_reference", "_crosscheck", "_contract",
+    "_manifest", "_handoff", "_package", "_probe", "_doctor", "_status",
+    "lint_", "inspect_", "_inspect", "generate_",
+)
+
+_UNCLASSIFIED_TOOLS = _classify_tool_annotations_common(
+    mcp,
+    destructive=_DESTRUCTIVE_TOOLS,
+    writes=_WRITING_TOOLS,
+    web=_WEB_TOOLS,
+    readonly_name_hints=_B3D_READONLY_HINTS,
+)
+
+_hide_gate_tools(mcp, "RADIA_MCP_BUILD123D_GATES")
+
+_install_call_log_common(mcp, "build123d_tool_calls.jsonl",
+                         "RADIA_MCP_BUILD123D_CALL_LOG")
+
+
 def main():
     if "--selftest" in sys.argv:
         from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
         print("build123d MCP server self-test:")
+
+        # Tool annotation classification (shared hardening)
+        n_tools = len(mcp._tool_manager._tools)
+        print(f"  tool annotations: {n_tools} tools classified")
+        if _UNCLASSIFIED_TOOLS:
+            print("  WARNING: tools defaulted to READONLY without an "
+                  "explicit entry or read-only name shape:")
+            for name in _UNCLASSIFIED_TOOLS:
+                print(f"    - {name}")
 
         # Test knowledge base topics (always available — pure text)
         topics = [
