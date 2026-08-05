@@ -983,19 +983,22 @@ slow and noisy; running ONE probe pass first is fast and final.
 
 ```python
 # Step 1: probe -- print everything we might filter on.
+# (Or, via the cubit MCP live session: cubit_probe(query="entities").)
 for vid in cubit.parse_cubit_list("volume", "all"):
     v = cubit.volume(vid)
     c = v.centroid()
-    bb = v.bounding_box()
+    bb = v.bounding_box()                 # (min_x,min_y,min_z,max_x,max_y,max_z)
+    ext = [bb[i + 3] - bb[i] for i in range(3)]
     print(f"vol {vid}: c=({c[0]:.3f},{c[1]:.3f},{c[2]:.3f}), "
-          f"extent=({bb[3]:.3f},{bb[4]:.3f},{bb[5]:.3f}), "
+          f"extent=({ext[0]:.3f},{ext[1]:.3f},{ext[2]:.3f}), "
           f"vol={v.volume():.3e}")
 for sid in cubit.parse_cubit_list("surface", "all"):
     s = cubit.surface(sid)
     cx, cy, cz = s.center_point()         # NOT centroid() -- Surface API
     bb = s.bounding_box()
+    ext = [bb[i + 3] - bb[i] for i in range(3)]
     print(f"surf {sid}: c=({cx:.3f},{cy:.3f},{cz:.3f}), "
-          f"area={s.area():.3e}, extent=({bb[3]:.3f},{bb[4]:.3f},{bb[5]:.3f})")
+          f"area={s.area():.3e}, extent=({ext[0]:.3f},{ext[1]:.3f},{ext[2]:.3f})")
 
 # Step 2: classify based on observed numbers.
 mag_vol = next(v for v in volumes if cubit.volume(v).volume() < 1e-4)
@@ -1006,9 +1009,18 @@ mag_vol = next(v for v in volumes if cubit.volume(v).volume() < 1e-4)
 - `cubit.volume(vid).centroid()` exists (returns 3-tuple).
 - `cubit.surface(sid).center_point()` is the equivalent on Surface
   (Cubit does NOT expose `.centroid()` on Surface).
-- `cubit.volume(vid).bounding_box()[3:6]` and `cubit.surface(sid).bounding_box()[3:6]`
-  are the (extent_x, extent_y, extent_z) tuple -- a flat cut face
-  has zero extent in its cut direction.
+- `cubit.volume(vid).bounding_box()` and `cubit.surface(sid).bounding_box()`
+  return a 6-tuple `(min_x, min_y, min_z, max_x, max_y, max_z)` -- VERIFIED
+  on Coreform Cubit 2025.12 (`brick x 1` -> `[-0.5]*3 + [0.5]*3`); the
+  extent is `max - min` per axis, and a flat cut face has zero extent in
+  its cut direction.  (An earlier version of this section claimed `[3:6]`
+  IS the extent tuple -- that is the max corner, not the extent.)
+- Block membership commands can SILENTLY no-op (verified Cubit 2025.12):
+  `block N add tri in surface S` on a hex mesh creates NO block (quads
+  need `add face`), and adding a different element kind to an
+  already-typed block returns success but adds nothing.  ALWAYS verify
+  actual membership after block/sideset commands -- via the cubit MCP
+  `cubit_probe(query="labels")` audit or `get_block_*` counts.
 - `cubit.volume(vid).volume()` returns the measured volume; for a
   1/8 octant of radius R it is `(4*pi*R^3/3) / 8`.
 - After `subtract A from B keep`, expect the SUBTRAHEND (`A`, the
