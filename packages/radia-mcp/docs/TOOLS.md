@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **912 tools** across 48 MCP servers.
+Total: **915 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 83 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 85 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 23 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 24 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -76,6 +76,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_curate_learned_recipes` | **Lab maintainer tool**: read accumulated `learned_recipes.jsonl`, |
 | `cubit_diagnostics_guide` | Get the foundational mesh-diagnostics + cleanup + quality playbook. |
 | `cubit_docs` | Get Cubit documentation: export formats, scripting guide, and API reference. |
+| `cubit_doctor` | One-shot environment diagnosis for the whole Cubit MCP stack. |
 | `cubit_embedded_pipe_source_recovery_gate` | Gate source-journal replay and semantically classified version recovery. |
 | `cubit_embedded_region_mixed_transition_gate` | Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.1. |
 | `cubit_examples` | Search Cubit journal examples from **multiple unioned sources**. |
@@ -122,6 +123,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_region_owned_mixed_mesh_gate` | Gate region-owned conductor hex and air tet/pyramid topology. |
 | `cubit_restore` | Restore a previously-saved Cubit checkpoint by label. |
 | `cubit_scaffold_toolbar` | Generate a complete Coreform-Cubit custom-toolbar skeleton on disk. |
+| `cubit_session_journal` | Export every Cubit command this MCP-server process sent to the live |
 | `cubit_session_shutdown` | Stop the persistent Cubit daemon. Next `cubit_show` relaunches. |
 | `cubit_session_status` | Return diagnostic info about the Cubit session (pid, alive, bin_dir). |
 | `cubit_show` | Load a file into the **persistent Cubit viewer** and optionally run |
@@ -239,6 +241,7 @@ Module: `radia_mcp.gmsh.server`
 | Tool | Description |
 |---|---|
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
+| `gmsh_audit_msh_directory` | Validate every .msh under a directory and summarize the health. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
 | `gmsh_diff_msh` | Compare two MSH v4.1 files: structure + field statistics. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |

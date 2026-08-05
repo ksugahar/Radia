@@ -39,6 +39,7 @@ from .post_display import (
     write_gmsh_post_launch_artifact,
 )
 from .msh_inspect import (
+    audit_msh_directory,
     diff_msh,
     field_stats,
     inspect_msh,
@@ -632,6 +633,32 @@ def gmsh_validate_geo(geo_path: str, deep: bool = True) -> dict:
 
 
 @mcp.tool()
+def gmsh_audit_msh_directory(directory: str,
+                             check_jacobians: bool = False,
+                             pattern: str = "**/*.msh") -> dict:
+    """
+    Validate every .msh under a directory and summarize the health.
+
+    The .msh companion of gmsh_audit_summary (which lints Python
+    scripts): one call answers "are the repository's mesh artifacts
+    structurally sound?" -- per-file status, failed checks for
+    problem files, node/element/view counts, high-order flags.
+    check_jacobians=True adds the getJacobians inverted-element gate
+    per file (slower; runs gmsh in subprocesses).
+
+    Args:
+        directory: Directory to scan (recursively).
+        check_jacobians: Also run the per-file Jacobian gate.
+        pattern: Glob pattern relative to the directory.
+    """
+    d = Path(directory)
+    if not d.is_absolute():
+        d = PROJECT_ROOT / d
+    return audit_msh_directory(d, check_jacobians=check_jacobians,
+                               pattern=pattern)
+
+
+@mcp.tool()
 def gmsh_diff_msh(msh_a: str, msh_b: str, rel_tol: float = 1e-9) -> dict:
     """
     Compare two MSH v4.1 files: structure + field statistics.
@@ -872,9 +899,9 @@ def _selftest(audit_repo: bool = False):
     print("=" * 70)
 
     # --- Fixtures validation ---
+    # server.py -> gmsh -> radia_mcp -> src -> radia-mcp (package root)
     fixtures_dir = (
-        Path(__file__).parent.parent.parent.parent.parent / "tests"
-        / "mcp_server" / "fixtures"
+        Path(__file__).parents[3] / "tests" / "mcp_server" / "fixtures"
     )
     if not fixtures_dir.exists():
         fixtures_dir = Path(__file__).parent / "fixtures"
@@ -972,9 +999,23 @@ def _selftest(audit_repo: bool = False):
             issues += len(gmsh_findings)
             print(_format_findings(str(py_file), gmsh_findings))
 
+    # Structural .msh audit over the same durable lanes (no Jacobians:
+    # keep the repo audit light and gmsh-free).
+    msh_total = 0
+    msh_issues = 0
+    for audit_dir in existing_audit_dirs:
+        audit = audit_msh_directory(audit_dir)
+        if not audit.get("ok"):
+            continue
+        msh_total += audit["files_scanned"]
+        for issue in audit["issues"]:
+            msh_issues += 1
+            print(f"  [MSH] {audit_dir.name}/{issue['path']}: "
+                  f"{issue['failed_checks']}")
+
     print()
-    print(f"Scanned: {total} files")
-    print(f"GMSH issues: {issues}")
+    print(f"Scanned: {total} py files, {msh_total} msh files")
+    print(f"GMSH issues: {issues} lint, {msh_issues} msh")
     print("PASSED")
 
 

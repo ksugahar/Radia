@@ -6,13 +6,16 @@ the check itself runs gmsh in a subprocess, never in this process.
 """
 
 import importlib.util
+from pathlib import Path
 
 import pytest
 
 from radia_mcp.gmsh.msh_inspect import (
+    audit_msh_directory,
     diff_msh,
     field_stats,
     inspect_msh,
+    main as msh_inspect_main,
     validate_geo,
     validate_msh,
 )
@@ -435,6 +438,124 @@ def test_validate_detects_wrong_row_width(tmp_path):
 
     assert result["ok"] is False
     assert result["checks"]["data_row_width_matches"] is False
+
+
+# ======================================================================
+# ElementData / ElementNodeData coverage
+# ======================================================================
+
+_ELEMENT_DATA = (
+    "$ElementData\n1\n\"quality\"\n1\n0.0\n3\n0\n1\n2\n"
+    "1 0.9\n2 0.8\n$EndElementData\n"
+    "$ElementNodeData\n1\n\"nodal_flux\"\n1\n0.0\n3\n0\n1\n1\n"
+    "2 4 1.0 2.0 3.0 4.0\n$EndElementNodeData\n")
+
+
+def test_element_data_sections_parse_validate_and_stats(tmp_path):
+    msh = _write(tmp_path, _BASE_MSH + _ELEMENT_DATA)
+
+    result = validate_msh(msh)
+    assert result["ok"] is True, result["errors"]
+
+    info = inspect_msh(msh)
+    sections = {(v["section"], v["name"]) for v in info["views"]}
+    assert ("ElementData", "quality") in sections
+    assert ("ElementNodeData", "nodal_flux") in sections
+
+    stats = field_stats(msh, view_name="quality")
+    step = stats["views"][0]["per_step"][0]
+    assert step["min"] == 0.8
+    assert step["max"] == 0.9
+
+
+def test_element_data_undefined_element_tag_fails(tmp_path):
+    broken = _BASE_MSH + _ELEMENT_DATA.replace("1 0.9\n", "99 0.9\n")
+    result = validate_msh(_write(tmp_path, broken))
+
+    assert result["ok"] is False
+    assert result["checks"]["data_tags_exist"] is False
+    assert any("99" in e for e in result["errors"])
+
+
+def test_elementnodedata_width_mismatch_fails(tmp_path):
+    broken = _BASE_MSH + _ELEMENT_DATA.replace(
+        "2 4 1.0 2.0 3.0 4.0\n", "2 4 1.0 2.0 3.0\n")
+    result = validate_msh(_write(tmp_path, broken))
+
+    assert result["ok"] is False
+    assert result["checks"]["data_row_width_matches"] is False
+
+
+# ======================================================================
+# Directory audit + CLI
+# ======================================================================
+
+def test_audit_msh_directory_reports_issues(tmp_path):
+    _write(tmp_path, _BASE_MSH, "good.msh")
+    _write(tmp_path, "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n", "legacy.msh")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    _write(sub, _TRI6_MSH, "curved.msh")
+
+    audit = audit_msh_directory(tmp_path)
+    assert audit["ok"] is True
+    assert audit["files_scanned"] == 3
+    assert audit["clean"] is False
+    assert audit["by_status"] == {"ok": 2, "needs_attention": 1}
+    issue = audit["issues"][0]
+    assert issue["path"] == "legacy.msh"
+    assert "format_is_v41" in issue["failed_checks"]
+    highorder = [f for f in audit["files"] if f["path"].endswith("curved.msh")]
+    assert highorder[0]["high_order"] is True
+
+
+def test_cli_exit_codes_and_modes(tmp_path, capsys):
+    good = _write(tmp_path, _BASE_MSH, "good.msh")
+    bad = _write(tmp_path, _BASE_MSH.replace("1\n4\n1 1.0", "1\n5\n1 1.0", 1),
+                 "bad.msh")
+
+    assert msh_inspect_main([str(good), "--validate"]) == 0
+    assert msh_inspect_main([str(bad), "--validate"]) == 1
+    assert msh_inspect_main([str(tmp_path)]) == 1        # audit: bad inside
+    assert msh_inspect_main([str(good), "--diff", str(good)]) == 0
+    assert msh_inspect_main([str(good), "--diff", str(bad)]) == 0  # same data
+    out = capsys.readouterr().out
+    assert "[ok]" in out and "[needs_attention]" in out
+
+    geo = tmp_path / "case.geo"
+    geo.write_text('Merge "good.msh";\nView[0].Visible = 1;\n',
+                   encoding="utf-8")
+    assert msh_inspect_main([str(geo)]) == 0
+    assert msh_inspect_main([str(good), "--stats", "--json"]) == 0
+
+
+# ======================================================================
+# Lint fixtures lock (selftest companions)
+# ======================================================================
+
+def test_lint_fixture_bad_script_trips_every_rule_class():
+    from radia_mcp.gmsh.server import _lint_file
+
+    fixture = (Path(__file__).parent / "mcp_server" / "fixtures"
+               / "bad_gmsh_script.py")
+    findings = _lint_file(str(fixture))
+    rules = {f["rule"] for f in findings}
+    assert {"pip-gmsh-import", "gmsh-mesh-generation", "meshio-removed",
+            "gmsh-builder-removed", "invalid-gmsh-option",
+            "readgmsh-deprecated"} <= rules
+
+
+def test_lint_fixture_clean_script_has_no_gmsh_findings():
+    from radia_mcp.gmsh.server import _lint_file
+
+    fixture = (Path(__file__).parent / "mcp_server" / "fixtures"
+               / "clean_gmsh_script.py")
+    findings = _lint_file(str(fixture))
+    gmsh_findings = [f for f in findings
+                     if f["rule"].startswith(("gmsh-", "pip-gmsh", "meshio-",
+                                              "msh-", "numsubedges",
+                                              "readgmsh", "invalid-gmsh"))]
+    assert gmsh_findings == []
 
 
 # ======================================================================

@@ -895,6 +895,74 @@ def field_stats(msh_path: str | Path,
 
 
 # ======================================================================
+# Public API: directory audit
+# ======================================================================
+
+def audit_msh_directory(directory: str | Path,
+                        check_jacobians: bool = False,
+                        pattern: str = "**/*.msh",
+                        limit: int = 500) -> dict[str, Any]:
+    """Validate every .msh under a directory and summarize the health.
+
+    The .msh companion of the Python-lint ``gmsh_audit_summary``: one
+    call answers "are the repository's mesh artifacts structurally
+    sound?".  ``check_jacobians=True`` additionally runs the gmsh
+    getJacobians gate per file (slower; needs the gmsh package).
+    """
+    root = Path(directory)
+    if not root.is_dir():
+        return {"ok": False, "directory": str(root),
+                "error": f"directory not found: {root}"}
+
+    files = sorted(root.glob(pattern))[: max(1, int(limit))]
+    entries: list[dict[str, Any]] = []
+    issues: list[dict[str, Any]] = []
+    by_status: Counter[str] = Counter()
+
+    for path in files:
+        result = validate_msh(path, check_jacobians=check_jacobians)
+        status = result.get("status", "needs_attention")
+        by_status[status] += 1
+        try:
+            rel = str(path.relative_to(root))
+        except ValueError:
+            rel = str(path)
+        info = inspect_msh(path)
+        entry: dict[str, Any] = {
+            "path": rel,
+            "status": status,
+            "version": info.get("version"),
+            "nodes": info.get("nodes", {}).get("count"),
+            "elements": info.get("elements", {}).get("count"),
+            "views": len(info.get("views") or []),
+            "high_order": info.get("high_order", False),
+        }
+        if check_jacobians and "jacobian" in result:
+            entry["negative_jacobians"] = result["jacobian"].get(
+                "total_negative")
+        entries.append(entry)
+        if status != "ok":
+            issues.append({
+                "path": rel,
+                "failed_checks": [k for k, v in result.get("checks", {}).items()
+                                  if not v],
+                "errors": result.get("errors", [])[:3],
+            })
+
+    return {
+        "ok": True,
+        "directory": str(root),
+        "pattern": pattern,
+        "files_scanned": len(files),
+        "clean": not issues,
+        "by_status": dict(by_status),
+        "issues": issues,
+        "files": entries,
+        "jacobians_checked": bool(check_jacobians),
+    }
+
+
+# ======================================================================
 # Public API: structural + field diff
 # ======================================================================
 
@@ -1186,3 +1254,97 @@ def validate_geo(geo_path: str | Path, deep: bool = True) -> dict[str, Any]:
         "warnings": warnings,
     })
     return result
+
+
+# ======================================================================
+# CLI:  python -m radia_mcp.gmsh.msh_inspect <target> [options]
+# ======================================================================
+
+def main(argv: list[str] | None = None) -> int:
+    """CI-friendly command line over inspect/validate/diff/audit.
+
+    Exit code 0 = ok, 1 = needs_attention/error, 2 = usage error.
+    """
+    import argparse
+    import json as _json
+
+    parser = argparse.ArgumentParser(
+        prog="python -m radia_mcp.gmsh.msh_inspect",
+        description="Inspect / validate / diff GMSH MSH v4.1 artifacts "
+                    "(pure Python; --jacobians shells out to gmsh).")
+    parser.add_argument("target", help=".msh or .geo file, or a directory")
+    parser.add_argument("--validate", action="store_true",
+                        help="run validation (default for .geo and dirs)")
+    parser.add_argument("--jacobians", action="store_true",
+                        help="also run the gmsh getJacobians gate")
+    parser.add_argument("--diff", metavar="OTHER",
+                        help="diff target .msh against OTHER .msh")
+    parser.add_argument("--stats", action="store_true",
+                        help="print per-view field statistics")
+    parser.add_argument("--json", action="store_true",
+                        help="print the full JSON result")
+    args = parser.parse_args(argv)
+
+    target = Path(args.target)
+    if args.diff:
+        result = diff_msh(target, Path(args.diff))
+        ok = bool(result.get("ok")) and result.get("identical_structure") \
+            and result.get("fields_match") is not False
+    elif target.is_dir():
+        result = audit_msh_directory(target, check_jacobians=args.jacobians)
+        ok = bool(result.get("ok")) and bool(result.get("clean"))
+    elif target.suffix.lower() == ".geo":
+        result = validate_geo(target)
+        ok = bool(result.get("ok"))
+    elif args.stats:
+        result = field_stats(target)
+        ok = bool(result.get("ok"))
+    elif args.validate or args.jacobians:
+        result = validate_msh(target, check_jacobians=args.jacobians)
+        ok = bool(result.get("ok"))
+    else:
+        result = inspect_msh(target)
+        ok = bool(result.get("ok"))
+
+    if args.json:
+        print(_json.dumps(result, indent=2, default=str))
+    else:
+        _print_cli_summary(result)
+    return 0 if ok else 1
+
+
+def _print_cli_summary(result: dict[str, Any]) -> None:
+    status = result.get("status") or ("ok" if result.get("ok") else "error")
+    print(f"[{status}] {result.get('path') or result.get('directory') or ''}")
+    for key in ("version", "high_order", "merged_views_total",
+                "files_scanned", "identical_structure", "fields_match"):
+        if key in result:
+            print(f"  {key}: {result[key]}")
+    if result.get("nodes") is not None and isinstance(result.get("nodes"), dict):
+        print(f"  nodes: {result['nodes'].get('count')}")
+    if isinstance(result.get("elements"), dict) and "by_type" in result["elements"]:
+        for t in result["elements"]["by_type"]:
+            print(f"  {t['name']} x {t['count']} (order {t['order']})")
+    for view in result.get("views") or []:
+        if isinstance(view, dict) and "name" in view and "steps" in view:
+            print(f"  view \"{view['name']}\": {view['steps']} step(s), "
+                  f"{view.get('components')} comp")
+    for check, value in (result.get("checks") or {}).items():
+        if not value:
+            print(f"  FAILED: {check}")
+    for issue in result.get("issues") or []:
+        print(f"  ISSUE {issue['path']}: {issue['failed_checks']}")
+    for err in result.get("errors") or []:
+        print(f"  ERROR: {err}")
+    for warning in result.get("warnings") or []:
+        print(f"  warning: {warning}")
+    if result.get("error"):
+        print(f"  ERROR: {result['error']}")
+    for diff_line in result.get("differences") or []:
+        print(f"  diff: {diff_line}")
+
+
+if __name__ == "__main__":
+    import sys as _sys
+
+    _sys.exit(main())

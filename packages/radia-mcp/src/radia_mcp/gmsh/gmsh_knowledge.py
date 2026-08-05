@@ -986,6 +986,18 @@ artifacts headlessly via mcp-server-gmsh:
 | `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 4.x options. |
 | `gmsh_field_stats` | Per-view, per-step field statistics without a GUI: scalar min/max/mean/rms, vector magnitude stats + pooled component min/max, NaN/Inf counts (validate_msh also gates on finiteness). |
 | `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, per-view min/max relative drift). |
+| `gmsh_audit_msh_directory` | Validate every .msh under a directory (recursive), optional per-file Jacobian gate: one call answers "are the repo's mesh artifacts sound?". |
+
+CLI twin for CI/hooks (exit 0 = ok, 1 = needs attention):
+
+```bash
+python -m radia_mcp.gmsh.msh_inspect case.msh               # inspect
+python -m radia_mcp.gmsh.msh_inspect case.msh --validate --jacobians
+python -m radia_mcp.gmsh.msh_inspect case.msh --stats
+python -m radia_mcp.gmsh.msh_inspect case.geo               # deep .geo check
+python -m radia_mcp.gmsh.msh_inspect a.msh --diff b.msh
+python -m radia_mcp.gmsh.msh_inspect docs                   # directory audit
+```
 | `gmsh_render` | Headless PNG screenshot of a .msh/.geo (subprocess FLTK). High-order aware: NumSubEdges=4 and per-view AdaptVisualizationGrid=1 by default. |
 | `gmsh_export_animation` | Time-stepped views -> PNG frames + GIF (linked views, AnimationCycle=0). |
 | `gmsh_write_post_launch_artifact` | Write case.geo + case.geo.opt + case.msh.opt + display.json contract files. |
