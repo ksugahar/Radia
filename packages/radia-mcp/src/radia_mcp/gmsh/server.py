@@ -20,25 +20,18 @@ Usage:
                                   # Run self-test plus durable repo-lane audit
 """
 
-from collections import Counter
-import os
 import errno
 import sys
+from collections import Counter
 from pathlib import Path, PurePosixPath
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
 
-from .rules import ALL_RULES
+from ..common import register_status_tool
+from .detect import detect_capabilities
+from .gmsh_examples import get_gmsh_examples
 from .gmsh_knowledge import get_gmsh_documentation
 from .gmsh_reference import get_gmsh_reference
-from .gmsh_examples import get_gmsh_examples
-from .post_display import (
-    build_gmsh_post_display_contract,
-    gmsh_post_display_manifest_gate,
-    write_gmsh_post_launch_artifact,
-)
-from .detect import detect_capabilities
 from .msh_inspect import (
     audit_msh_directory,
     diff_msh,
@@ -48,6 +41,11 @@ from .msh_inspect import (
     probe_options,
     validate_geo,
     validate_msh,
+)
+from .post_display import (
+    build_gmsh_post_display_contract,
+    gmsh_post_display_manifest_gate,
+    write_gmsh_post_launch_artifact,
 )
 from .post_process import (
     curve_profile,
@@ -80,6 +78,7 @@ from .render import (
     render_montage,
     render_png,
 )
+from .rules import ALL_RULES
 from .session import (
     session_exec,
     session_run_file,
@@ -121,7 +120,7 @@ def _lint_file(filepath: str) -> list[dict]:
     try:
         with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
-    except (OSError, IOError) as e:
+    except OSError as e:
         return [{'line': 0, 'severity': 'ERROR', 'rule': 'read-error',
                  'message': f'Cannot read file: {e}'}]
 
@@ -268,7 +267,7 @@ def lint_gmsh_script(filepath: str) -> str:
         p = PROJECT_ROOT / p
     if not p.exists():
         return f"Error: File not found: {p}"
-    if not p.suffix == '.py':
+    if p.suffix != '.py':
         return f"Error: Not a Python file: {p}"
 
     findings = _lint_file(str(p))
@@ -779,7 +778,11 @@ def gmsh_render(path: str,
                 numsubedges: int = 4,
                 camera_preset: str | None = None,
                 time_step: int | None = None,
-                cut_plane: dict | None = None) -> dict:
+                cut_plane: dict | None = None,
+                options: dict | None = None,
+                string_options: dict | None = None,
+                adapt_views: bool = True,
+                smooth_normals: bool = True) -> dict:
     """
     Render a .msh or .geo file to PNG headlessly (gmsh subprocess).
 
@@ -805,6 +808,10 @@ def gmsh_render(path: str,
         cut_plane: Optional structured cut plane ({enabled, normal:[3],
                    offset, whole_elements, only_volume}); views get
                    Clip=1 automatically.
+        options: Numeric Gmsh options applied after opening the input.
+        string_options: String-valued Gmsh options applied after open.
+        adapt_views: Enable adaptive visualization for high-order views.
+        smooth_normals: Average surface normals for smooth shading.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -816,7 +823,10 @@ def gmsh_render(path: str,
             out = PROJECT_ROOT / out
     return render_png(p, out, width=width, height=height,
                       numsubedges=numsubedges, camera_preset=camera_preset,
-                      time_step=time_step, cut_plane=cut_plane)
+                      time_step=time_step, cut_plane=cut_plane,
+                      options=options, string_options=string_options,
+                      adapt_views=adapt_views,
+                      smooth_normals=smooth_normals)
 
 
 @mcp.tool()
@@ -830,7 +840,13 @@ def gmsh_export_animation(path: str,
                           orbit_axis: str | None = None,
                           orbit_degrees: float = 360.0,
                           orbit_frames: int = 36,
-                          time_step: int | None = None) -> dict:
+                          time_step: int | None = None,
+                          cut_plane: dict | None = None,
+                          options: dict | None = None,
+                          string_options: dict | None = None,
+                          adapt_views: bool = True,
+                          smooth_normals: bool = True,
+                          link_views: bool = True) -> dict:
     """
     Export a time-stepped post-view animation as GIF (gmsh subprocess).
 
@@ -858,6 +874,12 @@ def gmsh_export_animation(path: str,
         orbit_degrees: Total camera sweep angle.
         orbit_frames: Number of orbit frames.
         time_step: Data step shown during an orbit.
+        cut_plane: Optional structured cut plane; views are clipped.
+        options: Numeric Gmsh options applied after opening the input.
+        string_options: String-valued Gmsh options applied after open.
+        adapt_views: Enable adaptive visualization for high-order views.
+        smooth_normals: Average surface normals for smooth shading.
+        link_views: Step all compatible views together.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -874,7 +896,12 @@ def gmsh_export_animation(path: str,
                             orbit_axis=orbit_axis,
                             orbit_degrees=orbit_degrees,
                             orbit_frames=orbit_frames,
-                            time_step=time_step)
+                            time_step=time_step, cut_plane=cut_plane,
+                            options=options,
+                            string_options=string_options,
+                            adapt_views=adapt_views,
+                            smooth_normals=smooth_normals,
+                            link_views=link_views)
 
 
 @mcp.tool()
@@ -1111,7 +1138,7 @@ def gmsh_isosurface(msh_path: str, value: float,
         msh_path: Input .msh with a scalar view.
         value: Iso value.
         view_name: Source view (default: first).
-        recur_level: Adaptive subdivision depth (0 = plain P1 cut).
+        recur_level: Adaptive subdivision depth, 0..6 (0 = plain P1 cut).
         target_error: Adaptive refinement error target.
         out_file: Output path (default: <stem>_iso.pos).
     """
@@ -1276,7 +1303,7 @@ def gmsh_flux_lines(msh_path: str, n_levels: int = 20,
         n_levels: Number of interior levels between view min and max.
         levels: Explicit level values (overrides n_levels).
         view_name: Source view (default: first).
-        recur_level: Adaptive subdivision depth (0 = plain P1 cut).
+        recur_level: Adaptive subdivision depth, 0..6 (0 = plain P1 cut).
         target_error: Adaptive refinement error target.
         out_file: Output path (default: <stem>_flux.pos).
     """

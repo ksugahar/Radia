@@ -21,6 +21,9 @@ Released 2026-08-06.
 - Added adaptive RK4 field tracing with closed-loop detection, exact equal-flux
   contours from planar or axisymmetric potentials, and Jobard-Lefer evenly
   spaced streamlines on arbitrary plane patches.
+- Added bounded adaptive high-order isosurface extraction, smooth surface
+  normals by default, and complete MCP passthrough for PNG/GIF view options,
+  clipping, adaptation, smoothing, and linked-view controls.
 - Made field-line controls fail fast on non-physical values, preserve the
   spacing contract, and stop exactly at the configured total-step budget.
 - Standardized spatial Gmsh renders on a physical 1:1:1 axis scale and report
