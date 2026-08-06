@@ -241,6 +241,11 @@ production interface for Radia applications is a masked block in the single
   field must declare the artifact not applicable and must not fabricate one.
   GMSH remains a visualization/post-processing target, never the solver mesh
   generator or the NGSolve interchange format.
+- Spatial GMSH figures, including contours, flux lines, streamlines, and
+  sections, use a physical 1:1:1 axis scale by default. A deliberately
+  exaggerated axis is allowed only when the scale factor is explicit in the
+  render configuration and stated in the figure caption; silent distortion is
+  not a valid production visualization.
 - Treat `radia-mcp` as the canonical executable manual for Radia-specific
   MATLAB and Simulink workflows. Do not duplicate generic MathWorks guidance.
 - Long or solver-heavy MATLAB validation runs execute on mdx or hibino; LAB and
