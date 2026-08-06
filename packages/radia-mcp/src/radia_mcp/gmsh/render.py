@@ -462,6 +462,17 @@ def render_montage(images: list[str | Path],
     image.  Cells take the largest input size; optional labels are
     drawn into the top-left corner of each cell.
     """
+    if cols is not None:
+        try:
+            n_cols = int(cols)
+        except (TypeError, ValueError):
+            return {"ok": False,
+                    "error": f"cols must be a positive integer, got {cols!r}"}
+        if n_cols < 1:
+            return {"ok": False,
+                    "error": f"cols must be a positive integer, got {cols!r}"}
+    else:
+        n_cols = 0
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -484,7 +495,8 @@ def render_montage(images: list[str | Path],
     cell_w = max(im.width for im in imgs)
     cell_h = max(im.height for im in imgs)
     n = len(imgs)
-    n_cols = int(cols) if cols else min(n, 3 if n != 4 else 2)
+    if not n_cols:
+        n_cols = min(n, 3 if n != 4 else 2)
     n_rows = (n + n_cols - 1) // n_cols
     canvas = Image.new("RGB", (cell_w * n_cols, cell_h * n_rows),
                        background)
