@@ -2,6 +2,10 @@
 used by both Cubit session runners, exercised against a mock cubit
 module (no Cubit license needed)."""
 
+from pathlib import Path
+
+import pytest
+
 from radia_mcp.cubit import probe_ops
 
 
@@ -151,6 +155,65 @@ def test_unknown_query_lists_valid_queries():
     assert "Unknown probe query" in out["error"]
     for q in ("summary", "quality", "per_volume", "entities", "labels"):
         assert q in out["error"]
+
+
+class _SnapshotCubit:
+    def __init__(self, payload: bytes):
+        self.payload = payload
+        self.command = ""
+
+    def cmd(self, command):
+        self.command = command
+        Path(command.split('"')[1]).write_bytes(self.payload)
+        return 1
+
+
+def test_snapshot_atomically_replaces_a_stale_target(tmp_path):
+    target = tmp_path / "view.png"
+    target.write_bytes(b"stale")
+    cubit = _SnapshotCubit(b"fresh-image")
+
+    result = probe_ops.op_snapshot(cubit, [str(target), 800, 600])
+
+    assert result == {
+        "path": str(target),
+        "ok": True,
+        "bytes": len(b"fresh-image"),
+        "requested_size_ignored": [800, 600],
+    }
+    assert target.read_bytes() == b"fresh-image"
+    assert str(target) not in cubit.command
+    assert not list(tmp_path.glob("*.tmp.png"))
+
+
+def test_snapshot_failure_does_not_mistake_a_stale_target_for_output(tmp_path):
+    target = tmp_path / "view.png"
+    target.write_bytes(b"previous-good-image")
+    cubit = _SnapshotCubit(b"")
+
+    result = probe_ops.op_snapshot(cubit, [str(target)])
+
+    assert result["ok"] is False
+    assert result["bytes"] == 0
+    assert "wrote no image" in result["error"]
+    assert target.read_bytes() == b"previous-good-image"
+    assert not list(tmp_path.glob("*.tmp.png"))
+
+
+def test_snapshot_exception_removes_partial_temp_and_preserves_target(tmp_path):
+    target = tmp_path / "view.png"
+    target.write_bytes(b"previous-good-image")
+
+    class RaisingCubit:
+        def cmd(self, command):
+            Path(command.split('"')[1]).write_bytes(b"partial")
+            raise RuntimeError("renderer failed")
+
+    with pytest.raises(RuntimeError, match="renderer failed"):
+        probe_ops.op_snapshot(RaisingCubit(), [str(target)])
+
+    assert target.read_bytes() == b"previous-good-image"
+    assert not list(tmp_path.glob("*.tmp.png"))
 
 
 def test_trimmed_traceback_drops_runner_frames():

@@ -3,6 +3,8 @@ mode, session-status enrichment, and the version-robust lint golden
 ((rule, line) pairs, not message text)."""
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,49 @@ import pytest
 from radia_mcp.cubit import server as cubit_server
 from radia_mcp.cubit import session as cubit_session
 from radia_mcp.cubit.server import _lint_file, cubit_session_status
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows Job Object")
+def test_kill_on_close_job_terminates_private_process():
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+    )
+    handle = None
+    try:
+        handle = cubit_session._assign_kill_on_close_job(proc.pid)
+        assert handle
+        assert proc.poll() is None
+        cubit_session._close_windows_handle(handle)
+        handle = None
+        assert proc.wait(timeout=5) is not None
+    finally:
+        if handle is not None:
+            cubit_session._close_windows_handle(handle)
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+def test_private_drop_cleanup_retries_transient_windows_locks(
+        monkeypatch, tmp_path):
+    drop = tmp_path / "cubit-session-private"
+    drop.mkdir()
+    (drop / "cubit_stdout.log").write_text("log", encoding="utf-8")
+    real_rmtree = cubit_session.shutil.rmtree
+    calls = 0
+
+    def temporarily_locked(path, ignore_errors=False):
+        nonlocal calls
+        calls += 1
+        if calls >= 3:
+            real_rmtree(path, ignore_errors=ignore_errors)
+
+    monkeypatch.setattr(cubit_session.shutil, "rmtree", temporarily_locked)
+
+    assert cubit_session._remove_tree_with_retry(drop, timeout_s=1.0)
+    assert calls == 3
+    assert not drop.exists()
 
 
 # ---------------------------------------------------------------------------
