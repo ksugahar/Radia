@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.30] - 2026-08-06
+
+- Added a persistent headless Gmsh session with MATLAB MCP-style execution
+  verbs, option control, post-processing, probing, profiles, integration,
+  derived views, cuts, isosurfaces, harmonics, and streamlines.
+- Added structural and field-aware MSH audits, strict NaN/Inf and parser
+  gates, Gmsh `minSICN` shape-quality checks, and overall plus per-step field
+  diffs that detect changes hidden by unchanged extrema.
+- Expanded Cubit session setup, doctor, journal, call-log, and lifecycle
+  diagnostics, including collision-free file-drop requests for multiple MCP
+  clients attached to one daemon.
+- Hardened PEEC MSH v4.1 handling and synchronized the generated public tool
+  inventory with the current Gmsh and HDiv-VIM surfaces.
+
 ## [1.4.29] - 2026-08-05
 
 - Added headless GMSH v4.1 inspection, validation, PNG/GIF rendering, and
