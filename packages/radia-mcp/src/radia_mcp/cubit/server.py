@@ -3897,9 +3897,13 @@ def _run_batch(step_path: str | None, commands: list[str],
 			pass
 
 
-def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path) -> dict:
-	"""STEP -> Netgen tet mesh -> GMSH .msh v4.1 (via radia's exporter,
-	honoring the lab's vol/v4.1-only interchange policy)."""
+def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path,
+                        order: int = 1) -> dict:
+	"""STEP -> Netgen tet mesh (optionally curved) -> GMSH .msh v4.1
+	(via radia's exporter, honoring the lab's vol/v4.1-only interchange
+	policy).  order=2 emits Tet10 with curved geometry, making the
+	referee's min_jacobian_ratio a real curvature diagnostic (verified:
+	sphere at order 2 reports jac_ratio ~0.79 vs 1.0 for straight)."""
 	from netgen.occ import OCCGeometry
 	from ngsolve import Mesh, TaskManager
 	from radia.gmsh_post_export import GmshPostExport
@@ -3908,6 +3912,8 @@ def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path) -> dict:
 		geo = OCCGeometry(str(step_path))
 		ngmesh = geo.GenerateMesh(maxh=maxh)
 		mesh = Mesh(ngmesh)
+		if order > 1:
+			mesh.Curve(order)
 		post = GmshPostExport(mesh)
 		post.write(str(out_msh))
 	return {"n_elements": mesh.ne, "n_vertices": mesh.nv}
@@ -3946,6 +3952,7 @@ def cubit_netgen_quality_compare(step_path: str,
                                  cubit_size: float = 0.0,
                                  schemes: list = None,
                                  threshold: float = 0.1,
+                                 order: int = 1,
                                  out_dir: str = "",
                                  timeout_s: int = 600) -> str:
 	"""
@@ -3984,6 +3991,10 @@ def cubit_netgen_quality_compare(step_path: str,
 	    schemes: subset of ["netgen", "cubit_tet", "cubit_hex"]
 	        (default: all three).
 	    threshold: minSICN acceptance threshold for the referee.
+	    order: element order 1-3 for BOTH routes (netgen `mesh.Curve`,
+	        cubit `export gmsh ... order N`). At order>=2 on curved
+	        geometry the referee's min_jacobian_ratio becomes a real
+	        curvature-distortion diagnostic (1.0 for straight elements).
 	    out_dir: where to write the .msh files (default: beside STEP).
 	"""
 	p = Path(step_path)
@@ -3991,6 +4002,10 @@ def cubit_netgen_quality_compare(step_path: str,
 		p = PROJECT_ROOT / p
 	if not p.is_file():
 		return json.dumps(_error_payload("input", f"STEP not found: {p}"))
+	if not 1 <= int(order) <= 3:
+		return json.dumps(_error_payload(
+			"input", f"order must be 1..3 (gmsh export limit), got {order}"))
+	order = int(order)
 	schemes = schemes or ["netgen", "cubit_tet", "cubit_hex"]
 	unknown = [s for s in schemes if s not in
 	           ("netgen", "cubit_tet", "cubit_hex")]
@@ -4032,10 +4047,12 @@ def cubit_netgen_quality_compare(step_path: str,
 	if "netgen" in schemes:
 		msh = out_base / f"{base}_netgen.msh"
 		try:
-			info = _netgen_mesh_to_msh(p, float(netgen_maxh), msh)
+			info = _netgen_mesh_to_msh(p, float(netgen_maxh), msh,
+			                           order=order)
 			q = mesh_quality(msh, threshold=threshold)
 			row = _quality_row("netgen", "netgen", q)
 			row["maxh"] = float(netgen_maxh)
+			row["order"] = order
 			row["msh"] = str(msh)
 			row.update(info)
 		except ImportError as exc:
@@ -4060,7 +4077,9 @@ def cubit_netgen_quality_compare(step_path: str,
 		         # mesh exports 0 elements (measured 2025.12).
 		         "block 1 add volume all",
 		         'block 1 name "mesh"',
-		         f'export gmsh "{msh_fwd}" overwrite']
+		         f'export gmsh "{msh_fwd}"'
+		         + (f" order {order}" if order > 1 else "")
+		         + " overwrite"]
 		r = _run_batch(str(p), cmds, timeout_s=timeout_s)
 		if r.get("status") != "ok":
 			rows.append({"route": route, "status": "error",
@@ -4071,6 +4090,7 @@ def cubit_netgen_quality_compare(step_path: str,
 		q = mesh_quality(msh, threshold=threshold)
 		row = _quality_row(route, "cubit", q)
 		row["size"] = float(cubit_size)
+		row["order"] = order
 		row["msh"] = str(msh)
 		row["summary"] = r.get("summary")
 		rows.append(row)
