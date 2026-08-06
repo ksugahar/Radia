@@ -35,6 +35,12 @@ Usage:
     python tools/release_qud.py all
         phase8 -> phase8e -> phase9 with all preconditions enforced.
 
+        When the canonical LAB worktree contains parallel WIP, set
+        RADIA_RELEASE_EDITABLE_REPO_LAB and RADIA_RELEASE_EDITABLE_REPO_100
+        to the LAB and 100-machine views of one clean NAS release worktree.
+        Both editable deployments then fail before install unless that
+        worktree is tracked-clean and matches the invoking release SHA.
+
     python tools/release_qud.py done --simulink-package <zip>
         Require both the normal release gate and the matching four-machine
         Simulink candidate state.
@@ -75,6 +81,8 @@ if hasattr(sys.stdout, "reconfigure"):
 REPO = Path(__file__).resolve().parent.parent
 NAS_REPO_LAB = "S:/Radia/01_GitHub"
 NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
+EDITABLE_REPO_LAB_ENV = "RADIA_RELEASE_EDITABLE_REPO_LAB"
+EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
 SSH_100 = "192.168.11.100"
 SSH_MDX = "mdx"
 SSH_HIBINO = "hibino"
@@ -87,6 +95,22 @@ SIMULINK_TARGETS = {
     "mdx": ("mdx", SSH_MDX, "python"),
     "hibino": ("hibino", SSH_HIBINO, "py -3.12"),
 }
+
+
+def _editable_repo_lab():
+    """Return the LAB editable source, allowing an exact release worktree."""
+    return os.environ.get(EDITABLE_REPO_LAB_ENV, NAS_REPO_LAB).strip().rstrip("/\\")
+
+
+def _editable_repo_100():
+    """Return the 100-machine view of the same release worktree."""
+    return os.environ.get(EDITABLE_REPO_100_ENV, NAS_REPO_100).strip().rstrip("/\\")
+
+
+def _release_head():
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True
+    ).strip().lower()
 
 
 # ============================================================
@@ -479,9 +503,12 @@ def _kill_mcp_local():
 
 def _deploy_lab():
     step("Phase 8 (LAB): kill, install from NAS, plugin install, verify, smoke")
+    repo = _editable_repo_lab()
+    rc = _verify_local_release_source(repo, _release_head())
+    if rc != 0:
+        return rc
     _kill_cubit_local()
     _kill_mcp_local()
-    repo = NAS_REPO_LAB
     for sub in ("", "/packages/cubit-mesh-export", "/packages/radia-mcp"):
         run(["pip", "install", "-e", repo + sub, "--no-deps",
              "--no-cache-dir"])
@@ -500,8 +527,19 @@ def _deploy_editable_remote(ssh_host, label, repo):
     verification tier.
     """
     step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
+    expected_sha = _release_head()
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
+$sourceHead = (& git -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0 -or $sourceHead -ne "{expected_sha}") {{
+  Write-Error "Release source SHA mismatch: expected {expected_sha}, got $sourceHead"
+  exit 41
+}}
+$sourceDirty = (& git -C "{repo}" status --porcelain --untracked-files=no) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
+  Write-Error "Release source has tracked changes: $sourceDirty"
+  exit 42
+}}
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
   $_.ProcessId -ne $PID -and (
     $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
@@ -654,7 +692,9 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 
 
 def _deploy_100():
-    return _deploy_editable_remote(SSH_100, "100号機", NAS_REPO_100)
+    return _deploy_editable_remote(
+        SSH_100, "100号機", _editable_repo_100()
+    )
 
 
 def _deploy_hibino():
@@ -673,7 +713,9 @@ def cmd_phase8(args):
     for t in targets:
         t = t.strip().lower()
         if t == "lab":
-            _deploy_lab()
+            rc = _deploy_lab()
+            if rc != 0:
+                return rc
         elif t in ("100", "100号機", "100goki"):
             rc = _deploy_100()
             if rc != 0:
@@ -683,7 +725,9 @@ def cmd_phase8(args):
             if rc != 0:
                 return rc
         elif t == "all":
-            _deploy_lab()
+            rc = _deploy_lab()
+            if rc != 0:
+                return rc
             rc = _deploy_100()
             if rc != 0:
                 return rc
@@ -878,19 +922,56 @@ def cmd_all(args):
 # (package name, expected Editable project location prefix on LAB)
 # Path-prefix match (case-insensitive, slash-normalised) so a UNC vs
 # drive-letter representation of the same NAS path is accepted.
-LAB_EDITABLE_PKGS = [
-    ("radia",               "S:/Radia/01_GitHub"),
-    ("cubit-mesh-export",   "S:/Radia/01_GitHub/packages/cubit-mesh-export"),
-    ("radia-mcp",           "S:/Radia/01_GitHub/packages/radia-mcp"),
-    # LAB-private; tolerated as missing if pip show says not installed.
-    ("mcp-server-document", "S:/mcp-server"),
-]
+def _lab_editable_packages():
+    root = _editable_repo_lab()
+    return [
+        ("radia", root),
+        ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
+        ("radia-mcp", root + "/packages/radia-mcp"),
+        # LAB-private; tolerated as missing if pip show says not installed.
+        ("mcp-server-document", "S:/mcp-server"),
+    ]
 
-REMOTE_100_EDITABLE_PKGS = [
-    ("radia",               NAS_REPO_100),
-    ("cubit-mesh-export",   NAS_REPO_100 + r"\packages\cubit-mesh-export"),
-    ("radia-mcp",           NAS_REPO_100 + r"\packages\radia-mcp"),
-]
+
+def _remote_100_editable_packages():
+    root = _editable_repo_100()
+    return [
+        ("radia", root),
+        ("cubit-mesh-export", root + r"\packages\cubit-mesh-export"),
+        ("radia-mcp", root + r"\packages\radia-mcp"),
+    ]
+
+
+def _verify_local_release_source(repo, expected_sha):
+    """Fail before install unless the editable source is the exact clean SHA."""
+    path = Path(repo)
+    if not path.is_dir():
+        fail(f"LAB editable release source does not exist: {repo}")
+        return 2
+    head = run(
+        ["git", "-C", repo, "rev-parse", "HEAD"],
+        capture=True, check=False,
+    )
+    got_sha = (head.stdout or "").strip().lower()
+    if head.returncode != 0 or got_sha != expected_sha.lower():
+        fail(
+            "LAB editable release source SHA mismatch: "
+            f"expected {expected_sha}, got {got_sha or '<unavailable>'}"
+        )
+        return 4
+    dirty = run(
+        ["git", "-C", repo, "status", "--porcelain", "--untracked-files=no"],
+        capture=True, check=False,
+    )
+    tracked_changes = (dirty.stdout or "").strip()
+    if dirty.returncode != 0 or tracked_changes:
+        fail(
+            "LAB editable release source has tracked changes: "
+            f"{tracked_changes or '<status unavailable>'}"
+        )
+        return 4
+    ok(f"LAB editable release source is exact and clean ({got_sha[:10]})")
+    return 0
 
 
 def _norm_path(p):
@@ -951,7 +1032,8 @@ def _verify_lab_editable():
     n_ok = n_drift = n_missing = 0
     details = []
 
-    for pkg, want_prefix in LAB_EDITABLE_PKGS:
+    packages = _lab_editable_packages()
+    for pkg, want_prefix in packages:
         d = _pip_show(pkg)
         if d is None:
             if pkg == "mcp-server-document":
@@ -1003,7 +1085,7 @@ def _verify_lab_editable():
             print(f"        Get-Process | Where-Object {{ $_.Name -like "
                   f"'mcp-server*' }} | Stop-Process -Force")
             print(f"        pip uninstall -y {pkg}")
-            print(f"        pip install -e {dict(LAB_EDITABLE_PKGS)[pkg]} "
+            print(f"        pip install -e {dict(packages)[pkg]} "
                   f"--no-deps --no-cache-dir")
         print("")
         print("        See CLAUDE.md \"POLICY (2026-05-27): release 後の "
@@ -1092,7 +1174,9 @@ def _verify_remote_editable(ssh_host, label, expected):
 
 
 def _verify_100_editable():
-    return _verify_remote_editable(SSH_100, "100号機", REMOTE_100_EDITABLE_PKGS)
+    return _verify_remote_editable(
+        SSH_100, "100号機", _remote_100_editable_packages()
+    )
 
 
 def cmd_verify_editable(args):
