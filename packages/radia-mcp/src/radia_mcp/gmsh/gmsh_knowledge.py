@@ -1755,7 +1755,9 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Transform | gmsh_transform_view | coordinates only -- data rewrite via value_expressions |
 | Warp By Vector | gmsh_warp | Plugin(Warp) MOVES THE MODEL NODES (in place) |
 | Cell Data to Point Data | gmsh_smooth_to_nodes | node = mean of adjacent elements (10/20 -> 15) |
-| Stream Tracer | gmsh_streamlines | probe-driven RK4 (Plugin StreamLines is broken on this build) |
+| Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons (Plugin StreamLines is broken on this build) |
+| Evenly Spaced Streamlines 2D | gmsh_streamlines_2d | Jobard-Lefer on ANY plane slice of 3D data (ParaView: native-2D datasets only) |
+| (FEMM-style 2D flux plot) | gmsh_flux_lines | contours of A_z / psi = EXACT equal-flux field lines, no integration |
 | Glyph (vector arrows) | gmsh_render options | View.VectorType=4 (3D arrow), View.GlyphLocation, View.ArrowSizeMax/ArrowSizeMin |
 | Plot Over Line | gmsh_line_profile | straight line + PNG graph |
 | Plot over custom curve | gmsh_curve_profile | parametric x(u),y(u),z(u); air-gap B(theta) in one call |
@@ -1771,10 +1773,39 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Warp-like displacement display | View.DisplacementFactor | vector view drawn as displaced (display only) |
 | Color map controls | gmsh_render options | View.RangeType, View.CustomMin/CustomMax, View.SaturateValues, View.IntervalsType, View.NbIso |
 
+## Field lines: pick the right tool (the ParaView pain point, solved)
+
+Stream tracing is where ParaView disappoints (manual seeds, bunched
+density, loops that overdraw or stop mid-circle).  Three tools, by
+decreasing exactness -- always prefer the highest one that applies:
+
+1. **2D / axisymmetric with a potential available ->
+   gmsh_flux_lines.**  Contours of A_z (or psi = r*A_theta) ARE the
+   field lines, with EQUAL FLUX between adjacent lines: exact
+   geometry, exact physical density, closed curves by construction.
+   No seeding, no integration error.  This is how FEMM draws motor
+   flux plots; if the solve can export A_z, use this.
+2. **Plane slice of a 3D field -> gmsh_streamlines_2d.**
+   Jobard-Lefer evenly spaced placement: seeds spawn automatically
+   d_sep from accepted lines, lines stop at d_sep/2 from neighbors.
+   Uniform visual density (line spacing does NOT encode |B|; keep
+   the |B| information in the line color).  EXACT field lines when
+   the plane is a symmetry plane (B.n = 0); otherwise the standard
+   projected-field portrait -- say so in captions.
+3. **True 3D lines -> gmsh_streamlines.**  Curvature-adaptive RK4
+   (step halves above max_turn_deg per step), closed loops detected
+   and closed exactly, per-line termination reasons.  A line that
+   reports "stagnation" INSIDE the domain marks a field zero (or a
+   numerically incoherent region) -- a real diagnostic, not a
+   rendering artifact.
+
 ## Honest gaps (do not fake these)
 
 - VOLUME RENDERING: gmsh has none.  Use isosurfaces + cut planes +
   clipping; for true volume rendering export to a tool that has it.
+- Surface LIC (line integral convolution): not available;
+  gmsh_streamlines_2d evenly spaced placement is the classical
+  vector-texture alternative.
 - Plugin(CutSphere): returns an EMPTY view on this build -- not
   exposed.  Use gmsh_cut_plane_extract / gmsh_threshold instead.
 - Plugin(Summation): absent from this build ("Unknown plugin"); a

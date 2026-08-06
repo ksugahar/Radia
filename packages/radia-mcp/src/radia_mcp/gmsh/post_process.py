@@ -256,25 +256,32 @@ try:
                            "n_steps": _n_steps(out_tag)})
 
         elif op == "streamlines":
-            # Probe-driven arc-length RK4 (Plugin(StreamLines) on this
-            # gmsh build only re-emits the seed points): unit-tangent
-            # integration, both directions, |v| carried as line color.
+            # Probe-driven arc-length tracer with curvature-ADAPTIVE RK4
+            # (step_size is the MAXIMUM step; it halves while the turn
+            # per step exceeds max_turn_deg), CLOSED-LOOP detection (the
+            # magnetic field-line case), one merged polyline per seed,
+            # and per-line termination reasons.  Plugin(StreamLines) on
+            # this gmsh build only re-emits the seed points.
+            import math as _math
             tag = _view_tag_by_selector(tags, cfg.get("view"))
             step = int(cfg.get("time_step", 0))
-            ds = cfg.get("step_size")
-            if ds is None:
+            ds0 = cfg.get("step_size")
+            if ds0 is None:
                 bb = gmsh.model.getBoundingBox(-1, -1)
                 diag = sum((bb[i + 3] - bb[i]) ** 2 for i in range(3)) ** 0.5
-                ds = diag / 200.0
-            ds = float(ds)
+                ds0 = diag / 200.0
+            ds0 = float(ds0)
+            ds_min = ds0 / 64.0
+            adaptive = bool(cfg.get("adaptive", True))
+            detect_closure = bool(cfg.get("closure", True))
+            angle_max = _math.radians(float(cfg.get("max_turn_deg", 10.0)))
             max_steps = int(cfg.get("max_steps", 400))
             n_seeds = max(1, int(cfg.get("n_seeds", 10)))
             s0, s1 = cfg["seed_start"], cfg["seed_end"]
             seeds = [[s0[k] + (s1[k] - s0[k]) *
                       (i / (n_seeds - 1) if n_seeds > 1 else 0.0)
                       for k in range(3)] for i in range(n_seeds)]
-            directions = ([1, -1] if cfg.get("both_directions", True)
-                          else [1])
+            both = bool(cfg.get("both_directions", True))
 
             def _sample(q):
                 values, dist = gmsh.view.probe(tag, q[0], q[1], q[2],
@@ -283,58 +290,133 @@ try:
                 # report the nearest value at ANY distance -- without
                 # this gate the tracer would never stop).
                 if len(values) < 3 or float(dist) > 0.0:
-                    return None, 0.0
+                    return None, 0.0, "left_data"
                 vx, vy, vz = (float(values[0]), float(values[1]),
                               float(values[2]))
                 norm = (vx * vx + vy * vy + vz * vz) ** 0.5
                 if norm < 1e-30:
-                    return None, 0.0
-                return (vx / norm, vy / norm, vz / norm), norm
+                    return None, 0.0, "stagnation"
+                return (vx / norm, vy / norm, vz / norm), norm, None
 
-            polylines = []
-            for seed in seeds:
-                for sgn in directions:
-                    path = [list(seed)]
-                    norms = [_sample(seed)[1]]
-                    p = list(seed)
-                    for _ in range(max_steps):
-                        def _f(q):
-                            t, _n = _sample(q)
-                            if t is None:
-                                return None
-                            return [sgn * c for c in t]
-                        k1 = _f(p)
+            def _trace(seed, sgn):
+                t0, n0, why = _sample(seed)
+                if t0 is None:
+                    return [list(seed)], [n0], why, False
+
+                def _f(q):
+                    # returns (direction, None) or (None, reason) so a
+                    # mid-step field zero reports "stagnation", not
+                    # "left_data"
+                    t, _n, w = _sample(q)
+                    if t is None:
+                        return None, w
+                    return [sgn * c for c in t], None
+
+                path = [list(seed)]
+                norms = [n0]
+                p = list(seed)
+                start_dir = [sgn * c for c in t0]
+                t_prev = start_dir[:]
+                ds = ds0
+                arc = 0.0
+                reason = "max_steps"
+                closed = False
+                for _ in range(max_steps):
+                    outcome = None
+                    while True:
+                        k1, w1 = _f(p)
                         if k1 is None:
+                            outcome = w1
                             break
                         q2 = [p[i] + 0.5 * ds * k1[i] for i in range(3)]
-                        k2 = _f(q2)
+                        k2, w2 = _f(q2)
                         if k2 is None:
+                            outcome = w2
                             break
                         q3 = [p[i] + 0.5 * ds * k2[i] for i in range(3)]
-                        k3 = _f(q3)
+                        k3, w3 = _f(q3)
                         if k3 is None:
+                            outcome = w3
                             break
                         q4 = [p[i] + ds * k3[i] for i in range(3)]
-                        k4 = _f(q4)
+                        k4, w4 = _f(q4)
                         if k4 is None:
+                            outcome = w4
                             break
-                        p = [p[i] + ds / 6.0 * (k1[i] + 2 * k2[i]
-                                                + 2 * k3[i] + k4[i])
-                             for i in range(3)]
-                        _t, norm = _sample(p)
-                        if _t is None:
+                        p_new = [p[i] + ds / 6.0 * (k1[i] + 2 * k2[i]
+                                                    + 2 * k3[i] + k4[i])
+                                 for i in range(3)]
+                        t_new, n_new, why = _sample(p_new)
+                        if t_new is None:
+                            outcome = why
                             break
-                        path.append(list(p))
-                        norms.append(norm)
-                    if len(path) > 1:
-                        if sgn < 0:
-                            path.reverse()
-                            norms.reverse()
-                        polylines.append((path, norms))
+                        t_dir = [sgn * c for c in t_new]
+                        d = sum(a * b for a, b in zip(t_prev, t_dir))
+                        angle = _math.acos(max(-1.0, min(1.0, d)))
+                        if (not adaptive or angle <= angle_max
+                                or ds <= ds_min * 1.0001):
+                            outcome = "ok" if (angle <= angle_max
+                                               or not adaptive) \
+                                else "incoherent"
+                            break
+                        ds *= 0.5
+                    if outcome == "left_data":
+                        reason = "left_data"
+                        break
+                    if outcome == "stagnation":
+                        reason = "stagnation"
+                        break
+                    if outcome == "incoherent":
+                        # ds_min reached and the direction still flips:
+                        # the field direction is no longer coherent
+                        # (approaching a zero / reversal point)
+                        reason = "stagnation"
+                        break
+                    p = p_new
+                    arc += ds
+                    path.append(list(p))
+                    norms.append(n_new)
+                    t_prev = t_dir
+                    if adaptive and angle < 0.5 * angle_max and ds < ds0:
+                        ds = min(ds0, ds * 2.0)
+                    if detect_closure and arc > 4.0 * ds0:
+                        dd = sum((a - b) ** 2
+                                 for a, b in zip(p, seed)) ** 0.5
+                        if (dd < max(ds, 0.75 * ds0)
+                                and sum(a * b for a, b in
+                                        zip(t_dir, start_dir)) > 0.8):
+                            path.append(list(seed))
+                            norms.append(norms[0])
+                            closed = True
+                            reason = "closed"
+                            break
+                return path, norms, reason, closed
+
+            polylines = []
+            skipped_seeds = 0
+            for seed in seeds:
+                fwd_path, fwd_norms, fwd_reason, closed = _trace(seed, 1)
+                if closed or not both:
+                    if len(fwd_path) > 1:
+                        polylines.append((fwd_path, fwd_norms, closed,
+                                          {"forward": fwd_reason}))
+                    else:
+                        skipped_seeds += 1
+                    continue
+                bwd_path, bwd_norms, bwd_reason, _bc = _trace(seed, -1)
+                merged = list(reversed(bwd_path)) + fwd_path[1:]
+                merged_norms = (list(reversed(bwd_norms))
+                                + fwd_norms[1:])
+                if len(merged) > 1:
+                    polylines.append((merged, merged_norms, False,
+                                      {"forward": fwd_reason,
+                                       "backward": bwd_reason}))
+                else:
+                    skipped_seeds += 1
 
             sl_data = []
             n_segments = 0
-            for path, norms in polylines:
+            for path, norms, _cl, _rs in polylines:
                 for i in range(len(path) - 1):
                     a, b = path[i], path[i + 1]
                     sl_data += [a[0], b[0], a[1], b[1], a[2], b[2],
@@ -344,15 +426,52 @@ try:
             if n_segments:
                 gmsh.view.addListData(out_tag, "SL", n_segments, sl_data)
             gmsh.view.write(out_tag, cfg["out_file"])
+
+            arrows_every = int(cfg.get("arrows_every", 0))
+            n_arrows = 0
+            if arrows_every > 0:
+                vp_data = []
+                for path, norms, _cl, _rs in polylines:
+                    for i in range(1, len(path) - 1, arrows_every):
+                        t = [path[i + 1][k] - path[i - 1][k]
+                             for k in range(3)]
+                        tn = sum(c * c for c in t) ** 0.5
+                        if tn < 1e-30:
+                            continue
+                        vp_data += list(path[i]) + [
+                            c / tn * norms[i] for c in t]
+                        n_arrows += 1
+                arrow_tag = gmsh.view.add("streamline_arrows")
+                if n_arrows:
+                    gmsh.view.addListData(arrow_tag, "VP", n_arrows,
+                                          vp_data)
+                gmsh.view.write(arrow_tag, cfg["out_file"], append=True)
+
+            reason_counts = {}
+            for _path, _norms, _cl, rs in polylines:
+                for r in rs.values():
+                    reason_counts[r] = reason_counts.get(r, 0) + 1
             result.update({
                 "ok": True, "ran": True,
                 "out_file": cfg["out_file"],
                 "n_polylines": len(polylines),
                 "n_segments": n_segments,
-                "step_size": ds,
+                "n_closed": sum(1 for _p, _n, cl, _r in polylines if cl),
+                "n_arrows": n_arrows,
+                "skipped_seeds": skipped_seeds,
+                "reasons": reason_counts,
+                "step_size": ds0,
+                "lines": [
+                    {"n_points": len(path), "closed": cl, "reasons": rs,
+                     "arc_length": sum(
+                         sum((path[i + 1][k] - path[i][k]) ** 2
+                             for k in range(3)) ** 0.5
+                         for i in range(len(path) - 1))}
+                    for path, _norms, cl, rs in polylines],
                 "polylines": [
-                    {"points": path, "field_norms": norms}
-                    for path, norms in polylines
+                    {"points": path, "field_norms": norms,
+                     "closed": cl, "reasons": rs}
+                    for path, norms, cl, rs in polylines
                 ] if cfg.get("return_points") else None,
             })
 
@@ -616,6 +735,313 @@ try:
                            "order": "w fastest, then v, then u",
                            "n_steps": max(1, _n_steps(out_tag))})
 
+        elif op == "flux_lines":
+            # N-level isoline/isosurface extraction merged into ONE
+            # view.  On a 2D scalar (A_z, the axisymmetric flux psi)
+            # the equally spaced levels ARE the exact equal-flux field
+            # lines (the FEMM-style motor plot) -- integration-free.
+            tag = _view_tag_by_selector(tags, cfg.get("view"))
+            levels = cfg.get("levels")
+            if levels is None:
+                gmsh.plugin.setNumber("MinMax", "View",
+                                      gmsh.view.getIndex(tag))
+                gmsh.plugin.setNumber("MinMax", "OverTime", 0)
+                gmsh.plugin.setNumber("MinMax", "Argument", 1)
+                before = set(gmsh.view.getTags())
+                gmsh.plugin.run("MinMax")
+                lo = hi = None
+                for t in list(gmsh.view.getTags()):
+                    if t in before:
+                        continue
+                    nm = _view_name(t)
+                    _dt, _ne, data = gmsh.view.getListData(t)
+                    val = (float(data[0][3])
+                           if data and len(data[0]) >= 4 else None)
+                    if nm.endswith("_Min"):
+                        lo = val
+                    elif nm.endswith("_Max"):
+                        hi = val
+                    gmsh.view.remove(t)
+                if lo is None or hi is None or hi <= lo:
+                    raise RuntimeError(
+                        f"cannot derive levels from view range "
+                        f"[{lo}, {hi}]")
+                n = max(1, int(cfg.get("n_levels", 20)))
+                levels = [lo + (hi - lo) * (k + 1) / (n + 1)
+                          for k in range(n)]
+            levels = [float(lv) for lv in levels]
+            acc = {}
+            pieces_per_level = []
+            for level in levels:
+                gmsh.plugin.setNumber("Isosurface", "View",
+                                      gmsh.view.getIndex(tag))
+                gmsh.plugin.setNumber("Isosurface", "Value", level)
+                iso_tag = gmsh.plugin.run("Isosurface")
+                dtypes, nels, data = gmsh.view.getListData(iso_tag)
+                per = {}
+                for dt_, ne_, block in zip(dtypes, nels, data):
+                    key = str(dt_)
+                    per[key] = per.get(key, 0) + int(ne_)
+                    old_n, old_data = acc.get(key, (0, []))
+                    acc[key] = (old_n + int(ne_),
+                                old_data + [float(v) for v in block])
+                pieces_per_level.append(per)
+                gmsh.view.remove(iso_tag)
+            out_tag = gmsh.view.add(cfg.get("result_name", "flux_lines"))
+            for key, (n_el, flat) in acc.items():
+                if n_el:
+                    gmsh.view.addListData(out_tag, key, n_el, flat)
+            gmsh.view.write(out_tag, cfg["out_file"])
+            result.update({"ok": True, "ran": True,
+                           "out_file": cfg["out_file"],
+                           "levels": levels,
+                           "pieces_per_level": pieces_per_level,
+                           "pieces": {k: v[0] for k, v in acc.items()}})
+
+        elif op == "streamlines_2d":
+            # Evenly-spaced streamlines on a plane patch (Jobard-Lefer
+            # 1997): trace the IN-PLANE projection of the vector view;
+            # new seeds spawn d_sep away from accepted lines and lines
+            # stop d_test (= d_sep/2) from other lines -- the uniform-
+            # density picture ParaView only offers for native-2D data.
+            # Exact field lines where the plane is a symmetry plane
+            # (B.n = 0); elsewhere it is the projected-field portrait.
+            import collections as _collections
+            tag = _view_tag_by_selector(tags, cfg.get("view"))
+            step = int(cfg.get("time_step", 0))
+            o = cfg["origin"]
+            u_vec = [cfg["u_point"][k] - o[k] for k in range(3)]
+            v_raw = [cfg["v_point"][k] - o[k] for k in range(3)]
+            Lu = sum(c * c for c in u_vec) ** 0.5
+            if Lu < 1e-30:
+                raise RuntimeError("u_point coincides with origin")
+            uh = [c / Lu for c in u_vec]
+            dot_uv = sum(a * b for a, b in zip(v_raw, uh))
+            v_ortho = [v_raw[k] - dot_uv * uh[k] for k in range(3)]
+            Lv = sum(c * c for c in v_ortho) ** 0.5
+            if Lv < 1e-30:
+                raise RuntimeError("v_point is collinear with u_point")
+            vh = [c / Lv for c in v_ortho]
+            diag = (Lu * Lu + Lv * Lv) ** 0.5
+            d_sep = float(cfg.get("d_sep") or diag / 30.0)
+            d_test = float(cfg.get("d_test") or 0.5 * d_sep)
+            ds = float(cfg.get("step_size")
+                       or max(d_sep / 4.0, diag / 800.0))
+            max_steps = int(cfg.get("max_steps", 1500))
+            max_lines = int(cfg.get("max_lines", 200))
+            budget = int(cfg.get("max_total_steps", 150000))
+            min_arc = 1.5 * d_sep
+
+            def _p3(a, b):
+                return [o[k] + a * uh[k] + b * vh[k] for k in range(3)]
+
+            def _sample2(a, b):
+                if a < 0.0 or a > Lu or b < 0.0 or b > Lv:
+                    return None, 0.0
+                q = _p3(a, b)
+                values, dist = gmsh.view.probe(tag, q[0], q[1], q[2],
+                                               step=step)
+                if len(values) < 3 or float(dist) > 0.0:
+                    return None, 0.0
+                vx, vy, vz = (float(values[0]), float(values[1]),
+                              float(values[2]))
+                fa = vx * uh[0] + vy * uh[1] + vz * uh[2]
+                fb = vx * vh[0] + vy * vh[1] + vz * vh[2]
+                nip = (fa * fa + fb * fb) ** 0.5
+                if nip < 1e-30:
+                    return None, 0.0
+                n3 = (vx * vx + vy * vy + vz * vz) ** 0.5
+                return (fa / nip, fb / nip), n3
+
+            grid = {}
+
+            def _add_to_grid(pts):
+                for (a, b, _n) in pts:
+                    grid.setdefault((int(a // d_sep), int(b // d_sep)),
+                                    []).append((a, b))
+
+            def _too_close(a, b, radius):
+                ci, cj = int(a // d_sep), int(b // d_sep)
+                r2 = radius * radius
+                for i in range(ci - 1, ci + 2):
+                    for j in range(cj - 1, cj + 2):
+                        for (pa, pb) in grid.get((i, j), ()):
+                            if (pa - a) ** 2 + (pb - b) ** 2 < r2:
+                                return True
+                return False
+
+            steps_used = [0]  # list: the op body runs at module level
+
+            def _trace2(seed):
+                t0, n0 = _sample2(seed[0], seed[1])
+                if t0 is None:
+                    return None, False
+                closed = False
+                halves = []
+                for sgn in (1, -1):
+                    pth = [(seed[0], seed[1], n0)]
+                    a, b = seed
+                    arc = 0.0
+
+                    def _f(qa, qb):
+                        t, _n = _sample2(qa, qb)
+                        if t is None:
+                            return None
+                        return (sgn * t[0], sgn * t[1])
+
+                    for _ in range(max_steps):
+                        steps_used[0] += 1
+                        k1 = _f(a, b)
+                        if k1 is None:
+                            break
+                        k2 = _f(a + 0.5 * ds * k1[0],
+                                b + 0.5 * ds * k1[1])
+                        if k2 is None:
+                            break
+                        k3 = _f(a + 0.5 * ds * k2[0],
+                                b + 0.5 * ds * k2[1])
+                        if k3 is None:
+                            break
+                        k4 = _f(a + ds * k3[0], b + ds * k3[1])
+                        if k4 is None:
+                            break
+                        a2 = a + ds / 6.0 * (k1[0] + 2 * k2[0]
+                                             + 2 * k3[0] + k4[0])
+                        b2 = b + ds / 6.0 * (k1[1] + 2 * k2[1]
+                                             + 2 * k3[1] + k4[1])
+                        t2, n2 = _sample2(a2, b2)
+                        if t2 is None:
+                            break
+                        if _too_close(a2, b2, d_test):
+                            break
+                        a, b = a2, b2
+                        arc += ds
+                        pth.append((a, b, n2))
+                        if arc > 4.0 * d_test:
+                            dd = ((a - seed[0]) ** 2
+                                  + (b - seed[1]) ** 2) ** 0.5
+                            # march-direction alignment: dot(sgn*t2,
+                            # sgn*t0) = t2.t0 (sgn cancels)
+                            if (dd < max(ds, 0.5 * d_test)
+                                    and (t2[0] * t0[0]
+                                         + t2[1] * t0[1]) > 0.8):
+                                pth.append((seed[0], seed[1], n0))
+                                closed = True
+                                break
+                    halves.append(pth)
+                    if closed:
+                        return halves[0], True
+                merged = list(reversed(halves[1]))[:-1] + halves[0]
+                return merged, False
+
+            # first seed: the strongest in-plane point of a coarse scan
+            seed0 = cfg.get("first_seed")
+            if seed0 is None:
+                best, best_n = None, -1.0
+                for i in range(1, 8):
+                    for j in range(1, 8):
+                        a, b = Lu * i / 8.0, Lv * j / 8.0
+                        t, n3 = _sample2(a, b)
+                        if t is not None and n3 > best_n:
+                            best, best_n = (a, b), n3
+                if best is None:
+                    raise RuntimeError(
+                        "no in-plane field found on the patch (all scan "
+                        "points outside the data or |v_inplane| = 0)")
+                seed0 = best
+            queue = _collections.deque([tuple(seed0)])
+            lines = []
+            budget_hit = False
+            while queue and len(lines) < max_lines:
+                if steps_used[0] > budget:
+                    budget_hit = True
+                    break
+                cand = queue.popleft()
+                # 0.95: candidates sit EXACTLY d_sep from their parent
+                # line, so testing at the full radius rejects them all
+                # on floating-point rounding
+                if _too_close(cand[0], cand[1], 0.95 * d_sep):
+                    continue
+                pts, closed = _trace2(cand)
+                if pts is None:
+                    continue
+                arc = ds * (len(pts) - 1)
+                if arc < min_arc and not closed:
+                    continue
+                _add_to_grid(pts)
+                lines.append((pts, closed))
+                stride = max(1, int(d_sep / ds))
+                for i in range(0, len(pts), stride):
+                    a, b, _n = pts[i]
+                    inext = min(i + 1, len(pts) - 1)
+                    ta = pts[inext][0] - pts[i - 1][0] if i > 0 else \
+                        pts[inext][0] - pts[i][0]
+                    tb = pts[inext][1] - pts[i - 1][1] if i > 0 else \
+                        pts[inext][1] - pts[i][1]
+                    tn = (ta * ta + tb * tb) ** 0.5
+                    if tn < 1e-30:
+                        continue
+                    na, nb = -tb / tn, ta / tn
+                    for s in (1.0, -1.0):
+                        queue.append((a + s * na * d_sep,
+                                      b + s * nb * d_sep))
+
+            sl_data = []
+            n_segments = 0
+            for pts, _cl in lines:
+                for i in range(len(pts) - 1):
+                    pa = _p3(pts[i][0], pts[i][1])
+                    pb = _p3(pts[i + 1][0], pts[i + 1][1])
+                    sl_data += [pa[0], pb[0], pa[1], pb[1], pa[2], pb[2],
+                                pts[i][2], pts[i + 1][2]]
+                    n_segments += 1
+            out_tag = gmsh.view.add(cfg.get("result_name",
+                                            "streamlines_2d"))
+            if n_segments:
+                gmsh.view.addListData(out_tag, "SL", n_segments, sl_data)
+            gmsh.view.write(out_tag, cfg["out_file"])
+
+            arrows_every = int(cfg.get("arrows_every", 0))
+            n_arrows = 0
+            if arrows_every > 0:
+                vp_data = []
+                for pts, _cl in lines:
+                    for i in range(1, len(pts) - 1, arrows_every):
+                        ta = pts[i + 1][0] - pts[i - 1][0]
+                        tb = pts[i + 1][1] - pts[i - 1][1]
+                        tn = (ta * ta + tb * tb) ** 0.5
+                        if tn < 1e-30:
+                            continue
+                        t3 = [(ta * uh[k] + tb * vh[k]) / tn * pts[i][2]
+                              for k in range(3)]
+                        vp_data += _p3(pts[i][0], pts[i][1]) + t3
+                        n_arrows += 1
+                arrow_tag = gmsh.view.add("streamlines_2d_arrows")
+                if n_arrows:
+                    gmsh.view.addListData(arrow_tag, "VP", n_arrows,
+                                          vp_data)
+                gmsh.view.write(arrow_tag, cfg["out_file"], append=True)
+
+            result.update({
+                "ok": True, "ran": True,
+                "out_file": cfg["out_file"],
+                "n_lines": len(lines),
+                "n_segments": n_segments,
+                "n_closed": sum(1 for _p, cl in lines if cl),
+                "n_arrows": n_arrows,
+                "d_sep": d_sep, "d_test": d_test, "step_size": ds,
+                "steps_used": steps_used[0],
+                "budget_exceeded": budget_hit,
+                "plane": {"origin": o, "u_axis": uh, "v_axis": vh,
+                          "extent": [Lu, Lv]},
+                "lines": [
+                    {"n_points": len(pts), "closed": cl,
+                     "points": ([[round(c, 12) for c in _p3(a, b)]
+                                 for a, b, _n in pts]
+                                if cfg.get("return_points") else None)}
+                    for pts, cl in lines],
+            })
+
         else:
             raise RuntimeError(f"unknown op {op!r}")
 
@@ -837,16 +1263,23 @@ def streamlines(path: str | Path, seed_start: list[float],
                 view: str | int | None = None,
                 step_size: float | None = None, max_steps: int = 400,
                 both_directions: bool = True, time_step: int = 0,
+                adaptive: bool = True, closure: bool = True,
+                max_turn_deg: float = 10.0, arrows_every: int = 0,
                 return_points: bool = False,
                 out_file: str | Path | None = None,
                 timeout_s: float = 600.0) -> dict[str, Any]:
     """Trace field lines of a vector view from seeds on a line segment.
 
-    Probe-driven arc-length RK4 (unit-tangent integration): step_size
-    defaults to bbox diagonal / 200, lines march in both directions
-    until they leave the data or hit max_steps, and the local |v| is
-    carried as the line color. The traced polylines are saved as an SL
-    view; return_points=True additionally returns the coordinates.
+    Probe-driven arc-length RK4 with curvature ADAPTIVITY (step_size =
+    bbox diagonal / 200 by default and is the MAXIMUM step; it halves
+    wherever the turn per step exceeds max_turn_deg) and CLOSED-LOOP
+    detection -- a magnetic field line that returns to its seed is
+    closed exactly and reported as such instead of overdrawing or
+    stopping mid-loop.  One merged polyline per seed (backward +
+    forward), local |v| as the line color, per-line termination
+    reasons (left_data | closed | stagnation | max_steps), and
+    optional direction arrows every arrows_every-th point as a
+    companion VP view.  return_points=True returns the coordinates.
     """
     err = _check_input(path)
     if err:
@@ -862,8 +1295,100 @@ def streamlines(path: str | Path, seed_start: list[float],
                       "max_steps": int(max_steps),
                       "both_directions": bool(both_directions),
                       "time_step": int(time_step),
+                      "adaptive": bool(adaptive),
+                      "closure": bool(closure),
+                      "max_turn_deg": float(max_turn_deg),
+                      "arrows_every": int(arrows_every),
                       "return_points": bool(return_points),
                       "out_file": _default_out(path, out_file, "stream")},
+                     timeout_s)
+
+
+def flux_lines(path: str | Path, *, n_levels: int = 20,
+               levels: list[float] | None = None,
+               view: str | int | None = None,
+               result_name: str = "flux_lines",
+               out_file: str | Path | None = None,
+               timeout_s: float = 600.0) -> dict[str, Any]:
+    """Equally spaced isolines of a scalar view, merged into ONE view.
+
+    THE 2D-magnetics field-line tool: on a planar A_z view (or the
+    axisymmetric flux function psi = r A_theta) the equally spaced
+    levels ARE the exact field lines with EQUAL FLUX between adjacent
+    lines -- the FEMM-style motor plot, no integration, no seeds, no
+    density tuning.  Levels default to n_levels interior values
+    between the view min and max; on a 3D scalar the same call yields
+    a multi-level isosurface stack.
+    """
+    err = _check_input(path)
+    if err:
+        return err
+    if levels is not None:
+        levels = [float(lv) for lv in levels]
+        if not levels:
+            return {"ok": False, "error": "levels must not be empty"}
+    return _run_post({"op": "flux_lines", "path": str(path), "view": view,
+                      "n_levels": int(n_levels), "levels": levels,
+                      "result_name": str(result_name),
+                      "out_file": _default_out(path, out_file, "flux")},
+                     timeout_s)
+
+
+def streamlines_2d(path: str | Path, origin: list[float],
+                   u_point: list[float], v_point: list[float], *,
+                   d_sep: float | None = None,
+                   d_test: float | None = None,
+                   step_size: float | None = None,
+                   view: str | int | None = None,
+                   first_seed: list[float] | None = None,
+                   max_lines: int = 200, max_steps: int = 1500,
+                   max_total_steps: int = 150000,
+                   arrows_every: int = 0, time_step: int = 0,
+                   result_name: str = "streamlines_2d",
+                   return_points: bool = False,
+                   out_file: str | Path | None = None,
+                   timeout_s: float = 900.0) -> dict[str, Any]:
+    """Evenly spaced streamlines on a plane patch (Jobard-Lefer).
+
+    The uniform-density streamline picture ParaView only offers for
+    native-2D datasets, here on ANY plane slice of a 3D field: the
+    IN-PLANE projection of the vector view is traced, new seeds spawn
+    d_sep away from accepted lines, and lines stop d_test (= d_sep/2)
+    from other lines -- no manual seed placement, no bunching, closed
+    loops handled.  The patch follows the resample_grid convention
+    (origin + u/v edge endpoints; the v axis is orthogonalized).
+    Exact field lines where the plane is a symmetry plane (B.n = 0);
+    elsewhere it is the standard projected-field portrait.
+    """
+    err = _check_input(path)
+    if err:
+        return err
+    pts = {"origin": origin, "u_point": u_point, "v_point": v_point}
+    clean: dict[str, list[float]] = {}
+    for key, val in pts.items():
+        v = [float(c) for c in val]
+        if len(v) != 3:
+            return {"ok": False, "error": f"{key} needs exactly 3 coords"}
+        clean[key] = v
+    if first_seed is not None:
+        first_seed = [float(c) for c in first_seed]
+        if len(first_seed) != 2:
+            return {"ok": False,
+                    "error": "first_seed is [u, v] IN-PLANE lengths "
+                             "(2 values)"}
+    return _run_post({"op": "streamlines_2d", "path": str(path),
+                      "view": view, **clean,
+                      "d_sep": d_sep, "d_test": d_test,
+                      "step_size": step_size,
+                      "first_seed": first_seed,
+                      "max_lines": int(max_lines),
+                      "max_steps": int(max_steps),
+                      "max_total_steps": int(max_total_steps),
+                      "arrows_every": int(arrows_every),
+                      "time_step": int(time_step),
+                      "result_name": str(result_name),
+                      "return_points": bool(return_points),
+                      "out_file": _default_out(path, out_file, "stream2d")},
                      timeout_s)
 
 

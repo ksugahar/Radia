@@ -26,13 +26,15 @@ def gmsh_available() -> bool:
 def run_gmsh_json_subprocess(script: str, args: list[str], *,
                              timeout_s: float,
                              prefix: str = "radia_mcp_gmsh_") -> dict[str, Any]:
-    """Run ``python -c <script> <args...> <out_json>`` and read the JSON back.
+    """Run ``python <script.py> <args...> <out_json>`` and read the JSON back.
 
     The script MUST take the output JSON path as its LAST argv entry and
     write a JSON object there even on failure (wrap its body in
-    try/except and record ``error``).  Returns ``{"ok": False,
-    "ran": False, "error": ...}`` when gmsh is missing, the child dies
-    without writing a result, or the timeout expires.
+    try/except and record ``error``).  The script is written to a temp
+    file rather than passed via ``-c`` -- long scripts overflow the
+    Windows 32k command-line limit (WinError 206).  Returns
+    ``{"ok": False, "ran": False, "error": ...}`` when gmsh is missing,
+    the child dies without writing a result, or the timeout expires.
     """
     if not gmsh_available():
         return {"ok": False, "ran": False,
@@ -41,7 +43,9 @@ def run_gmsh_json_subprocess(script: str, args: list[str], *,
     with tempfile.TemporaryDirectory(prefix=prefix) as work:
         out_json = Path(work) / "result.json"
         log_path = Path(work) / "run.log"
-        cmd = [sys.executable, "-c", script, *args, str(out_json)]
+        script_path = Path(work) / "script.py"
+        script_path.write_text(script, encoding="utf-8")
+        cmd = [sys.executable, str(script_path), *args, str(out_json)]
         try:
             with open(log_path, "w", encoding="utf-8") as log:
                 proc = subprocess.run(

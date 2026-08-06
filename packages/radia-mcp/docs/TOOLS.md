@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **948 tools** across 48 MCP servers.
+Total: **950 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 85 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 52 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 54 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -257,6 +257,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_extract_skin` | Extract the boundary skin of a volume view (surface + field). |
 | `gmsh_field_histogram` | Histogram of a view's values (the ParaView Histogram analog). |
 | `gmsh_field_stats` | Per-view, per-time-step field statistics for an MSH v4.1 file. |
+| `gmsh_flux_lines` | Equally spaced isolines of a scalar view, merged into ONE view. |
 | `gmsh_harmonic_to_time` | Expand a complex (re/im) view into a time-domain animation view. |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
 | `gmsh_integrate` | Integrate a view over its elements (per time step). |
@@ -283,6 +284,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_smooth_to_nodes` | Average element-wise data to nodes (CellDataToPointData analog). |
 | `gmsh_status` | (no description) |
 | `gmsh_streamlines` | Trace field lines of a vector view from seeds on a line segment. |
+| `gmsh_streamlines_2d` | Evenly spaced streamlines on a plane slice (Jobard-Lefer placement). |
 | `gmsh_threshold` | Keep only elements whose MEAN value lies in [min_val, max_val]. |
 | `gmsh_transform_view` | Apply an affine transform x' = A x + t to a COPY of a view. |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
