@@ -19,6 +19,8 @@ quality-class runs (no timing), so LAB execution is allowed.
 | `run_size_target_sensitivity.py` | is `min` a reproducible mesher property at all? | `results_size_target_sensitivity.json` | ~60 s |
 | `run_solver_impact.py` | does any of it change the solver? | `results_solver_impact.json` | ~10 s |
 | `run_accuracy_per_dof.py` | which mesh is more accurate for the same **dof**? tet vs tet vs hex | `results_accuracy_per_dof.json` | ~60 s |
+| `run_vector_elements.py` | does any of it hold for **HCurl / HDiv**? | `results_vector_elements.json` | ~110 s |
+| `run_rotation_control.py` | is the hex win just **axis alignment**? | `results_rotation_control.json` | ~20 s |
 
 `run_study.py` compares **equal-h** (same target size; netgen produces
 ~half the elements) and **equal-budget** (netgen `maxh` calibrated by
@@ -142,6 +144,45 @@ host with Cubit + netgen + gmsh + build123d. Scratch meshes land in
    slope). Always check the interior fraction before believing a
    convergence rate.
 
+8. **Vector spaces (HCurl / HDiv) — the verdict mostly carries, but hex
+   gains and the honest metric changes.** Manufactured curl-curl+mass
+   and div-div+mass problems at lowest order, on the same three
+   geometries, compared at matched dof:
+
+   * **cubit_tet still leads netgen, but by less and no longer
+     everywhere**: ahead in **29 of 32** matched-dof comparisons,
+     0.91–1.27× (vs 1.14–1.89× and 28/28 on scalar H1). All three
+     exceptions are the same one — the HCurl **curl** seminorm on the
+     thin plate, where netgen edges ahead by 2–9 %. The boundary-node
+     penalty is diluted because HCurl/HDiv dofs live on edges and faces
+     rather than nodes, though netgen's free-dof fraction is still the
+     lower one (HCurl 30–59 % vs cubit 51–83 %).
+   * **hex helps more here than in H1**, and differently per space —
+     matched-dof, alignment-free: HCurl L2 0.28×, **curl seminorm
+     0.66×**, CG 0.45×; HDiv L2 0.56×, **div seminorm 0.97× (a dead
+     heat)**, CG 0.47×. So for eddy-current (HCurl) work hex buys a
+     real ~1.5× in the curl seminorm and ~2.2× in iterations; for
+     flux-space (HDiv) work it buys iterations and L2, but nothing in
+     the div seminorm.
+
+9. **The metric that was lying: L2 on an axis-aligned benchmark.**
+   Before the control, hex looked 30× better than tet in HCurl L2 and
+   10–18× in HDiv L2 — while the curl/div seminorms on the *same runs*
+   showed near parity. That asymmetry was the tell. Rotating the FIELD
+   30° about z and 20° about y (rotation commutes with curl and div, so
+   `curl curl u = k²u` still holds exactly — same geometry, same meshes,
+   same exact-solution machinery) collapsed hex/tet L2 from 0.017–0.031×
+   to 0.39–0.44× (HCurl) and from 0.055–0.100× to 0.93–1.01× (HDiv, a
+   dead heat), and inflated hex's HDiv CG advantage by ~7×. The
+   derivative seminorms did not move at all across the rotation
+   (0.658→0.657, 0.973→0.967).
+
+   **Rule: never verify or benchmark a structured mesh with an
+   axis-aligned separable exact solution, and treat an order-of-magnitude
+   mesh-comparison gap as an artifact until a control says otherwise.**
+   Catalogued as bug pattern
+   `axis-aligned-manufactured-solution-fake-superconvergence`.
+
 ## Practical rule for the lab pipeline
 
 * **Cost is dof, not elements.** Rank meshes on error-vs-ndof, never on
@@ -150,24 +191,31 @@ host with Cubit + netgen + gmsh + build123d. Scratch meshes land in
 * **Cubit tetmesh over netgen for accuracy**: same convergence rate,
   1.14–1.89× lower L2 error at matched dof, because more of its nodes are
   interior. netgen's strengths here are speed and element economy.
-* **Cubit hex where the geometry sweeps cheaply**: ~1.8× fewer CG
-  iterations and 10–25 % better H1 at equal dof. If the answer is an
-  energy/gradient quantity or the solve is iteration-bound, that is worth
-  the meshing effort; if you only need L2 of the primary unknown, it is
-  not.
+* **Cubit hex where the geometry sweeps cheaply**: at equal dof, ~1.8×
+  fewer CG iterations and 10–25 % better H1 on scalar problems, and
+  more on vector ones — ~2.2× fewer iterations plus ~1.5× in the curl
+  seminorm for HCurl. The exception is the HDiv div seminorm, where hex
+  and tet tie. Worth the meshing effort when the solve is
+  iteration-bound or the answer is a gradient/curl quantity.
 * **Gate on inverted elements** (`negative > 0`), not on a single `min`
   value — and when comparing `min`, compare a **band** of sizes.
 * **Check the interior-node fraction** before trusting any convergence
-  number (finding 7).
+  number (finding 7), and **check a rotated control** before trusting an
+  order-of-magnitude win (finding 9).
+* `mesh_quality` now reports these axes directly — `mesh_stats.
+  dof_estimate`, `mesh_stats.interior_node_fraction`, and per-type
+  `aspect_ratio` — so an agent can apply this rule without re-deriving
+  it, and `cubit_netgen_quality_compare` carries them per route.
 
 ## Scope of these conclusions
 
-Everything above is order-1 elements on an isotropic scalar (Poisson)
-problem, on three geometries. Shape quality and element family are
-expected to matter differently for HCurl/HDiv vector problems,
-anisotropic materials, and high-order curved elements, where they enter
-the inf-sup / interpolation constants differently — none of that is
-tested here. In particular the hex verdict in finding 5 is an H1-scalar
-verdict; do not carry it to an HDiv-VIM or HCurl eddy-current problem
-without measuring. Timing was deliberately not measured anywhere (LAB is
-a contended host); every observable here is deterministic.
+Findings 1–7 are order-1 elements on an isotropic scalar (Poisson)
+problem; findings 8–9 extend the comparison to lowest-order HCurl and
+HDiv, which is what closes the scope hole that findings 1–7 originally
+carried. Still untested: anisotropic materials, high-order curved
+elements, and nonlinear problems, where element shape enters the
+inf-sup / interpolation constants differently. The c_core vector cases
+are mass-dominated (k·L ≈ 1.6 gives k² ≪ 1), so their CG counts say
+little about curl-curl conditioning — the sphere is the balanced case.
+Timing was deliberately not measured anywhere (LAB is a contended
+host); every observable here is deterministic.
