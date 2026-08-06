@@ -13,14 +13,14 @@ Binary MSH and v2.2 are rejected loudly, never half-parsed.
 
 from __future__ import annotations
 
+import json
 import math
 import re
-from collections import Counter
-from pathlib import Path
-from typing import Any, Iterator
-
-import json
 import tempfile
+from collections import Counter
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 from ._gmsh_subprocess import run_gmsh_json_subprocess
 
@@ -232,10 +232,8 @@ def _parse_nodes(body: list[str]) -> tuple[dict[str, Any], list[str]]:
                 for _ in range(n_extra):
                     next(toks)
                 for k, v in enumerate((x, y, z)):
-                    if v < lo[k]:
-                        lo[k] = v
-                    if v > hi[k]:
-                        hi[k] = v
+                    lo[k] = min(lo[k], v)
+                    hi[k] = max(hi[k], v)
         if out["tags"]:
             out["bbox_min"] = lo
             out["bbox_max"] = hi
@@ -519,100 +517,285 @@ def read_msh_data(msh_path: str | Path,
     if section_errors:
         raise ValueError(f"{path.name}: {'; '.join(section_errors)}")
 
-    fmt = next((b for name, b, _ in sections if name == "MeshFormat"), None)
-    if fmt is None:
+    format_sections = [b for name, b, _ in sections if name == "MeshFormat"]
+    if not format_sections:
         raise ValueError(f"{path.name}: $MeshFormat section missing")
+    if len(format_sections) > 1:
+        raise ValueError(f"{path.name}: multiple $MeshFormat sections")
+    fmt = format_sections[0]
     fmt_tokens = " ".join(fmt).split()
-    if not fmt_tokens or not fmt_tokens[0].startswith("4"):
+    if len(fmt_tokens) < 2:
+        raise ValueError(f"{path.name}: malformed $MeshFormat header")
+    if not fmt_tokens[0].startswith("4"):
         raise ValueError(
-            f"{path.name}: MSH v{fmt_tokens[0] if fmt_tokens else '?'} is "
+            f"{path.name}: MSH v{fmt_tokens[0]} is "
             f"not supported (ASCII v4.x only)")
-    if len(fmt_tokens) > 1 and fmt_tokens[1] != "0":
+    if fmt_tokens[1] != "0":
         raise ValueError(f"{path.name}: binary MSH is not supported")
 
     out: dict[str, Any] = {"nodes": {}, "views": [], "elements": {}}
+    node_sections = 0
+    element_sections = 0
+    element_tags: set[int] = set()
+    element_node_counts: dict[int, int] = {}
+    element_node_refs: set[int] = set()
+
+    def _reject_trailing(toks: Iterator[str], section: str) -> None:
+        try:
+            extra = next(toks)
+        except StopIteration:
+            return
+        raise ValueError(
+            f"{path.name}: ${section} has trailing token {extra!r}")
+
     for name, body, start_line in sections:
         if name == "Nodes":
+            node_sections += 1
+            if node_sections > 1:
+                raise ValueError(
+                    f"{path.name}: multiple $Nodes sections are not supported")
             toks = _token_stream(body)
             try:
                 n_blocks = int(next(toks))
-                next(toks)  # declared total
-                next(toks)  # min tag
-                next(toks)  # max tag
-                for _ in range(n_blocks):
+                declared = int(next(toks))
+                min_tag = int(next(toks))
+                max_tag = int(next(toks))
+                if n_blocks < 0 or declared < 0:
+                    raise ValueError("negative block or node count")
+                parsed_count = 0
+                for block_index in range(n_blocks):
                     dim = int(next(toks))
                     next(toks)  # entity tag
                     parametric = int(next(toks))
                     n_in_block = int(next(toks))
+                    if dim not in (0, 1, 2, 3):
+                        raise ValueError(
+                            f"block {block_index} has invalid entity dimension {dim}")
+                    if parametric not in (0, 1):
+                        raise ValueError(
+                            f"block {block_index} has invalid parametric flag "
+                            f"{parametric}")
+                    if n_in_block < 0:
+                        raise ValueError(
+                            f"block {block_index} has negative node count")
                     tags = [int(next(toks)) for _ in range(n_in_block)]
+                    parsed_count += n_in_block
                     n_extra = dim if parametric else 0
                     for tag in tags:
+                        if tag <= 0:
+                            raise ValueError(f"node tag must be positive, got {tag}")
+                        if tag in out["nodes"]:
+                            raise ValueError(f"duplicate node tag {tag}")
                         xyz = [float(next(toks)) for _ in range(3)]
                         for _ in range(n_extra):
                             next(toks)
                         out["nodes"][tag] = xyz
+                _reject_trailing(toks, "Nodes")
+                if parsed_count != declared:
+                    raise ValueError(
+                        f"$Nodes declares {declared} nodes but blocks contain "
+                        f"{parsed_count}")
+                if out["nodes"] and (
+                        min(out["nodes"]) != min_tag
+                        or max(out["nodes"]) != max_tag):
+                    raise ValueError(
+                        f"$Nodes tag range declares [{min_tag}, {max_tag}] but "
+                        f"parsed [{min(out['nodes'])}, {max(out['nodes'])}]")
             except (StopIteration, ValueError) as exc:
                 raise ValueError(
                     f"{path.name}: $Nodes truncated or malformed "
                     f"({exc})") from exc
-        elif name == "Elements" and include_elements:
+        elif name == "Elements":
+            element_sections += 1
+            if element_sections > 1:
+                raise ValueError(
+                    f"{path.name}: multiple $Elements sections are not supported")
             toks = _token_stream(body)
             try:
                 n_blocks = int(next(toks))
-                next(toks)
-                next(toks)
-                next(toks)
-                for _ in range(n_blocks):
-                    next(toks)  # entity dim
+                declared = int(next(toks))
+                min_tag = int(next(toks))
+                max_tag = int(next(toks))
+                if n_blocks < 0 or declared < 0:
+                    raise ValueError("negative block or element count")
+                parsed_count = 0
+                for block_index in range(n_blocks):
+                    entity_dim = int(next(toks))
                     next(toks)  # entity tag
                     etype = int(next(toks))
                     n_in_block = int(next(toks))
+                    if n_in_block < 0:
+                        raise ValueError(
+                            f"block {block_index} has negative element count")
                     if etype not in ELEMENT_TYPES:
                         raise ValueError(
                             f"unknown element type {etype}")
-                    n_per = ELEMENT_TYPES[etype][1]
+                    _etype_name, n_per, expected_dim, _order = ELEMENT_TYPES[etype]
+                    if entity_dim != expected_dim:
+                        raise ValueError(
+                            f"element type {etype} has dimension {expected_dim} "
+                            f"but block {block_index} uses entity dimension "
+                            f"{entity_dim}")
+                    parsed_count += n_in_block
                     for _ in range(n_in_block):
                         tag = int(next(toks))
+                        if tag <= 0:
+                            raise ValueError(
+                                f"element tag must be positive, got {tag}")
+                        if tag in element_tags:
+                            raise ValueError(f"duplicate element tag {tag}")
                         refs = [int(next(toks)) for _ in range(n_per)]
-                        out["elements"][tag] = {"type": etype,
-                                                "nodes": refs}
+                        if any(ref <= 0 for ref in refs):
+                            raise ValueError(
+                                f"element {tag} has a non-positive node tag")
+                        element_tags.add(tag)
+                        element_node_counts[tag] = n_per
+                        element_node_refs.update(refs)
+                        if include_elements:
+                            out["elements"][tag] = {"type": etype,
+                                                    "nodes": refs}
+                _reject_trailing(toks, "Elements")
+                if parsed_count != declared:
+                    raise ValueError(
+                        f"$Elements declares {declared} elements but blocks "
+                        f"contain {parsed_count}")
+                if element_tags and (
+                        min(element_tags) != min_tag
+                        or max(element_tags) != max_tag):
+                    raise ValueError(
+                        f"$Elements tag range declares [{min_tag}, {max_tag}] "
+                        f"but parsed [{min(element_tags)}, "
+                        f"{max(element_tags)}]")
             except (StopIteration, ValueError) as exc:
                 raise ValueError(
                     f"{path.name}: $Elements truncated or malformed "
                     f"({exc})") from exc
         elif name in _DATA_SECTIONS:
             rows_txt = [ln.strip() for ln in body if ln.strip()]
-            idx = 0
+            row_iter = iter(rows_txt)
 
-            def _take() -> str:
-                nonlocal idx
-                if idx >= len(rows_txt):
-                    raise ValueError(f"${name} truncated header")
-                val = rows_txt[idx]
-                idx += 1
-                return val
-
-            n_str = int(_take())
-            strings = [_take().strip('"') for _ in range(n_str)]
-            n_real = int(_take())
-            reals = [float(_take()) for _ in range(n_real)]
-            n_int = int(_take())
-            ints = [int(_take()) for _ in range(n_int)]
+            try:
+                n_str = int(next(row_iter))
+                if n_str < 0:
+                    raise ValueError("negative string-tag count")
+                strings = [next(row_iter).strip('"') for _ in range(n_str)]
+                n_real = int(next(row_iter))
+                if n_real < 0:
+                    raise ValueError("negative real-tag count")
+                reals = [float(next(row_iter)) for _ in range(n_real)]
+                n_int = int(next(row_iter))
+                if n_int < 0:
+                    raise ValueError("negative integer-tag count")
+                ints = [int(next(row_iter)) for _ in range(n_int)]
+            except (StopIteration, ValueError) as exc:
+                raise ValueError(
+                    f"{path.name}: ${name} @L{start_line} malformed header "
+                    f"({exc})") from exc
             if len(ints) < 3:
                 raise ValueError(
                     f"{path.name}: ${name} @L{start_line} header needs "
                     f">=3 integer tags")
+            ncomp = ints[1]
+            declared = ints[2]
+            if ncomp <= 0:
+                raise ValueError(
+                    f"{path.name}: ${name} @L{start_line} has non-positive "
+                    f"component count {ncomp}")
+            if declared < 0:
+                raise ValueError(
+                    f"{path.name}: ${name} @L{start_line} has negative "
+                    f"entry count {declared}")
+            data_rows = list(row_iter)
+            if len(data_rows) != declared:
+                raise ValueError(
+                    f"{path.name}: ${name} @L{start_line} declares "
+                    f"{declared} entries but has {len(data_rows)} data rows")
             view = {"section": name,
                     "name": strings[0] if strings else "",
                     "time": reals[0] if reals else None,
-                    "step": ints[0], "components": ints[1],
+                    "step": ints[0], "components": ncomp,
                     "rows": {}}
-            for row in rows_txt[idx:]:
+            for row_index, row in enumerate(data_rows):
                 toks = row.split()
-                tag = int(toks[0])
-                vals_start = 2 if name == "ElementNodeData" else 1
-                view["rows"][tag] = [float(t) for t in toks[vals_start:]]
+                try:
+                    tag = int(toks[0])
+                except (IndexError, ValueError) as exc:
+                    raise ValueError(
+                        f"{path.name}: ${name} @L{start_line} data row "
+                        f"{row_index} has an invalid tag") from exc
+                if tag <= 0:
+                    raise ValueError(
+                        f"{path.name}: ${name} @L{start_line} data row "
+                        f"{row_index} has non-positive tag {tag}")
+                if tag in view["rows"]:
+                    raise ValueError(
+                        f"{path.name}: ${name} @L{start_line} has duplicate "
+                        f"data tag {tag}")
+                vals_start = 1
+                expected_values = ncomp
+                if name == "ElementNodeData":
+                    try:
+                        n_element_nodes = int(toks[1])
+                    except (IndexError, ValueError) as exc:
+                        raise ValueError(
+                            f"{path.name}: ${name} @L{start_line} data row "
+                            f"{row_index} has an invalid node count") from exc
+                    if n_element_nodes < 0:
+                        raise ValueError(
+                            f"{path.name}: ${name} @L{start_line} data row "
+                            f"{row_index} has negative node count")
+                    if tag in element_node_counts \
+                            and n_element_nodes != element_node_counts[tag]:
+                        raise ValueError(
+                            f"{path.name}: ${name} @L{start_line} element "
+                            f"{tag} declares {n_element_nodes} nodes but its "
+                            f"mesh element has {element_node_counts[tag]}")
+                    vals_start = 2
+                    expected_values = n_element_nodes * ncomp
+                actual_values = len(toks) - vals_start
+                if actual_values != expected_values:
+                    raise ValueError(
+                        f"{path.name}: ${name} @L{start_line} data row "
+                        f"{row_index} has {actual_values} values; expected "
+                        f"{expected_values}")
+                try:
+                    view["rows"][tag] = [
+                        float(t) for t in toks[vals_start:]]
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{path.name}: ${name} @L{start_line} data row "
+                        f"{row_index} has a non-numeric value") from exc
             out["views"].append(view)
+
+    if node_sections and element_node_refs:
+        missing = element_node_refs - set(out["nodes"])
+        if missing:
+            sample = sorted(missing)[:5]
+            raise ValueError(
+                f"{path.name}: $Elements reference undefined node tag(s): "
+                f"{sample}")
+    for view in out["views"]:
+        tags = set(view["rows"])
+        if view["section"] == "NodeData":
+            if not node_sections:
+                raise ValueError(
+                    f"{path.name}: $NodeData requires a $Nodes section")
+            missing = tags - set(out["nodes"])
+            owner = "$Nodes"
+        elif view["section"] in ("ElementData", "ElementNodeData"):
+            if not element_sections:
+                raise ValueError(
+                    f"{path.name}: ${view['section']} requires an "
+                    f"$Elements section")
+            missing = tags - element_tags
+            owner = "$Elements"
+        else:
+            continue
+        if missing:
+            sample = sorted(missing)[:5]
+            raise ValueError(
+                f"{path.name}: ${view['section']} {view['name']!r} "
+                f"references tag(s) absent from {owner}: {sample}")
     return out
 
 
