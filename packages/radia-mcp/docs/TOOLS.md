@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **948 tools** across 48 MCP servers.
+Total: **955 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **948 tools** across 48 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 21 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 28 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -353,7 +353,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
 | `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
 | `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
-| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
+| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
 | `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
@@ -1205,7 +1205,7 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
@@ -1220,6 +1220,9 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
 | `grant_writing_collaborative_integration_risk_check` | Check recurring risks in collaborative software-integration proposals. |
 | `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
+| `grant_writing_cross_organization_pilot_check` | Check whether preliminary evidence crosses an organization boundary. |
+| `grant_writing_derived_metric_validation_check` | Check calibration and falsification of a proposal-specific metric. |
+| `grant_writing_domain_outcome_chain_check` | Check that a platform or tool proposal ends in domain knowledge. |
 | `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
 | `grant_writing_health_report` | Integrated grant-writing health report. |
 | `grant_writing_internal_evidence_to_external_scale_check` | Check whether an internal success is evidence for external transfer. |
@@ -1227,7 +1230,11 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
 | `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
 | `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
+| `grant_writing_literature_gap_evidence_check` | Check whether literature-survey evidence supports the claimed gap. |
+| `grant_writing_named_software_abstraction_check` | Check whether named software is used at the right proposal level. |
+| `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
+| `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
 | `grant_writing_status` | (no description) |
 | `grant_writing_suggest_redundancy_fixes` | 和文の典型的冗長表現 25 パターンを検出し置換候補を示す。 |
