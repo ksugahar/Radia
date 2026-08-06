@@ -1,0 +1,109 @@
+function modelFile = buildPEECCoilACModel(options)
+%BUILDPEECCOILACMODEL Build a frequency-domain PEEC R-L-C Simulink model.
+arguments
+    options.OutputDirectory (1,1) string = radia.simulink.exampleDirectory()
+    options.ModelName (1,1) string = "radia_peec_coil_ac_plant"
+    options.OpenModel (1,1) logical = false
+end
+
+if ~isfolder(options.OutputDirectory)
+    mkdir(options.OutputDirectory);
+end
+model = options.ModelName;
+modelFile = fullfile(options.OutputDirectory,model+".slx");
+if bdIsLoaded(model)
+    close_system(model,0);
+end
+if isfile(modelFile)
+    delete(modelFile);
+end
+
+new_system(model);
+cleanup = onCleanup(@() closeIfLoaded(model));
+set_param(model, ...
+    "Solver","FixedStepDiscrete", ...
+    "FixedStep","1", ...
+    "StopTime","0", ...
+    "ReturnWorkspaceOutputs","on", ...
+    "PreLoadFcn",["R_coil_Ohm=0.02; X_coil_Ohm=0.05; " ...
+        "L_eff_H=8e-6; C_F=3.3e-3; f_eval_Hz=1000;"], ...
+    "ModelBrowserVisibility","off");
+
+add_block("simulink/Sources/Constant",model+"/PEEC resistance R", ...
+    "Value","R_coil_Ohm","Position",[55 110 170 140]);
+add_block("simulink/Sources/Constant",model+"/PEEC coil reactance", ...
+    "Value","X_coil_Ohm","Position",[55 185 195 215]);
+add_block("simulink/Sources/Constant",model+"/Fixed capacitor reactance", ...
+    "Value","-1/(2*pi*f_eval_Hz*C_F)","Position",[55 260 195 290]);
+add_block("simulink/Math Operations/Sum",model+"/Input reactance", ...
+    "Inputs","++","Position",[265 205 295 270]);
+add_block("simulink/Signal Routing/Mux",model+"/R and X", ...
+    "Inputs","2","Position",[365 125 370 230]);
+add_block("simulink/User-Defined Functions/Fcn",model+"/Current magnitude", ...
+    "Expr","1/sqrt(u(1)^2+u(2)^2)","Position",[440 155 590 195]);
+
+add_block("simulink/Sinks/To Workspace",model+"/Reactance log", ...
+    "VariableName","input_reactance","SaveFormat","Timeseries", ...
+    "Position",[655 240 785 280]);
+add_block("simulink/Sinks/To Workspace",model+"/Current magnitude log", ...
+    "VariableName","current_magnitude","SaveFormat","Timeseries", ...
+    "Position",[655 145 800 185]);
+add_block("simulink/Sinks/To Workspace",model+"/PEEC inductance log", ...
+    "VariableName","peec_effective_inductance","SaveFormat","Timeseries", ...
+    "Position",[300 330 435 370]);
+add_block("simulink/Sinks/To Workspace",model+"/PEEC resistance log", ...
+    "VariableName","peec_effective_resistance","SaveFormat","Timeseries", ...
+    "Position",[300 390 435 430]);
+add_block("simulink/Sources/Constant",model+"/PEEC inductance H", ...
+    "Value","L_eff_H","Position",[55 335 175 365]);
+add_block("simulink/Sources/Constant",model+"/PEEC resistance Ohm", ...
+    "Value","R_coil_Ohm","Position",[55 395 175 425]);
+add_block("simulink/Sinks/To Workspace",model+"/PEEC reactance log", ...
+    "VariableName","peec_coil_reactance","SaveFormat","Timeseries", ...
+    "Position",[300 450 435 490]);
+add_block("simulink/Sinks/To Workspace",model+"/Frequency log", ...
+    "VariableName","evaluation_frequency","SaveFormat","Timeseries", ...
+    "Position",[300 510 435 550]);
+add_block("simulink/Sources/Constant",model+"/Evaluation frequency Hz", ...
+    "Value","f_eval_Hz","Position",[55 515 175 545]);
+
+add_block("simulink/Ports & Subsystems/Out1", ...
+    model+"/input_reactance_Ohm","Port","1", ...
+    "Position",[655 205 800 225]);
+add_block("simulink/Ports & Subsystems/Out1", ...
+    model+"/current_magnitude_A","Port","2", ...
+    "Position",[655 105 800 125]);
+
+add_line(model,"PEEC coil reactance/1","Input reactance/1");
+add_line(model,"Fixed capacitor reactance/1","Input reactance/2");
+add_line(model,"PEEC resistance R/1","R and X/1");
+add_line(model,"Input reactance/1","R and X/2");
+add_line(model,"R and X/1","Current magnitude/1");
+add_line(model,"Input reactance/1","Reactance log/1");
+add_line(model,"Input reactance/1","input_reactance_Ohm/1");
+add_line(model,"Current magnitude/1","Current magnitude log/1");
+add_line(model,"Current magnitude/1","current_magnitude_A/1");
+add_line(model,"PEEC inductance H/1","PEEC inductance log/1");
+add_line(model,"PEEC resistance Ohm/1","PEEC resistance log/1");
+add_line(model,"PEEC coil reactance/1","PEEC reactance log/1");
+add_line(model,"Evaluation frequency Hz/1","Frequency log/1");
+
+annotationText = "Frequency-domain design model at f_eval_Hz." + newline + ...
+    "Radia PEEC supplies Z_coil(f); X_in = Im(Z_coil) - 1/(omega C).";
+annotation = Simulink.Annotation(model,char(annotationText));
+annotation.Position = [35 25 690 65];
+save_system(model,modelFile);
+if options.OpenModel
+    clear cleanup
+    open_system(model);
+else
+    close_system(model,0);
+    clear cleanup
+end
+end
+
+function closeIfLoaded(model)
+if bdIsLoaded(model)
+    close_system(model,0);
+end
+end
