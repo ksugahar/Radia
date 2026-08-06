@@ -550,7 +550,13 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Grant proposal helpers: Japanese technical-prose "
                        "lint, section coverage, budget alignment, "
                        "internal-to-external scale, collaborative-integration "
-                       "risk, recommendation-letter "
+                       "risk, tool-to-domain outcomes, derived-metric "
+                       "validation, cross-organization pilots, "
+                       "literature-gap evidence scope, named-software "
+                       "abstraction, reviewer vocabulary, benchmark role, "
+                       "persuasion hierarchy, equation introductions, and "
+                       "internal-memo shorthand, "
+                       "recommendation-letter "
                        "template, and KDDI Digital Innovation and KAKENHI "
                        "OSS-platform checks.",
         "primary_tools": ["grant_writing_usage",
@@ -558,6 +564,13 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "grant_writing_kddi_digital_check",
                             "grant_writing_kaken_oss_platform_check",
                             "grant_writing_internal_evidence_to_external_scale_check",
+                            "grant_writing_domain_outcome_chain_check",
+                            "grant_writing_derived_metric_validation_check",
+                            "grant_writing_cross_organization_pilot_check",
+                            "grant_writing_named_software_abstraction_check",
+                            "grant_writing_reviewer_vocabulary_check",
+                            "grant_writing_persuasion_quality_check",
+                            "grant_writing_literature_gap_evidence_check",
                             "grant_writing_collaborative_integration_risk_check",
                             "grant_writing_recommendation_letter_template"],
         "related": ["paper-writing", "document-meta"],
