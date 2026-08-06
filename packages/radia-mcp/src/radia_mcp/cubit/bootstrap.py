@@ -76,7 +76,17 @@ except Exception:
 
 PROTOCOL_VERSION = 2  # file-drop variant of daemon.py's protocol 1
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+# Cubit executes this script as a STRING (tracebacks show <string>), so
+# __file__ resolves against Cubit's CWD and sibling imports (probe_ops)
+# break -- found by the 2026-08-05 GUI E2E.  session.py passes the real
+# package dir via env; fail loud if launched outside that contract.
+_HERE = os.environ.get("RADIA_MCP_CUBIT_PKG_DIR")
+if not _HERE:
+    _write_startup_error(
+        "RADIA_MCP_CUBIT_PKG_DIR env var not set -- bootstrap.py must "
+        "be launched by radia_mcp.cubit.session (which provides it); "
+        "__file__ is unreliable under Cubit's string exec.")
+    raise RuntimeError("RADIA_MCP_CUBIT_PKG_DIR not set")
 
 
 def _read_drop_dir() -> pathlib.Path:
@@ -198,15 +208,11 @@ def _op_probe(args: list) -> object:
 
 
 def _op_snapshot(args: list) -> dict:
-    """Hardcopy current view to PNG. Mirror cubit_daemon._op_snapshot."""
-    if len(args) < 1:
-        return {"error": "snapshot requires at least 1 arg (path)"}
-    out_path = str(args[0])
-    w = int(args[1]) if len(args) >= 2 else 800
-    h = int(args[2]) if len(args) >= 3 else 600
-    cmd_str = f'hardcopy "{out_path}" png window {w} {h}'
-    rc = cubit.cmd(cmd_str)
-    return {"path": out_path, "ok": bool(rc), "width": w, "height": h}
+    """Delegate to the SHARED snapshot implementation (probe_ops)."""
+    if _HERE not in sys.path:
+        sys.path.insert(0, _HERE)
+    import probe_ops
+    return probe_ops.op_snapshot(cubit, args)
 
 
 def _dispatch(req: dict) -> dict:

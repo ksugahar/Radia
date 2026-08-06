@@ -107,6 +107,85 @@ def _is_pid_alive(pid: int) -> bool:
         return False
 
 
+def _assign_kill_on_close_job(pid: int):
+    """Put ``pid`` into a Windows Job Object with KILL_ON_JOB_CLOSE.
+
+    Used for session_mode="new" ONLY: the private per-process daemon
+    must die with its client (a crashed client otherwise leaves a
+    license-holding orphan -- observed 2026-08-05).  The returned job
+    HANDLE must stay referenced for the client's lifetime; when this
+    process exits (normally or not), the OS closes the handle and kills
+    the job's processes.  Shared-daemon modes never call this -- their
+    persistence across client restarts is the feature.
+
+    Returns the handle (int) or None on failure (the spawn proceeds;
+    shutdown() remains the cleanup of last resort).
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.windll.kernel32
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+    JobObjectExtendedLimitInformation = 9
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    class IO_COUNTERS(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_uint64) for n in (
+            "ReadOperationCount", "WriteOperationCount",
+            "OtherOperationCount", "ReadTransferCount",
+            "WriteTransferCount", "OtherTransferCount")]
+
+    class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+            ("IoInfo", IO_COUNTERS),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    try:
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return None
+        info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        info.BasicLimitInformation.LimitFlags = \
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not kernel32.SetInformationJobObject(
+                job, JobObjectExtendedLimitInformation,
+                ctypes.byref(info), ctypes.sizeof(info)):
+            kernel32.CloseHandle(job)
+            return None
+        hproc = kernel32.OpenProcess(
+            PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
+        if not hproc:
+            kernel32.CloseHandle(job)
+            return None
+        ok = kernel32.AssignProcessToJobObject(job, hproc)
+        kernel32.CloseHandle(hproc)
+        if not ok:
+            kernel32.CloseHandle(job)
+            return None
+        return job
+    except Exception:
+        return None
+
+
 def _try_attach_existing_daemon(drop_dir: Path) -> dict | None:
     """Return the daemon's ready_info if a live daemon is found, else None.
 
@@ -291,6 +370,9 @@ class CubitSession:
         # daemon another process started.  Recovery paths must never
         # kill a live session we do not own.
         self._owned = False
+        # Windows Job Object handle for session_mode="new" (kill the
+        # private daemon when this client dies); None otherwise.
+        self._job_handle = None
 
         # gui-mode (file-drop) state
         self._drop_dir: Path | None = None
@@ -693,11 +775,20 @@ class CubitSession:
         env = os.environ.copy()
         env["CUBIT_BIN_DIR"] = str(self._bin_dir)
         env["CUBIT_DROP_DIR"] = str(drop)
+        # Cubit execs bootstrap.py as a STRING (frames show <string>),
+        # so __file__-based sibling imports (probe_ops) resolve against
+        # Cubit's CWD and fail -- found by the 2026-08-05 GUI E2E. The
+        # package dir is passed explicitly instead.
+        env["RADIA_MCP_CUBIT_PKG_DIR"] = str(Path(__file__).parent)
 
         # Detach the Cubit subprocess so it outlives THIS MCP server
         # process.  DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP mean: no
         # orphan child on VSCode exit, Cubit keeps running, and the next
         # MCP server process finds it via pid.lock + attaches.
+        # EXCEPTION -- session_mode "new": the private daemon is useless
+        # without this client, so it joins a kill-on-close Job Object
+        # instead (found by the same GUI E2E: a client that died before
+        # shutdown left license-holding orphans behind).
         creationflags = 0
         if sys.platform == "win32":
             creationflags = (
@@ -726,6 +817,8 @@ class CubitSession:
                 close_fds=True,
             )
         self._owned = True
+        if session_mode == "new" and sys.platform == "win32":
+            self._job_handle = _assign_kill_on_close_job(self._proc.pid)
         # Write PID lock immediately so a sibling VSCode racing to spawn
         # can also attach (once ready marker appears).
         try:

@@ -172,19 +172,11 @@ def _op_probe(cubit_mod, args):
 
 
 def _op_snapshot(cubit_mod, args):
-    """Hardcopy the current Cubit view to a PNG file."""
-    if len(args) < 1:
-        return {"error": "snapshot requires at least 1 arg (path)"}
-    out_path = str(args[0])
-    w = int(args[1]) if len(args) >= 2 else 800
-    h = int(args[2]) if len(args) >= 3 else 600
-    # Cubit hardcopy command:
-    #   hardcopy 'file.png' png window [wxh]
-    # GUI mode is recommended for this; batch mode may produce empty
-    # images depending on Cubit version.
-    cmd_str = f'hardcopy "{out_path}" png window {w} {h}'
-    rc = cubit_mod.cmd(cmd_str)
-    return {"path": out_path, "ok": bool(rc), "width": w, "height": h}
+    """Delegate to the SHARED snapshot implementation (probe_ops)."""
+    if _HERE not in sys.path:
+        sys.path.insert(0, _HERE)
+    import probe_ops
+    return probe_ops.op_snapshot(cubit_mod, args)
 
 
 def main():
