@@ -3897,6 +3897,213 @@ def _run_batch(step_path: str | None, commands: list[str],
 			pass
 
 
+def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path) -> dict:
+	"""STEP -> Netgen tet mesh -> GMSH .msh v4.1 (via radia's exporter,
+	honoring the lab's vol/v4.1-only interchange policy)."""
+	from netgen.occ import OCCGeometry
+	from ngsolve import Mesh, TaskManager
+	from radia.gmsh_post_export import GmshPostExport
+
+	with TaskManager():
+		geo = OCCGeometry(str(step_path))
+		ngmesh = geo.GenerateMesh(maxh=maxh)
+		mesh = Mesh(ngmesh)
+		post = GmshPostExport(mesh)
+		post.write(str(out_msh))
+	return {"n_elements": mesh.ne, "n_vertices": mesh.nv}
+
+
+def _quality_row(route: str, mesher: str, q: dict) -> dict:
+	"""Flatten one referee report into a comparison row."""
+	row = {
+		"route": route,
+		"mesher": mesher,
+		"metric": q.get("metric"),
+		"ok": q.get("ok"),
+		"total_negative": q.get("total_negative"),
+		"total_below_threshold": q.get("total_below_threshold"),
+		"by_type": [
+			{
+				"element": bt.get("name"),
+				"n": bt.get("n_elements"),
+				"min": bt.get("min_quality"),
+				"mean": bt.get("mean_quality"),
+				"negative": bt.get("negative"),
+				"below_threshold": bt.get("below_threshold"),
+				"worst_tag": (bt.get("worst") or [{}])[0].get("tag"),
+			}
+			for bt in q.get("by_type", [])
+		],
+	}
+	if not q.get("by_type"):
+		row["note"] = q.get("note") or q.get("error")
+	return row
+
+
+@mcp.tool()
+def cubit_netgen_quality_compare(step_path: str,
+                                 netgen_maxh: float = 0.0,
+                                 cubit_size: float = 0.0,
+                                 schemes: list = None,
+                                 threshold: float = 0.1,
+                                 out_dir: str = "",
+                                 timeout_s: int = 600) -> str:
+	"""
+	Mesh ONE STEP with both meshers and compare element quality with a
+	NEUTRAL referee.
+
+	Routes (headless throughout, per the driving policy):
+	  * netgen     — STEP -> Netgen tet mesh (maxh) -> .msh v4.1
+	  * cubit_tet  — batch Cubit, `volume all scheme tetmesh`, size
+	  * cubit_hex  — batch Cubit, default scheme ladder (sweep/map where
+	                 possible), size
+
+	Referee: GMSH minSICN via the radia-gmsh quality engine
+	(`radia_mcp.gmsh.msh_inspect.mesh_quality`) evaluated on each
+	exported `.msh v4.1` -- ONE metric implementation for every mesher,
+	so numbers are directly comparable. minSICN is defined for tets AND
+	hexes, but comparing across element FAMILIES is still
+	apples-to-oranges for meshing-difficulty reasons; the honest
+	comparison is netgen vs cubit_tet (same family), with cubit_hex as
+	the structured-mesh reference.
+
+	When `netgen_maxh`/`cubit_size` are 0, a common size is derived from
+	the geometry bbox (~1/8 of the max extent) so both meshers get the
+	SAME target length.
+
+	Writes `<base>_netgen.msh` / `<base>_cubit_tet.msh` /
+	`<base>_cubit_hex.msh` next to the STEP (or into `out_dir`).
+	Per-route failures are reported as rows with status/kind -- a
+	missing optional stack (netgen/radia/gmsh) fails that ROW as
+	environment, not the whole comparison.
+
+	Args:
+	    step_path: the geometry both meshers consume.
+	    netgen_maxh: Netgen max element size (0 = derive from bbox).
+	    cubit_size: Cubit `volume all size` (0 = derive from bbox).
+	    schemes: subset of ["netgen", "cubit_tet", "cubit_hex"]
+	        (default: all three).
+	    threshold: minSICN acceptance threshold for the referee.
+	    out_dir: where to write the .msh files (default: beside STEP).
+	"""
+	p = Path(step_path)
+	if not p.is_absolute():
+		p = PROJECT_ROOT / p
+	if not p.is_file():
+		return json.dumps(_error_payload("input", f"STEP not found: {p}"))
+	schemes = schemes or ["netgen", "cubit_tet", "cubit_hex"]
+	unknown = [s for s in schemes if s not in
+	           ("netgen", "cubit_tet", "cubit_hex")]
+	if unknown:
+		return json.dumps(_error_payload(
+			"input", f"unknown schemes: {unknown}; "
+			         "valid: netgen / cubit_tet / cubit_hex"))
+	out_base = Path(out_dir) if out_dir else p.parent
+	out_base.mkdir(parents=True, exist_ok=True)
+	base = p.stem
+
+	# Common target size from the CAD bbox (same length for BOTH meshers)
+	if not netgen_maxh or not cubit_size:
+		try:
+			from netgen.occ import OCCGeometry as _OCC
+			bb = _OCC(str(p)).shape.bounding_box
+			ext = max(bb[1][i] - bb[0][i] for i in range(3))
+			derived = ext / 8.0
+		except Exception:
+			derived = 0.0
+		if not netgen_maxh:
+			netgen_maxh = derived
+		if not cubit_size:
+			cubit_size = derived
+	if not netgen_maxh or not cubit_size:
+		return json.dumps(_error_payload(
+			"input", "could not derive a mesh size from the geometry; "
+			         "pass netgen_maxh and cubit_size explicitly"))
+
+	try:
+		from ..gmsh.msh_inspect import mesh_quality
+	except ImportError as exc:
+		return json.dumps(_error_payload(
+			"referee", f"gmsh referee unavailable: {exc}",
+			kind="environment"))
+
+	rows = []
+
+	if "netgen" in schemes:
+		msh = out_base / f"{base}_netgen.msh"
+		try:
+			info = _netgen_mesh_to_msh(p, float(netgen_maxh), msh)
+			q = mesh_quality(msh, threshold=threshold)
+			row = _quality_row("netgen", "netgen", q)
+			row["maxh"] = float(netgen_maxh)
+			row["msh"] = str(msh)
+			row.update(info)
+		except ImportError as exc:
+			row = {"route": "netgen", "status": "error",
+			       "kind": "environment",
+			       "error": f"netgen/ngsolve/radia unavailable: {exc}"}
+		except Exception as exc:
+			row = {"route": "netgen", "status": "error", "kind": "input",
+			       "error": f"{type(exc).__name__}: {exc}"}
+		rows.append(row)
+
+	cubit_routes = [s for s in schemes if s.startswith("cubit_")]
+	for route in cubit_routes:
+		msh = out_base / f"{base}_{route}.msh"
+		msh_fwd = str(msh).replace("\\", "/")
+		cmds = []
+		if route == "cubit_tet":
+			cmds.append("volume all scheme tetmesh")
+		cmds += [f"volume all size {float(cubit_size)}",
+		         "mesh volume all",
+		         # export gmsh emits only BLOCK members -- an unblocked
+		         # mesh exports 0 elements (measured 2025.12).
+		         "block 1 add volume all",
+		         'block 1 name "mesh"',
+		         f'export gmsh "{msh_fwd}" overwrite']
+		r = _run_batch(str(p), cmds, timeout_s=timeout_s)
+		if r.get("status") != "ok":
+			rows.append({"route": route, "status": "error",
+			             "kind": r.get("kind", "input"),
+			             "error": r.get("error"),
+			             "failed_at": r.get("failed_at")})
+			continue
+		q = mesh_quality(msh, threshold=threshold)
+		row = _quality_row(route, "cubit", q)
+		row["size"] = float(cubit_size)
+		row["msh"] = str(msh)
+		row["summary"] = r.get("summary")
+		rows.append(row)
+
+	# Verdict: same-family comparison where possible
+	notes = []
+	def _min_of(route):
+		for row in rows:
+			if row.get("route") == route and row.get("by_type"):
+				return min(bt["min"] for bt in row["by_type"])
+		return None
+	ng, ct = _min_of("netgen"), _min_of("cubit_tet")
+	if ng is not None and ct is not None:
+		better = "cubit_tet" if ct > ng else "netgen"
+		notes.append(
+			f"tet-vs-tet (same family, directly comparable): min minSICN "
+			f"netgen={ng:.3f} vs cubit_tet={ct:.3f} -> {better} has the "
+			"better worst element at this size")
+	if _min_of("cubit_hex") is not None:
+		notes.append(
+			"cubit_hex is a different element family -- report it as the "
+			"structured-mesh reference, not as a same-metric winner")
+
+	return json.dumps({
+		"status": "ok",
+		"step": str(p),
+		"referee": "gmsh minSICN (radia_mcp.gmsh.msh_inspect.mesh_quality)",
+		"threshold": threshold,
+		"rows": rows,
+		"notes": notes,
+	}, ensure_ascii=False, indent=2, default=str)
+
+
 @mcp.tool()
 def cubit_batch_try(commands: list, step_path: str = "",
                      timeout_s: int = 300) -> str:
@@ -6283,7 +6490,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_smart_async", "cubit_mesh_race_review",
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
-	"cubit_session_journal",
+	"cubit_session_journal", "cubit_netgen_quality_compare",
 }
 # Read-only tools that may reach the network.
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}

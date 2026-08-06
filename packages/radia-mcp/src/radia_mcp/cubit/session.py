@@ -107,6 +107,18 @@ def _is_pid_alive(pid: int) -> bool:
         return False
 
 
+def _close_proc_streams(proc) -> None:
+    """Close a reaped child's pipe handles (batch mode uses three PIPEs;
+    leaving them to GC raises unclosed-FileIO ResourceWarnings, which
+    pytest promotes to errors)."""
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        try:
+            if stream is not None:
+                stream.close()
+        except Exception:
+            pass
+
+
 def _assign_kill_on_close_job(pid: int):
     """Put ``pid`` into a Windows Job Object with KILL_ON_JOB_CLOSE.
 
@@ -533,6 +545,7 @@ class CubitSession:
                 self._proc.wait(timeout=10.0)
             except Exception:
                 pass
+            _close_proc_streams(self._proc)
             report["stopped"] = "owned-child"
         self._close_private_job()
         # Kill an attached daemon (not our child) via pid.lock
@@ -698,6 +711,12 @@ class CubitSession:
                 proc.kill()
             except Exception:
                 pass
+        if proc is not None:
+            try:
+                proc.wait(timeout=10.0)
+            except Exception:
+                pass
+            _close_proc_streams(proc)
         if self._drop_dir is not None:
             pid_file = self._drop_dir / "pid.lock"
             attached_alive = False
