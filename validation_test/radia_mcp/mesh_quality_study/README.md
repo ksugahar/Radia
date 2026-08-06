@@ -9,7 +9,7 @@ corner-geometry property — 2026-08-06 decision).
 
 Every script writes its committed results JSON beside itself (Data
 Persistence Policy) and its scratch meshes into `artifacts/`
-(gitignored). All four require Cubit + netgen + gmsh + build123d; all are
+(gitignored). All five require Cubit + netgen + gmsh + build123d; all are
 quality-class runs (no timing), so LAB execution is allowed.
 
 | Script | Question | Result JSON | Runtime |
@@ -18,6 +18,7 @@ quality-class runs (no timing), so LAB execution is allowed.
 | `run_nonmonotone_sweep.py` | does refinement always improve the worst element? | `results_nonmonotone_sweep.json` | ~45 s |
 | `run_size_target_sensitivity.py` | is `min` a reproducible mesher property at all? | `results_size_target_sensitivity.json` | ~60 s |
 | `run_solver_impact.py` | does any of it change the solver? | `results_solver_impact.json` | ~10 s |
+| `run_accuracy_per_dof.py` | which mesh is more accurate for the same **dof**? tet vs tet vs hex | `results_accuracy_per_dof.json` | ~60 s |
 
 `run_study.py` compares **equal-h** (same target size; netgen produces
 ~half the elements) and **equal-budget** (netgen `maxh` calibrated by
@@ -26,6 +27,10 @@ n ∝ 1/h³ until its element count matches cubit_tet within ±10 %).
 u = sin(kx)sin(ky)exp(kz), H1 order 1, Dirichlet on every boundary — on
 each mesh and reports CG iteration counts (unpreconditioned and Jacobi)
 plus relative L2/H1 error against the exact solution.
+`run_accuracy_per_dof.py` turns that single point into a **convergence
+curve**: the same manufactured problem over ~1 decade of ndof for every
+route, compared at matched ndof. Element count is not the cost that
+matters — the linear system is sized by **dof**, so that is the axis.
 
 `results_mesh_quality_study.json` is the committed result (Data
 Persistence Policy); `run_study.py` regenerates it on an idle compute
@@ -78,33 +83,91 @@ host with Cubit + netgen + gmsh + build123d. Scratch meshes land in
    **The metric that actually matters is `negative > 0`** (inverted
    elements); `min` is a floor/safety indicator, not a solver predictor.
 
-4. **Cubit's real advantage is accuracy per dof, and it comes from the
-   whole distribution rather than the tail.** On c_core cubit reached
-   0.20 % L2 with 2236 dofs where netgen needed 2571 dofs for 0.28 %
-   (1.15× the dofs, 1.43× the error). On the sphere the errors are equal
-   but netgen spends 1.53× the dofs. Netgen's economy shows up per
-   *element* (~2× fewer at equal h), not per *dof*.
+4. **Cubit's real advantage is accuracy per dof — same convergence
+   RATE, better constant.** Over ~1 decade of ndof the two meshers
+   converge at the same order (L2: sphere −0.735 vs −0.733, c_core
+   −0.730 vs −0.724; the P1 ideal is −2/3), so neither is
+   asymptotically superior. What differs is the constant: at matched
+   ndof netgen's L2 error is **1.29×** (c_core, ndof 1481) to **1.39×**
+   (sphere, ndof 700) cubit's, and point-wise interpolation over the
+   whole range gives 1.14–1.89×. Netgen's economy is per *element*
+   (~2× fewer at equal h), never per *dof* — and dof is what sizes the
+   linear system.
 
-5. **Hex dominates wherever the geometry sweeps**: thin plate min 0.93,
-   stacked gap pair min = mean = **1.000** (perfect lattice), with 5–8×
-   fewer elements than any tet route.
+   **Mechanism: netgen spends a much larger share of its nodes on the
+   boundary.** Interior-node fraction over the sweeps — cubit_tet
+   19–77 %, netgen 2–49 %; on the thin plate netgen bottoms out at
+   13 %. Fewer interior unknowns per dof is fewer unknowns doing work.
+   (Beware: an *equal-element-count* comparison hides this and makes
+   netgen look better — that is exactly how the earlier equal-budget
+   sphere pair appeared to favour netgen, while it was quietly using
+   1.53× the dofs.)
+
+5. **Hex: wins the energy norm and the conditioning, not L2.** On the
+   thin plate (8×8×1, sizes chosen so the thickness is resolved),
+   cubit_hex vs cubit_tet interpolated to matched ndof:
+
+   | ndof | CG hex/tet | L2 hex/tet | H1 hex/tet |
+   |---|---|---|---|
+   | 1764 | 0.54× | 0.75× | 0.75× |
+   | 2704 | 0.54× | 1.10× | 0.90× |
+   | 5445 | 0.55× | 1.05× | 0.88× |
+   | 10086 | 0.56× | 1.03× | 0.87× |
+
+   So at equal dof hex needs **~1.8× fewer CG iterations**, uniformly
+   across the range, and is **10–25 % better in H1** (the gradient/energy
+   norm — the one that matters when the answer is a field derived from
+   gradients). **In L2 it is a wash** (±10 %). Its 5–8× element-count
+   advantage does not shrink the linear system, whose size is set by dof.
+   Its minSICN dominance (plate 0.93, gap pair 1.000 vs tet ~0.6) is
+   therefore NOT an accuracy claim — it buys conditioning and energy-norm
+   accuracy, not L2.
+
+   netgen is clearly last on the thin plate: at ndof ≈ 2011 its L2 is
+   4.36 % against cubit_tet 2.17 % and cubit_hex 1.89 % at the same dof
+   (log-log interpolated) — roughly **2× worse than either**. Its
+   convergence rate there could not even be fitted — only 2 of 5 points
+   had a ≥ 20 % interior.
 
 6. **No inverted elements anywhere** — all routes, all cases,
    `negative = 0`.
 
+7. **Methodological trap, now fail-loud.** The first thin-plate attempt
+   (50×50×1, sizes 4.0→1.0) produced meshes whose every node lay on a
+   Dirichlet face: **zero free dofs**, no solve at all, and a flat ~28 %
+   "error" curve that was pure interpolation error — it looked like three
+   meshers tying. `run_accuracy_per_dof.py` now raises on `free_dofs == 0`
+   and excludes points with < 20 % interior nodes from rate fits (two
+   coarse netgen sphere points had silently corrupted an earlier fitted
+   slope). Always check the interior fraction before believing a
+   convergence rate.
+
 ## Practical rule for the lab pipeline
 
-Prefer Cubit hex where the geometry sweeps. For tet, Cubit tetmesh gives
-the better accuracy-per-dof and a higher worst-element floor; netgen is
-the cheaper mesh per element at equal h. Judge with the shared minSICN
-referee, over a **band** of sizes — and gate on inverted elements, not on
-a single `min` value.
+* **Cost is dof, not elements.** Rank meshes on error-vs-ndof, never on
+  element count — element count is what makes netgen look economical and
+  hex look revolutionary, and neither survives the dof axis.
+* **Cubit tetmesh over netgen for accuracy**: same convergence rate,
+  1.14–1.89× lower L2 error at matched dof, because more of its nodes are
+  interior. netgen's strengths here are speed and element economy.
+* **Cubit hex where the geometry sweeps cheaply**: ~1.8× fewer CG
+  iterations and 10–25 % better H1 at equal dof. If the answer is an
+  energy/gradient quantity or the solve is iteration-bound, that is worth
+  the meshing effort; if you only need L2 of the primary unknown, it is
+  not.
+* **Gate on inverted elements** (`negative > 0`), not on a single `min`
+  value — and when comparing `min`, compare a **band** of sizes.
+* **Check the interior-node fraction** before trusting any convergence
+  number (finding 7).
 
 ## Scope of these conclusions
 
 Everything above is order-1 elements on an isotropic scalar (Poisson)
-problem. Shape quality is expected to matter more for HCurl/HDiv vector
-problems, anisotropic materials, and high-order curved elements, where it
-enters the inf-sup / interpolation constants differently — none of that
-is tested here. Findings 2 and 3 should not be extrapolated past that
-boundary without measuring.
+problem, on three geometries. Shape quality and element family are
+expected to matter differently for HCurl/HDiv vector problems,
+anisotropic materials, and high-order curved elements, where they enter
+the inf-sup / interpolation constants differently — none of that is
+tested here. In particular the hex verdict in finding 5 is an H1-scalar
+verdict; do not carry it to an HDiv-VIM or HCurl eddy-current problem
+without measuring. Timing was deliberately not measured anywhere (LAB is
+a contended host); every observable here is deterministic.
