@@ -79,10 +79,16 @@ verifyTrue(testCase,contains(string(get_param(path,"Parameters")), ...
     "runner.evaluate(trial)"));
 verifyEqual(testCase,string(get_param(path,"num_trials")),"7");
 verifyEqual(testCase,string(get_param(path,"sampler_name")),"auto");
+ports=get_param(path,"PortHandles");
+verifyEqual(testCase,numel(ports.Inport),2);
+verifyEqual(testCase,numel(ports.Outport),14);
 contract=get_param(path,"UserData");
 verifyEqual(testCase,string(contract.domain),"sheet-metal");
 verifyEqual(testCase,string(contract.backend),"matlab-native-ngsolve-cubit");
 verifyFalse(testCase,contract.browser_required);
+verifyEqual(testCase,string(contract.pareto_kernel), ...
+    "auto-mex-with-matlab-fallback");
+verifyFalse(testCase,contract.python_per_trial);
 verifyEqual(testCase,string(get_param(monitor,"Mask")),"on");
 evalin("base","clear radia_sheet_metal_runner_test");
 clear cleanup; closeModel(m);
@@ -100,6 +106,65 @@ add_line(m,'Optuna Optimization/3','Status/1');
 out=sim(m,'StopTime','0.2','ReturnWorkspaceOutputs','on');
 status=out.get('status_value');
 verifyEqual(testCase,status(end),1);
+clear cleanup; closeModel(m);
+end
+function testCAEFailuresAreRecordedAndStudyContinues(testCase)
+m="radia_optuna_failure_block_test"; cleanup=onCleanup(@()closeModel(m)); new_system(m);
+path=radia.simulink.buildOptunaBlock(m,ObjectiveFcn="radia_optuna_mesh_failure", ...
+ NumTrials=3,SampleTime_s=0.1,Save=false);
+ports=get_param(path,"PortHandles");
+verifyEqual(testCase,numel(ports.Inport),2);
+verifyEqual(testCase,numel(ports.Outport),14);
+contract=get_param(path,"UserData");
+verifyEqual(testCase,string(contract.pareto_kernel), ...
+    "auto-mex-with-matlab-fallback");
+verifyEqual(testCase,string(contract.cae_failure_policy),"record-and-continue");
+verifyFalse(testCase,contract.python_per_trial);
+add_block('simulink/Sources/Constant',m+"/Start",'Value','1');
+add_block('simulink/Sources/Constant',m+"/Cancel",'Value','0');
+add_block('simulink/Sinks/To Workspace',m+"/Status", ...
+ 'VariableName','status_value','SaveFormat','Array');
+add_block('simulink/Sinks/To Workspace',m+"/Failed", ...
+ 'VariableName','failed_value','SaveFormat','Array');
+add_block('simulink/Sinks/To Workspace',m+"/Attempted", ...
+ 'VariableName','attempted_value','SaveFormat','Array');
+add_block('simulink/Sinks/To Workspace',m+"/FailureCode", ...
+ 'VariableName','failure_code','SaveFormat','Array');
+add_line(m,'Start/1','Optuna Optimization/1');
+add_line(m,'Cancel/1','Optuna Optimization/2');
+add_line(m,'Optuna Optimization/3','Status/1');
+add_line(m,'Optuna Optimization/12','Failed/1');
+add_line(m,'Optuna Optimization/13','Attempted/1');
+add_line(m,'Optuna Optimization/14','FailureCode/1');
+out=sim(m,'StopTime','0.3','ReturnWorkspaceOutputs','on');
+status=out.get('status_value'); failed=out.get('failed_value');
+attempted=out.get('attempted_value'); code=out.get('failure_code');
+verifyEqual(testCase,status(end),1);
+verifyEqual(testCase,failed(end),3);
+verifyEqual(testCase,attempted(end),3);
+verifyEqual(testCase,code(end),3);
+clear cleanup; closeModel(m);
+end
+function testCancelStopsActiveStudy(testCase)
+m="radia_optuna_cancel_block_test"; cleanup=onCleanup(@()closeModel(m)); new_system(m);
+radia.simulink.buildOptunaBlock(m,ObjectiveFcn="radia_optuna_quadratic", ...
+ NumTrials=20,SampleTime_s=0.1,Save=false);
+add_block('simulink/Sources/Constant',m+"/Start",'Value','1');
+add_block('simulink/Sources/Step',m+"/Cancel", ...
+ 'Time','0.15','Before','0','After','1');
+add_block('simulink/Sinks/To Workspace',m+"/Status", ...
+ 'VariableName','status_value','SaveFormat','Array');
+add_block('simulink/Sinks/To Workspace',m+"/Attempted", ...
+ 'VariableName','attempted_value','SaveFormat','Array');
+add_line(m,'Start/1','Optuna Optimization/1');
+add_line(m,'Cancel/1','Optuna Optimization/2');
+add_line(m,'Optuna Optimization/3','Status/1');
+add_line(m,'Optuna Optimization/13','Attempted/1');
+out=sim(m,'StopTime','0.5','ReturnWorkspaceOutputs','on');
+status=out.get('status_value'); attempted=out.get('attempted_value');
+verifyEqual(testCase,status(end),3);
+verifyLessThan(testCase,attempted(end),20);
+verifyGreaterThan(testCase,attempted(end),0);
 clear cleanup; closeModel(m);
 end
 function testLiveMonitorReceivesTrialProgress(testCase)

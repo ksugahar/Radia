@@ -233,6 +233,15 @@ classdef ParzenEstimator
                 samples double
             end
             samples = reshape(double(samples), [], 1);
+            if radia.optuna.internal.NativeKernels.has( ...
+                    "optuna.parzen.log_pdf_numerical")
+                value = radia.internal.callMex( ...
+                    "optuna.parzen.log_pdf_numerical", samples, ...
+                    estimator.weights, estimator.mu, estimator.sigma, ...
+                    estimator.internal_low, estimator.internal_high, ...
+                    estimator.log, estimator.step);
+                return
+            end
             nSamples = numel(samples);
             nKernels = numel(estimator.weights);
             mu = reshape(estimator.mu, 1, nKernels);
@@ -282,6 +291,13 @@ classdef ParzenEstimator
                     any(samples < 1 | samples > estimator.n_choices)
                 error("radia:optuna:ParzenCategory", ...
                     "Categorical samples must index the available choices.");
+            end
+            if radia.optuna.internal.NativeKernels.has( ...
+                    "optuna.parzen.log_pdf_categorical")
+                value = radia.internal.callMex( ...
+                    "optuna.parzen.log_pdf_categorical", samples, ...
+                    estimator.weights, estimator.probabilities);
+                return
             end
             nSamples = numel(samples);
             nKernels = numel(estimator.weights);

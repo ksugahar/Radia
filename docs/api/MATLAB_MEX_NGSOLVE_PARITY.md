@@ -21,9 +21,9 @@ silently dropped from the count.
 | Covered mapped MEX names | 94 |
 | Underscore numerical kernels | 27 / 27 covered |
 | Stateful pybind11 class surface | 121 / 121 covered |
-| MEX gateway commands | 334 |
+| MEX gateway commands | 337 |
 | MATLAB Optuna classes | 12 |
-| MATLAB Optuna factory functions | 2 |
+| MATLAB Optuna factory functions | 3 |
 
 Seven acoustic commands share their implementation with the pybind11
 scattering/CQ bindings: four real-wavenumber sphere models, complex-wavenumber
@@ -292,6 +292,14 @@ persisted single-objective best for warm starts and downstream Simulink setup;
 multi-objective studies use `paretoFront`. The workflow and table schema are compatible with Optuna;
 sampler random streams and optimizer internals are not promised to reproduce
 Python Optuna bit for bit.
+
+Three optimizer hot kernels are native: `optuna.pareto.rank_crowding`,
+`optuna.parzen.log_pdf_numerical`, and
+`optuna.parzen.log_pdf_categorical`. They are discovered through
+`radia.optuna.nativeStatus` and used automatically. The high-level study,
+trial, sampler random stream, CAE artifact contract, and MAT tables remain in
+MATLAB; this is deliberate kernel acceleration rather than an opaque second
+optimizer implementation.
 
 Sampler constraint callbacks use Optuna's `c_i <= 0` feasibility convention.
 The resulting vectors are persisted in `Study.ConstraintTable`. Multi-objective

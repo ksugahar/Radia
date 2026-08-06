@@ -44,7 +44,7 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
     live = bool(spec.get("live_monitor", True))
     code = _matlab_code(name, directions, sampler, n_trials, runner, parallel, storage, live)
     return {
-        "schema": "radia-mcp.matlab-optimize-build/v1",
+        "schema": "radia-mcp.matlab-optimize-build/v2",
         "status": "ready",
         "runtime_owner": "MathWorks MATLAB MCP Server",
         "domain_owner": "radia-mcp.matlab.optimize",
@@ -63,6 +63,9 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
         "result_contract": {
             "trials": "study.TrialTable",
             "objectives": "study.ObjectiveTable",
+            "constraints": "study.ConstraintTable with c <= 0 feasibility",
+            "cae_success": "radia.optuna.cae-trial.v1 in trial user attributes",
+            "cae_failure": "radia.optuna.cae-failure.v1 in trial user attributes",
             "pareto": "study.paretoFront() for multi-objective studies",
         },
     }
@@ -209,16 +212,38 @@ def _matlab_code(name, directions, sampler, n_trials, runner, parallel, storage,
         objective = _function(runner.get("objective_fcn"), "runner.objective_fcn")
         lines.append(f"results=study.optimize(@{objective},{n_trials});")
     else:
-        configure = _function(runner.get("configure_fcn"), "runner.configure_fcn")
         score = _function(runner.get("score_fcn"), "runner.score_fcn")
         if kind == "simulink":
             model = _quote(str(runner.get("model", "")))
             if not model:
                 raise ValueError("runner.model is required")
+            constructor = [f"ScoreFcn=@{score}"]
+            for field, option in (
+                ("configure_fcn", "ConfigureFcn"),
+                ("constraint_fcn", "ConstraintFcn"),
+                ("validation_fcn", "ValidationFcn"),
+                ("result_fcn", "ResultFcn"),
+                ("failure_classifier_fcn", "FailureClassifierFcn"),
+            ):
+                function = _optional_function(runner.get(field), f"runner.{field}")
+                if function:
+                    constructor.append(f"{option}=@{function}")
+            stop_time = str(runner.get("stop_time", ""))
+            if stop_time:
+                constructor.append(f"StopTime=\"{_quote(stop_time)}\"")
+            use_fast_restart = bool(runner.get("use_fast_restart", True))
+            constructor.append(f"UseFastRestart={str(use_fast_restart).lower()}")
+            context = runner.get("context", {})
+            if not isinstance(context, Mapping):
+                raise ValueError("runner.context must be a JSON object")
+            context_json = _quote(json.dumps(context, ensure_ascii=False, allow_nan=False))
+            constructor.append(f"Context=jsondecode('{context_json}')")
             lines.append(
-                f"runner=radia.optuna.SimulinkRunner('{model}',ConfigureFcn=@{configure},ScoreFcn=@{score});"
+                f"runner=radia.optuna.SimulinkRunner('{model}'," +
+                ",".join(constructor) + ");"
             )
         else:
+            configure = _function(runner.get("configure_fcn"), "runner.configure_fcn")
             netlist = _quote(str(runner.get("netlist", "")))
             if not netlist:
                 raise ValueError("runner.netlist is required")
@@ -226,7 +251,20 @@ def _matlab_code(name, directions, sampler, n_trials, runner, parallel, storage,
                 f"runner=radia.optuna.LTspiceRunner('{netlist}',ConfigureFcn=@{configure},ScoreFcn=@{score});"
             )
         method = "optimizeParallel" if parallel else "optimize"
-        lines.append(f"results=runner.{method}(study,{n_trials});")
+        if kind == "simulink":
+            continue_on_error = str(bool(runner.get("continue_on_error", True))).lower()
+            method_options = [f"ContinueOnError={continue_on_error}"]
+            if parallel:
+                batch_size = int(runner.get("batch_size", 4))
+                if batch_size <= 0:
+                    raise ValueError("runner.batch_size must be positive")
+                method_options.insert(0, f"BatchSize={batch_size}")
+            lines.append(
+                f"results=runner.{method}(study,{n_trials}," +
+                ",".join(method_options) + ");"
+            )
+        else:
+            lines.append(f"results=runner.{method}(study,{n_trials});")
     lines.append("if numel(study.Directions)>1, pareto=study.paretoFront(); else, best=study.bestTrial(); end")
     return "\n".join(lines) + "\n"
 
@@ -234,6 +272,13 @@ def _matlab_code(name, directions, sampler, n_trials, runner, parallel, storage,
 def _function(value, field):
     text = str(value or "")
     if not _FUNCTION.fullmatch(text):
+        raise ValueError(f"{field} must be a qualified MATLAB function name")
+    return text
+
+
+def _optional_function(value, field):
+    text = str(value or "")
+    if text and not _FUNCTION.fullmatch(text):
         raise ValueError(f"{field} must be a qualified MATLAB function name")
     return text
 
