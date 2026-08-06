@@ -59,6 +59,29 @@ GMSH GUI:
   `.msh.opt` sidecars, named views, Z-up camera metadata, and optional
   cut-plane metadata (`General.Clip0A/B/C/D`).  This is the cross-language
   contract shared with the MATLAB/Gypsilab readable acoustic lane.
+
+## Dumped Figures: Axis Equal for Spatial Plots (POLICY)
+
+Every figure dumped from the gmsh post lane whose BOTH axes are
+spatial lengths -- contour / flux-line plots, streamline plots, cut
+sections, mesh pictures -- MUST be axis equal (1:1:1).  A stretched
+axis misrepresents exactly what these figures exist to show: field-
+line density, the orthogonality of field lines and equipotentials,
+and the geometry itself.
+
+- gmsh renders are axis equal by default: `General.ScaleX`,
+  `General.ScaleY`, `General.ScaleZ` all stay at 1.0.  Do NOT move
+  them for contour/streamline/section figures.  `gmsh_render` /
+  `gmsh_export_animation` return a warning note whenever a Scale
+  option is overridden away from 1.0.
+- Deliberate exaggeration (e.g. Z-scaling a thin plate or a warp
+  display) is allowed ONLY when the caption states the scale factor
+  -- it is a labeled exception, not a default.
+- matplotlib figures: any spatial x-y plot (streamline coordinates,
+  section outlines, exported contour data) must set
+  `ax.set_aspect("equal")`.  Value-vs-parameter plots (line/curve
+  profiles, histograms, point histories) are NOT spatial figures and
+  keep the auto aspect -- axis equal would be wrong there.
 """
 
 GMSH_OVERVIEW = """
