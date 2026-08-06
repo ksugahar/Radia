@@ -17,6 +17,7 @@ argument, never imported here.
 import os
 import sys
 import traceback
+import uuid
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -253,21 +254,40 @@ def op_snapshot(cubit_mod, args):
     if len(args) < 1:
         return {"error": "snapshot requires at least 1 arg (path)"}
     out_path = str(args[0])
-    rc = cubit_mod.cmd(f'hardcopy "{out_path}" png')
+    parent = os.path.dirname(os.path.abspath(out_path))
+    os.makedirs(parent, exist_ok=True)
+    tmp_path = os.path.join(
+        parent,
+        f".{os.path.basename(out_path)}.{uuid.uuid4().hex}.tmp.png",
+    )
     try:
-        size = os.path.getsize(out_path) if os.path.isfile(out_path) else 0
-    except OSError:
-        size = 0
-    ok = bool(rc) and size > 0
-    result = {"path": out_path, "ok": ok, "bytes": int(size)}
-    if len(args) >= 3:
-        result["requested_size_ignored"] = [int(args[1]), int(args[2])]
-    if not ok:
-        result["error"] = (
-            "hardcopy wrote no image (0 bytes). The graphics window is "
-            "not rendering -- in batch (-nographics) mode snapshots are "
-            "unavailable; in GUI mode issue a draw/display command first.")
-    return result
+        try:
+            rc = cubit_mod.cmd(f'hardcopy "{tmp_path}" png')
+            size = (os.path.getsize(tmp_path)
+                    if os.path.isfile(tmp_path) else 0)
+        except OSError:
+            rc, size = False, 0
+        ok = bool(rc) and size > 0
+        result = {"path": out_path, "ok": ok, "bytes": int(size)}
+        if len(args) >= 3:
+            result["requested_size_ignored"] = [int(args[1]), int(args[2])]
+        if not ok:
+            result["error"] = (
+                "hardcopy wrote no image (0 bytes). The graphics window is "
+                "not rendering -- in batch (-nographics) mode snapshots are "
+                "unavailable; in GUI mode issue a draw/display command first.")
+        else:
+            try:
+                os.replace(tmp_path, out_path)
+            except OSError as exc:
+                result.update(ok=False, error=f"cannot publish snapshot: {exc}")
+        return result
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def op_probe(cubit_mod, args):

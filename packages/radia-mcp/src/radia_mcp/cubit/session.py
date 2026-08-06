@@ -118,13 +118,13 @@ def _assign_kill_on_close_job(pid: int):
     the job's processes.  Shared-daemon modes never call this -- their
     persistence across client restarts is the feature.
 
-    Returns the handle (int) or None on failure (the spawn proceeds;
-    shutdown() remains the cleanup of last resort).
+    Returns the handle. Failure raises ``OSError``: mode ``new`` must
+    not continue after losing the cleanup guarantee it promises.
     """
     import ctypes
     from ctypes import wintypes
 
-    kernel32 = ctypes.windll.kernel32
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
     JobObjectExtendedLimitInformation = 9
     PROCESS_SET_QUOTA = 0x0100
@@ -159,31 +159,72 @@ def _assign_kill_on_close_job(pid: int):
             ("PeakJobMemoryUsed", ctypes.c_size_t),
         ]
 
+    kernel32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD]
+    kernel32.SetInformationJobObject.restype = wintypes.BOOL
+    kernel32.OpenProcess.argtypes = [
+        wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.AssignProcessToJobObject.argtypes = [
+        wintypes.HANDLE, wintypes.HANDLE]
+    kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    job = None
+    hproc = None
     try:
         job = kernel32.CreateJobObjectW(None, None)
         if not job:
-            return None
+            raise ctypes.WinError(ctypes.get_last_error())
         info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
         info.BasicLimitInformation.LimitFlags = \
             JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         if not kernel32.SetInformationJobObject(
                 job, JobObjectExtendedLimitInformation,
                 ctypes.byref(info), ctypes.sizeof(info)):
-            kernel32.CloseHandle(job)
-            return None
+            raise ctypes.WinError(ctypes.get_last_error())
         hproc = kernel32.OpenProcess(
             PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
         if not hproc:
-            kernel32.CloseHandle(job)
-            return None
-        ok = kernel32.AssignProcessToJobObject(job, hproc)
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not kernel32.AssignProcessToJobObject(job, hproc):
+            raise ctypes.WinError(ctypes.get_last_error())
         kernel32.CloseHandle(hproc)
-        if not ok:
-            kernel32.CloseHandle(job)
-            return None
+        hproc = None
         return job
     except Exception:
-        return None
+        if hproc:
+            kernel32.CloseHandle(hproc)
+        if job:
+            kernel32.CloseHandle(job)
+        raise
+
+
+def _close_windows_handle(handle) -> None:
+    """Close a checked Windows HANDLE or raise ``OSError``."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    if not kernel32.CloseHandle(handle):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+def _remove_tree_with_retry(path: Path, timeout_s: float = 2.0) -> bool:
+    """Remove a process drop directory after Windows releases log handles."""
+    deadline = time.monotonic() + max(0.0, timeout_s)
+    while True:
+        shutil.rmtree(path, ignore_errors=True)
+        if not path.exists():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
 
 
 def _try_attach_existing_daemon(drop_dir: Path) -> dict | None:
@@ -392,6 +433,24 @@ class CubitSession:
         self._stderr_tail: list[bytes] = []
         self._stderr_tail_max = 200
 
+    def _close_private_job(self) -> None:
+        """Release the mode-new Job Object, killing any surviving child."""
+        handle, self._job_handle = getattr(self, "_job_handle", None), None
+        if handle is None or sys.platform != "win32":
+            return
+        try:
+            _close_windows_handle(handle)
+        except OSError:
+            pass
+
+    def __del__(self):
+        # A mode-new session is private to this object. Losing the object
+        # must not lose the only handle that enforces kill-on-close.
+        try:
+            self._close_private_job()
+        except Exception:
+            pass
+
     # ---- lifecycle ----
 
     def ensure_started(self) -> dict:
@@ -406,6 +465,9 @@ class CubitSession:
         """
         if self._proc is not None and self._proc.poll() is None:
             return self._ready_info or {}
+        if self._proc is not None:
+            self._close_private_job()
+            self._proc = None
         if self._mode == "gui" and self._drop_dir is not None and self._ready_info is not None:
             # Phase-1 attached mode: verify the daemon PID is still alive
             pid_file = self._drop_dir / "pid.lock"
@@ -460,6 +522,7 @@ class CubitSession:
             except Exception:
                 pass
             report["stopped"] = "owned-child"
+        self._close_private_job()
         # Kill an attached daemon (not our child) via pid.lock
         if self._drop_dir is not None:
             pid_file = self._drop_dir / "pid.lock"
@@ -499,11 +562,9 @@ class CubitSession:
             # child's log-file handles for a moment after the kill, so
             # retry briefly instead of leaving debris.
             if self._owned and self._drop_dir.name != "cubit-session":
-                for _ in range(8):
-                    shutil.rmtree(self._drop_dir, ignore_errors=True)
-                    if not self._drop_dir.exists():
-                        break
-                    time.sleep(0.5)
+                if not _remove_tree_with_retry(self._drop_dir):
+                    report["cleanup_warning"] = (
+                        f"private drop directory remains: {self._drop_dir}")
         self._drop_dir = None
         self._outbox = None
         self._proc = None
@@ -830,7 +891,24 @@ class CubitSession:
             )
         self._owned = True
         if session_mode == "new" and sys.platform == "win32":
-            self._job_handle = _assign_kill_on_close_job(self._proc.pid)
+            try:
+                self._job_handle = _assign_kill_on_close_job(self._proc.pid)
+            except OSError as exc:
+                try:
+                    self._proc.kill()
+                    self._proc.wait(timeout=3.0)
+                except Exception:
+                    pass
+                self._proc = None
+                self._owned = False
+                _remove_tree_with_retry(drop)
+                self._drop_dir = None
+                self._outbox = None
+                raise CubitSessionError(
+                    "Could not place the private Cubit process in a "
+                    "kill-on-close Windows Job Object; refusing to leave "
+                    "a mode-new session without orphan protection: "
+                    f"{exc}") from exc
         # Write PID lock immediately so a sibling VSCode racing to spawn
         # can also attach (once ready marker appears).
         try:
