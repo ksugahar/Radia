@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.32] - 2026-08-06
+
+- Added the executed electromagnetic field-line and adaptive-isosurface
+  notebook as the public Gmsh post-processing showcase.
+- Linked Gmsh knowledge to saved WebGUI scenes and synchronized quantitative
+  evidence without publishing generated heavyweight render artifacts.
+
 ## [1.4.31] - 2026-08-06
 
 - Fixed Cubit GUI bootstrap imports under Cubit's string-execution path and
