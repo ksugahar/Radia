@@ -181,6 +181,7 @@ def test_netgen_cubit_quality_compare(tmp_path):
     the reference assembly (no inverted, none below threshold)."""
     pytest.importorskip("netgen")
     pytest.importorskip("gmsh")
+    pytest.importorskip("build123d")
     from build123d import Box, Compound, Cylinder, Pos, export_step
     from radia_mcp.cubit.server import cubit_netgen_quality_compare
 

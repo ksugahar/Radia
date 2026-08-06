@@ -2515,7 +2515,7 @@ default」原則を実運用で守るチェック。
 | 2026-05-19 | 同じ pattern 再発 | LAB から「source 編集が反映されない」報告で発覚 |
 | 2026-05-26 | release 直後の CI runner clone (`C:\actions-runner\_work\...`) に `radia-mcp` editable が drift | LAB 側で knowledge file の編集が radia-mcp 経由で見えないことで発覚 |
 | 2026-05-27 | 同上、再発 | MCP tool 経由で新規 topic が dispatch されない (Unknown topic) で発覚 |
-| 2026-08-06 | v4.95.47 release 後、radia + cubit-mesh-export + radia-mcp の 3 つ全部が **release-qud クローン** (`S:\Radia\release-qud\Radia-v4.95.47-<sha>`) に drift(新パターン: CI runner ではなく release-qud のリリース用クローンで editable install が走った) | release 直後の本チェックで発覚。**重要教訓: 同バージョンへの `pip install -e` 再実行は `.pth` を書き換えない no-op になり得る — `pip show` の Editable location が直っても import は旧パスのまま**(実測: show=01_GitHub なのに `__editable__.*.pth` は release-qud、radia.gmsh_post_export が旧ソースを解決)。修復は `pip uninstall -y <pkgs>` → 再 `-e`。**検証は `pip show` でなく site-packages の `__editable__*.pth` の中身と `<pkg>.__file__` で行うこと** |
+| 2026-08-06 | v4.95.47 release 後、radia + cubit-mesh-export + radia-mcp の 3 つ全部が **release-qud worktree** (`release-qud/Radia-v4.95.47-<sha>`) に drift(新パターン: CI runner ではなくリリース用worktreeで editable install が走った) | release 直後の本チェックで発覚。**重要教訓: 同バージョンへの `pip install -e` 再実行は `.pth` を書き換えない no-op になり得る — `pip show` の Editable location が直っても import は旧パスのまま**(実測: show=canonical tree なのに `__editable__.*.pth` は release-qud、radia.gmsh_post_export が旧ソースを解決)。修復は `pip uninstall -y <pkgs>` → 再 `-e`。**検証は `pip show` でなく site-packages の `__editable__*.pth` の中身と `<pkg>.__file__` で行うこと** |
 
 **再発するため、release 後の確認を policy 化**。
 

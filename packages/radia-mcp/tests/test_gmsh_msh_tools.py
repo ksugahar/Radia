@@ -813,14 +813,17 @@ def test_render_mcp_tools_forward_visual_controls(tmp_path, monkeypatch):
     options = {"View[0].ColormapAlpha": 0.4}
     strings = {"View[0].Name": "Saturation front"}
     cut = {"enabled": True, "normal": [0, -1, 0], "offset": 0}
+    overlay = tmp_path / "coil.step"
 
     server.gmsh_render(
         str(source), options=options, string_options=strings,
-        cut_plane=cut, adapt_views=False, smooth_normals=False)
+        cut_plane=cut, adapt_views=False, smooth_normals=False,
+        merge_files=[str(overlay)], geometry_display=False)
     server.gmsh_export_animation(
         str(source), options=options, string_options=strings,
         cut_plane=cut, adapt_views=False, smooth_normals=False,
-        link_views=False)
+        link_views=False, merge_files=[str(overlay)],
+        geometry_display=True)
 
     render_kwargs = captured["render"][1]
     assert render_kwargs["options"] == options
@@ -828,6 +831,8 @@ def test_render_mcp_tools_forward_visual_controls(tmp_path, monkeypatch):
     assert render_kwargs["cut_plane"] == cut
     assert render_kwargs["adapt_views"] is False
     assert render_kwargs["smooth_normals"] is False
+    assert render_kwargs["merge_files"] == [overlay]
+    assert render_kwargs["geometry_display"] is False
 
     animation_kwargs = captured["animation"][1]
     assert animation_kwargs["options"] == options
@@ -836,6 +841,8 @@ def test_render_mcp_tools_forward_visual_controls(tmp_path, monkeypatch):
     assert animation_kwargs["adapt_views"] is False
     assert animation_kwargs["smooth_normals"] is False
     assert animation_kwargs["link_views"] is False
+    assert animation_kwargs["merge_files"] == [overlay]
+    assert animation_kwargs["geometry_display"] is True
 
 
 def _skip_if_no_graphics(result):

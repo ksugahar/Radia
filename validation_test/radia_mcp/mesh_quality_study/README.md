@@ -1,7 +1,7 @@
 # Mesh-quality study: netgen vs cubit (equal-h and equal-budget)
 
-Promoted 2026-08-06 from `C:/temp/mesh_quality_study`. One STEP per
-geometry (lab `build123d` helpers), meshed by netgen (tet) and the Cubit
+Promoted into the validation lane on 2026-08-06. One STEP per geometry
+(lab `build123d` helpers), meshed by netgen (tet) and the Cubit
 batch daemon (tet + hex where sweepable), all judged by ONE referee:
 gmsh **minSICN** via `radia_mcp.gmsh.msh_inspect.mesh_quality` on
 `.msh v4.1`. First-order elements throughout (shape quality is a
@@ -16,9 +16,9 @@ Two comparisons per case:
   element budget, which mesher is better?"*
 
 `results_mesh_quality_study.json` is the committed result (Data
-Persistence Policy); `run_study.py` regenerates it (~80 s on LAB;
-requires Cubit + netgen + gmsh + build123d; scratch meshes land in
-`artifacts/`).
+Persistence Policy); `run_study.py` regenerates it on an idle compute
+host with Cubit + netgen + gmsh + build123d. Scratch meshes land in
+`artifacts/`.
 
 ## Measured findings (LAB, Cubit 2025.12 / netgen 6.2.2604, 14 cases)
 

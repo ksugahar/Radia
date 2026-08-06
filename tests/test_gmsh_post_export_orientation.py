@@ -105,6 +105,20 @@ def test_single_element_both_orientations(family, orientation):
     assert negative == 0, (family, orientation, negative, total)
 
 
+@pytest.mark.parametrize("family", sorted(_CASES))
+def test_second_order_positive_listing(family):
+    """The Cubit-origin orientation must also place every curved
+    Lagrange node consistently with its mirrored corner permutation."""
+    case = _CASES[family]
+    mesh = _mesh_from_elements(case["points"], [case["pos"]])
+    mesh.Curve(2)
+    out = os.path.join(_TMP, f"orient_{family}_pos_order2.msh")
+    GmshPostExport(mesh).write(out)
+    negative, total = _count_negative_jacobians(out)
+    assert total > 0
+    assert negative == 0, (family, "pos_order2", negative, total)
+
+
 def test_mixed_orientations_in_one_mesh():
     """Two tets of OPPOSITE listing orientation in the same mesh: the
     per-element selection must handle both within one export."""
