@@ -25,8 +25,14 @@ from ._eddy_hybrid import (
 )
 from ._vim import _f64_buffer, _i32_buffer, _monos_vol, _outer_tet, _tet_ref
 from ._vim import (
+    _EMPTY_F64,
+    _EMPTY_I32,
     _IR_TET_NODES,
+    _Q2_LATTICE_3D,
+    _SYM5_TET,
+    _SYM5_TRI,
     _g01,
+    _hex_q2_lattice_nodes_ngsolve_linear,
     _outer_tri,
     _trafo_lattice_nodes,
     _tri_ref,
@@ -818,6 +824,264 @@ def _project_curved_tet_reference_currents(
     }
 
 
+def _hex_tensor_monomials(degree: int) -> list[tuple[int, int, int]]:
+    return [
+        (i, j, k)
+        for k in range(degree + 1)
+        for j in range(degree + 1)
+        for i in range(degree + 1)
+    ]
+
+
+def _hex_tensor_rule(order: int) -> tuple[np.ndarray, np.ndarray]:
+    nodes, weights = np.polynomial.legendre.leggauss(int(order))
+    nodes = 0.5 * (nodes + 1.0)
+    weights = 0.5 * weights
+    points = np.asarray(
+        [(x, y, z) for z in nodes for y in nodes for x in nodes],
+        dtype=float,
+    )
+    product_weights = np.asarray(
+        [wx * wy * wz for wz in weights for wy in weights for wx in weights],
+        dtype=float,
+    )
+    return points, product_weights
+
+
+def _hex_tensor_vandermonde(
+    points: np.ndarray,
+    exponents,
+) -> np.ndarray:
+    return np.asarray(
+        [
+            [x**i * y**j * z**k for i, j, k in exponents]
+            for x, y, z in np.asarray(points, dtype=float)
+        ],
+        dtype=float,
+    )
+
+
+def _hex_q2_map(nodes: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Evaluate the 27-node tensor-Q2 map used by the native HEX Gram."""
+
+    values = np.asarray(points, dtype=float)
+    lattice = np.asarray(nodes, dtype=float).reshape(3, 3, 3, 3)
+
+    def basis(coordinate):
+        return np.column_stack(
+            (
+                2.0 * (coordinate - 0.5) * (coordinate - 1.0),
+                4.0 * coordinate * (1.0 - coordinate),
+                2.0 * coordinate * (coordinate - 0.5),
+            )
+        )
+
+    lx = basis(values[:, 0])
+    ly = basis(values[:, 1])
+    lz = basis(values[:, 2])
+    return np.einsum("qi,qj,qk,kjic->qc", lx, ly, lz, lattice)
+
+
+def _hex_geometry_nodes(mesh, elements) -> tuple[np.ndarray, float]:
+    import ngsolve as ng
+
+    lattice_rule = ng.IntegrationRule(
+        _Q2_LATTICE_3D,
+        [1.0] * len(_Q2_LATTICE_3D),
+    )
+    linear_lattice = mesh.GetCurveOrder() < 2 and mesh.deformation is None
+    nodes = np.asarray(
+        [
+            (
+                _hex_q2_lattice_nodes_ngsolve_linear(mesh, element)
+                if linear_lattice
+                else _trafo_lattice_nodes(mesh, element, lattice_rule)
+            )
+            for element in elements
+        ],
+        dtype=float,
+    )
+    reference = np.asarray(_Q2_LATTICE_3D, dtype=float)
+    affine_residual = 0.0
+    for cell_nodes in nodes:
+        origin = cell_nodes[0]
+        affine = (
+            origin
+            + reference[:, 0, None] * (cell_nodes[2] - origin)
+            + reference[:, 1, None] * (cell_nodes[6] - origin)
+            + reference[:, 2, None] * (cell_nodes[18] - origin)
+        )
+        scale = max(
+            float(
+                np.max(
+                    np.linalg.norm(
+                        cell_nodes[:, None, :] - cell_nodes[None, :, :],
+                        axis=2,
+                    )
+                )
+            ),
+            np.finfo(float).tiny,
+        )
+        affine_residual = max(
+            affine_residual,
+            float(np.max(np.linalg.norm(cell_nodes - affine, axis=1)) / scale),
+        )
+    return nodes, affine_residual
+
+
+def _project_hex_reference_currents(
+    mesh,
+    fes,
+    vectors,
+    *,
+    degree: int,
+    projection_quad: int,
+    materials,
+):
+    """Project ``K=curl(T)*|det(dX/dxi)|`` on the exact HEX reference map."""
+
+    import ngsolve as ng
+
+    selected = _labels(materials)
+    elements = [
+        element
+        for element in mesh.Elements(ng.VOL)
+        if selected is None or str(element.mat) in selected
+    ]
+    if not elements:
+        raise ValueError("the selected conductor region contains no volume elements")
+    if any(str(element.type) != "ET.HEX" for element in elements):
+        raise NotImplementedError(
+            "the direct reference-density path currently requires pure HEX cells"
+        )
+    degree = int(degree)
+    if degree < 0 or degree > 2:
+        raise ValueError("direct HEX reference-density degree must be in [0, 2]")
+    projection_quad = int(projection_quad)
+    if projection_quad < degree + 2:
+        raise ValueError("projection_quad must be at least degree + 2")
+
+    gridfunctions, currents = _mode_gridfunctions(fes, vectors)
+    n_modes = len(currents)
+    current_bundle = ng.CF(tuple(currents))
+    exponents = _hex_tensor_monomials(degree)
+    fit_points, _ = _hex_tensor_rule(degree + 1)
+    fit_vandermonde = _hex_tensor_vandermonde(fit_points, exponents)
+    condition = float(np.linalg.cond(fit_vandermonde))
+    if not np.isfinite(condition):
+        raise ValueError("singular direct HEX reference-current projection")
+    fit_operator = np.linalg.inv(fit_vandermonde)
+    validation_points, validation_weights = _hex_tensor_rule(projection_quad)
+    validation_vandermonde = _hex_tensor_vandermonde(
+        validation_points,
+        exponents,
+    )
+    fit_rule = ng.IntegrationRule(
+        [tuple(float(value) for value in point) for point in fit_points],
+        [1.0] * len(fit_points),
+    )
+    validation_rule = ng.IntegrationRule(
+        [tuple(float(value) for value in point) for point in validation_points],
+        [float(weight) for weight in validation_weights],
+    )
+    determinant = ng.Det(ng.specialcf.JacobianMatrix(3))
+    coordinate = ng.CF((ng.x, ng.y, ng.z))
+    cell_nodes, affine_residual = _hex_geometry_nodes(mesh, elements)
+    coefficients = np.empty(
+        (n_modes, len(elements), len(exponents), 3),
+        dtype=float,
+    )
+    residual_sq = 0.0
+    field_sq = 0.0
+    geometry_error = 0.0
+    geometry_scale = 0.0
+
+    for cell, element in enumerate(elements):
+        trafo = mesh.GetTrafo(element)
+        mapped_fit = trafo(fit_rule)
+        fit_measure = np.abs(
+            np.asarray(determinant(mapped_fit), dtype=float).reshape(-1)
+        )
+        sampled_fit = np.asarray(
+            current_bundle(mapped_fit), dtype=float
+        ).reshape(-1, n_modes, 3)
+        reference_fit = sampled_fit * fit_measure[:, None, None]
+        local_coefficients = fit_operator @ reference_fit.reshape(
+            len(fit_points), -1
+        )
+        coefficients[:, cell, :, :] = local_coefficients.reshape(
+            len(exponents), n_modes, 3
+        ).transpose(1, 0, 2)
+
+        mapped_validation = trafo(validation_rule)
+        validation_measure = np.abs(
+            np.asarray(determinant(mapped_validation), dtype=float).reshape(-1)
+        )
+        sampled_validation = np.asarray(
+            current_bundle(mapped_validation), dtype=float
+        ).reshape(-1, n_modes, 3)
+        expected = sampled_validation * validation_measure[:, None, None]
+        reconstructed = (validation_vandermonde @ local_coefficients).reshape(
+            len(validation_points), n_modes, 3
+        )
+        residual_sq += float(
+            np.sum(
+                validation_weights[:, None, None]
+                * (reconstructed - expected) ** 2
+            )
+        )
+        field_sq += float(
+            np.sum(validation_weights[:, None, None] * expected**2)
+        )
+
+        mapped_points = np.asarray(
+            coordinate(mapped_validation), dtype=float
+        ).reshape(-1, 3)
+        geometry_error = max(
+            geometry_error,
+            float(
+                np.max(
+                    np.linalg.norm(
+                        mapped_points
+                        - _hex_q2_map(cell_nodes[cell], validation_points),
+                        axis=1,
+                    )
+                )
+            ),
+        )
+        geometry_scale = max(
+            geometry_scale,
+            float(
+                np.max(
+                    np.linalg.norm(
+                        cell_nodes[cell, :, None, :]
+                        - cell_nodes[cell, None, :, :],
+                        axis=2,
+                    )
+                )
+            ),
+        )
+
+    del gridfunctions
+    return {
+        "cell_nodes": cell_nodes,
+        "coefficients": coefficients,
+        "exponents": np.asarray(exponents, dtype=np.int32),
+        "relative_residual": float(
+            np.sqrt(residual_sq / max(field_sq, np.finfo(float).tiny))
+        ),
+        "relative_geometry_error": float(
+            geometry_error / max(geometry_scale, np.finfo(float).tiny)
+        ),
+        "affine_geometry_residual": float(affine_residual),
+        "max_vandermonde_condition": condition,
+        "cell_count": len(elements),
+        "mode_count": n_modes,
+        "charge_count": len(elements) * len(exponents),
+        "projection_quadrature_points": len(validation_points),
+    }
+
+
 class HCurlHMatrixOperator:
     """Matrix-free reduced HCurl Gram ``mu * sum_c B_c.T G B_c``.
 
@@ -1233,6 +1497,109 @@ def _affine_polynomial_hmatrix_operator(
     )
 
 
+def _direct_hex_reference_density_operator(
+    projected,
+    *,
+    eps: float,
+    leafsize: int,
+    eta: float,
+    max_charges: int,
+    mu: float,
+) -> HCurlHMatrixOperator:
+    """Reuse the native Q2 HEX Gram for HCurl Piola reference densities."""
+
+    coefficients = np.asarray(projected["coefficients"], dtype=float).copy()
+    scale = float(np.max(np.abs(coefficients)))
+    if scale > 0.0:
+        coefficients[
+            np.abs(coefficients) <= 4096.0 * np.finfo(float).eps * scale
+        ] = 0.0
+    n_modes, n_cells, n_monomials, _ = coefficients.shape
+    active = np.any(coefficients != 0.0, axis=(0, 3))
+    cell_indices, monomial_indices = np.nonzero(active)
+    charge_count = len(cell_indices)
+    unpruned_charge_count = n_cells * n_monomials
+    if charge_count == 0:
+        raise ValueError("direct HEX reference-density projection is identically zero")
+    max_charges = int(max_charges)
+    if max_charges <= 0:
+        raise ValueError("max_charges must be positive")
+    if charge_count > max_charges:
+        raise ValueError(
+            f"direct HEX reference-density Gram requires {charge_count} charges, "
+            f"above max_charges={max_charges}"
+        )
+    hosts = np.asarray(cell_indices, dtype=np.int32)
+    kinds = np.zeros(charge_count, dtype=np.int32)
+    exponents = np.asarray(projected["exponents"], dtype=np.int32)[
+        monomial_indices
+    ]
+    charge_maps = np.stack(
+        [
+            coefficients[:, cell_indices, monomial_indices, component].T
+            for component in range(3)
+        ],
+        axis=0,
+    )
+    outer_nodes, outer_weights = _g01(5)
+    inner_nodes, inner_weights = _g01(7)
+    gram = _rp._ChargeGramHMatrix(
+        hex_cell_nodes=_f64_buffer(projected["cell_nodes"]),
+        quad_face_nodes=_EMPTY_F64,
+        n_el=int(n_cells),
+        n_bf=0,
+        charge_host=_i32_buffer(hosts),
+        charge_kind=_i32_buffer(kinds),
+        charge_expo=_i32_buffer(exponents),
+        sym_tet_pts=_f64_buffer(_SYM5_TET[0]),
+        sym_tet_w=_f64_buffer(_SYM5_TET[1]),
+        sym_tri_pts=_f64_buffer(_SYM5_TRI[0]),
+        sym_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        gl_out=_f64_buffer(outer_nodes),
+        gw_out=_f64_buffer(outer_weights),
+        gl_in=_f64_buffer(inner_nodes),
+        gw_in=_f64_buffer(inner_weights),
+        far_tet_pts=_f64_buffer(_SYM5_TET[0]),
+        far_tet_w=_f64_buffer(_SYM5_TET[1]),
+        far_tri_pts=_f64_buffer(_SYM5_TRI[0]),
+        far_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        near_grade=0.5,
+        far_inner_factor=1.0,
+        image_masks=_EMPTY_I32,
+        image_signs=_EMPTY_F64,
+        eps=float(eps),
+        leaf=int(leafsize),
+        eta=float(eta),
+        build=True,
+    )
+    state = gram.hex_state_check()
+    if state["ctor"] != state["now"]:
+        raise RuntimeError(
+            "direct HEX reference-density Gram state changed during construction"
+        )
+    return HCurlHMatrixOperator(
+        gram,
+        charge_maps,
+        mu=mu,
+        charge_hosts=hosts,
+        host_parents=np.arange(n_cells, dtype=np.int32),
+        metadata={
+            "scalar_gram_backend": "direct-q2-hex-reference-density",
+            "reference_density": "curl(T)*abs(det(dX/dxi))",
+            "tensor_degree": int(np.max(projected["exponents"])),
+            "unpruned_charge_count": int(unpruned_charge_count),
+            "pruned_zero_charge_count": int(
+                unpruned_charge_count - charge_count
+            ),
+            "active_monomials_per_cell_min": int(np.min(np.sum(active, axis=1))),
+            "active_monomials_per_cell_max": int(np.max(np.sum(active, axis=1))),
+            "affine_geometry_residual": float(
+                projected["affine_geometry_residual"]
+            ),
+        },
+    )
+
+
 def _curved_reference_density_operator(
     projected,
     *,
@@ -1476,7 +1843,11 @@ class HCurlCellVolumeInteraction:
             "singular_self_treatment": (
                 "curved-p2-reference-density-duffy"
                 if self.geometry_backend == "curved-p2-reference-density"
-                else "analytic-subtet-reference-moments-through-degree-18"
+                else (
+                    "direct-q2-hex-reference-density-graded-duffy"
+                    if self.geometry_backend == "direct-q2-hex-reference-density"
+                    else "analytic-subtet-reference-moments-through-degree-18"
+                )
             ),
             "cell_count": int(self.cell_count),
             "subtet_count": int(self.subtet_count),
@@ -1495,6 +1866,9 @@ class HCurlCellVolumeInteraction:
             "projection_quadrature_points_per_subtet": int(
                 self.projection_quadrature_points
             ),
+            "projection_quadrature_points": int(
+                self.projection_quadrature_points
+            ),
             "outer_quadrature_points": int(self.outer_quadrature_points),
             "max_vandermonde_condition": float(self.max_vandermonde_condition),
             "subdivision_level": int(self.subdivision_level),
@@ -1511,6 +1885,7 @@ class HCurlCellVolumeInteraction:
             "hmatrix_operator": self.matrix.stats() if matrix_free else None,
             "kernel_epsilon_m": None,
             "geometry": self.geometry_backend,
+            "geometry_backend": self.geometry_backend,
         }
 
 
@@ -1693,6 +2068,7 @@ def NgsolveHCurlCellVolumeInteraction(
     outer_quad: int | None = None,
     projection_tolerance: float = 1.0e-4,
     geometry_tolerance: float = 1.0e-3,
+    hex_geometry_backend: str = "auto",
     max_subdivision_levels: int = 8,
     max_subtets: int = 512,
     max_dense_moment_pairs: int = 20_000_000,
@@ -1726,10 +2102,15 @@ def NgsolveHCurlCellVolumeInteraction(
     operator ``sum_c B_c.T G B_c``; ``matrix_free=False`` is the explicit
     dense verification path.  P2 tetrahedra instead project the
     curl-Piola reference density ``K=J*abs(det(dX/dxi))`` and use the exact P2
-    geometry in Radia's curved Duffy/H-matrix Gram.  Other warped maps use the
-    residual-controlled piecewise-affine loop.  ``max_subtets`` and
-    ``max_charges`` bound geometry refinement and the compressed scalar rank.
-    No diagonal kernel epsilon is used.
+    geometry in Radia's curved Duffy/H-matrix Gram.  An order-1 HEX uses the
+    native Q2-isoparametric HEX Gram directly for both affine and warped maps:
+    the Piola reference density ``K`` is tensor-Q2 to machine precision, so no
+    geometry subtet refinement is needed.  ``hex_geometry_backend='affine-subtet'``
+    retains the diagnostic legacy path, while ``'direct'`` forces the same
+    reference-density path.  Other
+    warped maps use the residual-controlled piecewise-affine loop.
+    ``max_subtets`` and ``max_charges`` bound geometry refinement and scalar
+    rank.  No diagonal kernel epsilon is used.
     """
 
     if int(mesh.dim) != 3:
@@ -1739,6 +2120,110 @@ def NgsolveHCurlCellVolumeInteraction(
     inventory = NgsolveHCurlCellFamilies(mesh, materials=materials)
     parent_order = int(getattr(fes, "globalorder", 0))
     curve_order = int(mesh.GetCurveOrder())
+    hex_geometry_backend = str(hex_geometry_backend).strip().lower()
+    if hex_geometry_backend not in {"auto", "direct", "affine-subtet"}:
+        raise ValueError(
+            "hex_geometry_backend must be 'auto', 'direct', or 'affine-subtet'"
+        )
+    if inventory.families == ("hex",) and hex_geometry_backend != "affine-subtet":
+        import ngsolve as ng
+
+        selected = _labels(materials)
+        hex_elements = [
+            element
+            for element in mesh.Elements(ng.VOL)
+            if selected is None or str(element.mat) in selected
+        ]
+        _, affine_residual = _hex_geometry_nodes(mesh, hex_elements)
+        explicit_direct = hex_geometry_backend == "direct"
+        automatic_direct = (
+            hex_geometry_backend == "auto"
+            and degree is None
+            and parent_order == 1
+        )
+        if explicit_direct or automatic_direct:
+            direct_degree = 2 if degree is None else int(degree)
+            direct_projection_quad = (
+                max(direct_degree + 3, 5)
+                if projection_quad is None
+                else int(projection_quad)
+            )
+            projection_tolerance = float(projection_tolerance)
+            geometry_tolerance = float(geometry_tolerance)
+            mu = float(mu)
+            if not np.isfinite(projection_tolerance) or projection_tolerance <= 0.0:
+                raise ValueError("projection_tolerance must be positive")
+            if not np.isfinite(geometry_tolerance) or geometry_tolerance <= 0.0:
+                raise ValueError("geometry_tolerance must be positive")
+            if not np.isfinite(mu) or mu <= 0.0:
+                raise ValueError("mu must be positive")
+            projected = _project_hex_reference_currents(
+                mesh,
+                fes,
+                vectors,
+                degree=direct_degree,
+                projection_quad=direct_projection_quad,
+                materials=materials,
+            )
+            residual = float(projected["relative_residual"])
+            geometry_residual = float(projected["relative_geometry_error"])
+            if residual > projection_tolerance:
+                raise ValueError(
+                    "direct HEX reference-density projection residual "
+                    f"{residual:.6e} exceeds tolerance "
+                    f"{projection_tolerance:.6e} at tensor degree "
+                    f"{direct_degree}"
+                )
+            if geometry_residual > geometry_tolerance:
+                raise ValueError(
+                    "NGSolve and direct Q2 HEX Gram geometry disagree: residual "
+                    f"{geometry_residual:.6e} exceeds tolerance "
+                    f"{geometry_tolerance:.6e}"
+                )
+            operator = _direct_hex_reference_density_operator(
+                projected,
+                eps=float(hmatrix_eps),
+                leafsize=int(hmatrix_leafsize),
+                eta=float(hmatrix_eta),
+                max_charges=int(max_charges),
+                mu=mu,
+            )
+            matrix = operator if matrix_free else operator.to_dense()
+            integration_subtets = 6 * int(projected["cell_count"])
+            return HCurlCellVolumeInteraction(
+                basis=basis,
+                matrix=matrix,
+                polynomial_degree=direct_degree,
+                projection_relative_residual=residual,
+                projection_tolerance=projection_tolerance,
+                geometry_relative_residual=geometry_residual,
+                geometry_tolerance=geometry_tolerance,
+                projection_quadrature_points=int(
+                    projected["projection_quadrature_points"]
+                ),
+                outer_quadrature_points=5**3,
+                cell_count=int(projected["cell_count"]),
+                subtet_count=integration_subtets,
+                family_counts=dict(inventory.counts),
+                family_subtet_counts={"hex": integration_subtets},
+                max_vandermonde_condition=float(
+                    projected["max_vandermonde_condition"]
+                ),
+                projection_residual_history=(residual,),
+                geometry_residual_history=(geometry_residual,),
+                subdivision_level=0,
+                subdivision_strategy="direct-q2-hex-reference-density",
+                required_polynomial_degree=2,
+                degree_capped=False,
+                geometry_order=curve_order,
+                max_subtets=int(max_subtets),
+                max_dense_moment_pairs=int(max_dense_moment_pairs),
+                dense_moment_pairs=0,
+                charge_count=int(projected["charge_count"]),
+                geometry_backend="direct-q2-hex-reference-density",
+                mu=mu,
+                name="direct-q2-hex-reference-density-hcurl-hmatrix",
+            )
     if curve_order == 2 and inventory.families == ("tet",):
         curved_degree = parent_order if degree is None else int(degree)
         if curved_degree < 0 or curved_degree > 18:

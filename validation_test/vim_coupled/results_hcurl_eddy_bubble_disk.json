@@ -1,0 +1,842 @@
+{
+  "schema": "cae-ai-lab.solver-run.v1",
+  "created_at_utc": "2026-08-05T03:20:48.397086+00:00",
+  "case": "3-D conducting disk HCurl eddy-bubble response-basis validation",
+  "solver": "radia-ngsolve HCurl eddy-bubble epsilon-free VIM",
+  "source_artifact": "validation_test/vim_coupled/validate_hcurl_eddy_bubble_disk.py",
+  "pass": true,
+  "run": {
+    "command": "python validation_test/vim_coupled/validate_hcurl_eddy_bubble_disk.py",
+    "workdir": "repository root",
+    "exit_code": 0,
+    "duration_s": 79.15264320001006
+  },
+  "result_files": [
+    "validation_test/vim_coupled/results_hcurl_eddy_bubble_disk.json"
+  ],
+  "physics": {
+    "geometry": "solid circular conducting disk",
+    "radius_m": 0.01,
+    "thickness_m": 0.002,
+    "conductivity_s_per_m": 58000000.0,
+    "excitation": "uniform Bz through A=(-y,x,0)/2",
+    "reference": "axisymmetric integral-equation BEM modal spectrum"
+  },
+  "axifem_reference": {
+    "reference_files": [
+      "validation_test/maglev/research_cln/ngsolve_validation/bem_disk_axisym_cauer_python_results.json",
+      "validation_test/axifem/research/verification/test_hiruma_disk_q1.py",
+      "validation_test/axifem/research/verification/test_hiruma_disk_q2.py"
+    ],
+    "bem_first_cauer_time_constant_us": 219.31648667949523,
+    "bem_first_modal_time_constant_us": 224.3070587702379,
+    "rows": [
+      {
+        "element_family": "Q1",
+        "mesh": {
+          "ne": 15170,
+          "ndof": 15438,
+          "free": 14904
+        },
+        "first_cauer_time_constant_us": 218.05214678731102,
+        "first_cauer_abs_error_pct": 0.5764910387388669,
+        "first_eigen_time_constant_us": 223.06284696454776,
+        "first_eigen_abs_error_pct": 0.5546913291590161
+      },
+      {
+        "element_family": "Q2",
+        "mesh": {
+          "ne": 2530,
+          "ndof": 10323,
+          "free": 9919
+        },
+        "first_cauer_time_constant_us": 218.7075714325328,
+        "first_cauer_abs_error_pct": 0.277642258537673,
+        "first_eigen_time_constant_us": 223.69297621686184,
+        "first_eigen_abs_error_pct": 0.27376871541303893
+      }
+    ],
+    "timing_s": {
+      "q1": 1.3918164999922737,
+      "q2": 0.9805497999768704,
+      "total": 2.3725097000133246
+    }
+  },
+  "positive_h_refinement": [
+    {
+      "maxh_m": 0.003,
+      "mesh": {
+        "elements": 203,
+        "vertices": 91,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 1372
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 115
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.1848211765966119e-15,
+        "hmatrix_compression": 0.4879941274964207
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          433.2848257069154,
+          222.0554233866538,
+          99.85078377152409,
+          85.73173003781467,
+          54.62754348372595,
+          38.74041762478706,
+          32.19091920857144,
+          26.740971351306026,
+          10.573711426712002,
+          9.445524959741824,
+          8.746358860449325,
+          4.475117136849894
+        ],
+        "port_residues_in_tau_order": [
+          1.0271440666211509e-11,
+          0.00040117363042226463,
+          6.284377525138292e-09,
+          3.2643966553988545e-05,
+          4.058842807383359e-09,
+          7.664196058864025e-06,
+          1.6122551622743906e-06,
+          1.7020800727803254e-06,
+          1.8677046324810075e-07,
+          9.043112581850542e-08,
+          1.2727066079991694e-07,
+          1.4587806694843217e-07
+        ],
+        "port_dominant_time_constant_us": 222.0554233866538,
+        "port_dominant_residue_fraction": 0.9007914587270063,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 1.0038183354231698,
+        "minimum_resistance_eigenvalue": 1.724137931034318e-08,
+        "minimum_inductance_eigenvalue": 7.715719201465322e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.027902500005438924,
+        "parent_assembly_and_reduction": 0.3628053999855183,
+        "epsilon_free_vim_interaction": 1.3286842000088654,
+        "cln_and_modal_spectrum": 0.4425078999483958,
+        "total": 2.190068700001575
+      }
+    },
+    {
+      "maxh_m": 0.002,
+      "mesh": {
+        "elements": 444,
+        "vertices": 180,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 2933
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 267
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.219188316688394e-15,
+        "hmatrix_compression": 0.2507089014690366
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          334.9156712117622,
+          224.27704100602028,
+          86.83722409161527,
+          78.05452639227082,
+          45.73253175990746,
+          39.178320550661624,
+          26.980799278861703,
+          18.583878134746953,
+          10.597402284893374,
+          5.753552320436974,
+          5.2313119604399665,
+          4.170157623545175
+        ],
+        "port_residues_in_tau_order": [
+          6.810921441936321e-11,
+          0.00040559370194517456,
+          3.108175906780702e-05,
+          7.740432529360697e-07,
+          2.403933664460796e-07,
+          8.912740475196047e-06,
+          7.640394742364956e-07,
+          7.282431107379942e-07,
+          1.107441440694816e-06,
+          1.2644091649700702e-08,
+          9.667087449120549e-09,
+          1.066719055472333e-07
+        ],
+        "port_dominant_time_constant_us": 224.27704100602028,
+        "port_dominant_residue_fraction": 0.902660463780937,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 0.013382442969996593,
+        "minimum_resistance_eigenvalue": 1.7241379310344316e-08,
+        "minimum_inductance_eigenvalue": 7.189926937146863e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.10869790002470836,
+        "parent_assembly_and_reduction": 1.2167633999488316,
+        "epsilon_free_vim_interaction": 2.490439700020943,
+        "cln_and_modal_spectrum": 0.07229490001918748,
+        "total": 3.92173439997714
+      }
+    },
+    {
+      "maxh_m": 0.0015,
+      "mesh": {
+        "elements": 819,
+        "vertices": 316,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 5349
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 507
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.2546572124643163e-15,
+        "hmatrix_compression": 0.1375221576686778
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          225.4400265032261,
+          174.41560344761476,
+          87.91392965698776,
+          77.29966731965732,
+          50.66700592858156,
+          41.56492071968902,
+          36.108363506539945,
+          11.647035654591104,
+          6.939473301451849,
+          3.708121941525781,
+          3.530600950227708,
+          3.3459964935440873
+        ],
+        "port_residues_in_tau_order": [
+          0.00040755870069668636,
+          5.958019768703387e-08,
+          3.232990517150208e-05,
+          1.2307041108953529e-07,
+          2.055996922669473e-07,
+          5.914245245973328e-06,
+          3.7935557903700885e-06,
+          1.8710743255498469e-06,
+          1.3362129226121562e-07,
+          1.6378275045973927e-09,
+          1.4976170962900142e-07,
+          3.2989906066520986e-09
+        ],
+        "port_dominant_time_constant_us": 225.4400265032261,
+        "port_dominant_residue_fraction": 0.9013912700582758,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 0.5050967808145268,
+        "minimum_resistance_eigenvalue": 1.7241379310344478e-08,
+        "minimum_inductance_eigenvalue": 5.768959471627745e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.12812820001272485,
+        "parent_assembly_and_reduction": 4.226721899991389,
+        "epsilon_free_vim_interaction": 10.950986799958628,
+        "cln_and_modal_spectrum": 0.43615830002818257,
+        "total": 15.86707189999288
+      }
+    },
+    {
+      "maxh_m": 0.001,
+      "mesh": {
+        "elements": 2225,
+        "vertices": 806,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 14330
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 1426
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.273926760414733e-15,
+        "hmatrix_compression": 0.05690660270167908
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          399.8734541451676,
+          221.1840390697895,
+          87.58039062288017,
+          83.01892240846998,
+          60.53478905557755,
+          42.048505209704174,
+          26.63607108127613,
+          13.109991456636408,
+          6.091050858499494,
+          3.5040675241818438,
+          3.0194936743295,
+          2.298383393546707
+        ],
+        "port_residues_in_tau_order": [
+          9.908427838382842e-11,
+          0.0004058266874346843,
+          3.0020180894536496e-05,
+          6.043080265113929e-06,
+          8.732506852760335e-08,
+          8.272868056279594e-06,
+          1.952563168744924e-06,
+          9.140561336422201e-07,
+          9.309386051757199e-07,
+          2.8991115932275937e-07,
+          7.518876320723015e-09,
+          1.6791581340638956e-08
+        ],
+        "port_dominant_time_constant_us": 221.1840390697895,
+        "port_dominant_residue_fraction": 0.8931791595207512,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 1.3922966658161953,
+        "minimum_resistance_eigenvalue": 1.7241379310343178e-08,
+        "minimum_inductance_eigenvalue": 3.962729988873695e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.4575808999943547,
+        "parent_assembly_and_reduction": 6.63045300001977,
+        "epsilon_free_vim_interaction": 14.29173830000218,
+        "cln_and_modal_spectrum": 0.17118969996226951,
+        "total": 21.88143960002344
+      }
+    }
+  ],
+  "positive_p_refinement": [
+    {
+      "maxh_m": 0.002,
+      "mesh": {
+        "elements": 444,
+        "vertices": 180,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 1,
+        "ndof": 801
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 267
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 4.487422511959649e-16,
+        "hmatrix_compression": 0.6293523252982712
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          513.0852301185089,
+          220.49319617919687,
+          189.54919791929166,
+          119.74733462405014,
+          87.53738551481915,
+          82.06073097704085,
+          50.4842431216302,
+          47.13594681609223,
+          39.50797554789347,
+          21.50335759305369,
+          15.158932063905,
+          5.2841126932387406
+        ],
+        "port_residues_in_tau_order": [
+          3.9778166082301263e-13,
+          0.00040712949694952493,
+          1.053702397382993e-11,
+          1.129029532581234e-09,
+          4.778962955044508e-08,
+          3.062073720717125e-05,
+          1.291180504048859e-07,
+          1.7660572747927647e-07,
+          6.741902639072158e-06,
+          5.966691823058875e-10,
+          1.587040462996716e-06,
+          9.037706043784451e-12
+        ],
+        "port_dominant_time_constant_us": 220.49319617919687,
+        "port_dominant_residue_fraction": 0.9119580924124912,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 1.700286478700445,
+        "minimum_resistance_eigenvalue": 1.7241379310343886e-08,
+        "minimum_inductance_eigenvalue": 9.11053912627382e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.09909430000698194,
+        "parent_assembly_and_reduction": 1.4521498999674805,
+        "epsilon_free_vim_interaction": 2.333788599993568,
+        "cln_and_modal_spectrum": 0.042245700024068356,
+        "total": 3.954619499971159
+      }
+    },
+    {
+      "maxh_m": 0.002,
+      "mesh": {
+        "elements": 444,
+        "vertices": 180,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 2933
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 267
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.219188316688394e-15,
+        "hmatrix_compression": 0.2507089014690366
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          334.9156712117622,
+          224.27704100602028,
+          86.83722409161527,
+          78.05452639227082,
+          45.73253175990746,
+          39.178320550661624,
+          26.980799278861703,
+          18.583878134746953,
+          10.597402284893374,
+          5.753552320436974,
+          5.2313119604399665,
+          4.170157623545175
+        ],
+        "port_residues_in_tau_order": [
+          6.810921441936321e-11,
+          0.00040559370194517456,
+          3.108175906780702e-05,
+          7.740432529360697e-07,
+          2.403933664460796e-07,
+          8.912740475196047e-06,
+          7.640394742364956e-07,
+          7.282431107379942e-07,
+          1.107441440694816e-06,
+          1.2644091649700702e-08,
+          9.667087449120549e-09,
+          1.066719055472333e-07
+        ],
+        "port_dominant_time_constant_us": 224.27704100602028,
+        "port_dominant_residue_fraction": 0.902660463780937,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 0.013382442969996593,
+        "minimum_resistance_eigenvalue": 1.7241379310344316e-08,
+        "minimum_inductance_eigenvalue": 7.189926937146863e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.10869790002470836,
+        "parent_assembly_and_reduction": 1.2167633999488316,
+        "epsilon_free_vim_interaction": 2.490439700020943,
+        "cln_and_modal_spectrum": 0.07229490001918748,
+        "total": 3.92173439997714
+      }
+    },
+    {
+      "maxh_m": 0.002,
+      "mesh": {
+        "elements": 444,
+        "vertices": 180,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 3,
+        "ndof": 7463
+      },
+      "training": {
+        "kind": "polynomial",
+        "port_count": 4,
+        "krylov_steps": 3,
+        "vector_potentials": [
+          "A_uniform",
+          "r2_A",
+          "r4_A",
+          "z2_A"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 12,
+        "current_gram_rank": 12,
+        "conductive_cycle_rank": 267
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 5.716769253709423e-15,
+        "hmatrix_compression": 0.09737034331628926
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          223.40031251285063,
+          86.26230895994733,
+          54.07008570728044,
+          42.05402165559346,
+          35.47474309901291,
+          22.184055648193052,
+          15.617464416748412,
+          7.738604808850837,
+          5.920328303894014,
+          4.614454483516292,
+          3.950538739605545,
+          2.6663644131503252
+        ],
+        "port_residues_in_tau_order": [
+          0.00040436696892816147,
+          3.3108352959101076e-05,
+          7.610720193373798e-08,
+          1.1866028651305791e-06,
+          8.785977756082058e-06,
+          7.725057803595989e-09,
+          7.704933579907367e-09,
+          1.2865378100499201e-06,
+          5.047176724956943e-07,
+          1.5297781517485873e-10,
+          5.615460665531585e-10,
+          3.6188675745935842e-12
+        ],
+        "port_dominant_time_constant_us": 223.40031251285063,
+        "port_dominant_residue_fraction": 0.8999303341246823,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 0.40424330039299056,
+        "minimum_resistance_eigenvalue": 1.724137931034444e-08,
+        "minimum_inductance_eigenvalue": 4.597180022673034e-14,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.04712260002270341,
+        "parent_assembly_and_reduction": 0.8406594999833032,
+        "epsilon_free_vim_interaction": 22.82312070002081,
+        "cln_and_modal_spectrum": 0.059444100013934076,
+        "total": 23.800123499997426
+      }
+    }
+  ],
+  "single_port_negative_control": [
+    {
+      "maxh_m": 0.002,
+      "mesh": {
+        "elements": 444,
+        "vertices": 180,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 2933
+      },
+      "training": {
+        "kind": "uniform",
+        "port_count": 1,
+        "krylov_steps": 8,
+        "vector_potentials": [
+          "A_uniform"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 6,
+        "current_gram_rank": 6,
+        "conductive_cycle_rank": 267
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.12336238994129e-15,
+        "hmatrix_compression": 0.25082937667397126
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          495.78509272733515,
+          212.03109571397542,
+          183.01999289073893,
+          58.74923270827994,
+          24.94119259152852,
+          12.071796213685731
+        ],
+        "port_residues_in_tau_order": [
+          1.4024435782760541e-12,
+          0.0004419668845695769,
+          4.19128350445178e-08,
+          8.85550942900129e-08,
+          2.597885595844681e-06,
+          4.636173829890042e-06
+        ],
+        "port_dominant_time_constant_us": 212.03109571397542,
+        "port_dominant_residue_fraction": 0.9836100291698238,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 5.472838493610216,
+        "minimum_resistance_eigenvalue": 1.7241379310344733e-08,
+        "minimum_inductance_eigenvalue": 2.0813441747733933e-13,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.053694500005804,
+        "parent_assembly_and_reduction": 0.5132866000058129,
+        "epsilon_free_vim_interaction": 1.9075443999608979,
+        "cln_and_modal_spectrum": 0.02926749998005107,
+        "total": 2.5239216000190936
+      }
+    },
+    {
+      "maxh_m": 0.002,
+      "mesh": {
+        "elements": 444,
+        "vertices": 180,
+        "curve_order": 1,
+        "cell_family": "tet"
+      },
+      "parent": {
+        "family": "HCurl",
+        "order": 2,
+        "ndof": 2933
+      },
+      "training": {
+        "kind": "uniform",
+        "port_count": 1,
+        "krylov_steps": 16,
+        "vector_potentials": [
+          "A_uniform"
+        ]
+      },
+      "reduction": {
+        "kind": "EddyBubbleHCurlBasis",
+        "rank": 7,
+        "current_gram_rank": 7,
+        "conductive_cycle_rank": 267
+      },
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "projection_relative_residual": 1.1178835870745049e-15,
+        "hmatrix_compression": 0.25055925858290723
+      },
+      "modal": {
+        "time_constants_us_descending": [
+          495.66551060797946,
+          212.83468478284473,
+          195.28471971352914,
+          108.18349534161057,
+          43.20056589801687,
+          17.732888592712023,
+          9.434581289420521
+        ],
+        "port_residues_in_tau_order": [
+          1.679897843105601e-12,
+          0.0004419340992224883,
+          3.940529236991263e-08,
+          4.4731411529940076e-08,
+          5.573130122182796e-07,
+          4.713799316269401e-06,
+          2.042063392315819e-06
+        ],
+        "port_dominant_time_constant_us": 212.83468478284473,
+        "port_dominant_residue_fraction": 0.9835370644357412,
+        "reference_leading_time_constant_us": 224.3070587702379,
+        "port_dominant_abs_error_pct": 5.11458446751091,
+        "minimum_resistance_eigenvalue": 1.7241379310344485e-08,
+        "minimum_inductance_eigenvalue": 1.626651946451806e-13,
+        "resistance_hermitian_error": 0.0,
+        "inductance_hermitian_error": 0.0
+      },
+      "timing_s": {
+        "mesh": 0.05275969998911023,
+        "parent_assembly_and_reduction": 0.5674554000142962,
+        "epsilon_free_vim_interaction": 1.919885199982673,
+        "cln_and_modal_spectrum": 0.03159420000156388,
+        "total": 2.591993600013666
+      }
+    }
+  ],
+  "checks": {
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "axifem_q1_q2_first_eigen_below_0_6_percent": true,
+    "axifem_q1_q2_first_cauer_below_0_6_percent": true,
+    "polynomial_h_sweep_all_below_2_percent": true,
+    "polynomial_p1_p2_p3_all_below_2_percent": true,
+    "h_refinement_change_below_5_percent": true,
+    "single_port_remains_above_4_percent_at_steps_8_and_16": true,
+    "polynomial_basis_improves_at_least_3_percentage_points": true,
+    "epsilon_free_projection_below_1e_9": true,
+    "all_reduced_cln_models_are_passive": true,
+    "validation_passed": true
+  },
+  "tolerances": {
+    "axifem_first_mode_error_pct": 0.6,
+    "hcurl_port_dominant_error_pct": 2.0,
+    "h_refinement_change_fraction": 0.05,
+    "single_port_expected_error_floor_pct": 4.0,
+    "projection_relative_residual": 1e-09,
+    "passive_minimum_eigenvalue": -1e-12
+  },
+  "errors": {
+    "maximum_relative": 0.01700286478700445,
+    "maximum_absolute": 3.8138625910410155,
+    "best_polynomial_error_pct": 0.013382442969996593,
+    "best_single_port_error_pct": 5.11458446751091,
+    "h_refinement_change_fraction": 0.01924183793430835,
+    "projection_relative_residual": 5.716769253709423e-15
+  },
+  "tool_versions": {
+    "python": "3.12.10",
+    "radia": "4.95.40",
+    "ngsolve": "6.2.2604",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  },
+  "timing_breakdown_s": {
+    "axisymmetric_axifem_reference": 2.3725097000133246,
+    "positive_h_refinement": 43.860314599995036,
+    "p_order_additional_runs": 27.754742999968585,
+    "single_port_negative_controls": 5.1159152000327595,
+    "total": 79.15264320001006
+  },
+  "claim_boundary": {
+    "proves": [
+      "the leading disk diffusion pole is reproduced by the 3-D HCurl eddy-bubble path under the recorded h and p gates",
+      "spatial response-basis enrichment is required for this port observable",
+      "the reduced resistance-inductance models are passive"
+    ],
+    "does_not_prove": [
+      "universal accuracy for arbitrary conductor topology or strong-skin frequency",
+      "that spatial mesh refinement can repair an incomplete response basis",
+      "replacement of charged-particle tracking workflows"
+    ]
+  },
+  "verification": {
+    "method": "live Q1/Q2 axisymmetric solves plus an independent BEM modal reference, followed by 3-D HCurl h/p and negative-control runs",
+    "command": "python $env:USERPROFILE/.codex/skills/solver-run-verify/scripts/validate_solver_run.py validation_test/vim_coupled/results_hcurl_eddy_bubble_disk.json --require-existing-files"
+  }
+}
