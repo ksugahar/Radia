@@ -65,6 +65,34 @@ def test_flux_lines_rejects_invalid_levels(input_file, kwargs, message):
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
+        ({"value": math.inf}, "value must be a finite number"),
+        ({"value": 0.5, "recur_level": -1}, "recur_level must be in"),
+        ({"value": 0.5, "recur_level": 7}, "recur_level must be in"),
+        ({"value": 0.5, "recur_level": 1.5},
+         "recur_level must be an integer"),
+        ({"value": 0.5, "target_error": 0.0},
+         "target_error must be positive"),
+        ({"value": 0.5, "target_error": math.nan},
+         "target_error must be a finite number"),
+    ],
+)
+def test_isosurface_rejects_invalid_adaptive_controls(input_file, kwargs,
+                                                       message):
+    result = post_process.isosurface(input_file, **kwargs)
+    assert result["ok"] is False
+    assert message in result["error"]
+
+
+def test_flux_lines_rejects_invalid_adaptive_controls(input_file):
+    result = post_process.flux_lines(
+        input_file, levels=[0.5], recur_level=99)
+    assert result == {"ok": False,
+                      "error": "recur_level must be in [0, 6]"}
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
         ({"d_sep": 0.0}, "d_sep must be positive"),
         ({"d_sep": 1.0, "d_test": 1.1},
          "d_test must not exceed d_sep"),

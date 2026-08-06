@@ -1165,6 +1165,20 @@ def _finite_vector(value: Any, name: str, size: int) -> list[float]:
     return clean
 
 
+def _adaptive_extraction_controls(recur_level: Any,
+                                  target_error: Any) -> tuple[int, float]:
+    level_value = _finite_float(recur_level, "recur_level")
+    if not level_value.is_integer():
+        raise ValueError("recur_level must be an integer")
+    level = int(level_value)
+    if not 0 <= level <= 6:
+        raise ValueError("recur_level must be in [0, 6]")
+    error = _finite_float(target_error, "target_error")
+    if error <= 0.0:
+        raise ValueError("target_error must be positive")
+    return level, error
+
+
 def _default_out(path: str | Path, out_file: str | Path | None,
                  suffix: str) -> str:
     if out_file is not None:
@@ -1275,7 +1289,7 @@ def isosurface(path: str | Path, value: float, *,
                timeout_s: float = 300.0) -> dict[str, Any]:
     """Extract the isosurface of a scalar view and save it.
 
-    ``recur_level > 0`` enables ADAPTIVE extraction on high-order data
+    ``0 < recur_level <= 6`` enables ADAPTIVE extraction on high-order data
     (order-2 NodeData from GmshPostExport): each element is recursively
     subdivided using the actual high-order interpolant, so the surface
     follows the curved field instead of the P1 chord (measured on a
@@ -1285,10 +1299,16 @@ def isosurface(path: str | Path, value: float, *,
     err = _check_input(path)
     if err:
         return err
+    try:
+        clean_value = _finite_float(value, "value")
+        clean_level, clean_error = _adaptive_extraction_controls(
+            recur_level, target_error)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     return _run_post({"op": "isosurface", "path": str(path), "view": view,
-                      "value": float(value),
-                      "recur_level": int(recur_level),
-                      "target_error": float(target_error),
+                      "value": clean_value,
+                      "recur_level": clean_level,
+                      "target_error": clean_error,
                       "out_file": _default_out(path, out_file, "iso")},
                      timeout_s)
 
@@ -1415,6 +1435,11 @@ def flux_lines(path: str | Path, *, n_levels: int = 20,
     err = _check_input(path)
     if err:
         return err
+    try:
+        clean_level, clean_error = _adaptive_extraction_controls(
+            recur_level, target_error)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     if levels is not None:
         try:
             levels = [_finite_float(lv, "levels") for lv in levels]
@@ -1430,8 +1455,8 @@ def flux_lines(path: str | Path, *, n_levels: int = 20,
         return {"ok": False, "error": "result_name must not be empty"}
     return _run_post({"op": "flux_lines", "path": str(path), "view": view,
                       "n_levels": int(n_levels), "levels": levels,
-                      "recur_level": int(recur_level),
-                      "target_error": float(target_error),
+                      "recur_level": clean_level,
+                      "target_error": clean_error,
                       "result_name": str(result_name),
                       "out_file": _default_out(path, out_file, "flux")},
                      timeout_s)

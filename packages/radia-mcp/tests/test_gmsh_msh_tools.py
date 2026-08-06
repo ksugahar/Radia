@@ -9,16 +9,17 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-
 from radia_mcp.gmsh.msh_inspect import (
     ELEMENT_TYPES,
     audit_msh_directory,
     diff_msh,
     field_stats,
     inspect_msh,
-    main as msh_inspect_main,
     validate_geo,
     validate_msh,
+)
+from radia_mcp.gmsh.msh_inspect import (
+    main as msh_inspect_main,
 )
 
 _GMSH_AVAILABLE = importlib.util.find_spec("gmsh") is not None
@@ -791,6 +792,51 @@ def test_lint_fixture_clean_script_has_no_gmsh_findings():
 # ======================================================================
 # Headless rendering (needs gmsh + an FLTK graphics context)
 # ======================================================================
+
+def test_render_mcp_tools_forward_visual_controls(tmp_path, monkeypatch):
+    from radia_mcp.gmsh import server
+
+    source = tmp_path / "case.msh"
+    source.write_text("placeholder", encoding="ascii")
+    captured = {}
+
+    def fake_render(*args, **kwargs):
+        captured["render"] = (args, kwargs)
+        return {"ok": True}
+
+    def fake_animation(*args, **kwargs):
+        captured["animation"] = (args, kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(server, "render_png", fake_render)
+    monkeypatch.setattr(server, "export_animation", fake_animation)
+    options = {"View[0].ColormapAlpha": 0.4}
+    strings = {"View[0].Name": "Saturation front"}
+    cut = {"enabled": True, "normal": [0, -1, 0], "offset": 0}
+
+    server.gmsh_render(
+        str(source), options=options, string_options=strings,
+        cut_plane=cut, adapt_views=False, smooth_normals=False)
+    server.gmsh_export_animation(
+        str(source), options=options, string_options=strings,
+        cut_plane=cut, adapt_views=False, smooth_normals=False,
+        link_views=False)
+
+    render_kwargs = captured["render"][1]
+    assert render_kwargs["options"] == options
+    assert render_kwargs["string_options"] == strings
+    assert render_kwargs["cut_plane"] == cut
+    assert render_kwargs["adapt_views"] is False
+    assert render_kwargs["smooth_normals"] is False
+
+    animation_kwargs = captured["animation"][1]
+    assert animation_kwargs["options"] == options
+    assert animation_kwargs["string_options"] == strings
+    assert animation_kwargs["cut_plane"] == cut
+    assert animation_kwargs["adapt_views"] is False
+    assert animation_kwargs["smooth_normals"] is False
+    assert animation_kwargs["link_views"] is False
+
 
 def _skip_if_no_graphics(result):
     if not result.get("ran"):

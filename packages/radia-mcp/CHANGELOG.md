@@ -22,6 +22,9 @@ crystallized as its own package.
 - Added adaptive RK4 field tracing with closed-loop detection, exact equal-flux
   contours from planar or axisymmetric potentials, and Jobard-Lefer evenly
   spaced streamlines on arbitrary plane patches.
+- Added bounded adaptive isosurface extraction for high-order views and smooth
+  surface normals by default; PNG/GIF MCP tools now expose numeric/string view
+  options, clipping, adaptation, smoothing, and linked-view controls.
 - Made field-line controls reject non-finite or non-physical values before
   launching Gmsh, enforce the 2D integration-step and spacing contract, and
   stop exactly at the configured total-step budget.
