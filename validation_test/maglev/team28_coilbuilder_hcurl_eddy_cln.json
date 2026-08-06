@@ -1,0 +1,114 @@
+{
+  "schema": "radia.hcurl.eddy_cln.exchange.v1",
+  "state_order": 3,
+  "port_count": 1,
+  "input_convention": "u=-d(coil_current)/dt",
+  "force_convention": "F=0.5*real(sum(K(k,a,b)*c(a)*conj(i(b))))",
+  "has_sibc_termination": false,
+  "basis_names": [
+    "volume_current_gram_0",
+    "volume_current_gram_1",
+    "volume_current_gram_2"
+  ],
+  "blocks": {
+    "volume": [
+      0,
+      3
+    ]
+  },
+  "arrays": {
+    "resistance": {
+      "shape": [
+        3,
+        3
+      ],
+      "values": [
+        2.9411764705882344e-08,
+        -1.3367575020762454e-23,
+        1.4005341004577457e-23,
+        -1.3367575020762454e-23,
+        2.9411764705882377e-08,
+        2.653106492670411e-24,
+        1.4005341004577457e-23,
+        2.653106492670411e-24,
+        2.941176470588234e-08
+      ]
+    },
+    "inductance": {
+      "shape": [
+        3,
+        3
+      ],
+      "values": [
+        3.1103503514151746e-11,
+        -1.3332712953410738e-11,
+        -6.178211105580872e-13,
+        -1.3332712953410738e-11,
+        2.6361946419357166e-11,
+        1.1393817421732065e-12,
+        -6.178211105580872e-13,
+        1.1393817421732065e-12,
+        1.0679860377878353e-12
+      ]
+    },
+    "surface_mass": {
+      "shape": [
+        3,
+        3
+      ],
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "port_rhs": {
+      "shape": [
+        3,
+        1
+      ],
+      "values": [
+        -1.4797862778936226e-07,
+        -2.1781066671775884e-08,
+        -9.48001521972503e-09
+      ]
+    },
+    "force_operator": {
+      "shape": [
+        3,
+        3,
+        1
+      ],
+      "values": [
+        -5.754173190651872e-08,
+        -1.404141732387343e-07,
+        -2.8739524465408642e-09,
+        4.042185970755992e-09,
+        8.269078210154489e-09,
+        -5.696212325998815e-11,
+        1.178663844020104e-05,
+        -4.4518277323477245e-06,
+        3.664140567759916e-07
+      ]
+    }
+  },
+  "metadata": {
+    "benchmark": "TEAM 28 electrodynamic levitation",
+    "frequency_hz": 50.0,
+    "coil_current_reference_A": 20.0,
+    "conductivity_S_per_m": 34000000.0,
+    "coil_source": "radia.coil_builder.CoilBuilder",
+    "coil_count": 2,
+    "winding_directions": "counter-wound",
+    "force_operator_units": "N per reduced coefficient and ampere port current",
+    "parent_space": "HCurl",
+    "parent_order": 6
+  },
+  "sample_time_s": 1e-05
+}
