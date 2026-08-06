@@ -2437,6 +2437,147 @@ def convert_sol_to_msh(output_msh,
 # Filament visualization (PEEC sub-filament paths as GMSH line elements)
 # =====================================================================
 
+# Line-element .msh tag offsets.  Element tags start high so filament
+# lines do not collide with the volume-mesh element tags when GMSH
+# merges this file as a sibling overlay (open_gmsh.py auto-merge);
+# without the offset GMSH warns "Skipping duplicate element N" for every
+# line and silently DROPS the filament geometry.
+#
+# ENTITY tags need the same offset: merging a STEP file creates OCC
+# curves with tags 1..N in the same (dim, tag) space, and a discrete
+# curve sharing a tag gets BOUND to the OCC curve as its "mesh" -- gmsh
+# then hard-crashes (0xC000041D) as soon as shaded geometry faces are
+# enabled (Geometry.Surfaces=1 + Geometry.SurfaceType>0).  Measured
+# gmsh 4.15.2; the tag offset resolves it.
+_LINE_ELEM_TAG_OFFSET = 10_000_000
+_LINE_ENT_TAG_OFFSET = 10_000_000
+
+
+def _write_line_element_msh(output_msh, segments, groups, group_names,
+                            element_views=()):
+    """Write 2-node line elements as a GMSH .msh v4.1 post file.
+
+    Shared low-level writer behind ``export_filaments_msh`` (per-filament
+    polylines) and ``export_peec_topology_msh`` (per-segment PEEC
+    branches).  Coincident endpoints are merged into one node so a
+    filament chain renders as a continuous polyline.
+
+    Args:
+        output_msh: output .msh path.
+        segments: list of ((x1,y1,z1), (x2,y2,z2)) endpoint pairs, in
+            the order the elements should be tagged.
+        groups: per-segment 0-based physical-group index.
+        group_names: physical group names, one per group.
+        element_views: iterable of view dicts, each
+            ``{"name": str, "ncomp": 1 or 3, "step": int, "time": float,
+            "values": array of shape (n_seg,) or (n_seg, ncomp)}``.
+            Values are PER ELEMENT (callers expand per-filament data).
+
+    Returns:
+        dict with n_nodes / n_elements / element_tags.
+    """
+    import numpy as np
+
+    n_groups = len(group_names)
+    if len(groups) != len(segments):
+        raise ValueError(
+            f"groups length {len(groups)} != segments length {len(segments)}")
+
+    node_map = {}
+    nodes = []
+
+    def _get_node(pt):
+        key = (round(pt[0], 12), round(pt[1], 12), round(pt[2], 12))
+        if key not in node_map:
+            node_map[key] = len(nodes) + 1  # 1-based
+            nodes.append(key)
+        return node_map[key]
+
+    elements = []          # (tag, group, n1, n2) in `segments` order
+    elem_tag = _LINE_ELEM_TAG_OFFSET
+    for (p1, p2), g in zip(segments, groups):
+        n1 = _get_node(p1)
+        n2 = _get_node(p2)
+        elem_tag += 1
+        elements.append((elem_tag, int(g), n1, n2))
+
+    n_nodes = len(nodes)
+    n_elems = len(elements)
+
+    elems_by_group = [[] for _ in range(n_groups)]
+    for (tag, g, n1, n2) in elements:
+        elems_by_group[g].append((tag, n1, n2))
+
+    with open(output_msh, "w") as f:
+        f.write("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+
+        f.write("$PhysicalNames\n")
+        f.write(f"{n_groups}\n")
+        for k, name in enumerate(group_names):
+            f.write(f'1 {k+1} "{name}"\n')
+        f.write("$EndPhysicalNames\n")
+
+        # One curve entity per group, REAL bounding boxes, tags offset
+        # out of the OCC range (see _LINE_ENT_TAG_OFFSET note).
+        f.write("$Entities\n")
+        f.write(f"0 {n_groups} 0 0\n")   # 0 points, n curves, 0 surf, 0 vol
+        for k in range(n_groups):
+            gnodes = {n for (_t, a, b) in elems_by_group[k] for n in (a, b)}
+            pts = [nodes[n - 1] for n in gnodes]
+            if pts:
+                lo = [min(p[i] for p in pts) for i in range(3)]
+                hi = [max(p[i] for p in pts) for i in range(3)]
+            else:
+                lo = hi = [0.0, 0.0, 0.0]
+            f.write(f"{k + 1 + _LINE_ENT_TAG_OFFSET} "
+                    f"{lo[0]:.9e} {lo[1]:.9e} {lo[2]:.9e} "
+                    f"{hi[0]:.9e} {hi[1]:.9e} {hi[2]:.9e} 1 {k+1} 0\n")
+        f.write("$EndEntities\n")
+
+        # Nodes (one block, all nodes, on the first curve entity)
+        f.write("$Nodes\n")
+        f.write(f"1 {n_nodes} 1 {n_nodes}\n")
+        f.write(f"1 {1 + _LINE_ENT_TAG_OFFSET} 0 {n_nodes}\n")
+        for i in range(n_nodes):
+            f.write(f"{i+1}\n")
+        for (x, y, z) in nodes:
+            f.write(f"{x:.15e} {y:.15e} {z:.15e}\n")
+        f.write("$EndNodes\n")
+
+        # Elements (one block per group)
+        f.write("$Elements\n")
+        min_tag = _LINE_ELEM_TAG_OFFSET + 1
+        f.write(f"{n_groups} {n_elems} {min_tag} {elem_tag}\n")
+        for k in range(n_groups):
+            es = elems_by_group[k]
+            # dim=1, entityTag (offset), elemType=1 (2-node line), count
+            f.write(f"1 {k + 1 + _LINE_ENT_TAG_OFFSET} 1 {len(es)}\n")
+            for (tag, n1, n2) in es:
+                f.write(f"{tag} {n1} {n2}\n")
+        f.write("$EndElements\n")
+
+        for view in element_views:
+            ncomp = int(view["ncomp"])
+            vals = np.asarray(view["values"], dtype=np.float64)
+            if ncomp == 1:
+                vals = vals.reshape(-1, 1)
+            if vals.shape != (n_elems, ncomp):
+                raise ValueError(
+                    f"view {view['name']!r}: values shape {vals.shape} "
+                    f"!= expected ({n_elems}, {ncomp})")
+            step = int(view.get("step", 0))
+            f.write("$ElementData\n")
+            f.write(f'1\n"{view["name"]}"\n')
+            f.write(f"1\n{float(view.get('time', step)):g}\n")
+            f.write(f"3\n{step}\n{ncomp}\n{n_elems}\n")
+            for (tag, _g, _n1, _n2), row in zip(elements, vals):
+                f.write(f"{tag} " + " ".join(f"{v:.6e}" for v in row) + "\n")
+            f.write("$EndElementData\n")
+
+    return {"n_nodes": n_nodes, "n_elements": n_elems,
+            "element_tags": [e[0] for e in elements]}
+
+
 def export_filaments_msh(filament_paths, output_msh, *,
                          currents=None, label="filament",
                          direction_view=False,
@@ -2471,9 +2612,11 @@ def export_filaments_msh(filament_paths, output_msh, *,
             Written as |I| ElementData.
         direction_view: if True (and currents given), additionally
             write an "I direction" vector ElementData view: the unit
-            tangent of every line element scaled by |I| of its
-            filament.  Rendered as arrows by gmsh (View.VectorType),
-            this shows the CURRENT FLOW direction along the winding.
+            tangent of every line element scaled by the SIGNED current
+            Re(I) of its filament.  Rendered as arrows by gmsh
+            (View.VectorType), this shows the CURRENT FLOW direction
+            along the winding, and a filament carrying reverse current
+            points backwards (the |I| view cannot show that).
         complex_steps: if True (and currents are complex), additionally
             write an "I_complex" ElementData view with TWO time steps
             (step 0 = Re I, step 1 = Im I).  This is the
@@ -2604,152 +2747,263 @@ def export_filaments_msh(filament_paths, output_msh, *,
             filament_paths_viz.append(new_path)
         filament_paths = filament_paths_viz
 
-    # Collect unique nodes and build element connectivity
-    node_map = {}   # (x,y,z) rounded -> node_id (1-based)
-    nodes = []      # [(x, y, z), ...]
-    elements = []   # [(tag, phys_group, n1, n2), ...]
-
-    def _get_node(pt):
-        key = (round(pt[0], 12), round(pt[1], 12), round(pt[2], 12))
-        if key not in node_map:
-            nid = len(nodes) + 1  # 1-based
-            node_map[key] = nid
-            nodes.append(key)
-        return node_map[key]
-
-    # Per-filament physical groups.  Element tags start at a high
-    # offset so the filament lines don't collide with the volume-mesh
-    # element tags when GMSH merges this file as a sibling overlay
-    # (open_gmsh.py auto-merge).  Without the offset, GMSH's merge
-    # warns "Skipping duplicate element N" for every line and silently
-    # DROPS the filament geometry, leaving the panel user with an
-    # empty filament view.
-    #
-    # ENTITY tags need the same offset: merging a STEP file creates
-    # OCC curves with tags 1..N in the same (dim, tag) space, and a
-    # discrete curve sharing a tag gets BOUND to the OCC curve as its
-    # "mesh" -- gmsh then hard-crashes (0xC000041D) as soon as shaded
-    # geometry faces are enabled (Geometry.Surfaces=1 +
-    # Geometry.SurfaceType>0).  Measured gmsh 4.15.2; the tag offset
-    # resolves it.
-    ELEM_TAG_OFFSET = 10_000_000
-    ENT_TAG_OFFSET = 10_000_000
-    elem_tag = ELEM_TAG_OFFSET
-
+    # Flatten the polylines into per-element segments; the physical
+    # group of an element is its filament index.
+    n_fil = len(filament_paths)
+    segments = []
+    groups = []
     for k, path in enumerate(filament_paths):
-        phys = k + 1  # 1-based physical group
-        for (p1, p2) in path:
-            n1 = _get_node(p1)
-            n2 = _get_node(p2)
-            elem_tag += 1
-            elements.append((elem_tag, phys, n1, n2))
+        for seg in path:
+            segments.append(seg)
+            groups.append(k)
+    group_names = [f"{label}_{k}" for k in range(n_fil)]
+    n_elems = len(segments)
 
-    n_nodes = len(nodes)
-    n_elems = len(elements)
+    views = []
+    if currents is not None:
+        I_arr = np.asarray(currents)
+        g_idx = np.asarray(groups, dtype=int)
+        I_abs_el = np.abs(I_arr)[g_idx]
+        views.append({"name": "|I| [A]", "ncomp": 1, "step": 0,
+                      "time": 0.0, "values": I_abs_el})
 
-    with open(output_msh, "w") as f:
-        # Header
-        f.write("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+        if direction_view:
+            # unit tangent x Re(I): SIGNED arrows, so a filament that
+            # carries reverse current points backwards (|I| cannot show
+            # that -- see the export_peec_topology_msh note).
+            I_signed_el = np.real(I_arr)[g_idx]
+            tang = np.zeros((n_elems, 3), dtype=np.float64)
+            for i, (p1, p2) in enumerate(segments):
+                t = np.asarray(p2, dtype=np.float64) - np.asarray(
+                    p1, dtype=np.float64)
+                norm = float(np.linalg.norm(t))
+                if norm >= 1e-30:
+                    tang[i] = (t / norm) * float(I_signed_el[i])
+            views.append({"name": "I direction [A]", "ncomp": 3, "step": 0,
+                          "time": 0.0, "values": tang})
 
-        # Physical names
-        f.write("$PhysicalNames\n")
-        f.write(f"{n_fil}\n")
-        for k in range(n_fil):
-            f.write(f'1 {k+1} "{label}_{k}"\n')
-        f.write("$EndPhysicalNames\n")
+        if complex_steps:
+            # two-step re/im view: feeds gmsh harmonic-to-time /
+            # modulus-phase post (AC current animation)
+            for step, part in ((0, I_arr.real), (1, I_arr.imag)):
+                views.append({"name": "I_complex [A]", "ncomp": 1,
+                              "step": step, "time": float(step),
+                              "values": np.asarray(part)[g_idx]})
 
-        # Entities: one curve entity per filament, REAL bounding boxes,
-        # tags offset out of the OCC range (see ENT_TAG_OFFSET note).
-        elems_by_fil = [[] for _ in range(n_fil)]
-        for (tag, phys, n1, n2) in elements:
-            elems_by_fil[phys - 1].append((tag, n1, n2))
-
-        f.write("$Entities\n")
-        f.write(f"0 {n_fil} 0 0\n")  # 0 points, n_fil curves, 0 surfs, 0 vols
-        for k in range(n_fil):
-            fil_node_ids = {n for (_t, a, b) in elems_by_fil[k]
-                            for n in (a, b)}
-            pts = [nodes[n - 1] for n in fil_node_ids]
-            if pts:
-                lo = [min(p[i] for p in pts) for i in range(3)]
-                hi = [max(p[i] for p in pts) for i in range(3)]
-            else:
-                lo = hi = [0.0, 0.0, 0.0]
-            f.write(f"{k + 1 + ENT_TAG_OFFSET} "
-                    f"{lo[0]:.9e} {lo[1]:.9e} {lo[2]:.9e} "
-                    f"{hi[0]:.9e} {hi[1]:.9e} {hi[2]:.9e} 1 {k+1} 0\n")
-        f.write("$EndEntities\n")
-
-        # Nodes (one block, all nodes, on the first filament entity)
-        f.write("$Nodes\n")
-        f.write(f"1 {n_nodes} 1 {n_nodes}\n")  # 1 entity block
-        f.write(f"1 {1 + ENT_TAG_OFFSET} 0 {n_nodes}\n")
-        for i in range(n_nodes):
-            f.write(f"{i+1}\n")
-        for (x, y, z) in nodes:
-            f.write(f"{x:.15e} {y:.15e} {z:.15e}\n")
-        f.write("$EndNodes\n")
-
-        # Elements (one block per filament)
-        f.write("$Elements\n")
-        # GMSH 4.1: numEntityBlocks numElements minTag maxTag
-        min_tag = ELEM_TAG_OFFSET + 1
-        max_tag = elem_tag  # last assigned
-        f.write(f"{n_fil} {n_elems} {min_tag} {max_tag}\n")
-        for k in range(n_fil):
-            es = elems_by_fil[k]
-            # dim=1, entityTag (offset), elemType=1 (2-node line), numElems
-            f.write(f"1 {k + 1 + ENT_TAG_OFFSET} 1 {len(es)}\n")
-            for (tag, n1, n2) in es:
-                f.write(f"{tag} {n1} {n2}\n")
-        f.write("$EndElements\n")
-
-        # ElementData: |I| per line element (no node-sharing ambiguity)
-        if I_arr is not None:
-            I_abs = np.abs(I_arr)
-            f.write("$ElementData\n")
-            f.write('1\n"|I| [A]"\n')  # 1 string tag
-            f.write("1\n0.0\n")         # 1 real tag (time=0)
-            f.write(f"3\n0\n1\n{n_elems}\n")  # step=0, 1 comp, n elems
-            for (tag, phys, n1, n2) in elements:
-                k = phys - 1  # filament index (0-based)
-                f.write(f"{tag} {float(I_abs[k]):.6e}\n")
-            f.write("$EndElementData\n")
-
-            if direction_view:
-                # unit tangent x |I| per element: arrows show the flow
-                f.write("$ElementData\n")
-                f.write('1\n"I direction [A]"\n')
-                f.write("1\n0.0\n")
-                f.write(f"3\n0\n3\n{n_elems}\n")
-                for (tag, phys, n1, n2) in elements:
-                    k = phys - 1
-                    p1 = np.asarray(nodes[n1 - 1], dtype=np.float64)
-                    p2 = np.asarray(nodes[n2 - 1], dtype=np.float64)
-                    t = p2 - p1
-                    norm = float(np.linalg.norm(t))
-                    if norm < 1e-30:
-                        vx = vy = vz = 0.0
-                    else:
-                        vx, vy, vz = (t / norm) * float(I_abs[k])
-                    f.write(f"{tag} {vx:.6e} {vy:.6e} {vz:.6e}\n")
-                f.write("$EndElementData\n")
-
-            if complex_steps:
-                # two-step re/im view: feeds gmsh harmonic-to-time /
-                # modulus-phase post (AC current animation)
-                for step, part in ((0, I_arr.real), (1, I_arr.imag)):
-                    f.write("$ElementData\n")
-                    f.write('1\n"I_complex [A]"\n')
-                    f.write(f"1\n{float(step)}\n")
-                    f.write(f"3\n{step}\n1\n{n_elems}\n")
-                    for (tag, phys, n1, n2) in elements:
-                        k = phys - 1
-                        f.write(f"{tag} {float(part[k]):.6e}\n")
-                    f.write("$EndElementData\n")
+    info = _write_line_element_msh(output_msh, segments, groups,
+                                   group_names, views)
 
     print(f"export_filaments_msh: {output_msh}")
-    print(f"  {n_fil} filaments, {n_elems} line elements, {n_nodes} nodes")
-    if I_arr is not None:
-        print(f"  |I| range: [{float(np.min(np.abs(I_arr))):.3e}, "
-              f"{float(np.max(np.abs(I_arr))):.3e}] A")
+    print(f"  {n_fil} filaments, {info['n_elements']} line elements, "
+          f"{info['n_nodes']} nodes")
+    if currents is not None:
+        print(f"  |I| range: [{float(np.min(np.abs(currents))):.3e}, "
+              f"{float(np.max(np.abs(currents))):.3e}] A")
+
+
+def export_peec_topology_msh(topology, output_msh, *,
+                             currents=None, Zs=None,
+                             current_convention="amplitude",
+                             groups=None, group_names=None,
+                             label="peec",
+                             direction_view=False, complex_steps=False):
+    """Export a solved PEEC topology as a GMSH .msh v4.1 post file.
+
+    This is the PEEC-solution counterpart of ``export_filaments_msh``:
+    it takes the ``PEECBuilder.build_topology()`` dict directly (so the
+    per-segment geometry is the one the solver actually used) plus the
+    branch currents from
+    ``PEECCircuitSolver.compute_branch_currents(freq, port_currents)``,
+    and writes one line element per PEEC segment carrying the electrical
+    quantities as ElementData views.
+
+    A multi-filament segment (``nwinc``/``nhinc`` > 1) is expanded by the
+    builder into offset sub-filaments, so each strand becomes its own
+    line element: the skin/proximity current redistribution is directly
+    visible.  Sub-filaments meet only at the topology NODE, which is a
+    circuit connection and not a geometric one -- the small visual gap
+    between strands at a node is the model, not an export defect.
+
+    REVERSE CURRENTS -- ``|I|`` hides them.  In the inductance-limited
+    (high-frequency) regime the interior strands of a multi-filament bar
+    carry current in the OPPOSITE direction: measured on a 4 mm square
+    bar at 100 MHz, the uniform partition gives 1 reverse strand at
+    nwinc=nhinc=3 (Re I = -0.091 A of 1 A total), 4 at 4x4 and 8 at 5x5,
+    with the high-frequency limit reproducing L^-1 1 exactly.  A ``|I|``
+    colormap shows those strands as ordinary positive current.  Use the
+    ``I direction`` arrows (scaled by the SIGNED Re(I), so a reverse
+    strand points backwards) or step 0 of ``I_complex`` (= Re I, read
+    with a diverging colormap) to see the reversal;
+    ``n_reverse_segments`` in the returned dict counts them.
+
+    Views written (all ElementData, one value per segment):
+        ``|I| [A]``        branch current magnitude (needs ``currents``)
+        ``|J| [A/m^2]``    |I| / (width * height) -- the current-DENSITY
+                           map, which is what actually reveals skin and
+                           proximity effect when sub-filaments have
+                           unequal cross-sections
+        ``P [W]``          per-segment time-average ohmic dissipation
+        ``I direction [A]`` (opt-in) unit tangent x SIGNED Re(I) arrows
+        ``I_complex [A]``  (opt-in) two steps Re/Im -> feeds the
+                           radia-mcp ``gmsh_harmonic_to_time`` /
+                           ``gmsh_modulus_phase`` post-processing
+
+    Args:
+        topology: dict from ``PEECBuilder.build_topology()``.  Requires
+            ``segment_centers`` / ``segment_directions`` /
+            ``segment_lengths``; ``segment_widths`` /
+            ``segment_heights`` enable ``|J|`` and ``R`` enables ``P``.
+        output_msh: output .msh path.
+        currents: optional complex (n_seg,) branch currents.  Without
+            them a geometry-only file is written (useful to inspect the
+            discretization before solving).
+        Zs: optional complex (n_seg,) surface impedance added to the
+            loss as ``Re(Zs)`` (the SIBC/proximity part of the
+            dissipation); ``None`` uses the DC resistance alone.
+        current_convention: ``"amplitude"`` (default) treats the
+            currents as phasor AMPLITUDES, so the time-average loss is
+            ``0.5 |I|^2 R``; ``"rms"`` treats them as RMS values, giving
+            ``|I|^2 R``.  The choice is echoed in the returned dict so
+            the reported power is never ambiguous.
+        groups: optional per-segment 0-based group index (e.g. one group
+            per turn or per conductor).  Default: a single group.
+        group_names: names for those groups (default ``label`` /
+            ``label_0`` ...).
+        label: base physical-group name.
+        direction_view: also write the ``I direction`` arrow view.
+        complex_steps: also write the two-step ``I_complex`` view.
+
+    Returns:
+        dict with the output path, element/node counts, the view names,
+        the current convention and the |I| / |J| ranges and total loss.
+    """
+    import numpy as np
+
+    required = ("segment_centers", "segment_directions", "segment_lengths")
+    missing = [k for k in required if topology.get(k) is None]
+    if missing:
+        raise KeyError(
+            "topology is missing per-segment geometry %s.  Rebuild it via "
+            "PEECBuilder.build_topology() from a recent Radia (the keys "
+            "are written by the C++ builder)." % missing)
+
+    centers = np.asarray(topology["segment_centers"], dtype=np.float64)
+    dirs = np.asarray(topology["segment_directions"], dtype=np.float64)
+    lengths = np.asarray(topology["segment_lengths"], dtype=np.float64)
+    n_seg = centers.shape[0]
+    if dirs.shape != (n_seg, 3) or lengths.shape != (n_seg,):
+        raise ValueError(
+            f"inconsistent topology geometry: centers {centers.shape}, "
+            f"directions {dirs.shape}, lengths {lengths.shape}")
+
+    # A PEEC segment is a straight stick: endpoints are exactly
+    # center -/+ direction * length / 2.
+    half = dirs * (lengths[:, None] / 2.0)
+    p0 = centers - half
+    p1 = centers + half
+    segments = [(tuple(p0[i]), tuple(p1[i])) for i in range(n_seg)]
+
+    if groups is None:
+        groups = [0] * n_seg
+        names = list(group_names) if group_names else [label]
+        if len(names) != 1:
+            raise ValueError(
+                "group_names must hold exactly one name when groups is "
+                f"None, got {len(names)}")
+    else:
+        groups = [int(g) for g in groups]
+        if len(groups) != n_seg:
+            raise ValueError(
+                f"groups length {len(groups)} != {n_seg} segments")
+        n_groups = max(groups) + 1
+        names = (list(group_names) if group_names
+                 else [f"{label}_{k}" for k in range(n_groups)])
+        if len(names) != n_groups:
+            raise ValueError(
+                f"group_names length {len(names)} != {n_groups} groups")
+
+    conv = str(current_convention).lower()
+    if conv not in ("amplitude", "rms"):
+        raise ValueError("current_convention must be 'amplitude' or 'rms', "
+                         f"got {current_convention!r}")
+    p_factor = 0.5 if conv == "amplitude" else 1.0
+
+    views = []
+    summary = {"msh": output_msh, "n_segments": n_seg,
+               "current_convention": conv}
+
+    if currents is not None:
+        I_arr = np.asarray(currents).reshape(-1)
+        if I_arr.shape[0] != n_seg:
+            raise ValueError(
+                f"currents length {I_arr.shape[0]} != {n_seg} segments")
+        I_abs = np.abs(I_arr)
+        views.append({"name": "|I| [A]", "ncomp": 1, "step": 0,
+                      "time": 0.0, "values": I_abs})
+        summary["I_abs_range"] = [float(I_abs.min()), float(I_abs.max())]
+
+        widths = topology.get("segment_widths")
+        heights = topology.get("segment_heights")
+        if widths is not None and heights is not None:
+            area = (np.asarray(widths, dtype=np.float64)
+                    * np.asarray(heights, dtype=np.float64))
+            if np.any(area <= 0.0):
+                raise ValueError(
+                    "non-positive segment cross-section in topology "
+                    "(widths * heights); cannot form the current density")
+            J_abs = I_abs / area
+            views.append({"name": "|J| [A/m^2]", "ncomp": 1, "step": 0,
+                          "time": 0.0, "values": J_abs})
+            summary["J_abs_range"] = [float(J_abs.min()),
+                                      float(J_abs.max())]
+
+        R = topology.get("R")
+        if R is not None:
+            R = np.asarray(R, dtype=np.float64)
+            if R.ndim == 2:            # dense diagonal form
+                R = np.diag(R)
+            if R.shape[0] != n_seg:
+                raise ValueError(
+                    f"R length {R.shape[0]} != {n_seg} segments")
+            R_eff = R.copy()
+            if Zs is not None:
+                Zs_arr = np.asarray(Zs).reshape(-1)
+                if Zs_arr.shape[0] != n_seg:
+                    raise ValueError(
+                        f"Zs length {Zs_arr.shape[0]} != {n_seg} segments")
+                R_eff = R_eff + np.real(Zs_arr)
+            P = p_factor * (I_abs ** 2) * R_eff
+            views.append({"name": "P [W]", "ncomp": 1, "step": 0,
+                          "time": 0.0, "values": P})
+            summary["P_total_W"] = float(P.sum())
+
+        if direction_view:
+            # SIGNED arrows: Re(I) * unit tangent, so a reverse-carrying
+            # strand points backwards (see the reverse-current note).
+            I_signed = np.real(I_arr)
+            tang = np.zeros((n_seg, 3), dtype=np.float64)
+            norms = np.linalg.norm(dirs, axis=1)
+            ok = norms >= 1e-30
+            tang[ok] = (dirs[ok] / norms[ok, None]) * I_signed[ok, None]
+            views.append({"name": "I direction [A]", "ncomp": 3, "step": 0,
+                          "time": 0.0, "values": tang})
+            summary["n_reverse_segments"] = int((I_signed < 0.0).sum())
+
+        if complex_steps:
+            for step, part in ((0, I_arr.real), (1, I_arr.imag)):
+                views.append({"name": "I_complex [A]", "ncomp": 1,
+                              "step": step, "time": float(step),
+                              "values": part})
+
+    info = _write_line_element_msh(output_msh, segments, groups, names, views)
+    summary["n_nodes"] = info["n_nodes"]
+    summary["n_elements"] = info["n_elements"]
+    summary["views"] = list(dict.fromkeys(v["name"] for v in views))
+
+    print(f"export_peec_topology_msh: {output_msh}")
+    print(f"  {n_seg} segments, {info['n_nodes']} nodes, "
+          f"views: {summary['views']}")
+    if "P_total_W" in summary:
+        print(f"  P_total = {summary['P_total_W']:.6e} W "
+              f"({conv} current convention)")
+    return summary

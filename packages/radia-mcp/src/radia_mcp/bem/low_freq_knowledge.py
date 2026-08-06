@@ -85,7 +85,7 @@ The PEEC framework uses Loop-Star **naturally**:
 No transformation needed — they're independent unknowns by construction.
 
 ```python
-from peec_matrices import PyPEECBuilder
+from radia.peec_matrices import PEECBuilder
 # Loops: add_connected_segment defines current path (loop)
 # Stars: panel basis on faces
 ```

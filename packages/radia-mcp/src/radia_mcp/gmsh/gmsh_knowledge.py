@@ -1888,12 +1888,38 @@ lines):
 
 - ``currents=I`` writes ``|I| [A]`` per line element (color).
 - ``direction_view=True`` adds ``I direction [A]``: unit tangent x
-  |I| arrows -- the winding's current flow direction.
+  SIGNED Re(I) arrows -- the winding's current flow direction, with
+  reverse-carrying strands pointing backwards.
 - ``complex_steps=True`` (AC) adds ``I_complex [A]`` with step 0 =
   Re I, step 1 = Im I: feed it to gmsh_harmonic_to_time +
   gmsh_export_animation for the rotating-phasor current animation
   (outer-filament phase lead = visible skin effect), or to
   gmsh_modulus_phase for amplitude/phase maps.
+
+A SOLVED PEEC circuit goes straight to a picture -- no hand-assembled
+polylines -- through ``export_peec_topology_msh`` (the
+``build_topology()`` dict + branch currents) or its one-hop wrapper
+``PEECCircuitSolver.export_gmsh(msh, freq, port_currents)``:
+
+    solver.export_gmsh("coil_I.msh", 50e3, [1.0],
+                       direction_view=True, complex_steps=True)
+    gmsh_render("coil_I.msh", "coil_I.png", merge_files=["coil.step"])
+
+It writes ``|I| [A]``, ``|J| [A/m^2]`` (= |I| / (width*height): the
+current-DENSITY map, which is what actually exposes skin/proximity
+when strands have unequal cross-sections) and ``P [W]`` (per-segment
+ohmic loss; ``current_convention="amplitude"`` default gives
+0.5|I|^2 R, ``"rms"`` gives |I|^2 R -- the choice is echoed in the
+returned summary so the reported power is never ambiguous).
+
+REVERSE CURRENTS -- ``|I|`` HIDES THEM (measured, 4 mm square bar at
+100 MHz): in the inductance-limited regime interior strands run
+BACKWARDS -- 1 reverse strand at nwinc=nhinc=3 (Re I = -0.091 A of
+1 A total), 4 at 4x4, 8 at 5x5, the high-frequency limit reproducing
+L^-1 1 exactly.  A |I| colormap paints them as ordinary positive
+current.  Read the reversal from the signed ``I direction`` arrows or
+from step 0 of ``I_complex`` (= Re I, with a diverging colormap);
+``n_reverse_segments`` in the returned summary counts them.
 
 CoilBuilder closes the loop end-to-end: ``write_step()`` for the CAD
 solid, ``to_filaments(nw, nh, frequency=...)`` for the Tier-A current

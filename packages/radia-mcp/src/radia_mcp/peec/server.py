@@ -3,7 +3,7 @@ PEEC (Partial Element Equivalent Circuit) MCP Server (radia_mcp.peec)
 
 Provides tools for:
 - PEEC architecture: Loop-Star, filament-panel, node-segment topology
-- PyPEECBuilder and PEECCircuitSolver API guidance
+- PEECBuilder and PEECCircuitSolver API guidance
 - Multi-filament subdivision (nwinc/nhinc) for skin/proximity effect
 - Surface impedance methods (Bessel, Dowell, ESIM)
 - Magnetic-material coupling is handled by HDiv-VIM / reduced FEM, not PEEC
@@ -19,7 +19,7 @@ Promoted from legacy private source tree to public radia-mcp on
 2026-04-24 (single Radia monorepo).  General PEEC inductance formulae
 live in radia_mcp.radia_ngsolve.peec_inductance_knowledge; this
 subpackage holds the LAB PEEC workflow (Loop-Star, FastHenry parsing,
-PyPEECBuilder/PEECCircuitSolver API, Bessel/Dowell/ESIM surface
+PEECBuilder/PEECCircuitSolver API, Bessel/Dowell/ESIM surface
 impedance, PRIMA MOR, SPICE extraction).
 """
 
@@ -81,7 +81,7 @@ def peec_usage(topic: str = "all") -> str:
         topic: Documentation topic. Options:
             "all"            - Complete documentation
             "overview"       - PEEC architecture, system equation, Loop-Star
-            "builder"        - PyPEECBuilder API (add_node_at, add_segment, add_port)
+            "builder"        - PEECBuilder API (add_node_at, add_segment, add_port)
             "solver"         - PEECCircuitSolver (MNA, port impedance, sweep)
             "multi_filament" - nwinc/nhinc subdivision for skin/proximity
             "fasthenry"      - FastHenry .inp parser usage
@@ -89,6 +89,8 @@ def peec_usage(topic: str = "all") -> str:
             "sibc"           - Surface impedance (Bessel, Dowell, ESIM)
             "prima"          - PRIMA model order reduction, SPICE export
             "ngsolve_bem"    - ngsolve.bem integration, frequency range guide
+            "postproc"       - solved PEEC -> GMSH (|I|, |J|, P, arrows,
+                               AC animation, STEP overlay; reverse-current trap)
             "pitfalls"       - Common mistakes and gotchas
     """
     return get_peec_documentation(topic)
@@ -203,7 +205,7 @@ def new_peec_simulation(conductor_type: str) -> str:
         f"Set up a PEEC simulation for: {conductor_type}\n\n"
         f"{specific}\n"
         "General workflow:\n"
-        "1. Define geometry: PyPEECBuilder (add_node_at, add_connected_segment)\n"
+        "1. Define geometry: PEECBuilder (add_node_at, add_connected_segment)\n"
         "2. Define ports: builder.add_port(n_pos, n_neg)\n"
         "3. Build topology: topo = builder.build_topology()\n"
         "4. Create solver: PEECCircuitSolver(topo)\n"
