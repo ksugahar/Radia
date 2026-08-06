@@ -252,6 +252,25 @@ def _merge_cut_plane(cut_plane: dict[str, Any] | None,
     return merged, clip_views
 
 
+def _axis_equal_note(options: dict[str, float]) -> str | None:
+    """Warn when a General.Scale* override breaks the 1:1:1 aspect.
+
+    Policy (gmsh_usage topic "policy"): spatial figures -- contour /
+    flux-line / streamline / section renders -- must be axis equal.
+    Overriding a Scale axis is allowed only as a LABELED exaggeration.
+    """
+    scaled = {name: float(val) for name, val in options.items()
+              if name in ("General.ScaleX", "General.ScaleY",
+                          "General.ScaleZ") and float(val) != 1.0}
+    if not scaled:
+        return None
+    parts = ", ".join(f"{k}={v:g}" for k, v in sorted(scaled.items()))
+    return (f"axis-equal policy: {parts} overrides the 1:1:1 aspect -- "
+            f"contour/flux-line/streamline/section figures must stay "
+            f"axis equal; keep an exaggerated-scale figure only with "
+            f"the factor stated in its caption")
+
+
 def render_png(path: str | Path,
                png_out: str | Path | None = None, *,
                width: int = 1000, height: int = 800,
@@ -300,6 +319,9 @@ def render_png(path: str | Path,
         size = _png_size(out)
         result["png_size"] = size
         notes = []
+        scale_note = _axis_equal_note(merged_options)
+        if scale_note:
+            notes.append(scale_note)
         if size and size[0] < int(width):
             notes.append(
                 f"exported width {size[0]} < requested {width}: the FLTK "
@@ -409,6 +431,9 @@ def export_animation(path: str | Path,
                 first_frame_size = _png_size(frames[0])
         result["frame_size"] = first_frame_size
         result["gif_size_bytes"] = gif.stat().st_size if gif.is_file() else None
+        scale_note = _axis_equal_note(merged_options)
+        if scale_note:
+            result["note"] = scale_note
     return result
 
 

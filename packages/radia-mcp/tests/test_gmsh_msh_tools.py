@@ -830,6 +830,25 @@ def test_render_png_with_structured_cut_plane(tmp_path):
     assert out.is_file()
 
 
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_render_png_flags_axis_equal_override(tmp_path):
+    # Policy: spatial figures (contours, streamlines, sections) must be
+    # axis equal; a General.Scale* override away from 1.0 is flagged.
+    from radia_mcp.gmsh.render import render_png
+
+    msh = _write(tmp_path, _BASE_MSH)
+    result = render_png(msh, tmp_path / "scaled.png", width=300,
+                        height=250, options={"General.ScaleZ": 3.0})
+    _skip_if_no_graphics(result)
+    assert result["ok"] is True, result
+    assert "axis-equal" in result.get("note", "")
+    assert "General.ScaleZ=3" in result["note"]
+
+    default = render_png(msh, tmp_path / "plain.png", width=300,
+                         height=250)
+    assert "axis-equal" not in (default.get("note") or "")
+
+
 @pytest.mark.skipif(not _GMSH_AVAILABLE or
                     importlib.util.find_spec("PIL") is None,
                     reason="gmsh or Pillow not installed")
