@@ -9,26 +9,19 @@ SHRINK: a companion test fails the moment an allowlisted file becomes
 v4.1 (or disappears), forcing the entry to be removed.
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from radia_mcp.gmsh.msh_inspect import audit_msh_directory, validate_msh
+from radia_mcp.gmsh.msh_inspect import validate_msh
 
 _REPO = Path(__file__).resolve().parents[3]
 _LANES = ("docs", "validation_test", "src/radia/panels/samples")
 
 # Known legacy v2.2 assets. Never ADD to this list -- new .msh must be
 # v4.1 (repo format policy 2026-04-15).
-_KNOWN_LEGACY = {
-    # docs/cubit_mesh_export: intentional historical references (README).
-    "docs/cubit_mesh_export/gmsh/cube_2nd_order.msh",
-    "docs/cubit_mesh_export/gmsh/cube_v2.msh",
-    "docs/cubit_mesh_export/gmsh/gmsh_2nd_order/brick_layer.msh",
-    "docs/cubit_mesh_export/gmsh/gmsh_2nd_order/hex20.msh",
-    "docs/cubit_mesh_export/gmsh/gmsh_2nd_order/wedge15.msh",
-    # (peec_integration was migrated to v4.1 on 2026-08-05.)
-}
+_KNOWN_LEGACY = set()
 
 
 def _existing_lanes():
@@ -38,18 +31,39 @@ def _existing_lanes():
     return lanes
 
 
+def _tracked_lane_assets():
+    """Return tracked .msh paths only, independent of ignored local assets."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--", "*.msh"],
+            cwd=_REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    lane_prefixes = tuple(f"{lane}/" for lane in _LANES)
+    return {
+        rel.replace("\\", "/")
+        for rel in result.stdout.splitlines()
+        if rel.replace("\\", "/").startswith(lane_prefixes)
+    }
+
+
 def test_durable_lane_msh_assets_are_structurally_sound():
+    _existing_lanes()
+    tracked = _tracked_lane_assets()
+    if tracked is None:
+        pytest.skip("git tracked-file inventory unavailable")
     unexpected = []
-    for lane in _existing_lanes():
-        audit = audit_msh_directory(lane)
-        assert audit["ok"] is True
-        for issue in audit["issues"]:
-            rel = (lane.relative_to(_REPO).as_posix() + "/"
-                   + issue["path"].replace("\\", "/"))
-            if rel in _KNOWN_LEGACY:
-                continue
-            unexpected.append((rel, issue["failed_checks"],
-                               issue["errors"][:1]))
+    for rel in sorted(tracked):
+        result = validate_msh(_REPO / rel)
+        if result["ok"] or rel in _KNOWN_LEGACY:
+            continue
+        failed = [name for name, passed in result["checks"].items()
+                  if not passed]
+        unexpected.append((rel, failed, result["errors"][:1]))
     assert unexpected == [], (
         "unsound .msh assets outside the known-legacy allowlist "
         f"(new .msh must be valid v4.1): {unexpected}")
@@ -57,8 +71,14 @@ def test_durable_lane_msh_assets_are_structurally_sound():
 
 def test_known_legacy_allowlist_only_shrinks():
     _existing_lanes()
+    tracked = _tracked_lane_assets()
+    if tracked is None:
+        pytest.skip("git tracked-file inventory unavailable")
     stale_entries = []
     for rel in sorted(_KNOWN_LEGACY):
+        if rel not in tracked:
+            stale_entries.append((rel, "file is not tracked"))
+            continue
         path = _REPO / rel
         if not path.is_file():
             stale_entries.append((rel, "file no longer exists"))

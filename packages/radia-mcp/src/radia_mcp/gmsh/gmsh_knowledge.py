@@ -998,9 +998,9 @@ artifacts headlessly via mcp-server-gmsh:
 | `gmsh_validate_msh` | Structural consistency; `check_jacobians=True` adds the getJacobians inverted-element gate (repo policy for high-order exports) + per-type integrated volume. |
 | `gmsh_validate_geo` | Merge targets exist + no invalid GMSH 4.x options. |
 | `gmsh_field_stats` | Per-view, per-step field statistics without a GUI: scalar min/max/mean/rms, vector magnitude stats + pooled component min/max, NaN/Inf counts (validate_msh also gates on finiteness). |
-| `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, per-view min/max relative drift). |
+| `gmsh_diff_msh` | Structure + field-statistics diff of two .msh files (before/after verification: node/element/physical/view differences, bbox drift, overall and per-step min/max/mean/rms drift). |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory (recursive), optional per-file Jacobian gate: one call answers "are the repo's mesh artifacts sound?". |
-| `gmsh_mesh_quality` | Scaled-Jacobian (min detJ / max detJ per element) distribution + threshold gate: catches non-inverted but degenerating curved elements the sign gate cannot see. |
+| `gmsh_mesh_quality` | Gmsh minSICN shape-quality distribution + threshold gate; min(detJ)/max(detJ) remains a separate curvature diagnostic so affine slivers cannot pass as perfect. |
 
 CLI twin for CI/hooks (exit 0 = ok, 1 = needs attention):
 
@@ -1036,7 +1036,7 @@ the .geo -> render a PNG and look at it. The 2026-08 audit found all
 four docs/gmsh_animation TET10 meshes systematically inverted (every
 Gauss point det<=0) -- a bug invisible in GUI display, caught only by
 the Jacobian gate. `gmsh_mesh_quality` extends that gate to
-non-inverted-but-degenerating curved elements (scaled Jacobian).
+non-inverted shape degradation, including affine slivers (minSICN).
 
 ### EM cross-section render recipe (one call)
 

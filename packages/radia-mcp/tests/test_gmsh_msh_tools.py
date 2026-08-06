@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from radia_mcp.gmsh.msh_inspect import (
+    ELEMENT_TYPES,
     audit_msh_directory,
     diff_msh,
     field_stats,
@@ -236,6 +237,25 @@ def test_validate_detects_unbalanced_sections(tmp_path):
     assert result["checks"]["sections_balanced"] is False
 
 
+def test_validate_fails_when_a_section_cannot_be_parsed(tmp_path):
+    broken = _BASE_MSH.replace('3 1 "block"', 'this is not a physical name')
+    result = validate_msh(_write(tmp_path, broken))
+
+    assert result["ok"] is False
+    assert result["checks"]["sections_parseable"] is False
+    assert any("$PhysicalNames" in error for error in result["errors"])
+
+
+def test_element_registry_covers_all_gmsh_post_export_volume_types():
+    expected = {
+        94: ("hex216", 216, 3, 5),
+        118: ("pyr30", 30, 3, 3),
+        119: ("pyr55", 55, 3, 4),
+        120: ("pyr91", 91, 3, 5),
+    }
+    assert {code: ELEMENT_TYPES[code] for code in expected} == expected
+
+
 # ======================================================================
 # validate_geo
 # ======================================================================
@@ -339,6 +359,21 @@ def test_diff_msh_detects_field_drift(tmp_path):
     assert any("drift" in d for d in result["differences"])
 
 
+def test_diff_msh_detects_interior_field_drift_with_same_extrema(tmp_path):
+    a = _write(tmp_path, _BASE_MSH, "a.msh")
+    drifted = _BASE_MSH.replace("2 2.0\n", "2 2.5\n", 1)
+    b = _write(tmp_path, drifted, "b.msh")
+    result = diff_msh(a, b)
+
+    assert result["identical_structure"] is True
+    assert result["fields_match"] is False
+    common = result["views"]["common"][0]
+    assert common["a"]["min"] == common["b"]["min"]
+    assert common["a"]["max"] == common["b"]["max"]
+    assert common["relative_deltas"]["mean"] > 0.0
+    assert common["per_step_max_rel_delta"] > 0.0
+
+
 # ======================================================================
 # Jacobian subprocess check (needs the gmsh Python package)
 # ======================================================================
@@ -391,6 +426,8 @@ def test_field_stats_scalar_two_steps(tmp_path):
     assert step1["max"] == 4.5
     assert view["overall"]["min"] == 1.0
     assert view["overall"]["max"] == 4.5
+    assert view["overall"]["samples"] == 8
+    assert view["overall"]["mean"] == pytest.approx(2.75)
 
 
 def test_field_stats_vector_magnitude(tmp_path):
@@ -466,6 +503,13 @@ def test_element_data_sections_parse_validate_and_stats(tmp_path):
     step = stats["views"][0]["per_step"][0]
     assert step["min"] == 0.8
     assert step["max"] == 0.9
+
+    nodal = field_stats(msh, view_name="nodal_flux")
+    nodal_step = nodal["views"][0]["per_step"][0]
+    assert nodal_step["samples"] == 4
+    assert nodal_step["min"] == 1.0
+    assert nodal_step["max"] == 4.0
+    assert nodal_step["mean"] == pytest.approx(2.5)
 
 
 def test_element_data_undefined_element_tag_fails(tmp_path):
@@ -569,7 +613,7 @@ $EndElements
 
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
-def test_mesh_quality_affine_tet10_is_perfect(tmp_path):
+def test_mesh_quality_affine_tet10_has_good_shape_quality(tmp_path):
     from radia_mcp.gmsh.msh_inspect import mesh_quality
 
     msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0 0"))
@@ -577,7 +621,9 @@ def test_mesh_quality_affine_tet10_is_perfect(tmp_path):
     assert q["ran"] is True, q.get("error")
     assert q["ok"] is True
     bt = q["by_type"][0]
-    assert bt["min_scaled"] == pytest.approx(1.0)
+    assert bt["metric"] == "minSICN"
+    assert bt["min_quality"] == pytest.approx(0.8164965809)
+    assert bt["min_jacobian_ratio"] == pytest.approx(1.0)
     assert bt["negative"] == 0
     assert bt["below_threshold"] == 0
 
@@ -587,7 +633,7 @@ def test_mesh_quality_flags_degrading_curved_element(tmp_path):
     from radia_mcp.gmsh.msh_inspect import mesh_quality
 
     # Mid-edge node pushed sideways: NOT inverted (sign gate passes)
-    # but the scaled Jacobian collapses to ~0.49.
+    # but Gmsh's minSICN shape quality collapses to ~0.31.
     msh = _write(tmp_path, _TET10_TEMPLATE.format(e01="0.5 0.12 0.05"))
     v = validate_msh(msh, check_jacobians=True)
     assert v["ok"] is True, "sign gate must PASS for this element"
@@ -597,8 +643,24 @@ def test_mesh_quality_flags_degrading_curved_element(tmp_path):
     bt = q["by_type"][0]
     assert bt["negative"] == 0
     assert bt["below_threshold"] == 1
-    assert bt["min_scaled"] == pytest.approx(0.4895, abs=0.01)
+    assert bt["min_quality"] == pytest.approx(0.3095, abs=0.01)
     assert bt["worst"][0]["tag"] == 1
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_mesh_quality_rejects_affine_sliver(tmp_path):
+    from radia_mcp.gmsh.msh_inspect import mesh_quality
+
+    sliver = _BASE_MSH.replace("0 0 1\n$EndNodes", "0 0 0.001\n$EndNodes")
+    q = mesh_quality(_write(tmp_path, sliver), threshold=0.1)
+
+    assert q["ran"] is True, q.get("error")
+    assert q["ok"] is False
+    bt = next(row for row in q["by_type"] if row["name"] == "Tetrahedron 4")
+    assert bt["negative"] == 0
+    assert bt["below_threshold"] == 1
+    assert bt["min_quality"] == pytest.approx(0.001732, rel=1e-3)
+    assert bt["min_jacobian_ratio"] == pytest.approx(1.0)
 
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")

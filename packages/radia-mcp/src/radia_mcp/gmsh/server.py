@@ -1193,20 +1193,18 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
 def gmsh_mesh_quality(msh_path: str, threshold: float = 0.1,
                       quadrature: str = "Gauss4") -> dict:
     """
-    Scaled-Jacobian quality distribution for all 3D elements.
+    Gmsh minSICN shape-quality distribution for all 3D elements.
 
     Complements the sign-only Jacobian gate of gmsh_validate_msh: a
-    high-order element can be non-inverted yet nearly degenerate.
-    Scaled Jacobian = min(detJ)/max(detJ) per element (1.0 for affine,
-    -> 0 as a curved element degenerates, negative when inverted).
-    Reports per-type min/mean, a histogram, the below-threshold count,
-    and the worst elements by tag. The .msh counterpart of check-vol's
-    scaled-Jacobian threshold. ok=True only when no element is
-    inverted or below the threshold.
+    non-inverted affine or high-order element can still be nearly
+    degenerate. Gmsh's signed inverse condition number detects both
+    aspect-ratio and shape degradation. The sampled min(detJ)/max(detJ)
+    ratio is also reported as a separate curvature diagnostic.
+    ok=True only when no element is inverted or below the threshold.
 
     Args:
         msh_path: Path to the .msh file.
-        threshold: Minimum acceptable scaled Jacobian (default 0.1).
+        threshold: Minimum acceptable minSICN quality (default 0.1).
         quadrature: Integration rule for sampling detJ (default Gauss4).
     """
     p = Path(msh_path)

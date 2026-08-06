@@ -77,6 +77,18 @@ def test_new_mode_uses_private_drop_dir(monkeypatch, tmp_path):
     assert (shared / "ready").is_file()
 
 
+def test_attached_clients_use_distinct_request_filenames(tmp_path):
+    first = _bare_session(tmp_path)
+    second = _bare_session(tmp_path)
+
+    first_stem = first._request_stem(1)
+    second_stem = second._request_stem(1)
+
+    assert first_stem != second_stem
+    assert first_stem.endswith("-00000001")
+    assert second_stem.endswith("-00000001")
+
+
 # ---------------------------------------------------------------------------
 # --setup CLI mode + status enrichment
 # ---------------------------------------------------------------------------
