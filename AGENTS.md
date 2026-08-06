@@ -1785,6 +1785,27 @@ GUI が絶対必要なもの (panel dialog のレンダリング) のみ例外�
 
 **特記**: FEMEEM エクスポートの出力パスは **40 文字以下** にすること。`inpin.f90::chkinib(filename*40)` が長い Python `tempfile.TemporaryDirectory()` パスを切り詰めて `forrtl severe (29)` を起こす。`C:\temp\<short>\` 等を使う。
 
+### Cubit Driving Policy: APREPRO/Python Headless is Primary; GUI is a User Debugging Aid (2026-08-05)
+
+**POLICY** (Sugahara): AI-agent-driven Cubit work runs through **APREPRO
+commands and Python** on the **headless/batch route** — `.jou` playback,
+`cubit.cmd(...)` scripting, the batch stdio daemon, and headless dry-run
+tools (`cubit_batch_try`, `cubit_mesh_auto`, mesh races). This is the 本命
+(primary) path for automation, testing, CI, and validation. The **GUI
+session** (`cubit_show`, the persistent GUI daemon, `cubit_snapshot`) exists
+**for the USER's visual debugging** — a human watching the model, inspecting
+a mesh, capturing a figure — not as the agent's default execution surface.
+
+- Agent workflows (mesh generation, exports, gates, validation runs) default
+  to batch/headless; they must never REQUIRE a GUI window to function.
+- GUI-session features are maintained and tested as the **user-debugging
+  surface** (that is why `validation_test/radia_mcp/test_cubit_session_e2e.py`
+  exercises the GUI path: to protect the user-facing debug surface, incl.
+  `cubit_snapshot`, which needs a rendering window — batch reports an honest
+  ok=false there).
+- This restates and extends the "Cubit Batch Self-Testing Policy" above to
+  the MCP-server era: batch first, GUI when the user wants to see something.
+
 **Wheel Verification** (automated by Build_Wheel.ps1, also manual):
 ```python
 import zipfile

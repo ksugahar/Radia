@@ -57,6 +57,19 @@ def test_private_drop_cleanup_retries_transient_windows_locks(
     assert not drop.exists()
 
 
+def test_close_process_streams_closes_batch_pipes():
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "pass"], stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc.wait(timeout=10.0)
+
+    cubit_session._close_process_streams(proc)
+
+    assert proc.stdin.closed
+    assert proc.stdout.closed
+    assert proc.stderr.closed
+
+
 # ---------------------------------------------------------------------------
 # Session-mode triad
 # ---------------------------------------------------------------------------
