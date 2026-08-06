@@ -117,14 +117,22 @@ new flag names.
   H_t spikes drive ESIM into very nonlinear regime. Refine the
   surface mesh or upgrade to per-element Z_s.
 
-## Scalar (current production) vs per-element Z_s (roadmap)
-- **Scalar (v4.46.x)**: one Z_s for the entire workpiece surface,
-  derived from the mesh-RMS H_t.  Fast (one ESIM call per outer
-  iter) but spatially averaged — under-resolves H_t spikes.
-- **Per-element (roadmap)**: each surface panel gets its own Z_s
-  from ESIM(H_t at panel centroid).  N_panel ESIM calls per outer
-  iter, but resolves spatial saturation pattern.  BEM solver API
-  must accept `Z_s = ndarray[n_panels]` instead of scalar.
+## Local Z_s (current production) vs scalar legacy
+- **Local production**: `LocalESIMSurfaceModel` evaluates
+  `Z_s(f, |H_t(x)|)` at surface quadrature samples and
+  `AssembleSurfaceImpedanceGram` projects those values against the
+  surface-Omega basis.  `SolveLocalESIMSurfaceVIM` drives HCurl-only systems;
+  `CoupledHDivHybridVIMSystem.solve_frequency_local_esim` places the same
+  update around the full fixed-bulk-HDiv/HCurl solve.  Do not average these
+  sample values into one modal diagonal.
+- **LUT production path**: `BuildLocalESIMSurfaceLUT` stores a pickle-free
+  frequency/field table.  Online updates interpolate it with zero cell solves,
+  reject extrapolation, and verify a material/cell SHA-256 signature.
+- **Scalar legacy**: one mesh-RMS field and one Z_s for the whole surface.
+  It is useful only as a quick ablation because it under-resolves local
+  saturation and edge-field variation.
+- **Still open**: simultaneous ordinary bulk nonlinear B-H plus local ESIM,
+  hysteretic/rotational surface state, and multidimensional corner cells.
 """
 
 MODULE_API = """
@@ -148,8 +156,26 @@ H_profile = sol['H_z']      # H(z) profile inside the cell (debug)
 
 ## Coupling pattern (v4.46+ production scripts use this)
 
+For reduced HCurl/HDiv-VIM use the current local API:
+
 ```python
-# Scalar Karl iteration loop (current production)
+cell = LocalESIMSurfaceModel(bh_curve=bh, sigma=sigma)
+solution = mixed.solve_frequency_local_esim(
+    cell,
+    frequency_hz,
+    mixed_galerkin_keep_blocks=("volume1", "surface"),
+    mixed_galerkin_eliminate_blocks="volume",
+)
+assert solution.converged
+assert solution.surface_impedance.diagnostics()["passive"]
+```
+
+This updates nonlinear skin impedance around a fixed bulk HDiv magnetic
+operator and accepts exactly one physical excitation.  It is not yet a
+simultaneous bulk nonlinear B-H solve.
+
+```python
+# Scalar Karl iteration loop (legacy/application compatibility)
 esim = ESIMFiniteSlabSolver(half_thickness=R_wp, bh_curve=bh,
                             sigma=sigma, frequency=freq,
                             geometry='cylinder')

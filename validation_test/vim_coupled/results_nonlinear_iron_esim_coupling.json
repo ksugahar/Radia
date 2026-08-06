@@ -1,0 +1,231 @@
+{
+  "schema": "radia.validation.nonlinear-iron-local-esim-coupling.v1",
+  "created_at_utc": "2026-08-05T11:42:33.849662+00:00",
+  "tool_versions": {
+    "radia": "4.95.42",
+    "radia_source_head": "6eefeaab38ae5682708da5510a8a8abd16ad44b3",
+    "radia_source_head_end": "6eefeaab38ae5682708da5510a8a8abd16ad44b3",
+    "radia_source_dirty": true,
+    "python": "3.12.10",
+    "ngsolve": "6.2.2604",
+    "numpy": "2.4.6"
+  },
+  "source_fingerprints": {
+    "validation_test/vim_coupled/validate_nonlinear_iron_esim_coupling.py": "3cd50cb3038b2831beb8bc53592299ae8d8c7db38f3093e4b8b6f025664f5e3c",
+    "src/radia/vim/_eddy_hybrid.py": "e1455340e7d700b4bb4fd9addd06f7d39c933766d1daebf1d98e205f367a790a",
+    "src/radia/vim/_vim.py": "83c9b4ade15e42252db3f94f8ed97dea0a6cd0d7272663d89c458132f93a4bfa",
+    "src/radia/esim_cell_problem.py": "244e2822c5e8cbbf394923ecbb75f6b482d0a8023650d729ac149f87f362d70c"
+  },
+  "identity": {
+    "geometry": "solid conducting ferromagnetic cube",
+    "mesh": "regenerated in-memory TET; no mesh tracked",
+    "material_region": "iron",
+    "magnetic_region": "iron",
+    "conductive_region": "iron",
+    "bulk_magnetic_law": "fixed low-field scalar permeability",
+    "bulk_mu_r": 795.7747154594766,
+    "surface_magnetic_law": "monotone nonlinear B-H local ESIM cell",
+    "bh_curve_H_A_per_m_B_T": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        100.0,
+        0.1
+      ],
+      [
+        500.0,
+        0.45
+      ],
+      [
+        2000.0,
+        1.2
+      ],
+      [
+        10000.0,
+        1.6
+      ],
+      [
+        50000.0,
+        1.8
+      ]
+    ],
+    "sigma_S_per_m": 2000000.0,
+    "frequency_Hz": 50000.0,
+    "field_amplitudes_A_per_m": [
+      50.0,
+      1000.0,
+      5000.0
+    ]
+  },
+  "discretization": {
+    "tetrahedra": 23,
+    "hcurl_order": 2,
+    "hcurl_dofs": 188,
+    "hdiv_family": "BDM",
+    "hdiv_order": 1,
+    "hdiv_modes": 1,
+    "eddy_modes": 10,
+    "eddy_block_roles": {
+      "volume": "bulk",
+      "volume1": "bridge",
+      "surface": "sibc"
+    },
+    "sibc_applicability": {
+      "frequency_hz": 50000.0,
+      "sigma_S_per_m": 2000000.0,
+      "mu_H_per_m": 0.001,
+      "skin_depth_m": 5.641895835477563e-05,
+      "characteristic_thickness_m": 1.0,
+      "thickness_to_skin_depth": 17724.53850905516,
+      "min_thickness_to_skin_depth": 3.0,
+      "characteristic_curvature_radius_m": 0.5,
+      "curvature_radius_to_skin_depth": 8862.26925452758,
+      "min_curvature_radius_to_skin_depth": 3.0,
+      "thickness_separated": true,
+      "curvature_resolved": true,
+      "sibc_applicable": true,
+      "selected_model": "sibc"
+    }
+  },
+  "amplitude_ladder": [
+    {
+      "applied_H_A_per_m": 50.0,
+      "linear_surface_impedance_ohm": {
+        "real": 0.00886226925452758,
+        "imag": 0.00886226925452758
+      },
+      "local_surface_impedance": {
+        "real_min_ohm": 0.008909946376442289,
+        "real_mean_ohm": 0.00892018439876479,
+        "real_max_ohm": 0.0089406583889717,
+        "imag_min_ohm": 0.008876785392378342,
+        "imag_mean_ohm": 0.008892179298358331,
+        "imag_max_ohm": 0.008922964018825575,
+        "passive": true
+      },
+      "local_esim": {
+        "converged": true,
+        "iterations": 2,
+        "relative_impedance_change": 0.0023847989392598514,
+        "h_min_A_per_m": 0.8803300251580098,
+        "h_max_A_per_m": 66.60664341924178,
+        "cell_solve_count": 4
+      },
+      "mixed": {
+        "residual_relative_norm": 1.5437001481403416e-16,
+        "residual_backward_error": 7.718500740701707e-17,
+        "joule_loss_W": 79.05887634382727,
+        "linear_sibc_joule_loss_W": 78.64746548599834,
+        "local_vs_linear_solution_relative_difference": 0.00027182119199042177,
+        "local_vs_linear_port_relative_difference": 0.0006518961221666165,
+        "fixed_gram_replay_relative_difference": 0.0,
+        "magnetization_norm": 375.55336200332704,
+        "eddy_current_norm": 672.1288506472978
+      },
+      "wall_s": 0.265862200059928
+    },
+    {
+      "applied_H_A_per_m": 1000.0,
+      "linear_surface_impedance_ohm": {
+        "real": 0.00886226925452758,
+        "imag": 0.00886226925452758
+      },
+      "local_surface_impedance": {
+        "real_min_ohm": 0.008126459816437026,
+        "real_mean_ohm": 0.008404443027247441,
+        "real_max_ohm": 0.008960354108801753,
+        "imag_min_ohm": 0.007746284677509287,
+        "imag_mean_ohm": 0.008140978908115654,
+        "imag_max_ohm": 0.008930289319008205,
+        "passive": true
+      },
+      "local_esim": {
+        "converged": true,
+        "iterations": 4,
+        "relative_impedance_change": 0.0026877447424041266,
+        "h_min_A_per_m": 17.648057831361594,
+        "h_max_A_per_m": 1339.144880406027,
+        "cell_solve_count": 4
+      },
+      "mixed": {
+        "residual_relative_norm": 3.0586729844795214e-17,
+        "residual_backward_error": 1.5293364922397607e-17,
+        "joule_loss_W": 29147.55202311705,
+        "linear_sibc_joule_loss_W": 31458.986194399346,
+        "local_vs_linear_solution_relative_difference": 0.007338270817895249,
+        "local_vs_linear_port_relative_difference": 0.017578672396590507,
+        "fixed_gram_replay_relative_difference": 0.0,
+        "magnetization_norm": 7338.85208002661,
+        "eddy_current_norm": 13507.26782054359
+      },
+      "wall_s": 0.3414523999672383
+    },
+    {
+      "applied_H_A_per_m": 5000.0,
+      "linear_surface_impedance_ohm": {
+        "real": 0.00886226925452758,
+        "imag": 0.00886226925452758
+      },
+      "local_surface_impedance": {
+        "real_min_ohm": 0.0066262759979329525,
+        "real_mean_ohm": 0.0073890818301669825,
+        "real_max_ohm": 0.008914549645700319,
+        "imag_min_ohm": 0.005809920156384114,
+        "imag_mean_ohm": 0.0068264913353592365,
+        "imag_max_ohm": 0.008859444849858199,
+        "passive": true
+      },
+      "local_esim": {
+        "converged": true,
+        "iterations": 5,
+        "relative_impedance_change": 0.002771206736648671,
+        "h_min_A_per_m": 88.63669851534061,
+        "h_max_A_per_m": 6756.612946654393,
+        "cell_solve_count": 4
+      },
+      "mixed": {
+        "residual_relative_norm": 3.827139639659028e-16,
+        "residual_backward_error": 1.913569819829514e-16,
+        "joule_loss_W": 605041.8536652414,
+        "linear_sibc_joule_loss_W": 786474.6548599834,
+        "local_vs_linear_solution_relative_difference": 0.02095930487740433,
+        "local_vs_linear_port_relative_difference": 0.05021048922119903,
+        "fixed_gram_replay_relative_difference": 0.0,
+        "magnetization_norm": 35190.73516132415,
+        "eddy_current_norm": 68101.51891284726
+      },
+      "wall_s": 0.4285461000399664
+    }
+  ],
+  "checks": {
+    "source_fingerprints_stable_during_run": true,
+    "same_region_is_magnetic_and_conductive": true,
+    "high_frequency_route_selects_sibc": true,
+    "all_local_esim_outer_loops_converged": true,
+    "all_local_surface_grams_are_passive": true,
+    "all_mixed_residuals_below_1e-10": true,
+    "all_joule_losses_are_positive": true,
+    "converged_gram_replay_matches_mixed_solution": true,
+    "surface_impedance_changes_with_field_amplitude": true,
+    "high_field_reduces_mean_surface_resistance": true,
+    "nonlinear_departure_grows_from_low_to_high_field": true,
+    "companion_volumetric_magnetic_conductor_gate_passes": true
+  },
+  "pass": true,
+  "timing_s": {
+    "mesh": 0.017877500038594007,
+    "assembly_and_reduction": 0.8913185000419617,
+    "amplitude_solves": 1.0358607000671327,
+    "total": 1.9761243000393733
+  },
+  "companion_evidence": {
+    "artifact": "validation_test/vim_coupled/results_magnetic_conductor_disk_adjudication.json",
+    "purpose": "axisymmetric Q2 and full 3-D HCurl volumetric accuracy at frequencies where skin penetration is resolved"
+  },
+  "claim_boundary": {
+    "established": "a single TET iron region can carry fixed bulk HDiv-MMM magnetization, HCurl eddy-bubble currents, and a passive field-dependent local ESIM surface law in one converged mixed harmonic solve",
+    "not_established": "a simultaneous ordinary bulk nonlinear B-H update, hysteretic or rotational skin state, multidimensional corner cells, or universal accuracy and performance superiority"
+  }
+}

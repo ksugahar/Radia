@@ -121,6 +121,29 @@ class EddySIBCApplicability:
     def selected_model(self) -> str:
         return "sibc" if self.sibc_applicable else "volumetric"
 
+    def at_frequency(self, frequency_hz: float) -> "EddySIBCApplicability":
+        """Return the same physical gate evaluated at another frequency."""
+
+        return replace(self, frequency_hz=frequency_hz)
+
+    def frequency_route(self, frequency_hz: float) -> dict[str, object]:
+        """Describe whether an assembled route remains valid at a frequency."""
+
+        requested = self.at_frequency(frequency_hz)
+        return {
+            "assembled_frequency_hz": self.frequency_hz,
+            "requested_frequency_hz": requested.frequency_hz,
+            "assembled_model": self.selected_model,
+            "requested_model": requested.selected_model,
+            "route_compatible": requested.selected_model == self.selected_model,
+            "requested_thickness_to_skin_depth": (
+                requested.thickness_to_skin_depth
+            ),
+            "requested_curvature_radius_to_skin_depth": (
+                requested.curvature_radius_to_skin_depth
+            ),
+        }
+
     def diagnostics(self) -> dict[str, float | bool | str | None]:
         return {
             "frequency_hz": self.frequency_hz,
@@ -2768,6 +2791,63 @@ class HDivMultipolePortSet:
 
 
 @dataclass(frozen=True)
+class HDivLocalPolynomialPortSet:
+    """Training-only local vector-polynomial probes for HDiv response POD."""
+
+    fields: tuple[object, ...]
+    names: tuple[str, ...]
+    degrees: tuple[int, ...]
+    center: tuple[float, float, float]
+    radius: float
+
+    def __post_init__(self) -> None:
+        fields = tuple(self.fields)
+        names = tuple(str(name) for name in self.names)
+        degrees = tuple(int(degree) for degree in self.degrees)
+        if not fields or len(names) != len(fields) or len(degrees) != len(fields):
+            raise ValueError("fields, names, and degrees must have the same non-zero length")
+        if any(degree < 0 or degree > 4 for degree in degrees):
+            raise ValueError("local polynomial degrees must lie in [0, 4]")
+        center = tuple(float(value) for value in self.center)
+        if len(center) != 3 or not np.all(np.isfinite(center)):
+            raise ValueError("center must contain three finite coordinates")
+        radius = float(self.radius)
+        if not np.isfinite(radius) or radius <= 0.0:
+            raise ValueError("radius must be positive")
+        object.__setattr__(self, "fields", fields)
+        object.__setattr__(self, "names", names)
+        object.__setattr__(self, "degrees", degrees)
+        object.__setattr__(self, "center", center)
+        object.__setattr__(self, "radius", radius)
+
+    @property
+    def count(self) -> int:
+        return len(self.fields)
+
+    @property
+    def max_degree(self) -> int:
+        return max(self.degrees)
+
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "family": "local-vector-polynomial-residual-probe",
+            "count": self.count,
+            "max_degree": self.max_degree,
+            "degrees": list(self.degrees),
+            "degree_counts": {
+                str(degree): self.degrees.count(degree)
+                for degree in sorted(set(self.degrees))
+            },
+            "names": list(self.names),
+            "center": list(self.center),
+            "radius": float(self.radius),
+            "training_only": True,
+            "source_free": False,
+            "purpose": "nonlinear-hdiv-local-enrichment",
+        }
+
+
+@dataclass(frozen=True)
 class PlanarHarmonicPortSet:
     """Real 2-D harmonic-gradient applied-H ports."""
 
@@ -3000,12 +3080,95 @@ def NgsolveHDivRegularSolidHarmonicPorts(
     )
 
 
+def NgsolveHDivLocalPolynomialTrainingPorts(
+    mesh,
+    *,
+    max_degree: int = 2,
+    center=None,
+    radius=None,
+) -> HDivLocalPolynomialPortSet:
+    """Return local vector-polynomial probes for HDiv response training.
+
+    Unlike regular-solid-harmonic applied-H ports, these fields are not
+    required to be source free.  They are algebraic probes that expose local
+    charge/star response directions to the response POD and therefore may only
+    be passed as ``training_fields``.  Degree two supplies 30 probes and is the
+    production default for nonlinear magnetic-conductor reductions.
+    """
+
+    import ngsolve as ng
+
+    if mesh.dim != 3:
+        raise ValueError("local-polynomial HDiv training ports require a 3-D mesh")
+    max_degree = int(max_degree)
+    if max_degree < 0 or max_degree > 4:
+        raise ValueError("max_degree must lie in [0, 4]")
+    coordinates = np.asarray(
+        [tuple(vertex.point) for vertex in mesh.vertices],
+        dtype=float,
+    )
+    if coordinates.ndim != 2 or coordinates.shape[1] != 3 or not coordinates.size:
+        raise ValueError("mesh must expose three-dimensional vertices")
+    if center is None:
+        center_values = 0.5 * (
+            np.min(coordinates, axis=0) + np.max(coordinates, axis=0)
+        )
+    else:
+        center_values = np.asarray(center, dtype=float).reshape(-1)
+    if center_values.size != 3 or not np.all(np.isfinite(center_values)):
+        raise ValueError("center must contain three finite coordinates")
+    if radius is None:
+        radius_value = float(
+            np.max(np.linalg.norm(coordinates - center_values, axis=1))
+        )
+    else:
+        radius_value = float(radius)
+    if not np.isfinite(radius_value) or radius_value <= 0.0:
+        raise ValueError("radius must be positive")
+
+    coordinates_cf = (
+        (ng.x - float(center_values[0])) / radius_value,
+        (ng.y - float(center_values[1])) / radius_value,
+        (ng.z - float(center_values[2])) / radius_value,
+    )
+    fields = []
+    names = []
+    degrees = []
+    axes = ("x", "y", "z")
+    for degree in range(max_degree + 1):
+        for power_x in range(degree, -1, -1):
+            for power_y in range(degree - power_x, -1, -1):
+                power_z = degree - power_x - power_y
+                monomial = 1.0
+                for coordinate, power in zip(
+                    coordinates_cf,
+                    (power_x, power_y, power_z),
+                ):
+                    if power:
+                        monomial *= coordinate**power
+                for axis_index, axis_name in enumerate(axes):
+                    components = [0.0, 0.0, 0.0]
+                    components[axis_index] = monomial
+                    fields.append(ng.CoefficientFunction(tuple(components)))
+                    names.append(
+                        f"lp_d{degree}_x{power_x}y{power_y}z{power_z}_{axis_name}"
+                    )
+                    degrees.append(degree)
+    return HDivLocalPolynomialPortSet(
+        fields=tuple(fields),
+        names=tuple(names),
+        degrees=tuple(degrees),
+        center=tuple(center_values),
+        radius=radius_value,
+    )
+
+
 def _ngsolve_field_tuple(fields):
     import ngsolve as ng
 
     if fields is None:
         return ()
-    if isinstance(fields, HDivMultipolePortSet):
+    if isinstance(fields, (HDivMultipolePortSet, HDivLocalPolynomialPortSet)):
         return fields.fields
     if isinstance(fields, (tuple, list)):
         if len(fields) in (2, 3) and all(np.isscalar(value) for value in fields):
@@ -3017,6 +3180,10 @@ def _ngsolve_field_tuple(fields):
 def _ngsolve_parent_external_field_rhs(mesh, fes, external_fields, *, materials=None):
     import ngsolve as ng
 
+    if isinstance(external_fields, HDivLocalPolynomialPortSet):
+        raise ValueError(
+            "local-polynomial HDiv ports are training-only; pass them as training_fields"
+        )
     fields = _ngsolve_field_tuple(external_fields)
     if not fields:
         raise ValueError("external_fields must not be empty")
@@ -3055,6 +3222,30 @@ def NgsolveHDivExternalFieldRHS(
         materials=materials,
     )
     return q.conj().T @ parent_rhs
+
+
+@dataclass(frozen=True)
+class HDivMMMReducedSolution:
+    """Solved 3-D HDiv-MMM response in reduced, parent, and sampled form."""
+
+    reduced_coefficients: np.ndarray
+    parent_coefficients: np.ndarray
+    sampled_magnetization: np.ndarray
+    average_magnetization: np.ndarray
+    residual_relative_norm: float
+
+    @property
+    def n_excitations(self) -> int:
+        return int(self.reduced_coefficients.shape[1])
+
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "n_excitations": self.n_excitations,
+            "reduced_modes": int(self.reduced_coefficients.shape[0]),
+            "parent_dofs": int(self.parent_coefficients.shape[0]),
+            "sample_count": int(self.sampled_magnetization.shape[1]),
+            "residual_relative_norm": float(self.residual_relative_norm),
+        }
 
 
 @dataclass(frozen=True)
@@ -3155,6 +3346,48 @@ class HDivMMMReducedModel:
                 f"reduced_coefficients must have shape ({self.n_modes}, n_rhs)"
             )
         return self.parent_vectors @ coefficients
+
+    def solve(
+        self,
+        external_fields=None,
+        *,
+        materials=None,
+    ) -> HDivMMMReducedSolution:
+        """Solve stored or newly projected applied-H excitations.
+
+        The returned sampled and volume-average magnetization use the same
+        quadrature rule as the reduced HDiv-MMM basis.  This keeps validation
+        code on the public model contract instead of reconstructing modes with
+        ad-hoc NumPy expressions.
+        """
+
+        rhs = (
+            self.magnetic_rhs
+            if external_fields is None
+            else self.external_field_rhs(external_fields, materials=materials)
+        )
+        if rhs is None:
+            raise ValueError("no stored magnetic RHS; pass external_fields")
+        coefficients = np.linalg.solve(self.magnetic_operator, rhs)
+        residual = self.magnetic_operator @ coefficients - rhs
+        relative = float(
+            np.linalg.norm(residual)
+            / max(np.linalg.norm(rhs), np.finfo(float).tiny)
+        )
+        sampled = np.einsum(
+            "mr,mik->rik",
+            coefficients,
+            self.magnetization_basis.modes,
+        )
+        weights = self.magnetization_basis.weights
+        average = np.einsum("rik,i->rk", sampled, weights) / np.sum(weights)
+        return HDivMMMReducedSolution(
+            reduced_coefficients=coefficients,
+            parent_coefficients=self.reconstruct_parent(coefficients),
+            sampled_magnetization=sampled,
+            average_magnetization=average,
+            residual_relative_norm=relative,
+        )
 
     def diagnostics(self) -> dict[str, object]:
         native_gram = getattr(self.demag_backend, "_G", None)
@@ -3303,7 +3536,7 @@ def NgsolveHDivMMMReduction(
 def _hdiv_response_field_names(fields, supplied_names, prefix: str) -> tuple[str, ...]:
     values = _ngsolve_field_tuple(fields)
     if supplied_names is None:
-        if isinstance(fields, HDivMultipolePortSet):
+        if isinstance(fields, (HDivMultipolePortSet, HDivLocalPolynomialPortSet)):
             return fields.names
         return tuple(f"{prefix}_{index}" for index in range(len(values)))
     names = tuple(str(name) for name in supplied_names)
@@ -3613,6 +3846,10 @@ def NgsolveHDivMMMResponseReduction(
         raise ValueError("pod_rtol, solve_tol, and solve_maxit must be positive")
     if max_modes is not None and int(max_modes) < 1:
         raise ValueError("max_modes must be positive or None")
+    if isinstance(external_fields, HDivLocalPolynomialPortSet):
+        raise ValueError(
+            "local-polynomial HDiv ports are training-only; pass them as training_fields"
+        )
 
     physical_fields = _ngsolve_field_tuple(external_fields)
     enrichment_fields = _ngsolve_field_tuple(training_fields)
@@ -3711,7 +3948,10 @@ def NgsolveHDivMMMResponseReduction(
     else:
         backend = "ngsolve-mass-preconditioned-cg"
         system_matrix = demag_matrix + inv_chi * mass_matrix
-        preconditioner = mass_matrix.Inverse(inverse=inverse)
+        preconditioner = mass_matrix.Inverse(
+            freedofs=fes.FreeDofs(),
+            inverse=inverse,
+        )
         solver = ng.CGSolver(
             system_matrix,
             preconditioner,
@@ -3725,7 +3965,8 @@ def NgsolveHDivMMMResponseReduction(
 
         for index in range(count):
             rhs_vector = _ngsolve_array_to_vector(mass_matrix, parent_rhs[:, index])
-            solved = solver * rhs_vector
+            solved = rhs_vector.CreateVector()
+            solved.data = solver * rhs_vector
             snapshot = np.array(solved.FV().NumPy(), copy=True)
             snapshots.append(snapshot)
             iterations.append(int(solver.GetSteps()))
@@ -3968,6 +4209,19 @@ def NgsolveHDivMMMResponseReduction(
             if isinstance(training_fields, HDivMultipolePortSet)
             else None
         ),
+        "local_polynomial_training": (
+            training_fields.diagnostics()
+            if isinstance(training_fields, HDivLocalPolynomialPortSet)
+            else None
+        ),
+        "training_ports": (
+            training_fields.diagnostics()
+            if isinstance(
+                training_fields,
+                (HDivMultipolePortSet, HDivLocalPolynomialPortSet),
+            )
+            else None
+        ),
     }
     return NgsolveHDivMMMReduction(
         mesh,
@@ -4005,7 +4259,9 @@ def NgsolveBDMHDivMMMResponseReduction(
     intorder: int = 2,
     materials=None,
     mass=None,
+    hdiv_definedon=None,
     demag_operator=None,
+    demag_operator_factory=None,
     demag_intorder=None,
     demag_eps: float = 1.0e-7,
     demag_leafsize: int = 16,
@@ -4016,10 +4272,13 @@ def NgsolveBDMHDivMMMResponseReduction(
     """Build the production BDM-MMM response reduction on ``mesh``.
 
     The parent space is deliberately constructed as bare
-    ``ngsolve.HDiv(mesh, order=order)``.  In NGSolve this selects BDM on
-    simplex cells; no ``RT=True`` flag is forwarded.  The returned diagnostics
-    lock both the family and parent order so a later mixed solve cannot silently
-    relabel an RT comparison as production BDM.
+    ``ngsolve.HDiv(mesh, order=order)`` or, when ``hdiv_definedon`` is supplied,
+    the same BDM space restricted to that material region.  No ``RT=True`` flag
+    is forwarded.  A restricted space requires ``demag_operator_factory`` so
+    the operator is built from the exact FESpace instance rather than relying
+    on coincident DOF numbering.  The returned diagnostics lock both the family
+    and parent order so a later mixed solve cannot silently relabel an RT
+    comparison as production BDM.
     """
 
     import ngsolve as ng
@@ -4029,7 +4288,29 @@ def NgsolveBDMHDivMMMResponseReduction(
         raise ValueError("order must be positive")
     if mesh.dim != 3:
         raise ValueError("NgsolveBDMHDivMMMResponseReduction requires a 3-D mesh")
-    fes = ng.HDiv(mesh, order=order)
+    if demag_operator is not None and demag_operator_factory is not None:
+        raise ValueError(
+            "demag_operator and demag_operator_factory are mutually exclusive"
+        )
+    if hdiv_definedon is not None and demag_operator_factory is None:
+        raise ValueError(
+            "hdiv_definedon requires demag_operator_factory so the demag "
+            "operator is built on the exact restricted HDiv space"
+        )
+    region = hdiv_definedon
+    if isinstance(region, str):
+        region = mesh.Materials(region)
+    fes = (
+        ng.HDiv(mesh, order=order)
+        if region is None
+        else ng.HDiv(mesh, order=order, definedon=region)
+    )
+    if demag_operator_factory is not None:
+        if not callable(demag_operator_factory):
+            raise TypeError("demag_operator_factory must be callable")
+        demag_operator = demag_operator_factory(fes)
+        if demag_operator is None:
+            raise TypeError("demag_operator_factory returned None")
     return NgsolveHDivMMMResponseReduction(
         mesh,
         fes,
@@ -5065,6 +5346,25 @@ class HACApKSampledLaplaceInteraction:
             cross_only=self.cross_only,
         )
 
+    def diagonal_correction(
+        self,
+        left: SampledCurrentBasis,
+        right: SampledCurrentBasis,
+        assembled_operator,
+        start: int,
+        stop: int,
+    ):
+        """Replace one sampled diagonal through a restricted H-matrix apply."""
+
+        return _matrix_free_diagonal_correction(
+            self,
+            left,
+            right,
+            assembled_operator,
+            start,
+            stop,
+        )
+
     def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
         sampled = _interaction_block(
             left,
@@ -5149,6 +5449,25 @@ class HACApKSampledPlanarLogInteraction:
             cross_only=self.cross_only,
             kernel="planar-log",
             reference_length=self.reference_length,
+        )
+
+    def diagonal_correction(
+        self,
+        left: SampledCurrentBasis,
+        right: SampledCurrentBasis,
+        assembled_operator,
+        start: int,
+        stop: int,
+    ):
+        """Replace one sampled diagonal through a restricted H-matrix apply."""
+
+        return _matrix_free_diagonal_correction(
+            self,
+            left,
+            right,
+            assembled_operator,
+            start,
+            stop,
         )
 
     def __call__(self, left: SampledCurrentBasis, right: SampledCurrentBasis):
@@ -5612,6 +5931,121 @@ def _build_sampled_hacapk_operator(
     )
 
 
+class RestrictedReducedOperator:
+    """Restriction ``scale * R A R.T`` of a larger matrix-free operator."""
+
+    def __init__(self, parent, start: int, stop: int, *, scale: float = 1.0):
+        if not _is_matrix_free_operator(parent):
+            raise TypeError("parent must be a matrix-free operator")
+        parent_shape = tuple(parent.shape)
+        if len(parent_shape) != 2 or parent_shape[0] != parent_shape[1]:
+            raise ValueError("parent operator must be square")
+        start = int(start)
+        stop = int(stop)
+        if start < 0 or stop <= start or stop > parent_shape[0]:
+            raise ValueError("invalid restricted operator interval")
+        scale = float(scale)
+        if not np.isfinite(scale):
+            raise ValueError("restricted operator scale must be finite")
+        self._parent = parent
+        self._start = start
+        self._stop = stop
+        self._scale = scale
+        self.shape = (stop - start, stop - start)
+        self.dtype = np.result_type(parent.dtype, scale)
+
+    @property
+    def T(self):
+        return self
+
+    @property
+    def H(self):
+        return self
+
+    @property
+    def matrix_free(self) -> bool:
+        return True
+
+    @property
+    def is_hermitian(self) -> bool:
+        return bool(getattr(self._parent, "is_hermitian", False))
+
+    def matvec(self, vector):
+        values = np.asarray(vector)
+        if values.shape != (self.shape[1],):
+            raise ValueError(f"vector must have shape ({self.shape[1]},)")
+        embedded = np.zeros(self._parent.shape[1], dtype=values.dtype)
+        embedded[self._start:self._stop] = values
+        result = self._parent.matvec(embedded)
+        return self._scale * np.asarray(result)[self._start:self._stop]
+
+    def matmat(self, matrix):
+        values = np.asarray(matrix)
+        if values.ndim == 1:
+            return self.matvec(values)
+        if values.ndim != 2 or values.shape[0] != self.shape[1]:
+            raise ValueError(f"matrix must have shape ({self.shape[1]}, n_rhs)")
+        embedded = np.zeros(
+            (self._parent.shape[1], values.shape[1]), dtype=values.dtype
+        )
+        embedded[self._start:self._stop, :] = values
+        result = self._parent.matmat(embedded)
+        return self._scale * np.asarray(result)[self._start:self._stop, :]
+
+    def __matmul__(self, other):
+        values = np.asarray(other)
+        return self.matvec(values) if values.ndim == 1 else self.matmat(values)
+
+    def to_dense(self):
+        dense = self.matmat(np.eye(self.shape[1]))
+        return 0.5 * (dense + dense.conj().T)
+
+    def stats(self):
+        return {
+            "operator": "restricted-parent-diagonal",
+            "matrix_free": True,
+            "mode_count": int(self.shape[0]),
+            "parent_mode_count": int(self._parent.shape[0]),
+            "parent_start": self._start,
+            "parent_stop": self._stop,
+            "scale": self._scale,
+        }
+
+
+def _matrix_free_diagonal_correction(
+    interaction,
+    left,
+    right,
+    assembled_operator,
+    start: int,
+    stop: int,
+):
+    if left is not right:
+        raise ValueError("matrix-free diagonal correction requires identical bases")
+    use_override = interaction.diagonal_interaction is not None and (
+        not interaction.diagonal_bases
+        or any(left is basis for basis in interaction.diagonal_bases)
+    )
+    if not use_override:
+        return np.zeros((left.n_modes, left.n_modes), dtype=complex)
+    sampled = RestrictedReducedOperator(
+        assembled_operator,
+        start,
+        stop,
+        scale=-1.0,
+    )
+    desired = interaction.diagonal_interaction(left, right)
+    if _is_matrix_free_operator(desired):
+        return ReducedBlockHMatrixOperator(
+            np.zeros((left.n_modes, left.n_modes), dtype=complex),
+            ((0, left.n_modes, sampled), (0, left.n_modes, desired)),
+        )
+    return ReducedBlockHMatrixOperator(
+        np.asarray(desired),
+        ((0, left.n_modes, sampled),),
+    )
+
+
 class ReducedBlockHMatrixOperator:
     """Dense remainder plus additive symmetric matrix-free block operators."""
 
@@ -5830,6 +6264,33 @@ def _flatten_native_operator(operator, *, offset=0, scale=1.0):
         )
         dense += scale * np.asarray(operator._dense)
         return dense, terms
+    if isinstance(operator, RestrictedReducedOperator):
+        matrix_type = _radia_cpp_kernel("_ProjectedBaseMatrix")
+        if matrix_type is None:
+            raise RuntimeError(
+                "Radia C++ extension lacks the projected BaseMatrix adapter"
+            )
+        parent_native = _native_reduced_base_matrix(operator._parent)
+        projection = np.zeros(
+            (operator._parent.shape[0], operator.shape[0]),
+            dtype=np.complex128,
+        )
+        projection[
+            operator._start:operator._stop,
+            :,
+        ] = np.eye(operator.shape[0], dtype=np.complex128)
+        projected = matrix_type(parent_native, projection)
+        return (
+            np.zeros(operator.shape, dtype=complex),
+            [
+                (
+                    projected,
+                    offset,
+                    offset + operator.shape[0],
+                    scale * operator._scale,
+                )
+            ],
+        )
     if isinstance(operator, ReducedBlockHMatrixOperator):
         dense = scale * np.asarray(operator._dense, dtype=complex)
         terms = []
@@ -6019,6 +6480,8 @@ def CurrentMagneticFluxDensitySamples(
     *,
     mu: float = MU0,
     kernel_epsilon: float = 0.0,
+    target_block_size: int | None = None,
+    source_block_size: int | None = None,
 ) -> np.ndarray:
     """Evaluate ``B`` from sampled volume/surface currents at target points.
 
@@ -6038,19 +6501,79 @@ def CurrentMagneticFluxDensitySamples(
     if kernel_epsilon < 0.0:
         raise ValueError("kernel_epsilon must be non-negative")
     targets = _as_points(target_points, "target_points")
-    diff = targets[:, np.newaxis, :] - current_basis.points[np.newaxis, :, :]
-    radius2 = np.einsum("ijk,ijk->ij", diff, diff) + kernel_epsilon**2
-    if np.any(radius2 <= 0.0):
-        raise ValueError(
-            "target_points contain a source point; use a positive kernel_epsilon "
-            "or a proper singular quadrature backend"
-        )
-    kernel = current_basis.weights[np.newaxis, :] / (radius2 ** 1.5)
-    cross = np.cross(
-        current_basis.modes[:, np.newaxis, :, :],
-        diff[np.newaxis, :, :, :],
+
+    def resolved_block_size(value, count, name):
+        if value is None:
+            return count
+        if isinstance(value, bool) or int(value) != value or int(value) <= 0:
+            raise ValueError(f"{name} must be a positive integer or None")
+        return min(int(value), count)
+
+    n_targets = int(targets.shape[0])
+    n_sources = int(current_basis.n_samples)
+    target_block = resolved_block_size(
+        target_block_size,
+        n_targets,
+        "target_block_size",
     )
-    return (mu / (4.0 * np.pi)) * np.einsum("misk,is->mik", cross, kernel)
+    source_block = resolved_block_size(
+        source_block_size,
+        n_sources,
+        "source_block_size",
+    )
+    if target_block_size is None and source_block_size is None:
+        # Keep the temporary geometric arrays below roughly a few MiB.  The
+        # previous four-dimensional cross-product array scaled as
+        # n_modes*n_targets*n_sources and exhausted memory on fine HEX meshes.
+        max_pairs = 512 * 512
+        if n_targets * n_sources > max_pairs:
+            target_block = min(n_targets, 512)
+            source_block = min(n_sources, max(1, max_pairs // target_block))
+
+    result = np.zeros(
+        (current_basis.n_modes, n_targets, 3),
+        dtype=np.result_type(current_basis.modes, float),
+    )
+    if current_basis.n_modes == 0 or n_targets == 0 or n_sources == 0:
+        return result
+
+    modes = current_basis.modes
+    weights = current_basis.weights
+    sources = current_basis.points
+    for target_start in range(0, n_targets, target_block):
+        target_stop = min(target_start + target_block, n_targets)
+        target = targets[target_start:target_stop]
+        block_result = result[:, target_start:target_stop, :]
+        for source_start in range(0, n_sources, source_block):
+            source_stop = min(source_start + source_block, n_sources)
+            diff = target[:, np.newaxis, :] - sources[
+                np.newaxis, source_start:source_stop, :
+            ]
+            radius2 = np.einsum("tsk,tsk->ts", diff, diff) + kernel_epsilon**2
+            if np.any(radius2 <= 0.0):
+                raise ValueError(
+                    "target_points contain a source point; use a positive "
+                    "kernel_epsilon or a proper singular quadrature backend"
+                )
+            weighted_diff = diff * (
+                weights[np.newaxis, source_start:source_stop]
+                / (radius2 ** 1.5)
+            )[:, :, np.newaxis]
+            current = modes[:, source_start:source_stop, :]
+            block_result[:, :, 0] += (
+                current[:, :, 1] @ weighted_diff[:, :, 2].T
+                - current[:, :, 2] @ weighted_diff[:, :, 1].T
+            )
+            block_result[:, :, 1] += (
+                current[:, :, 2] @ weighted_diff[:, :, 0].T
+                - current[:, :, 0] @ weighted_diff[:, :, 2].T
+            )
+            block_result[:, :, 2] += (
+                current[:, :, 0] @ weighted_diff[:, :, 1].T
+                - current[:, :, 1] @ weighted_diff[:, :, 0].T
+            )
+    result *= mu / (4.0 * np.pi)
+    return result
 
 
 def MagnetizationCurrentCoupling(
@@ -7690,6 +8213,7 @@ class CoupledHDivHybridVIMSystem:
     response_basis: ResponseBasis | None = None
     eddy_bubbling: EddyBubbleDecomposition | None = None
     hdiv_reduction: HDivMMMReducedModel | None = None
+    sibc_applicability: EddySIBCApplicability | None = None
     conductivity: float | None = None
     eddy_block_roles: dict[str, str] | None = None
     eddy_rhs_contract: str = "raw"
@@ -7750,6 +8274,13 @@ class CoupledHDivHybridVIMSystem:
             HDivMMMReducedModel,
         ):
             raise TypeError("hdiv_reduction must be an HDivMMMReducedModel or None")
+        if self.sibc_applicability is not None and not isinstance(
+            self.sibc_applicability,
+            EddySIBCApplicability,
+        ):
+            raise TypeError(
+                "sibc_applicability must be an EddySIBCApplicability or None"
+            )
         if (
             self.hdiv_reduction is not None
             and self.hdiv_reduction.n_modes != self.magnetization_basis.n_modes
@@ -7759,6 +8290,17 @@ class CoupledHDivHybridVIMSystem:
             )
         if self.conductivity is not None and self.conductivity <= 0.0:
             raise ValueError("conductivity must be positive")
+        if (
+            self.conductivity is not None
+            and self.sibc_applicability is not None
+            and not np.isclose(
+                self.conductivity,
+                self.sibc_applicability.sigma,
+            )
+        ):
+            raise ValueError(
+                "conductivity must match sibc_applicability.sigma"
+            )
         eddy_rhs_contract = str(self.eddy_rhs_contract)
         if eddy_rhs_contract not in {"raw", "vector_potential"}:
             raise ValueError(
@@ -8136,6 +8678,17 @@ class CoupledHDivHybridVIMSystem:
         frequency = float(frequency_hz)
         if not np.isfinite(frequency) or frequency <= 0.0:
             raise ValueError("frequency_hz must be positive")
+        if self.sibc_applicability is not None:
+            route = self.sibc_applicability.frequency_route(frequency)
+            if not route["route_compatible"]:
+                raise ValueError(
+                    "frequency sweep crosses the assembled eddy-model route: "
+                    f"built at {route['assembled_frequency_hz']:g} Hz as "
+                    f"{route['assembled_model']}, but {frequency:g} Hz requires "
+                    f"{route['requested_model']}; rebuild the topology-aware "
+                    "HCurl-VIM system with a frequency-appropriate "
+                    "EddySIBCApplicability gate"
+                )
         if mu <= 0.0:
             raise ValueError("mu must be positive")
         s = 1j * 2.0 * np.pi * frequency
@@ -8380,6 +8933,21 @@ class CoupledHDivHybridVIMSystem:
             **kwargs,
         )
 
+    def solve_frequency_local_esim(
+        self,
+        model,
+        frequency_hz: float,
+        **kwargs,
+    ) -> "CoupledHDivHCurlLocalESIMSolution":
+        """Run local nonlinear ESIM updates around the full mixed solve."""
+
+        return SolveCoupledLocalESIMSurfaceVIM(
+            self,
+            model,
+            frequency_hz,
+            **kwargs,
+        )
+
     def schur_magnetic_operator(
         self,
         magnetic_operator,
@@ -8499,6 +9067,11 @@ class CoupledHDivHybridVIMSystem:
                 None
                 if self.hdiv_reduction is None
                 else self.hdiv_reduction.diagnostics()
+            ),
+            "sibc_applicability": (
+                None
+                if self.sibc_applicability is None
+                else self.sibc_applicability.diagnostics()
             ),
             "conductivity": self.conductivity,
         }
@@ -8732,6 +9305,7 @@ def CoupleHybridVIMWithHDivMMM(
     response_basis: ResponseBasis | None = None,
     eddy_bubbling: EddyBubbleDecomposition | None = None,
     hdiv_reduction: HDivMMMReducedModel | None = None,
+    sibc_applicability: EddySIBCApplicability | None = None,
     conductivity: float | None = None,
     eddy_block_roles: dict[str, str] | None = None,
     eddy_rhs_contract: str = "raw",
@@ -8765,6 +9339,7 @@ def CoupleHybridVIMWithHDivMMM(
         response_basis=response_basis,
         eddy_bubbling=eddy_bubbling,
         hdiv_reduction=hdiv_reduction,
+        sibc_applicability=sibc_applicability,
         conductivity=conductivity,
         eddy_block_roles=eddy_block_roles,
         eddy_rhs_contract=eddy_rhs_contract,
@@ -8911,7 +9486,25 @@ def AssembleHybridVIM(
                 or (assembled_operator_scope == "cross" and ia != ib)
             )
             if not assembled_pair:
-                if interaction is None:
+                correction_builder = (
+                    None
+                    if interaction is None
+                    else getattr(interaction, "diagonal_correction", None)
+                )
+                if (
+                    assembled_interaction_operator is not None
+                    and assembled_operator_scope == "cross"
+                    and ia == ib
+                    and callable(correction_builder)
+                ):
+                    block = correction_builder(
+                        left,
+                        right,
+                        assembled_interaction_operator,
+                        a0,
+                        a1,
+                    )
+                elif interaction is None:
                     block = _interaction_block(
                         left, right, mu=mu, kernel_epsilon=kernel_epsilon
                     )
@@ -10006,6 +10599,263 @@ def SolveLocalESIMSurfaceVIM(
     )
 
 
+@dataclass(frozen=True)
+class CoupledHDivHCurlLocalESIMSolution:
+    """Converged local-ESIM update wrapped around one HDiv/HCurl solve."""
+
+    mixed_solution: HCurlVIMHDivMMMSolution
+    surface_impedance: SurfaceImpedanceGram
+    tangential_field_magnitude: np.ndarray
+    frequency_hz: float
+    converged: bool
+    iterations: int
+    relative_impedance_change: float
+    history: tuple[dict[str, object], ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mixed_solution, HCurlVIMHDivMMMSolution):
+            raise TypeError("mixed_solution must be an HCurlVIMHDivMMMSolution")
+        if not isinstance(self.surface_impedance, SurfaceImpedanceGram):
+            raise TypeError("surface_impedance must be a SurfaceImpedanceGram")
+        fields = np.asarray(self.tangential_field_magnitude, dtype=float).reshape(-1)
+        if not np.all(np.isfinite(fields)) or np.any(fields < 0.0):
+            raise ValueError("tangential field magnitudes must be finite and non-negative")
+        object.__setattr__(self, "tangential_field_magnitude", np.array(fields, copy=True))
+        object.__setattr__(self, "history", tuple(dict(row) for row in self.history))
+
+    @property
+    def average_joule_loss(self) -> np.ndarray:
+        return self.mixed_solution.average_joule_loss
+
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "frequency_Hz": float(self.frequency_hz),
+            "converged": bool(self.converged),
+            "iterations": int(self.iterations),
+            "relative_impedance_change": float(self.relative_impedance_change),
+            "h_min_A_per_m": float(np.min(self.tangential_field_magnitude)),
+            "h_max_A_per_m": float(np.max(self.tangential_field_magnitude)),
+            "surface_impedance": self.surface_impedance.diagnostics(),
+            "mixed_solution": self.mixed_solution.diagnostics(),
+            "history": [dict(row) for row in self.history],
+        }
+
+
+def SolveCoupledLocalESIMSurfaceVIM(
+    system: CoupledHDivHybridVIMSystem,
+    model: LocalESIMSurfaceModel,
+    frequency_hz: float,
+    *,
+    surface_basis: SampledCurrentBasis | None = None,
+    block: str | None = None,
+    magnetic_operator=None,
+    magnetic_rhs=None,
+    eddy_rhs=None,
+    eddy_operator=None,
+    mu: float = MU0,
+    coupling_scale=None,
+    adjoint_coupling_scale=None,
+    mixed_galerkin_keep_blocks=None,
+    mixed_galerkin_eliminate_blocks=None,
+    solver: str | None = None,
+    solve_tolerance: float = 1.0e-10,
+    solve_max_iterations: int | None = None,
+    restart: int | None = None,
+    outer_tolerance: float = 1.0e-3,
+    outer_max_iterations: int = 20,
+    outer_relaxation: float = 0.5,
+    field_amplitude_scale: float = 1.0,
+    initial_surface_impedance=None,
+    raise_on_nonconvergence: bool = True,
+) -> CoupledHDivHCurlLocalESIMSolution:
+    """Solve one nonlinear SIBC excitation in the full HDiv/HCurl system.
+
+    The magnetic reduced operator is held fixed during this Karl iteration.
+    Consequently this function couples nonlinear skin impedance to HDiv-MMM,
+    but does not yet update an ordinary bulk nonlinear B-H operator.
+    """
+
+    if not isinstance(system, CoupledHDivHybridVIMSystem):
+        raise TypeError("system must be a CoupledHDivHybridVIMSystem")
+    if not isinstance(model, LocalESIMSurfaceModel):
+        raise TypeError("model must be a LocalESIMSurfaceModel")
+    frequency = float(frequency_hz)
+    if not np.isfinite(frequency) or frequency <= 0.0:
+        raise ValueError("frequency_hz must be positive")
+    outer_tolerance = float(outer_tolerance)
+    outer_relaxation = float(outer_relaxation)
+    field_amplitude_scale = float(field_amplitude_scale)
+    outer_max_iterations = int(outer_max_iterations)
+    if not np.isfinite(outer_tolerance) or outer_tolerance <= 0.0:
+        raise ValueError("outer_tolerance must be positive")
+    if outer_max_iterations < 1:
+        raise ValueError("outer_max_iterations must be >= 1")
+    if not np.isfinite(outer_relaxation) or not 0.0 < outer_relaxation <= 1.0:
+        raise ValueError("outer_relaxation must be in (0, 1]")
+    if not np.isfinite(field_amplitude_scale) or field_amplitude_scale <= 0.0:
+        raise ValueError("field_amplitude_scale must be positive")
+
+    ordered_blocks = tuple(
+        name
+        for name, _ in sorted(
+            system.eddy_system.blocks.items(),
+            key=lambda item: item[1][0],
+        )
+    )
+    if block is None:
+        if system.eddy_block_roles is not None:
+            candidates = tuple(
+                name
+                for name in ordered_blocks
+                if system.eddy_block_roles[name] == "sibc"
+            )
+        else:
+            candidates = tuple(name for name in ordered_blocks if name == "surface")
+        if len(candidates) != 1:
+            raise ValueError("exactly one SIBC block must be selected")
+        block = candidates[0]
+    block = str(block)
+    if block not in system.eddy_system.blocks:
+        raise KeyError(f"unknown eddy block {block!r}")
+    if (
+        system.eddy_block_roles is not None
+        and system.eddy_block_roles[block] != "sibc"
+    ):
+        raise ValueError(f"eddy block {block!r} is not classified as SIBC")
+    block_index = ordered_blocks.index(block)
+    if surface_basis is None:
+        surface_basis = system.eddy_bases[block_index]
+    if not isinstance(surface_basis, SampledCurrentBasis):
+        raise TypeError("surface_basis must be a SampledCurrentBasis")
+    if surface_basis.kind != "surface":
+        raise ValueError("surface_basis must have kind='surface'")
+    block_slice = system.eddy_system.block_slice(block)
+    if block_slice.stop - block_slice.start != surface_basis.n_modes:
+        raise ValueError("surface basis mode count does not match the SIBC block")
+
+    m_rhs, e_rhs = system._resolved_rhs(
+        magnetic_rhs,
+        eddy_rhs if eddy_rhs is not None else system.eddy_rhs,
+        np.complex128,
+        require_excitation=True,
+    )
+    if m_rhs.shape[1] != 1 or e_rhs.shape[1] != 1:
+        raise ValueError("local ESIM requires exactly one physical excitation")
+
+    if initial_surface_impedance is None:
+        initial_surface_impedance = model.linear_impedance(frequency)
+    if isinstance(initial_surface_impedance, SurfaceImpedanceGram):
+        _surface_impedance_term(
+            system.eddy_system.surface_mass,
+            initial_surface_impedance,
+        )
+        current_gram = initial_surface_impedance
+    elif np.isscalar(initial_surface_impedance):
+        current_gram = AssembleSurfaceImpedanceGram(
+            system.eddy_system,
+            surface_basis,
+            complex(initial_surface_impedance),
+            block=block,
+            label="coupled-local-esim-initial-linear",
+        )
+    else:
+        raise TypeError(
+            "initial_surface_impedance must be scalar or SurfaceImpedanceGram"
+        )
+
+    history = []
+    mixed_solution = None
+    fields = None
+    solved_gram = current_gram
+    impedance_table = None
+    relative_change = float("inf")
+    converged = False
+    for iteration in range(1, outer_max_iterations + 1):
+        solved_gram = current_gram
+        mixed_solution = system.solve_frequency(
+            frequency,
+            magnetic_operator=magnetic_operator,
+            magnetic_rhs=magnetic_rhs,
+            eddy_rhs=eddy_rhs,
+            eddy_operator=eddy_operator,
+            surface_impedance=solved_gram,
+            mu=mu,
+            coupling_scale=coupling_scale,
+            adjoint_coupling_scale=adjoint_coupling_scale,
+            mixed_galerkin_keep_blocks=mixed_galerkin_keep_blocks,
+            mixed_galerkin_eliminate_blocks=mixed_galerkin_eliminate_blocks,
+            solver=solver,
+            tolerance=solve_tolerance,
+            max_iterations=solve_max_iterations,
+            restart=restart,
+        )
+        if mixed_solution.n_excitations != 1:
+            raise RuntimeError("mixed local ESIM solve returned multiple excitations")
+        surface_current = mixed_solution.current_samples(block)[0]
+        fields = field_amplitude_scale * np.sqrt(
+            np.sum(np.abs(surface_current) ** 2, axis=1)
+        )
+        target_values, cell_info, impedance_table = model._impedance_samples_cached(
+            fields,
+            frequency,
+            impedance_table,
+        )
+        target_gram = AssembleSurfaceImpedanceGram(
+            system.eddy_system,
+            surface_basis,
+            target_values,
+            block=block,
+            label="coupled-local-esim",
+        )
+        denominator = max(float(np.linalg.norm(target_values)), np.finfo(float).tiny)
+        relative_change = float(
+            np.linalg.norm(target_values - solved_gram.sample_values) / denominator
+        )
+        history.append(
+            {
+                "iteration": iteration,
+                "relative_impedance_change": relative_change,
+                "mixed_residual_relative_norm": float(
+                    mixed_solution.residual_relative_norm
+                ),
+                "joule_loss_W": float(mixed_solution.average_joule_loss[0]),
+                **cell_info,
+            }
+        )
+        if relative_change <= outer_tolerance:
+            converged = True
+            break
+        relaxed_values = (
+            (1.0 - outer_relaxation) * solved_gram.sample_values
+            + outer_relaxation * target_values
+        )
+        current_gram = AssembleSurfaceImpedanceGram(
+            system.eddy_system,
+            surface_basis,
+            relaxed_values,
+            block=block,
+            label="coupled-local-esim-relaxed",
+        )
+
+    if not converged and raise_on_nonconvergence:
+        raise RuntimeError(
+            "coupled local ESIM outer iteration did not converge: "
+            f"relative change={relative_change:.3e} after "
+            f"{outer_max_iterations} iterations"
+        )
+    assert mixed_solution is not None and fields is not None
+    return CoupledHDivHCurlLocalESIMSolution(
+        mixed_solution=mixed_solution,
+        surface_impedance=solved_gram,
+        tangential_field_magnitude=fields,
+        frequency_hz=frequency,
+        converged=converged,
+        iterations=iteration,
+        relative_impedance_change=relative_change,
+        history=tuple(history),
+    )
+
+
 def _rhs_matrix_for_basis(basis: SampledCurrentBasis, vector_potentials) -> np.ndarray:
     ports = tuple(vector_potentials)
     if not ports:
@@ -10051,6 +10901,8 @@ class TopologyAwareHybridVIM:
     response_basis: ResponseBasis | None = None
     conductivity: float | None = None
     sibc_applicability: EddySIBCApplicability | None = None
+    hcurl_interaction_max_subtets: int = 512
+    bridge_cycles_enabled: bool = True
 
     def diagnostics(self) -> dict[str, object]:
         """Return complete production diagnostics for the tri-block VIM."""
@@ -10068,6 +10920,10 @@ class TopologyAwareHybridVIM:
             "has_rhs": self.rhs is not None,
             "has_response_basis": self.response_basis is not None,
             "conductivity": self.conductivity,
+            "hcurl_interaction_max_subtets": int(
+                self.hcurl_interaction_max_subtets
+            ),
+            "bridge_cycles_enabled": bool(self.bridge_cycles_enabled),
             "surface_model": (
                 "explicit"
                 if self.sibc_applicability is None
@@ -10173,6 +11029,7 @@ class TopologyAwareHybridVIM:
             response_basis=self.response_basis,
             eddy_bubbling=self.eddy_bubble_decomposition(),
             hdiv_reduction=hdiv_reduction,
+            sibc_applicability=self.sibc_applicability,
             conductivity=self.conductivity,
             eddy_block_roles={
                 "volume": "bulk",
@@ -10206,6 +11063,7 @@ def NgsolveTopologyAwareHybridVIM(
     free_dofs=None,
     volume_names=None,
     bridge_names=None,
+    include_bridge_cycles: bool = True,
     surface_names=None,
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
@@ -10213,6 +11071,7 @@ def NgsolveTopologyAwareHybridVIM(
     sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
+    hcurl_interaction_max_subtets: int = 512,
 ) -> TopologyAwareHybridVIM:
     """Build the production tri-block topology-aware HCurl VIM system.
 
@@ -10265,16 +11124,31 @@ def NgsolveTopologyAwareHybridVIM(
             rtol=current_gram_rtol,
         )
         vectors = response_basis.vectors
+    if not isinstance(include_bridge_cycles, bool):
+        raise TypeError("include_bridge_cycles must be bool")
     graph = topology.conductor_graph()
-    if bridge_names is None:
-        bridge_names = [f"bridge_cycle_{i}" for i in range(graph.cycle_rank)]
-    bridge = NgsolveBridgeCycleCurrentBasis(
-        mesh,
-        topology,
-        geometry_intorder=geometry_intorder,
-        names=bridge_names,
-    )
-    bridge = _normalize_sampled_current_modes(bridge)
+    if include_bridge_cycles:
+        if bridge_names is None:
+            bridge_names = [f"bridge_cycle_{i}" for i in range(graph.cycle_rank)]
+        bridge = NgsolveBridgeCycleCurrentBasis(
+            mesh,
+            topology,
+            geometry_intorder=geometry_intorder,
+            names=bridge_names,
+        )
+        bridge = _normalize_sampled_current_modes(bridge)
+    else:
+        if bridge_names is not None and tuple(bridge_names):
+            raise ValueError(
+                "bridge_names must be empty when include_bridge_cycles is False"
+            )
+        bridge = SampledCurrentBasis(
+            points=np.zeros((0, 3), dtype=float),
+            weights=np.zeros(0, dtype=float),
+            modes=np.zeros((0, 0, 3), dtype=float),
+            kind="volume",
+            names=(),
+        )
     surface = NgsolveSurfaceOmegaBasis(
         mesh,
         surface_grad_modes,
@@ -10301,6 +11175,7 @@ def NgsolveTopologyAwareHybridVIM(
                 volume,
                 materials=volume_materials,
                 matrix_free=True,
+                max_subtets=hcurl_interaction_max_subtets,
             )
             interaction = HACApKSampledLaplaceInteraction(
                 kernel_epsilon=sampled_epsilon,
@@ -10348,8 +11223,10 @@ def NgsolveTopologyAwareHybridVIM(
         evrs_rank=volume.n_modes,
         surface_modes=surface.n_modes,
         non_sibc_trace_modes=non_sibc_trace_modes,
-        loop_bridge_modes=graph.cycle_rank,
-        bridge_strategy="cycle-basis",
+        loop_bridge_modes=(graph.cycle_rank if include_bridge_cycles else 0),
+        bridge_strategy=(
+            "cycle-basis" if include_bridge_cycles else "disabled-by-contract"
+        ),
     )
     rhs = None
     if port_vector_potentials is not None:
@@ -10375,6 +11252,8 @@ def NgsolveTopologyAwareHybridVIM(
         response_basis=response_basis,
         conductivity=float(sigma),
         sibc_applicability=sibc_applicability,
+        hcurl_interaction_max_subtets=int(hcurl_interaction_max_subtets),
+        bridge_cycles_enabled=include_bridge_cycles,
     )
 
 
@@ -10404,6 +11283,7 @@ def NgsolveEddyBubbleHybridVIM(
     current_gram_rtol: float = 1.0e-10,
     volume_names=None,
     bridge_names=None,
+    include_bridge_cycles: bool = True,
     surface_names=None,
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
@@ -10411,6 +11291,7 @@ def NgsolveEddyBubbleHybridVIM(
     sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
+    hcurl_interaction_max_subtets: int = 512,
 ) -> TopologyAwareHybridVIM:
     """Build the full production eddy-bubbled hybrid HCurl-VIM system.
 
@@ -10464,6 +11345,7 @@ def NgsolveEddyBubbleHybridVIM(
         free_dofs=free_dofs,
         volume_names=volume_names,
         bridge_names=bridge_names,
+        include_bridge_cycles=include_bridge_cycles,
         surface_names=surface_names,
         non_sibc_trace_modes=non_sibc_trace_modes,
         parent_order=parent_order,
@@ -10471,6 +11353,7 @@ def NgsolveEddyBubbleHybridVIM(
         sibc_applicability=sibc_applicability,
         port_vector_potentials=port_vector_potentials,
         interaction=interaction,
+        hcurl_interaction_max_subtets=hcurl_interaction_max_subtets,
     )
 
 
@@ -10501,6 +11384,7 @@ def NgsolveHCurlVIMHDivMMM(
     current_gram_rtol: float = 1.0e-10,
     volume_names=None,
     bridge_names=None,
+    include_bridge_cycles: bool = True,
     surface_names=None,
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
@@ -10508,6 +11392,7 @@ def NgsolveHCurlVIMHDivMMM(
     sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
+    hcurl_interaction_max_subtets: int = 512,
     material_model: object | None = None,
     magnetic_operator=None,
     magnetic_rhs=None,
@@ -10566,6 +11451,7 @@ def NgsolveHCurlVIMHDivMMM(
         current_gram_rtol=current_gram_rtol,
         volume_names=volume_names,
         bridge_names=bridge_names,
+        include_bridge_cycles=include_bridge_cycles,
         surface_names=surface_names,
         non_sibc_trace_modes=non_sibc_trace_modes,
         parent_order=parent_order,
@@ -10573,6 +11459,7 @@ def NgsolveHCurlVIMHDivMMM(
         sibc_applicability=sibc_applicability,
         port_vector_potentials=port_vector_potentials,
         interaction=interaction,
+        hcurl_interaction_max_subtets=hcurl_interaction_max_subtets,
     )
     return hybrid.couple_hdiv_mmm(
         magnetization_basis,
@@ -10609,7 +11496,9 @@ def NgsolveBDMEddyBubbleVIM(
     hdiv_intorder: int = 2,
     magnetic_materials=None,
     hdiv_mass=None,
+    hdiv_definedon=None,
     demag_operator=None,
+    demag_operator_factory=None,
     demag_intorder=None,
     demag_eps: float = 1.0e-7,
     demag_leafsize: int = 16,
@@ -10634,6 +11523,7 @@ def NgsolveBDMEddyBubbleVIM(
     current_gram_rtol: float = 1.0e-10,
     volume_names=None,
     bridge_names=None,
+    include_bridge_cycles: bool = True,
     surface_names=None,
     non_sibc_trace_modes: int | None = None,
     parent_order: int | None = None,
@@ -10641,17 +11531,19 @@ def NgsolveBDMEddyBubbleVIM(
     sibc_applicability: EddySIBCApplicability | None = None,
     port_vector_potentials=None,
     interaction=None,
+    hcurl_interaction_max_subtets: int = 512,
     material_model: SharedMeshMaterialModel | None = None,
     mu: float = MU0,
     coupling_kernel_epsilon: float = 0.0,
 ) -> CoupledHDivHybridVIMSystem:
     """Build the production BDM-MMM plus eddy-bubble HCurl-VIM system.
 
-    One shared NGSolve mesh feeds both branches.  The magnetic parent is always
-    bare ``HDiv(order=hdiv_order)`` (BDM on simplex cells); the eddy parent is
-    the supplied high-order HCurl space and is reduced class by class into bulk
-    EVRS, conductor-cycle bridge, and air-facing SIBC modes.  Physical applied-H
-    responses are protected before POD compression.
+    One shared NGSolve mesh feeds both branches.  The magnetic parent is bare
+    ``HDiv(order=hdiv_order)`` or its explicit ``hdiv_definedon`` restriction;
+    the eddy parent is the supplied high-order HCurl space and is reduced class
+    by class into bulk EVRS, conductor-cycle bridge, and air-facing SIBC modes.
+    A restricted magnetic parent requires ``demag_operator_factory``.  Physical
+    applied-H responses are protected before POD compression.
     """
 
     if magnetic_materials is None:
@@ -10702,7 +11594,9 @@ def NgsolveBDMEddyBubbleVIM(
         intorder=hdiv_intorder,
         materials=magnetic_materials,
         mass=hdiv_mass,
+        hdiv_definedon=hdiv_definedon,
         demag_operator=demag_operator,
+        demag_operator_factory=demag_operator_factory,
         demag_intorder=demag_intorder,
         demag_eps=demag_eps,
         demag_leafsize=demag_leafsize,
@@ -10736,6 +11630,7 @@ def NgsolveBDMEddyBubbleVIM(
         current_gram_rtol=current_gram_rtol,
         volume_names=volume_names,
         bridge_names=bridge_names,
+        include_bridge_cycles=include_bridge_cycles,
         surface_names=surface_names,
         non_sibc_trace_modes=non_sibc_trace_modes,
         parent_order=parent_order,
@@ -10743,6 +11638,7 @@ def NgsolveBDMEddyBubbleVIM(
         sibc_applicability=sibc_applicability,
         port_vector_potentials=port_vector_potentials,
         interaction=interaction,
+        hcurl_interaction_max_subtets=hcurl_interaction_max_subtets,
         material_model=material_model,
         mu=mu,
         coupling_kernel_epsilon=coupling_kernel_epsilon,
@@ -10902,10 +11798,13 @@ __all__ = [
     "NgsolveMagnetizationBasis",
     "NgsolveHDivMagnetizationBasis",
     "HDivMultipolePortSet",
+    "HDivLocalPolynomialPortSet",
     "PlanarHarmonicPortSet",
     "NgsolveHDivRegularSolidHarmonicPorts",
+    "NgsolveHDivLocalPolynomialTrainingPorts",
     "NgsolvePlanarHarmonicPorts",
     "NgsolveHDivExternalFieldRHS",
+    "HDivMMMReducedSolution",
     "HDivMMMReducedModel",
     "NgsolveHDivMMMReduction",
     "NgsolveHDivMMMResponseReduction",
@@ -10952,6 +11851,7 @@ __all__ = [
     "LocalESIMSurfaceLUT",
     "LocalESIMSurfaceModel",
     "LocalESIMSurfaceSolution",
+    "CoupledHDivHCurlLocalESIMSolution",
     "BuildLocalESIMSurfaceLUT",
     "ValidateLocalESIMSurfaceLUT",
     "HybridVIMSystem",
@@ -10960,6 +11860,7 @@ __all__ = [
     "AssembleHybridVIM",
     "AssembleSurfaceImpedanceGram",
     "SolveLocalESIMSurfaceVIM",
+    "SolveCoupledLocalESIMSurfaceVIM",
     "TopologyAwareHybridVIM",
     "NgsolveTopologyAwareHybridVIM",
     "NgsolveEddyBubbleHybridVIM",

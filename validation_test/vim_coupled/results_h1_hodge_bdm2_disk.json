@@ -1,0 +1,218 @@
+{
+  "schema": "radia.validation.h1-hodge-bdm2-axisymmetric-disk.v1",
+  "created_at_utc": "2026-08-05T11:48:45.395318+00:00",
+  "tool_versions": {
+    "radia": "4.95.42",
+    "radia_source_head": "0094f0768b47a0eb7438e42780e411b94ce87187",
+    "radia_source_head_end": "0094f0768b47a0eb7438e42780e411b94ce87187",
+    "radia_source_dirty": true,
+    "python": "3.12.10",
+    "ngsolve": "6.2.2604",
+    "numpy": "2.4.6"
+  },
+  "source_fingerprints": {
+    "validation_test/vim_coupled/validate_h1_hodge_bdm2_disk.py": "045d2ac1f7e06ad007620eba9907229c6e7b8bb5c6be826f5eb97d8af14833b9",
+    "validation_test/vim_coupled/validate_magnetic_conductor_disk.py": "6e013fe103b2d7f7ec17271008df1579ea51ce6165c3e9e5159ab2517670c20e",
+    "src/radia/vim/_vim.py": "83c9b4ade15e42252db3f94f8ed97dea0a6cd0d7272663d89c458132f93a4bfa",
+    "src/radia/vim/_eddy_hybrid.py": "e1455340e7d700b4bb4fd9addd06f7d39c933766d1daebf1d98e205f367a790a",
+    "src/radia/axifem.pyd": "f7444d51ee94c5ca66c5a842a20cff50ef21e2bde563caf6da1cf163838d87b2"
+  },
+  "identity": {
+    "geometry": "solid circular disk in an air box",
+    "radius_m": 0.01,
+    "thickness_m": 0.0005,
+    "mu_r": 100.0,
+    "excitation": "uniform axial H",
+    "meshes_tracked": false
+  },
+  "axisymmetric_q2_static_reference": {
+    "frequency_hz": 0.0,
+    "normalized_Bz": [
+      1.0916977441121123,
+      0.0
+    ],
+    "elements": 18432,
+    "dofs": 74305,
+    "mesh_parameters": {
+      "nr_disk": 160,
+      "nz_disk": 32,
+      "nr_air": 32,
+      "nz_air": 32,
+      "outer_radius_m": 0.5,
+      "outer_half_height_m": 0.5
+    },
+    "wall_s": 10.663485599914566
+  },
+  "h1_hodge_3d_cases": [
+    {
+      "maxh_m": 0.002,
+      "tetrahedra": 7274,
+      "hdiv_family": "BDM",
+      "hdiv_order": 1,
+      "hdiv_dofs": 17290,
+      "hdiv_active_dofs": 3690,
+      "h1_order": 2,
+      "h1_dofs": 10345,
+      "h1_free_dofs": 9215,
+      "normalized_Bz": 1.142506412905907,
+      "reference_relative_error": 0.046540967101766716,
+      "reduced_demag_generalized_eigenvalue": 0.723590227974702,
+      "snapshot_backend": "ngsolve-mass-preconditioned-cg",
+      "snapshot_iterations": [
+        82
+      ],
+      "max_snapshot_relative_residual": 1.2085278236421966e-10,
+      "response_relative_energy_error": 1.2448170623494724e-16,
+      "reduced_solve_relative_residual": 0.0,
+      "operator": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 17290,
+        "hdiv_active_dofs": 3690,
+        "h1_dofs": 10345,
+        "h1_free_dofs": 9215,
+        "h1_constrained_dofs": 1130,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-disk-accuracy",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "wall_s": 1.0988638000562787
+    },
+    {
+      "maxh_m": 0.002,
+      "tetrahedra": 7274,
+      "hdiv_family": "BDM",
+      "hdiv_order": 2,
+      "hdiv_dofs": 24064,
+      "hdiv_active_dofs": 10464,
+      "h1_order": 3,
+      "h1_dofs": 34125,
+      "h1_free_dofs": 31585,
+      "normalized_Bz": 1.1161526410390974,
+      "reference_relative_error": 0.022400794596195206,
+      "reduced_demag_generalized_eigenvalue": 0.7997585935264689,
+      "snapshot_backend": "ngsolve-mass-preconditioned-cg",
+      "snapshot_iterations": [
+        84
+      ],
+      "max_snapshot_relative_residual": 8.211204431862719e-11,
+      "response_relative_energy_error": 1.8955274351291184e-16,
+      "reduced_solve_relative_residual": 0.0,
+      "operator": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 24064,
+        "hdiv_active_dofs": 10464,
+        "h1_dofs": 34125,
+        "h1_free_dofs": 31585,
+        "h1_constrained_dofs": 2540,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-disk-accuracy",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "wall_s": 4.430516100022942
+    },
+    {
+      "maxh_m": 0.001,
+      "tetrahedra": 17686,
+      "hdiv_family": "BDM",
+      "hdiv_order": 2,
+      "hdiv_dofs": 68738,
+      "hdiv_active_dofs": 37470,
+      "h1_order": 3,
+      "h1_dofs": 81029,
+      "h1_free_dofs": 78480,
+      "normalized_Bz": 1.1073711301390912,
+      "reference_relative_error": 0.014356891466993166,
+      "reduced_demag_generalized_eigenvalue": 0.8291101082473262,
+      "snapshot_backend": "ngsolve-mass-preconditioned-cg",
+      "snapshot_iterations": [
+        83
+      ],
+      "max_snapshot_relative_residual": 5.430246980287179e-11,
+      "response_relative_energy_error": 2.937237965665899e-16,
+      "reduced_solve_relative_residual": 0.0,
+      "operator": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 68738,
+        "hdiv_active_dofs": 37470,
+        "h1_dofs": 81029,
+        "h1_free_dofs": 78480,
+        "h1_constrained_dofs": 2549,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-disk-accuracy",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "wall_s": 15.006994399940595
+    },
+    {
+      "maxh_m": 0.001,
+      "tetrahedra": 17686,
+      "hdiv_family": "BDM",
+      "hdiv_order": 2,
+      "hdiv_dofs": 68738,
+      "hdiv_active_dofs": 37470,
+      "h1_order": 4,
+      "h1_dofs": 191139,
+      "h1_free_dofs": 186609,
+      "normalized_Bz": 1.1023601974903854,
+      "reference_relative_error": 0.009766854823855083,
+      "reduced_demag_generalized_eigenvalue": 0.8452610186113303,
+      "snapshot_backend": "ngsolve-mass-preconditioned-cg",
+      "snapshot_iterations": [
+        90
+      ],
+      "max_snapshot_relative_residual": 4.649546455215841e-11,
+      "response_relative_energy_error": 7.829047254055126e-17,
+      "reduced_solve_relative_residual": 0.0,
+      "operator": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 68738,
+        "hdiv_active_dofs": 37470,
+        "h1_dofs": 191139,
+        "h1_free_dofs": 186609,
+        "h1_constrained_dofs": 4530,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-disk-accuracy",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "wall_s": 52.00957880006172
+    }
+  ],
+  "checks": {
+    "source_fingerprints_stable_during_run": true,
+    "axisymmetric_static_reference_is_real": true,
+    "all_response_solves_converged": true,
+    "all_reduced_material_solves_converged": true,
+    "all_hodge_modes_are_contractive": true,
+    "coarse_bdm2_improves_on_coarse_bdm1": true,
+    "bdm2_h_and_h1_p_ladder_is_strict": true,
+    "fine_bdm2_h1p4_error_below_one_percent": true
+  },
+  "pass": true,
+  "timing_s": {
+    "axisymmetric_reference": 10.663485599914566,
+    "coarse_mesh": 0.5318093999521807,
+    "fine_mesh": 0.9095858000218868,
+    "case_solves": 72.54595310008153,
+    "total": 84.86168610001914
+  },
+  "claim_boundary": {
+    "established": "on this disk, the finite-domain 3-D BDM2/H1-Hodge response converges monotonically toward the independent axisymmetric Q2 static observable and reaches below one-percent error",
+    "not_established": "an exact open-boundary H1 formulation, universal BDM2 superiority, or transient mixed-solver accuracy"
+  }
+}

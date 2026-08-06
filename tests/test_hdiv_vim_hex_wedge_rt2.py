@@ -137,6 +137,40 @@ def test_rt2_demag_spectrum_is_physical(kind):
     assert eigenvalues.max() <= 1.0 + 2e-5
 
 
+def test_mapped_hex_rt2_material_solve_fails_loud_before_wrong_physics():
+    mesh = MakeStructured3DMesh(
+        hexes=True, nx=2, ny=1, nz=1,
+        mapping=lambda x, y, z: (
+            0.02*(x + 0.35*y*z),
+            0.02*(y + 0.20*x*z),
+            0.02*(z + 0.25*x*y),
+        ),
+    )
+    with ng.TaskManager(), pytest.raises(
+            NotImplementedError, match="mapped/non-affine HEX BDM2"):
+        Solve(
+            mesh, mu_r=100.0, H_ext=ng.CF((0, 0, 1000.0)),
+            order=2, tol=1e-9)
+
+
+def test_mapped_hex_bdm1_material_solve_remains_the_supported_lane():
+    mesh = MakeStructured3DMesh(
+        hexes=True, nx=2, ny=1, nz=1,
+        mapping=lambda x, y, z: (
+            0.02*(x + 0.35*y*z),
+            0.02*(y + 0.20*x*z),
+            0.02*(z + 0.25*x*y),
+        ),
+    )
+    with ng.TaskManager():
+        result = Solve(
+            mesh, mu_r=10.0, H_ext=ng.CF((0, 0, 1000.0)),
+            order=1, tol=1e-8)
+    assert result["order"] == 1
+    assert result["iters"] < 100
+    assert np.isfinite(result["M_avg"]).all()
+
+
 def test_rt2_hex_far_block_uses_accurate_complete_tensor_rule():
     """A separated affine pair exercises the fast far block, not the exact near recurrence."""
     x5, w5 = np.polynomial.legendre.leggauss(5)
