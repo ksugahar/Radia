@@ -1254,9 +1254,10 @@ _MESH_QUALITY_SCRIPT = r"""
 import json
 import sys
 
-msh_path, quadrature, threshold_s, worst_n_s, out_path = sys.argv[1:6]
+msh_path, quadrature, threshold_s, worst_n_s, stats_s, out_path = sys.argv[1:7]
 threshold = float(threshold_s)
 worst_n = int(worst_n_s)
+want_stats = stats_s == "1"
 result = {"ok": False, "ran": False}
 try:
     import numpy as np
@@ -1305,6 +1306,35 @@ try:
                       "metric": "minSICN",
                       "jacobian_ratio": float(jac_ratio[i]),
                       "min_det": float(e_min[i])} for i in worst_idx]
+            aniso = None
+            if want_stats:
+                # minSICN is a SHAPE number and says little about stretching;
+                # thin-gap / lamination meshes are exactly where that gap
+                # bites, so report the edge-length aspect ratio explicitly.
+                e_lo = np.asarray(gmsh.model.mesh.getElementQualities(
+                    etags, "minEdge"), dtype=float)
+                e_hi = np.asarray(gmsh.model.mesh.getElementQualities(
+                    etags, "maxEdge"), dtype=float)
+                iso = np.asarray(gmsh.model.mesh.getElementQualities(
+                    etags, "minIsotropy"), dtype=float)
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    ar = np.where(e_lo > 0.0, e_hi / e_lo, np.inf)
+                ar_f = ar[np.isfinite(ar)]
+                aniso = {
+                    "aspect_ratio": {
+                        "min": float(ar_f.min()) if ar_f.size else None,
+                        "mean": float(ar_f.mean()) if ar_f.size else None,
+                        "p95": (float(np.percentile(ar_f, 95))
+                                if ar_f.size else None),
+                        "max": float(ar_f.max()) if ar_f.size else None,
+                        "n_above_10": int((ar_f > 10.0).sum()),
+                        "n_nonfinite": int((~np.isfinite(ar)).sum()),
+                    },
+                    "min_isotropy": {
+                        "min": float(iso.min()) if iso.size else None,
+                        "mean": float(iso.mean()) if iso.size else None,
+                    },
+                }
             by_type.append({
                 "type": int(et), "name": str(name), "order": int(order),
                 "n_elements": int(len(etags)),
@@ -1319,6 +1349,7 @@ try:
                 "negative": neg,
                 "below_threshold": below,
                 "worst": worst,
+                **(aniso or {}),
             })
             total_neg += neg
             total_below += below
@@ -1335,6 +1366,62 @@ try:
             "total_below_threshold": total_below,
             "histogram": {"edges": hist_edges, "counts": hist_total},
         })
+        if want_stats and by_type:
+            # ---- cost axis + anisotropy -------------------------------
+            # Measured (validation_test/radia_mcp/mesh_quality_study):
+            # element COUNT is not the cost -- the linear system is sized
+            # by dof, and the share of INTERIOR nodes is what separated
+            # the meshers at matched dof. minSICN alone reports neither.
+            gmsh.model.mesh.createEdges()
+            gmsh.model.mesh.createFaces()
+            edge_tags, _ = gmsh.model.mesh.getAllEdges()
+            tri_tags, _ = gmsh.model.mesh.getAllFaces(3)
+            quad_tags, _ = gmsh.model.mesh.getAllFaces(4)
+            node_tags, _, _ = gmsh.model.mesh.getNodes()
+            n_elem3d = sum(bt["n_elements"] for bt in by_type)
+
+            # boundary faces are those incident to exactly ONE 3D element
+            bnd_nodes = set()
+            n_bnd_faces = 0
+            for et, etags in zip(etypes, etags_all):
+                for fnn in (3, 4):
+                    try:
+                        fn = gmsh.model.mesh.getElementFaceNodes(int(et), fnn)
+                    except Exception:
+                        continue
+                    if not len(fn):
+                        continue
+                    fa = np.asarray(fn, dtype=np.int64).reshape(-1, fnn)
+                    key = np.sort(fa, axis=1)
+                    uniq, inv_idx, counts = np.unique(
+                        key, axis=0, return_inverse=True, return_counts=True)
+                    once = counts == 1
+                    n_bnd_faces += int(once.sum())
+                    bnd_nodes.update(uniq[once].ravel().tolist())
+            n_nodes = int(len(node_tags))
+            n_bnd_nodes = len(bnd_nodes)
+            result["mesh_stats"] = {
+                "n_nodes": n_nodes,
+                "n_edges": int(len(edge_tags)),
+                "n_faces_tri": int(len(tri_tags)),
+                "n_faces_quad": int(len(quad_tags)),
+                "n_elements_3d": int(n_elem3d),
+                "n_boundary_faces": n_bnd_faces,
+                "n_boundary_nodes": n_bnd_nodes,
+                "n_interior_nodes": n_nodes - n_bnd_nodes,
+                "interior_node_fraction": (
+                    (n_nodes - n_bnd_nodes) / n_nodes if n_nodes else None),
+                "dof_estimate": {
+                    "h1_p1": n_nodes,
+                    "hcurl_lowest": int(len(edge_tags)),
+                    "hdiv_lowest": int(len(tri_tags)) + int(len(quad_tags)),
+                    "l2_p0": int(n_elem3d),
+                },
+                "note": ("dof_estimate is the TOTAL (unconstrained) dof "
+                         "count of the named lowest-order space on this "
+                         "mesh -- the honest cost axis for ranking meshes; "
+                         "element count is not."),
+            }
         if not by_type:
             result["ok"] = True
             result["note"] = "no 3D elements; quality gate not applicable"
@@ -1351,6 +1438,7 @@ def mesh_quality(msh_path: str | Path,
                  threshold: float = 0.1,
                  quadrature: str = "Gauss4",
                  worst_n: int = 10,
+                 include_mesh_stats: bool = True,
                  timeout_s: float = 600.0) -> dict[str, Any]:
     """Gmsh minSICN shape-quality distribution for all 3D elements.
 
@@ -1358,6 +1446,24 @@ def mesh_quality(msh_path: str | Path,
     non-inverted yet nearly degenerate. Gmsh's signed inverse condition
     number detects that shape degradation. The sampled min(detJ)/max(detJ)
     ratio is retained separately as a curvature diagnostic.
+
+    With ``include_mesh_stats`` (default on) the report also carries the
+    axes that the lab mesh-quality study found actually discriminate
+    meshes -- none of which minSICN expresses:
+
+    * ``mesh_stats.dof_estimate`` -- nodes / edges / faces, i.e. the dof
+      count of H1-p1, lowest-order HCurl and lowest-order HDiv on this
+      mesh. Element count is NOT the cost; the linear system is sized by
+      dof, and ranking meshes by element count inverts the verdict.
+    * ``mesh_stats.interior_node_fraction`` -- the share of nodes that
+      are not on the boundary. A mesher that spends its nodes on the
+      surface delivers less accuracy per dof.
+    * per-element-type ``aspect_ratio`` (maxEdge/minEdge) and
+      ``min_isotropy`` -- stretching, which a single shape number misses
+      and which is exactly what thin-gap and lamination meshes exhibit.
+
+    Set ``include_mesh_stats=False`` to skip the extra gmsh edge/face
+    construction on very large meshes.
     """
     path = Path(msh_path)
     if not path.is_file():
@@ -1365,7 +1471,8 @@ def mesh_quality(msh_path: str | Path,
                 "error": f"file not found: {path}"}
     result = run_gmsh_json_subprocess(
         _MESH_QUALITY_SCRIPT,
-        [str(path), quadrature, str(float(threshold)), str(int(worst_n))],
+        [str(path), quadrature, str(float(threshold)), str(int(worst_n)),
+         "1" if include_mesh_stats else "0"],
         timeout_s=timeout_s, prefix="radia_mcp_gmsh_quality_")
     result["path"] = str(path)
     return result

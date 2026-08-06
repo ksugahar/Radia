@@ -1238,6 +1238,53 @@ PATTERNS: list[dict] = [
         "related": ["validation_test/clebsch_legendre/verify_synrm_collector_design.py",
                     "duplicate-corner-points-stall-mesher"],
     },
+    {
+        "id": "axis-aligned-manufactured-solution-fake-superconvergence",
+        "title": "An axis-aligned manufactured solution on a structured "
+                 "mesh fakes a huge accuracy win; the derivative "
+                 "seminorm is the metric immune to it.",
+        "topics": ["mesh", "verification", "fem", "benchmark", "ngsolve"],
+        "severity": "high",
+        "first_seen": "2026-08-07",
+        "last_seen": "2026-08-07",
+        "what": "A mesher/element comparison shows one route beating "
+                "another by 10-70x in the L2 error -- far more than any "
+                "real element difference -- while the curl/div/H1 "
+                "seminorm on the same runs shows near parity. Measured: "
+                "structured hex looked 30x better than tet in HCurl L2 "
+                "and 10-18x in HDiv L2.",
+        "root_cause": "The manufactured field was separable and aligned "
+                      "with the coordinate axes (u = (sin ky, sin kz, "
+                      "sin kx)) and the structured mesh was aligned with "
+                      "the same axes, so each edge/face dof integrated "
+                      "an exactly-constant integrand -- superconvergence "
+                      "of the interpolant, not solver accuracy. Rotating "
+                      "the FIELD by 30 deg z / 20 deg y (which preserves "
+                      "curl curl u = k^2 u, because rotation commutes "
+                      "with curl and div) collapsed hex/tet L2 from "
+                      "0.017-0.031x to 0.39-0.44x (HCurl) and from "
+                      "0.055-0.100x to 0.93-1.01x (HDiv -- a dead heat). "
+                      "It also inflated hex's CG-iteration advantage "
+                      "~7x for HDiv.",
+        "detection": "Compare the L2 ratio against the derivative "
+                     "seminorm ratio in the SAME run: alignment moves L2 "
+                     "and leaves curl/div essentially untouched (0.658 "
+                     "-> 0.657 and 0.973 -> 0.967 across the rotation). "
+                     "An L2 advantage with no matching seminorm "
+                     "advantage is the signature. "
+                     "validation_test/radia_mcp/mesh_quality_study/"
+                     "run_rotation_control.py is the standing control.",
+        "prevention": "Never verify or benchmark a structured mesh with "
+                      "an axis-aligned separable exact solution. Rotate "
+                      "the field (cheaper and cleaner than rotating the "
+                      "geometry: same meshes, same exact-solution "
+                      "identity), or headline the derivative seminorm. "
+                      "Treat any order-of-magnitude mesh-comparison gap "
+                      "as an artifact until a control says otherwise.",
+        "related": ["validation_test/radia_mcp/mesh_quality_study/run_rotation_control.py",
+                    "validation_test/radia_mcp/mesh_quality_study/run_vector_elements.py",
+                    "memory/mesh_quality_min_is_chaotic.md"],
+    },
 ]
 
 

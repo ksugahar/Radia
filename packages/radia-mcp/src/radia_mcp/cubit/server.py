@@ -3940,10 +3940,22 @@ def _quality_row(route: str, mesher: str, q: dict) -> dict:
 				"negative": bt.get("negative"),
 				"below_threshold": bt.get("below_threshold"),
 				"worst_tag": (bt.get("worst") or [{}])[0].get("tag"),
+				# stretching -- minSICN is a shape number and misses it
+				"aspect_p95": (bt.get("aspect_ratio") or {}).get("p95"),
+				"aspect_max": (bt.get("aspect_ratio") or {}).get("max"),
+				"aspect_above_10": (bt.get("aspect_ratio") or {}).get("n_above_10"),
 			}
 			for bt in by_type
 		],
 	}
+	stats = q.get("mesh_stats") or {}
+	if stats:
+		# THE COST AXIS. Ranking meshes by element count inverts the
+		# verdict (measured: netgen looks ~2x cheaper per element and is
+		# never cheaper per dof); ranking by dof does not.
+		row["dof_estimate"] = stats.get("dof_estimate")
+		row["interior_node_fraction"] = stats.get("interior_node_fraction")
+		row["n_nodes"] = stats.get("n_nodes")
 	if not completed:
 		row["kind"] = "referee"
 		row["error"] = q.get("error") or q.get("note") \
@@ -3999,6 +4011,20 @@ def cubit_netgen_quality_compare(step_path: str,
 	min does NOT predict solver behaviour (order-1 Poisson CG counts and
 	L2/H1 error barely respond). Treat min_quality as a floor/safety
 	indicator -- `negative > 0` is the signal that actually matters.
+
+	RANK BY dof, NOT BY ELEMENT COUNT. Each row carries `dof_estimate`
+	(H1-p1 / lowest HCurl / lowest HDiv dof on that mesh) and
+	`interior_node_fraction`. The linear system is sized by dof, and the
+	two axes disagree: netgen produces ~2x fewer ELEMENTS at equal h yet
+	is never cheaper per dof, because more of its nodes sit on the
+	boundary (interior fraction 2-49 % vs cubit_tet 19-77 %). Measured at
+	matched dof, netgen's error is 1.14-1.89x cubit_tet's on scalar H1
+	and 1.02-1.27x on HCurl/HDiv. An element-count comparison reverses
+	this and is the single easiest way to reach a wrong conclusion here.
+
+	`aspect_p95` / `aspect_max` report stretching, which minSICN does not
+	express and which is what thin-gap and lamination meshes actually
+	exhibit.
 
 	Args:
 	    step_path: the geometry both meshers consume.
