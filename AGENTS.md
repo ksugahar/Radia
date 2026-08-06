@@ -1742,6 +1742,13 @@ mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 - `radia-mcp` (`packages\radia-mcp`)
 - `mcp-server-document` (LAB: `S:\mcp-server`) -- LAB-private (PyPI 配布なし)
 
+共有worktreeに並行WIPがあるreleaseでは、そのWIPをstash/clean/resetしてはならない。
+代わりに同一NAS上へexact SHAのclean release worktreeを作り、
+`RADIA_RELEASE_EDITABLE_REPO_LAB` と `RADIA_RELEASE_EDITABLE_REPO_100` で
+LAB/100号機から見える各pathを `release_qud all` と `done` の両方へ渡す。
+QUDはprocess停止やinstallより前にSHA一致とtracked-cleanを強制する。公開完了まで
+release worktreeを保持し、並行WIPがmainへ着地した後に通常のeditable pointerへ戻す。
+
 LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意。release 後の LAB / 100号機 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx / hibino 用** (PyPI から通常通り upgrade).
 
 **mdx / hibino 全ユーザー PyPI install**: `C:\Program Files\Python312`

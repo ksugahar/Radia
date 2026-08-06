@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.46 - Exact-source QUD deployment
+
+Released 2026-08-06.
+
+- Added a parallel-work-safe QUD route that deploys LAB and the 100-machine
+  host from one explicit clean NAS release worktree without disturbing active
+  development.
+- Made editable deployment fail before process shutdown or installation when
+  the release source has a different Git SHA or tracked changes.
+
 ## 4.95.45 - Executed Gmsh field-visualization example
 
 Released 2026-08-06.
