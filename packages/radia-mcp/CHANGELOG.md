@@ -16,8 +16,17 @@ crystallized as its own package.
   private-directory cleanup.
 - Made snapshots write through a unique temporary PNG, verify non-empty output,
   and atomically replace the destination so stale captures cannot pass.
-- Added tool-classification, call-log rotation, Job Object, stale-snapshot, and
-  live Cubit GUI lifecycle coverage.
+- Added 15 ParaView-parity Gmsh tools covering derived fields, thresholds,
+  symmetry expansion, transforms, skins, regular-grid and curve resampling,
+  CSV/histogram/history export, montages, and camera orbits.
+- Hardened the pure-Python MSH data reader against malformed section counts,
+  duplicate or missing tags, invalid row widths, tag ranges, and connectivity;
+  post plots also follow the repository's no-in-figure-title rule.
+- Completed build123d/Cubit structured error-kind coverage and made Cubit block
+  element counts deduplicate direct and geometry-based membership.
+- Added tool-classification, call-log rotation, Job Object, malformed-MSH,
+  stale-snapshot, concurrency, and live GUI plus headless Cubit coverage,
+  including explicit Popen stream and private-directory cleanup.
 
 ## [1.4.30] - 2026-08-06
 

@@ -146,8 +146,8 @@ mcp = FastMCP("mcp-server-build123d", instructions=_SERVER_INSTRUCTIONS)
 # Rather than editing ~60 literal dicts, every tool serializes through
 # _dumps(), which stamps `kind` onto any error payload that lacks one.
 _B3D_ENV_NEEDLES = (
-    "no module named 'build123d'", "no module named 'ocp'",
-    "no module named 'cadquery'", "not installed",
+    "no module named", "not installed", "dll load failed",
+    "cannot import name",
 )
 _json_dumps = json.dumps
 
@@ -156,6 +156,7 @@ def _with_kind(payload):
     if (isinstance(payload, dict) and payload.get("status") == "error"
             and "kind" not in payload):
         text = str(payload.get("error", "")).lower()
+        payload = dict(payload)
         payload["kind"] = ("environment"
                            if any(n in text for n in _B3D_ENV_NEEDLES)
                            else "input")

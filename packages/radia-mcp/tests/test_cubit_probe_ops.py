@@ -5,7 +5,6 @@ module (no Cubit license needed)."""
 from pathlib import Path
 
 import pytest
-
 from radia_mcp.cubit import probe_ops
 
 
@@ -142,6 +141,16 @@ def test_labels_membership_and_audit():
     assert b["name"] == "iron" and b["volume_elems"] == 1
     assert b["surface_elems"] == 0
     assert lab["audit"]["passed"] is True
+
+
+def test_labels_do_not_double_count_direct_and_geometry_membership():
+    class _OverlappingMembershipCubit(_MockCubit):
+        def get_block_hexes(self, bid):
+            return (1,)
+
+    lab = probe_ops.op_probe(_OverlappingMembershipCubit(), ["labels"])
+
+    assert lab["blocks"][0]["volume_elems"] == 1
 
 
 def test_per_volume_rows():
