@@ -19,6 +19,14 @@ crystallized as its own package.
 - Added 15 ParaView-parity Gmsh tools covering derived fields, thresholds,
   symmetry expansion, transforms, skins, regular-grid and curve resampling,
   CSV/histogram/history export, montages, and camera orbits.
+- Added adaptive RK4 field tracing with closed-loop detection, exact equal-flux
+  contours from planar or axisymmetric potentials, and Jobard-Lefer evenly
+  spaced streamlines on arbitrary plane patches.
+- Made field-line controls reject non-finite or non-physical values before
+  launching Gmsh, enforce the 2D integration-step and spacing contract, and
+  stop exactly at the configured total-step budget.
+- Established physical 1:1:1 axis scaling for spatial Gmsh figures, with an
+  explicit warning whenever a render requests an exaggerated axis.
 - Hardened the pure-Python MSH data reader against malformed section counts,
   duplicate or missing tags, invalid row widths, tag ranges, and connectivity;
   post plots also follow the repository's no-in-figure-title rule.
