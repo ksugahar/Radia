@@ -1,0 +1,11 @@
+* Series RLC AC resonance optimization fixture
+.param Rval=2
+.param Lval=0.01
+.param Cval=2.5e-6
+Vdrive in 0 AC 1
+Rseries in n1 {Rval}
+Lseries n1 out {Lval} Rser=0
+Cseries out 0 {Cval}
+.ac lin 6001 300 1800
+.save V(in) V(n1) V(out) I(Vdrive)
+.end

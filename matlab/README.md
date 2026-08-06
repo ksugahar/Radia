@@ -683,6 +683,20 @@ and mutation. Use
 LTspice coupling does not require Simscape. `radia.ltspice.run` accepts both
 netlists and `.asc` schematics; `SchematicEditor` edits component values, and
 the conversion path stages recursive local include/model/hierarchical files.
+Frequency-domain geometry tuning can keep the capacitor fixed while deriving
+the series coil parameters from geometry. `radia.peec.circularTurnStack`
+creates readable circular filament turns, `radia.peec.seriesCoilProperties`
+uses the native HACApK PEEC matrix to compute `L = 1.'*L_partial*1` and copper
+resistance. `radia.peec.seriesCoilImpedance` adds the frequency-dependent
+equivalent-round Bessel internal impedance without changing the DC limit, and
+`radia.peec.solveSeriesResonance` iterates until
+`Im(Z_coil(f) + 1/(j*2*pi*f*C)) = 0`. The TPE geometry demo performs that inner
+frequency solve for every radius trial and passes the converged `R_eff`,
+`X_eff`, and frequency to a static Simulink AC model. LTspice then checks the
+local `R_eff`/`L_eff` equivalent around the converged root; it is not used to
+pretend that one constant inductor is a broadband PEEC model. The saved
+validation also checks segment refinement and a Wheeler-formula scale
+reference. Time-domain ringdown is not used as the geometry objective.
 For KiCad-owned designs, `radia.kicad.exportSpiceNetlist` calls the current
 `kicad-cli` SPICE exporter, `radia.kicad.prepareLTspice` generates the editable
 `.asc`, and `radia.kicad.buildLTspiceBlock` adds the exported circuit to a
