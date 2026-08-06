@@ -1975,7 +1975,7 @@ def inspect_geometry(file_path: str) -> str:
     """
     p = Path(file_path)
     if not p.exists():
-        return json.dumps({"status": "error", "error": f"File not found: {file_path}"})
+        return json.dumps({"status": "error", "kind": "input", "error": f"File not found: {file_path}"})
 
     try:
         suffix = p.suffix.lower()
@@ -2145,7 +2145,7 @@ def section_along_path(
 
     p = Path(file_path)
     if not p.exists():
-        return json.dumps({"status": "error", "error": f"File not found: {file_path}"})
+        return json.dumps({"status": "error", "kind": "input", "error": f"File not found: {file_path}"})
 
     try:
         pts = json.loads(path_json)
@@ -3067,6 +3067,7 @@ def execute_cadquery(script: str,
     except ImportError:
         return json.dumps({
             "status": "error",
+            "kind": "environment",
             "error": ("cadquery not installed. Install with "
                       "`pip install radia-mcp[cadquery]` or "
                       "`pip install cadquery`."),
