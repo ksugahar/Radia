@@ -93,7 +93,14 @@ def test_attached_clients_use_distinct_request_filenames(tmp_path):
 # --setup CLI mode + status enrichment
 # ---------------------------------------------------------------------------
 
-def test_setup_mode_runs_and_reports(monkeypatch, capsys):
+def test_setup_mode_runs_and_reports(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(cubit_server._cs, "find_cubit_install",
+                        lambda: tmp_path)
+    monkeypatch.setattr(
+        cubit_server,
+        "cubit_doctor",
+        lambda: json.dumps({"status": "ok", "problems": []}),
+    )
     # Avoid a real license warmup: stub it.
     import radia_mcp.cubit.license_warmup as lw
     monkeypatch.setattr(lw, "warmup_license",
@@ -102,9 +109,19 @@ def test_setup_mode_runs_and_reports(monkeypatch, capsys):
     rc = cubit_server._setup_mode()
     out = capsys.readouterr().out
     assert "Doctor report" in out
-    assert rc in (0, 1)
-    if rc == 1:
-        assert "SETUP FOUND PROBLEMS" in out
+    assert "SETUP OK" in out
+    assert rc == 0
+
+
+def test_setup_mode_fails_loud_when_cubit_is_missing(monkeypatch, capsys):
+    monkeypatch.setattr(cubit_server._cs, "find_cubit_install", lambda: None)
+
+    rc = cubit_server._setup_mode()
+    out = capsys.readouterr().out
+
+    assert rc == 1
+    assert "Coreform Cubit not found" in out
+    assert "Doctor report" not in out
 
 
 def test_session_status_reports_mode_and_journal(monkeypatch):
