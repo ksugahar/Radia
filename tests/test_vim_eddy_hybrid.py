@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import radia.vim as vim
+import radia.vim._eddy_hybrid as eddy_hybrid
 
 
 class _ToySymmetricOperator:
@@ -954,6 +955,80 @@ def test_local_esim_surface_vim_runs_the_scipy_cell_problem_and_is_consistent():
         )
 
 
+def test_coupled_hdiv_hcurl_local_esim_updates_the_full_mixed_system():
+    surface = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        modes=np.array([[[1.0, 0.0, 0.0]]]),
+        kind="surface",
+        names=("skin",),
+    )
+    magnetization = vim.SampledMagnetizationBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        modes=np.array([[[0.0, 0.0, 1.0]]]),
+        names=("mz",),
+    )
+    eddy = vim.HybridVIMSystem(
+        resistance=np.zeros((1, 1)),
+        inductance=np.array([[1.0e-10]]),
+        surface_mass=np.ones((1, 1)),
+        basis_names=("skin",),
+        blocks={"surface": (0, 1)},
+    )
+    coupled = vim.CoupledHDivHybridVIMSystem(
+        magnetization_basis=magnetization,
+        eddy_system=eddy,
+        eddy_bases=(surface,),
+        coupling=np.array([[1.0e-9]]),
+        magnetic_operator=np.array([[1.0]]),
+        magnetic_rhs=np.array([[0.2]]),
+        eddy_rhs=np.array([[1.0]]),
+        eddy_block_roles={"surface": "sibc"},
+    )
+    model = vim.LocalESIMSurfaceModel(
+        bh_curve=np.array([
+            [0.0, 0.0],
+            [100.0, 0.1],
+            [500.0, 0.45],
+            [2_000.0, 1.2],
+            [10_000.0, 1.6],
+        ]),
+        sigma=2.0e6,
+        bins=2,
+        n_nodes=30,
+        cell_tolerance=1.0e-4,
+        cell_max_iterations=60,
+    )
+
+    solved = coupled.solve_frequency_local_esim(
+        model,
+        10_000.0,
+        outer_tolerance=5.0e-3,
+        outer_max_iterations=12,
+        outer_relaxation=0.7,
+        solver="dense",
+    )
+
+    assert isinstance(solved, vim.CoupledHDivHCurlLocalESIMSolution)
+    assert solved.converged
+    assert solved.surface_impedance.diagnostics()["passive"]
+    assert solved.mixed_solution.residual_relative_norm < 1.0e-10
+    assert solved.average_joule_loss[0] > 0.0
+    assert solved.history[-1]["cell_model"].endswith("1d-esim")
+    assert solved.history[0]["cell_solve_count"] == 2
+    assert all(row["cell_solve_count"] == 0 for row in solved.history[1:])
+    assert solved.diagnostics()["mixed_solution"]["n_excitations"] == 1
+
+    with pytest.raises(ValueError, match="exactly one physical excitation"):
+        coupled.solve_frequency_local_esim(
+            model,
+            10_000.0,
+            magnetic_rhs=np.ones((1, 2)),
+            eddy_rhs=np.ones((1, 2)),
+        )
+
+
 def test_local_esim_surface_lut_roundtrip_interpolation_and_model_guard(tmp_path):
     curve = np.array([
         [0.0, 0.0],
@@ -1173,7 +1248,9 @@ def test_hacapk_sampled_interaction_keeps_full_hybrid_operator_matrix_free():
     )
 
 
-def test_hacapk_cross_operator_preserves_matrix_free_diagonal_backends_and_gmres():
+def test_hacapk_cross_operator_preserves_matrix_free_diagonal_backends_and_gmres(
+    monkeypatch,
+):
     volume = vim.VolumeCurrentBasis(
         points=np.array([[0.0, 0.0, 0.0], [0.7, 0.0, 0.1]]),
         weights=np.array([0.35, 0.45]),
@@ -1218,6 +1295,15 @@ def test_hacapk_cross_operator_preserves_matrix_free_diagonal_backends_and_gmres
         assert left is volume
         assert right is volume
         return exact_volume_operator
+
+    def reject_dense_sampled_diagonal(*_args, **_kwargs):
+        raise AssertionError("cross-only diagonal replacement must stay matrix-free")
+
+    monkeypatch.setattr(
+        eddy_hybrid,
+        "_interaction_block",
+        reject_dense_sampled_diagonal,
+    )
 
     compressed = vim.AssembleHybridVIM(
         volume,
@@ -1396,6 +1482,55 @@ def test_magnetization_current_coupling_matches_biot_savart_orientation():
         kernel_epsilon=0.0,
     )
     np.testing.assert_allclose(coupling, [[3.0 * expected_bz]])
+
+
+def test_current_flux_density_blocked_matrix_product_matches_direct_cross_sum():
+    rng = np.random.default_rng(20260805)
+    source_points = rng.normal(size=(7, 3))
+    target_points = rng.normal(size=(5, 3)) + np.array([4.0, 0.0, 0.0])
+    weights = rng.uniform(0.1, 0.9, size=7)
+    modes = rng.normal(size=(4, 7, 3)) + 1j * rng.normal(size=(4, 7, 3))
+    current = vim.VolumeCurrentBasis(
+        source_points,
+        weights,
+        modes,
+        names=[f"mode{i}" for i in range(4)],
+    )
+    epsilon = 0.17
+
+    diff = target_points[:, None, :] - source_points[None, :, :]
+    radius2 = np.einsum("tsk,tsk->ts", diff, diff) + epsilon**2
+    kernel = weights[None, :] / radius2**1.5
+    expected = (vim.MU0 / (4.0 * np.pi)) * np.einsum(
+        "mtsk,ts->mtk",
+        np.cross(modes[:, None, :, :], diff[None, :, :, :]),
+        kernel,
+    )
+    actual = vim.CurrentMagneticFluxDensitySamples(
+        current,
+        target_points,
+        kernel_epsilon=epsilon,
+        target_block_size=2,
+        source_block_size=3,
+    )
+
+    np.testing.assert_allclose(actual, expected, rtol=2.0e-14, atol=1.0e-18)
+
+
+@pytest.mark.parametrize("name", ["target_block_size", "source_block_size"])
+def test_current_flux_density_rejects_invalid_block_size(name):
+    current = vim.VolumeCurrentBasis(
+        [[0.0, 0.0, 0.0]],
+        [1.0],
+        [[[1.0, 0.0, 0.0]]],
+    )
+    kwargs = {name: 0}
+    with pytest.raises(ValueError, match=name):
+        vim.CurrentMagneticFluxDensitySamples(
+            current,
+            [[1.0, 0.0, 0.0]],
+            **kwargs,
+        )
 
 
 def test_magnetization_current_coupling_accepts_surface_omega_current():
@@ -2062,10 +2197,13 @@ def test_hybrid_vim_public_names_are_exported():
         "NgsolveMagnetizationBasis",
         "NgsolveHDivMagnetizationBasis",
         "HDivMultipolePortSet",
+        "HDivLocalPolynomialPortSet",
         "PlanarHarmonicPortSet",
         "NgsolveHDivRegularSolidHarmonicPorts",
+        "NgsolveHDivLocalPolynomialTrainingPorts",
         "NgsolvePlanarHarmonicPorts",
         "NgsolveHDivExternalFieldRHS",
+        "HDivMMMReducedSolution",
         "HDivMMMReducedModel",
         "NgsolveHDivMMMReduction",
         "NgsolveHDivMMMResponseReduction",
@@ -2110,6 +2248,8 @@ def test_hybrid_vim_public_names_are_exported():
         "CoupleHybridVIMWithHDivMMM",
         "CoupleEddyBubbleHCurlBasisWithHDivMMM",
         "AssembleHybridVIM",
+        "CoupledHDivHCurlLocalESIMSolution",
+        "SolveCoupledLocalESIMSurfaceVIM",
         "LocalESIMSurfaceLUT",
         "BuildLocalESIMSurfaceLUT",
         "ValidateLocalESIMSurfaceLUT",
@@ -2595,6 +2735,31 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     assert info["reduction_plan"]["loop_bridge_reduction_strategy"] == "cycle-basis"
     assert info["reduction_plan"]["estimated_reduced_modes"] == built.system.n_modes
 
+    without_bridges = vim.NgsolveTopologyAwareHybridVIM(
+        mesh,
+        fes,
+        vectors,
+        (),
+        sigma=5.8e7,
+        conductive_materials="cond",
+        surface_boundaries="skin",
+        intorder=1,
+        geometry_intorder=4,
+        kernel_epsilon=0.1,
+        include_bridge_cycles=False,
+        port_vector_potentials=(np.array([1.0, 0.0, 0.0]),),
+    )
+    assert without_bridges.bridge_cycle_basis.n_modes == 0
+    assert without_bridges.system.blocks["volume1"][0] == without_bridges.system.blocks["volume1"][1]
+    assert without_bridges.system.n_modes == without_bridges.volume_basis.n_modes
+    bridge_info = without_bridges.diagnostics()
+    assert bridge_info["bridge_cycles_enabled"] is False
+    assert (
+        bridge_info["reduction_plan"]["loop_bridge_reduction_strategy"]
+        == "disabled-by-contract"
+    )
+    assert bridge_info["reduction_plan"]["loop_bridge_reduced_modes"] == 0
+
     fes_hdiv = ng.HDiv(mesh, order=1)
     hdiv_vectors = np.zeros((fes_hdiv.ndof, 1))
     hdiv_vectors[0, 0] = 1.0
@@ -2778,6 +2943,7 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
         conductive_materials="cond",
         response_backend="dense",
         intorder=1,
+        hcurl_interaction_max_subtets=1024,
         parent_order_ledger=vim.EddyParentOrderLedger(
             bulk_degree=2,
             bridge_trace_degree=0,
@@ -2785,6 +2951,7 @@ def test_ngsolve_one_call_hcurl_vim_hdiv_mmm_builder_returns_mixed_system():
         ),
     )
     assert isinstance(hybrid, vim.TopologyAwareHybridVIM)
+    assert hybrid.diagnostics()["hcurl_interaction_max_subtets"] == 1024
     assert hybrid.response_basis.diagnostics()["pre_current_gram_rank"] == 2
     assert hybrid.volume_basis.n_modes == 1
     np.testing.assert_allclose(
@@ -3087,6 +3254,79 @@ def test_ngsolve_regular_solid_harmonic_ports_are_divergence_free():
     assert ports.count == 15
     assert ports.diagnostics()["degree_counts"] == {"1": 3, "2": 5, "3": 7}
     assert max(divergence_energies) < 1.0e-20
+
+
+def test_ngsolve_local_polynomial_hdiv_training_ports_degree_two_contract():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("body")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+    ports = vim.NgsolveHDivLocalPolynomialTrainingPorts(mesh, max_degree=2)
+
+    assert isinstance(ports, vim.HDivLocalPolynomialPortSet)
+    assert ports.count == 30
+    assert len(set(ports.names)) == ports.count
+    assert ports.diagnostics()["degree_counts"] == {"0": 3, "1": 9, "2": 18}
+    assert ports.diagnostics()["training_only"] is True
+    assert ports.diagnostics()["source_free"] is False
+    fes = ng.HDiv(mesh, order=2)
+    divergence_energies = []
+    for field in ports.fields:
+        projected = ng.GridFunction(fes)
+        projected.Set(field)
+        divergence_energies.append(float(ng.Integrate(ng.div(projected) ** 2, mesh)))
+    assert max(divergence_energies) > 1.0e-3
+
+
+def test_ngsolve_local_polynomial_hdiv_ports_are_training_only():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("body")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+    ports = vim.NgsolveHDivLocalPolynomialTrainingPorts(mesh, max_degree=1)
+    fes = ng.HDiv(mesh, order=1)
+
+    with pytest.raises(ValueError, match="training-only"):
+        vim.NgsolveHDivExternalFieldRHS(mesh, fes, np.eye(fes.ndof), ports)
+    with pytest.raises(ValueError, match="training-only"):
+        vim.NgsolveHDivMMMResponseReduction(
+            mesh,
+            fes,
+            mu_r=1001.0,
+            external_fields=ports,
+        )
+
+
+def test_ngsolve_hdiv_response_reduction_records_local_polynomial_training():
+    ng = pytest.importorskip("ngsolve")
+    occ = pytest.importorskip("netgen.occ")
+
+    box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1))
+    box.mat("body")
+    mesh = ng.Mesh(occ.OCCGeometry(box).GenerateMesh(maxh=2.0))
+    ports = vim.NgsolveHDivLocalPolynomialTrainingPorts(mesh, max_degree=1)
+    with ng.TaskManager():
+        reduced = vim.NgsolveBDMHDivMMMResponseReduction(
+            mesh,
+            order=1,
+            mu_r=1001.0,
+            external_fields=ng.CoefficientFunction((0.0, 0.0, 1.0)),
+            training_fields=ports,
+            materials="body",
+            max_modes=4,
+            solve_tol=1.0e-9,
+            demag_eps=1.0e-7,
+        )
+
+    generation = reduced.diagnostics()["basis_generation"]
+    assert generation["training_port_count"] == 12
+    assert generation["local_polynomial_training"] == ports.diagnostics()
+    assert generation["training_ports"] == ports.diagnostics()
+    assert generation["multipole_training"] is None
 
 
 def test_ngsolve_planar_hdiv_response_reduction_preserves_corner_visible_fields():

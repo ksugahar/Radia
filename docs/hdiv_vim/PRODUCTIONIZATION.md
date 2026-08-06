@@ -24,11 +24,44 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 - On geometrically and topologically symmetric full/reduced hex meshes,
   `rad.Fld` image parity is locked to the explicit full solve at the
   roundoff-level contract (`< 10 eps` relative error).
-- BDM1 and BDM2 are public for flat and isoparametric-P2 pure TET/HEX/WEDGE
-  linear/nonlinear material solves, IMA, persistent field evaluation, and the
+- BDM1 and BDM2 are public for pure TET/HEX/WEDGE operators, IMA, persistent
+  field evaluation, and the
   NGSolve `ChargeGram`/`DemagOperator` surface.  Planar BDM1 is public through
   Q2 geometry and planar BDM2 through Q3, including IMA and the persistent
   planar field evaluator.
+- Material solves reject mapped/non-affine HEX BDM2 until one composite
+  volume/surface operator preserves the discrete cancellation.  The production
+  alternatives are mapped HEX BDM1, affine HEX BDM2, or pure-TET BDM2.
+- An independent finite-domain H1 Omega gate uses `N = C.T K^-1 C` on the
+  same 207 active mapped-body BDM2 DoFs.  Its order-2/order-3 Hodge spectra are
+  contractions, while the current charge diagnostic has modes above one.
+  Therefore the gate is localized to the mapped charge operator; it is not a
+  rejection of the BDM2 approximation space.
+- `H1HodgeDemagOperator` exposes that finite-domain operator as an NGSolve
+  `BaseMatrix` path.  `NgsolveHDivMMMResponseReduction` accepts it directly,
+  evaluates generic CG results into concrete vectors, and restricts the mass
+  preconditioner with `fes.FreeDofs()` for body-only spaces.  On the 54-HEX
+  air/body gate, the resulting BDM2 reduction feeds HCurl eddy-bubble with
+  snapshot residual below `3e-12`, mixed residual below `3e-16`, and positive
+  Joule loss.  This is a mixed-mechanics/contraction gate, not an open-boundary
+  replacement for the guarded mapped-HEX BDM2 charge solve.  The one-call path
+  uses `NgsolveBDMEddyBubbleVIM(..., hdiv_definedon=...,
+  demag_operator_factory=...)`, ensuring the operator is built on the exact
+  restricted BDM space rather than a separately reconstructed space.
+- A separate heavy static-disk accuracy artifact uses an 18432-element
+  axisymmetric Q2 reference (`1.0916977441`).  The 3-D finite-domain H1-Hodge
+  error decreases through 4.65% (coarse BDM1/H1-p2), 2.24% (coarse
+  BDM2/H1-p3), 1.44% (fine BDM2/H1-p3), and 0.98% (fine BDM2/H1-p4).  This
+  promotes a strict h/p accuracy lane for this disk without claiming exact
+  open-boundary H1 behavior or universal superiority.
+- `CoupledHDivHybridVIMSystem.solve_frequency_local_esim` wraps the local
+  nonlinear ESIM Karl iteration around the complete HDiv-MMM/HCurl-VIM mixed
+  solve.  On a regenerated TET cube whose single `iron` label is both magnetic
+  and conductive, the 50/1000/5000 A/m ladder converges in 2--5 updates,
+  preserves a passive surface Gram and positive Joule loss, and reproduces the
+  converged mixed solution under fixed-Gram replay to machine precision.
+  This promotes nonlinear skin coupling, not simultaneous bulk nonlinear B-H;
+  the latter remains an explicit open item.
 - `radia.vim.hdiv_capabilities()` is the sole field/geometry-order table.  Do
   not derive geometry order from HDiv order with one cross-dimensional p+1
   rule; Policy 8 rejects duplicated arithmetic guards.
@@ -135,6 +168,9 @@ Before release or `mdx`/`hibino` deployment:
 
 ## Open Work
 
+- add the outer constitutive update that changes the ordinary nonlinear bulk
+  HDiv B-H operator and local ESIM Gram together, with energy and line-search
+  safeguards;
 - extend force tests around motor workflows; torque/coenergy are locked;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
 - continue mdx scaling measurements for charge-Gram build and solve time.

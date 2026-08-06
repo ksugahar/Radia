@@ -1,0 +1,152 @@
+{
+  "schema": "radia.validation.mapped-hex-bdm2-hodge-reference.v2",
+  "created_at_utc": "2026-08-05T11:47:12.545395+00:00",
+  "tool_versions": {
+    "radia": "4.95.42",
+    "radia_source_head": "0094f0768b47a0eb7438e42780e411b94ce87187",
+    "radia_source_head_end": "0094f0768b47a0eb7438e42780e411b94ce87187",
+    "radia_source_dirty": true,
+    "python": "3.12.10",
+    "ngsolve": "6.2.2604",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "source_fingerprints": {
+    "validation_test/vim_coupled/validate_mapped_hex_bdm2_hodge_reference.py": "462068097c7fcf8e83cbcb741ab006b2f306e48de1014130c4d073450ae708ef",
+    "src/radia/vim/_vim.py": "83c9b4ade15e42252db3f94f8ed97dea0a6cd0d7272663d89c458132f93a4bfa",
+    "src/radia/vim/_eddy_hybrid.py": "e1455340e7d700b4bb4fd9addd06f7d39c933766d1daebf1d98e205f367a790a",
+    "src/radia/_radia_pybind.pyd": "d11d38508acc6472b270ee1aa599b63b353ee8be10799e8aa2fd5f049614f7f5"
+  },
+  "identity": {
+    "outer_mesh": "54 mapped HEX, air plus central body",
+    "body_mesh": "same central two mapped HEX regenerated independently",
+    "hdiv_family": "BDM2",
+    "body_active_dofs": 207,
+    "meshes_tracked": false
+  },
+  "h1_hodge_reference": [
+    {
+      "formulation": "finite-domain H1 Omega discrete Hodge projection",
+      "backend": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 403,
+        "hdiv_active_dofs": 207,
+        "h1_dofs": 637,
+        "h1_free_dofs": 275,
+        "h1_constrained_dofs": 362,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-validation",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "h1_order": 2,
+      "h1_dofs": 637,
+      "h1_free_dofs": 275,
+      "hdiv_dofs": 403,
+      "hdiv_active_dofs": 207,
+      "spectrum": {
+        "minimum": -1.7840681699173413e-15,
+        "maximum": 0.9917861681011922,
+        "outside_count": 0
+      }
+    },
+    {
+      "formulation": "finite-domain H1 Omega discrete Hodge projection",
+      "backend": {
+        "formulation": "HDiv-to-H1 discrete Hodge projection",
+        "operator": "C.T @ K^-1 @ C",
+        "hdiv_dofs": 403,
+        "hdiv_active_dofs": 207,
+        "h1_dofs": 1900,
+        "h1_free_dofs": 1088,
+        "h1_constrained_dofs": 812,
+        "inverse_backend": "sparsecholesky",
+        "boundary_contract": "finite-dirichlet-validation",
+        "definedon": null,
+        "unit_stiffness": true,
+        "contraction_contract": "standard-unit-H1 metric",
+        "claim_boundary": "finite-domain reference unless the caller supplied and independently verified a Kelvin-transformed potential domain"
+      },
+      "h1_order": 3,
+      "h1_dofs": 1900,
+      "h1_free_dofs": 1088,
+      "hdiv_dofs": 403,
+      "hdiv_active_dofs": 207,
+      "spectrum": {
+        "minimum": -1.161502205018787e-15,
+        "maximum": 0.9877233444752044,
+        "outside_count": 0
+      }
+    }
+  ],
+  "h1_hcurl_mixed_reference": {
+    "formulation": "finite-domain H1-Hodge BDM2 plus HCurl eddy-bubble",
+    "validation_role": "shared-mesh mixed-mechanics gate, not open-boundary accuracy",
+    "frequency_hz": 100.0,
+    "sigma_s_per_m": 1000000.0,
+    "mu_r": 100.0,
+    "mesh_elements": 54,
+    "hdiv_parent_dofs": 403,
+    "hdiv_active_dofs": 207,
+    "hdiv_modes": 2,
+    "hcurl_parent_dofs": 3432,
+    "hcurl_modes": 1,
+    "demag_backend": "H1HodgeDemagOperator",
+    "snapshot_backend": "ngsolve-mass-preconditioned-cg",
+    "snapshot_iterations": [
+      28,
+      18
+    ],
+    "max_snapshot_relative_residual": 2.193303523886691e-12,
+    "reduced_demag_generalized_spectrum": {
+      "minimum": 0.1524830687301976,
+      "maximum": 0.1943995001501962
+    },
+    "hcurl_interaction_backend": "hacapk-sampled-laplace",
+    "mixed_relative_residual": 2.4987957448678446e-16,
+    "average_joule_loss": 5.0568403016105796e-11,
+    "magnetization_coefficient_norm": 0.015661648784533955,
+    "eddy_coefficient_norm": 0.010056679672347704,
+    "wall_s": 0.7457325999857858
+  },
+  "charge_bem_diagnostic": {
+    "formulation": "mapped volume/surface charge BEM diagnostic",
+    "hdiv_dofs": 207,
+    "spectrum": {
+      "minimum": -4.623782593209763e-16,
+      "maximum": 1.2174953480084003,
+      "outside_count": 3
+    },
+    "affinity": {
+      "cell_count": 2,
+      "nonaffine_cell_count": 2,
+      "nonaffine_cells": [
+        0,
+        1
+      ],
+      "maximum_relative_residual": 0.7628353742578918,
+      "relative_tolerance": 1e-10
+    }
+  },
+  "checks": {
+    "source_fingerprints_stable_during_run": true,
+    "body_is_nonaffine": true,
+    "h1_hodge_active_dofs_match_body_bdm2": true,
+    "h1_hodge_spectra_are_contractions": true,
+    "h1_hodge_public_operator_path_verified": true,
+    "charge_bem_spectrum_violation_reproduced": true,
+    "mapped_bdm2_response_uses_generic_ngsolve_cg": true,
+    "mapped_bdm2_hcurl_mixed_solve_is_finite_and_converged": true
+  },
+  "pass": true,
+  "timing_s": {
+    "total": 3.0610186000121757
+  },
+  "claim_boundary": {
+    "established": "the mapped BDM2 HDiv space and NGSolve mass/coupling admit a bounded discrete Hodge projection; the out-of-range spectrum is localized to the current mapped volume/surface charge operator; the same BDM2 response reduction feeds a converged shared-mesh HCurl eddy-bubble mixed solve",
+    "not_established": "an open-boundary H1 accuracy reference, a repaired composite charge operator, a production open-boundary replacement for vim.Solve, or universal solver superiority"
+  }
+}

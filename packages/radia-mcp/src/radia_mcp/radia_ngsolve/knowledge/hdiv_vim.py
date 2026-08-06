@@ -111,6 +111,225 @@ RHS, includes the affine lift for a nonzero eliminated RHS, and reconstructs
 the full HCurl coefficients.  The HDiv parent demag operator continues to use
 the C++ `_ChargeGramHMatrix` HACApK backend; the final mixed Schur system is a
 small dense retained-mode matrix.
+
+## Response-basis completeness gate
+
+Do not interpret spatial h-refinement as proof that the HCurl response basis is
+complete.  A single uniform-field vector-potential port can converge to the
+wrong reduced subspace: increasing its Krylov depth only explores moments of
+that one input.  The conducting-disk validation freezes this as a negative
+control.  The single-port model remains more than 4% away from the independent
+axisymmetric diffusion pole at both 8 and 16 Krylov steps.
+
+For an axisymmetric disk driven through `A=(-y,x,0)/2`, enrich the training set
+with independent spatial moments before changing the mesh:
+
+    A, r^2 A, r^4 A, z^2 A
+
+The four-port, three-step basis passes the public h-refinement ladder and the
+HCurl p=1/2/3 ladder at less than 2% error, with p=2 reaching the recorded
+sub-percent gate.  General geometries need geometry- and excitation-aware
+moments; these four functions are a disk recipe, not a universal basis.
+
+## HDiv local-response completeness gate
+
+When mean magnetic flux converges but Joule loss is much too large, do not
+immediately diagnose an unphysical HCurl star current.  First freeze the HCurl
+space and replace only the reduced HDiv response basis by its full parent.  If
+the Joule mismatch collapses, the missing directions are local magnetic
+charge/star responses in the HDiv reduction; they are not extra current modes.
+This distinction is especially important when the current branch already has
+`J=curl(T)`, `nograds=True`, tangential-zero boundary conditions, and disabled
+bridge cycles.
+
+Use `NgsolveHDivLocalPolynomialTrainingPorts(mesh, max_degree=2)` as the
+conservative enrichment.  It supplies 30 normalized vector-polynomial probes
+through degree two to `training_fields` of
+`NgsolveBDMHDivMMMResponseReduction`.  The probes deliberately include
+non-source-free residual directions, so they are **training-only** and the API
+rejects them as physical `external_fields`.  Keep regular-solid-harmonic ports
+for physical source-free applied-H content.
+
+The frozen nonlinear magnetic-conductor gate holds the HCurl branch fixed,
+checks the reduced N2 model against the full HDiv parent, compares degree two
+against degree three, then performs N4 h-refinement against an independent
+A-phi solve.  Degree two to three changes Joule loss by about 0.015%; the N4
+degree-two result is within 1.02% in Joule loss and 4.48% in mean B of the
+independent formulation, with mixed energy-balance norm below `2e-4`.  Treat
+these as one case-specific validation gate, not a universal accuracy claim.
+
+When extracting a free-decay time constant, select the mode that is dominant
+for the physical excitation by its port residue.  The largest generalized
+eigenvalue can be a nearly port-invisible mode and is not automatically the
+observable pole.  Always record the residue fraction, R/L passivity,
+current-Gram rank, projection residual, and both h- and p-refinement.  See
+`validation_test/vim_coupled/validate_hcurl_eddy_bubble_disk.py` and its
+result JSON.
+
+## Frequency-route validity gate
+
+`EddySIBCApplicability` is part of the assembled model identity, not a label
+that can be reused across an arbitrary frequency sweep.  The gate is carried
+from `TopologyAwareHybridVIM` into `CoupledHDivHybridVIMSystem`.  A frequency
+solve may move within the same volumetric or SIBC regime, but
+`solve_frequency` rejects a point whose thickness/skin-depth and curvature
+test changes the selected route.  Rebuild the topology-aware system at that
+frequency so the retained volume and surface bases match the physics model.
+
+This preflight must run before blaming a high-frequency discrepancy on BDM,
+HCurl polynomial order, or response-basis rank.  For a thin magnetic conductor,
+first compare an axisymmetric volume solve with an independently refined full
+3-D HCurl volume solve.  A forced volumetric reduced solve above the SIBC
+transition is an invalid extrapolation, even when its linear residual is at
+machine precision.  Residual convergence proves the assembled algebra was
+solved; it does not prove that the frequency-appropriate model was assembled.
+
+## Nonlinear magnetic-conductor SIBC coupling
+
+An air-facing SIBC basis does not by itself imply ESIM.  For a linear magnetic
+conductor, use the ordinary frequency-dependent `SkinImpedance`.  When the
+skin permeability follows a nonlinear B-H curve, use
+`LocalESIMSurfaceModel`: its one-dimensional normal cell returns the local
+field-dependent `Z_s(f, |H_t|)`, which is projected into a
+`SurfaceImpedanceGram` rather than averaged into one scalar.
+
+`CoupledHDivHybridVIMSystem.solve_frequency_local_esim(model, frequency)` now
+runs that Karl iteration around the complete HDiv-MMM/HCurl-VIM mixed solve.
+Every update reconstructs solution-shaped tangential field samples, updates
+the local ESIM impedance, and resolves the magnetic, bulk-current,
+conductor-cycle, and SIBC blocks together.  Nonlinear superposition is invalid,
+so the method requires exactly one physical excitation.  The returned
+`CoupledHDivHCurlLocalESIMSolution` retains the converged mixed solution,
+surface Gram, local fields, update history, residual, and Joule loss.
+
+The executable same-region TET gate assigns both magnetic and conductive roles
+to one `iron` label.  Its 50/1000/5000 A/m ladder converges in 2--5 updates,
+keeps every local Gram passive, gives positive Joule loss, and matches a
+fixed-Gram replay to machine precision.  Increasing field lowers the mean
+surface resistance for the supplied monotone saturating B-H curve and increases
+the departure from linear SIBC.
+
+Keep the claim boundary exact.  This API updates nonlinear **skin** impedance
+while the ordinary bulk HDiv-MMM operator remains at a fixed low-field scalar
+permeability.  A simultaneous constitutive iteration that updates both the
+ordinary bulk nonlinear B-H operator and the local ESIM Gram is not yet
+implemented.  Hysteretic or rotational skin state and multidimensional
+edge/corner cells also require additional state/cell models.
+
+## Thin magnetic-conductor adjudication
+
+For a 20 mm diameter, 0.5 mm thick linear magnetic conductor, use an
+axisymmetric Q2 volume solve as one reference and a separately refined full
+3-D HCurl A-form as the second.  At the recorded 100 Hz and 10 kHz points, the
+fine full 3-D results agree with the axisymmetric reference within 2%.  This
+cross-formulation agreement is the reference gate before judging a reduced
+coupled model.
+
+On the static magnetic branch, the mapped-HEX BDM1 HDiv-MMM ladder decreases
+from about 3.1% to 1.2% reference error as the nominal size moves from 2 mm to
+0.5 mm.  The tested BDM2 HEX ladder is non-monotone and is explicitly not
+promoted.  Do not infer BDM2 accuracy from polynomial order alone; require its
+own h/p and observable convergence evidence.
+
+The cause is now bounded more tightly.  A two-cell affine HEX BDM2 diagnostic
+has generalized demag spectrum inside the physical interval, while the same
+two-cell warped map reaches about 1.16.  Four warped cells reach about 1.57,
+and an annular-sector map develops both a negative mode and an upper mode near
+1.80.  Dense storage reproduces the same result, so ACA compression is not the
+cause.  Volume-only and boundary-only blocks are positive but individually
+large; their cross term must preserve a strong cancellation.  Raising
+quadrature and widening the near region improves the spectrum but is too
+expensive and does not robustly restore the annular case.  Therefore
+`vim.Solve(order=2)` rejects mapped/non-affine pure HEX material models.  Use
+mapped HEX BDM1, affine HEX BDM2, or pure-TET BDM2.  `ChargeGram` is still an
+explicit diagnostic surface; a finite residual is not permission to promote
+the rejected material lane.  Removing this gate requires a composite
+mapped-HEX BDM2 charge operator that preserves the volume/surface cancellation;
+raising quadrature alone is not a production remedy.  The magnetic-conductor
+validation runner exposes this as ``--include-bdm2-gate`` and records the
+expected rejection alongside the independent axisymmetric Q2, full 3-D HCurl,
+mapped-HEX BDM1, and coupled eddy-bubble evidence.
+
+Do not diagnose this as an intrinsic BDM2-space failure.  A separate
+54-HEX air/body H1 Omega experiment assembles the discrete Hodge operator
+``C.T K^-1 C`` on the same 207 active mapped-body BDM2 DoFs.  H1 orders 2 and
+3 have generalized maxima about 0.992 and 0.988 with no modes outside
+``[0,1]``.  The same two-cell mapped charge diagnostic reaches about 1.2175
+with three out-of-range modes.  This localizes the defect to the mapped
+volume/surface charge operator.  The finite H1 box is a contraction and
+formulation-separation gate, not an open-boundary accuracy oracle.
+The `[0,1]` contraction is specific to the standard unit H1 stiffness metric;
+a weighted or Kelvin-transformed metric needs its own independent bound.
+
+The executable API is
+`H1HodgeDemagOperator(hdiv, h1, definedon=...)`.  Pass it as the
+`demag_operator` of `NgsolveHDivMMMResponseReduction`; the generic NGSolve CG
+path evaluates solver expressions into concrete vectors and uses
+`hdiv.FreeDofs()` when the magnetic space is restricted to one material.  On
+the same 54-HEX body, the resulting BDM2 response reduction feeds a shared-mesh
+HCurl eddy-bubble solve with snapshot residual below `3e-12`, mixed residual
+below `3e-16`, and positive Joule loss.  This verifies mixed mechanics and the
+BDM2 approximation space.  It does not repair the open-boundary charge kernel,
+and its sampled HCurl interaction is not an accuracy oracle.
+
+For the one-call mixed API, pass both
+`hdiv_definedon=mesh.Materials("body")` and
+`demag_operator_factory=lambda hdiv: H1HodgeDemagOperator(hdiv, h1,
+definedon="body")` to `NgsolveBDMEddyBubbleVIM`.  The factory receives the
+exact restricted BDM space constructed by the builder.  A restricted space
+without a factory, or simultaneous `demag_operator` and factory arguments, is
+rejected rather than relying on coincident DOF numbering.
+
+Accuracy is a separate gate.  For the static circular disk, the independently
+refined axisymmetric Q2 reference is `1.0916977441`.  The 3-D finite-domain
+H1-Hodge sequence reduces relative error from 4.65% (coarse BDM1/H1-p2) to
+2.24% (coarse BDM2/H1-p3), 1.44% (fine BDM2/H1-p3), and 0.98% (fine
+BDM2/H1-p4).  This strict h/p ladder supports the BDM2/H1 formulation on that
+disk; it is not a universal open-boundary or solver-superiority claim.
+
+The coarse coupled HDiv-MMM plus HCurl eddy-bubble run is a mechanics gate: it
+checks the mixed solve, non-negative Joule loss, small algebraic residual, and
+rejection of a stale volumetric-to-SIBC frequency route.  Its explicitly
+sampled interaction is not an accuracy oracle by itself.  The subsequent
+sampled h ladder is stronger: 32, 96, and 384 mapped HEX reduce the independent
+reference error from 5.38% to 3.34% to 1.90%, with non-negative Joule loss and
+small residual at every level.  This promotes the explicit sampled-interaction
+route as a bounded h-convergent validation lane.
+
+For a warped order-1 pure HEX mesh, the production HCurl diagonal now uses the
+native Q2 isoparametric HEX Gram directly.  It projects the contravariant-Piola
+reference density `K=curl(T)*abs(det(dX/dxi))`, which is tensor-Q2 to machine
+precision on this map.  Do not try to meet a geometry tolerance by repeatedly
+splitting a trilinear HEX into affine sub-tetrahedra: that residual decreases
+too slowly and the charge count explodes.  `hex_geometry_backend="auto"`
+selects the direct path for a warped order-1 pure HEX,
+`hex_geometry_backend="direct"` forces it, and `"affine-subtet"` retains the
+diagnostic legacy route.  Affine HEX keeps the established analytic subtet
+path by default.
+
+The production direct-Q2 lane now has its own strict 32/96/384-HEX h ladder.
+Its independent-reference error decreases from 5.38% to 3.34% to 1.90%.  At
+the fine level it agrees with the sampled observable to 8.03e-7 and Joule loss
+to 2.93e-6; the largest direct algebraic residual is 3.90e-16.  This establishes
+h convergence for this thin magnetic-conductor disk lane, not for every
+geometry, material, or observable, and it is not a universal
+solver-superiority claim.
+
+Do not form the sampled diagonal as an `Nsample x Nsample` dense pair matrix
+when replacing it by the direct-Q2 diagonal.  Build the stable global sampled
+H-matrix once, subtract its diagonal through a matrix-free restricted operator,
+and add the direct-Q2 operator on the same reduced interval.  Projection
+coefficients below the established roundoff threshold may be pruned before the
+native HEX Gram is built; retain unpruned/pruned charge counts in diagnostics.
+On the recorded same-machine ladder these two structural changes reduced total
+runtime from 1819.7 s to 339.8 s, but that observation is not a portable speed
+guarantee.
+
+Reference fidelity is part of that gate.  The 384-HEX result is 1.90% from the
+18432-element fine axisymmetric Q2 reference, but 2.19% from the 6656-element
+quick reference.  The latter is a frozen reject.  A coupled h-ladder accuracy
+claim must use the fine reference; a coarse reference is suitable only for a
+mechanics smoke.
 """
 
 _IMPLEMENTATION = r"""
@@ -184,6 +403,10 @@ Primary Python entry points:
 - `radia.vim.DemagOperator(HDiv(mesh, order=1|2), ...)` for the NGSolve-style
   diagnostic operator, or `radia.vim.ChargeGram(...)` for its charge map and
   C++ H-matrix components
+- `radia.vim.H1HodgeDemagOperator(hdiv, h1, definedon=...)` for an independent
+  finite-domain `C.T K^-1 C` contraction/reference operator.  It can be passed
+  to `NgsolveHDivMMMResponseReduction(..., demag_operator=...)`; it is not an
+  open-boundary substitute for `DemagOperator`.
 - `radia.vim.FieldFromSolution(res, points)` -- batch demagnetizing H (A/m) at
   points from the full BDM1/BDM2 TET/HEX/WEDGE solution or the planar BDM1/BDM2
   solution.  `rad.Fld` on a solved mesh-backed
@@ -261,9 +484,17 @@ Fast tests should cover API contracts and small deterministic checks:
   and large non-IMA auto-tree output stays within its direct-probe contract;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
-- BDM2 flat/curved TET/HEX/WEDGE linear/nonlinear solves, IMA, and persistent
-  field reconstruction remain consistent with the analytic cube/sphere and
-  image gates; planar BDM2 is supported through Q3 geometry.
+- BDM2 TET/WEDGE and affine HEX linear/nonlinear solves, IMA, and persistent
+  field reconstruction remain consistent with their analytic and image gates;
+  mapped/non-affine HEX BDM2 material solves must fail loudly.  Planar BDM2 is
+  supported through Q3 geometry.
+- generic H1-Hodge response reduction must solve both whole-domain and
+  material-restricted HDiv spaces, preserve the `[0,1]` contraction, and feed a
+  finite-residual HCurl eddy-bubble mixed solve without promoting finite-domain
+  H1 or sampled interaction as an open-boundary accuracy oracle.
+- local-polynomial HDiv residual probes must remain training-only, reject use as
+  physical excitation, retain the 30-probe degree-two contract, and preserve
+  the frozen reduced/full-parent, p-saturation, A-phi, and energy-balance gates.
 
 Validation-class tests live under `validation_test/feec/` and should cover:
 
@@ -373,8 +604,9 @@ _STATUS = r"""
 Current direction:
 
 - Radia soft iron: HDiv-VIM.
-- BDM1/BDM2: flat and Curve(2) pure TET/HEX/WEDGE material/operator, IMA, and
-  persistent-field paths.  Planar BDM1 is supported through Q2 and planar BDM2
+- BDM1/BDM2: pure TET/HEX/WEDGE operator, IMA, and persistent-field paths.
+  Material solves gate mapped/non-affine HEX BDM2 while retaining mapped HEX
+  BDM1, affine HEX BDM2, and pure-TET BDM2.  Planar BDM1 is supported through Q2 and planar BDM2
   through Q3.  `radia.vim.hdiv_capabilities()` is the sole order-pair table;
   geometry order is not inferred from one global p+1 rule.
 - Fixed/given 3D magnetization: source-owned HDiv projection and native C++
@@ -396,6 +628,8 @@ Open work:
 
 - extend 2D and 3D validation coverage around `rad.Fld`;
 - keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
+- implement a composite mapped-HEX BDM2 charge operator that preserves
+  volume/surface cancellation before removing the material-solve gate;
 - continue BDM1/BDM2 TET/HEX/WEDGE accuracy, memory, and timing measurements on mdx;
 - continue charge-Gram H-matrix performance checks on mdx;
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a

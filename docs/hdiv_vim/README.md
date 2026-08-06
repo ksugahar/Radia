@@ -228,18 +228,67 @@ bounded domain, derives the branch update from a convex energy/proximal law,
 and exposes the explicit manufacturing/restart state used for irreversible
 demagnetization studies.
 
-The public VIM contract supports BDM1 and BDM2 on pure TET/HEX/WEDGE meshes.
-Both orders use the same C++ charge-Gram, mass-Riesz CG, energy-Newton, IMA,
-and persistent-field paths on flat and isoparametric-P2 geometry.  Flat HEX
-BDM2 uses batched analytic source moments for its Q2 volume/face charge blocks;
-WEDGE BDM2 uses the corresponding tri-P2 by z-P2 charge basis.  Curve(2)
-HEX/WEDGE retain their mapped high-order integration path.
+The public VIM operator contract supports BDM1 and BDM2 on pure
+TET/HEX/WEDGE meshes.  Material-solve support is intentionally narrower:
+mapped/non-affine HEX BDM2 is rejected because separate volume/surface charge
+quadrature does not yet preserve its large cancellation.  Use mapped HEX BDM1,
+affine HEX BDM2, or pure-TET BDM2 for material solves.  `ChargeGram` remains
+available for explicit mapped-HEX diagnostics.  WEDGE BDM2 uses the
+corresponding tri-P2 by z-P2 charge basis.
+
+This is a charge-kernel limitation, not an intrinsic BDM2-space limitation.
+`radia.vim.H1HodgeDemagOperator(hdiv, h1, definedon=...)` assembles the
+finite-domain H1 Omega Hodge operator `C.T K^-1 C` without forming a dense
+parent matrix.  The independent mapped-body validation applies it to the same
+207 active BDM2 DoFs.  H1 orders 2 and 3 have no generalized eigenvalues
+outside `[0,1]`, while the current mapped charge diagnostic exceeds 1.2.  The
+`[0,1]` contraction is the unit-stiffness contract; weighted or
+Kelvin-transformed stiffness needs its own independently verified metric.  The
+same H1-backed BDM2 response reduction now feeds a shared-mesh HCurl
+eddy-bubble solve with a snapshot residual below `3e-12`, mixed residual below
+`3e-16`, and positive Joule loss.  This proves the response/coupling path and
+localizes the defect; the finite H1 box and sampled mixed interaction are not
+an open-boundary accuracy replacement.  Partial-material response solves use
+the HDiv space's `FreeDofs()` in the generic NGSolve CG path.  The one-call
+mixed builder accepts `hdiv_definedon=mesh.Materials("body")` together with
+`demag_operator_factory=lambda hdiv: H1HodgeDemagOperator(...)`; the factory
+receives the exact restricted BDM space built by `NgsolveBDMEddyBubbleVIM`.
+
+Observable accuracy is checked separately from that mixed-mechanics gate.  On
+the static circular-disk lane, the fine axisymmetric Q2 reference is
+`1.0916977441`.  The 3-D finite-domain H1-Hodge sequence reduces error from
+4.65% (coarse BDM1/H1-p2) to 2.24% (coarse BDM2/H1-p3), 1.44% (fine
+BDM2/H1-p3), and 0.98% (fine BDM2/H1-p4).  This establishes a strict h/p
+accuracy ladder for that geometry; it is not a universal open-boundary claim.
+
+For a magnetic and conductive body, use the same material label in
+`SharedMeshMaterialModel.magnetic_regions` and `conductive_regions`.
+At frequencies where `EddySIBCApplicability` selects the surface route,
+`mixed.solve_frequency_local_esim(model, frequency)` now places the local
+nonlinear ESIM Karl iteration around the complete HDiv-MMM/HCurl-VIM solve.
+Each update reconstructs the solution-shaped tangential field, solves or
+interpolates the one-dimensional nonlinear B-H skin cell, assembles the local
+`SurfaceImpedanceGram`, and resolves both magnetic and eddy-current blocks.
+Nonlinear superposition is invalid, so this API accepts exactly one physical
+excitation at a time.
+
+The regenerated TET iron-cube validation uses the same `iron` region for BDM1
+magnetization and HCurl bulk/bridge/SIBC current.  Its 50, 1000, and 5000 A/m
+ladder converges in 2--5 Karl updates, keeps every local Gram passive, produces
+positive Joule loss, and replays the converged Gram in the fixed mixed solver
+to machine precision.  The mean surface resistance decreases with increasing
+field and the departure from linear SIBC grows, as expected for the supplied
+monotone saturating B-H curve.  This establishes nonlinear skin coupling; the
+ordinary bulk HDiv operator still uses a fixed low-field scalar permeability.
+A simultaneous update of bulk nonlinear B-H and local ESIM is a separate
+double-nonlinear constitutive iteration and remains open.
 
 Geometry order and HDiv order are independent Piola-FEM choices.  The
 authoritative table is `radia.vim.hdiv_capabilities()`: in 2D, BDM1 supports
 geometry orders 1/2 (Q2 recommended) and BDM2 supports 1/2/3 (Q3 recommended);
-in 3D, TET/HEX/WEDGE BDM1 and BDM2 support geometry orders 1/2 (P2/Q2
-recommended).  A combination outside that table fails loudly.  In particular,
+in 3D, TET/HEX/WEDGE BDM1 and BDM2 expose geometry orders 1/2 (P2/Q2
+recommended).  This order table does not override the mapped-HEX BDM2
+material-solve gate above.  A combination outside the table fails loudly.  In particular,
 BDM1/Q3 is intentionally excluded in 2D: under the Q3 contravariant Piola map,
 the BDM1 space does not reproduce a uniform physical field to roundoff, and an
 ellipse torque check showed no accuracy gain over BDM1/Q2.
@@ -395,7 +444,8 @@ host (`mdx` or `hibino`).  Required HDiv gates:
   immutability, superposition, and iron-response equality;
 - energy-Stop hard projection/proximal stationarity, non-negative vector-loop
   dissipation, reverse-field remanence loss, and state-restart reproducibility;
-- BDM1/BDM2 flat/curved TET/HEX/WEDGE accuracy and cost, plus charge-Gram H-matrix build stats and
+- BDM1/BDM2 flat/curved TET/HEX/WEDGE operator accuracy and cost, including
+  the mapped-HEX BDM2 rejection gate, plus charge-Gram H-matrix build stats and
   memory/timing on idle `mdx` or `hibino`
   for large runs;
 - 2D planar motor saliency checks for the motor lane.

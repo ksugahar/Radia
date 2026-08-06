@@ -65,6 +65,7 @@ import inspect as _inspect
 from . import _nonlinear  # noqa: F401
 from ._vim import (  # noqa: F401  (ngsolve.bem-style operator + .mat)
     DemagOperator,
+    H1HodgeDemagOperator,
     build_charge_gram as _charge_gram_impl,
 )
 from ._solve import hdiv_demag_solve as _solve_impl  # noqa: F401  (production demag solve)
@@ -132,10 +133,13 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     NgsolveMagnetizationBasis,
     NgsolveHDivMagnetizationBasis,
     HDivMultipolePortSet,
+    HDivLocalPolynomialPortSet,
     PlanarHarmonicPortSet,
     NgsolveHDivRegularSolidHarmonicPorts,
+    NgsolveHDivLocalPolynomialTrainingPorts,
     NgsolvePlanarHarmonicPorts,
     NgsolveHDivExternalFieldRHS,
+    HDivMMMReducedSolution,
     HDivMMMReducedModel,
     NgsolveHDivMMMReduction,
     NgsolveHDivMMMResponseReduction,
@@ -183,6 +187,7 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     LocalESIMSurfaceLUT,
     LocalESIMSurfaceModel,
     LocalESIMSurfaceSolution,
+    CoupledHDivHCurlLocalESIMSolution,
     HybridVIMSystem,
     HCurlEddyCLNModel,
     HCurlEddyCLNFromVIM,
@@ -191,6 +196,7 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     BuildLocalESIMSurfaceLUT,
     ValidateLocalESIMSurfaceLUT,
     SolveLocalESIMSurfaceVIM,
+    SolveCoupledLocalESIMSurfaceVIM,
     TopologyAwareHybridVIM,
     NgsolveTopologyAwareHybridVIM,
     NgsolveEddyBubbleHybridVIM,
@@ -227,6 +233,7 @@ from ._slab_eddy import (  # noqa: F401  (exact 1-D HDiv-MMM/HCurl-eddy validati
 )
 from ._transient import (  # noqa: F401  (backward-Euler HDiv/HCurl transient driver)
     save_transient_artifact,
+    solve_hdiv_hcurl_nonlinear_transient,
     solve_hdiv_hcurl_transient,
 )
 def Solve(*args, **kwargs):
@@ -333,7 +340,7 @@ for _new, _old in [
     ])
 
 __all__ = [
-    "Solve", "HDivSolver", "DemagOperator", "ChargeGram",
+    "Solve", "HDivSolver", "DemagOperator", "H1HodgeDemagOperator", "ChargeGram",
     "MeshSoftIron", "VolSoftIron", "PlanarSolve",
     "PlanarDemagBody", "maxwell_torque_circle",
     "soft_iron_box", "soft_iron_hex",
@@ -358,9 +365,10 @@ __all__ = [
     "NgsolveBridgeCycleCurrentBasis", "SampleNgsolveVectorCFs", "NgsolveVolumeCurrentBasis",
     "NgsolveHCurlVectorPotentialPort",
     "NgsolveMagnetizationBasis", "NgsolveHDivMagnetizationBasis",
-    "HDivMultipolePortSet", "PlanarHarmonicPortSet",
-    "NgsolveHDivRegularSolidHarmonicPorts", "NgsolvePlanarHarmonicPorts",
-    "NgsolveHDivExternalFieldRHS", "HDivMMMReducedModel", "NgsolveHDivMMMReduction",
+    "HDivMultipolePortSet", "HDivLocalPolynomialPortSet", "PlanarHarmonicPortSet",
+    "NgsolveHDivRegularSolidHarmonicPorts", "NgsolveHDivLocalPolynomialTrainingPorts",
+    "NgsolvePlanarHarmonicPorts",
+    "NgsolveHDivExternalFieldRHS", "HDivMMMReducedSolution", "HDivMMMReducedModel", "NgsolveHDivMMMReduction",
     "NgsolveHDivMMMResponseReduction", "NgsolveBDMHDivMMMResponseReduction",
     "PlanarHDivMMMReducedSolution", "PlanarHDivMMMReducedModel",
     "NgsolvePlanarHDivMMMResponseReduction",
@@ -373,8 +381,9 @@ __all__ = [
     "SampledHACApKOperator", "ReducedInteractionMatrix", "HybridVIMSystem",
     "SurfaceImpedanceGram", "AssembleSurfaceImpedanceGram",
     "LocalESIMSurfaceLUT", "LocalESIMSurfaceModel", "LocalESIMSurfaceSolution",
+    "CoupledHDivHCurlLocalESIMSolution",
     "BuildLocalESIMSurfaceLUT", "ValidateLocalESIMSurfaceLUT",
-    "SolveLocalESIMSurfaceVIM",
+    "SolveLocalESIMSurfaceVIM", "SolveCoupledLocalESIMSurfaceVIM",
     "HACApKSampledPlanarLogInteraction", "NGSolveProjectedOperator",
     "NGSolveProjectedInteraction", "CoupledReducedOperator",
     "HCurlHMatrixOperator", "HCurlTetVolumeInteraction", "HCurlCellVolumeInteraction",
@@ -401,6 +410,7 @@ __all__ = [
     "ConductiveSlab", "parallel_slab_exact_response",
     "slab_surface_model", "solve_parallel_slab_reduced",
     "refine_parallel_slab_reduced",
-    "solve_hdiv_hcurl_transient", "save_transient_artifact",
+    "solve_hdiv_hcurl_transient", "solve_hdiv_hcurl_nonlinear_transient",
+    "save_transient_artifact",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]

@@ -319,6 +319,7 @@ def test_warped_hex_uses_uniform_h_refinement_until_both_residuals_pass():
         outer_quad=3,
         projection_tolerance=1.0e-5,
         geometry_tolerance=7.0e-3,
+        hex_geometry_backend="affine-subtet",
         max_subdivision_levels=1,
         materials="cond",
     )
@@ -332,6 +333,131 @@ def test_warped_hex_uses_uniform_h_refinement_until_both_residuals_pass():
     assert info["projection_relative_residual"] < 1.0e-5
     assert info["geometry_relative_residual"] < 7.0e-3
     assert interaction.matrix[0, 0] > 0.0
+
+
+def test_warped_order1_hex_uses_direct_q2_reference_density_by_default():
+    mesh = _warped_hex_mesh()
+    fes = ng.HCurl(mesh, order=1, nograds=True)
+    field = ng.GridFunction(fes)
+    field.Set(ng.CF((-ng.y, ng.x, ng.z * ng.x)))
+    vectors = field.vec.FV().NumPy().copy()
+    basis = vim.NgsolveHCurlCurlBasis(
+        mesh,
+        fes,
+        vectors,
+        intorder=5,
+        materials="cond",
+    )
+
+    interaction = vim.NgsolveHCurlCellVolumeInteraction(
+        mesh,
+        fes,
+        vectors,
+        basis,
+        materials="cond",
+        matrix_free=True,
+    )
+    info = interaction.diagnostics()
+
+    assert info["geometry_backend"] == "direct-q2-hex-reference-density"
+    assert info["subdivision_strategy"] == "direct-q2-hex-reference-density"
+    assert info["polynomial_degree"] == 2
+    assert info["required_polynomial_degree"] == 2
+    assert info["subdivision_level"] == 0
+    assert info["subtet_count"] == 6
+    assert info["charge_count"] == 27
+    assert info["projection_relative_residual"] < 1.0e-12
+    assert info["geometry_relative_residual"] < 1.0e-12
+    assert info["hmatrix_operator"]["scalar_gram_backend"] == (
+        "direct-q2-hex-reference-density"
+    )
+    assert info["hmatrix_operator"]["tensor_degree"] == 2
+    assert interaction.matrix[0, 0] > 0.0
+
+
+def test_affine_order1_hex_uses_direct_backend_and_matches_legacy_subtet():
+    mesh = _single_cell_mesh("hex")
+    fes = ng.HCurl(mesh, order=1, nograds=True)
+    field = ng.GridFunction(fes)
+    field.Set(ng.CF((-ng.y, ng.x, 0.0)))
+    vectors = field.vec.FV().NumPy().copy()
+    basis = vim.NgsolveHCurlCurlBasis(
+        mesh,
+        fes,
+        vectors,
+        intorder=4,
+        materials="cond",
+    )
+
+    direct = vim.NgsolveHCurlCellVolumeInteraction(
+        mesh,
+        fes,
+        vectors,
+        basis,
+        degree=0,
+        projection_quad=4,
+        materials="cond",
+        hex_geometry_backend="direct",
+        matrix_free=False,
+        projection_tolerance=1.0e-12,
+        geometry_tolerance=1.0e-12,
+    )
+    subtet = vim.NgsolveHCurlCellVolumeInteraction(
+        mesh,
+        fes,
+        vectors,
+        basis,
+        degree=0,
+        projection_quad=4,
+        outer_quad=4,
+        materials="cond",
+        hex_geometry_backend="affine-subtet",
+        matrix_free=False,
+        projection_tolerance=1.0e-12,
+        geometry_tolerance=1.0e-12,
+    )
+    automatic = vim.NgsolveHCurlCellVolumeInteraction(
+        mesh,
+        fes,
+        vectors,
+        basis,
+        materials="cond",
+        matrix_free=False,
+        projection_tolerance=1.0e-12,
+        geometry_tolerance=1.0e-12,
+    )
+
+    assert direct.diagnostics()["geometry_backend"] == (
+        "direct-q2-hex-reference-density"
+    )
+    assert subtet.diagnostics()["geometry_backend"] == "piecewise-affine-subtet"
+    assert automatic.diagnostics()["geometry_backend"] == (
+        "direct-q2-hex-reference-density"
+    )
+    np.testing.assert_allclose(
+        direct.matrix,
+        subtet.matrix,
+        rtol=2.0e-4,
+        atol=1.0e-16,
+    )
+
+
+def test_hex_geometry_backend_rejects_unknown_policy():
+    mesh = _single_cell_mesh("hex")
+    fes = ng.HCurl(mesh, order=1, nograds=True)
+    field = ng.GridFunction(fes)
+    field.Set(ng.CF((-ng.y, ng.x, 0.0)))
+    vectors = field.vec.FV().NumPy().copy()
+    basis = vim.NgsolveHCurlCurlBasis(mesh, fes, vectors, intorder=4)
+
+    with pytest.raises(ValueError, match="hex_geometry_backend"):
+        vim.NgsolveHCurlCellVolumeInteraction(
+            mesh,
+            fes,
+            vectors,
+            basis,
+            hex_geometry_backend="silently-refine-forever",
+        )
 
 
 @pytest.mark.parametrize(

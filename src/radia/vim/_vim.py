@@ -853,6 +853,44 @@ def _trafo_lattice_nodes(mesh, e, ir, max_tries=4):
         "extraction; abort and report the incident).")
 
 
+def _hex_mapping_affinity_report(mesh, relative_tolerance=1.0e-10):
+    """Classify pure-HEX Q1/Q2 mappings without trusting topological order.
+
+    A straight parallelepiped is affine even when rotated.  Cylinder/O-grid
+    hexes are usually trilinear and therefore non-affine despite carrying
+    curve order one.  Sampling the complete Q2 lattice also catches a curved
+    mapping whose corner vertices happen to form a parallelepiped.
+    """
+    if _volume_vertex_counts(mesh) != {8}:
+        raise ValueError("HEX mapping affinity requires a pure-HEX mesh")
+    ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
+    linear_lattice = mesh.GetCurveOrder() < 2 and mesh.deformation is None
+    nonaffine = []
+    maximum_relative_residual = 0.0
+    for element in mesh.Elements(ng.VOL):
+        nodes = (_hex_q2_lattice_nodes_ngsolve_linear(mesh, element)
+                 if linear_lattice else
+                 _trafo_lattice_nodes(mesh, element, ir_hex))
+        origin = nodes[0]
+        axes = np.asarray((nodes[2]-origin, nodes[6]-origin, nodes[18]-origin))
+        predicted = np.asarray([
+            origin + u*axes[0] + v*axes[1] + w*axes[2]
+            for u, v, w in _Q2_LATTICE_3D
+        ])
+        scale = max(*(np.linalg.norm(axis) for axis in axes), 1.0e-300)
+        residual = float(np.max(np.linalg.norm(nodes-predicted, axis=1))/scale)
+        maximum_relative_residual = max(maximum_relative_residual, residual)
+        if residual > float(relative_tolerance):
+            nonaffine.append(int(element.nr))
+    return {
+        "cell_count": int(mesh.ne),
+        "nonaffine_cell_count": len(nonaffine),
+        "nonaffine_cells": tuple(nonaffine),
+        "maximum_relative_residual": maximum_relative_residual,
+        "relative_tolerance": float(relative_tolerance),
+    }
+
+
 def _broken_hex_face_charge_basis(fes, p):
     """NGSolve-assembled normal jump on every quadrilateral facet.
 
@@ -1909,3 +1947,193 @@ class DemagOperator:
         numerator = float(ng.InnerProduct(gfu.vec, demag))
         denominator = float(ng.Integrate(ng.InnerProduct(gfu, gfu), self.space.mesh))
         return numerator / denominator
+
+
+class H1HodgeDemagOperator:
+    """Independent HDiv-to-H1 discrete Hodge demagnetizing operator.
+
+    This constructs
+
+        ``N_hodge = C.T @ K^-1 @ C``
+
+    directly as an NGSolve ``BaseMatrix`` product.  ``C`` is the weak
+    magnetization-gradient coupling on ``definedon`` and ``K`` is the scalar
+    H1 stiffness on the complete potential domain.  The construction is a
+    useful independent complex/formulation gate for charge-BEM operators.  For
+    the standard unit stiffness coefficient it preserves the contraction
+    ``0 <= N_hodge <= M_HDiv`` by construction.  A weighted/Kelvin stiffness
+    uses the metric supplied by the caller and needs its own verified bound.
+
+    The boundary claim is intentionally caller-owned.  An ordinary H1 space
+    with a finite Dirichlet outer boundary is a finite-domain reference, not
+    an open-boundary oracle.  The same class can represent an open boundary
+    only when ``potential_space`` and ``stiffness_coefficient`` come from a
+    separately verified Kelvin-transformed domain.
+
+    The caller wraps construction and use in ``ngsolve.TaskManager``.
+    """
+
+    def __init__(
+        self,
+        hdiv_space,
+        potential_space,
+        *,
+        definedon,
+        stiffness_coefficient=1.0,
+        inverse="sparsecholesky",
+        bonus_intorder=0,
+        boundary_contract="finite-domain",
+    ):
+        if hdiv_space.mesh is not potential_space.mesh:
+            raise ValueError(
+                "H1HodgeDemagOperator requires HDiv and H1 spaces on the same mesh"
+            )
+        if int(hdiv_space.mesh.dim) != 3:
+            raise ValueError("H1HodgeDemagOperator currently requires a 3-D mesh")
+        if definedon is None:
+            raise ValueError(
+                "H1HodgeDemagOperator requires an explicit magnetization region "
+                "via definedon"
+            )
+        if isinstance(definedon, str):
+            definedon_name = definedon
+            definedon = hdiv_space.mesh.Materials(definedon)
+        else:
+            definedon_name = None
+        bonus_intorder = int(bonus_intorder)
+        if bonus_intorder < 0:
+            raise ValueError("bonus_intorder must be non-negative")
+        unit_stiffness = False
+        if np.isscalar(stiffness_coefficient):
+            stiffness_value = float(stiffness_coefficient)
+            if not np.isfinite(stiffness_value) or stiffness_value <= 0.0:
+                raise ValueError(
+                    "stiffness_coefficient must be positive and finite"
+                )
+            unit_stiffness = stiffness_value == 1.0
+        free = np.asarray(potential_space.FreeDofs(), dtype=bool)
+        if not np.any(free):
+            raise ValueError("H1HodgeDemagOperator potential space has no free DoFs")
+        if np.all(free):
+            raise ValueError(
+                "H1HodgeDemagOperator requires a grounded/constrained scalar potential; "
+                "a pure-Neumann H1 stiffness is singular")
+
+        self.space = hdiv_space
+        self.potential_space = potential_space
+        self.definedon = definedon
+        self.definedon_name = definedon_name
+        self.inverse_backend = str(inverse)
+        self.boundary_contract = str(boundary_contract)
+        self.bonus_intorder = bonus_intorder
+        self.unit_stiffness = unit_stiffness
+
+        magnetization, magnetization_test = hdiv_space.TnT()
+        potential, potential_test = potential_space.TnT()
+        volume = ng.dx(bonus_intorder=bonus_intorder)
+        magnetic_volume = ng.dx(
+            definedon=definedon, bonus_intorder=bonus_intorder)
+
+        self._stiffness_form = ng.BilinearForm(potential_space)
+        self._stiffness_form += (
+            stiffness_coefficient
+            * ng.grad(potential)
+            * ng.grad(potential_test)
+            * volume
+        )
+        self._coupling_form = ng.BilinearForm(
+            trialspace=hdiv_space, testspace=potential_space
+        )
+        self._coupling_form += (
+            magnetization * ng.grad(potential_test) * magnetic_volume
+        )
+        self._mass_form = ng.BilinearForm(hdiv_space)
+        self._mass_form += (
+            magnetization * magnetization_test * magnetic_volume
+        )
+        self._stiffness_form.Assemble()
+        self._coupling_form.Assemble()
+        self._mass_form.Assemble()
+
+        self._inverse = self._stiffness_form.mat.Inverse(
+            potential_space.FreeDofs(), inverse=self.inverse_backend
+        )
+        self.mat = (
+            self._coupling_form.mat.T @ self._inverse @ self._coupling_form.mat
+        )
+        self.mass = self._mass_form.mat
+        _, _, mass_values = self.mass.COO()
+        if not len(mass_values) or not np.any(np.abs(mass_values) > 0.0):
+            raise ValueError(
+                "H1HodgeDemagOperator magnetization region has zero HDiv mass"
+            )
+
+    @property
+    def ndof(self):
+        return self.space.ndof
+
+    def Potential(self, magnetization):
+        """Return the scalar potential solving ``K phi = C magnetization``."""
+        if hasattr(magnetization, "vec"):
+            source = magnetization
+        else:
+            source = ng.GridFunction(self.space)
+            source.Set(magnetization, definedon=self.definedon)
+        if source.space is not self.space:
+            raise ValueError(
+                "H1HodgeDemagOperator.Potential requires a GridFunction on its "
+                "HDiv space"
+            )
+        rhs = self._coupling_form.mat * source.vec
+        potential = ng.GridFunction(self.potential_space)
+        potential.vec.data = self._inverse * rhs
+        return potential
+
+    def DemagFactor(self, magnetization):
+        """Return the Hodge Rayleigh quotient for an HDiv field or vector CF."""
+        if hasattr(magnetization, "vec"):
+            source = magnetization
+        else:
+            source = ng.GridFunction(self.space)
+            source.Set(magnetization, definedon=self.definedon)
+        if source.space is not self.space:
+            raise ValueError(
+                "H1HodgeDemagOperator.DemagFactor requires a GridFunction on its "
+                "HDiv space"
+            )
+        applied = source.vec.CreateVector()
+        self.mat.Mult(source.vec, applied)
+        numerator = float(np.real(ng.InnerProduct(source.vec, applied)))
+        denominator = float(
+            np.real(ng.InnerProduct(source.vec, self.mass * source.vec))
+        )
+        if denominator <= 0.0:
+            raise ValueError("H1HodgeDemagOperator source has zero HDiv mass")
+        return numerator / denominator
+
+    def Diagnostics(self):
+        """Return construction metadata without claiming open-boundary accuracy."""
+        hdiv_free = np.asarray(self.space.FreeDofs(), dtype=bool)
+        potential_free = np.asarray(self.potential_space.FreeDofs(), dtype=bool)
+        return {
+            "formulation": "HDiv-to-H1 discrete Hodge projection",
+            "operator": "C.T @ K^-1 @ C",
+            "hdiv_dofs": int(self.space.ndof),
+            "hdiv_active_dofs": int(np.count_nonzero(hdiv_free)),
+            "h1_dofs": int(self.potential_space.ndof),
+            "h1_free_dofs": int(np.count_nonzero(potential_free)),
+            "h1_constrained_dofs": int(np.count_nonzero(~potential_free)),
+            "inverse_backend": self.inverse_backend,
+            "boundary_contract": self.boundary_contract,
+            "definedon": self.definedon_name,
+            "unit_stiffness": self.unit_stiffness,
+            "contraction_contract": (
+                "standard-unit-H1 metric"
+                if self.unit_stiffness
+                else "caller-verified weighted H1 metric"
+            ),
+            "claim_boundary": (
+                "finite-domain reference unless the caller supplied and "
+                "independently verified a Kelvin-transformed potential domain"
+            ),
+        }

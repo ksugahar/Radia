@@ -26,7 +26,10 @@ import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from .. import __version__
 from ..common import register_status_tool
+from ..common.mcp_contract import apply_tool_contract
 from ..common.learning_quality import build_balanced_learning_profile
 from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
@@ -1223,10 +1226,17 @@ def cln_sphere_dd_pipeline() -> str:
     return get_cln_sphere_dd_documentation()
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 def hdiv_vim(topic: str = "overview") -> str:
     """
-    HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT
+    HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div)
     soft-iron demag route.  Canonical reference:
     docs/hdiv_vim/README.md.
 
@@ -1250,6 +1260,8 @@ def hdiv_vim(topic: str = "overview") -> str:
         topic: One of:
             "family"         - BDM default versus explicit Raviart--Thomas; Radia production uses BDM1/BDM2
             "overview"       - what it is + why (symmetric, loops field-null, mu_r-independent) [DEFAULT]
+            "eddy_bubble"    - BDM-MMM + HCurl eddy-bubble coupling, topology blocks,
+                               response-basis completeness, and port-residue modal selection
             "implementation" - C++/pybind/Python files + APIs (rad_hdiv_vim, _ChargeGramHMatrix, ...)
             "scaling"        - charge-Gram H-matrix + persistent rad.Fld direct/tree scaling
             "verification"   - golden tests (tests/feec/) + the verify-first bug catches
@@ -4782,6 +4794,12 @@ register_status_tool(
     subpackage='radia_mcp.radia_ngsolve',
     related_servers=["fem", "bem", "matrix-solvers"],
     optional_deps=["radia", "ngsolve"],
+)
+
+apply_tool_contract(
+    mcp,
+    server_name="mcp-server-radia-ngsolve",
+    version=__version__,
 )
 
 

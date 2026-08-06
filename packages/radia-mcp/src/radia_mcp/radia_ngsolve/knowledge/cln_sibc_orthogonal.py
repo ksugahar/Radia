@@ -706,9 +706,12 @@ is rejected because it would hide the required surface projection.
 
 `LocalESIMSurfaceModel` owns the validated BH curve and SciPy one-dimensional
 cell controls. `SolveLocalESIMSurfaceVIM`, or
-`TopologyAwareHybridVIM.solve_local_esim`, runs the fail-loud outer loop for
-exactly one physical excitation. The returned coefficients, sampled `|H_t|`,
-and `SurfaceImpedanceGram` always belong to the same linearization point.
+`TopologyAwareHybridVIM.solve_local_esim`, runs the fail-loud HCurl outer loop
+for exactly one physical excitation.  For a fixed bulk HDiv magnetic operator,
+`CoupledHDivHybridVIMSystem.solve_frequency_local_esim` runs the same update
+around the complete magnetic/current mixed solve and returns
+`CoupledHDivHCurlLocalESIMSolution`. The returned fields and
+`SurfaceImpedanceGram` always belong to the same linearization point.
 
 For design sweeps, `BuildLocalESIMSurfaceLUT` solves the cell grid offline and
 `LocalESIMSurfaceLUT` persists `Z_s(f,|H_t|)` in a pickle-free NPZ archive.
@@ -732,11 +735,11 @@ The nonlinear solve uses an outer Karl iteration:
 3. interpolate the converged ESIM cell table;
 4. rebuild `G_Gamma(Z_s)` and repeat to the impedance-change tolerance.
 
-The converged Gram is accepted by the fixed-operator HDiv-MMM/HCurl coupled
-solve. Do not overclaim the scope: `NgsolveBDMEddyBubbleVIM` currently builds
-the BDM-MMM response reduction from scalar `mu_r`. A simultaneous constitutive
-iteration that updates an ordinary nonlinear HDiv magnetic operator together
-with the local ESIM Gram is still an integration task.
+The converged Gram is solved directly inside the fixed-operator
+HDiv-MMM/HCurl coupling. Do not overclaim the scope:
+`NgsolveBDMEddyBubbleVIM` currently builds the BDM-MMM response reduction from
+scalar `mu_r`. A simultaneous constitutive iteration that updates an ordinary
+nonlinear HDiv magnetic operator together with the local ESIM Gram is still an integration task.
 
 ## Exact mixed-Galerkin elimination
 

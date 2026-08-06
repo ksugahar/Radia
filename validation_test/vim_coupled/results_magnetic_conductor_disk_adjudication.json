@@ -1,0 +1,536 @@
+{
+  "schema": "radia.validation.vim-coupled.magnetic-conductor-disk.v1",
+  "executed_at_utc": "2026-08-05T17:41:36.866422+09:00",
+  "execution_version": {
+    "radia": "4.95.42",
+    "radia_source_head": "e064fcfe7f11e8af1abe4fb9ed752a3cb90e40b7",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2604",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "mesh_generator": "Coreform Cubit 2025.12 headless Python",
+    "machine_class": "LAB"
+  },
+  "identity": {
+    "geometry": "solid circular disk",
+    "radius_m": 0.01,
+    "thickness_m": 0.0005,
+    "material": {
+      "law": "linear isotropic magnetic conductor",
+      "mu_r": 100.0,
+      "sigma_S_per_m": 10000000.0
+    },
+    "excitation": {
+      "kind": "uniform axial H",
+      "H0_A_per_m": 1.0
+    },
+    "observable": "volume-average complex Bz divided by mu0*H0"
+  },
+  "reproducer": {
+    "script": "validation_test/vim_coupled/validate_magnetic_conductor_disk.py",
+    "profile": "full",
+    "direct_h_ladder_profile": "quick --direct-h-ladder",
+    "mesh_generator": "validation_test/vim_coupled/build_magnetic_conductor_disk_hex.py",
+    "generated_vol_files_tracked": false
+  },
+  "axisymmetric_q2_reference": [
+    {
+      "frequency_hz": 100.0,
+      "normalized_Bz": [1.0916095702505593, -0.004171761620478412],
+      "elements": 18432,
+      "dofs": 74305,
+      "mesh_parameters": {
+        "nr_disk": 160,
+        "nz_disk": 32,
+        "nr_air": 32,
+        "nz_air": 32,
+        "outer_radius_m": 0.5,
+        "outer_half_height_m": 0.5
+      },
+      "wall_s": 10.47251699998742
+    },
+    {
+      "frequency_hz": 10000.0,
+      "normalized_Bz": [0.9517238382659116, -0.11536353350351519],
+      "elements": 18432,
+      "dofs": 74305,
+      "mesh_parameters": {
+        "nr_disk": 160,
+        "nz_disk": 32,
+        "nr_air": 32,
+        "nz_air": 32,
+        "outer_radius_m": 0.5,
+        "outer_half_height_m": 0.5
+      },
+      "wall_s": 11.241585599957034
+    }
+  ],
+  "full_3d_hcurl_A_form": [
+    {
+      "frequency_hz": 100.0,
+      "order": 2,
+      "disk_maxh_m": 0.002,
+      "tetrahedra": 7274,
+      "dofs": 38610,
+      "normalized_Bz": [1.0747123140464014, -0.004228101626686475],
+      "relative_residual": 1.637502022564574e-11,
+      "reference_relative_error": 0.01547918523110337,
+      "timing_s": {"mesh": 0.4942043999908492, "assembly": 0.0697364000370726, "solve": 4.285563600016758, "total": 4.871262200002093}
+    },
+    {
+      "frequency_hz": 10000.0,
+      "order": 1,
+      "disk_maxh_m": 0.002,
+      "tetrahedra": 7274,
+      "dofs": 8950,
+      "normalized_Bz": [0.9111960732380086, -0.28954257468031835],
+      "relative_residual": 5.045997013253726e-11,
+      "reference_relative_error": 0.18653769532923162,
+      "timing_s": {"mesh": 0.43435200001113117, "assembly": 0.043501999985892326, "solve": 0.32312529999762774, "total": 0.8085289999726228}
+    },
+    {
+      "frequency_hz": 10000.0,
+      "order": 2,
+      "disk_maxh_m": 0.002,
+      "tetrahedra": 7274,
+      "dofs": 38610,
+      "normalized_Bz": [0.956841555000948, -0.18827017073040664],
+      "relative_residual": 4.2613726189172905e-11,
+      "reference_relative_error": 0.0762352973358693,
+      "timing_s": {"mesh": 0.47197850001975894, "assembly": 0.06408619997091591, "solve": 4.138171600003261, "total": 4.696738100028597}
+    },
+    {
+      "frequency_hz": 10000.0,
+      "order": 3,
+      "disk_maxh_m": 0.002,
+      "tetrahedra": 7274,
+      "dofs": 104922,
+      "normalized_Bz": [0.9549520329107974, -0.14366751815802556],
+      "relative_residual": 1.8901846098344094e-11,
+      "reference_relative_error": 0.029715003931345442,
+      "timing_s": {"mesh": 0.45089909998932853, "assembly": 0.10697750002145767, "solve": 14.989968799985945, "total": 15.608278000028804}
+    },
+    {
+      "frequency_hz": 10000.0,
+      "order": 3,
+      "disk_maxh_m": 0.001,
+      "tetrahedra": 17686,
+      "dofs": 252447,
+      "normalized_Bz": [0.9574994036926091, -0.12691433396050478],
+      "relative_residual": 2.3518749040169915e-10,
+      "reference_relative_error": 0.013470733942867725,
+      "timing_s": {"mesh": 0.960686500009615, "assembly": 0.36186130001442507, "solve": 123.84742119995644, "total": 125.33586080005625}
+    }
+  ],
+  "hdiv_mmm_static_hex": {
+    "family": "BDM",
+    "mesh_source": "regenerated mapped HEX .vol; no .vol tracked",
+    "bdm1_h_ladder": [
+      {"size_mm": 2.0, "hexes": 96, "dofs": 2752, "normalized_Bz": 1.1247144615845712, "reference_relative_error": 0.030566301894174135, "iterations": 37, "setup_s": 5.383963700034656},
+      {"size_mm": 1.0, "hexes": 384, "dofs": 10880, "normalized_Bz": 1.110689949954826, "reference_relative_error": 0.017891903583695492, "iterations": 32, "setup_s": 38.24090770003386},
+      {"size_mm": 0.5, "hexes": 1536, "dofs": 43264, "normalized_Bz": 1.1042766929959364, "reference_relative_error": 0.01221710037270537, "iterations": 31, "setup_s": 254.6688915999839}
+    ],
+    "bdm2_negative_control": [
+      {"size_mm": 2.0, "hexes": 96, "dofs": 8784, "normalized_Bz": 1.0953562205753973, "iterations": 1542, "total_s": 60.73601280001458},
+      {"size_mm": 1.0, "hexes": 384, "dofs": 34848, "normalized_Bz": 1.1326507989798547, "iterations": 1116, "total_s": 250.29233190004015}
+    ],
+    "bdm2_status": "not promoted: this HEX h ladder is non-monotone"
+  },
+  "mapped_hex_bdm2_spectrum_gate": {
+    "executed_at_utc": "2026-08-05T10:10:55.568974+00:00",
+    "radia": "4.95.42",
+    "radia_source_head": "3682fcf62a8b38e27abd4cd5676d292e62172c73",
+    "radia_source_dirty": true,
+    "status": "material_solve_rejected_for_nonaffine_hex_bdm2",
+    "reproducer_scope": "NGSolve-generated minimal HEX mappings plus regenerated 32-HEX disk; no .vol tracked",
+    "minimal_generalized_spectra": [
+      {
+        "case": "two_affine_hex",
+        "elements": 2,
+        "minimum": -4.369174430107408e-16,
+        "maximum": 1.0000045777627755,
+        "outside_count": 0,
+        "quadrature": {"outer": 5, "inner": 7, "near_grade": 0.5}
+      },
+      {
+        "case": "two_warped_hex",
+        "elements": 2,
+        "minimum": -4.766170853364581e-16,
+        "maximum": 1.1637887804373435,
+        "outside_count": 6,
+        "quadrature": {"outer": 5, "inner": 7, "near_grade": 0.5}
+      },
+      {
+        "case": "two_warped_hex_high_near",
+        "elements": 2,
+        "minimum": -4.512188619592558e-16,
+        "maximum": 0.9982280483366669,
+        "outside_count": 0,
+        "quadrature": {"outer": 7, "inner": 10, "near_grade": 1.0}
+      },
+      {
+        "case": "four_warped_hex",
+        "elements": 4,
+        "minimum": -7.241926176049323e-16,
+        "maximum": 1.5659502092835798,
+        "outside_count": 11,
+        "quadrature": {"outer": 5, "inner": 7, "near_grade": 0.5}
+      },
+      {
+        "case": "four_hex_annular_sector",
+        "elements": 4,
+        "minimum": -0.020922863117152225,
+        "maximum": 1.795424504097915,
+        "outside_count": 45,
+        "quadrature": {"outer": 5, "inner": 7, "near_grade": 0.5}
+      },
+      {
+        "case": "four_hex_annular_sector_high_near",
+        "elements": 4,
+        "minimum": -6.558145534287163e-16,
+        "maximum": 1.0783211793030993,
+        "outside_count": 8,
+        "quadrature": {"outer": 7, "inner": 10, "near_grade": 1.0}
+      }
+    ],
+    "full_disk_32_hex": {
+      "hdiv_order": 2,
+      "dofs": 2952,
+      "charges": 1584,
+      "aca_hmatrix": {
+        "minimum": -5.244213663982451,
+        "maximum": 5.845231889751701
+      },
+      "all_dense_gram": {
+        "minimum": -5.244204070380188,
+        "maximum": 5.845477286610888
+      },
+      "volume_only": {
+        "minimum": 4.813160082813466e-12,
+        "maximum": 337.48175511545304
+      },
+      "boundary_only": {
+        "minimum": 6.873527322280162e-13,
+        "maximum": 332.78808392962173
+      },
+      "aca_dense_maximum_difference": 0.00024539685918734255,
+      "aca_dense_minimum_difference": 9.593602263046285e-06
+    },
+    "mapped_hex_bdm1_control": {
+      "minimum": 2.5713558454667628e-12,
+      "maximum": 1.6382209728234916,
+      "interpretation": "positive lower spectrum and h-convergent observable, but the upper spectral cap is not promoted as exact"
+    },
+    "conclusion": "separate mapped-HEX BDM2 volume and boundary charge blocks are individually positive and large, but their cross cancellation is not preserved; denser storage does not fix it. Material solve fails loudly until a composite cancellation-preserving operator is implemented"
+  },
+  "mapped_hex_bdm2_gate_replay": {
+    "executed_at_utc": "2026-08-05T19:18:18.464623+09:00",
+    "radia": "4.95.42",
+    "radia_source_head": "3682fcf62a8b38e27abd4cd5676d292e62172c73",
+    "radia_source_dirty": true,
+    "source_fingerprints_stable_during_run": true,
+    "runner": "validation_test/vim_coupled/validate_magnetic_conductor_disk.py --profile quick --include-bdm2-gate",
+    "axisymmetric_q2": {
+      "elements": 6656,
+      "normalized_Bz": [1.08846899230483, -0.00416737199862923]
+    },
+    "full_3d_hcurl": {
+      "normalized_Bz": [1.0747123140464, -0.00422810162668648],
+      "reference_relative_error": 0.01263858830663183
+    },
+    "mapped_hex_bdm1": {
+      "hexes": 32,
+      "normalized_Bz": 1.148345428882073,
+      "role": "coarse positive control; accuracy is established only by the stored h ladder"
+    },
+    "coupled_hdiv_mmm_hcurl_eddy_bubble": {
+      "normalized_Bz": [1.15025064709544, -0.00691855182681881],
+      "reference_relative_error": 0.05681597509993709,
+      "relative_residual": 2.0617854373250156e-18,
+      "role": "coarse mechanics/passivity/routing smoke; not the accuracy oracle"
+    },
+    "direct_sampled_parity": {
+      "observable_relative_difference": 3.897162828825282e-06,
+      "joule_relative_difference": 1.442614496376608e-05
+    },
+    "mapped_hex_bdm2_gate": [
+      {"size_mm": 2.0, "status": "rejected_as_expected"},
+      {"size_mm": 1.0, "status": "rejected_as_expected"}
+    ],
+    "total_s": 29.47553129994776,
+    "pass": true
+  },
+  "coupled_hdiv_mmm_hcurl_eddy_bubble_smoke": {
+    "interaction": "explicit sampled HACApK smoke; not the accuracy oracle",
+    "hexes": 32,
+    "hcurl_parent_dofs": 753,
+    "hdiv_parent_dofs": 928,
+    "hdiv_modes": 8,
+    "eddy_modes": 36,
+    "frequency_hz": 100.0,
+    "route": "volumetric",
+    "normalized_Bz": [1.1502506472580936, -0.006918551387407806],
+    "reference_relative_error": 0.05377833381021211,
+    "relative_residual": 1.2983821992654663e-16,
+    "joule_loss": 1.2399925679724662e-11,
+    "wall_s": 1.9191212000441737,
+    "stale_10khz_route_rejected": true
+  },
+  "coupled_sampled_h_ladder": {
+    "executed_at_utc": "2026-08-05T15:25:13+09:00",
+    "radia": "4.95.41",
+    "radia_source_head": "02fc876762d422c6417f6071b1cfaf7ca3e85db2",
+    "source_head_stable_during_run": true,
+    "source_fingerprints_stable_during_run": true,
+    "solver_run_contract_validated": true,
+    "interaction": "explicit sampled HACApK",
+    "reference": "axisymmetric Q2 at 100 Hz",
+    "reference_fidelity_gate": {
+      "accepted_fine_q2_elements": 18432,
+      "accepted_fine_error": 0.018971901715430877,
+      "rejected_coarse_q2_elements": 6656,
+      "rejected_coarse_error": 0.021868442285025415,
+      "rule": "a coupled h-ladder accuracy claim requires the fine axisymmetric reference"
+    },
+    "rows": [
+      {
+        "size_mm": 4.0,
+        "hexes": 32,
+        "hcurl_parent_dofs": 753,
+        "hdiv_parent_dofs": 928,
+        "hdiv_modes": 8,
+        "eddy_modes": 36,
+        "normalized_Bz": [1.1502506470318246, -0.006918552316418958],
+        "reference_relative_error": 0.053778333642980194,
+        "relative_residual": 2.59684482121599e-16,
+        "joule_loss": 1.2399925691340055e-11
+      },
+      {
+        "size_mm": 2.0,
+        "hexes": 96,
+        "hcurl_parent_dofs": 2209,
+        "hdiv_parent_dofs": 2752,
+        "hdiv_modes": 8,
+        "eddy_modes": 92,
+        "normalized_Bz": [1.127855053148875, -0.007704293222493602],
+        "reference_relative_error": 0.03336078544012037,
+        "relative_residual": 1.2985404984625738e-16,
+        "joule_loss": 1.3174889567489193e-11
+      },
+      {
+        "size_mm": 1.0,
+        "hexes": 384,
+        "hcurl_parent_dofs": 8641,
+        "hdiv_parent_dofs": 10880,
+        "hdiv_modes": 8,
+        "eddy_modes": 364,
+        "normalized_Bz": [1.1119550389783583, -0.008040678394337981],
+        "reference_relative_error": 0.018971901715951586,
+        "relative_residual": 2.609297932170292e-16,
+        "joule_loss": 1.3318933284082562e-11
+      }
+    ]
+  },
+  "production_direct_q2_hex_replay": {
+    "executed_at_utc": "2026-08-05T16:23:17.995215+09:00",
+    "radia": "4.95.42",
+    "radia_source_head": "95cf615c163614fca2feea62c8b390b1f4275fb1",
+    "radia_source_dirty": true,
+    "source_head_stable_during_run": true,
+    "source_fingerprints_stable_during_run": true,
+    "solver_run_contract_validated": true,
+    "full_profile_passed": true,
+    "interaction": "production auto HCurl diagonal with direct Q2 HEX reference density",
+    "hcurl_diagonal_backend": "direct-q2-hex-reference-density",
+    "reference_density": "curl(T)*abs(det(dX/dxi))",
+    "tensor_degree": 2,
+    "hexes": 32,
+    "hcurl_parent_dofs": 753,
+    "hdiv_parent_dofs": 928,
+    "hdiv_modes": 8,
+    "eddy_modes": 36,
+    "charge_count": 864,
+    "charge_map_entries": 16896,
+    "affine_geometry_residual": 0.4180188097514102,
+    "hmatrix_compression": 0.4857494212962963,
+    "hmatrix_memory_mb": 2.7664947509765625,
+    "hmatrix_build_s": 5.4994613,
+    "frequency_hz": 100.0,
+    "route": "volumetric",
+    "normalized_Bz": [1.1502460939938184, -0.006918451742954894],
+    "reference_relative_error": 0.05377416299080771,
+    "relative_residual": 2.5967862487776547e-16,
+    "joule_loss": 1.2399743992908705e-11,
+    "sampled_observable_relative_difference": 3.959286691937603e-06,
+    "sampled_joule_relative_difference": 1.4656501965620257e-05,
+    "stale_10khz_route_rejected": true,
+    "wall_s": 14.509466399962548,
+    "full_profile_wall_s": 891.6315825000056,
+    "claim_boundary": "historical single-level replay; superseded for h convergence by production_direct_q2_hex_h_ladder"
+  },
+  "production_direct_q2_hex_h_ladder": {
+    "executed_at_utc": "2026-08-05T17:41:36.866422+09:00",
+    "radia": "4.95.42",
+    "radia_source_head": "e064fcfe7f11e8af1abe4fb9ed752a3cb90e40b7",
+    "source_head_stable_during_run": true,
+    "source_fingerprints_stable_during_run": true,
+    "source_fingerprints": {
+      "src/radia/__init__.py": "136c1307bda4850dde26dd384b7f84fb35bcc84ca6f702293d54bcf26b26ff0b",
+      "src/radia/axifem.pyd": "f7444d51ee94c5ca66c5a842a20cff50ef21e2bde563caf6da1cf163838d87b2",
+      "src/radia/_radia_pybind.pyd": "d11d38508acc6472b270ee1aa599b63b353ee8be10799e8aa2fd5f049614f7f5",
+      "src/radia/vim/_eddy_hybrid.py": "766c4275e8ee5a8ecda5ad63b209eef25c9d0dd97d79b133bff95510461a1092",
+      "src/radia/vim/_hcurl_tet_interaction.py": "8e1ba8288b9ec0a99b38dac1b0d2ce1ef41020c7734aa8c5d8d7ab93184cdbd6",
+      "validation_test/vim_coupled/validate_magnetic_conductor_disk.py": "e0a85cf80b42e9af135f493c85f9ebbb315a91e6faa109891a3792241e51b17b",
+      "validation_test/vim_coupled/build_magnetic_conductor_disk_hex.py": "638c65aaee3b02365c19e31c85e73a91424c7c0dec4f8938db3913dbf8c23847"
+    },
+    "solver_run_contract_validated": true,
+    "direct_h_ladder_passed": true,
+    "interaction": "production auto HCurl diagonal with direct Q2 HEX reference density",
+    "hcurl_diagonal_backend": "direct-q2-hex-reference-density",
+    "reference_density": "curl(T)*abs(det(dX/dxi))",
+    "sampled_diagonal_policy": "global H-matrix with matrix-free restricted diagonal subtraction",
+    "zero_monomial_policy": "prune only coefficients below the projection roundoff threshold",
+    "rows": [
+      {
+        "size_mm": 4.0,
+        "hexes": 32,
+        "hcurl_parent_dofs": 753,
+        "hdiv_parent_dofs": 928,
+        "hdiv_modes": 8,
+        "eddy_modes": 36,
+        "normalized_Bz": [1.150246165451155, -0.00691845294552945],
+        "reference_relative_error": 0.053774228430703855,
+        "sampled_observable_relative_difference": 3.8971089199379765e-06,
+        "sampled_joule_relative_difference": 1.4435903165364533e-05,
+        "relative_residual": 1.2985408597078836e-16,
+        "joule_loss": 1.2399746753993389e-11,
+        "charge_count": 704,
+        "unpruned_charge_count": 864,
+        "hmatrix_build_s": 4.4222872,
+        "hmatrix_memory_mb": 1.97857666015625,
+        "hmatrix_compression": 0.5232599431818182,
+        "wall_s": 10.525139999983367
+      },
+      {
+        "size_mm": 2.0,
+        "hexes": 96,
+        "hcurl_parent_dofs": 2209,
+        "hdiv_parent_dofs": 2752,
+        "hdiv_modes": 8,
+        "eddy_modes": 92,
+        "normalized_Bz": [1.1278529357887677, -0.0077042423143727536],
+        "reference_relative_error": 0.033358850409891505,
+        "sampled_observable_relative_difference": 1.8778335970856012e-06,
+        "sampled_joule_relative_difference": 6.8186585769734045e-06,
+        "relative_residual": 3.8957387208307753e-16,
+        "joule_loss": 1.317479973202135e-11,
+        "charge_count": 2112,
+        "unpruned_charge_count": 2592,
+        "hmatrix_build_s": 13.4636122,
+        "hmatrix_memory_mb": 9.012863159179688,
+        "hmatrix_compression": 0.26484079071969696,
+        "wall_s": 31.71702360000927
+      },
+      {
+        "size_mm": 1.0,
+        "hexes": 384,
+        "hcurl_parent_dofs": 8641,
+        "hdiv_parent_dofs": 10880,
+        "hdiv_modes": 8,
+        "eddy_modes": 364,
+        "normalized_Bz": [1.1119541458807296, -0.008040656067007377],
+        "reference_relative_error": 0.01897109415696592,
+        "sampled_observable_relative_difference": 8.03407350029429e-07,
+        "sampled_joule_relative_difference": 2.928511784196616e-06,
+        "relative_residual": 1.3050053479078024e-16,
+        "joule_loss": 1.3318894279311116e-11,
+        "charge_count": 8448,
+        "unpruned_charge_count": 10368,
+        "hmatrix_build_s": 73.6136901,
+        "hmatrix_memory_mb": 63.62681579589844,
+        "hmatrix_compression": 0.11685365619081439,
+        "wall_s": 193.95309570000973
+      }
+    ],
+    "timing": {
+      "total_s": 339.8093207000056,
+      "pre_optimization_candidate_total_s": 1819.6953950999887,
+      "observed_speedup": 5.355048505883902,
+      "claim_boundary": "same-machine observation, not a universal performance claim"
+    },
+    "claim_boundary": "h convergence is established for this 32/96/384 mapped-HEX magnetic-conductor disk lane only"
+  },
+  "checks": {
+    "full_3d_hcurl_100hz_error_below_2pct": true,
+    "full_3d_hcurl_10khz_p_error_decreases_p1_p2_p3": true,
+    "full_3d_hcurl_10khz_fine_p3_error_below_2pct": true,
+    "full_3d_hcurl_all_residuals_below_1e-8": true,
+    "bdm1_hex_h_error_decreases_monotonically": true,
+    "bdm1_hex_fine_error_below_2pct": true,
+    "bdm2_hex_nonmonotone_gap_detected": true,
+    "mapped_hex_bdm2_spectrum_violation_reproduced": true,
+    "mapped_hex_bdm2_dense_aca_parity_verified": true,
+    "mapped_hex_bdm2_material_gate_verified": true,
+    "mapped_hex_bdm2_live_gate_replay_verified": true,
+    "mapped_hex_bdm2_space_hodge_contraction_verified": true,
+    "coupled_smoke_residual_below_1e-10": true,
+    "coupled_smoke_joule_nonnegative": true,
+    "stale_volumetric_to_sibc_frequency_route_rejected": true,
+    "coupled_sampled_h_error_decreases_monotonically": true,
+    "coupled_sampled_h_fine_error_below_2pct": true,
+    "coupled_h_ladder_fine_reference_required": true,
+    "production_direct_q2_hex_execution_verified": true,
+    "production_direct_q2_hex_backend_observed": true,
+    "production_direct_q2_hex_sampled_observable_parity_below_1e-4": true,
+    "production_direct_q2_hex_sampled_joule_parity_below_1e-4": true,
+    "production_direct_q2_hex_h_convergence_verified": true,
+    "production_direct_q2_hex_h_error_decreases_monotonically": true,
+    "production_direct_q2_hex_fine_error_below_2pct": true,
+    "production_direct_q2_hex_source_identity_verified": true,
+    "production_direct_q2_hex_solver_run_contract_validated": true
+  },
+  "full_profile_replay": {
+    "executed_at_utc": "2026-08-05T15:12:27.841978+09:00",
+    "radia": "4.95.41",
+    "radia_source_head": "02fc876762d422c6417f6071b1cfaf7ca3e85db2",
+    "source_head_stable_during_run": true,
+    "source_fingerprints_stable_during_run": true,
+    "solver_run_contract_validated": true,
+    "full_profile_passed": true,
+    "max_axisymmetric_component_difference_from_stored": 0.0,
+    "max_hcurl_reference_error_difference_from_stored": 0.0,
+    "max_bdm1_normalized_Bz_difference_from_stored": 4.440892098500626e-16,
+    "bdm1_reference_relative_errors": [
+      0.030566301894173736,
+      0.01789190358369569,
+      0.012217100372704985
+    ],
+    "coupled_relative_residual": 2.59684482121599e-16,
+    "coupled_joule_loss": 1.2399925691340055e-11,
+    "timing_breakdown_s": {
+      "axisymmetric_reference": 21.94772869994631,
+      "full_3d_hcurl": 165.25375869992422,
+      "hdiv_mesh_and_static": 304.89805550005985,
+      "coupled_mesh_and_solve": 3.47043390001636,
+      "total": 496.435506299953
+    }
+  },
+  "adjudication": {
+    "status": "reference_bdm1_sampled_and_direct_q2_hex_h_convergence_pass",
+    "established": [
+      "axisymmetric Q2 and independently refined full 3-D HCurl A-form agree within 2%",
+      "mapped-HEX BDM1 HDiv-MMM h-refines to within 2% of the axisymmetric reference",
+      "the sampled coupled HDiv-MMM plus HCurl eddy-bubble h ladder reaches 1.90% reference error, solves passively, and rejects a stale frequency route",
+      "the production direct-Q2 HEX reference-density diagonal h-refines from 5.38% to 3.34% to 1.90% error over 32/96/384 HEX",
+      "the direct-Q2 lane agrees with the sampled fine-mesh observable to 8.03e-7 and Joule loss to 2.93e-6 while retaining non-negative loss and sub-4e-16 residuals",
+      "matrix-free sampled-diagonal restriction and exact-zero monomial pruning reduce the observed same-machine ladder time from 1819.7 s to 339.8 s",
+      "mapped/non-affine HEX BDM2 material solves now fail loudly after minimal and 32-cell spectrum diagnostics isolated a cancellation defect",
+      "an independent H1 Omega discrete Hodge operator is bounded on the same 207 active mapped-body BDM2 DoFs, localizing the defect to the mapped charge operator rather than the approximation space"
+    ],
+    "not_established": [
+      "BDM2 mapped-HEX h-convergence for this thin high-mu disk",
+      "a cancellation-preserving composite mapped-HEX BDM2 charge operator",
+      "universal speed or accuracy superiority over another solver"
+    ]
+  }
+}
