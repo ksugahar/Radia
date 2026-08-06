@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.48 - Gmsh mesh-origin parity and PEEC overlays
+
+Released 2026-08-06.
+
+- Made Gmsh volume export select orientation per element so Netgen- and
+  Cubit-origin tetrahedra, hexahedra, prisms, and pyramids retain positive
+  Jacobians, including mirrored high-order connectivity.
+- Added checked PEEC filament magnitude, direction, and complex-current views,
+  with collision-free STEP overlays and fail-fast input validation.
+- Added a neutral Gmsh minSICN comparison lane for equal-size and equal-budget
+  Netgen/Cubit mesh studies, with isolated per-route diagnostics.
+- Recorded and hardened the release-worktree editable-install drift checks.
+
 ## 4.95.47 - NAS-safe exact-source QUD
 
 Released 2026-08-06.
