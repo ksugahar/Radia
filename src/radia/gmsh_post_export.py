@@ -2552,8 +2552,17 @@ def export_filaments_msh(filament_paths, output_msh, *,
     # warns "Skipping duplicate element N" for every line and silently
     # DROPS the filament geometry, leaving the panel user with an
     # empty filament view.
+    #
+    # ENTITY tags need the same offset: merging a STEP file creates
+    # OCC curves with tags 1..N in the same (dim, tag) space, and a
+    # discrete curve sharing a tag gets BOUND to the OCC curve as its
+    # "mesh" -- gmsh then hard-crashes (0xC000041D) as soon as shaded
+    # geometry faces are enabled (Geometry.Surfaces=1 +
+    # Geometry.SurfaceType>0).  Measured gmsh 4.15.2; the tag offset
+    # resolves it.
     n_fil = len(filament_paths)
     ELEM_TAG_OFFSET = 10_000_000
+    ENT_TAG_OFFSET = 10_000_000
     elem_tag = ELEM_TAG_OFFSET
     fil_of_node = {}  # node_id -> filament index (for current assignment)
 
@@ -2581,18 +2590,32 @@ def export_filaments_msh(filament_paths, output_msh, *,
             f.write(f'1 {k+1} "{label}_{k}"\n')
         f.write("$EndPhysicalNames\n")
 
-        # Entities: one curve entity per filament
+        # Entities: one curve entity per filament, REAL bounding boxes,
+        # tags offset out of the OCC range (see ENT_TAG_OFFSET note).
+        elems_by_fil = [[] for _ in range(n_fil)]
+        for (tag, phys, n1, n2) in elements:
+            elems_by_fil[phys - 1].append((tag, n1, n2))
+
         f.write("$Entities\n")
         f.write(f"0 {n_fil} 0 0\n")  # 0 points, n_fil curves, 0 surfs, 0 vols
         for k in range(n_fil):
-            # curve tag, minX,minY,minZ, maxX,maxY,maxZ, numPhysTags, physTag
-            f.write(f"{k+1} 0 0 0 0 0 0 1 {k+1} 0\n")
+            fil_node_ids = {n for (_t, a, b) in elems_by_fil[k]
+                            for n in (a, b)}
+            pts = [nodes[n - 1] for n in fil_node_ids]
+            if pts:
+                lo = [min(p[i] for p in pts) for i in range(3)]
+                hi = [max(p[i] for p in pts) for i in range(3)]
+            else:
+                lo = hi = [0.0, 0.0, 0.0]
+            f.write(f"{k + 1 + ENT_TAG_OFFSET} "
+                    f"{lo[0]:.9e} {lo[1]:.9e} {lo[2]:.9e} "
+                    f"{hi[0]:.9e} {hi[1]:.9e} {hi[2]:.9e} 1 {k+1} 0\n")
         f.write("$EndEntities\n")
 
-        # Nodes (one block, all nodes)
+        # Nodes (one block, all nodes, on the first filament entity)
         f.write("$Nodes\n")
         f.write(f"1 {n_nodes} 1 {n_nodes}\n")  # 1 entity block
-        f.write(f"1 1 0 {n_nodes}\n")  # dim=1, tag=1, parametric=0, numNodes
+        f.write(f"1 {1 + ENT_TAG_OFFSET} 0 {n_nodes}\n")
         for i in range(n_nodes):
             f.write(f"{i+1}\n")
         for (x, y, z) in nodes:
@@ -2601,19 +2624,14 @@ def export_filaments_msh(filament_paths, output_msh, *,
 
         # Elements (one block per filament)
         f.write("$Elements\n")
-        # Count elements per filament for block structure
-        elems_by_fil = [[] for _ in range(n_fil)]
-        for (tag, phys, n1, n2) in elements:
-            elems_by_fil[phys - 1].append((tag, n1, n2))
-
         # GMSH 4.1: numEntityBlocks numElements minTag maxTag
         min_tag = ELEM_TAG_OFFSET + 1
         max_tag = elem_tag  # last assigned
         f.write(f"{n_fil} {n_elems} {min_tag} {max_tag}\n")
         for k in range(n_fil):
             es = elems_by_fil[k]
-            # dim=1, entityTag=k+1, elemType=1 (2-node line), numElems
-            f.write(f"1 {k+1} 1 {len(es)}\n")
+            # dim=1, entityTag (offset), elemType=1 (2-node line), numElems
+            f.write(f"1 {k + 1 + ENT_TAG_OFFSET} 1 {len(es)}\n")
             for (tag, n1, n2) in es:
                 f.write(f"{tag} {n1} {n2}\n")
         f.write("$EndElements\n")

@@ -50,7 +50,16 @@ try:
         gmsh.option.setNumber("General.MenuPositionX", 100)
         gmsh.option.setNumber("General.MenuPositionY", 100)
         gmsh.open(cfg["path"])
+        for extra in cfg.get("merge_files") or []:
+            gmsh.merge(extra)
         gmsh.option.setNumber("Mesh.NumSubEdges", cfg["numsubedges"])
+
+        if cfg.get("geometry_display"):
+            # merged CAD (STEP/BREP) shows as shaded solid faces; points
+            # off (vertex dots clutter overlay figures)
+            gmsh.option.setNumber("Geometry.Surfaces", 1)
+            gmsh.option.setNumber("Geometry.SurfaceType", 2)
+            gmsh.option.setNumber("Geometry.Points", 0)
 
         view_tags = list(gmsh.view.getTags())
         n_views = len(view_tags)
@@ -90,6 +99,25 @@ try:
         for name, val in (cfg.get("string_options") or {}).items():
             gmsh.option.setString(name, str(val))
 
+        def _revert_empty_adaptive_views():
+            # Adaptive visualization skips LINE-element views entirely
+            # (PEEC filament exports render as an empty 1e+200 range).
+            # After the first draw, any view whose computed range is
+            # empty gets its adaptation reverted and the scene redrawn.
+            if not cfg.get("adapt_views"):
+                return []
+            reverted = []
+            for i in range(n_views):
+                vmin = gmsh.option.getNumber(f"View[{i}].Min")
+                vmax = gmsh.option.getNumber(f"View[{i}].Max")
+                if vmin > vmax:
+                    gmsh.option.setNumber(
+                        f"View[{i}].AdaptVisualizationGrid", 0)
+                    reverted.append(i)
+            if reverted:
+                gmsh.fltk.update()
+            return reverted
+
         if cfg["mode"] == "png":
             ts = cfg.get("time_step")
             if ts is not None:
@@ -97,6 +125,7 @@ try:
                     gmsh.option.setNumber(f"View[{i}].TimeStep", int(ts))
             gmsh.fltk.initialize()
             gmsh.fltk.update()
+            result["adapt_reverted_views"] = _revert_empty_adaptive_views()
             gmsh.write(cfg["png_out"])
             gmsh.fltk.finalize()
             result.update({"ok": True, "ran": True, "png": cfg["png_out"]})
@@ -141,6 +170,9 @@ try:
                                               int(ts))
                 n_frames = int(orbit["n_frames"])
                 gmsh.fltk.initialize()
+                gmsh.fltk.update()
+                result["adapt_reverted_views"] = \
+                    _revert_empty_adaptive_views()
                 for k in range(n_frames):
                     gmsh.option.setNumber(
                         axis_opt,
@@ -170,6 +202,9 @@ try:
                     gmsh.option.setNumber("PostProcessing.Link", 1)
                     gmsh.option.setNumber("PostProcessing.AnimationCycle", 0)
                 gmsh.fltk.initialize()
+                gmsh.fltk.update()
+                result["adapt_reverted_views"] = \
+                    _revert_empty_adaptive_views()
                 for step in range(int(steps)):
                     for i in targets:
                         gmsh.option.setNumber(f"View[{i}].TimeStep", step)
@@ -278,6 +313,23 @@ def _axis_equal_note(options: dict[str, float]) -> str | None:
             f"the factor stated in its caption")
 
 
+_CAD_SUFFIXES = {".step", ".stp", ".brep", ".iges", ".igs"}
+
+
+def _resolve_merge_files(merge_files) -> tuple[list[str], bool] | dict:
+    """Validate overlay files; returns (paths, any_cad) or an error dict."""
+    paths: list[str] = []
+    any_cad = False
+    for m in merge_files or []:
+        p = Path(m)
+        if not p.is_file():
+            return {"ok": False, "error": f"merge file not found: {p}"}
+        if p.suffix.lower() in _CAD_SUFFIXES:
+            any_cad = True
+        paths.append(str(p))
+    return paths, any_cad
+
+
 def render_png(path: str | Path,
                png_out: str | Path | None = None, *,
                width: int = 1000, height: int = 800,
@@ -286,6 +338,8 @@ def render_png(path: str | Path,
                rotation: list[float] | None = None,
                time_step: int | None = None,
                cut_plane: dict[str, Any] | None = None,
+               merge_files: list[str | Path] | None = None,
+               geometry_display: bool | None = None,
                options: dict[str, float] | None = None,
                string_options: dict[str, str] | None = None,
                auto_mesh_display: bool = True,
@@ -300,10 +354,23 @@ def render_png(path: str | Path,
     contract ({enabled, normal, offset, ...}); views get Clip=1.
     ``smooth_normals`` (default on) averages surface normals per vertex
     -- the gmsh default leaves isosurfaces visibly faceted.
+
+    ``merge_files`` overlays additional files into the same scene (the
+    lab's Merge workflow: coil STEP + filament .msh + field .msh in one
+    picture).  When a CAD file (.step/.brep) is merged,
+    ``geometry_display`` defaults on: shaded solid faces, vertex dots
+    off.  Radia/netgen STEP files carry meter coordinates and overlay
+    the field data 1:1 (measured).
     """
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
+    resolved = _resolve_merge_files(merge_files)
+    if isinstance(resolved, dict):
+        return resolved
+    merge_paths, any_cad = resolved
+    if geometry_display is None:
+        geometry_display = any_cad
     out = Path(png_out) if png_out is not None else src.with_suffix(".png")
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -311,6 +378,8 @@ def render_png(path: str | Path,
     cfg = {
         "mode": "png",
         "path": str(src),
+        "merge_files": merge_paths,
+        "geometry_display": bool(geometry_display),
         "png_out": str(out),
         "width": int(width),
         "height": int(height),
@@ -361,6 +430,8 @@ def export_animation(path: str | Path,
                      camera_preset: str | None = None,
                      rotation: list[float] | None = None,
                      cut_plane: dict[str, Any] | None = None,
+                     merge_files: list[str | Path] | None = None,
+                     geometry_display: bool | None = None,
                      options: dict[str, float] | None = None,
                      string_options: dict[str, str] | None = None,
                      adapt_views: bool = True,
@@ -389,6 +460,12 @@ def export_animation(path: str | Path,
     if orbit_axis is not None and orbit_axis not in ("x", "y", "z"):
         return {"ok": False,
                 "error": f"orbit_axis must be x|y|z, got {orbit_axis!r}"}
+    resolved = _resolve_merge_files(merge_files)
+    if isinstance(resolved, dict):
+        return resolved
+    merge_paths, any_cad = resolved
+    if geometry_display is None:
+        geometry_display = any_cad
     gif = Path(gif_out) if gif_out is not None else src.with_suffix(".gif")
     gif.parent.mkdir(parents=True, exist_ok=True)
 
@@ -404,6 +481,8 @@ def export_animation(path: str | Path,
     cfg = {
         "mode": "animation",
         "path": str(src),
+        "merge_files": merge_paths,
+        "geometry_display": bool(geometry_display),
         "gif_out": str(gif),
         "frames_dir": str(frames_dir).replace("\\", "/"),
         "width": int(width),
