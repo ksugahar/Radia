@@ -1,0 +1,138 @@
+{
+ "timestamp": "2026-08-06T18:50:48.146446",
+ "hostname": "lab",
+ "problem": "H1 order-1 Poisson, manufactured u=sin(kx)sin(ky)exp(kz), Dirichlet on all boundaries; CG precision 1e-10, unpreconditioned (Projector) and Jacobi",
+ "referee": "gmsh minSICN",
+ "cases": [
+  {
+   "pair": "sphere_equal_budget",
+   "k": 1.0,
+   "legs": [
+    {
+     "mesher": "cubit_tet",
+     "h": 0.3,
+     "n_elements": 1385,
+     "min_quality": 0.5665,
+     "mean_quality": 0.864,
+     "negative": 0,
+     "ndof": 329,
+     "free_dofs": 160,
+     "cg_plain_iters": 34,
+     "cg_jacobi_iters": 31,
+     "l2_error": 0.012495576411625306,
+     "h1_error": 0.3101943245147947,
+     "l2_rel": 0.03753872826193255,
+     "h1_rel": 0.23726867621507391
+    },
+    {
+     "mesher": "netgen",
+     "h": 0.2006,
+     "n_elements": 1765,
+     "min_quality": 0.47,
+     "mean_quality": 0.8164,
+     "negative": 0,
+     "ndof": 502,
+     "free_dofs": 140,
+     "cg_plain_iters": 34,
+     "cg_jacobi_iters": 32,
+     "l2_error": 0.01245435221499004,
+     "h1_error": 0.31053756096355967,
+     "l2_rel": 0.036612343990315994,
+     "h1_rel": 0.2337785639880263
+    }
+   ]
+  },
+  {
+   "pair": "c_core_equal_budget",
+   "k": 0.02,
+   "legs": [
+    {
+     "mesher": "cubit_tet",
+     "h": 4.0,
+     "n_elements": 9470,
+     "min_quality": 0.5928,
+     "mean_quality": 0.8858,
+     "negative": 0,
+     "ndof": 2236,
+     "free_dofs": 1050,
+     "cg_plain_iters": 42,
+     "cg_jacobi_iters": 40,
+     "l2_error": 0.0980858878909667,
+     "h1_error": 0.19864830861343505,
+     "l2_rel": 0.0019510492742218172,
+     "h1_rel": 0.05730684143155003
+    },
+    {
+     "mesher": "netgen",
+     "h": 3.1024,
+     "n_elements": 8646,
+     "min_quality": 0.3911,
+     "mean_quality": 0.8173,
+     "negative": 0,
+     "ndof": 2571,
+     "free_dofs": 543,
+     "cg_plain_iters": 37,
+     "cg_jacobi_iters": 35,
+     "l2_error": 0.13986360917174365,
+     "h1_error": 0.236453375766325,
+     "l2_rel": 0.0027820596727963103,
+     "h1_rel": 0.0682129951451627
+    }
+   ]
+  },
+  {
+   "pair": "c_core_netgen_valley",
+   "k": 0.02,
+   "legs": [
+    {
+     "mesher": "netgen",
+     "h": 8.0435,
+     "n_elements": 856,
+     "min_quality": 0.5122,
+     "mean_quality": 0.8429,
+     "negative": 0,
+     "ndof": 313,
+     "free_dofs": 33,
+     "cg_plain_iters": 14,
+     "cg_jacobi_iters": 14,
+     "l2_error": 0.578602050890258,
+     "h1_error": 0.4857221880326324,
+     "l2_rel": 0.01150910835008023,
+     "h1_rel": 0.14012303761540398
+    },
+    {
+     "mesher": "netgen",
+     "h": 6.413,
+     "n_elements": 1206,
+     "min_quality": 0.3744,
+     "mean_quality": 0.82,
+     "negative": 0,
+     "ndof": 449,
+     "free_dofs": 34,
+     "cg_plain_iters": 16,
+     "cg_jacobi_iters": 15,
+     "l2_error": 0.49451726547256597,
+     "h1_error": 0.45703264393914617,
+     "l2_rel": 0.009836558273946019,
+     "h1_rel": 0.13184656562954986
+    },
+    {
+     "mesher": "netgen",
+     "h": 6.087,
+     "n_elements": 1573,
+     "min_quality": 0.2716,
+     "mean_quality": 0.7951,
+     "negative": 0,
+     "ndof": 573,
+     "free_dofs": 38,
+     "cg_plain_iters": 17,
+     "cg_jacobi_iters": 17,
+     "l2_error": 0.44213559326944685,
+     "h1_error": 0.43947365781731607,
+     "l2_rel": 0.008794622210148149,
+     "h1_rel": 0.126781080593322
+    }
+   ]
+  }
+ ]
+}
