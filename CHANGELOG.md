@@ -5,6 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.43 - Gmsh post-processing and session hardening
+
+Released 2026-08-06.
+
+- Made `GmshPostExport` write nodal field values for every emitted node and
+  expanded round-trip checks across supported high-order volume families.
+- Migrated the PEEC centerline corpus to ASCII MSH v4.1 and made specialized
+  readers reject missing, legacy, or ambiguous mesh metadata instead of
+  silently accepting a reduced interpretation.
+- Added persistent Gmsh and Cubit MCP operating lanes with reproducible
+  session diagnostics, field post-processing, artifact audits, and fail-loud
+  lifecycle behavior.
+- Strengthened release gates for malformed MSH sections, high-order element
+  coverage, field-statistics drift, affine slivers, NaN/Inf values, and
+  concurrent Cubit clients.
+
 ## 4.95.42 - Portable Simulink release verification
 
 Released 2026-08-05.
