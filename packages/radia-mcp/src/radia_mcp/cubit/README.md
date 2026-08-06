@@ -73,6 +73,7 @@ Then in a session:
 | **Headless batch** | `cubit_batch_try`, `cubit_mesh_auto`, `open_in_cubit` |
 | **Mesh race (variant exploration)** | `cubit_mesh_race`, `cubit_mesh_race_smart[_async]`, `cubit_mesh_race_review[_async]`, `cubit_mesh_race_status`, `cubit_mesh_apply_choice`, `cubit_mesh_race_with_human`, `cubit_curate_learned_recipes` |
 | **Export / .vol gates** | `cubit_check_vol` (canonical check-vol), `cubit_vol_inventory`, `cubit_gmsh_v41_inventory`, `cubit_headless_netgen_export_gate`, `cubit_mixed_order_series_gate`, ~30 further scenario gates (`*_gate`) |
+| **Cross-mesher quality** | `cubit_netgen_quality_compare` — one STEP through Netgen tet + Cubit tet + Cubit hex, judged by ONE gmsh minSICN referee (same metric implementation for every route; tet-vs-tet is the directly comparable pair, hex reported as the structured reference) |
 | **Diagnostics** | `cubit_mesh_diagnose`, `cubit_suggest_next`, `cubit_recent_failures`, `cubit_diagnostics_guide` |
 | **Lint** | `lint_cubit_script`, `lint_cubit_directory`, `cubit_audit_summary`, `get_lint_rules`, `generate_cubit_script` |
 | **Knowledge** | `cubit_ask`, `cubit_lookup`, `cubit_docs`, `cubit_forum_tips`, `cubit_web_docs`, `cubit_examples[_refresh]`, `netgen_workflow_guide`, `netgen_code_example` |
