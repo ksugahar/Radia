@@ -1829,7 +1829,8 @@ turn it into the publication picture; the radia-mcp tools apply the
 first two for you:
 
 1. **Adaptive extraction on high-order data**:
-   ``gmsh_isosurface(recur_level=3..4)`` / ``gmsh_flux_lines(...)``.
+   ``gmsh_isosurface(recur_level=3..4)`` / ``gmsh_flux_lines(...)``
+   (accepted range 0..6).
    Plugin(Isosurface) honors RecurLevel ONLY when the source view has
    adaptive visualization data -- the tools enable
    ``View.AdaptVisualizationGrid`` + ``View.MaxRecursionLevel`` on
