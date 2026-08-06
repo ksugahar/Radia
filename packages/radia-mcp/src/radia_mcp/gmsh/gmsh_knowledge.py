@@ -1864,6 +1864,12 @@ scalar with ``View[0].IntervalsType = 1`` + ``View[0].NbIso`` draws
 isosurfaces on the fly (RangeType=2 + CustomMin/CustomMax pin the
 levels) -- same crack caveat, handy for quick looks.
 
+Executable showcase: ``docs/gmsh_post/em_fieldlines.ipynb`` runs the
+whole battery on two analytic-field cases (circular coil with exact
+psi contours + cross-check; opposed-PM gap with mid-plane
+streamlines, gap profile, nested adaptive isosurfaces), with the key
+numbers locked in its synchronized result JSON.
+
 ## Honest gaps (do not fake these)
 
 - VOLUME RENDERING: gmsh has none.  Use isosurfaces + cut planes +
