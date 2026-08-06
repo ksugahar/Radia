@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.44 - Cubit GUI session lifecycle hardening
+
+Released 2026-08-06.
+
+- Fixed Cubit GUI bootstrap sibling imports when Cubit executes the launcher
+  as a string instead of a normal Python file.
+- Made private `mode=new` sessions use a checked, fail-loud Windows Job Object
+  so client termination cannot leave license-holding Cubit processes behind.
+- Made snapshots verify fresh non-empty output and atomically replace the
+  destination, preventing stale PNGs from being reported as new captures.
+- Added lifecycle, annotation, call-log rotation, probe compatibility, and
+  real Cubit GUI regressions covering startup through private-directory cleanup.
+
 ## 4.95.43 - Gmsh post-processing and session hardening
 
 Released 2026-08-06.

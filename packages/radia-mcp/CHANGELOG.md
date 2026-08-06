@@ -7,6 +7,18 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.31] - 2026-08-06
+
+- Fixed Cubit GUI bootstrap imports under Cubit's string-execution path and
+  consolidated probes and snapshots across GUI and batch transports.
+- Made private sessions fail loudly unless their process is protected by a
+  checked Windows kill-on-close Job Object, with deterministic handle and
+  private-directory cleanup.
+- Made snapshots write through a unique temporary PNG, verify non-empty output,
+  and atomically replace the destination so stale captures cannot pass.
+- Added tool-classification, call-log rotation, Job Object, stale-snapshot, and
+  live Cubit GUI lifecycle coverage.
+
 ## [1.4.30] - 2026-08-06
 
 - Added a persistent headless Gmsh session with MATLAB MCP-style execution
