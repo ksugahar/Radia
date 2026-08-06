@@ -6,6 +6,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.8 - Reproducible plugin release build
+
+Released 2026-08-06.
+
+- Rebuilt the bundled `cubit_mesh_export.ccm` from the unchanged canonical
+  source with the current MSVC release toolchain for the four-machine release
+  candidate; public APIs and mesh-format contracts remain unchanged.
+
 ## 0.14.7 - Cubit plugin release refresh
 
 Released 2026-08-05.
