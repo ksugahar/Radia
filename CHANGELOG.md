@@ -37,6 +37,8 @@ Released 2026-08-06.
 - Added lifecycle, concurrency, annotation, call-log rotation, parser, probe,
   and live GUI plus headless Cubit regressions, including deterministic stream
   and private-directory cleanup.
+- Isolated the NGSolve coil-sphere MagLev golden run in a temporary workspace
+  so validation cannot rewrite the published result JSON or figure.
 
 ## 4.95.43 - Gmsh post-processing and session hardening
 

@@ -12,6 +12,7 @@ ngsolve / netgen are unavailable.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -27,14 +28,21 @@ _JSON = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force_results.json")
 
 
 @pytest.fixture(scope="module")
-def results():
+def results(tmp_path_factory):
     if not os.path.isfile(_SCRIPT):
         pytest.skip(f"coil sphere demo script not found: {_SCRIPT}")
-    proc = subprocess.run([sys.executable, _SCRIPT], cwd=_SPHERE_DEMO,
-                          capture_output=True, text=True, timeout=600)
+    run_dir = tmp_path_factory.mktemp("coil_sphere_eddy_force")
+    shutil.copytree(
+        _SPHERE_DEMO, run_dir, dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.json", "*.png"))
+    script = os.path.join(run_dir, os.path.basename(_SCRIPT))
+    result_json = os.path.join(run_dir, os.path.basename(_JSON))
+    proc = subprocess.run([sys.executable, script], cwd=run_dir,
+                          capture_output=True, text=True, timeout=600,
+                          check=False)
     assert proc.returncode == 0, (
         f"coil_sphere_eddy_force.py failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
-    with open(_JSON) as f:
+    with open(result_json) as f:
         return json.load(f)
 
 
