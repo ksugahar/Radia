@@ -111,10 +111,10 @@ WPT_LAB_LINEAGE = r"""
 
 ```python
 import radia as rad
-from radia.peec_matrices import PyPEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 # Build primary + secondary as PEEC filaments
-builder = PyPEECBuilder()
+builder = PEECBuilder()
 # ... add coils ...
 topology = builder.build_topology()
 

@@ -83,8 +83,8 @@ Frequency-independent matrices (L, R_dc, P, M_LS) are computed in C++
 (`rad_peec_matrices.cpp`). Frequency-dependent Z_s is computed in Python.
 
 ```python
-from peec_matrices import PyPEECBuilder
-builder = PyPEECBuilder()
+from radia.peec_matrices import PEECBuilder
+builder = PEECBuilder()
 # ... add segments ...
 topo = builder.build_topology()
 # topo contains: L, R, P, M_LS, segment_nodes, ports, etc.
@@ -108,14 +108,14 @@ extracted |Z11| matches the dense reference. Corpus + JSON +
 """
 
 PEEC_BUILDER_API = """
-# PyPEECBuilder API (Node-Segment Topology)
+# PEECBuilder API (Node-Segment Topology)
 
 ## Basic Usage
 
 ```python
-from peec_matrices import PyPEECBuilder
+from radia.peec_matrices import PEECBuilder
 
-builder = PyPEECBuilder()
+builder = PEECBuilder()
 
 # Add nodes (returns node ID)
 n1 = builder.add_node_at(0, 0, 0)           # x, y, z in meters
@@ -197,7 +197,7 @@ PEEC_CIRCUIT_SOLVER = """
 ## Basic Impedance Extraction
 
 ```python
-from peec_topology import PEECCircuitSolver
+from radia.peec_topology import PEECCircuitSolver
 
 solver = PEECCircuitSolver(topo)
 
@@ -272,7 +272,7 @@ Where d = conductor dimension, delta = skin depth.
 ## Usage
 
 ```python
-builder = PyPEECBuilder()
+builder = PEECBuilder()
 n1 = builder.add_node_at(0, 0, 0)
 n2 = builder.add_node_at(0.1, 0, 0)
 
@@ -294,6 +294,45 @@ delta = np.sqrt(2 / (2 * np.pi * freq * mu0 * mu_r * sigma))
 # Copper at 100 kHz: delta ~ 209 um
 # Steel at 8 kHz: delta ~ 0.18 mm (mu_r=1000, sigma=10e6)
 ```
+
+## Which physical direction does nwinc split?  PROBE, don't guess
+
+The builder picks the cross-section frame itself -- the caller cannot
+name the width axis (unlike FastHenry's `wx wy wz`).  Measured: an
+x-directed segment stacks its `nwinc` strands along **z**; a z-directed
+segment stacks them along **y**.  Read `topo['segment_centers']` to see
+where the strands actually went before interpreting any distribution.
+
+## LIMIT: do NOT subdivide across the direction of CURVATURE
+
+`nwinc`/`nhinc` subdivide ONE STRAIGHT PRISM at a time.  The builder
+sees a single segment with no curvature information, so a sub-filament
+is a parallel-offset copy that KEEPS THE PARENT LENGTH.  On a polygonal
+or curved coil the outward-offset strand therefore traces a path with
+the parent's perimeter instead of its own longer one, and its loop
+inductance comes out too small.
+
+Measured on a 36-chord split ring, R = 25 mm, 4x4 mm bar (nhinc=5, so
+the strands sit at dr = -1.69 .. +1.51 mm):
+
+| ring | offset-strand L | standalone ring at the true radius | analytic |
+|------|-----------------|------------------------------------|----------|
+| inner | 104.4 nH | 90.9 nH (R = 23.31 mm) | 92.5 nH |
+| outer |  95.3 nH | 107.3 nH (R = 26.51 mm) | 109.5 nH |
+
+The kernel is fine -- a ring BUILT at its true radius reproduces
+`mu0 R (ln(8R/a) - 2)` to ~2% and grows with R.  It is the offset model
+that inverts the ordering, so the predicted radial crowding comes out
+BACKWARDS (outward instead of the physical inward crowding of a loop).
+
+What to do:
+- Use `nwinc`/`nhinc` freely in the direction PERPENDICULAR to the plane
+  of curvature, and for straight bars/busbars (there the high-frequency
+  answer is exactly the inductance-limited `L^-1 1`, verified).
+- To resolve current ACROSS the curvature direction, build CONCENTRIC
+  node chains at the true radii (each its own series path in parallel
+  between the port nodes) instead of asking one segment to split.
+- Locked by `tests/test_peec_multifilament_curvature.py`.
 """
 
 PEEC_FASTHENRY = """
@@ -373,10 +412,10 @@ at the application layer.
 ## Usage
 
 ```python
-from peec_matrices import PyPEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 # Build conductor topology
-builder = PyPEECBuilder()
+builder = PEECBuilder()
 n1 = builder.add_node_at(0, 0, 0)
 n2 = builder.add_node_at(0.1, 0, 0)
 builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
@@ -645,6 +684,92 @@ Wave propagation effects are NOT modeled. Use ngsolve.bem for high frequency.
 """
 
 
+PEEC_POSTPROCESSING = """
+# Post-Processing: solved PEEC -> GMSH picture
+
+## One hop from solver to viewable .msh
+
+```python
+from radia.peec_topology import PEECCircuitSolver
+
+solver = PEECCircuitSolver(topo)
+summary = solver.export_gmsh("coil_I.msh", 50e3, [1.0],
+                             direction_view=True, complex_steps=True)
+# summary: n_segments, n_reverse_segments, I_abs_range, J_abs_range,
+#          P_total_W, current_convention, views, frequency_Hz
+```
+
+`PEECCircuitSolver.export_gmsh` solves the branch currents at that
+frequency and writes them with the per-segment geometry the solver was
+built from.  The functional form is
+`radia.gmsh_post_export.export_peec_topology_msh(topology, msh,
+currents=I)` -- use it when the currents come from somewhere else
+(a bundle reduction, a coupled BEM solve, a measured distribution).
+`currents=None` writes a geometry-only file: a cheap way to inspect
+the discretization BEFORE spending a solve.
+
+## Views written (ElementData, one value per PEEC segment)
+
+| View | Meaning |
+|------|---------|
+| `\\|I\\| [A]` | branch current magnitude |
+| `\\|J\\| [A/m^2]` | `\\|I\\|/(width*height)` -- the current DENSITY; this is what exposes skin/proximity when strands differ in cross-section |
+| `P [W]` | per-segment ohmic loss |
+| `I direction [A]` | opt-in: unit tangent x SIGNED Re(I) arrows |
+| `I_complex [A]` | opt-in: 2 steps (Re I, Im I) for AC animation |
+
+Loss convention is EXPLICIT, never guessed:
+`current_convention="amplitude"` (default, phasor amplitudes) gives
+`P = 0.5|I|^2 R`; `"rms"` gives `P = |I|^2 R`.  The choice is echoed in
+the summary dict, so a reported `P_total_W` is never ambiguous.
+`Zs=` adds `Re(Zs)` to the dissipation (and is used in the solve).
+
+## REVERSE CURRENTS -- |I| hides them
+
+Measured on a 4 mm square copper bar at 100 MHz (uniform partition):
+
+| nwinc x nhinc | segments | reverse strands | min Re(I) of 1 A |
+|---------------|----------|-----------------|------------------|
+| 3 x 3 | 9 | 1 (the center) | -0.091 A |
+| 4 x 4 | 16 | 4 | -0.025 A |
+| 5 x 5 | 25 | 8 | -0.031 A |
+
+The high-frequency limit reproduces `L^-1 1` exactly (verified to 5
+digits at 1e8 and 1e10 Hz), and Kirchhoff holds: `sum(I) = I_port`.
+Interior strands genuinely run BACKWARDS in the inductance-limited
+regime -- a `|I|` colormap paints them as ordinary positive current.
+
+Read the reversal from the SIGNED `I direction` arrows (a reverse
+strand points backwards) or from step 0 of `I_complex` (= Re I, with a
+diverging colormap); `n_reverse_segments` in the summary counts them.
+When a bundle plot looks "non-monotone from the surface inward", check
+the sign before blaming the mesh.
+
+On a CURVED coil, also do not read a radial crowding direction out of
+the picture at all: `nwinc`/`nhinc` offsets keep the parent length, so
+the radial ordering is inverted by construction (see the
+`multi_filament` topic).  The plot is a faithful view of the model; the
+model is only valid across the non-curvature direction.
+
+## Overlaying the conductor CAD
+
+```python
+# radia-mcp gmsh server, headless
+gmsh_render("coil_I.msh", "coil_I.png", merge_files=["coil.step"])
+gmsh_harmonic_to_time("coil_I.msh", view="I_complex [A]", n_steps=24,
+                      out_file="I_time.pos")
+gmsh_export_animation("I_time.pos", "I_rotating.gif",
+                      merge_files=["coil.step"])
+```
+
+radia/netgen `WriteStep` writes METER coordinates, so a radia-produced
+STEP overlays the current data 1:1 with no conversion.  A multi-strand
+segment's sub-filaments meet only at the topology NODE (a circuit
+connection, not a geometric one), so the small visual gap between
+strands at a node is the model, not an export defect.
+"""
+
+
 def get_peec_documentation(topic: str = "all") -> str:
     """Return PEEC documentation by topic."""
     topics = {
@@ -657,6 +782,7 @@ def get_peec_documentation(topic: str = "all") -> str:
         "sibc": PEEC_SIBC,
         "prima": PEEC_PRIMA,
         "ngsolve_bem": PEEC_NGSOLVE_BEM,
+        "postproc": PEEC_POSTPROCESSING,
         "pitfalls": PEEC_PITFALLS,
     }
 

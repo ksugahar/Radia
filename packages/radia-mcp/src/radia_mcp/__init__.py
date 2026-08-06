@@ -9,7 +9,7 @@ Layout:
   radia_mcp.ih            — Induction Heating workflow (workpiece SIBC, ESIM,
                             Karl iteration, screening physics) — promoted from
                             legacy private source tree on 2026-04-24
-  radia_mcp.peec          — LAB PEEC workflow (Loop-Star, FastHenry, PyPEECBuilder,
+  radia_mcp.peec          — LAB PEEC workflow (Loop-Star, FastHenry, PEECBuilder,
                             PEECCircuitSolver, Bessel/Dowell/ESIM, PRIMA MOR,
                             SPICE extraction) — promoted from
                             legacy private source tree on 2026-04-24

@@ -32,8 +32,8 @@ Loop-only system (no panels, backward compatible):
   Y_node * V = I_ext
 
 Usage:
-    from peec_matrices import PEECBuilder
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_matrices import PEECBuilder
+    from radia.peec_topology import PEECCircuitSolver
 
     builder = PEECBuilder()
     n1 = builder.add_node_at(0, 0, 0)
@@ -170,7 +170,7 @@ class PEECCircuitSolver:
                 raise KeyError(
                     "use_hacapk=True requires per-filament geometry in "
                     "topology_dict (missing: %s). Rebuild via "
-                    "PyPEECBuilder.build_topology() from a recent Radia."
+                    "PEECBuilder.build_topology() from a recent Radia."
                     % missing
                 )
             self._seg_centers = np.ascontiguousarray(
@@ -191,6 +191,23 @@ class PEECCircuitSolver:
         else:
             self.L = np.array(topology_dict['L'])
             self.R_dc = np.array(topology_dict['R'])
+
+        # Per-segment geometry kept for post-processing exports.  Only
+        # O(n_seg) arrays are retained (never the dense L), so this is
+        # free even in the HACApK path where L is deliberately not
+        # materialized.  Consumed by export_gmsh().
+        R_geom = topology_dict.get('R', None)
+        if R_geom is not None:
+            R_geom = np.asarray(R_geom, dtype=np.float64)
+            if R_geom.ndim == 2:
+                R_geom = np.diag(R_geom)
+        self._export_geometry = {
+            k: topology_dict.get(k, None)
+            for k in ('segment_centers', 'segment_directions',
+                      'segment_lengths', 'segment_widths',
+                      'segment_heights')
+        }
+        self._export_geometry['R'] = R_geom
 
         # Panel/Star data (optional - enables full RLCM mode)
         P_raw = topology_dict.get('P', None)
@@ -359,6 +376,48 @@ class PEECCircuitSolver:
         pc = np.asarray(port_currents, dtype=complex).reshape(-1)
         Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
         return np.array(self._solver.solve_branch_currents(freq, pc, Zs_arg))
+
+    def export_gmsh(self, output_msh, freq, port_currents, *, Zs=None,
+                    **kwargs):
+        """Solve at one frequency and write the result as a GMSH post file.
+
+        One hop from a solved PEEC circuit to a viewable .msh: solves the
+        branch currents at ``freq`` and hands them, together with the
+        per-segment geometry this solver was built from, to
+        ``radia.gmsh_post_export.export_peec_topology_msh``.  Views:
+        ``|I| [A]``, ``|J| [A/m^2]``, ``P [W]`` (plus the opt-in arrow
+        and complex two-step views).
+
+        Overlay the conductor CAD in the same picture with the radia-mcp
+        gmsh server::
+
+            solver.export_gmsh("coil_I.msh", 50e3, [1.0],
+                               direction_view=True, complex_steps=True)
+            gmsh_render("coil_I.msh", "coil_I.png",
+                        merge_files=["coil.step"])
+
+        Args:
+            output_msh: output .msh path.
+            freq: frequency in Hz.
+            port_currents: array-like of complex port currents
+                (length n_ports), as for compute_branch_currents.
+            Zs: optional per-segment surface impedance; used BOTH in the
+                solve and in the dissipation (its real part).
+            **kwargs: forwarded to export_peec_topology_msh
+                (current_convention, groups, group_names, label,
+                direction_view, complex_steps).
+
+        Returns:
+            The export summary dict, with the frequency added.
+        """
+        from radia.gmsh_post_export import export_peec_topology_msh
+
+        I_branch = self.compute_branch_currents(freq, port_currents, Zs=Zs)
+        summary = export_peec_topology_msh(
+            self._export_geometry, output_msh, currents=I_branch, Zs=Zs,
+            **kwargs)
+        summary["frequency_Hz"] = float(freq)
+        return summary
 
     def compute_Z_matrix(self, freq, Zs=None):
         """Compute full n_port x n_port Z-parameter matrix.
