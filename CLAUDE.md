@@ -2516,6 +2516,7 @@ default」原則を実運用で守るチェック。
 | 2026-05-26 | release 直後の CI runner clone (`C:\actions-runner\_work\...`) に `radia-mcp` editable が drift | LAB 側で knowledge file の編集が radia-mcp 経由で見えないことで発覚 |
 | 2026-05-27 | 同上、再発 | MCP tool 経由で新規 topic が dispatch されない (Unknown topic) で発覚 |
 | 2026-08-06 | v4.95.47 release 後、radia + cubit-mesh-export + radia-mcp の 3 つ全部が **release-qud worktree** (`release-qud/Radia-v4.95.47-<sha>`) に drift(新パターン: CI runner ではなくリリース用worktreeで editable install が走った) | release 直後の本チェックで発覚。**重要教訓: 同バージョンへの `pip install -e` 再実行は `.pth` を書き換えない no-op になり得る — `pip show` の Editable location が直っても import は旧パスのまま**(実測: show=canonical tree なのに `__editable__.*.pth` は release-qud、radia.gmsh_post_export が旧ソースを解決)。修復は `pip uninstall -y <pkgs>` → 再 `-e`。**検証は `pip show` でなく site-packages の `__editable__*.pth` の中身と `<pkg>.__file__` で行うこと** |
+| 2026-08-07 | v4.95.48 release 後、同じ release-qud クローンパターンで 3 つとも再 drift(`Radia-v4.95.48-a6a5ddde`) | **ソース修正が実行時に反映されない**ことで発覚(coil_builder の OCC pose 修正を入れたのに `write_step` の出力が 1 バイトも変わらなかった)。**教訓: `sys.path.insert` するテストは自分のツリーを見るので緑のまま、素の `import radia` を使うデモ/スクリプトだけが旧ソースを掴む** — テストが通っていることは editable が正しい証拠にならない。デモの結果が「直したはずなのに変わらない」ときは真っ先に `<pkg>.__file__` を見る |
 
 **再発するため、release 後の確認を policy 化**。
 
