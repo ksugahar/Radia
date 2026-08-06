@@ -56,6 +56,7 @@ from .post_process import (
     export_view_csv,
     extract_skin,
     field_histogram,
+    flux_lines,
     harmonic_to_time,
     integrate_view,
     isosurface,
@@ -68,6 +69,7 @@ from .post_process import (
     resample_grid,
     smooth_to_nodes,
     streamlines,
+    streamlines_2d,
     threshold,
     transform_view,
     view_min_max,
@@ -1184,17 +1186,22 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
                      n_seeds: int = 10, view_name: str | None = None,
                      step_size: float | None = None, max_steps: int = 400,
                      both_directions: bool = True,
+                     adaptive: bool = True, closure: bool = True,
+                     max_turn_deg: float = 10.0, arrows_every: int = 0,
                      return_points: bool = False,
                      out_file: str | None = None) -> dict:
     """
     Trace field lines of a vector view from seeds on a line segment.
 
-    Probe-driven arc-length RK4 (this gmsh build's Plugin(StreamLines)
-    only re-emits seed points): unit-tangent integration marching in
-    both directions until the line leaves the data, |v| carried as the
-    line color. The polylines are saved as an SL view for rendering
-    (the classic magnetic field-line picture); return_points=True also
-    returns the coordinates for numeric analysis.
+    Probe-driven arc-length RK4 with curvature ADAPTIVITY (step_size is
+    the MAXIMUM step; it halves wherever the turn per step exceeds
+    max_turn_deg) and CLOSED-LOOP detection: a magnetic field line that
+    returns to its seed closes exactly instead of overdrawing or
+    stopping mid-loop. One merged polyline per seed (backward+forward),
+    |v| as line color, per-line termination reasons (left_data | closed
+    | stagnation | max_steps) for solution debugging, and optional
+    direction arrows as a companion VP view. (This gmsh build's
+    Plugin(StreamLines) only re-emits seed points.)
 
     Args:
         msh_path: .msh with a vector view.
@@ -1202,9 +1209,13 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
         seed_end: Seed segment end [x, y, z].
         n_seeds: Number of seeds along the segment.
         view_name: Vector view (default: first).
-        step_size: Arc-length step (default: bbox diagonal / 200).
+        step_size: Maximum arc-length step (default: bbox diag / 200).
         max_steps: Max integration steps per direction.
         both_directions: Trace backward as well as forward.
+        adaptive: Halve the step where the line turns too fast.
+        closure: Detect and exactly close returning loops.
+        max_turn_deg: Adaptive turn-angle bound per step.
+        arrows_every: Emit a direction arrow every k-th point (0=off).
         return_points: Include polyline coordinates in the result.
         out_file: Output path (default: <stem>_stream.pos).
     """
@@ -1219,6 +1230,8 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
     return streamlines(p, seed_start, seed_end, n_seeds=n_seeds,
                        view=view_name, step_size=step_size,
                        max_steps=max_steps, both_directions=both_directions,
+                       adaptive=adaptive, closure=closure,
+                       max_turn_deg=max_turn_deg, arrows_every=arrows_every,
                        return_points=return_points, out_file=out)
 
 
@@ -1228,6 +1241,78 @@ def _abs_path(path_str: str | None) -> Path | None:
         return None
     p = Path(path_str)
     return p if p.is_absolute() else PROJECT_ROOT / p
+
+
+@mcp.tool()
+def gmsh_flux_lines(msh_path: str, n_levels: int = 20,
+                    levels: list | None = None,
+                    view_name: str | None = None,
+                    out_file: str | None = None) -> dict:
+    """
+    Equally spaced isolines of a scalar view, merged into ONE view.
+
+    THE 2D-magnetics field-line tool: on a planar A_z view (or the
+    axisymmetric flux function psi = r*A_theta) the equally spaced
+    levels ARE the exact field lines with EQUAL FLUX between adjacent
+    lines -- the FEMM-style motor flux plot with physically correct
+    density, no integration, no seeds, no tuning. On a 3D scalar the
+    same call stacks isosurfaces at the given levels.
+
+    Args:
+        msh_path: .msh/.pos with the scalar view (A_z, psi, |B|, T...).
+        n_levels: Number of interior levels between view min and max.
+        levels: Explicit level values (overrides n_levels).
+        view_name: Source view (default: first).
+        out_file: Output path (default: <stem>_flux.pos).
+    """
+    return flux_lines(_abs_path(msh_path), n_levels=n_levels,
+                      levels=levels, view=view_name,
+                      out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_streamlines_2d(msh_path: str, origin: list, u_point: list,
+                        v_point: list, d_sep: float | None = None,
+                        view_name: str | None = None,
+                        step_size: float | None = None,
+                        first_seed: list | None = None,
+                        max_lines: int = 200,
+                        arrows_every: int = 0,
+                        return_points: bool = False,
+                        out_file: str | None = None) -> dict:
+    """
+    Evenly spaced streamlines on a plane slice (Jobard-Lefer placement).
+
+    The uniform-density streamline picture ParaView only offers for
+    native-2D datasets, here on ANY plane cut of a 3D field: the
+    in-plane projection of the vector view is traced, new seeds spawn
+    automatically d_sep away from accepted lines, and lines stop at
+    d_sep/2 from their neighbors -- no manual seeding, no bunching,
+    closed loops detected. Exact field lines on symmetry planes
+    (B.n = 0); elsewhere the standard projected-field portrait. The
+    patch follows the resample_grid convention (origin + u/v edge
+    endpoints).
+
+    Args:
+        msh_path: .msh/.pos with a vector view.
+        origin: Patch corner [x, y, z].
+        u_point: End of the patch U edge.
+        v_point: End of the patch V edge.
+        d_sep: Line separation (default: patch diagonal / 30).
+        view_name: Vector view (default: first).
+        step_size: Integration step (default: d_sep / 4).
+        first_seed: Optional [u, v] in-plane start seed.
+        max_lines: Cap on the number of lines.
+        arrows_every: Emit a direction arrow every k-th point (0=off).
+        return_points: Include line coordinates in the result.
+        out_file: Output path (default: <stem>_stream2d.pos).
+    """
+    return streamlines_2d(_abs_path(msh_path), origin, u_point, v_point,
+                          d_sep=d_sep, view=view_name,
+                          step_size=step_size, first_seed=first_seed,
+                          max_lines=max_lines, arrows_every=arrows_every,
+                          return_points=return_points,
+                          out_file=_abs_path(out_file))
 
 
 @mcp.tool()
