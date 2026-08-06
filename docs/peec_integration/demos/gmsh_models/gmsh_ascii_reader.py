@@ -134,7 +134,12 @@ def _parse_physical_names(lines: list[str]) -> dict[tuple[int, int], str]:
 
 
 def _parse_entity_physicals(lines: list[str]) -> dict[tuple[int, int], int]:
-    """Map (dim, entity_tag) -> first physical tag (0 when untagged)."""
+    """Map (dim, entity_tag) -> physical tag (0 when untagged).
+
+    The compact example API represents one physical tag per element, so an
+    entity assigned to multiple groups must fail loudly instead of silently
+    discarding all but the first tag.
+    """
     body = _section_body(lines, "Entities")
     if body is None:
         return {}
@@ -148,6 +153,10 @@ def _parse_entity_physicals(lines: list[str]) -> dict[tuple[int, int], int]:
             next(toks)
         n_phys = int(next(toks))
         phys = [int(next(toks)) for _ in range(n_phys)]
+        if len(phys) > 1:
+            raise ValueError(
+                f"point entity {tag} has multiple physical tags {phys}; "
+                "this example reader supports exactly one")
         physicals[(0, tag)] = phys[0] if phys else 0
     # curves / surfaces / volumes: tag bbox(6) numPhys phys... numBnd bnd...
     for dim in (1, 2, 3):
@@ -157,6 +166,10 @@ def _parse_entity_physicals(lines: list[str]) -> dict[tuple[int, int], int]:
                 next(toks)
             n_phys = int(next(toks))
             phys = [int(next(toks)) for _ in range(n_phys)]
+            if len(phys) > 1:
+                raise ValueError(
+                    f"dim{dim} entity {tag} has multiple physical tags "
+                    f"{phys}; this example reader supports exactly one")
             physicals[(dim, tag)] = phys[0] if phys else 0
             n_bnd = int(next(toks))
             for _ in range(n_bnd):

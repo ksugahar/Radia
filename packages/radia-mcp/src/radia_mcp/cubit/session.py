@@ -41,6 +41,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -281,6 +282,7 @@ class CubitSession:
         self._mode = mode
         self._proc: subprocess.Popen | None = None
         self._next_id = 1
+        self._client_id = f"{os.getpid():08x}-{uuid.uuid4().hex[:12]}"
         self._lock = threading.Lock()
         self._ready_info: dict | None = None
 
@@ -786,10 +788,18 @@ class CubitSession:
             f"Cubit did not signal ready within {budget:.0f} s. "
             f"drop={drop}\n" + _startup_diag())
 
+    def _request_stem(self, req_id: int) -> str:
+        """Return a request filename unique across attached MCP clients."""
+        client_id = getattr(self, "_client_id", None)
+        if client_id is None:
+            client_id = f"{os.getpid():08x}-{uuid.uuid4().hex[:12]}"
+            self._client_id = client_id
+        return f"{client_id}-{int(req_id):08d}"
+
     def _call_via_filedrop(self, req: dict, timeout_s: float) -> dict:
         assert self._drop_dir is not None and self._outbox is not None
         req_id = req["id"]
-        stem = f"{req_id:08d}"
+        stem = self._request_stem(req_id)
         req_path = self._drop_dir / f"{stem}.req"
         tmp_path = self._drop_dir / f"{stem}.req.tmp"
         resp_path = self._outbox / f"{stem}.resp"
@@ -808,6 +818,10 @@ class CubitSession:
                     time.sleep(0.03)
                     continue
                 resp_path.unlink(missing_ok=True)
+                if resp.get("id") != req_id:
+                    raise CubitSessionError(
+                        f"Response id mismatch for op={req.get('op')!r}: "
+                        f"expected {req_id}, got {resp.get('id')!r}")
                 return resp
             if self._proc is not None and self._proc.poll() is not None:
                 raise CubitSessionError(

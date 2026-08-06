@@ -259,7 +259,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_line_profile` | Sample a view along a straight line; optionally plot a PNG graph. |
 | `gmsh_math_eval` | Create a derived view with Plugin(MathEval) and save it. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
-| `gmsh_mesh_quality` | Scaled-Jacobian quality distribution for all 3D elements. |
+| `gmsh_mesh_quality` | Gmsh minSICN shape-quality distribution for all 3D elements. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
 | `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
@@ -335,7 +335,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
 | `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
 | `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
-| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
+| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
 | `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
