@@ -139,6 +139,14 @@ persistent Cubit session (GUI or batch), headless mesh dry-runs and
 mesh-variant races, Netgen `.vol` export gates, lint, and a curated Cubit
 knowledge corpus.
 
+Driving model (lab policy): APREPRO commands + Python on the
+HEADLESS/batch route are the PRIMARY way agents drive Cubit --
+`cubit_batch_try` / `cubit_mesh_auto` / `.jou` playback for mesh
+generation, exports, and validation. The persistent GUI session
+(`cubit_show`, `cubit_snapshot`) is the USER's visual-debugging aid:
+open it when the user wants to see the model, not as your default
+execution surface.
+
 Session model: `cubit_show`/`cubit_exec` reuse ONE persistent Cubit daemon
 (first call may take 30+ s for license + startup; later calls are
 sub-second). The daemon deliberately survives client restarts. Use

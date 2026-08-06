@@ -452,6 +452,13 @@ class CubitSession:
                     self._proc.kill()
                 except Exception:
                     pass
+            # Reap after kill: releases the child's handles (so the
+            # drop-dir rmtree below can succeed on Windows) and avoids
+            # the Popen.__del__ "still running" ResourceWarning.
+            try:
+                self._proc.wait(timeout=10.0)
+            except Exception:
+                pass
             report["stopped"] = "owned-child"
         # Kill an attached daemon (not our child) via pid.lock
         if self._drop_dir is not None:
@@ -488,10 +495,15 @@ class CubitSession:
                 except OSError: pass
             # Session-mode "new" uses a private per-process drop dir --
             # remove it entirely (the shared dir is named exactly
-            # "cubit-session" and is preserved).
+            # "cubit-session" and is preserved).  Windows may hold the
+            # child's log-file handles for a moment after the kill, so
+            # retry briefly instead of leaving debris.
             if self._owned and self._drop_dir.name != "cubit-session":
-                import shutil
-                shutil.rmtree(self._drop_dir, ignore_errors=True)
+                for _ in range(8):
+                    shutil.rmtree(self._drop_dir, ignore_errors=True)
+                    if not self._drop_dir.exists():
+                        break
+                    time.sleep(0.5)
         self._drop_dir = None
         self._outbox = None
         self._proc = None

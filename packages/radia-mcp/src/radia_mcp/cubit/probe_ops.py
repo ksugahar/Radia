@@ -113,20 +113,43 @@ def _probe_labels(cubit_mod):
     (phantom).  The primary value of this probe is therefore verifying
     ACTUAL block membership after every block/sideset command -- an
     intended-but-absent element set shows up here as missing counts."""
+    def _count_in(kind: str, scope: str, eid: int) -> int:
+        try:
+            return len(cubit_mod.parse_cubit_list(
+                kind, f"in {scope} {eid}"))
+        except Exception:
+            return 0
+
     blocks = []
     for bid in cubit_mod.get_block_id_list():
         bid = int(bid)
+        volumes = [int(v) for v in cubit_mod.get_block_volumes(bid)]
+        surfaces = [int(s) for s in cubit_mod.get_block_surfaces(bid)]
+        # EFFECTIVE element counts.  Cubit binds elements to a block two
+        # ways: DIRECT element membership (get_block_hexes/... -- e.g.
+        # `block N add face in surface S`) and GEOMETRY membership
+        # (`block N add volume V` -- get_block_hexes returns 0 there
+        # even for a fully meshed volume, VERIFIED Cubit 2025.12
+        # 2026-08-05: 125-hex brick in a volume block reported 0).  Sum
+        # both so `volume_elems`/`surface_elems` mean "elements this
+        # block will actually export".
         vol_elems = (len(cubit_mod.get_block_hexes(bid))
                      + len(cubit_mod.get_block_tets(bid))
                      + len(cubit_mod.get_block_wedges(bid))
                      + len(cubit_mod.get_block_pyramids(bid)))
+        for vid in volumes:
+            vol_elems += sum(_count_in(k, "volume", vid)
+                             for k in ("hex", "tet", "wedge", "pyramid"))
         surf_elems = (len(cubit_mod.get_block_tris(bid))
                       + len(cubit_mod.get_block_faces(bid)))
+        for sid in surfaces:
+            surf_elems += sum(_count_in(k, "surface", sid)
+                              for k in ("face", "tri"))
         blocks.append({
             "id": bid,
             "name": str(cubit_mod.get_exodus_entity_name("block", bid)),
-            "volumes": [int(v) for v in cubit_mod.get_block_volumes(bid)],
-            "surfaces": [int(s) for s in cubit_mod.get_block_surfaces(bid)],
+            "volumes": volumes,
+            "surfaces": surfaces,
             "volume_elems": int(vol_elems),
             "surface_elems": int(surf_elems),
         })

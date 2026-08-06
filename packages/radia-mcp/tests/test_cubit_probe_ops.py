@@ -83,7 +83,9 @@ class _MockCubit:
         return "iron"
 
     def get_block_hexes(self, bid):
-        return (1,)
+        # Real Cubit 2025.12: DIRECT element membership is empty for a
+        # `block N add volume V` block; elements come via the volume.
+        return ()
 
     def get_block_tets(self, bid):
         return ()
