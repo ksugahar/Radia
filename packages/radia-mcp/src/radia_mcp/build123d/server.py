@@ -137,6 +137,34 @@ ask the user rather than looping.
 
 mcp = FastMCP("mcp-server-build123d", instructions=_SERVER_INSTRUCTIONS)
 
+# ---------------------------------------------------------------------------
+# Error-kind contract, applied at the serialization boundary
+# ---------------------------------------------------------------------------
+# Most error payloads here embed traceback.format_exc(), whose kind can
+# only be decided at RUNTIME (a missing optional dependency is an
+# environment problem; everything else is an input/script problem).
+# Rather than editing ~60 literal dicts, every tool serializes through
+# _dumps(), which stamps `kind` onto any error payload that lacks one.
+_B3D_ENV_NEEDLES = (
+    "no module named 'build123d'", "no module named 'ocp'",
+    "no module named 'cadquery'", "not installed",
+)
+_json_dumps = json.dumps
+
+
+def _with_kind(payload):
+    if (isinstance(payload, dict) and payload.get("status") == "error"
+            and "kind" not in payload):
+        text = str(payload.get("error", "")).lower()
+        payload["kind"] = ("environment"
+                           if any(n in text for n in _B3D_ENV_NEEDLES)
+                           else "input")
+    return payload
+
+
+def _dumps(obj, **kw):
+    return _json_dumps(_with_kind(obj), **kw)
+
 
 @mcp.tool()
 def build123d_lofted_shell_handoff_gate(summary_json: str) -> str:
@@ -149,7 +177,7 @@ def build123d_lofted_shell_handoff_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -165,77 +193,77 @@ def build123d_loft_example_source_replay_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def build123d_faceted_edit_portability_gate(summary_json: str) -> str:
     """Separate faceted CAD portability from downstream mesh readiness."""
     try: result=_build123d_faceted_edit_portability_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_faceted_edit_portability_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_faceted_source_replay_gate(summary_json: str) -> str:
     """Gate tagged source, dependent STL, viewer stub, and external replay."""
     try: result=_build123d_faceted_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_faceted_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_cross_kernel_mass_topology_diagnosis_gate(summary_json: str) -> str:
     """Diagnose STEP portability while separating evidence quality from acceptance."""
     try: result=_cross_kernel_mass_topology_diagnosis_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_cross_kernel_mass_topology_diagnosis_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_upstream_source_external_cad_contract_gate(summary_json: str) -> str:
     """Gate immutable upstream execution and an explicit external-CAD decision."""
     try: result=_upstream_source_external_cad_contract_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError) as exc: result={"policy":"build123d_upstream_source_external_cad_contract_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_dual_api_prismatic_pattern_gate(summary_json: str) -> str:
     """Gate native dual-API parity separately from external STEP-kernel bias."""
     try: result=_dual_api_prismatic_pattern_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_dual_api_prismatic_pattern_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_dual_api_source_replay_gate(summary_json: str) -> str:
     """Gate immutable upstream dual-API execution and headless CAD replay."""
     try: result=_dual_api_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_dual_api_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_drafted_housing_cross_kernel_gate(summary_json: str) -> str:
     """Gate drafted housing mass/topology across B-rep, STEP, Cubit, and Gmsh."""
     try: result=_drafted_housing_cross_kernel_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_drafted_housing_cross_kernel_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_drafted_housing_source_replay_gate(summary_json: str) -> str:
     """Gate tagged draft/fillet/hole source and headless mesh-companion replay."""
     try: result=_drafted_housing_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_drafted_housing_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_jointed_assembly_step_closure_gate(summary_json: str) -> str:
     """Diagnose a component-level solid closure loss in a jointed STEP assembly."""
     try: result=_jointed_assembly_step_closure_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_step_closure_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_jointed_assembly_heal_invariance_gate(summary_json: str) -> str:
     """Verify that STEP solid closure loss persists across heal/noheal imports."""
     try: result=_jointed_assembly_heal_invariance_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_heal_invariance_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
@@ -292,35 +320,35 @@ def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
             if v51_identity.get("status") != "ok":
                 result["status"] = "needs_attention"
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_nested_assembly_volume_gate(summary_json: str) -> str:
     """Distinguish a zero parent Compound from an empty CAD handoff."""
     try: result=_nested_assembly_volume_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_nested_assembly_volume_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_stud_wall_source_replay_gate(summary_json: str) -> str:
     """Gate exact stud-wall source, RigidJoints, and headless CAD replay."""
     try: result=_stud_wall_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_stud_wall_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_patterned_compound_translation_gate(summary_json: str) -> str:
     """Diagnose dominant curved-body STEP bias without solver-ready overclaim."""
     try: result=_patterned_compound_translation_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_patterned_compound_translation_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
 def build123d_wrap_faces_rotational_source_replay_gate(summary_json: str) -> str:
     """Gate immutable wrap_faces, thicken, and rotational-pattern replay."""
     try: result=_wrap_faces_rotational_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_wrap_faces_rotational_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
-    return json.dumps(result,indent=2,sort_keys=True)
+    return _dumps(result,indent=2,sort_keys=True)
 
 
 @mcp.tool()
@@ -334,7 +362,7 @@ def build123d_reflection_rotation_handoff_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -350,7 +378,7 @@ def build123d_heat_exchanger_source_recovery_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -364,7 +392,7 @@ def build123d_curved_shell_step_semantics_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -378,7 +406,7 @@ def build123d_tea_cup_source_contract_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -394,7 +422,7 @@ def build123d_vase_external_solid_contract_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -408,7 +436,7 @@ def build123d_repeated_cavity_dual_api_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -422,7 +450,7 @@ def build123d_repeated_cavity_source_replay_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 # ============================================================
@@ -507,7 +535,7 @@ def build123d_motor_housing_thermal_reference(
     """
     from .modeling import motor_housing_radial_fin_reference_row
 
-    return json.dumps(
+    return _dumps(
         motor_housing_radial_fin_reference_row(
             inner_radius,
             outer_radius,
@@ -541,7 +569,7 @@ def build123d_volume_crosscheck(
         reference_rows = json.loads(reference_rows_json)
         measured_sets = json.loads(measured_sets_json)
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -555,13 +583,13 @@ def build123d_volume_crosscheck(
             rtol=rtol,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "volume_crosscheck",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -596,7 +624,7 @@ def build123d_brep_mass_topology_roundtrip_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -612,7 +640,7 @@ def build123d_platonic_solid_family_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -628,7 +656,7 @@ def build123d_dual_api_perforated_board_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -653,7 +681,7 @@ def build123d_upstream_example_roundtrip_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -684,7 +712,7 @@ def build123d_external_cad_mass_topology_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -715,7 +743,7 @@ def build123d_step_portability_diagnosis_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -743,7 +771,7 @@ def build123d_curved_step_topology_crosscheck_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -777,7 +805,7 @@ def build123d_path_sweep_handoff_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -794,7 +822,7 @@ def build123d_path_sweep_source_contract_gate(result_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2, sort_keys=True)
+    return _dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
@@ -829,7 +857,7 @@ def build123d_perforated_prism_roundtrip_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
-    return json.dumps(result, indent=2)
+    return _dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -861,7 +889,7 @@ def build123d_volume_crosscheck_with_units(
         reference_rows = json.loads(reference_rows_json)
         measured_sets = json.loads(measured_sets_json)
     except json.JSONDecodeError as exc:
-        return json.dumps({
+        return _dumps({
             "policy": "build123d_volume_crosscheck_with_units",
             "status": "invalid_input",
             "error": f"{type(exc).__name__}: {exc}",
@@ -869,7 +897,7 @@ def build123d_volume_crosscheck_with_units(
 
     target = str(target_volume_unit or "").strip().lower()
     if target not in factors_to_mm3:
-        return json.dumps({
+        return _dumps({
             "policy": "build123d_volume_crosscheck_with_units",
             "status": "invalid_input",
             "error": f"unsupported target_volume_unit: {target_volume_unit}",
@@ -915,7 +943,7 @@ def build123d_volume_crosscheck_with_units(
         normalized_measured = {}
 
     if issues:
-        return json.dumps({
+        return _dumps({
             "policy": "build123d_volume_crosscheck_with_units",
             "status": "needs_attention",
             "target_volume_unit": target,
@@ -930,13 +958,13 @@ def build123d_volume_crosscheck_with_units(
             rtol=rtol,
         )
     except Exception as exc:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "policy": "build123d_volume_crosscheck_with_units",
             "status": "error",
             "error": f"{type(exc).__name__}: {exc}",
         }, indent=2)
 
-    return json.dumps({
+    return _dumps({
         "policy": "build123d_volume_crosscheck_with_units",
         "status": summary.get("status", "needs_attention"),
         "target_volume_unit": target,
@@ -962,7 +990,7 @@ def build123d_volume_crosscheck_source_coverage_gate(
             else json.loads(required_sources_json)
         )
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -980,13 +1008,13 @@ def build123d_volume_crosscheck_source_coverage_gate(
             **kwargs,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "volume_crosscheck_source_coverage_gate",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1043,7 +1071,7 @@ def build123d_volume_crosscheck_source_identity_gate(
             else json.loads(expected_objective_observable_families_json)
         )
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1063,13 +1091,13 @@ def build123d_volume_crosscheck_source_identity_gate(
             expected_objective_observable_families=expected_objective_observable_families,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "volume_crosscheck_source_identity_gate",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1091,7 +1119,7 @@ def build123d_mass_property_crosscheck(
         reference_rows = json.loads(reference_rows_json)
         measured_sets = json.loads(measured_sets_json)
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1106,7 +1134,7 @@ def build123d_mass_property_crosscheck(
             bbox_atol=bbox_atol,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "mass_property_crosscheck",
             "error": f"{type(e).__name__}: {e}",
@@ -1179,7 +1207,7 @@ def build123d_mass_property_crosscheck(
         if v51_identity.get("status") != "ok":
             summary["status"] = "needs_attention"
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1218,7 +1246,7 @@ def build123d_cad_route_source_contract(
             else json.loads(required_metadata_fields_json)
         )
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1243,13 +1271,13 @@ def build123d_cad_route_source_contract(
             **kwargs,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cad_route_source_contract",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1323,7 +1351,7 @@ def build123d_external_cad_volume_evidence_package(
             else json.loads(required_metadata_fields_json)
         )
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1366,13 +1394,13 @@ def build123d_external_cad_volume_evidence_package(
             **kwargs,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "external_cad_volume_evidence_package",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1392,7 +1420,7 @@ def build123d_cubit_solver_route_handoff(
         shape_rows = json.loads(shape_rows_json)
         solver_route_gate = json.loads(solver_route_gate_json)
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1417,13 +1445,13 @@ def build123d_cubit_solver_route_handoff(
             **kwargs,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cubit_solver_route_handoff",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1447,7 +1475,7 @@ def build123d_cubit_quality_ledger_handoff(
         shape_rows = json.loads(shape_rows_json)
         quality_ledger_gate = json.loads(quality_ledger_gate_json)
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1479,13 +1507,13 @@ def build123d_cubit_quality_ledger_handoff(
             **kwargs,
         )
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cubit_quality_ledger_handoff",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1548,7 +1576,7 @@ def build123d_cad_handoff_manifest(
             else json.loads(expected_geometry_ids_json)
         )
     except json.JSONDecodeError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "parse_json",
             "error": f"{type(e).__name__}: {e}",
@@ -1607,13 +1635,13 @@ def build123d_cad_handoff_manifest(
             )
         summary = shape_cad_handoff_manifest_gate(shape_rows, **kwargs)
     except Exception as e:  # noqa: BLE001
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cad_handoff_manifest",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
-    return json.dumps(summary, indent=2)
+    return _dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -1686,7 +1714,7 @@ def _execute_build123d_sync(
         err_payload["stdout"] = captured.getvalue()
         if preflight:
             err_payload["preflight"] = preflight
-        return json.dumps(err_payload, indent=2)
+        return _dumps(err_payload, indent=2)
     finally:
         sys.stdout = old_stdout
 
@@ -1705,7 +1733,7 @@ def _execute_build123d_sync(
             target_name = name
 
     if target is None:
-        return json.dumps({
+        return _dumps({
             "status": "ok",
             "message": "Script executed but no Shape object found in namespace.",
             "stdout": stdout_text,
@@ -1797,7 +1825,7 @@ def _execute_build123d_sync(
     if preflight:
         info["preflight"] = preflight
 
-    return json.dumps(info, indent=2)
+    return _dumps(info, indent=2)
 
 
 @mcp.tool()
@@ -1848,7 +1876,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
         )
     except Exception:
         sys.stdout = _orig_stdout
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "script_exec",
             "error": _tb.format_exc(),
@@ -1868,7 +1896,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
         if isinstance(obj, Shape):
             target, target_name = obj, n
     if target is None:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "extract",
             "error": "Script executed but no build123d Shape was found.",
@@ -1881,7 +1909,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
     try:
         export_step(target, str(step_path))
     except Exception:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "step_export",
             "error": _tb.format_exc(),
@@ -1891,7 +1919,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
     try:
         from radia_mcp.cubit import session as _cs
     except ImportError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cubit_import",
             "error": f"radia_mcp.cubit not available: {e}",
@@ -1901,7 +1929,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
         sess = _cs.CubitSession.get()
         sess.ensure_started()
     except _cs.CubitSessionError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cubit_session",
             "error": str(e),
@@ -1913,7 +1941,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
     try:
         r = sess.call("cmd", [f'import step "{step_fwd}"'])
     except _cs.CubitSessionError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cubit_rpc",
             "error": str(e),
@@ -1956,7 +1984,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
     except OSError:
         pass
 
-    return json.dumps(info, indent=2)
+    return _dumps(info, indent=2)
 
 
 @mcp.tool()
@@ -1975,7 +2003,7 @@ def inspect_geometry(file_path: str) -> str:
     """
     p = Path(file_path)
     if not p.exists():
-        return json.dumps({"status": "error", "kind": "input", "error": f"File not found: {file_path}"})
+        return _dumps({"status": "error", "kind": "input", "error": f"File not found: {file_path}"})
 
     try:
         suffix = p.suffix.lower()
@@ -1986,12 +2014,12 @@ def inspect_geometry(file_path: str) -> str:
             from build123d import import_brep
             shape = import_brep(str(p))
         else:
-            return json.dumps({
+            return _dumps({
                 "status": "error",
                 "error": f"Unsupported format: {suffix}. Use .step or .brep",
             })
     except Exception:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "error": traceback.format_exc(),
         })
@@ -2104,7 +2132,7 @@ def inspect_geometry(file_path: str) -> str:
     if warnings:
         info["cae_warnings"] = warnings
 
-    return json.dumps(info, indent=2)
+    return _dumps(info, indent=2)
 
 
 @mcp.tool()
@@ -2145,16 +2173,16 @@ def section_along_path(
 
     p = Path(file_path)
     if not p.exists():
-        return json.dumps({"status": "error", "kind": "input", "error": f"File not found: {file_path}"})
+        return _dumps({"status": "error", "kind": "input", "error": f"File not found: {file_path}"})
 
     try:
         pts = json.loads(path_json)
     except Exception:
-        return json.dumps({"status": "error", "error": "path_json is not valid JSON"})
+        return _dumps({"status": "error", "error": "path_json is not valid JSON"})
 
     pts = np.array(pts, dtype=np.float64)
     if pts.ndim != 2 or pts.shape[1] != 3 or pts.shape[0] < 2:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "error": f"path must be (N, 3) with N >= 2, got shape {pts.shape}",
         })
@@ -2189,7 +2217,7 @@ def section_along_path(
             from build123d import import_brep
             solid = import_brep(str(p))
     except Exception:
-        return json.dumps({"status": "error", "error": traceback.format_exc()})
+        return _dumps({"status": "error", "error": traceback.format_exc()})
 
     from build123d import section, Plane, Vector
 
@@ -2234,7 +2262,7 @@ def section_along_path(
         "w_range": [round(min(ws), 4), round(max(ws), 4)] if ws else None,
     }
 
-    return json.dumps({"status": "ok", "summary": summary, "segments": segments}, indent=2)
+    return _dumps({"status": "ok", "summary": summary, "segments": segments}, indent=2)
 
 
 @mcp.tool()
@@ -2351,7 +2379,7 @@ def generate_helix_coil(
         export_step(coil, str(fpath))
         info["exported"] = str(fpath)
 
-    return json.dumps(info, indent=2)
+    return _dumps(info, indent=2)
 
 
 # ============================================================
@@ -2555,7 +2583,7 @@ def preview_boolean(op: str, a_script: str, b_script: str,
     }
     sym = op_map.get(op.strip().lower())
     if sym is None:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "op",
             "error": f"unknown op {op!r}; use union / subtract / intersect",
@@ -2713,10 +2741,10 @@ def build123d_lookup(query: str, max_results: int = 5) -> str:
     """
     q = (query or "").strip()
     if not q:
-        return json.dumps({"status": "error", "error": "empty query"})
+        return _dumps({"status": "error", "error": "empty query"})
     terms = [t for t in _tokenize(q) if t not in _STOP_WORDS]
     if not terms:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                             "error": "no searchable terms (all stop words?)"})
     corpus = _b3d_build_corpus()
     n = max(1, len(corpus))
@@ -2731,7 +2759,7 @@ def build123d_lookup(query: str, max_results: int = 5) -> str:
             scored.append((s, doc))
     scored.sort(key=lambda x: (-x[0], x[1]["source"], x[1]["start_line"]))
     top = scored[: max(1, int(max_results))]
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "query": q,
         "terms": terms,
@@ -2754,7 +2782,7 @@ def build123d_lookup(query: str, max_results: int = 5) -> str:
 def build123d_recent_failures(limit: int = 10) -> str:
     """Return the last N failed `execute_build123d` invocations (from log)."""
     recs = _fl.recent_failures("build123d", limit=limit)
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "count": len(recs),
         "log_path": str(_fl._log_path("build123d")),
@@ -2778,7 +2806,7 @@ def build123d_web_docs(query: str, max_hits: int = 5,
     """
     q = (query or "").strip()
     if not q:
-        return json.dumps({"status": "error", "error": "empty query"})
+        return _dumps({"status": "error", "error": "empty query"})
     urls = _wd.DOCS_INDEX.get("build123d", [])
     all_hits: list[dict] = []
     errors: list[dict] = []
@@ -2797,7 +2825,7 @@ def build123d_web_docs(query: str, max_hits: int = 5,
                 h["from_cache"] = data.get("from_cache", False)
                 all_hits.append(h)
             remaining -= len(hits)
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "query": q,
         "hits": all_hits,
@@ -2834,7 +2862,7 @@ def build123d_examples(query: str, limit: int = 3,
     """
     r = _ex.search_examples("build123d", query, limit=limit,
                              force_refresh=force_refresh)
-    return json.dumps(r, indent=2, ensure_ascii=False)
+    return _dumps(r, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
@@ -2859,7 +2887,7 @@ def build123d_examples_refresh(limit: int = 0,
     }
     if include_youtube:
         out["build123d_youtube"] = _ex.refresh_build123d_youtube()
-    return json.dumps(out, indent=2, ensure_ascii=False)
+    return _dumps(out, indent=2, ensure_ascii=False)
 
 
 def _b3d_preflight_warn(script: str) -> dict | None:
@@ -2919,7 +2947,7 @@ def build123d_ask(query: str, limit: int = 6,
     """
     q = (query or "").strip()
     if not q:
-        return json.dumps({"status": "error", "error": "empty query"})
+        return _dumps({"status": "error", "error": "empty query"})
 
     results: list[dict] = []
 
@@ -2958,7 +2986,7 @@ def build123d_ask(query: str, limit: int = 6,
         except (TypeError, ValueError):
             return 0.0
     results.sort(key=lambda h: -_score_of(h))
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "query": q,
         "total": len(results),
@@ -2985,7 +3013,7 @@ def build123d_discussions(query: str, limit: int = 5,
     """
     r = _ex.search_examples("build123d_discussions", query, limit=limit,
                              force_refresh=force_refresh)
-    return json.dumps(r, indent=2, ensure_ascii=False)
+    return _dumps(r, indent=2, ensure_ascii=False)
 
 
 # ============================================================
@@ -3065,7 +3093,7 @@ def execute_cadquery(script: str,
     try:
         import cadquery as cq
     except ImportError:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "kind": "environment",
             "error": ("cadquery not installed. Install with "
@@ -3091,7 +3119,7 @@ def execute_cadquery(script: str,
             "traceback": tb[-1200:],
             "stdout": captured.getvalue()[-400:],
         })
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "error": tb,
             "stdout": captured.getvalue(),
@@ -3104,7 +3132,7 @@ def execute_cadquery(script: str,
 
     found, err = _find_cadquery_shape(namespace)
     if found is None:
-        return json.dumps({
+        return _dumps({
             "status": "ok" if err is None else "error",
             "message": err or "no shape found",
             "stdout": stdout_text,
@@ -3193,7 +3221,7 @@ def execute_cadquery(script: str,
     if stdout_text:
         info["stdout"] = stdout_text
 
-    return json.dumps(info, indent=2)
+    return _dumps(info, indent=2)
 
 
 @mcp.tool()
@@ -3224,7 +3252,7 @@ def cadquery_to_cubit_hex(script: str,
     try:
         import cadquery as cq  # noqa: F401
     except ImportError:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": "cadquery not installed"}, indent=2)
 
     import tempfile
@@ -3235,7 +3263,7 @@ def cadquery_to_cubit_hex(script: str,
                                     export_format="step")
     cq_info = json.loads(cq_info_raw)
     if cq_info.get("status") != "ok" or "exported" not in cq_info:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cadquery",
             "cadquery": cq_info,
@@ -3248,7 +3276,7 @@ def cadquery_to_cubit_hex(script: str,
     try:
         from ..cubit.server import cubit_mesh_auto
     except ImportError as e:
-        return json.dumps({
+        return _dumps({
             "status": "error",
             "stage": "cubit_import",
             "error": str(e),
@@ -3262,7 +3290,7 @@ def cadquery_to_cubit_hex(script: str,
                                 commit_to_gui=commit_to_gui,
                                 timeout_s=timeout_s)
     mesh_info = json.loads(mesh_raw)
-    return json.dumps({
+    return _dumps({
         "status": mesh_info.get("status", "ok"),
         "cadquery": {
             k: cq_info[k] for k in
@@ -3320,10 +3348,10 @@ def lint_build123d_script(filepath: str) -> str:
     """
     import os as _os
     if not _os.path.isfile(filepath):
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"not a file: {filepath}"})
     findings = _b3d_lint_file(filepath)
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "path": filepath,
         "count": len(findings),
@@ -3340,7 +3368,7 @@ def lint_build123d_directory(directory: str = "examples") -> str:
     """
     import os as _os
     if not _os.path.isdir(directory):
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"not a directory: {directory}"})
     by_file: list[dict] = []
     total = 0
@@ -3352,7 +3380,7 @@ def lint_build123d_directory(directory: str = "examples") -> str:
         by_file.append({"path": p, "count": len(findings),
                         "findings": findings})
         total += len(findings)
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "directory": directory,
         "total_findings": total,
@@ -3773,10 +3801,10 @@ def generate_build123d_script(pattern: str = "helix_coil") -> str:
     """
     key = (pattern or "helix_coil").strip().lower()
     if key not in _B3D_TEMPLATES:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"unknown pattern {pattern!r}",
                            "known": list(_B3D_TEMPLATES.keys())})
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "pattern": key,
         "script": _B3D_TEMPLATES[key],
@@ -3830,12 +3858,12 @@ def build123d_try(script: str, timeout_s: int = 90) -> str:
             timeout=timeout_s,
         )
     except _sp.TimeoutExpired as e:
-        return json.dumps({"status": "error", "stage": "timeout",
+        return _dumps({"status": "error", "stage": "timeout",
                            "error": f"exceeded {timeout_s}s",
                            "stdout": e.stdout or "",
                            "stderr": e.stderr or ""}, indent=2)
     except OSError as e:
-        return json.dumps({"status": "error", "stage": "spawn",
+        return _dumps({"status": "error", "stage": "spawn",
                            "error": str(e)}, indent=2)
 
     out = r.stdout or ""
@@ -3857,7 +3885,7 @@ def build123d_try(script: str, timeout_s: int = 90) -> str:
             "error": err[-1200:] if err else out[-1200:],
             "via": "build123d_try",
         })
-    return json.dumps(payload, indent=2, ensure_ascii=False)
+    return _dumps(payload, indent=2, ensure_ascii=False)
 
 
 # ============================================================
@@ -3892,7 +3920,7 @@ def build123d_try_race(scripts: list,
     import concurrent.futures as _cf
 
     if not scripts:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": "scripts list cannot be empty"})
 
     # Normalize entries
@@ -3904,7 +3932,7 @@ def build123d_try_race(scripts: list,
             norm.append({"name": s.get("name", f"variant_{i}"),
                           "script": s["script"]})
         else:
-            return json.dumps({"status": "error",
+            return _dumps({"status": "error",
                                "error": f"scripts[{i}] must be str or {{name, script}}"})
 
     def _one(rec: dict) -> dict:
@@ -3961,7 +3989,7 @@ def build123d_try_race(scripts: list,
         if valid:
             winner_idx = max(valid, key=lambda iv: iv[1]["volume"])[0]
 
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "rule": rule,
         "results": results,
@@ -4005,7 +4033,7 @@ def build123d_to_cubit_hex(script: str,
                                         export_format="step")
     exec_info = json.loads(exec_raw)
     if exec_info.get("status") != "ok" or "exported" not in exec_info:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "stage": "build123d",
                            "build123d": exec_info}, indent=2)
     step_path = exec_info["exported"].replace("\\", "/")
@@ -4013,7 +4041,7 @@ def build123d_to_cubit_hex(script: str,
     try:
         from ..cubit.server import cubit_mesh_auto
     except ImportError as e:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "stage": "cubit_import",
                            "error": str(e),
                            "build123d": exec_info,
@@ -4025,7 +4053,7 @@ def build123d_to_cubit_hex(script: str,
                                 commit_to_gui=commit_to_gui,
                                 timeout_s=timeout_s)
     mesh_info = json.loads(mesh_raw)
-    return json.dumps({
+    return _dumps({
         "status": mesh_info.get("status", "ok"),
         "build123d": {
             k: exec_info[k] for k in
@@ -4127,7 +4155,7 @@ def build123d_suggest_next(goal: str = "cae_pipeline",
         add("# unknown goal; try: cae_pipeline / clean / export / refine / assemble",
             "")
 
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "goal": g,
         "script_analysis": {
@@ -4164,18 +4192,18 @@ def build123d_api(query: str, max_results: int = 5) -> str:
     """
     q = (query or "").strip()
     if not q:
-        return json.dumps({"status": "error", "error": "empty query"})
+        return _dumps({"status": "error", "error": "empty query"})
     # Reuse the existing build123d_lookup mechanism but restrict to
     # the api_reference topic by directly chunking + scoring it.
     from .build123d_knowledge import _TOPICS
     api_text = _TOPICS.get("api_reference", "")
     if not api_text:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": "api_reference topic missing"})
     chunks = _chunk_by_heading(api_text, target_lines=20)
     terms = [t for t in _tokenize(q) if t not in _STOP_WORDS]
     if not terms:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                             "error": "no searchable terms (all stop words?)"})
     docs = []
     for start, text in chunks:
@@ -4201,7 +4229,7 @@ def build123d_api(query: str, max_results: int = 5) -> str:
             scored.append((s, doc))
     scored.sort(key=lambda x: (-x[0], x[1]["start_line"]))
     top = scored[: max(1, int(max_results))]
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "query": q,
         "terms": terms,
@@ -4246,20 +4274,20 @@ def build123d_inspect_step(path: str) -> str:
     """
     p = Path(path)
     if not p.exists():
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"not found: {path}"})
     if not p.is_file():
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"not a file: {path}"})
     try:
         from build123d import import_step, Compound, Shape
     except ImportError as e:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"build123d unavailable: {e}"})
     try:
         imported = import_step(str(p))
     except Exception as e:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "stage": "import",
                            "error": f"{type(e).__name__}: {e}"})
 
@@ -4329,7 +4357,7 @@ def build123d_inspect_step(path: str) -> str:
                             f"({info['volume']})")
         summaries.append(info)
 
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "path": str(p.resolve()),
         "size_bytes": p.stat().st_size,
@@ -4366,7 +4394,7 @@ def build123d_heal(step_in: str, step_out: str = "",
     """
     p_in = Path(step_in)
     if not p_in.exists():
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"not found: {step_in}"})
     p_out = Path(step_out) if step_out else \
         p_in.with_name(p_in.stem + "__healed.step")
@@ -4375,7 +4403,7 @@ def build123d_heal(step_in: str, step_out: str = "",
     try:
         from build123d import import_step, export_step, Compound
     except ImportError as e:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"build123d unavailable: {e}"})
 
     # ShapeFix lives in OCP (build123d's OCCT binding).
@@ -4383,13 +4411,13 @@ def build123d_heal(step_in: str, step_out: str = "",
         from OCP.ShapeFix import ShapeFix_Shape
         from OCP.TopoDS import TopoDS_Shape
     except ImportError as e:
-        return json.dumps({"status": "error",
+        return _dumps({"status": "error",
                            "error": f"OCP ShapeFix unavailable: {e}"})
 
     try:
         imported = import_step(str(p_in))
     except Exception as e:
-        return json.dumps({"status": "error", "stage": "import",
+        return _dumps({"status": "error", "stage": "import",
                            "error": f"{type(e).__name__}: {e}"})
 
     # Accept Compound-of-shapes or a single shape
@@ -4454,10 +4482,10 @@ def build123d_heal(step_in: str, step_out: str = "",
     try:
         export_step(out_shape, str(p_out))
     except Exception as e:
-        return json.dumps({"status": "error", "stage": "export",
+        return _dumps({"status": "error", "stage": "export",
                            "error": f"{type(e).__name__}: {e}"})
 
-    return json.dumps({
+    return _dumps({
         "status": "ok",
         "input": str(p_in.resolve()),
         "output": str(p_out.resolve()),
@@ -4584,14 +4612,14 @@ def build123d_probe(path: str, query: str = "summary") -> str:
     """
     p = Path(path)
     if not p.is_file():
-        return json.dumps(_error_payload_common(
+        return _dumps(_error_payload_common(
             "input", f"File not found: {p}"))
     try:
         shape = _load_cad_shape(p)
     except ValueError as exc:
-        return json.dumps(_error_payload_common("input", str(exc)))
+        return _dumps(_error_payload_common("input", str(exc)))
     except Exception:
-        return json.dumps(_error_payload_common(
+        return _dumps(_error_payload_common(
             "load", traceback.format_exc(),
             environment_needles=("no module named 'build123d'",
                                  "no module named 'ocp'")))
@@ -4665,11 +4693,11 @@ def build123d_probe(path: str, query: str = "summary") -> str:
                   "audit": {"errors": errors, "warnings": warnings,
                             "passed": not errors}}
     else:
-        return json.dumps(_error_payload_common(
+        return _dumps(_error_payload_common(
             "input",
             f"Unknown probe query: {query!r}. "
             "Try: summary / entities / labels"))
-    return json.dumps({"status": "ok", "file": str(p), **result},
+    return _dumps({"status": "ok", "file": str(p), **result},
                       ensure_ascii=False, indent=2)
 
 
@@ -4737,7 +4765,7 @@ def build123d_doctor() -> str:
     except Exception as exc:
         checks["state_dir"] = {"status": "skipped", "detail": str(exc)}
 
-    return json.dumps({
+    return _dumps({
         "status": "ok" if not problems else "problems_found",
         "problems": problems,
         "checks": checks,

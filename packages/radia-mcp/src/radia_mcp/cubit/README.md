@@ -149,6 +149,18 @@ Guess", "Mesh Export Consistency Check Policy"):
 - **Cubit Python API reference** (600+ functions, `api_reference.py`)
 - **In-tree examples** at `src/radia/panels/samples/*.jou`
 
+## Driving policy: headless is primary, GUI is the user's debugger
+
+Lab policy (2026-08-05): agents drive Cubit through **APREPRO + Python on
+the headless/batch route** — `.jou` playback, `cubit_batch_try`,
+`cubit_mesh_auto`, the batch stdio daemon. That is the primary path for
+mesh generation, exports, gates, and validation, and it must never
+require a GUI window. The **persistent GUI session** (`cubit_show`,
+`cubit_snapshot`) is maintained as the **user's visual-debugging aid** —
+open it when a human wants to watch the model or capture a figure
+(`cubit_snapshot` needs the rendering window; batch reports an honest
+`ok=false` there).
+
 ## When to use this vs Cubit GUI
 
 | Task | This server | Cubit GUI |
