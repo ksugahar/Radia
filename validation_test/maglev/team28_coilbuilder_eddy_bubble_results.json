@@ -1,0 +1,378 @@
+{
+  "radia_version": "4.95.48",
+  "schema": "cae-ai-lab.solver-run.v1",
+  "created_at_utc": "2026-08-06T10:38:32.391258+00:00",
+  "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble CLN",
+  "solver": "radia-ngsolve",
+  "source_artifact": "validation_test/maglev/team28_coilbuilder_eddy_bubble.py",
+  "pass": true,
+  "run": {
+    "command": "python validation_test/maglev/team28_coilbuilder_eddy_bubble.py",
+    "workdir": ".",
+    "exit_code": 0,
+    "duration_s": 15.529571100021712
+  },
+  "result_files": [
+    "validation_test/maglev/team28_coilbuilder_eddy_bubble_results.json",
+    "validation_test/maglev/team28_coilbuilder_hcurl_eddy_cln.json"
+  ],
+  "checks": {
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "validation_passed": true,
+    "coilbuilder_created_two_closed_counter_wound_coils": true,
+    "vector_potential_matches_filament_reference_below_0p05_percent": true,
+    "flux_density_matches_filament_reference_below_0p1_percent": true,
+    "interaction_projection_residual_below_1e-10": true,
+    "reduced_inductance_block_positive": true,
+    "cln_handoff_passive": true,
+    "upward_force_matches_reference_below_one_percent": true,
+    "transverse_force_below_half_percent": true,
+    "linear_model_force_scales_with_current_squared": true,
+    "runtime_reduction_below_one_percent": true,
+    "kernel_is_epsilon_free": true,
+    "matlab_exchange_written": true
+  },
+  "tolerances": {
+    "coil_field_max_rel": 0.001,
+    "force_max_rel": 0.01,
+    "transverse_force_ratio_max": 0.005,
+    "projection_residual_max": 1e-10
+  },
+  "errors": {
+    "max_rel": 0.005165646516112803,
+    "max_abs": 0.0056629229409495
+  },
+  "tool_versions": {
+    "python": "3.12.10",
+    "radia": "4.95.48",
+    "ngsolve": "6.2.2604",
+    "numpy": "2.4.6"
+  },
+  "timing_breakdown_s": {
+    "mesh_and_eddy_basis": 2.744251500000246,
+    "coilbuilder_and_field_cross_check": 2.81234659999609,
+    "vim_and_cln_assembly": 9.93291880004108,
+    "harmonic_solve_force_and_export": 0.00109479995444417,
+    "write_results": 0.0006152000278234482
+  },
+  "verification": {
+    "method": "independent winding-pack field quadrature, passive CLN gates, stored TEAM force, symmetry, and current-squared scaling",
+    "command": "pytest -q tests/test_team28_coilbuilder_source.py validation_test/maglev/test_team28_coilbuilder_eddy_bubble_evidence.py"
+  },
+  "environment": {
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  },
+  "details": {
+    "timing_breakdown_s": {
+      "mesh_and_eddy_basis": 2.744251500000246,
+      "coilbuilder_and_field_cross_check": 2.81234659999609,
+      "vim_and_cln_assembly": 9.93291880004108,
+      "harmonic_solve_force_and_export": 0.00109479995444417,
+      "write_results": 0.0006152000278234482
+    },
+    "problem": {
+      "frequency_hz": 50.0,
+      "conductivity_S_per_m": 34000000.0,
+      "disk_radius_m": 0.065,
+      "disk_thickness_m": 0.003,
+      "disk_bottom_m": 0.0108,
+      "parent_space": "HCurl",
+      "parent_order": 6,
+      "mesh_maxh_m": 0.025,
+      "outer_quadrature_order": 4
+    },
+    "coil_builder": {
+      "coil_count": 2,
+      "source_object_count": 2,
+      "all_paths_closed": true,
+      "closure_gaps_m": [
+        1.0042103753008297e-17,
+        2.143131898507868e-17
+      ],
+      "arc_max_segment_length_m": 0.002,
+      "coils": [
+        {
+          "name": "inner",
+          "mean_radius_m": 0.041,
+          "radial_width_m": 0.028,
+          "axial_height_m": 0.052,
+          "turns": 960.0,
+          "direction": 1.0,
+          "ampere_turns_A": 19200.0
+        },
+        {
+          "name": "outer",
+          "mean_radius_m": 0.0875,
+          "radial_width_m": 0.015,
+          "axial_height_m": 0.052,
+          "turns": 576.0,
+          "direction": -1.0,
+          "ampere_turns_A": -11520.0
+        }
+      ],
+      "field_cross_check": {
+        "reference": "Gauss-integrated circular-filament winding pack",
+        "sample_count": 49032,
+        "vector_potential_relative_l2": 7.328613757566348e-05,
+        "flux_density_relative_l2": 0.0002092079617480215,
+        "flux_density_max_pointwise_over_reference_max": 0.0005671831905903459
+      }
+    },
+    "reduced_model": {
+      "mesh_elements": 227,
+      "parent_ndof": 22814,
+      "evrs_rank": 3,
+      "runtime_reduction_ratio": 0.00013149820285789427,
+      "current_sample_count": 49032,
+      "interaction": {
+        "kind": "HCurlTetVolumeInteraction",
+        "backend": "hacapk-local-polynomial-affine-tet-hcurl",
+        "singular_self_treatment": "analytic-reference-moments-through-degree-6",
+        "cell_count": 227,
+        "mode_count": 3,
+        "polynomial_degree": 5,
+        "projection_relative_residual": 3.2948629784131636e-15,
+        "projection_tolerance": 1e-10,
+        "projection_quadrature_points": 343,
+        "outer_quadrature_points": 15,
+        "max_vandermonde_condition": 142964.9376199077,
+        "mu_H_per_m": 1.2566370614359173e-06,
+        "minimum_eigenvalue_H": null,
+        "maximum_eigenvalue_H": null,
+        "matrix_free": true,
+        "hmatrix_operator": {
+          "scalar_gram_backend": "hacapk-local-polynomial-degree18",
+          "uncompressed_charge_count": 12712,
+          "local_rank_min": 9,
+          "local_rank_max": 9,
+          "local_rank_sum": 2043,
+          "local_rank_algorithm": "pivoted-qr-original-columns",
+          "local_rank_relative_truncation_error": 0.0,
+          "operator": "sum-component-BtGB",
+          "matrix_free": true,
+          "mode_count": 3,
+          "charge_count": 2043,
+          "charge_map_entries": 2043,
+          "charge_map_bytes": 49036,
+          "charge_map_backend": "native-cpp-component-csr",
+          "hmatrix": {
+            "n_dof": 2043,
+            "n_leaves": 1399,
+            "n_lowrank": 372,
+            "n_dense": 1027,
+            "max_rank": 10,
+            "compression": 0.21680348282843964,
+            "build_time": 6.8064539,
+            "memory_mb": 6.903877258300781,
+            "dense_memory_mb": 31.84394073486328,
+            "hex_cache_stats_enabled": 0.0,
+            "hex_far_one_sided_threshold": 0.0,
+            "hex_affine_exact_near_factor": 1.0,
+            "wedge_far_one_sided_threshold": 0.0,
+            "wedge_trans_cache_scope": 2.0,
+            "wedge_trans_cache_enabled": 1.0,
+            "ho_far_one_sided_enabled": 0.0,
+            "ho_analytic_block_available": 1.0,
+            "ho_analytic_block_enabled": 1.0,
+            "hex_block_lookups": 0.0,
+            "hex_block_hits": 0.0,
+            "hex_block_misses": 0.0,
+            "hex_block_clears": 0.0,
+            "hex_trans_block_lookups": 0.0,
+            "hex_trans_block_hits": 0.0,
+            "hex_trans_block_misses": 0.0,
+            "hex_trans_block_clears": 0.0,
+            "hex_sym_block_lookups": 0.0,
+            "hex_sym_block_hits": 0.0,
+            "hex_sym_block_misses": 0.0,
+            "hex_sym_block_clears": 0.0,
+            "hex_sym_trans_block_lookups": 0.0,
+            "hex_sym_trans_block_hits": 0.0,
+            "hex_sym_trans_block_misses": 0.0,
+            "hex_sym_trans_block_clears": 0.0,
+            "ho_sym_block_lookups": 0.0,
+            "ho_sym_block_hits": 0.0,
+            "ho_sym_block_misses": 0.0,
+            "ho_sym_block_clears": 0.0,
+            "hex_block_hit_rate": 0.0,
+            "hex_trans_block_hit_rate": 0.0,
+            "hex_sym_block_hit_rate": 0.0,
+            "hex_sym_trans_block_hit_rate": 0.0,
+            "ho_sym_block_hit_rate": 0.0,
+            "curved_touch_blocks": 0.0,
+            "curved_touch_build_time": 0.0
+          }
+        },
+        "kernel_epsilon_m": null,
+        "geometry": "affine-tetrahedron"
+      },
+      "cln_handoff": {
+        "state_order": 3,
+        "port_count": 1,
+        "blocks": {
+          "volume": [
+            0,
+            3
+          ]
+        },
+        "input_convention": "u=-d(coil_current)/dt for vector-potential ports",
+        "has_sibc_termination": false,
+        "finite_rl_state_space": true,
+        "min_resistance_eigenvalue": 2.9411764705882328e-08,
+        "min_inductance_eigenvalue": 1.016750888291066e-12,
+        "min_surface_mass_eigenvalue": 0.0,
+        "passive": true
+      },
+      "eddy_bubble": {
+        "rule": "topology-aware-eddy-bubbling",
+        "free_dofs": 22814,
+        "structural_keep_dofs": 11464,
+        "eddy_bubble_candidate_dofs": 11350,
+        "eddy_bubble_candidate_fraction": 0.49750153414570003,
+        "classes": {
+          "sibc_surface": 3955,
+          "non_sibc_trace": 0,
+          "loop_bridge": 7509,
+          "ordinary_bulk_eddy_bubble": 11350
+        },
+        "policy": {
+          "ndof": 22814,
+          "free_dofs": 22814,
+          "sibc_surface_dofs": 4214,
+          "surface_candidate_dofs": 4214,
+          "non_sibc_trace_dofs": 0,
+          "loop_bridge_dofs": 7509,
+          "sibc_loop_bridge_overlap_dofs": 259,
+          "sibc_surface_only_dofs": 3955,
+          "ordinary_evrs_candidate_dofs": 11350,
+          "partitioned_free_dofs": 22814,
+          "local_bubble_dofs": 11350,
+          "interface_dofs": 4940,
+          "wirebasket_dofs": 6524,
+          "loop_bridge_fraction": 0.3291400017533094,
+          "sibc_surface_fraction": 0.18471114228105548,
+          "non_sibc_trace_fraction": 0.0,
+          "ordinary_evrs_fraction": 0.49750153414570003
+        },
+        "plan": {
+          "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+          "free_dofs": 22814,
+          "loop_bridge_keep_dofs": 7509,
+          "loop_bridge_reduced_modes": 130,
+          "loop_bridge_reduction_strategy": "cycle-basis",
+          "loop_bridge_reduction_savings": 7379,
+          "sibc_surface_trace_dofs": 4214,
+          "sibc_surface_only_dofs": 3955,
+          "non_sibc_trace_dofs": 0,
+          "non_sibc_trace_modes": 0,
+          "sibc_loop_bridge_overlap_dofs": 259,
+          "ordinary_evrs_candidate_dofs": 11350,
+          "conservative_structural_keep_dofs": 11464,
+          "evrs_rank": 3,
+          "surface_modes": 0,
+          "conservative_estimated_reduced_modes": 7512,
+          "estimated_reduced_modes": 133,
+          "estimated_reduction_ratio": 0.005829753660033313,
+          "ordinary_evrs_candidate_fraction": 0.49750153414570003,
+          "conservative_structural_keep_fraction": 0.5024984658543
+        },
+        "topology": {
+          "face_count": 552,
+          "roles": [
+            "conductor-conductor",
+            "conductor-exterior"
+          ],
+          "conductive_materials": [
+            "Al"
+          ],
+          "air_materials": [
+            "air",
+            "vacuum"
+          ],
+          "conductive_element_count": 227,
+          "conductive_component_count": 1,
+          "conductive_graph_edge_count": 356,
+          "conductive_graph_cycle_rank": 130,
+          "surface_face_count": 196,
+          "sibc_face_count": 196,
+          "non_sibc_trace_face_count": 0,
+          "loop_bridge_face_count": 356,
+          "conductor_exterior_face_count": 196,
+          "conductor_air_face_count": 0,
+          "conductor_insulator_face_count": 0,
+          "conductor_conductor_face_count": 356,
+          "conductive_interface_face_count": 0
+        },
+        "conductor_graph": {
+          "node_count": 227,
+          "edge_count": 356,
+          "component_count": 1,
+          "cycle_rank": 130,
+          "fundamental_cycle_count": 130,
+          "material_interface_edge_count": 0
+        },
+        "parent_order": 6
+      }
+    },
+    "observables": {
+      "target_upward_force_N": 1.0962660575565093,
+      "reference_current_force_N": [
+        -0.0018085686486911004,
+        0.00016237940698321244,
+        1.1019289804974588
+      ],
+      "upward_force_relative_error": 0.005165646516112803,
+      "transverse_force_ratio": 0.0016478770733304525,
+      "joule_loss_W": 13.741045870149236,
+      "magnetic_energy_J": 0.006060091151866651,
+      "current_sweep": [
+        {
+          "coil_current_A": 10.0,
+          "force_N": [
+            -0.0004521421621727751,
+            4.059485174580311e-05,
+            0.2754822451243647
+          ],
+          "upward_force_N": 0.2754822451243647,
+          "force_per_current_squared_N_per_A2": 0.002754822451243647
+        },
+        {
+          "coil_current_A": 20.0,
+          "force_N": [
+            -0.0018085686486911004,
+            0.00016237940698321244,
+            1.1019289804974588
+          ],
+          "upward_force_N": 1.1019289804974588,
+          "force_per_current_squared_N_per_A2": 0.002754822451243647
+        },
+        {
+          "coil_current_A": 30.0,
+          "force_N": [
+            -0.0040692794595549725,
+            0.0003653536657122277,
+            2.4793402061192813
+          ],
+          "upward_force_N": 2.4793402061192813,
+          "force_per_current_squared_N_per_A2": 0.002754822451243646
+        }
+      ],
+      "force_over_current_squared_relative_spread": 4.722782066754459e-16
+    },
+    "checks": {
+      "coilbuilder_created_two_closed_counter_wound_coils": true,
+      "vector_potential_matches_filament_reference_below_0p05_percent": true,
+      "flux_density_matches_filament_reference_below_0p1_percent": true,
+      "interaction_projection_residual_below_1e-10": true,
+      "reduced_inductance_block_positive": true,
+      "cln_handoff_passive": true,
+      "upward_force_matches_reference_below_one_percent": true,
+      "transverse_force_below_half_percent": true,
+      "linear_model_force_scales_with_current_squared": true,
+      "runtime_reduction_below_one_percent": true,
+      "kernel_is_epsilon_free": true,
+      "matlab_exchange_written": true
+    }
+  }
+}

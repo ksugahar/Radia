@@ -1,0 +1,92 @@
+{
+  "radia_version": "4.95.43",
+  "schema": "cae-ai-lab.solver-run.v1",
+  "created_at_utc": "2026-08-06T10:38:45.066Z",
+  "case": "TEAM 28 CoilBuilder HCurl eddy-bubble MATLAB replay",
+  "solver": "matlab",
+  "source_artifact": "validation_test/maglev/validate_team28_coilbuilder_eddy_bubble.m",
+  "pass": true,
+  "run": {
+    "command": "validate_team28_coilbuilder_eddy_bubble",
+    "workdir": ".",
+    "exit_code": 0,
+    "duration_s": 0.6741997
+  },
+  "result_files": [
+    "validation_test/maglev/team28_coilbuilder_matlab_results.json",
+    "validation_test/maglev/team28_coilbuilder_hcurl_eddy_cln.json",
+    "validation_test/maglev/team28_coilbuilder_eddy_bubble_results.json"
+  ],
+  "checks": {
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "validation_passed": true,
+    "details": {
+      "three_or_more_current_points": true,
+      "reference_current_included": true,
+      "mex_matches_python_below_1e_10": true,
+      "upward_force_matches_reference_below_one_percent": true,
+      "force_scales_with_current_squared": true,
+      "loss_is_nonnegative": true,
+      "magnetic_energy_is_nonnegative": true
+    }
+  },
+  "tolerances": {
+    "mex_vs_python_max_rel": 1E-10,
+    "force_reference_max_rel": 0.01,
+    "quadratic_scaling_max_rel": 1E-12
+  },
+  "errors": {
+    "max_rel": 0.0051656465161123979,
+    "max_abs": 4.4408920985006262E-16
+  },
+  "tool_versions": {
+    "radia": "4.95.43",
+    "matlab": "26.1.0.3312084 (R2026a) Update 4",
+    "matlab_release": "2026a"
+  },
+  "timing_breakdown_s": {
+    "load_exchange_and_python_evidence": 0.0657896,
+    "mex_harmonic_current_sweep": 0.4535591,
+    "cross_language_verification": 0.0109353,
+    "write_results": 0.0084499
+  },
+  "verification": {
+    "method": "Python/MATLAB CLN parity, stored TEAM force, passivity observables, and current-squared scaling",
+    "command": "validate_team28_coilbuilder_eddy_bubble"
+  },
+  "comparisons": {
+    "mex_vs_python_relative_error": 4.0301193747149837E-16,
+    "upward_force_reference_relative_error": 0.0051656465161123979,
+    "force_over_current_squared_relative_spread": 0
+  },
+  "current_sweep": [
+    {
+      "coil_current_A": 10,
+      "force_x_N": -0.00045214216217277477,
+      "force_y_N": 4.0594851745803077E-5,
+      "upward_force_N": 0.27548224512436459,
+      "joule_loss_W": 3.4352614675373077,
+      "magnetic_energy_J": 0.0015150227879666622,
+      "force_per_current_squared_N_per_A2": 0.0027548224512436458
+    },
+    {
+      "coil_current_A": 20,
+      "force_x_N": -0.0018085686486910991,
+      "force_y_N": 0.00016237940698321231,
+      "upward_force_N": 1.1019289804974584,
+      "joule_loss_W": 13.741045870149231,
+      "magnetic_energy_J": 0.0060600911518666487,
+      "force_per_current_squared_N_per_A2": 0.0027548224512436458
+    },
+    {
+      "coil_current_A": 30,
+      "force_x_N": -0.0040692794595549742,
+      "force_y_N": 0.00036535366571222781,
+      "upward_force_N": 2.4793402061192813,
+      "joule_loss_W": 30.917353207835763,
+      "magnetic_energy_J": 0.013635205091699961,
+      "force_per_current_squared_N_per_A2": 0.0027548224512436458
+    }
+  ]
+}
