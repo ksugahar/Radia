@@ -875,7 +875,7 @@ def cubit_check_vol(vol_path: str,
 			**kwargs,
 		)
 	except FileNotFoundError as exc:
-		return json.dumps({"status": "error", "stage": "input",
+		return json.dumps({"status": "error", "stage": "input", "kind": "input",
 		                   "kind": "input", "error": str(exc)})
 	except Exception as exc:
 		return json.dumps({
@@ -2345,16 +2345,16 @@ def open_in_cubit(path: str = "",
 	else:
 		bin_dir = find_cubit_install()
 		if bin_dir is None:
-			return _json.dumps({"status": "error", "stage": "cubit_binary",
+			return _json.dumps({"status": "error", "stage": "cubit_binary", "kind": "environment",
 			                    "error": "Cubit install not found on PATH "
 			                             "or standard locations; pass cubit_exe."})
 		try:
 			exe = str(_cubit_gui_exe(bin_dir))
 		except FileNotFoundError as e:
-			return _json.dumps({"status": "error", "stage": "cubit_binary",
+			return _json.dumps({"status": "error", "stage": "cubit_binary", "kind": "environment",
 			                    "error": str(e)})
 	if not Path(exe).exists():
-		return _json.dumps({"status": "error", "stage": "cubit_binary",
+		return _json.dumps({"status": "error", "stage": "cubit_binary", "kind": "environment",
 		                    "error": f"Cubit exe not found: {exe}"})
 
 	# Pre-warm Learn license (same logic as cubit_session):
@@ -2372,7 +2372,7 @@ def open_in_cubit(path: str = "",
 		if not p.is_absolute():
 			p = PROJECT_ROOT / p
 		if not p.exists():
-			return _json.dumps({"status": "error", "stage": "input",
+			return _json.dumps({"status": "error", "stage": "input", "kind": "input",
 			                    "error": f"File not found: {p}"})
 		abs_path = str(p.resolve()).replace("\\", "/")
 		suffix = p.suffix.lower()
@@ -2389,14 +2389,14 @@ def open_in_cubit(path: str = "",
 		elif suffix in (".msh", ".vol", ".g", ".e", ".exo"):
 			lines.append(f'import mesh "{abs_path}"')
 		else:
-			return _json.dumps({"status": "error", "stage": "input",
+			return _json.dumps({"status": "error", "stage": "input", "kind": "input",
 			                    "error": f"Unsupported extension: {suffix}"})
 
 	if commands:
 		lines.extend(str(c).rstrip() for c in commands)
 
 	if not lines:
-		return _json.dumps({"status": "error", "stage": "input",
+		return _json.dumps({"status": "error", "stage": "input", "kind": "input",
 		                    "error": "Either `path` or `commands` is required."})
 
 	wrapper.write_text("\n".join(lines) + "\n")
@@ -2441,10 +2441,10 @@ def open_in_cubit(path: str = "",
 				"stderr_tail": proc.stderr[-400:] if proc.stderr else "",
 			}
 	except _sp.TimeoutExpired:
-		return _json.dumps({"status": "error", "stage": "timeout",
+		return _json.dumps({"status": "error", "stage": "timeout", "kind": "environment",
 		                    "wrapper": str(wrapper)})
 	except OSError as e:
-		return _json.dumps({"status": "error", "stage": "launch",
+		return _json.dumps({"status": "error", "stage": "launch", "kind": "environment",
 		                    "error": str(e)})
 
 	return _json.dumps(info, indent=2)
@@ -2565,17 +2565,17 @@ def cubit_show(path: str = "", extra_commands: list = None) -> str:
 		if not p.is_absolute():
 			p = PROJECT_ROOT / p
 		if not p.exists():
-			return json.dumps({"status": "error", "stage": "input",
+			return json.dumps({"status": "error", "stage": "input", "kind": "input",
 			                   "error": f"File not found: {p}"})
 		try:
 			cmds.append(_cubit_path_dispatch(p))
 		except ValueError as e:
-			return json.dumps({"status": "error", "stage": "input",
+			return json.dumps({"status": "error", "stage": "input", "kind": "input",
 			                   "error": str(e)})
 	if extra_commands:
 		cmds.extend(str(c).rstrip() for c in extra_commands)
 	if not cmds:
-		return json.dumps({"status": "error", "stage": "input",
+		return json.dumps({"status": "error", "stage": "input", "kind": "input",
 		                   "error": "Either `path` or `extra_commands` is required."})
 
 	try:
@@ -3194,7 +3194,7 @@ def cubit_checkpoint(label: str) -> str:
 	except _cs.CubitSessionError as e:
 		return json.dumps(_error_payload("rpc", str(e)))
 	if not r.get("ok"):
-		return json.dumps({"status": "error", "stage": "save", "detail": r})
+		return json.dumps({"status": "error", "stage": "save", "kind": "input", "detail": r})
 	return json.dumps({
 		"status": "ok",
 		"label": safe,
@@ -3233,7 +3233,7 @@ def cubit_restore(label: str) -> str:
 	except _cs.CubitSessionError as e:
 		return json.dumps(_error_payload("rpc", str(e)))
 	if not r.get("ok"):
-		return json.dumps({"status": "error", "stage": "open", "detail": r})
+		return json.dumps({"status": "error", "stage": "open", "kind": "input", "detail": r})
 	return json.dumps({"status": "ok", "label": safe, "path": str(path)}, indent=2)
 
 
@@ -3311,10 +3311,10 @@ def cubit_mesh_diagnose() -> str:
 	except _cs.CubitSessionError as e:
 		return json.dumps(_error_payload("rpc", str(e)))
 	if not r.get("ok"):
-		return json.dumps({"status": "error", "stage": "probe", "detail": r})
+		return json.dumps({"status": "error", "stage": "probe", "kind": "internal", "detail": r})
 	rows = r.get("result", [])
 	if not isinstance(rows, list):
-		return json.dumps({"status": "error", "stage": "parse",
+		return json.dumps({"status": "error", "stage": "parse", "kind": "internal",
 		                   "error": "per_volume did not return list",
 		                   "raw": rows})
 
@@ -3622,7 +3622,7 @@ def cubit_lookup(query: str, max_results: int = 5, chunk_lines: int = 40) -> str
 	del chunk_lines  # corpus is pre-chunked & cached; param kept for compat
 	q = (query or "").strip()
 	if not q:
-		return json.dumps({"status": "error", "error": "empty query"})
+		return json.dumps({"status": "error", "kind": "input", "error": "empty query"})
 	terms = [t for t in _tokenize(q) if t not in _STOP_WORDS]
 	if not terms:
 		return json.dumps({"status": "error",
@@ -3697,7 +3697,7 @@ def cubit_web_docs(query: str, source: str = "cubit", max_hits: int = 5,
 	src = (source or "cubit").strip().lower()
 	q = (query or "").strip()
 	if not q:
-		return json.dumps({"status": "error", "error": "empty query"})
+		return json.dumps({"status": "error", "kind": "input", "error": "empty query"})
 
 	# Discourse-backed sources: use the JSON search API (richer + reliable).
 	if src == "cubit_forum":
@@ -3830,7 +3830,7 @@ def _run_batch(step_path: str | None, commands: list[str],
 		try:
 			sess.ensure_started()
 		except _cs.CubitSessionError as e:
-			return {"status": "error", "stage": "start",
+			return {"status": "error", "stage": "start", "kind": "environment",
 			        "error": str(e), "commands": commands}
 		per_line: list[dict] = []
 		if cub5_path:
@@ -3840,7 +3840,7 @@ def _run_batch(step_path: str | None, commands: list[str],
 				preamble = r.get("result", [])
 				per_line.extend(preamble)
 				if not preamble or not preamble[0].get("ok"):
-					return {"status": "error", "stage": "open_cub5",
+					return {"status": "error", "stage": "open_cub5", "kind": "input",
 					        "cub5_path": cub5_path, "per_line": per_line}
 			except _cs.CubitSessionError as e:
 				return {"status": "error", "stage": "open_cub5_rpc",
@@ -4166,7 +4166,7 @@ def cubit_ask(query: str, limit: int = 6,
 	"""
 	q = (query or "").strip()
 	if not q:
-		return json.dumps({"status": "error", "error": "empty query"})
+		return json.dumps({"status": "error", "kind": "input", "error": "empty query"})
 
 	results: list[dict] = []
 
@@ -4695,14 +4695,14 @@ def _run_batch_with_quality(step_path: str | None, commands: list[str],
 		try:
 			sess.ensure_started()
 		except _cs.CubitSessionError as e:
-			return {"status": "error", "stage": "start", "error": str(e)}
+			return {"status": "error", "stage": "start", "kind": "environment", "error": str(e)}
 		per_line: list[dict] = []
 		if cub5_path:
 			fwd = str(cub5_path).replace("\\", "/")
 			r = sess.call("cmd", [f'open "{fwd}"'], timeout_s=timeout_s)
 			per_line.extend(r.get("result", []))
 			if not per_line or not per_line[0].get("ok"):
-				return {"status": "error", "stage": "open_cub5",
+				return {"status": "error", "stage": "open_cub5", "kind": "input",
 				        "per_line": per_line}
 		elif step_path:
 			fwd = str(step_path).replace("\\", "/")

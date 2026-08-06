@@ -99,6 +99,52 @@ def test_b3d_probe_unlabeled_solid_warns(tmp_path):
     assert any("unnamed" in w for w in out["audit"]["warnings"])
 
 
+def test_b3d_labeled_solids_deep_nesting(tmp_path):
+    """3-level assembly label inheritance, locked from measured behavior
+    (2026-08-05, identical in-memory and after STEP round trip):
+
+    * a part keeps its own label;
+    * an unlabeled part inside a labeled sub-assembly inherits the
+      SUB-ASSEMBLY label (nearest labeled ancestor);
+    * parts under an unlabeled sub-assembly inherit the root label;
+    * world placement is preserved at every level.
+    """
+    pytest.importorskip("build123d")
+    from build123d import (Box, Compound, Cylinder, Pos, Sphere,
+                           export_step, import_step)
+    from radia_mcp.build123d.server import _labeled_solids
+
+    m1 = Box(1, 1, 1)
+    m1.label = "magnet_a"
+    m2 = Pos(2, 0, 0) * Box(1, 1, 1)              # unlabeled
+    sub1 = Compound(children=[m1, m2], label="rotor")
+    c1 = Pos(0, 4, 0) * Cylinder(0.5, 1)
+    c1.label = "pole"
+    c2 = Pos(2, 4, 0) * Cylinder(0.5, 1)          # unlabeled
+    sub2 = Compound(children=[c1, c2])            # unlabeled sub-assembly
+    s = Pos(0, 8, 0) * Sphere(0.6)
+    s.label = "sensor"
+    root = Compound(children=[sub1, sub2, s], label="machine")
+
+    def rows(shape):
+        return sorted(
+            (lab, round(sol.center().X, 1), round(sol.center().Y, 1))
+            for lab, sol in _labeled_solids(shape))
+
+    expected = sorted([
+        ("magnet_a", 0.0, 0.0),
+        ("rotor", 2.0, 0.0),          # inherited from labeled sub-asm
+        ("pole", -0.0, 4.0),
+        ("machine", 2.0, 4.0),        # inherited from root
+        ("sensor", -0.0, 8.0),
+    ])
+    assert rows(root) == expected
+
+    p = tmp_path / "nested3.step"
+    export_step(root, str(p))
+    assert rows(import_step(str(p))) == expected
+
+
 def test_b3d_probe_summary_and_errors(tmp_path):
     pytest.importorskip("build123d")
     from build123d import Box, export_step
