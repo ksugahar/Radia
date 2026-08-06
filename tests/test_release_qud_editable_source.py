@@ -104,5 +104,6 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     ) == 0
     script = base64.b64decode(captured["command"][-1]).decode("utf-16le")
     assert expected_sha in script
+    assert 'safe.directory=W:/Radia/release-source' in script
     assert "status --porcelain --untracked-files=no" in script
     assert script.index("rev-parse HEAD") < script.index("pip install -e")
