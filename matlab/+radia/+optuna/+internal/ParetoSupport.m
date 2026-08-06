@@ -63,8 +63,24 @@ classdef ParetoSupport
             if isempty(values)
                 rank=zeros(0,1); crowding=zeros(0,1); return
             end
-            signs=ones(1,numel(directions)); signs(string(directions)=="maximize")=-1;
-            normalized=double(values).*signs;
+            values=double(values); directions=string(directions);
+            if ~ismatrix(values) || size(values,2)~=numel(directions) || ...
+                    any(~isfinite(values),"all")
+                error("radia:optuna:InvalidParetoValues", ...
+                    "Values must be a finite matrix with one column per direction.");
+            end
+            if any(directions~="minimize" & directions~="maximize")
+                error("radia:optuna:InvalidDirection", ...
+                    "Directions must be minimize or maximize.");
+            end
+            signs=ones(1,numel(directions)); signs(directions=="maximize")=-1;
+            if radia.optuna.internal.NativeKernels.has( ...
+                    "optuna.pareto.rank_crowding")
+                [rank,crowding]=radia.internal.callMex( ...
+                    "optuna.pareto.rank_crowding",values,signs);
+                return
+            end
+            normalized=values.*signs;
             count=size(normalized,1); rank=inf(count,1); remaining=true(count,1); level=1;
             while any(remaining)
                 front=false(count,1); candidates=find(remaining);

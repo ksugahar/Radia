@@ -3,7 +3,7 @@ MathWorks' official MATLAB MCP Server is the execution substrate. The MATLAB
 Agentic Toolkit owns generic MATLAB workflows and the Simulink Agentic Toolkit
 owns generic model inspection, editing, checking, and testing. This
 package adds the Radia/NGSolve MEX capability contract, a table-backed
-Optuna-like `radia.optuna` layer with `SimulinkRunner`, and 43 generic ML/RL
+CAE-oriented `radia.optuna` layer with `SimulinkRunner`, and 43 generic ML/RL
 gates backed by 86 self-contained MATLAB functions. The Simulink surface also
 contains the validated 50 Hz TEAM 28 six-stage CLN force LUT and a numeric
 HCurl Eddy Bubble/CLN reduced-state bridge. The bridge consumes trusted R/L/P
@@ -11,6 +11,16 @@ matrices, uses the existing `hybrid_vim.solve` MEX kernel for harmonic solves,
 and builds a passive discrete state-space model; NGSolve remains the owner of
 mesh assembly, high-order geometry, and DoF orientation. Acoustic FEM/BEM
 remains separate.
+
+For Simulink optimization, use the MATLAB-native `radia.optuna` route rather
+than calling MATLAB Engine once per Python Optuna trial. `Study` and `Trial`
+remain readable MATLAB objects and own MAT persistence. The optional MEX
+kernels accelerate Pareto rank/crowding and numerical/categorical Parzen
+log-density evaluation; inspect them with `radia.optuna.nativeStatus`. The
+Optimization block exposes start/cancel, attempted and failed trial counts,
+and a numeric failure class while preserving failed CAE trials. Generic Python
+Optuna and its official MCP server remain external tools, not dependencies of
+the Radia Simulink loop.
 
 For a reusable file exchange, call `radia.vim.ExportHCurlEddyCLNJSON` from
 the NGSolve/Python side and load it with

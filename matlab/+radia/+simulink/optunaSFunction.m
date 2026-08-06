@@ -6,12 +6,14 @@ end
 function setup(block)
 block.NumDialogPrms = 7;
 block.DialogPrmsTunable = repmat({'Nontunable'}, 1, 7);
-block.NumInputPorts = 1;
-block.NumOutputPorts = 11;
+block.NumInputPorts = 2;
+block.NumOutputPorts = 14;
 block.SetPreCompInpPortInfoToDynamic;
 block.SetPreCompOutPortInfoToDynamic;
-block.InputPort(1).Dimensions = 1;
-block.InputPort(1).DirectFeedthrough = true;
+for index = 1:2
+    block.InputPort(index).Dimensions = 1;
+    block.InputPort(index).DirectFeedthrough = true;
+end
 
 nTrials = max(1, round(double(block.DialogPrm(2).Data)));
 for index = 1:8
@@ -24,6 +26,10 @@ for index = 9:10
 end
 block.OutputPort(11).Dimensions = 1;
 block.OutputPort(11).DatatypeID = 0;
+for index = 12:14
+    block.OutputPort(index).Dimensions = 1;
+    block.OutputPort(index).DatatypeID = 0;
+end
 
 block.SampleTimes = [block.DialogPrm(5).Data 0];
 block.RegBlockMethod('PostPropagationSetup', @postSetup);
@@ -36,7 +42,9 @@ function postSetup(block)
 nTrials = max(1, round(double(block.DialogPrm(2).Data)));
 names = {'previous_trigger','best_value','best_trial','status', ...
     'completed_trials','last_value','elapsed_s','best_updated', ...
-    'pareto_count','pareto_x','pareto_y','pareto_revision'};
+    'pareto_count','pareto_x','pareto_y','pareto_revision', ...
+    'previous_cancel','failed_trials','last_failure_code', ...
+    'attempted_trials'};
 block.NumDworks = numel(names);
 for index = 1:numel(names)
     block.Dwork(index).Name = names{index};
@@ -65,6 +73,7 @@ end
 
 function outputs(block)
 trigger = double(block.InputPort(1).Data);
+cancel = double(block.InputPort(2).Data);
 block.Dwork(8).Data = 0;
 key = runtimeKey(block);
 
@@ -73,7 +82,12 @@ if trigger > 0 && block.Dwork(1).Data <= 0
 end
 
 runtime = radia.simulink.optunaRuntimeStore("get", key);
-if ~isempty(runtime) && runtime.active
+if ~isempty(runtime) && runtime.active && ...
+        cancel > 0 && block.Dwork(13).Data <= 0
+    runtime.active = false;
+    radia.simulink.optunaRuntimeStore("set", key, runtime);
+    block.Dwork(4).Data = 3;
+elseif ~isempty(runtime) && runtime.active
     try
         runtime = runOneTrial(block, runtime);
         radia.simulink.optunaRuntimeStore("set", key, runtime);
@@ -87,12 +101,16 @@ if ~isempty(runtime) && runtime.active
 end
 
 block.Dwork(1).Data = trigger;
+block.Dwork(13).Data = cancel;
 for index = 1:8
     block.OutputPort(index).Data = block.Dwork(index + 1).Data;
 end
 block.OutputPort(9).Data = block.Dwork(10).Data;
 block.OutputPort(10).Data = block.Dwork(11).Data;
 block.OutputPort(11).Data = block.Dwork(12).Data;
+block.OutputPort(12).Data = block.Dwork(14).Data;
+block.OutputPort(13).Data = block.Dwork(16).Data;
+block.OutputPort(14).Data = block.Dwork(15).Data;
 end
 
 function initializeStudy(block, key)
@@ -152,6 +170,9 @@ block.Dwork(9).Data = 0;
 block.Dwork(10).Data = NaN(block.Dwork(10).Dimensions, 1);
 block.Dwork(11).Data = NaN(block.Dwork(11).Dimensions, 1);
 block.Dwork(12).Data = 0;
+block.Dwork(14).Data = 0;
+block.Dwork(15).Data = 0;
+block.Dwork(16).Data = 0;
 end
 
 function name = normalizeSamplerName(value)
@@ -202,6 +223,7 @@ end
 
 function runtime = runOneTrial(block, runtime)
 trial = runtime.study.ask();
+failed = false;
 try
     value = runtime.objective(trial);
     if trial.State == "RUNNING"
@@ -211,14 +233,19 @@ catch exception
     if trial.State == "RUNNING"
         runtime.study.fail(trial, exception.message);
     end
-    rethrow(exception);
+    failed = true;
+    value = NaN;
+    block.Dwork(14).Data = block.Dwork(14).Data + 1;
+    block.Dwork(15).Data = failureCode(exception);
 end
 
 values = reshape(double(value), 1, []);
 block.Dwork(6).Data = values(1);
 complete = runtime.study.TrialTable.State == "COMPLETE";
 completedCount = sum(complete);
+attemptedCount = height(runtime.study.TrialTable);
 block.Dwork(5).Data = completedCount;
+block.Dwork(16).Data = attemptedCount;
 block.Dwork(7).Data = toc(runtime.started);
 
 [bestValue, bestTrial] = primaryBest(runtime.study);
@@ -250,11 +277,38 @@ if signature ~= runtime.pareto_signature
     runtime.pareto_signature = signature;
 end
 
-if completedCount >= runtime.n_trials
+if attemptedCount >= runtime.n_trials
     runtime.active = false;
     block.Dwork(4).Data = 1;
 else
     block.Dwork(4).Data = 2;
+end
+if failed && attemptedCount < runtime.n_trials
+    block.Dwork(4).Data = 2;
+end
+end
+
+function code = failureCode(exception)
+text = lower(string(exception.identifier) + " " + string(exception.message));
+if contains(text,"timeout") || contains(text,"timed out")
+    code = 1;
+elseif contains(text,"license") || contains(text,"resource") || ...
+        contains(text,"checkout")
+    code = 2;
+elseif contains(text,"mesh") || contains(text,"element quality") || ...
+        contains(text,"jacobian")
+    code = 3;
+elseif contains(text,"converge") || contains(text,"solver") || ...
+        contains(text,"singular")
+    code = 4;
+elseif contains(text,"observable") || contains(text,"nan") || ...
+        contains(text,"inf")
+    code = 5;
+elseif contains(text,"config") || contains(text,"parameter") || ...
+        contains(text,"model")
+    code = 6;
+else
+    code = 99;
 end
 end
 

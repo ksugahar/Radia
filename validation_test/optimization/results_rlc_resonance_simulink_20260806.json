@@ -1,0 +1,63 @@
+{
+  "radia_version": "4.95.43",
+  "executed_at_utc": "2026-08-06T07:09:08.683Z",
+  "matlab_release": "2026a",
+  "simulink_version": "26.1",
+  "schema": "radia.validation.rlc-resonance-optimization.v1",
+  "model_file": "S:\\Radia\\01_GitHub\\matlab\\radia_rlc_resonance_plant.slx",
+  "study_file": "C:\\temp\\radia_rlc_resonance_validation\\study.mat",
+  "plot_file": "S:\\Radia\\01_GitHub\\validation_test\\optimization\\rlc_resonance_simulink_20260806.png",
+  "definition": "underdamped free ring-down frequency from zero crossings",
+  "target_frequency_Hz": 1000,
+  "fixed_components": {
+    "resistance_Ohm": 2,
+    "inductance_H": 0.01
+  },
+  "search": {
+    "parameter": "capacitance_F",
+    "bounds_F": [
+      1E-6,
+      6E-6
+    ],
+    "sampler": "TPE",
+    "seed": 42,
+    "requested_trials": 36,
+    "completed_trials": 36,
+    "failed_trials": 0
+  },
+  "best": {
+    "trial_number": 35,
+    "objective": 2.1067323848049916E-6,
+    "capacitance_F": 2.5250461734200352E-6,
+    "measured_ringdown_frequency_Hz": 1001.4525125853172,
+    "analytic_ringdown_frequency_Hz": 1001.4531385863119,
+    "natural_frequency_Hz": 1001.5795983063356,
+    "quality_factor": 31.465551080246,
+    "target_relative_error": 0.0014525125853172085,
+    "measurement_vs_theory_relative_error": 6.2509264840983664E-7,
+    "zero_crossing_measurement": {
+      "crossing_count": 40,
+      "median_half_period_s": 0.00049927479707371873,
+      "relative_half_period_mad": 1.39333285960805E-6,
+      "first_crossing_s": 0.0002521629974379725,
+      "last_crossing_s": 0.019723871765155738
+    }
+  },
+  "analytic_optimum": {
+    "capacitance_F": 2.5323881296515993E-6,
+    "best_capacitance_relative_error": 0.0028992223370491559
+  },
+  "gates": {
+    "all_trials_completed": true,
+    "target_within_2_percent": true,
+    "ringdown_measurement_within_0_1_percent": true,
+    "capacitance_within_3_percent": true
+  },
+  "timing_s": {
+    "model_build": 5.4107521,
+    "optimization": 17.1929371,
+    "best_replay": 0.1844462,
+    "visualization": 6.7830773,
+    "total_before_json_write": 31.3306386
+  }
+}

@@ -680,6 +680,16 @@ and mutation. Use
 `SimulinkRunner.optimizeParallel` (`parsim`) or
 `LTspiceRunner.optimizeParallel` (`parfeval`) for parallel engineering trials.
 
+`radia.optuna.nativeStatus()` reports the optional optimizer MEX backend. The
+native commands accelerate non-dominated rank/crowding and numerical or
+categorical Parzen log-density evaluation. `Study`, `Trial`, random streams,
+MAT-file persistence, and CAE evidence remain readable MATLAB code, with a
+checked MATLAB fallback when the MEX is unavailable. The Simulink Optimization
+block keeps its original telemetry ports and adds an independent `cancel`
+input plus failed, attempted, and failure-code outputs. Failed mesh or solver
+trials are recorded and the requested trial budget continues; no Python or
+MATLAB Engine round trip occurs per trial.
+
 LTspice coupling does not require Simscape. `radia.ltspice.run` accepts both
 netlists and `.asc` schematics; `SchematicEditor` edits component values, and
 the conversion path stages recursive local include/model/hierarchical files.
@@ -930,7 +940,7 @@ materialized in the optimization loop.
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 94 public top-level names, 27 underscore-prefixed
 numerical kernels, and 121 stateful class members. All 242 entries are covered
-by the current 334-command gateway. Three internal mesh/test helpers are
+by the current 337-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:
