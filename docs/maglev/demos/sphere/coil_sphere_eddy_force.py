@@ -441,6 +441,7 @@ def main():
     out_json = os.path.join(HERE, "coil_sphere_eddy_force_results.json")
     with open(out_json, "w") as fp:
         json.dump(results, fp, indent=2)
+        fp.write("\n")
     print(f"\nwrote {out_json}")
 
     try:
