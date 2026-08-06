@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.45 - Executed Gmsh field-visualization example
+
+Released 2026-08-06.
+
+- Added an executed, result-bearing electromagnetic field-line and adaptive
+  isosurface notebook with saved WebGUI scenes and synchronized numerical
+  evidence.
+- Connected the public Gmsh post-processing knowledge to the reproducible
+  notebook while keeping generated heavy rendering artifacts out of source.
+
 ## 4.95.44 - Gmsh post-processing and Cubit MCP hardening
 
 Released 2026-08-06.
