@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **930 tools** across 48 MCP servers.
+Total: **948 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 85 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 37 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 52 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -44,7 +44,7 @@ Total: **930 tools** across 48 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 21 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 24 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -245,12 +245,17 @@ Module: `radia_mcp.gmsh.server`
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory and summarize the health. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
+| `gmsh_curve_profile` | Sample a view along a parametric curve x(u), y(u), z(u). |
 | `gmsh_cut_plane_extract` | Cut a view with the plane A*x+B*y+C*z+D=0 and save the section DATA. |
+| `gmsh_derived_field` | Derive gradient, curl, divergence, or tensor eigenvalues of a view. |
 | `gmsh_detect` | Detect gmsh capabilities on this machine (detect_matlab_toolboxes twin). |
 | `gmsh_diff_msh` | Compare two MSH v4.1 files: structure + field statistics. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_exec` | Execute Python code in a PERSISTENT gmsh session (stateful evaluate). |
 | `gmsh_export_animation` | Export a time-stepped post-view animation as GIF (gmsh subprocess). |
+| `gmsh_export_csv` | Dump view data to CSV (the ParaView spreadsheet / SaveData analog). |
+| `gmsh_extract_skin` | Extract the boundary skin of a volume view (surface + field). |
+| `gmsh_field_histogram` | Histogram of a view's values (the ParaView Histogram analog). |
 | `gmsh_field_stats` | Per-view, per-time-step field statistics for an MSH v4.1 file. |
 | `gmsh_harmonic_to_time` | Expand a complex (re/im) view into a time-domain animation view. |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
@@ -260,22 +265,32 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_math_eval` | Create a derived view with Plugin(MathEval) and save it. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
 | `gmsh_mesh_quality` | Gmsh minSICN shape-quality distribution for all 3D elements. |
+| `gmsh_mirror_expand` | Expand a half/quarter/eighth symmetric model view by mirroring. |
+| `gmsh_modulus_phase` | Convert a complex re/im two-step view to modulus and phase steps. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
+| `gmsh_point_history` | Value of a view at one point across ALL time steps. |
 | `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
 | `gmsh_probe` | Probe post-processing views at arbitrary points (interpolated). |
 | `gmsh_probe_options` | Ask gmsh ITSELF whether option names exist (subprocess probe). |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_render` | Render a .msh or .geo file to PNG headlessly (gmsh subprocess). |
+| `gmsh_render_montage` | Compose rendered PNGs into one comparison grid (side-by-side). |
+| `gmsh_resample_grid` | Resample a view on a regular grid spanned by three box edges. |
 | `gmsh_run_file` | Open/run a file in the persistent gmsh session (run_matlab_file twin). |
 | `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
 | `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
+| `gmsh_smooth_to_nodes` | Average element-wise data to nodes (CellDataToPointData analog). |
 | `gmsh_status` | (no description) |
 | `gmsh_streamlines` | Trace field lines of a vector view from seeds on a line segment. |
+| `gmsh_threshold` | Keep only elements whose MEAN value lies in [min_val, max_val]. |
+| `gmsh_transform_view` | Apply an affine transform x' = A x + t to a COPY of a view. |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `gmsh_validate_geo` | Validate a .geo launch/companion file BEFORE opening it in GMSH. |
 | `gmsh_validate_msh` | Validate MSH v4.1 structural consistency; optional Jacobian check. |
 | `gmsh_verify` | Run ALL applicable gates on an artifact (run_matlab_test_file twin). |
+| `gmsh_view_min_max` | Locate the min and max of a scalar view WITH their coordinates. |
+| `gmsh_warp` | Displace a vector view's geometry by factor * its own vectors. |
 | `gmsh_write_post_launch_artifact` | Write the shared .geo/.geo.opt/.msh.opt post-display launch artifact. |
 | `lint_gmsh_directory` | Lint all Python scripts in a directory for GMSH policy violations. |
 | `lint_gmsh_script` | Lint a single Python script for GMSH policy violations. |
@@ -335,7 +350,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
 | `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
 | `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
-| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
+| `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
 | `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
@@ -1187,7 +1202,7 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
@@ -1209,7 +1224,10 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
 | `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
 | `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
+| `grant_writing_literature_gap_evidence_check` | Check whether literature-survey evidence supports the claimed gap. |
+| `grant_writing_named_software_abstraction_check` | Check whether named software is used at the right proposal level. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
+| `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
 | `grant_writing_status` | (no description) |
 | `grant_writing_suggest_redundancy_fixes` | 和文の典型的冗長表現 25 パターンを検出し置換候補を示す。 |

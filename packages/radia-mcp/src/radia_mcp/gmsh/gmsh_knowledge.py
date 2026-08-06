@@ -1732,12 +1732,83 @@ ref(0,0,1) -> el.vertices[2]
 """
 
 
+GMSH_PARAVIEW_PARITY = """
+# ParaView -> gmsh correspondence (radia-mcp post verbs)
+
+Everything the lab used ParaView for maps onto the radia-mcp gmsh
+tools below.  Semantics were MEASURED on gmsh 4.15.2 and are locked by
+tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
+
+## Filter correspondence matrix
+
+| ParaView filter | radia-mcp tool | Notes (measured semantics) |
+|---|---|---|
+| Calculator | gmsh_math_eval | NODAL application: result interpolates f(node values) |
+| Gradient / Curl / Divergence | gmsh_derived_field | exact derivative of the P1 interpolant, element-wise constant |
+| Eigenvalues (tensor) | gmsh_derived_field(operation="eigenvalues") | writes Min/Mid/Max as 3 views in one file |
+| Contour (isosurface) | gmsh_isosurface | |
+| Slice | gmsh_cut_plane_extract | plane A x + B y + C z + D = 0 |
+| Clip (visual) | gmsh_render(cut_plane=...) | display-side clipping, data untouched |
+| Threshold | gmsh_threshold | selects on the ELEMENT MEAN of the scalar |
+| Extract Surface | gmsh_extract_skin | boundary skin with the field interpolated |
+| Reflect | gmsh_mirror_expand | parity-aware: B/H are PSEUDOVECTORS (v' = det(M) M v) |
+| Transform | gmsh_transform_view | coordinates only -- data rewrite via value_expressions |
+| Warp By Vector | gmsh_warp | Plugin(Warp) MOVES THE MODEL NODES (in place) |
+| Cell Data to Point Data | gmsh_smooth_to_nodes | node = mean of adjacent elements (10/20 -> 15) |
+| Stream Tracer | gmsh_streamlines | probe-driven RK4 (Plugin StreamLines is broken on this build) |
+| Glyph (vector arrows) | gmsh_render options | View.VectorType=4 (3D arrow), View.GlyphLocation, View.ArrowSizeMax/ArrowSizeMin |
+| Plot Over Line | gmsh_line_profile | straight line + PNG graph |
+| Plot over custom curve | gmsh_curve_profile | parametric x(u),y(u),z(u); air-gap B(theta) in one call |
+| Plot Data Over Time | gmsh_point_history | per-step values + recorded step times |
+| Resample To Image | gmsh_resample_grid | CutBox regular grid, W varies fastest |
+| Spreadsheet / Save Data | gmsh_export_csv | pure-Python on the MSH parser; nodes or element centroids |
+| Histogram | gmsh_field_histogram | value / |field| distribution + PNG |
+| Find Data (max/min location) | gmsh_view_min_max | argmin/argmax coordinates + values |
+| Integrate Variables | gmsh_integrate | P1 accuracy on high-order views; exact FE integrals live in NGSolve |
+| Temporal shift/harmonics | gmsh_harmonic_to_time / gmsh_modulus_phase | AC phasor -> rotating field / amplitude+phase |
+| Comparative views | gmsh_render_montage | labeled PNG grid |
+| Camera orbit / fly-around | gmsh_export_animation(orbit_axis=...) | camera sweeps, data fixed at time_step |
+| Warp-like displacement display | View.DisplacementFactor | vector view drawn as displaced (display only) |
+| Color map controls | gmsh_render options | View.RangeType, View.CustomMin/CustomMax, View.SaturateValues, View.IntervalsType, View.NbIso |
+
+## Honest gaps (do not fake these)
+
+- VOLUME RENDERING: gmsh has none.  Use isosurfaces + cut planes +
+  clipping; for true volume rendering export to a tool that has it.
+- Plugin(CutSphere): returns an EMPTY view on this build -- not
+  exposed.  Use gmsh_cut_plane_extract / gmsh_threshold instead.
+- Plugin(Summation): absent from this build ("Unknown plugin"); a
+  bare run() call even fabricates a misleading view.  Sum two views
+  with gmsh_math_eval(other_view=..., "v0+w0").
+- Plugin(StreamLines): only re-emits seed points -- gmsh_streamlines
+  implements its own RK4 tracer instead.
+
+## Measured pitfalls behind the tools
+
+- Transform / Warp / Smooth / ModulusPhase run IN PLACE on the input
+  view (Warp even moves the model nodes).  The tools materialize
+  copies where the original must survive (mirror/transform) and
+  write the view directly where the displacement IS the result
+  (warp).
+- gmsh.view.combine("elements", "name") RENAMES the merged view to
+  "<name>_Combine".
+- gmsh.view.probe on VECTOR list views returns the NEAREST value at
+  ANY distance (scalar views return empty outside).  Always gate
+  "found" on the returned distance -- gmsh_probe and the streamline
+  tracer do this internally.
+- A wrong count in a $Nodes/$Elements header header does not raise in
+  gmsh: it CRASHES the process with heap corruption (0xC0000374).
+  Run gmsh_validate_msh before feeding hand-written MSH to anything.
+"""
+
+
 def get_gmsh_documentation(topic: str = "all") -> str:
     """Return GMSH usage documentation by topic.
 
     Args:
         topic: One of: all, policy, overview, cli, shortcuts, options, opt_file,
-               msh_format, geo, high_order, workflow, onelab, pitfalls
+               msh_format, geo, high_order, workflow, onelab, pitfalls,
+               animation, paraview
 
     Returns:
         Documentation string for the requested topic.
@@ -1756,6 +1827,7 @@ def get_gmsh_documentation(topic: str = "all") -> str:
         "onelab": GMSH_ONELAB,
         "pitfalls": GMSH_PITFALLS,
         "animation": GMSH_ANIMATION,
+        "paraview": GMSH_PARAVIEW_PARITY,
     }
 
     topic = topic.lower().strip()

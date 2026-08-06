@@ -269,14 +269,21 @@ def test_streamlines_trace_straight_in_uniform_field(tmp_path):
     # its seed, and the carried |v| is exactly 1
     for line in result["polylines"]:
         pts = line["points"]
-        assert len(pts) > 2
+        assert len(pts) >= 2
         x0, y0 = pts[0][0], pts[0][1]
         for p in pts:
             assert p[0] == pytest.approx(x0, abs=1e-9)
             assert p[1] == pytest.approx(y0, abs=1e-9)
         zs = [p[2] for p in pts]
         assert zs == sorted(zs)  # forward+backward merged, ascending
+        # the tracer STOPS at the data boundary (vector views report
+        # nearest values at any distance; the distance gate ends the
+        # march): the tet spans 0 <= z <= 1 - x - y
+        assert zs[0] >= -0.051
+        assert zs[-1] <= 1.0 - x0 - y0 + 0.051
         assert all(n == pytest.approx(1.0) for n in line["field_norms"])
+    longest = max(len(line["points"]) for line in result["polylines"])
+    assert longest > 5  # the forward march crosses the tet interior
 
 
 def test_probe_missing_view_lists_available(tmp_path):

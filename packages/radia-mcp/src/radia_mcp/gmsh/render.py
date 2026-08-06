@@ -114,33 +114,66 @@ try:
                 result["blank_check"] = {
                     "ran": False, "error": "Pillow not installed"}
         else:
-            targets = cfg.get("view_indices")
-            if targets is None:
-                targets = list(range(n_views))
-            if not targets:
-                raise RuntimeError(
-                    "no post-processing views to animate (the file has "
-                    "no NodeData/ElementData sections)")
-            steps = cfg.get("num_steps")
-            if steps is None:
-                steps = max(int(gmsh.option.getNumber(
-                    f"View[{i}].NbTimeStep")) for i in targets)
-            if cfg.get("link_views", True):
-                gmsh.option.setNumber("PostProcessing.Link", 1)
-                gmsh.option.setNumber("PostProcessing.AnimationCycle", 0)
             frames_dir = cfg["frames_dir"]
             frames = []
-            gmsh.fltk.initialize()
-            for step in range(int(steps)):
-                for i in targets:
-                    gmsh.option.setNumber(f"View[{i}].TimeStep", step)
-                gmsh.fltk.update()
-                frame = frames_dir + f"/frame_{step:04d}.png"
-                gmsh.write(frame)
-                frames.append(frame)
-            gmsh.fltk.finalize()
-            result.update({"ok": True, "ran": True, "num_steps": int(steps),
-                           "frames": frames, "view_indices": targets})
+            orbit = cfg.get("orbit")
+            if orbit:
+                # Camera-orbit animation: the data stays fixed (one time
+                # step); the camera sweeps `degrees` around one axis.
+                gmsh.option.setNumber("General.Trackball", 0)
+                gmsh.option.setNumber("General.RotationCenterGravity", 1)
+                base = cfg.get("rotation") or [0.0, 0.0, 0.0]
+                axis_opt = {"x": "General.RotationX",
+                            "y": "General.RotationY",
+                            "z": "General.RotationZ"}[orbit["axis"]]
+                axis_idx = {"x": 0, "y": 1, "z": 2}[orbit["axis"]]
+                ts = cfg.get("time_step")
+                if ts is not None:
+                    for i in range(n_views):
+                        gmsh.option.setNumber(f"View[{i}].TimeStep",
+                                              int(ts))
+                n_frames = int(orbit["n_frames"])
+                gmsh.fltk.initialize()
+                for k in range(n_frames):
+                    gmsh.option.setNumber(
+                        axis_opt,
+                        base[axis_idx] + orbit["degrees"] * k / n_frames)
+                    gmsh.fltk.update()
+                    frame = frames_dir + f"/frame_{k:04d}.png"
+                    gmsh.write(frame)
+                    frames.append(frame)
+                gmsh.fltk.finalize()
+                result.update({"ok": True, "ran": True,
+                               "num_steps": n_frames, "frames": frames,
+                               "orbit": orbit})
+            else:
+                targets = cfg.get("view_indices")
+                if targets is None:
+                    targets = list(range(n_views))
+                if not targets:
+                    raise RuntimeError(
+                        "no post-processing views to animate (the file has "
+                        "no NodeData/ElementData sections); for a mesh-only "
+                        "fly-around pass orbit_axis instead")
+                steps = cfg.get("num_steps")
+                if steps is None:
+                    steps = max(int(gmsh.option.getNumber(
+                        f"View[{i}].NbTimeStep")) for i in targets)
+                if cfg.get("link_views", True):
+                    gmsh.option.setNumber("PostProcessing.Link", 1)
+                    gmsh.option.setNumber("PostProcessing.AnimationCycle", 0)
+                gmsh.fltk.initialize()
+                for step in range(int(steps)):
+                    for i in targets:
+                        gmsh.option.setNumber(f"View[{i}].TimeStep", step)
+                    gmsh.fltk.update()
+                    frame = frames_dir + f"/frame_{step:04d}.png"
+                    gmsh.write(frame)
+                    frames.append(frame)
+                gmsh.fltk.finalize()
+                result.update({"ok": True, "ran": True,
+                               "num_steps": int(steps),
+                               "frames": frames, "view_indices": targets})
             gif_out = cfg.get("gif_out")
             if gif_out:
                 try:
@@ -299,6 +332,10 @@ def export_animation(path: str | Path,
                      string_options: dict[str, str] | None = None,
                      adapt_views: bool = True,
                      link_views: bool = True,
+                     orbit_axis: str | None = None,
+                     orbit_degrees: float = 360.0,
+                     orbit_frames: int = 36,
+                     time_step: int | None = None,
                      timeout_s: float = 900.0) -> dict[str, Any]:
     """Export a time-stepped post view animation as GIF (+ PNG frames).
 
@@ -306,10 +343,18 @@ def export_animation(path: str | Path,
     writes one PNG per step, and assembles the GIF with Pillow inside
     the subprocess.  ``keep_frames=True`` retains the per-step PNGs in a
     ``<gif stem>_frames`` directory next to the GIF.
+
+    ``orbit_axis`` switches to a CAMERA-ORBIT animation instead: the
+    data stays at ``time_step`` while the camera sweeps
+    ``orbit_degrees`` around the axis in ``orbit_frames`` frames (the
+    ParaView camera-path fly-around; works on mesh-only files too).
     """
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
+    if orbit_axis is not None and orbit_axis not in ("x", "y", "z"):
+        return {"ok": False,
+                "error": f"orbit_axis must be x|y|z, got {orbit_axis!r}"}
     gif = Path(gif_out) if gif_out is not None else src.with_suffix(".gif")
     gif.parent.mkdir(parents=True, exist_ok=True)
 
@@ -336,10 +381,14 @@ def export_animation(path: str | Path,
         "delay_ms": int(delay_ms),
         "options": merged_options,
         "string_options": string_options or {},
-        "auto_mesh_display": False,
+        "auto_mesh_display": orbit_axis is not None,
         "adapt_views": bool(adapt_views),
         "link_views": bool(link_views),
         "clip_views": clip_views,
+        "orbit": ({"axis": orbit_axis, "degrees": float(orbit_degrees),
+                   "n_frames": max(2, int(orbit_frames))}
+                  if orbit_axis is not None else None),
+        "time_step": time_step,
     }
     try:
         result = _run_render(cfg, timeout_s)
@@ -361,3 +410,58 @@ def export_animation(path: str | Path,
         result["frame_size"] = first_frame_size
         result["gif_size_bytes"] = gif.stat().st_size if gif.is_file() else None
     return result
+
+
+def render_montage(images: list[str | Path],
+                   out_png: str | Path, *,
+                   cols: int | None = None,
+                   labels: list[str] | None = None,
+                   background: str = "white") -> dict[str, Any]:
+    """Compose rendered PNGs into one comparison grid (side-by-side).
+
+    The ParaView comparative-views analog for static output: before/
+    after, per-frequency, or per-design renders lined up in a single
+    image.  Cells take the largest input size; optional labels are
+    drawn into the top-left corner of each cell.
+    """
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return {"ok": False,
+                "error": "Pillow not installed (pip install pillow)"}
+    paths = [Path(p) for p in images]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        return {"ok": False, "error": f"missing images: {missing}"}
+    if len(paths) < 2:
+        return {"ok": False, "error": "montage needs at least 2 images"}
+    if labels is not None and len(labels) != len(paths):
+        return {"ok": False,
+                "error": f"got {len(labels)} labels for {len(paths)} images"}
+
+    imgs = []
+    for p in paths:
+        with Image.open(p) as im:
+            imgs.append(im.convert("RGB"))
+    cell_w = max(im.width for im in imgs)
+    cell_h = max(im.height for im in imgs)
+    n = len(imgs)
+    n_cols = int(cols) if cols else min(n, 3 if n != 4 else 2)
+    n_rows = (n + n_cols - 1) // n_cols
+    canvas = Image.new("RGB", (cell_w * n_cols, cell_h * n_rows),
+                       background)
+    draw = ImageDraw.Draw(canvas)
+    for k, im in enumerate(imgs):
+        r, c = divmod(k, n_cols)
+        x = c * cell_w + (cell_w - im.width) // 2
+        y = r * cell_h + (cell_h - im.height) // 2
+        canvas.paste(im, (x, y))
+        if labels is not None:
+            draw.text((c * cell_w + 8, r * cell_h + 6), labels[k],
+                      fill="black")
+    out = Path(out_png)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(out)
+    return {"ok": True, "png": str(out),
+            "grid": [n_rows, n_cols], "cell_size": [cell_w, cell_h],
+            "n_images": n}
