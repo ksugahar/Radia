@@ -3921,9 +3921,12 @@ def _netgen_mesh_to_msh(step_path: Path, maxh: float, out_msh: Path,
 
 def _quality_row(route: str, mesher: str, q: dict) -> dict:
 	"""Flatten one referee report into a comparison row."""
+	by_type = q.get("by_type", [])
+	completed = bool(q.get("ran")) and bool(by_type)
 	row = {
 		"route": route,
 		"mesher": mesher,
+		"status": "ok" if completed else "error",
 		"metric": q.get("metric"),
 		"ok": q.get("ok"),
 		"total_negative": q.get("total_negative"),
@@ -3938,11 +3941,13 @@ def _quality_row(route: str, mesher: str, q: dict) -> dict:
 				"below_threshold": bt.get("below_threshold"),
 				"worst_tag": (bt.get("worst") or [{}])[0].get("tag"),
 			}
-			for bt in q.get("by_type", [])
+			for bt in by_type
 		],
 	}
-	if not q.get("by_type"):
-		row["note"] = q.get("note") or q.get("error")
+	if not completed:
+		row["kind"] = "referee"
+		row["error"] = q.get("error") or q.get("note") \
+			or "quality referee returned no 3D element data"
 	return row
 
 
@@ -4002,23 +4007,56 @@ def cubit_netgen_quality_compare(step_path: str,
 		p = PROJECT_ROOT / p
 	if not p.is_file():
 		return json.dumps(_error_payload("input", f"STEP not found: {p}"))
-	if not 1 <= int(order) <= 3:
+	try:
+		order = int(order)
+		netgen_maxh = float(netgen_maxh)
+		cubit_size = float(cubit_size)
+		threshold = float(threshold)
+		timeout_s = int(timeout_s)
+	except (TypeError, ValueError) as exc:
+		return json.dumps(_error_payload(
+			"input", f"invalid numeric option: {exc}"))
+	if not 1 <= order <= 3:
 		return json.dumps(_error_payload(
 			"input", f"order must be 1..3 (gmsh export limit), got {order}"))
-	order = int(order)
-	schemes = schemes or ["netgen", "cubit_tet", "cubit_hex"]
+	if not _math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+		return json.dumps(_error_payload(
+			"input", f"threshold must be finite and in [0, 1], got {threshold}"))
+	if timeout_s <= 0:
+		return json.dumps(_error_payload(
+			"input", f"timeout_s must be positive, got {timeout_s}"))
+	for name, value in (("netgen_maxh", netgen_maxh),
+	                    ("cubit_size", cubit_size)):
+		if not _math.isfinite(value) or value < 0.0:
+			return json.dumps(_error_payload(
+				"input", f"{name} must be finite and non-negative, got {value}"))
+	if schemes is None:
+		schemes = ["netgen", "cubit_tet", "cubit_hex"]
+	elif not isinstance(schemes, (list, tuple)) or not schemes:
+		return json.dumps(_error_payload(
+			"input", "schemes must be a non-empty list"))
+	schemes = [str(s) for s in schemes]
 	unknown = [s for s in schemes if s not in
 	           ("netgen", "cubit_tet", "cubit_hex")]
 	if unknown:
 		return json.dumps(_error_payload(
 			"input", f"unknown schemes: {unknown}; "
 			         "valid: netgen / cubit_tet / cubit_hex"))
+	if len(set(schemes)) != len(schemes):
+		return json.dumps(_error_payload(
+			"input", f"schemes contains duplicates: {schemes}"))
 	out_base = Path(out_dir) if out_dir else p.parent
-	out_base.mkdir(parents=True, exist_ok=True)
+	if not out_base.is_absolute():
+		out_base = PROJECT_ROOT / out_base
+	try:
+		out_base.mkdir(parents=True, exist_ok=True)
+	except OSError as exc:
+		return json.dumps(_error_payload(
+			"input", f"cannot create out_dir {out_base}: {exc}"))
 	base = p.stem
 
 	# Common target size from the CAD bbox (same length for BOTH meshers)
-	if not netgen_maxh or not cubit_size:
+	if netgen_maxh == 0.0 or cubit_size == 0.0:
 		try:
 			from netgen.occ import OCCGeometry as _OCC
 			bb = _OCC(str(p)).shape.bounding_box
@@ -4026,11 +4064,12 @@ def cubit_netgen_quality_compare(step_path: str,
 			derived = ext / 8.0
 		except Exception:
 			derived = 0.0
-		if not netgen_maxh:
+		if netgen_maxh == 0.0:
 			netgen_maxh = derived
-		if not cubit_size:
+		if cubit_size == 0.0:
 			cubit_size = derived
-	if not netgen_maxh or not cubit_size:
+	if (not _math.isfinite(netgen_maxh) or netgen_maxh <= 0.0
+			or not _math.isfinite(cubit_size) or cubit_size <= 0.0):
 		return json.dumps(_error_payload(
 			"input", "could not derive a mesh size from the geometry; "
 			         "pass netgen_maxh and cubit_size explicitly"))
@@ -4087,12 +4126,18 @@ def cubit_netgen_quality_compare(step_path: str,
 			             "error": r.get("error"),
 			             "failed_at": r.get("failed_at")})
 			continue
-		q = mesh_quality(msh, threshold=threshold)
-		row = _quality_row(route, "cubit", q)
-		row["size"] = float(cubit_size)
-		row["order"] = order
-		row["msh"] = str(msh)
-		row["summary"] = r.get("summary")
+		try:
+			q = mesh_quality(msh, threshold=threshold)
+			row = _quality_row(route, "cubit", q)
+			row["size"] = float(cubit_size)
+			row["order"] = order
+			row["msh"] = str(msh)
+			row["summary"] = r.get("summary")
+		except Exception as exc:
+			row = {"route": route, "status": "error",
+			       "kind": "referee",
+			       "error": f"{type(exc).__name__}: {exc}",
+			       "msh": str(msh)}
 		rows.append(row)
 
 	# Verdict: same-family comparison where possible
@@ -4100,7 +4145,9 @@ def cubit_netgen_quality_compare(step_path: str,
 	def _min_of(route):
 		for row in rows:
 			if row.get("route") == route and row.get("by_type"):
-				return min(bt["min"] for bt in row["by_type"])
+				values = [bt.get("min") for bt in row["by_type"]
+				          if isinstance(bt.get("min"), (int, float))]
+				return min(values) if values else None
 		return None
 	ng, ct = _min_of("netgen"), _min_of("cubit_tet")
 	if ng is not None and ct is not None:
@@ -4116,6 +4163,8 @@ def cubit_netgen_quality_compare(step_path: str,
 
 	return json.dumps({
 		"status": "ok",
+		"all_routes_completed": bool(rows) and all(
+			row.get("status") == "ok" for row in rows),
 		"step": str(p),
 		"referee": "gmsh minSICN (radia_mcp.gmsh.msh_inspect.mesh_quality)",
 		"threshold": threshold,
