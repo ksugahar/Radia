@@ -34,6 +34,26 @@ versions, compatibility constants, and tracked file hashes. mdx reports
 `radia-mcp` as `N/A`; that is intentional and is excluded from drift
 comparison.
 
+## Parallel WIP-Safe Editable Source
+
+Do not stash, clean, reset, or rebase a shared LAB worktree just to release.
+When `S:\Radia\01_GitHub` contains parallel work, create one clean release
+worktree on the NAS and expose its two machine-local views before `all`,
+`verify-editable`, and `done`:
+
+```powershell
+$env:RADIA_RELEASE_EDITABLE_REPO_LAB = "S:/Radia/release-qud/<release>"
+$env:RADIA_RELEASE_EDITABLE_REPO_100 = "W:\00_CAE\Radia\release-qud\<release>"
+python tools/release_qud.py all
+```
+
+The release worktree must contain the native build outputs needed by editable
+installs. QUD verifies its exact Git SHA and tracked-clean state on LAB and
+100号機 before killing processes or installing anything. Repeat the same two
+environment variables for `done`. Keep that worktree until publication is
+complete; after parallel work lands and the canonical worktree catches up,
+restore the normal editable pointers.
+
 ## Rules
 
 - Do not call a release done until `python tools/release_qud.py done`
