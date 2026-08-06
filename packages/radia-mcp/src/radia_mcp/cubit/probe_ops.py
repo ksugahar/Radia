@@ -216,6 +216,37 @@ def _probe_per_volume(cubit_mod):
     return rows
 
 
+def op_snapshot(cubit_mod, args):
+    """Hardcopy the current view to PNG -- SHARED by both runners.
+
+    Uses the plain ``hardcopy "<path>" png`` form: the ``window <w> <h>``
+    variant returns rc=1 but writes a 0-byte file in GUI mode (measured
+    Coreform Cubit 2025.12, 2026-08-05).  Any requested size is reported
+    back as ignored rather than silently dropped; the image renders at
+    the current graphics-window size.  The written file is verified
+    (existence + non-zero size) because ``cubit.cmd`` returns success
+    for silently-failing hardcopies.
+    """
+    if len(args) < 1:
+        return {"error": "snapshot requires at least 1 arg (path)"}
+    out_path = str(args[0])
+    rc = cubit_mod.cmd(f'hardcopy "{out_path}" png')
+    try:
+        size = os.path.getsize(out_path) if os.path.isfile(out_path) else 0
+    except OSError:
+        size = 0
+    ok = bool(rc) and size > 0
+    result = {"path": out_path, "ok": ok, "bytes": int(size)}
+    if len(args) >= 3:
+        result["requested_size_ignored"] = [int(args[1]), int(args[2])]
+    if not ok:
+        result["error"] = (
+            "hardcopy wrote no image (0 bytes). The graphics window is "
+            "not rendering -- in batch (-nographics) mode snapshots are "
+            "unavailable; in GUI mode issue a draw/display command first.")
+    return result
+
+
 def op_probe(cubit_mod, args):
     """Dispatch one probe query.  The single implementation for BOTH the
     GUI file-drop runner and the batch stdio runner."""

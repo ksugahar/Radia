@@ -123,11 +123,33 @@ def hide_gate_tools(mcp, env_var: str, suffix: str = "_gate") -> int:
     return removed
 
 
+# One-shot size-capped rotation: when the log exceeds this, it is moved
+# to <name>.1 (replacing any previous .1) and a fresh file starts -- at
+# most 2x the cap on disk, no unbounded growth.
+CALL_LOG_ROTATE_BYTES = 5 * 1024 * 1024
+
+
+def rotate_if_large(log_path, cap_bytes: int = CALL_LOG_ROTATE_BYTES) -> bool:
+    """Rotate ``log_path`` to ``<name>.1`` when it exceeds ``cap_bytes``.
+
+    Returns True when a rotation happened.  Best-effort: a locked file
+    (concurrent server instance) just skips this round.
+    """
+    try:
+        if log_path.stat().st_size <= cap_bytes:
+            return False
+        os.replace(log_path, log_path.with_name(log_path.name + ".1"))
+        return True
+    except OSError:
+        return False
+
+
 def install_call_log(mcp, log_name: str, env_var: str) -> None:
     """Wrap ``ToolManager.call_tool`` with a JSONL all-calls log.
 
     Every call appends ``{ts, tool, args, ms, ok, error?}`` to
-    ``<state_dir>/logs/<log_name>``.  Argument values are recorded as
+    ``<state_dir>/logs/<log_name>`` (size-capped via
+    :func:`rotate_if_large`).  Argument values are recorded as
     truncated reprs (200 chars) so journal bodies / file contents never
     bloat the log.  Set ``env_var=0`` to disable.  Idempotent enough for
     tests: calling again re-wraps against the current ``call_tool``.
@@ -168,6 +190,7 @@ def install_call_log(mcp, log_name: str, env_var: str) -> None:
         finally:
             record["ms"] = round((time.time() - t0) * 1000, 1)
             try:
+                rotate_if_large(log_path)
                 with open(log_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(record, ensure_ascii=False,
                                        default=str) + "\n")

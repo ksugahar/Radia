@@ -2836,7 +2836,9 @@ def cubit_snapshot(out_path: str,
 
 	Use for paper/slide figures from an LLM-driven session, or for
 	a cheap "visual diff" after a command sequence.  GUI mode is
-	strongly recommended; batch-mode screenshots may be empty.
+	required in practice: batch (-nographics) has no rendering window
+	and the daemon reports ok=false with 0 bytes (the written file is
+	verified -- Cubit's rc alone lies for silently-failing hardcopies).
 
 	The captured PNG is returned INLINE as image content (so the model
 	sees the current view directly) in addition to being written to
@@ -2844,7 +2846,11 @@ def cubit_snapshot(out_path: str,
 
 	Args:
 	    out_path: PNG output path (absolute or relative to project root).
-	    width, height: pixel dimensions (defaults 800x600).
+	    width, height: ACCEPTED BUT IGNORED (reported back as
+	        `requested_size_ignored`): the `hardcopy ... window w h`
+	        variant writes 0-byte files in GUI mode (measured Cubit
+	        2025.12), so the image renders at the current
+	        graphics-window size.
 	"""
 	from pathlib import Path as _P
 	from mcp.server.fastmcp import Image as _Image

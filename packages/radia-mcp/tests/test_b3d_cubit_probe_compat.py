@@ -69,6 +69,10 @@ def test_b3d_probe_entities_core_keys_and_world_placement(
     assert abs(by_label["core"]["centroid"][0] - 3.0) < 1e-6
     assert abs(by_label["core"]["volume"] - 0.502655) < 1e-4
     assert by_label["yoke"]["extent"] == [1.0, 1.0, 2.0]
+    # FACES are world-placed too (verified 2026-08-05: shape.faces() on
+    # the top-level compound applies child Locations): the cylinder at
+    # x=3 contributes exactly 3 faces centred at x > 2.
+    assert sum(1 for f in out["faces"] if f["center"][0] > 2.0) == 3
 
 
 def test_b3d_probe_labels_audit(labeled_assembly_step):
