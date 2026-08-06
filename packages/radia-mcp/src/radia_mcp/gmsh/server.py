@@ -782,7 +782,9 @@ def gmsh_render(path: str,
                 options: dict | None = None,
                 string_options: dict | None = None,
                 adapt_views: bool = True,
-                smooth_normals: bool = True) -> dict:
+                smooth_normals: bool = True,
+                merge_files: list | None = None,
+                geometry_display: bool | None = None) -> dict:
     """
     Render a .msh or .geo file to PNG headlessly (gmsh subprocess).
 
@@ -794,6 +796,12 @@ def gmsh_render(path: str,
     explicit window geometry (immune to the stale off-screen-monitor
     window position pitfall). Meshes with no views auto-enable
     SurfaceFaces + physical-group coloring.
+
+    merge_files overlays additional files into the SAME scene -- the
+    lab Merge workflow headless: field .msh + coil STEP + filament
+    .msh in one picture. Merging a CAD file (.step/.brep) turns on
+    shaded geometry faces automatically. Radia/netgen STEP carries
+    meter coordinates and overlays field data 1:1.
 
     Args:
         path: .msh or .geo file to render.
@@ -812,6 +820,9 @@ def gmsh_render(path: str,
         string_options: String-valued Gmsh options applied after open.
         adapt_views: Enable adaptive visualization for high-order views.
         smooth_normals: Average surface normals for smooth shading.
+        merge_files: Additional .step/.msh/.pos files to overlay.
+        geometry_display: Force shaded CAD faces on/off (default: auto
+                          when a CAD file is merged).
     """
     p = Path(path)
     if not p.is_absolute():
@@ -821,12 +832,16 @@ def gmsh_render(path: str,
         out = Path(png_out)
         if not out.is_absolute():
             out = PROJECT_ROOT / out
+    merged = None
+    if merge_files is not None:
+        merged = [_abs_path(str(m)) for m in merge_files]
     return render_png(p, out, width=width, height=height,
                       numsubedges=numsubedges, camera_preset=camera_preset,
                       time_step=time_step, cut_plane=cut_plane,
                       options=options, string_options=string_options,
                       adapt_views=adapt_views,
-                      smooth_normals=smooth_normals)
+                      smooth_normals=smooth_normals,
+                      merge_files=merged, geometry_display=geometry_display)
 
 
 @mcp.tool()
@@ -846,7 +861,9 @@ def gmsh_export_animation(path: str,
                           string_options: dict | None = None,
                           adapt_views: bool = True,
                           smooth_normals: bool = True,
-                          link_views: bool = True) -> dict:
+                          link_views: bool = True,
+                          merge_files: list | None = None,
+                          geometry_display: bool | None = None) -> dict:
     """
     Export a time-stepped post-view animation as GIF (gmsh subprocess).
 
@@ -880,6 +897,10 @@ def gmsh_export_animation(path: str,
         adapt_views: Enable adaptive visualization for high-order views.
         smooth_normals: Average surface normals for smooth shading.
         link_views: Step all compatible views together.
+        merge_files: Additional .step/.msh/.pos overlays (CAD merges
+                     enable shaded geometry faces automatically).
+        geometry_display: Force shaded CAD faces on/off (default: auto
+                          when a CAD file is merged).
     """
     p = Path(path)
     if not p.is_absolute():
@@ -889,6 +910,9 @@ def gmsh_export_animation(path: str,
         out = Path(gif_out)
         if not out.is_absolute():
             out = PROJECT_ROOT / out
+    merged = None
+    if merge_files is not None:
+        merged = [_abs_path(str(m)) for m in merge_files]
     return export_animation(p, out, keep_frames=keep_frames,
                             num_steps=num_steps, delay_ms=delay_ms,
                             width=width, height=height,
@@ -901,7 +925,9 @@ def gmsh_export_animation(path: str,
                             string_options=string_options,
                             adapt_views=adapt_views,
                             smooth_normals=smooth_normals,
-                            link_views=link_views)
+                            link_views=link_views,
+                            merge_files=merged,
+                            geometry_display=geometry_display)
 
 
 @mcp.tool()
