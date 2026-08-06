@@ -7,6 +7,32 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Strengthened grant-writing budget review so external costs must be traceable
+  to dated official prices or quotations, including tax, purchase-unit,
+  expiry, currency, rounding, direct-cost ceiling, and future-travel status.
+- Added grant-writing checks that require platform proposals to end in a
+  field-specific, falsifiable knowledge product; require proposal-specific
+  metrics to separate calibration from held-out validation; and require
+  cross-organization pilots to identify the transferred artifact, independent
+  action, observed result, and remaining gap.
+- Added a grant-writing reviewer-vocabulary check that expands OSS/AI terms by
+  their Japanese role, prefers readable institution and domain terminology,
+  and prevents named benchmarks from substituting for engineering significance.
+- Added a grant-writing persuasion check for self-negating evidence, equation
+  on-ramps and symbol definitions, post-equation interpretation, defensive
+  prose, optional side branches, acronym density, and internal memo shorthand.
+- Extended the persuasion check to flag short inline conditions such as a bare
+  symbol-equals-zero claim before the proposal explains its physical meaning
+  and engineering consequence.
+- Added a grant-writing abstraction check that keeps named software out of
+  titles, questions, aims, novelty, and impact while preserving concrete names
+  for reproducible methods, preliminary evidence, collaboration, rights, and
+  costs.
+- Added a grant-writing evidence-scope check that flags field-wide adoption,
+  causal-barrier, and academic-gap claims inferred from non-detection in a
+  bounded literature corpus, with health-report integration and rewrite
+  guidance.
+
 ## [1.4.33] - 2026-08-06
 
 - Added a headless Netgen/Cubit mesh-quality comparison using one Gmsh minSICN

@@ -2,7 +2,6 @@ from radia_mcp.document_meta.tools import document_meta_lint_all
 from radia_mcp.grant_writing import tools as gw
 from radia_mcp.meta.catalog import CATALOG
 
-
 KDDI_SAMPLE = (
     "本研究の主題はパワーエレクトロニクス基板CAE-AI環境の社会実装である。"
     "社会的課題は1000人以下の地域製造業のパワーエレクトロニクス設計である。"
@@ -14,6 +13,8 @@ KDDI_SAMPLE = (
     "1年目、2年目、3年目の年度スケジュールを定め、"
     "Claude、Codex、Fable、MDXの計算資源と基板評価費を予算化する。"
     "予算は助成上限額に近い申請額とし、単価、数量、月数、年度配分、見積根拠を積算する。"
+    "外部費用は公式料金表URL、料金年度、参照日、税込区分、最低購入単位、有効期限、"
+    "為替換算、端数処理を記録する。"
 )
 
 KAKEN_OSS_SAMPLE = (
@@ -65,6 +66,10 @@ def test_grant_writing_kaken_oss_health_report_runs():
     assert report["program"] == "kaken_oss"
     assert report["overall_score"] > 0
     assert "kaken_oss_platform" in report["detailed_results"]
+    assert "named_software_abstraction" in report["detailed_results"]
+    assert "reviewer_vocabulary" in report["detailed_results"]
+    assert "persuasion_quality" in report["detailed_results"]
+    assert "literature_gap_evidence" in report["detailed_results"]
     assert "budget" in report["detailed_results"]
 
 
@@ -161,7 +166,16 @@ def test_grant_writing_budget_alignment_accepts_near_ceiling_itemization():
     assert result["score"] >= 9
     assert result["axis_results"]["near_ceiling_strategy"]["ok"]
     assert result["axis_results"]["itemized_calculation"]["ok"]
+    assert result["axis_results"]["pricing_provenance"]["ok"]
     assert "上限" in result["budget_policy"]
+    assert "常時稼働" in result["budget_policy"]
+    assert "短期集中" in result["budget_policy"]
+    assert "ホストCPU" in result["budget_policy"]
+    assert "設計判断" in result["budget_policy"]
+    assert "参照日" in result["budget_policy"]
+    assert "最低購入単位" in result["budget_policy"]
+    assert "間接経費" in result["budget_policy"]
+    assert "泊数" in result["budget_policy"]
 
 
 def test_grant_writing_budget_alignment_requires_ceiling_and_calculation():
@@ -172,8 +186,20 @@ def test_grant_writing_budget_alignment_requires_ceiling_and_calculation():
     assert result["score"] < 8
     assert "near_ceiling_strategy" in result["missing_axes"]
     assert "itemized_calculation" in result["missing_axes"]
+    assert "pricing_provenance" in result["missing_axes"]
     assert any("上限" in comment for comment in result["comments"])
     assert any("単価" in comment for comment in result["comments"])
+    assert any("公式料金表" in comment for comment in result["comments"])
+
+
+def test_grant_writing_budget_alignment_requires_price_provenance():
+    result = gw.grant_writing_budget_alignment_check(
+        "生成AIとGPUを予算化する。助成上限まで、単価、数量、月数、年度配分を積算する。"
+    )
+
+    assert "pricing_provenance" in result["missing_axes"]
+    assert not result["axis_results"]["pricing_provenance"]["ok"]
+    assert any("参照日" in comment for comment in result["comments"])
 
 
 def test_internal_evidence_to_external_scale_accepts_transfer_and_validation():
@@ -208,6 +234,520 @@ def test_internal_evidence_to_external_scale_is_optional_without_prior_result():
     assert not result["applicable"]
     assert result["score"] is None
     assert result["comments"] == []
+
+
+def test_domain_outcome_chain_accepts_field_decision_rule():
+    text = (
+        "磁気浮上機器の平衡高さ、復元剛性、損失を設計量とする。"
+        "候補間の性能差から、低費用解析と高忠実度解析の選択則と適用境界を求める。"
+        "区間が分離すれば設計順位を確定し、包含条件を満たさなければ反証する。"
+        "MCPとGitHubは問いではなく、この仮説を検証する手段である。"
+    )
+
+    result = gw.grant_writing_domain_outcome_chain_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["missing_axes"] == []
+
+
+def test_domain_outcome_chain_rejects_platform_as_outcome():
+    result = gw.grant_writing_domain_outcome_chain_check(
+        "本研究ではMCPとGitHubを用いたOSS研究基盤を構築し、公開する。"
+    )
+
+    assert result["applicable"]
+    assert result["score"] < 5
+    assert "measurable_domain_quantity" in result["missing_axes"]
+    assert "conditional_knowledge_product" in result["missing_axes"]
+    assert "falsifiable_gate" in result["missing_axes"]
+
+
+def test_derived_metric_validation_accepts_frozen_holdout_design():
+    text = (
+        "求解差、離散化差、連成差の合成則から設計判定区間を定義する。"
+        "9校正ケースを校正集合とし、最終候補を得る前に式と安全係数を凍結する。"
+        "校正に用いない保留データ15点で検証し、全点包含を合格条件とする。"
+        "1点でも満たさない場合は再校正せず、適用境界として主張しない。"
+    )
+
+    result = gw.grant_writing_derived_metric_validation_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["missing_axes"] == []
+
+
+def test_derived_metric_validation_flags_same_data_tuning():
+    result = gw.grant_writing_derived_metric_validation_check(
+        "残差から新しい設計判定区間を構成し、結果が合うよう安全係数を調整する。"
+    )
+
+    assert result["applicable"]
+    assert result["score"] < 6
+    assert "pretest_freeze" in result["missing_axes"]
+    assert "heldout_validation" in result["missing_axes"]
+    assert "failure_consequence" in result["missing_axes"]
+
+
+def test_cross_organization_pilot_accepts_artifact_result_and_limit():
+    text = (
+        "大学間予備実証として、A大学提供の行列ソルバー実装をB大学が同一問題へ統合した。"
+        "C大学提供のモデルで再実行し、168反復、真の残差8e-11で収束した。"
+        "別機関レビューによる設計採否は未検証であり、本研究で実施する。"
+    )
+
+    result = gw.grant_writing_cross_organization_pilot_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["missing_axes"] == []
+    assert result["evidence_level"].startswith("L2")
+    assert not result["independent_review_or_adoption"]
+
+
+def test_cross_organization_pilot_rejects_link_and_user_count_only():
+    result = gw.grant_writing_cross_organization_pilot_check(
+        "予備成果としてリポジトリを公開し、公式ページからリンクされた。"
+        "研究室内の利用者が増えた。"
+    )
+
+    assert result["applicable"]
+    assert result["score"] < 4
+    assert "cross_organization_actor" in result["missing_axes"]
+    assert "bounded_task" in result["missing_axes"]
+    assert "observed_outcome" in result["missing_axes"]
+
+
+def test_literature_gap_evidence_flags_bounded_corpus_generalization():
+    text = (
+        "電気機器の電磁界解析は細分化・高度化し、全てを一研究室で再実装できない。"
+        "有限要素・数値解法・実機解析を継続的に扱う電気学会技術報告"
+        "No. 1043・1317・1391・1471・1543・1547（2006–2023年）を調査対象とした。"
+        "同一語彙で全文検索し、検出頁を目視確認した。ICCGは全6冊に現れた。"
+        "一方、Maxwell問題向け補助空間前処理hypre AMSを確認できなかった。"
+        "回転境界ではスライドメッシュ系が継承される一方、海外で発展した"
+        "Air-Gap Elementは同一問題の比較候補にない。高次要素は以前から論じられる。"
+        "しかしNo. 1543・1547の実機例は一次辺要素である。"
+        "国内全実装の未利用や海外手法の優位を意味せず、実装言語、自由度対応、"
+        "補助作用素、検証情報の不足により、科学的適合性を調べる前に候補から外れる"
+        "未解決の研究障壁を示す。"
+    )
+
+    result = gw.grant_writing_literature_gap_evidence_check(text)
+
+    assert result["applicable"]
+    assert result["score"] < 5
+    assert {risk["type"] for risk in result["risks"]} == {
+        "field_generalization",
+        "unsupported_causal_inference",
+        "absence_as_academic_gap",
+    }
+    assert result["rewrite_strategy"]
+
+
+def test_literature_gap_evidence_disclaimer_does_not_cure_same_inference():
+    text = (
+        "調査対象は6報告に限り、国内全体を断定しない。"
+        "しかし全文検索でXを確認できなかったことは、国内では言語障壁により"
+        "Xが普及していないことを示す。"
+    )
+
+    result = gw.grant_writing_literature_gap_evidence_check(text)
+
+    assert result["applicable"]
+    assert result["risk_count"] >= 2
+    assert any(risk["type"] == "field_generalization" for risk in result["risks"])
+
+
+def test_literature_gap_evidence_accepts_case_selection_only():
+    text = (
+        "対象10件ではXを確認できなかった。"
+        "本調査は網羅調査ではなく、実証対象の選定にのみ用いる。"
+        "学術的問いは、異種定式化の結合時に設計判断を保証する条件は何かである。"
+    )
+
+    result = gw.grant_writing_literature_gap_evidence_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["risks"] == []
+
+
+def test_literature_gap_evidence_ignores_independent_literature_gap():
+    text = (
+        "既往研究は個々の手法の高速化を進めてきた。"
+        "一方、異なる定式化間で設計判断の再現性を保証する条件は明らかでない。"
+    )
+
+    result = gw.grant_writing_literature_gap_evidence_check(text)
+
+    assert not result["applicable"]
+    assert result["score"] is None
+    assert result["risks"] == []
+
+
+def test_named_software_abstraction_flags_core_research_framing():
+    text = r"""
+\subsection{研究背景と学術的問い}
+海外にはNGSolveの高次要素実装がある。
+本研究の中心の問いは、ONELABで異種コードを結合できるかである。
+"""
+
+    result = gw.grant_writing_named_software_abstraction_check(text)
+
+    assert result["applicable"]
+    assert result["risk_count"] == 2
+    assert {risk["software"] for risk in result["risks"]} == {
+        "NGSolve",
+        "ONELAB",
+    }
+    assert result["recommendations"]
+
+
+def test_named_software_abstraction_accepts_category_level_framing():
+    text = (
+        "海外には高次要素を備えたOSS実装がある。"
+        "中心の問いは、既存OSS連成基盤で異種モジュールを結合しても、"
+        "設計判断を再現可能に保つ条件は何かである。"
+    )
+
+    result = gw.grant_writing_named_software_abstraction_check(text)
+
+    assert not result["applicable"]
+    assert result["score"] is None
+    assert result["risks"] == []
+
+
+def test_named_software_abstraction_allows_methods_and_prior_evidence():
+    text = r"""
+\subsection{研究方法と達成指標}
+実証ではNGSolveの高次要素を用いて比較する。
+\subsection{着想を支える準備状況}
+代表者はONELABとの接続試験を実施し、国際会議で発表した。
+"""
+
+    result = gw.grant_writing_named_software_abstraction_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["risks"] == []
+    assert {item["software"] for item in result["allowed_mentions"]} == {
+        "NGSolve",
+        "ONELAB",
+    }
+
+
+def test_reviewer_vocabulary_flags_unexplained_and_internal_terms():
+    text = (
+        "TU Grazとの共同研究でOSS、LLM、MCPを用いる。"
+        "MMMとH(curl)を接続して解析する。"
+    )
+
+    result = gw.grant_writing_reviewer_vocabulary_check(text)
+
+    assert result["applicable"]
+    risk_types = {risk["type"] for risk in result["risks"]}
+    assert "foreign_institution_alias" in risk_types
+    assert "unexplained_acronym" in risk_types
+    assert "domain_shorthand" in risk_types
+    assert not result["term_results"]["OSS"]["explained"]
+    assert not result["term_results"]["MCP"]["explained"]
+
+
+def test_reviewer_vocabulary_accepts_japanese_role_first():
+    text = (
+        "代表者はグラーツ工科大学で共同研究を行った。"
+        "オープンソースソフトウェア（OSS）を版管理し、"
+        "AIが利用する知識・実行インターフェース（Model Context Protocol; MCP）"
+        "へ写像する。大規模言語モデルは候補探索を支援する。"
+        "磁気モーメント法と高次辺要素を比較する。"
+    )
+
+    result = gw.grant_writing_reviewer_vocabulary_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["risks"] == []
+    assert result["term_results"]["OSS"]["explained"]
+    assert result["term_results"]["MCP"]["explained"]
+
+
+def test_reviewer_vocabulary_rejects_benchmark_as_engineering_significance():
+    text = "本研究の独創性はTEAM Problem 28を高精度に解くことである。"
+
+    result = gw.grant_writing_reviewer_vocabulary_check(text)
+
+    risk_types = {risk["type"] for risk in result["risks"]}
+    assert "benchmark_unframed" in risk_types
+    assert "benchmark_without_limit" in risk_types
+    assert "benchmark_as_significance" in risk_types
+    assert result["benchmark_result"]["used_as_significance"]
+
+
+def test_reviewer_vocabulary_accepts_benchmark_as_initial_check_only():
+    text = (
+        "単純化した磁気浮上公開基準問題（TEAM Problem 28）は、"
+        "解析経路の初期検証に限って用いる。"
+        "結合前後の誤差を4%に収め、整合確認基準を得た。"
+        "主実証では制約付き機器設計の設計判断を評価する。"
+    )
+
+    result = gw.grant_writing_reviewer_vocabulary_check(text)
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["risks"] == []
+    assert result["benchmark_result"]["framed_as_verification"]
+    assert result["benchmark_result"]["limitation_stated"]
+    assert result["benchmark_result"]["engineering_value_distinguished"]
+    assert not result["benchmark_result"]["negative_disclaimer_present"]
+
+
+def test_reviewer_vocabulary_rejects_self_negating_benchmark_disclaimer():
+    text = (
+        "単純化した公開基準問題（TEAM Problem 28）は初期検証に用いる。"
+        "この一致は工学的有用性の根拠にしない。"
+    )
+
+    result = gw.grant_writing_reviewer_vocabulary_check(text)
+
+    risk_types = {risk["type"] for risk in result["risks"]}
+    assert "benchmark_self_negating_disclaimer" in risk_types
+    assert "benchmark_without_limit" in risk_types
+    assert result["benchmark_result"]["negative_disclaimer_present"]
+
+
+def test_persuasion_quality_flags_self_negating_evidence():
+    result = gw.grant_writing_persuasion_quality_check(
+        "公開基準問題で誤差を4%に収めた。"
+        "この一致は工学的有用性の根拠にしない。"
+    )
+
+    assert result["score"] < 10
+    assert any(
+        risk["type"] == "self_negating_evidence" for risk in result["risks"]
+    )
+
+
+def test_persuasion_quality_accepts_positive_evidence_bridge():
+    result = gw.grant_writing_persuasion_quality_check(
+        "公開基準問題で誤差を4%に収め、結合前後の整合確認基準を得た。"
+        "主実証では制約付き機器設計に移し、設計順位が保存される条件を検証する。"
+    )
+
+    assert result["score"] == 10.0
+    assert result["risks"] == []
+
+
+def test_persuasion_quality_flags_equation_with_unintroduced_symbols():
+    text = r"""
+設計判定区間を次式で定義する。
+\[
+\Delta_q(d)=\gamma_s|q_s-q_s^+|+\gamma_h|q_{h,p}-q_{h/2,p+1}|
++\gamma_c|q_{1way}-q_{iter}|
+\]
+この区間で候補順位を判断する。
+"""
+
+    result = gw.grant_writing_persuasion_quality_check(text)
+
+    symbol_risks = [
+        risk
+        for risk in result["risks"]
+        if risk["type"] == "equation_symbols_not_introduced"
+    ]
+    assert symbol_risks
+    assert "q_s" in symbol_risks[0]["missing_symbols"]
+    assert "q_{1way}" in symbol_risks[0]["missing_symbols"]
+
+
+def test_persuasion_quality_accepts_equation_on_ramp_and_interpretation():
+    text = r"""
+候補$d$の低費用解析値を$\hat q_d$とする。停止条件を強めた変化を
+求解差$\delta_s$、高次化による変化を離散化差$\delta_h$、反復連成による
+変化を連成差$\delta_c$とする。値が動き得る幅$\Delta_q$と判定区間$I_q$を
+\[
+\Delta_q(d)=\gamma_s\delta_s(d)+\gamma_h\delta_h(d)+\gamma_c\delta_c(d),
+\qquad I_q(d)=[\hat q_d-\Delta_q(d),\hat q_d+\Delta_q(d)]
+\]
+と表す。区間が分離すれば順位を確定し、重なれば高忠実度解析へ進む。
+$\gamma_s,\gamma_h,\gamma_c$は校正で定める安全係数である。
+"""
+
+    result = gw.grant_writing_persuasion_quality_check(text)
+
+    assert result["score"] == 10.0
+    assert result["counts"]["display_equations"] == 1
+    assert result["risks"] == []
+
+
+def test_persuasion_quality_flags_inline_condition_before_physical_meaning():
+    result = gw.grant_writing_persuasion_quality_check(
+        r"加速器電磁石では、$\eta_{\rm out}=0$を満たす形状を設計する。"
+    )
+
+    risk = next(
+        risk
+        for risk in result["risks"]
+        if risk["type"] == "inline_condition_before_physical_meaning"
+    )
+    assert risk["symbol"] == r"\eta_{\rm out}"
+    assert result["counts"]["unexplained_inline_conditions"] == 1
+
+
+def test_persuasion_quality_accepts_explained_inline_condition():
+    text = (
+        "粒子の運動量が異なっても出口で同じ位置へ戻す。"
+        r"運動量差に対する軌道位置の変化率を分散関数$\eta$と呼ぶ。"
+        r"目標は出口分散$\eta_{\rm out}=0$である。"
+    )
+
+    result = gw.grant_writing_persuasion_quality_check(text)
+
+    assert result["score"] == 10.0
+    assert result["counts"]["unexplained_inline_conditions"] == 0
+    assert result["risks"] == []
+
+
+def test_persuasion_quality_ignores_latex_linebreak_spacing():
+    text = r"""
+\begin{center}
+図を配置する。
+\\[-0.5zw]{\small 図1　研究構想}
+\end{center}
+"""
+
+    result = gw.grant_writing_persuasion_quality_check(text)
+
+    assert result["score"] == 10.0
+    assert result["counts"]["display_equations"] == 0
+    assert result["risks"] == []
+
+
+def test_sentence_analysis_does_not_count_display_equation_source():
+    text = r"""
+設計判定区間を定義する。
+\[
+I_q(d)=[\hat q_d-\gamma_s\delta_s(d)-\gamma_h\delta_h(d)-
+\gamma_c\delta_c(d),\hat q_d+\gamma_s\delta_s(d)+
+\gamma_h\delta_h(d)+\gamma_c\delta_c(d)]
+\]
+区間が分離すれば順位を確定する。
+"""
+
+    result = gw.grant_writing_analyze_sentences(text)
+
+    assert result["over_threshold_count"] == 0
+
+
+def test_sentence_analysis_does_not_join_figure_caption_to_aims():
+    text = r"""
+\begin{center}
+\includegraphics[width=0.8\linewidth]{concept.png}
+\\[-0.5zw]{\small\textbf{図1　研究機関別の解析資産を結合する構想}}
+\end{center}
+\subsection{研究目的}
+目的は、磁気浮上機構の設計判断を再現する条件を示すことである。
+"""
+
+    result = gw.grant_writing_analyze_sentences(text, max_len=50)
+
+    assert result["over_threshold_count"] == 0
+
+
+def test_persuasion_quality_reads_cp932_tex(tmp_path):
+    path = tmp_path / "proposal.tex"
+    path.write_bytes(
+        (
+            "公開基準問題で誤差を4%に収めた。"
+            "この一致は工学的有用性の根拠にしない。"
+        ).encode("cp932")
+    )
+
+    result = gw.grant_writing_persuasion_quality_check(str(path))
+
+    assert any(
+        risk["type"] == "self_negating_evidence" for risk in result["risks"]
+    )
+
+
+def test_persuasion_quality_flags_equation_without_decision_on_ramp():
+    text = r"""
+候補について計算する。
+\[
+x_a=x_b+x_c
+\]
+以上である。
+"""
+
+    result = gw.grant_writing_persuasion_quality_check(text)
+
+    risk_types = {risk["type"] for risk in result["risks"]}
+    assert "equation_without_on_ramp" in risk_types
+    assert "equation_without_interpretation" in risk_types
+
+
+def test_persuasion_quality_flags_defensive_core_and_optional_branch():
+    text = (
+        "本研究は統一ソルバーを目的としない。規格策定を前提にしない。"
+        "商用コードは含めない。単なる基盤整備ではない。"
+        "条件付き追加検証は必達成果には含めない。"
+    )
+
+    result = gw.grant_writing_persuasion_quality_check(text)
+
+    risk_types = {risk["type"] for risk in result["risks"]}
+    assert "defensive_paragraph" in risk_types
+    assert "optional_branch_in_core_plan" in risk_types
+
+
+def test_persuasion_quality_flags_internal_memo_shorthand():
+    result = gw.grant_writing_persuasion_quality_check(
+        "実証Aと実証BをL2比較する。A・Bの仕様を固定する。"
+        "国際会議で報告する（年度末: 結合条件を確定）。"
+    )
+
+    memo_risks = [
+        risk
+        for risk in result["risks"]
+        if risk["type"] == "internal_memo_shorthand"
+    ]
+    assert {risk["memo_type"] for risk in memo_risks} == {
+        "lettered_experiment",
+        "letter_pair",
+        "coded_stage",
+        "parenthetical_milestone",
+    }
+    assert result["counts"]["memo_shorthand"] == 5
+
+
+def test_persuasion_quality_allows_formal_numbered_research_items():
+    result = gw.grant_writing_persuasion_quality_check(
+        "研究項目1では磁気浮上設計を検証する。"
+        "研究項目2では行列解法の選択条件を求める。"
+    )
+
+    assert result["score"] == 10.0
+    assert result["risks"] == []
+
+
+def test_persuasion_quality_flags_acronym_pile():
+    result = gw.grant_writing_persuasion_quality_check(
+        "OSS、MCP、LLM、GPU、CPU、XFEMをGitHubで接続して検証する。"
+    )
+
+    acronym_risk = next(
+        risk for risk in result["risks"] if risk["type"] == "acronym_pile"
+    )
+    assert set(acronym_risk["acronyms"]) >= {
+        "OSS",
+        "MCP",
+        "LLM",
+        "GPU",
+        "CPU",
+        "XFEM",
+    }
 
 
 def test_collaborative_integration_risk_check_accepts_complete_plan():
