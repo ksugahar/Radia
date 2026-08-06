@@ -1,0 +1,492 @@
+{
+ "timestamp": "2026-08-06T17:25:46.249759",
+ "hostname": "lab",
+ "referee": "gmsh minSICN (radia_mcp.gmsh.msh_inspect)",
+ "note": "quality-class study (no timing); equal_budget = netgen maxh calibrated to cubit_tet element count +/-10%",
+ "cases": [
+  {
+   "geometry": "sphere",
+   "size": 0.5,
+   "cubit_tet": {
+    "n": 251,
+    "min": 0.5926,
+    "mean": 0.8577,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 37.85,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 106,
+    "min": 0.2383,
+    "mean": 0.4166,
+    "neg": 0,
+    "pct_below_0.3": 3.77,
+    "pct_ge_0.9": 0.0,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 262,
+    "min": 0.4067,
+    "mean": 0.7263,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 3.44,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 0.3751
+   }
+  },
+  {
+   "geometry": "sphere",
+   "size": 0.3,
+   "cubit_tet": {
+    "n": 1385,
+    "min": 0.5665,
+    "mean": 0.864,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 34.37,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 422,
+    "min": 0.4569,
+    "mean": 0.7478,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 9.24,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 1765,
+    "min": 0.47,
+    "mean": 0.8164,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 20.23,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 0.2006
+   }
+  },
+  {
+   "geometry": "thin_plate",
+   "size": 3.0,
+   "cubit_tet": {
+    "n": 1829,
+    "min": 0.3648,
+    "mean": 0.5552,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 0.0,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 1952,
+    "min": 0.2415,
+    "mean": 0.6496,
+    "neg": 0,
+    "pct_below_0.3": 0.05,
+    "pct_ge_0.9": 0.0,
+    "elements": "Tetrahedron 4"
+   },
+   "cubit_hex": {
+    "n": 289,
+    "min": 0.632,
+    "mean": 0.632,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 0.0,
+    "elements": "Hexahedron 8"
+   },
+   "netgen_equal_budget": {
+    "n": 1952,
+    "min": 0.2415,
+    "mean": 0.6496,
+    "neg": 0,
+    "pct_below_0.3": 0.05,
+    "pct_ge_0.9": 0.0,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 3.0
+   }
+  },
+  {
+   "geometry": "thin_plate",
+   "size": 1.5,
+   "cubit_tet": {
+    "n": 6761,
+    "min": 0.6055,
+    "mean": 0.8204,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 2.0,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 7816,
+    "min": 0.1666,
+    "mean": 0.8587,
+    "neg": 0,
+    "pct_below_0.3": 0.01,
+    "pct_ge_0.9": 25.68,
+    "elements": "Tetrahedron 4"
+   },
+   "cubit_hex": {
+    "n": 1089,
+    "min": 0.9275,
+    "mean": 0.9275,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 100.0,
+    "elements": "Hexahedron 8"
+   },
+   "netgen_equal_budget": {
+    "n": 6964,
+    "min": 0.1538,
+    "mean": 0.8499,
+    "neg": 0,
+    "pct_below_0.3": 0.04,
+    "pct_ge_0.9": 24.08,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 1.5743
+   }
+  },
+  {
+   "geometry": "c_core",
+   "size": 8.0,
+   "cubit_tet": {
+    "n": 1231,
+    "min": 0.5378,
+    "mean": 0.8687,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 38.34,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 815,
+    "min": 0.4726,
+    "mean": 0.8271,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 24.29,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 1349,
+    "min": 0.1231,
+    "mean": 0.7523,
+    "neg": 0,
+    "pct_below_0.3": 0.67,
+    "pct_ge_0.9": 17.27,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 6.9725
+   }
+  },
+  {
+   "geometry": "c_core",
+   "size": 4.0,
+   "cubit_tet": {
+    "n": 9470,
+    "min": 0.5928,
+    "mean": 0.8858,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 44.95,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 5269,
+    "min": 0.4864,
+    "mean": 0.8482,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 27.86,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 8671,
+    "min": 0.4301,
+    "mean": 0.8174,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 18.19,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 3.1024
+   }
+  },
+  {
+   "geometry": "halbach",
+   "size": 4.0,
+   "cubit_tet": {
+    "n": 2306,
+    "min": 0.4974,
+    "mean": 0.8375,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 26.63,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 1146,
+    "min": 0.3527,
+    "mean": 0.7939,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 9.42,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 2086,
+    "min": 0.3755,
+    "mean": 0.7747,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 9.88,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 3.1684
+   }
+  },
+  {
+   "geometry": "halbach",
+   "size": 2.0,
+   "cubit_tet": {
+    "n": 15918,
+    "min": 0.5894,
+    "mean": 0.8841,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 44.85,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 8721,
+    "min": 0.3796,
+    "mean": 0.8328,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 25.3,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 15161,
+    "min": 0.3601,
+    "mean": 0.8369,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 25.61,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 1.6365
+   }
+  },
+  {
+   "geometry": "stator",
+   "size": 4.0,
+   "cubit_tet": {
+    "n": 2798,
+    "min": 0.5594,
+    "mean": 0.8683,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 38.74,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 1541,
+    "min": 0.47,
+    "mean": 0.8296,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 20.9,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 2620,
+    "min": 0.4093,
+    "mean": 0.8218,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 20.0,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 3.2788
+   }
+  },
+  {
+   "geometry": "stator",
+   "size": 2.0,
+   "cubit_tet": {
+    "n": 21428,
+    "min": 0.5585,
+    "mean": 0.8888,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 45.92,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 12023,
+    "min": 0.4485,
+    "mean": 0.851,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 30.81,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 19948,
+    "min": 0.4903,
+    "mean": 0.8625,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 34.66,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 1.6496
+   }
+  },
+  {
+   "geometry": "gap_pair",
+   "size": 2.0,
+   "cubit_tet": {
+    "n": 1027,
+    "min": 0.5925,
+    "mean": 0.8698,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 38.56,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 546,
+    "min": 0.3714,
+    "mean": 0.7895,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 11.9,
+    "elements": "Tetrahedron 4"
+   },
+   "cubit_hex": {
+    "n": 150,
+    "min": 0.9854,
+    "mean": 0.9854,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 100.0,
+    "elements": "Hexahedron 8"
+   },
+   "netgen_equal_budget": {
+    "n": 1545,
+    "min": 0.4993,
+    "mean": 0.8604,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 34.37,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 1.6058
+   }
+  },
+  {
+   "geometry": "gap_pair",
+   "size": 1.0,
+   "cubit_tet": {
+    "n": 7880,
+    "min": 0.5958,
+    "mean": 0.8912,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 46.75,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 4376,
+    "min": 0.4642,
+    "mean": 0.8376,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 24.75,
+    "elements": "Tetrahedron 4"
+   },
+   "cubit_hex": {
+    "n": 1000,
+    "min": 1.0,
+    "mean": 1.0,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 100.0,
+    "elements": "Hexahedron 8"
+   },
+   "netgen_equal_budget": {
+    "n": 12093,
+    "min": 0.3928,
+    "mean": 0.8678,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 39.63,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 0.8053
+   }
+  },
+  {
+   "geometry": "cyl_hole",
+   "size": 1.5,
+   "cubit_tet": {
+    "n": 8245,
+    "min": 0.5591,
+    "mean": 0.8681,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 35.57,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 6370,
+    "min": 0.4387,
+    "mean": 0.8341,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 23.92,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 6898,
+    "min": 0.4138,
+    "mean": 0.8274,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 22.89,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 1.2052
+   }
+  },
+  {
+   "geometry": "cyl_hole",
+   "size": 0.8,
+   "cubit_tet": {
+    "n": 21378,
+    "min": 0.5552,
+    "mean": 0.8805,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 41.85,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_h": {
+    "n": 11161,
+    "min": 0.4487,
+    "mean": 0.8509,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 31.28,
+    "elements": "Tetrahedron 4"
+   },
+   "netgen_equal_budget": {
+    "n": 21963,
+    "min": 0.369,
+    "mean": 0.8416,
+    "neg": 0,
+    "pct_below_0.3": 0.0,
+    "pct_ge_0.9": 28.17,
+    "elements": "Tetrahedron 4",
+    "calibrated_maxh": 0.539
+   }
+  }
+ ]
+}
