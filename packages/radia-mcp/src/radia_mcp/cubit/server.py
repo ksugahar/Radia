@@ -3989,6 +3989,17 @@ def cubit_netgen_quality_compare(step_path: str,
 	missing optional stack (netgen/radia/gmsh) fails that ROW as
 	environment, not the whole comparison.
 
+	INTERPRETING min_quality -- one call is ONE SAMPLE, not a verdict.
+	Both meshers are bit-exactly reproducible at a FIXED size target, but
+	the worst element is a chaotic function of that target: measured on
+	c_core, a 0.125 % change of the size target moved min by 0.118
+	(netgen) and 0.086 (cubit_tet) -- bigger than most mesher differences
+	(validation_test/radia_mcp/mesh_quality_study). So compare BANDS over
+	several sizes, never two single numbers; and note that at these levels
+	min does NOT predict solver behaviour (order-1 Poisson CG counts and
+	L2/H1 error barely respond). Treat min_quality as a floor/safety
+	indicator -- `negative > 0` is the signal that actually matters.
+
 	Args:
 	    step_path: the geometry both meshers consume.
 	    netgen_maxh: Netgen max element size (0 = derive from bbox).
