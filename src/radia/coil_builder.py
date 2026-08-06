@@ -86,6 +86,31 @@ class CoilSegment(ABC):
 				"ignore", message="Gimbal lock detected.*", category=UserWarning)
 			self.euler_angles = rot.as_euler('ZXZ', degrees=True) * (-1)
 
+	def apply_pose_occ(self, shape, translation):
+		"""Place a locally-built OCC shape into this segment's world pose.
+
+		``euler_angles`` holds the NEGATED intrinsic ZXZ angles (a, b, c) of
+		``orientation``, so the local->world rotation is
+		``Rz(ea[2]) Rx(ea[1]) Rz(ea[0])``.  OCC's ``Rotate`` acts about a
+		GLOBAL axis, so the rotation applied LAST is the leftmost factor:
+		the calls must run ea[0] -> ea[1] -> ea[2].
+
+		Applying them in the opposite order (ea[2] first) swaps the two
+		Z angles.  That is not the inverse rotation -- it happens to agree
+		for identity and for 180-degree poses, which is why it stayed
+		unnoticed, but it mirrors every tilted arc about its arc centre and
+		is simply wrong for a general orientation.  ``to_radia`` composes
+		the same angles in the correct order (TrfCmbR chains right), which
+		is why the FIELD was right while the STEP was not.
+		"""
+		from netgen.occ import Axis, Pnt, Vec, X, Z
+
+		ea = self.euler_angles
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[0])
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[2])
+		return shape.Move(Vec(*translation))
+
 	@property
 	@abstractmethod
 	def end_pos(self):
@@ -166,16 +191,11 @@ class StraightSegment(CoilSegment):
 
 	def to_occ_shape(self, index=0):
 		"""Generate OCC Box for this straight segment."""
-		from netgen.occ import Box, Pnt, Axis, Vec, Z, X, Y
+		from netgen.occ import Box, Pnt
 		# Create box at origin aligned with XYZ
 		shape = Box(Pnt(-self.width/2, 0, -self.height/2),
 		            Pnt(self.width/2, self.length, self.height/2))
-		# Apply ZXZ Euler rotation + translation to match segment pose
-		ea = self.euler_angles
-		shape = shape.Rotate(Axis(Pnt(0,0,0), Z), ea[2])
-		shape = shape.Rotate(Axis(Pnt(0,0,0), X), ea[1])
-		shape = shape.Rotate(Axis(Pnt(0,0,0), Z), ea[0])
-		shape = shape.Move(Vec(*self.start_pos))
+		shape = self.apply_pose_occ(shape, self.start_pos)
 		shape.name = "coil_straight_" + str(index)
 		return shape
 
@@ -262,11 +282,7 @@ class LoftStraightSegment(CoilSegment):
 		wire1 = WorkPlane(Axes(Pnt(0, self.length, 0), n=Y, h=X)) \
 		        .Rectangle(w1, h1).Wire()
 		shape = ThruSections([wire0, wire1], solid=True)
-		ea = self.euler_angles
-		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[2])
-		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
-		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[0])
-		shape = shape.Move(Vec(*self.start_pos))
+		shape = self.apply_pose_occ(shape, self.start_pos)
 		shape.name = "coil_loft_" + str(index)
 		return shape
 
@@ -439,12 +455,7 @@ class ArcSegment(CoilSegment):
 		face = wp.Rectangle(self.width, self.height).Face()
 		# Revolve around Z axis
 		shape = face.Revolve(Axis(Pnt(0, 0, 0), Z), self.arc_angle)
-		# Apply ZXZ Euler rotation + translation to arc center
-		ea = self.euler_angles
-		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[2])
-		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
-		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[0])
-		shape = shape.Move(Vec(*self.arc_center))
+		shape = self.apply_pose_occ(shape, self.arc_center)
 		shape.name = "coil_arc_" + str(index)
 		return shape
 
