@@ -54,6 +54,14 @@ class GMSHCenterlineReader:
         with open(self.filename, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
+        format_rows = [i + 1 for i, line in enumerate(lines)
+                       if line.strip() == "$MeshFormat"]
+        if not format_rows:
+            raise ValueError(
+                f"{self.filename}: $MeshFormat section missing; "
+                "re-export the mesh as ASCII MSH v4.1")
+        self._check_format(lines, format_rows[0])
+
         i = 0
         while i < len(lines):
             line = lines[i].strip()
@@ -72,7 +80,7 @@ class GMSHCenterlineReader:
     def _check_format(self, lines, idx):
         tokens = lines[idx].split()
         version = tokens[0] if tokens else "?"
-        if not version.startswith("4"):
+        if version != "4.1":
             raise ValueError(
                 f"{self.filename}: MSH v{version} is not supported; the "
                 f"repository standard is v4.1 -- re-export the mesh")

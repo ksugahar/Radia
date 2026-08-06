@@ -64,6 +64,10 @@ ELEMENT_TYPES: dict[int, tuple[str, int, int, int]] = {
     38: ("quad36", 36, 2, 5),
     92: ("hex64", 64, 3, 3),
     93: ("hex125", 125, 3, 4),
+    94: ("hex216", 216, 3, 5),
+    118: ("pyr30", 30, 3, 3),
+    119: ("pyr55", 55, 3, 4),
+    120: ("pyr91", 91, 3, 5),
 }
 
 _DATA_SECTIONS = ("NodeData", "ElementData", "ElementNodeData")
@@ -329,7 +333,7 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
         stats = {"nan": 0, "inf": 0, "bad_width_rows": 0,
                  "comp_min": None, "comp_max": None,
                  "min": None, "max": None, "s1": 0.0, "s2": 0.0,
-                 "n_finite_rows": 0}
+                 "n_finite_samples": 0}
 
     for row in rows[idx:]:
         view["data_rows"] += 1
@@ -344,13 +348,16 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
         if stats is None:
             continue
 
-        # ElementNodeData rows carry an extra per-element node count.
+        # ElementNodeData rows carry an extra per-element node count and
+        # then one ncomp-wide sample for every element node.
         vals_start = 2 if kind == "ElementNodeData" else 1
         try:
             vals = [float(t) for t in toks[vals_start:]]
         except ValueError:
             stats["bad_width_rows"] += 1
             continue
+        expected = None
+        row_width_ok = False
         if ncomp:
             expected = ncomp
             if kind == "ElementNodeData" and len(toks) > 1:
@@ -358,7 +365,8 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
                     expected = ncomp * int(toks[1])
                 except ValueError:
                     expected = None
-            if expected is not None and len(vals) != expected:
+            row_width_ok = expected is not None and len(vals) == expected
+            if not row_width_ok:
                 stats["bad_width_rows"] += 1
         stats["nan"] += sum(1 for v in vals if math.isnan(v))
         stats["inf"] += sum(1 for v in vals if math.isinf(v))
@@ -368,15 +376,20 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
         lo, hi = min(finite), max(finite)
         stats["comp_min"] = lo if stats["comp_min"] is None else min(stats["comp_min"], lo)
         stats["comp_max"] = hi if stats["comp_max"] is None else max(stats["comp_max"], hi)
-        if len(vals) == len(finite):
+        if not row_width_ok:
+            continue
+        samples = [vals[i:i + ncomp] for i in range(0, len(vals), ncomp)]
+        for sample in samples:
+            if not all(math.isfinite(v) for v in sample):
+                continue
             # scalar: signed value; vector/tensor: euclidean magnitude
-            metric = vals[0] if ncomp == 1 and len(vals) == 1 else \
-                math.sqrt(sum(v * v for v in vals))
+            metric = sample[0] if ncomp == 1 else \
+                math.sqrt(sum(v * v for v in sample))
             stats["min"] = metric if stats["min"] is None else min(stats["min"], metric)
             stats["max"] = metric if stats["max"] is None else max(stats["max"], metric)
             stats["s1"] += metric
             stats["s2"] += metric * metric
-            stats["n_finite_rows"] += 1
+            stats["n_finite_samples"] += 1
 
     view["value_stats"] = stats
     return view, errors
@@ -589,6 +602,7 @@ def validate_msh(msh_path: str | Path,
         "format_is_v41": str(parsed["version"]) == "4.1",
         "is_ascii": bool(parsed["ascii"]),
         "sections_balanced": not parsed["section_errors"],
+        "sections_parseable": not parsed["errors"],
     }
 
     if not checks["format_is_v41"] or not checks["is_ascii"]:
@@ -855,12 +869,16 @@ def field_stats(msh_path: str | Path,
         per_step = []
         overall_nan = overall_inf = 0
         overall_min = overall_max = None
+        overall_comp_min = overall_comp_max = None
+        overall_s1 = overall_s2 = 0.0
+        overall_samples = 0
         for view in sections:
             st = view.get("value_stats") or {}
-            n = st.get("n_finite_rows", 0)
+            n = st.get("n_finite_samples", 0)
             entry: dict[str, Any] = {
                 "step": view["step"], "time": view["time"],
                 "entities": view["data_rows"],
+                "samples": n,
                 "nan": st.get("nan", 0), "inf": st.get("inf", 0),
                 "min": st.get("min"), "max": st.get("max"),
                 "mean": (st.get("s1", 0.0) / n) if n else None,
@@ -875,6 +893,9 @@ def field_stats(msh_path: str | Path,
             per_step.append(entry)
             overall_nan += entry["nan"]
             overall_inf += entry["inf"]
+            overall_s1 += st.get("s1", 0.0)
+            overall_s2 += st.get("s2", 0.0)
+            overall_samples += n
             for bound, pick in (("min", min), ("max", max)):
                 val = entry[bound]
                 if val is None:
@@ -885,20 +906,41 @@ def field_stats(msh_path: str | Path,
                     overall_min = new
                 else:
                     overall_max = new
+            for bound, pick in (("comp_min", min), ("comp_max", max)):
+                val = st.get(bound)
+                if val is None:
+                    continue
+                current = overall_comp_min if bound == "comp_min" else overall_comp_max
+                new = val if current is None else pick(current, val)
+                if bound == "comp_min":
+                    overall_comp_min = new
+                else:
+                    overall_comp_max = new
+        overall = {
+            "min": overall_min,
+            "max": overall_max,
+            "mean": overall_s1 / overall_samples if overall_samples else None,
+            "rms": math.sqrt(overall_s2 / overall_samples) if overall_samples else None,
+            "samples": overall_samples,
+            "nan": overall_nan,
+            "inf": overall_inf,
+        }
+        if (sections[0]["components"] or 1) > 1:
+            overall["comp_min"] = overall_comp_min
+            overall["comp_max"] = overall_comp_max
         views_out.append({
             "section": section, "name": name,
             "components": sections[0]["components"],
             "steps": len(sections),
             "per_step": per_step,
-            "overall": {"min": overall_min, "max": overall_max,
-                        "nan": overall_nan, "inf": overall_inf},
+            "overall": overall,
         })
 
     return {"ok": True, "path": str(path), "views": views_out}
 
 
 # ======================================================================
-# Public API: mesh quality gate (scaled Jacobian distribution)
+# Public API: mesh quality gate (Gmsh minSICN distribution)
 # ======================================================================
 
 _MESH_QUALITY_SCRIPT = r"""
@@ -932,25 +974,41 @@ try:
                                                        len(weights))
             e_min = det.min(axis=1)
             e_max = det.max(axis=1)
-            neg = int((e_min <= 0.0).sum())
-            # Scaled Jacobian per element = min(detJ)/max(detJ) over its
-            # integration points: exactly 1 for affine elements, -> 0 as
-            # a curved element degenerates, negative when inverted.
+            quality = np.asarray(
+                gmsh.model.mesh.getElementQualities(etags, "minSICN"),
+                dtype=float)
+            inverted = (e_min <= 0.0) | (quality <= 0.0)
+            neg = int(inverted.sum())
+            finite_quality = quality[np.isfinite(quality)]
+            # Keep min(detJ)/max(detJ) as a curvature diagnostic. It is
+            # exactly 1 for every affine element, including a bad sliver,
+            # so it must never be used as the shape-quality gate.
             with np.errstate(divide="ignore", invalid="ignore"):
-                scaled = np.where(e_max > 0.0, e_min / e_max, -1.0)
-            below = int(((scaled < threshold) & (e_min > 0.0)).sum())
-            hist, _ = np.histogram(np.clip(scaled, 0.0, 1.0),
+                jac_ratio = np.where(e_max > 0.0, e_min / e_max, -1.0)
+            below_mask = ((quality < threshold) | ~np.isfinite(quality)) & ~inverted
+            below = int(below_mask.sum())
+            hist, _ = np.histogram(np.clip(finite_quality, 0.0, 1.0),
                                    bins=hist_edges)
-            worst_idx = np.argsort(scaled)[:worst_n]
+            worst_idx = np.argsort(
+                np.nan_to_num(quality, nan=-np.inf))[:worst_n]
             tags_arr = np.asarray(etags)
             worst = [{"tag": int(tags_arr[i]),
-                      "scaled_jacobian": float(scaled[i]),
+                      "quality": (float(quality[i])
+                                  if np.isfinite(quality[i]) else None),
+                      "metric": "minSICN",
+                      "jacobian_ratio": float(jac_ratio[i]),
                       "min_det": float(e_min[i])} for i in worst_idx]
             by_type.append({
                 "type": int(et), "name": str(name), "order": int(order),
                 "n_elements": int(len(etags)),
-                "min_scaled": float(scaled.min()) if scaled.size else None,
-                "mean_scaled": float(scaled.mean()) if scaled.size else None,
+                "metric": "minSICN",
+                "min_quality": (float(finite_quality.min())
+                                if finite_quality.size else None),
+                "mean_quality": (float(finite_quality.mean())
+                                 if finite_quality.size else None),
+                "nonfinite_quality": int((~np.isfinite(quality)).sum()),
+                "min_jacobian_ratio": float(jac_ratio.min()) if jac_ratio.size else None,
+                "mean_jacobian_ratio": float(jac_ratio.mean()) if jac_ratio.size else None,
                 "negative": neg,
                 "below_threshold": below,
                 "worst": worst,
@@ -962,6 +1020,7 @@ try:
             "ran": True,
             "ok": total_neg == 0 and total_below == 0,
             "applicable": bool(by_type),
+            "metric": "minSICN",
             "quadrature": quadrature,
             "threshold": threshold,
             "by_type": by_type,
@@ -986,13 +1045,12 @@ def mesh_quality(msh_path: str | Path,
                  quadrature: str = "Gauss4",
                  worst_n: int = 10,
                  timeout_s: float = 600.0) -> dict[str, Any]:
-    """Scaled-Jacobian quality distribution for all 3D elements.
+    """Gmsh minSICN shape-quality distribution for all 3D elements.
 
-    Complements the sign-only Jacobian gate: an element can be
-    non-inverted yet nearly degenerate (scaled Jacobian ~ 0); this
-    reports per-type min/mean scaled Jacobian, a histogram, the
-    below-threshold count, and the worst elements by tag.  The .msh
-    counterpart of check-vol's scaled-Jacobian threshold for .vol.
+    Complements the sign-only Jacobian gate: an affine element can be
+    non-inverted yet nearly degenerate. Gmsh's signed inverse condition
+    number detects that shape degradation. The sampled min(detJ)/max(detJ)
+    ratio is retained separately as a curvature diagnostic.
     """
     path = Path(msh_path)
     if not path.is_file():
@@ -1184,7 +1242,8 @@ def diff_msh(msh_a: str | Path, msh_b: str | Path,
 
     Built for before/after checks (re-export, node-order fix, solver
     change): reports node/element/physical/view structure differences
-    and, for common views, the relative drift of per-view min/max/mean.
+    and, for common views, the relative drift of min/max/mean/rms both
+    overall and per time step.
     Field values are compared through statistics, not tag-by-tag.
     """
     results = {}
@@ -1266,17 +1325,49 @@ def diff_msh(msh_a: str | Path, msh_b: str | Path,
                 f"view \"{key[1]}\": {va['components']} vs "
                 f"{vb['components']} components")
             structural_diff_count += 1
-        deltas = [d for d in (_rel_delta(va["overall"]["min"], vb["overall"]["min"]),
-                              _rel_delta(va["overall"]["max"], vb["overall"]["max"]))
-                  if d is not None]
+        if va["steps"] != vb["steps"] or va["components"] != vb["components"]:
+            fields_match = False
+        metric_names = ("min", "max", "mean", "rms")
+        relative_deltas = {
+            metric: _rel_delta(va["overall"].get(metric),
+                               vb["overall"].get(metric))
+            for metric in metric_names
+        }
+        deltas = [d for d in relative_deltas.values() if d is not None]
         max_rel = max(deltas) if deltas else None
+        entry["relative_deltas"] = relative_deltas
         entry["max_rel_delta"] = max_rel
-        if max_rel is not None and max_rel > rel_tol:
+        count_fields = ("samples", "nan", "inf")
+        count_mismatch = any(
+            va["overall"].get(name) != vb["overall"].get(name)
+            for name in count_fields)
+        per_step_max_rel = None
+        per_step_mismatch = False
+        for sa, sb in zip(va["per_step"], vb["per_step"]):
+            if (sa.get("step"), sa.get("time")) != (sb.get("step"), sb.get("time")):
+                per_step_mismatch = True
+            if any(sa.get(name) != sb.get(name) for name in count_fields):
+                per_step_mismatch = True
+            step_deltas = [
+                delta for delta in (
+                    _rel_delta(sa.get(metric), sb.get(metric))
+                    for metric in metric_names)
+                if delta is not None
+            ]
+            if step_deltas:
+                step_max = max(step_deltas)
+                per_step_max_rel = step_max if per_step_max_rel is None \
+                    else max(per_step_max_rel, step_max)
+                if step_max > rel_tol:
+                    per_step_mismatch = True
+        entry["per_step_max_rel_delta"] = per_step_max_rel
+        if count_mismatch or per_step_mismatch or \
+                (max_rel is not None and max_rel > rel_tol):
             fields_match = False
             differences.append(
-                f"view \"{key[1]}\": min/max drift rel {max_rel:.3e} "
-                f"(a: [{va['overall']['min']}, {va['overall']['max']}], "
-                f"b: [{vb['overall']['min']}, {vb['overall']['max']}])")
+                f"view \"{key[1]}\": field-statistics drift "
+                f"(overall max rel {max_rel}, per-step max rel "
+                f"{per_step_max_rel}, count mismatch={count_mismatch})")
         common_views.append(entry)
 
     identical_structure = structural_diff_count == 0
