@@ -174,6 +174,39 @@ def test_batch_probe_stack():
         sess.shutdown()
 
 
+def test_netgen_cubit_quality_compare(tmp_path):
+    """The cross-mesher quality comparison on one STEP: Netgen tet,
+    Cubit tet, Cubit hex, all judged by the SAME gmsh minSICN referee.
+    Locks the schema and that every route produces a healthy mesh on
+    the reference assembly (no inverted, none below threshold)."""
+    pytest.importorskip("netgen")
+    pytest.importorskip("gmsh")
+    from build123d import Box, Compound, Cylinder, Pos, export_step
+    from radia_mcp.cubit.server import cubit_netgen_quality_compare
+
+    step = tmp_path / "asm.step"
+    box = Box(1, 1, 2)
+    box.label = "yoke"
+    cyl = Pos(3, 0, 0) * Cylinder(0.4, 1.0)
+    cyl.label = "core"
+    export_step(Compound(children=[box, cyl]), str(step))
+
+    out = json.loads(cubit_netgen_quality_compare(str(step)))
+    assert out["status"] == "ok"
+    by_route = {r["route"]: r for r in out["rows"]}
+    assert set(by_route) == {"netgen", "cubit_tet", "cubit_hex"}
+    for route, row in by_route.items():
+        assert row.get("by_type"), (route, row)
+        for bt in row["by_type"]:
+            assert bt["n"] > 0
+            assert bt["negative"] == 0, (route, bt)
+            assert bt["below_threshold"] == 0, (route, bt)
+            assert 0.0 < bt["min"] <= bt["mean"] <= 1.0
+    assert by_route["netgen"]["by_type"][0]["element"].startswith("Tetra")
+    assert by_route["cubit_hex"]["by_type"][0]["element"].startswith("Hexa")
+    assert any("tet-vs-tet" in n for n in out["notes"])
+
+
 def test_cad_mesh_probe_contract(tmp_path):
     """The cross-server probe contract on one geometry: a labeled
     build123d assembly, probed on the CAD side and meshed+probed in the
