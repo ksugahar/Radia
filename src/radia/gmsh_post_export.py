@@ -252,14 +252,24 @@ _GMSH_NODES_PER_TYPE = {
 # GMSH PYR: (-1,-1,0) base, (0,0,1) apex; NGSolve: (0,0,0)-(1,0,0)-(1,1,0)-(0,1,0)-(0,0,1)
 #   transform: ng_x = (gmsh_x + 1)/2, ng_y = (gmsh_y + 1)/2, ng_z = gmsh_z
 
-def _gmsh_ref_to_ngsolve_ref(et_name, gmsh_x, gmsh_y, gmsh_z):
+def _gmsh_ref_to_ngsolve_ref(et_name, gmsh_x, gmsh_y, gmsh_z,
+                             orient="neg"):
     """Convert GMSH reference coordinates to NGSolve reference coordinates.
 
     GMSH and NGSolve use different vertex numbering in reference space.
     For TET the two reference simplices coincide point-by-point under the
     [3,0,1,2] corner permutation, so no coordinate transform is needed.
+
+    orient: "neg" for the netgen-native vertex listing (the mapping
+    below, as probed 2026-08); "pos" for the MIRRORED listing that
+    Cubit-plugin .vol files carry (probed 2026-08-06: same ref-corner
+    correspondence, opposite geometric orientation).  The mirror is one
+    gx<->gy swap of the GMSH reference, uniform across element types,
+    paired with _NGSOLVE_TO_GMSH_NODE_ORDER_POS.
     """
     gx, gy, gz = gmsh_x, gmsh_y, gmsh_z
+    if orient == "pos":
+        gx, gy = gy, gx
     if et_name == 'TET':
         # Identity: GMSH corner i == NGSolve reference vertex i under
         # _NGSOLVE_TO_GMSH_NODE_ORDER['TET'] = [3,0,1,2].
@@ -293,7 +303,7 @@ def _gmsh_ref_to_ngsolve_ref(et_name, gmsh_x, gmsh_y, gmsh_z):
     return (gx, gy, gz)
 
 
-def _get_gmsh_ref_points(et_name, order):
+def _get_gmsh_ref_points(et_name, order, orient="neg"):
     """Get GMSH Lagrange reference points for given element type and order.
 
     Returns list of (x, y, z) in NGSolve reference coordinates,
@@ -322,7 +332,8 @@ def _get_gmsh_ref_points(et_name, order):
         gx = ref_pts[offset]
         gy = ref_pts[offset + 1] if dimension >= 2 else 0.0
         gz = ref_pts[offset + 2] if dimension >= 3 else 0.0
-        ng_pts.append(_gmsh_ref_to_ngsolve_ref(et_name, gx, gy, gz))
+        ng_pts.append(_gmsh_ref_to_ngsolve_ref(et_name, gx, gy, gz,
+                                               orient=orient))
 
     return gmsh_type, ng_pts
 
@@ -344,6 +355,45 @@ _NGSOLVE_TO_GMSH_NODE_ORDER = {
     'TRIG': [0, 1, 2],
     'QUAD': [0, 1, 2, 3],
 }
+
+# MIRRORED corner permutations for positively-listed meshes (Cubit
+# plugin .vol): the gx<->gy swap of the GMSH reference induces these
+# corner transpositions (TET (1 2); HEX (1 3)(5 7); PRISM (1 2)(4 5);
+# PYRAMID (1 3)) composed with the "neg" tables above.  Selected PER
+# ELEMENT from the measured corner-frame orientation; every element is
+# verified after reordering (fail loud on a non-positive frame).
+_NGSOLVE_TO_GMSH_NODE_ORDER_POS = {
+    'TET': [3, 1, 0, 2],
+    'HEX': [0, 4, 5, 1, 3, 7, 6, 2],
+    'PRISM': [0, 1, 2, 3, 4, 5],
+    'PYRAMID': [0, 3, 2, 1, 4],
+    'TRIG': [0, 1, 2],
+    'QUAD': [0, 1, 2, 3],
+}
+
+# GMSH-convention corner frame whose determinant must be POSITIVE for a
+# valid (non-inverted) linear element, per type: (origin, a, b, c).
+_GMSH_FRAME_CORNERS = {
+    'TET': (0, 1, 2, 3),
+    'HEX': (0, 1, 3, 4),
+    'PRISM': (0, 1, 2, 3),
+    'PYRAMID': (0, 1, 3, 4),
+}
+
+
+def _gmsh_corner_frame_det(et_name, pts):
+    """det of the GMSH corner frame; > 0 for a valid element."""
+    frame = _GMSH_FRAME_CORNERS.get(et_name)
+    if frame is None:
+        return 1.0
+    o, ia, ib, ic = frame
+    ax = [pts[ia][k] - pts[o][k] for k in range(3)]
+    bx = [pts[ib][k] - pts[o][k] for k in range(3)]
+    cx = [pts[ic][k] - pts[o][k] for k in range(3)]
+    return (ax[0] * (bx[1] * cx[2] - bx[2] * cx[1])
+            - ax[1] * (bx[0] * cx[2] - bx[2] * cx[0])
+            + ax[2] * (bx[0] * cx[1] - bx[1] * cx[0]))
+
 
 _VOL_TYPES = {4, 5, 6, 7, 11, 12, 17, 18, 19,
               29, 30, 31,       # TET order 3-5
@@ -947,9 +997,36 @@ def _extract_mesh_data_grouped(mesh, is_surface):
                 continue
 
             verts = [v.nr for v in el.vertices]
+            # Vertex-listing orientation is MESH-ORIGIN dependent
+            # (measured 2026-08-06: netgen-generated meshes list tet
+            # corners negatively, Cubit-plugin .vol files positively --
+            # same reference correspondence, mirrored geometry), so the
+            # corner permutation is selected PER ELEMENT: try the
+            # netgen-native table, and if the GMSH corner frame comes
+            # out negative use the mirrored table.  A frame that is
+            # non-positive under BOTH tables is a genuinely degenerate/
+            # inverted element -> fail loud.
             perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
                 et_name, list(range(len(verts))))
             reordered = [verts[i] for i in perm]
+            orient = "neg"
+            if et_name in _GMSH_FRAME_CORNERS:
+                det = _gmsh_corner_frame_det(
+                    et_name, [nodes[v] for v in reordered])
+                if det <= 0:
+                    perm = _NGSOLVE_TO_GMSH_NODE_ORDER_POS.get(
+                        et_name, perm)
+                    reordered = [verts[i] for i in perm]
+                    orient = "pos"
+                    det = _gmsh_corner_frame_det(
+                        et_name, [nodes[v] for v in reordered])
+                if det <= 0:
+                    raise RuntimeError(
+                        f"GmshPostExport: volume element {idx} "
+                        f"({et_name}) has a non-positive GMSH corner "
+                        f"frame under both orientation tables "
+                        f"(det={det:.3e}) -- degenerate or inverted "
+                        "mesh element")
 
             if use_highorder and et_name in _GMSH_TYPE_BY_ORDER:
                 effective_order = curve_order
@@ -958,7 +1035,8 @@ def _extract_mesh_data_grouped(mesh, is_surface):
                 if effective_order >= 2:
                     reordered = _build_vol_ho_generic(
                         mesh, el, reordered, et_name, effective_order,
-                        nodes, vol_ho_cache, _vol_gmsh_ref)
+                        nodes, vol_ho_cache, _vol_gmsh_ref,
+                        orient=orient)
 
             mat_name = _get_element_material(mesh, el, is_surface)
             elem_data.append((mat_name, gmsh_type, reordered, idx))
@@ -1083,7 +1161,7 @@ def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
 
 
 def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
-                          nodes, cache, ref_cache):
+                          nodes, cache, ref_cache, orient="neg"):
     """Build arbitrary-order connectivity for a volume element.
 
     Uses GMSH API to get Lagrange reference points, converts to NGSolve
@@ -1103,10 +1181,12 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
         cache: dict for node deduplication
         ref_cache: dict (et_name,) -> (gmsh_type, ng_ref_pts)
     """
-    # Get or compute reference points
-    if et_name not in ref_cache:
-        ref_cache[et_name] = _get_gmsh_ref_points(et_name, order)
-    gmsh_type, ng_ref_pts = ref_cache[et_name]
+    # Get or compute reference points (cached per type AND orientation)
+    ref_key = (et_name, orient)
+    if ref_key not in ref_cache:
+        ref_cache[ref_key] = _get_gmsh_ref_points(et_name, order,
+                                                  orient=orient)
+    gmsh_type, ng_ref_pts = ref_cache[ref_key]
 
     if ng_ref_pts is None:
         # Fallback to order-2 path
@@ -2359,6 +2439,8 @@ def convert_sol_to_msh(output_msh,
 
 def export_filaments_msh(filament_paths, output_msh, *,
                          currents=None, label="filament",
+                         direction_view=False,
+                         complex_steps=False,
                          viz_subdivide_long=True,
                          viz_subdivide_threshold=5.0,
                          viz_subdivide_n=8):
@@ -2378,6 +2460,8 @@ def export_filaments_msh(filament_paths, output_msh, *,
         # In GMSH GUI:
         #   Merge "coil.step"       <- solid coil overlay
         #   Merge "filaments.msh"   <- filament lines + current
+        # or headless via radia-mcp:
+        #   gmsh_render("filaments.msh", merge_files=["coil.step"])
 
     Args:
         filament_paths: list of N filaments.  Each filament is a list
@@ -2385,6 +2469,19 @@ def export_filaments_msh(filament_paths, output_msh, *,
         output_msh: Output .msh file path.
         currents: optional complex ndarray (N,) of per-filament currents.
             Written as |I| NodeData.
+        direction_view: if True (and currents given), additionally
+            write an "I direction" vector ElementData view: the unit
+            tangent of every line element scaled by |I| of its
+            filament.  Rendered as arrows by gmsh (View.VectorType),
+            this shows the CURRENT FLOW direction along the winding.
+        complex_steps: if True (and currents are complex), additionally
+            write an "I_complex" ElementData view with TWO time steps
+            (step 0 = Re I, step 1 = Im I).  This is the
+            harmonic-to-time contract: expanding it (radia-mcp
+            gmsh_harmonic_to_time) animates the AC current
+            distribution over one period -- skin/proximity phase lead
+            of outer filaments becomes visible; gmsh_modulus_phase
+            turns the same data into amplitude/phase maps.
         label: Physical group base name (default "filament").
         viz_subdivide_long: if True (default), subdivide segments
             whose length exceeds ``viz_subdivide_threshold`` x the
@@ -2523,7 +2620,8 @@ def export_filaments_msh(filament_paths, output_msh, *,
 
         # ElementData: |I| per line element (no node-sharing ambiguity)
         if currents is not None:
-            I_abs = np.abs(np.asarray(currents))
+            I_arr = np.asarray(currents)
+            I_abs = np.abs(I_arr)
             f.write("$ElementData\n")
             f.write('1\n"|I| [A]"\n')  # 1 string tag
             f.write("1\n0.0\n")         # 1 real tag (time=0)
@@ -2532,6 +2630,38 @@ def export_filaments_msh(filament_paths, output_msh, *,
                 k = phys - 1  # filament index (0-based)
                 f.write(f"{tag} {float(I_abs[k]):.6e}\n")
             f.write("$EndElementData\n")
+
+            if direction_view:
+                # unit tangent x |I| per element: arrows show the flow
+                f.write("$ElementData\n")
+                f.write('1\n"I direction [A]"\n')
+                f.write("1\n0.0\n")
+                f.write(f"3\n0\n3\n{n_elems}\n")
+                for (tag, phys, n1, n2) in elements:
+                    k = phys - 1
+                    p1 = np.asarray(nodes[n1 - 1], dtype=np.float64)
+                    p2 = np.asarray(nodes[n2 - 1], dtype=np.float64)
+                    t = p2 - p1
+                    norm = float(np.linalg.norm(t))
+                    if norm < 1e-30:
+                        vx = vy = vz = 0.0
+                    else:
+                        vx, vy, vz = (t / norm) * float(I_abs[k])
+                    f.write(f"{tag} {vx:.6e} {vy:.6e} {vz:.6e}\n")
+                f.write("$EndElementData\n")
+
+            if complex_steps and np.iscomplexobj(I_arr):
+                # two-step re/im view: feeds gmsh harmonic-to-time /
+                # modulus-phase post (AC current animation)
+                for step, part in ((0, I_arr.real), (1, I_arr.imag)):
+                    f.write("$ElementData\n")
+                    f.write('1\n"I_complex [A]"\n')
+                    f.write(f"1\n{float(step)}\n")
+                    f.write(f"3\n{step}\n1\n{n_elems}\n")
+                    for (tag, phys, n1, n2) in elements:
+                        k = phys - 1
+                        f.write(f"{tag} {float(part[k]):.6e}\n")
+                    f.write("$EndElementData\n")
 
     print(f"export_filaments_msh: {output_msh}")
     print(f"  {n_fil} filaments, {n_elems} line elements, {n_nodes} nodes")
