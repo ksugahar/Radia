@@ -493,6 +493,130 @@ def _group_views(views_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 # ======================================================================
+# Public API: raw data reader (post verbs: CSV export, histograms)
+# ======================================================================
+
+def read_msh_data(msh_path: str | Path,
+                  include_elements: bool = False) -> dict[str, Any]:
+    """Read node coordinates and raw data values from an ASCII MSH v4.x.
+
+    Pure Python (no gmsh).  Returns::
+
+        {"nodes": {tag: [x, y, z]},
+         "views": [{"section", "name", "step", "time", "components",
+                    "rows": {tag: [values...]}}, ...],
+         "elements": {tag: {"type": int, "nodes": [tags]}}}  # opt-in
+
+    ``ElementNodeData`` rows drop the per-element node-count token and
+    keep the flat value list.  Raises ``ValueError`` on non-4.x or
+    binary files and on malformed counts (fail fast -- a wrong count
+    header crashes gmsh itself with heap corruption, so files must be
+    validated before any API feeds on them).
+    """
+    path = Path(msh_path)
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    sections, section_errors = _split_sections(lines)
+    if section_errors:
+        raise ValueError(f"{path.name}: {'; '.join(section_errors)}")
+
+    fmt = next((b for name, b, _ in sections if name == "MeshFormat"), None)
+    if fmt is None:
+        raise ValueError(f"{path.name}: $MeshFormat section missing")
+    fmt_tokens = " ".join(fmt).split()
+    if not fmt_tokens or not fmt_tokens[0].startswith("4"):
+        raise ValueError(
+            f"{path.name}: MSH v{fmt_tokens[0] if fmt_tokens else '?'} is "
+            f"not supported (ASCII v4.x only)")
+    if len(fmt_tokens) > 1 and fmt_tokens[1] != "0":
+        raise ValueError(f"{path.name}: binary MSH is not supported")
+
+    out: dict[str, Any] = {"nodes": {}, "views": [], "elements": {}}
+    for name, body, start_line in sections:
+        if name == "Nodes":
+            toks = _token_stream(body)
+            try:
+                n_blocks = int(next(toks))
+                next(toks)  # declared total
+                next(toks)  # min tag
+                next(toks)  # max tag
+                for _ in range(n_blocks):
+                    dim = int(next(toks))
+                    next(toks)  # entity tag
+                    parametric = int(next(toks))
+                    n_in_block = int(next(toks))
+                    tags = [int(next(toks)) for _ in range(n_in_block)]
+                    n_extra = dim if parametric else 0
+                    for tag in tags:
+                        xyz = [float(next(toks)) for _ in range(3)]
+                        for _ in range(n_extra):
+                            next(toks)
+                        out["nodes"][tag] = xyz
+            except (StopIteration, ValueError) as exc:
+                raise ValueError(
+                    f"{path.name}: $Nodes truncated or malformed "
+                    f"({exc})") from exc
+        elif name == "Elements" and include_elements:
+            toks = _token_stream(body)
+            try:
+                n_blocks = int(next(toks))
+                next(toks)
+                next(toks)
+                next(toks)
+                for _ in range(n_blocks):
+                    next(toks)  # entity dim
+                    next(toks)  # entity tag
+                    etype = int(next(toks))
+                    n_in_block = int(next(toks))
+                    if etype not in ELEMENT_TYPES:
+                        raise ValueError(
+                            f"unknown element type {etype}")
+                    n_per = ELEMENT_TYPES[etype][1]
+                    for _ in range(n_in_block):
+                        tag = int(next(toks))
+                        refs = [int(next(toks)) for _ in range(n_per)]
+                        out["elements"][tag] = {"type": etype,
+                                                "nodes": refs}
+            except (StopIteration, ValueError) as exc:
+                raise ValueError(
+                    f"{path.name}: $Elements truncated or malformed "
+                    f"({exc})") from exc
+        elif name in _DATA_SECTIONS:
+            rows_txt = [ln.strip() for ln in body if ln.strip()]
+            idx = 0
+
+            def _take() -> str:
+                nonlocal idx
+                if idx >= len(rows_txt):
+                    raise ValueError(f"${name} truncated header")
+                val = rows_txt[idx]
+                idx += 1
+                return val
+
+            n_str = int(_take())
+            strings = [_take().strip('"') for _ in range(n_str)]
+            n_real = int(_take())
+            reals = [float(_take()) for _ in range(n_real)]
+            n_int = int(_take())
+            ints = [int(_take()) for _ in range(n_int)]
+            if len(ints) < 3:
+                raise ValueError(
+                    f"{path.name}: ${name} @L{start_line} header needs "
+                    f">=3 integer tags")
+            view = {"section": name,
+                    "name": strings[0] if strings else "",
+                    "time": reals[0] if reals else None,
+                    "step": ints[0], "components": ints[1],
+                    "rows": {}}
+            for row in rows_txt[idx:]:
+                toks = row.split()
+                tag = int(toks[0])
+                vals_start = 2 if name == "ElementNodeData" else 1
+                view["rows"][tag] = [float(t) for t in toks[vals_start:]]
+            out["views"].append(view)
+    return out
+
+
+# ======================================================================
 # Public API: inspect
 # ======================================================================
 

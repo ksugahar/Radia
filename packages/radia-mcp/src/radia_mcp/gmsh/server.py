@@ -50,17 +50,32 @@ from .msh_inspect import (
     validate_msh,
 )
 from .post_process import (
+    curve_profile,
     cut_plane_extract,
+    derived_field,
+    export_view_csv,
+    extract_skin,
+    field_histogram,
     harmonic_to_time,
     integrate_view,
     isosurface,
     line_profile,
     math_eval,
+    mirror_expand,
+    modulus_phase,
+    point_history,
     probe_field,
+    resample_grid,
+    smooth_to_nodes,
     streamlines,
+    threshold,
+    transform_view,
+    view_min_max,
+    warp_view,
 )
 from .render import (
     export_animation,
+    render_montage,
     render_png,
 )
 from .session import (
@@ -477,7 +492,9 @@ def gmsh_usage(topic: str = "all") -> str:
     Get GMSH documentation for visualization and post-processing.
 
     Topics: policy, overview, cli, shortcuts, options, msh_format,
-            geo, high_order, workflow, onelab, pitfalls
+            geo, high_order, workflow, onelab, pitfalls, animation,
+            paraview (ParaView-filter -> gmsh-tool correspondence
+            matrix with measured semantics and honest gaps)
 
     Args:
         topic: Documentation topic (default: "all").
@@ -807,7 +824,11 @@ def gmsh_export_animation(path: str,
                           num_steps: int | None = None,
                           delay_ms: int = 40,
                           width: int = 1000, height: int = 800,
-                          camera_preset: str | None = None) -> dict:
+                          camera_preset: str | None = None,
+                          orbit_axis: str | None = None,
+                          orbit_degrees: float = 360.0,
+                          orbit_frames: int = 36,
+                          time_step: int | None = None) -> dict:
     """
     Export a time-stepped post-view animation as GIF (gmsh subprocess).
 
@@ -818,6 +839,10 @@ def gmsh_export_animation(path: str,
     automatically. Works on a .geo launch artifact (auto-loads
     .geo.opt) or directly on a time-stepped .msh.
 
+    orbit_axis switches to a CAMERA-ORBIT fly-around instead (ParaView
+    camera path): the data stays at time_step while the camera sweeps
+    orbit_degrees in orbit_frames frames -- works on mesh-only files.
+
     Args:
         path: .geo or .msh with time-stepped NodeData/ElementData views.
         gif_out: Output GIF path (default: alongside input).
@@ -827,6 +852,10 @@ def gmsh_export_animation(path: str,
         width: Requested window width in pixels.
         height: Window height in pixels.
         camera_preset: Optional camera preset (see gmsh_render).
+        orbit_axis: x | y | z enables the camera-orbit mode.
+        orbit_degrees: Total camera sweep angle.
+        orbit_frames: Number of orbit frames.
+        time_step: Data step shown during an orbit.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -839,7 +868,11 @@ def gmsh_export_animation(path: str,
     return export_animation(p, out, keep_frames=keep_frames,
                             num_steps=num_steps, delay_ms=delay_ms,
                             width=width, height=height,
-                            camera_preset=camera_preset)
+                            camera_preset=camera_preset,
+                            orbit_axis=orbit_axis,
+                            orbit_degrees=orbit_degrees,
+                            orbit_frames=orbit_frames,
+                            time_step=time_step)
 
 
 @mcp.tool()
@@ -1189,6 +1222,404 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
                        return_points=return_points, out_file=out)
 
 
+def _abs_path(path_str: str | None) -> Path | None:
+    """Resolve a possibly-relative tool path against PROJECT_ROOT."""
+    if path_str is None:
+        return None
+    p = Path(path_str)
+    return p if p.is_absolute() else PROJECT_ROOT / p
+
+
+@mcp.tool()
+def gmsh_derived_field(msh_path: str, operation: str,
+                       view_name: str | None = None,
+                       check_point: list | None = None,
+                       out_file: str | None = None) -> dict:
+    """
+    Derive gradient, curl, divergence, or tensor eigenvalues of a view.
+
+    The ParaView Gradient-filter analog: grad(phi) for equipotential
+    checks, curl(A) = B, div(B) = 0 sanity maps, and min/mid/max
+    eigenvalues of a Maxwell stress tensor view (written as three
+    views in one file). Values are exact derivatives of the P1
+    interpolant, element-wise constant, discontinuous across elements.
+
+    Args:
+        msh_path: .msh/.pos with the source view.
+        operation: gradient | curl | divergence | eigenvalues.
+        view_name: Source view (default: first).
+        check_point: Optional [x,y,z]; probes the result there.
+        out_file: Output path (default: <stem>_<operation>.pos).
+    """
+    return derived_field(_abs_path(msh_path), operation, view=view_name,
+                         check_point=check_point,
+                         out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_threshold(msh_path: str, min_val: float, max_val: float,
+                   view_name: str | None = None, time_step: int = 0,
+                   dimension: int = -1,
+                   out_file: str | None = None) -> dict:
+    """
+    Keep only elements whose MEAN value lies in [min_val, max_val].
+
+    The ParaView Threshold analog (Plugin ExtractElements): isolate
+    saturated iron (|B| > 1.8 T), loss hot spots, or any value band as
+    a new view. Selection uses the ELEMENT MEAN at time_step (measured
+    semantics) -- threshold |v| of vector fields via gmsh_math_eval
+    first.
+
+    Args:
+        msh_path: .msh/.pos with a scalar view.
+        min_val: Lower bound of the kept band.
+        max_val: Upper bound of the kept band.
+        view_name: Source view (default: first).
+        time_step: Step whose values select elements.
+        dimension: Restrict to one element dimension (-1 = all).
+        out_file: Output path (default: <stem>_thresh.pos).
+    """
+    return threshold(_abs_path(msh_path), min_val, max_val, view=view_name,
+                     time_step=time_step, dimension=dimension,
+                     out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_extract_skin(msh_path: str, view_name: str | None = None,
+                      from_mesh: bool = False,
+                      out_file: str | None = None) -> dict:
+    """
+    Extract the boundary skin of a volume view (surface + field).
+
+    The ParaView ExtractSurface analog: the boundary triangles/quads
+    of the view's volume elements with the field interpolated on them
+    -- surface |B| maps from volume solutions without re-export.
+
+    Args:
+        msh_path: .msh/.pos with a volume view.
+        view_name: Source view (default: first).
+        from_mesh: Skin the model mesh instead of the view data.
+        out_file: Output path (default: <stem>_skin.pos).
+    """
+    return extract_skin(_abs_path(msh_path), view=view_name,
+                        from_mesh=from_mesh, out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_mirror_expand(msh_path: str, planes: list, parity: str = "scalar",
+                       view_name: str | None = None,
+                       origin: list | None = None,
+                       result_name: str = "mirrored",
+                       out_file: str | None = None) -> dict:
+    """
+    Expand a half/quarter/eighth symmetric model view by mirroring.
+
+    The ParaView Reflect analog with the field physics done right:
+    every subset of planes (["x"], ["x","y"], ...) adds a mirrored
+    copy and ALL copies merge into one view. parity controls the data
+    transform under a mirror M: "scalar" copies values; "vector"
+    (polar: A, J, force) maps v' = M v; "pseudovector" (axial: B and
+    H!) maps v' = det(M) M v. Element orientation is repaired, so a
+    quarter magnet model becomes the full-field picture in one call.
+
+    Args:
+        msh_path: .msh/.pos with the symmetric-sector view.
+        planes: Mirror planes, subset of ["x","y","z"].
+        parity: scalar | vector | pseudovector (B/H are pseudovectors).
+        view_name: Source view (default: first).
+        origin: Mirror-plane crossing point (default: [0,0,0]).
+        result_name: Name of the merged output view.
+        out_file: Output path (default: <stem>_full.pos).
+    """
+    return mirror_expand(_abs_path(msh_path), planes, parity=parity,
+                         view=view_name, origin=origin,
+                         result_name=result_name,
+                         out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_transform_view(msh_path: str, matrix: list,
+                        translation: list | None = None,
+                        view_name: str | None = None,
+                        value_expressions: list | None = None,
+                        swap_orientation: bool = False,
+                        out_file: str | None = None) -> dict:
+    """
+    Apply an affine transform x' = A x + t to a COPY of a view.
+
+    The ParaView Transform analog: move a rotor view by its rotation
+    angle, offset a coil view for assembly pictures. matrix is
+    row-major 3x3. Plugin(Transform) does NOT rotate the data
+    components -- pass value_expressions (v0..v8) to rewrite vectors
+    consistently, and swap_orientation=True when det(A) < 0.
+
+    Args:
+        msh_path: .msh/.pos with the source view.
+        matrix: Row-major 3x3 matrix (9 numbers).
+        translation: [tx, ty, tz] (default zero).
+        view_name: Source view (default: first).
+        value_expressions: Optional data rewrite during the copy.
+        swap_orientation: Repair element orientation (det < 0).
+        out_file: Output path (default: <stem>_xform.pos).
+    """
+    return transform_view(_abs_path(msh_path), matrix,
+                          translation=translation, view=view_name,
+                          value_expressions=value_expressions,
+                          swap_orientation=swap_orientation,
+                          out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_warp(msh_path: str, factor: float = 1.0,
+              view_name: str | None = None, time_step: int = 0,
+              out_file: str | None = None) -> dict:
+    """
+    Displace a vector view's geometry by factor * its own vectors.
+
+    The ParaView WarpByVector analog: exaggerated deformation display
+    for displacement or force-density fields (magnetostriction,
+    magnet-pull visualization). The output is a self-contained .pos
+    at the displaced coordinates.
+
+    Args:
+        msh_path: .msh/.pos with a vector view.
+        factor: Displacement scale factor.
+        view_name: Source view (default: first).
+        time_step: Step supplying the displacement vectors.
+        out_file: Output path (default: <stem>_warp.pos).
+    """
+    return warp_view(_abs_path(msh_path), factor, view=view_name,
+                     time_step=time_step, out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_smooth_to_nodes(msh_path: str, view_name: str | None = None,
+                         out_file: str | None = None) -> dict:
+    """
+    Average element-wise data to nodes (CellDataToPointData analog).
+
+    Each node receives the mean of its adjacent elements' values
+    (measured: elements 10/20 -> shared node 15). Run this on
+    per-element views (loss density, |J| per cell) before probing,
+    isosurfacing, or contour plots, which need nodal continuity.
+
+    Args:
+        msh_path: .msh with an ElementData view.
+        view_name: Source view (default: first).
+        out_file: Output path (default: <stem>_nodal.pos).
+    """
+    return smooth_to_nodes(_abs_path(msh_path), view=view_name,
+                           out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_view_min_max(msh_path: str, view_name: str | None = None,
+                      over_time: bool = False) -> dict:
+    """
+    Locate the min and max of a scalar view WITH their coordinates.
+
+    "Where is the hottest point / peak |B|?" in one call: returns
+    {"min": {point, values}, "max": {point, values}} per time step
+    (Plugin MinMax with Argument=1). For vector views build |v| with
+    gmsh_math_eval first.
+
+    Args:
+        msh_path: .msh/.pos with a scalar view.
+        view_name: Source view (default: first).
+        over_time: Reduce over all time steps as well.
+    """
+    return view_min_max(_abs_path(msh_path), view=view_name,
+                        over_time=over_time)
+
+
+@mcp.tool()
+def gmsh_modulus_phase(msh_path: str, view_name: str | None = None,
+                       real_step: int = 0, imag_step: int = 1,
+                       out_file: str | None = None) -> dict:
+    """
+    Convert a complex re/im two-step view to modulus and phase steps.
+
+    AC post companion to gmsh_harmonic_to_time: step 0 becomes
+    sqrt(re^2 + im^2), step 1 becomes atan2(im, re) -- amplitude and
+    phase maps of eddy-current phasor solutions in one call.
+
+    Args:
+        msh_path: .msh whose view carries re/im as two time steps.
+        view_name: Source view (default: first).
+        real_step: Step index holding the real part.
+        imag_step: Step index holding the imaginary part.
+        out_file: Output path (default: <stem>_modphase.pos).
+    """
+    return modulus_phase(_abs_path(msh_path), view=view_name,
+                         real_step=real_step, imag_step=imag_step,
+                         out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_curve_profile(msh_path: str, x_expr: str, y_expr: str,
+                       z_expr: str, u_min: float, u_max: float,
+                       n: int = 100, view_name: str | None = None,
+                       plot_png: str | None = None,
+                       csv_out: str | None = None,
+                       out_file: str | None = None) -> dict:
+    """
+    Sample a view along a parametric curve x(u), y(u), z(u).
+
+    gmsh_line_profile generalized to curves (Plugin CutParametric,
+    MathEx syntax). THE air-gap tool: B(theta) on a circle is
+    x_expr="0.05*Cos(u)", y_expr="0.05*Sin(u)", z_expr="0", u in
+    [0, 2*Pi]. Returns u, points, per-step values; optionally writes
+    a PNG graph, a CSV, and an SL line view for rendering.
+
+    Args:
+        msh_path: .msh/.pos with the source view.
+        x_expr: MathEx expression for x(u).
+        y_expr: MathEx expression for y(u).
+        z_expr: MathEx expression for z(u).
+        u_min: Parameter start.
+        u_max: Parameter end.
+        n: Number of samples.
+        view_name: Source view (default: first).
+        plot_png: Optional PNG graph path (value / |v| vs u).
+        csv_out: Optional CSV path.
+        out_file: Optional SL line view output (.pos).
+    """
+    return curve_profile(_abs_path(msh_path), x_expr, y_expr, z_expr,
+                         u_min, u_max, n=n, view=view_name,
+                         plot_png=_abs_path(plot_png),
+                         csv_out=_abs_path(csv_out),
+                         out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_resample_grid(msh_path: str, origin: list, u_point: list,
+                       v_point: list, w_point: list, nu: int, nv: int,
+                       nw: int, view_name: str | None = None,
+                       csv_out: str | None = None,
+                       out_file: str | None = None) -> dict:
+    """
+    Resample a view on a regular grid spanned by three box edges.
+
+    The ParaView ResampleToImage analog (Plugin CutBox): origin plus
+    the endpoints of the U/V/W edges, nu x nv x nw samples (W varies
+    fastest). Turns any unstructured result into a uniform grid for
+    numpy/MATLAB via the CSV export.
+
+    Args:
+        msh_path: .msh/.pos with the source view.
+        origin: Box origin [x,y,z].
+        u_point: End of the U edge.
+        v_point: End of the V edge.
+        w_point: End of the W edge.
+        nu: Samples along U.
+        nv: Samples along V.
+        nw: Samples along W.
+        view_name: Source view (default: first).
+        csv_out: Optional CSV path.
+        out_file: Optional point-view output (.pos).
+    """
+    return resample_grid(_abs_path(msh_path), origin, u_point, v_point,
+                         w_point, nu, nv, nw, view=view_name,
+                         csv_out=_abs_path(csv_out),
+                         out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_export_csv(msh_path: str, csv_out: str,
+                    view_name: str | None = None,
+                    kind: str = "auto") -> dict:
+    """
+    Dump view data to CSV (the ParaView spreadsheet / SaveData analog).
+
+    Pure Python on the radia-mcp MSH v4.1 parser -- no gmsh needed.
+    kind="nodes" writes tag,x,y,z + one column per view step/component
+    from $NodeData; kind="elements" writes element CENTROIDS +
+    $ElementData columns; "auto" prefers nodes. List-based .pos files
+    carry no node table -- use gmsh_resample_grid/gmsh_curve_profile
+    with csv_out for those.
+
+    Args:
+        msh_path: .msh with NodeData/ElementData sections.
+        csv_out: Output CSV path.
+        view_name: Restrict to one view (default: all).
+        kind: auto | nodes | elements.
+    """
+    return export_view_csv(_abs_path(msh_path), _abs_path(csv_out),
+                           view=view_name, kind=kind)
+
+
+@mcp.tool()
+def gmsh_field_histogram(msh_path: str, view_name: str | None = None,
+                         step: int | None = None,
+                         component: int | None = None, bins: int = 32,
+                         value_range: list | None = None,
+                         plot_png: str | None = None) -> dict:
+    """
+    Histogram of a view's values (the ParaView Histogram analog).
+
+    Value-distribution checks without a GUI: how much of the iron
+    sits above 1.8 T, is the loss density long-tailed. Scalars bin
+    the value, vectors bin |v| unless component selects one; step=None
+    pools all time steps. Pure Python (no gmsh); optional PNG chart.
+
+    Args:
+        msh_path: .msh with NodeData/ElementData sections.
+        view_name: Source view (default: first found).
+        step: Time step (None = pool all steps).
+        component: Component index (None = magnitude for vectors).
+        bins: Number of bins.
+        value_range: [lo, hi] bin range (default: data min/max).
+        plot_png: Optional PNG bar chart path.
+    """
+    return field_histogram(_abs_path(msh_path), view=view_name, step=step,
+                           component=component, bins=bins,
+                           value_range=value_range,
+                           plot_png=_abs_path(plot_png))
+
+
+@mcp.tool()
+def gmsh_point_history(msh_path: str, point: list,
+                       view_name: str | None = None,
+                       plot_png: str | None = None) -> dict:
+    """
+    Value of a view at one point across ALL time steps.
+
+    The ParaView PlotDataOverTime analog for a probe point: transient
+    solutions and gmsh_harmonic_to_time outputs become per-step value
+    lists plus the recorded step TIMES ($NodeData headers), with an
+    optional value-vs-time PNG.
+
+    Args:
+        msh_path: .msh with a multi-step view.
+        point: Probe point [x, y, z].
+        view_name: Source view (default: first).
+        plot_png: Optional PNG graph path.
+    """
+    return point_history(_abs_path(msh_path), point, view=view_name,
+                         plot_png=_abs_path(plot_png))
+
+
+@mcp.tool()
+def gmsh_render_montage(images: list, out_png: str,
+                        cols: int | None = None,
+                        labels: list | None = None) -> dict:
+    """
+    Compose rendered PNGs into one comparison grid (side-by-side).
+
+    The ParaView comparative-views analog for static output:
+    before/after, per-frequency, or per-design renders lined up in a
+    single image with optional per-cell labels.
+
+    Args:
+        images: PNG paths (at least 2).
+        out_png: Output montage path.
+        cols: Grid columns (default: 3, or 2 for 4 images).
+        labels: Optional per-image labels.
+    """
+    return render_montage([_abs_path(p) for p in images],
+                          _abs_path(out_png), cols=cols, labels=labels)
+
+
 @mcp.tool()
 def gmsh_mesh_quality(msh_path: str, threshold: float = 0.1,
                       quadrature: str = "Gauss4") -> dict:
@@ -1399,8 +1830,9 @@ def _selftest(audit_repo: bool = False):
 register_status_tool(
     mcp,
     server_name='mcp-server-gmsh',
-    description='GMSH MSH v4.1 inspect/validate + post-display '
-                'launch artifacts + visualization-only policy lint',
+    description='GMSH MSH v4.1 inspect/validate + ParaView-parity post '
+                'verbs (derive/threshold/mirror/resample/CSV) + '
+                'post-display launch artifacts + visualization policy lint',
     subpackage='radia_mcp.gmsh',
     related_servers=["cubit"],
     optional_deps=["gmsh"],
