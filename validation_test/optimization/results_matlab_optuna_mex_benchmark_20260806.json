@@ -1,0 +1,31 @@
+{
+  "schema": "radia.validation.optuna-mex-benchmark.v1",
+  "generated_at": "2026-08-06T13:47:53.5129659+09:00",
+  "versions": {
+    "radia": "4.95.43",
+    "matlab": "R2026a Update 4"
+  },
+  "kernel": "optuna.pareto.rank_crowding",
+  "case": {
+    "trial_count": 350,
+    "objective_count": 3,
+    "directions": [
+      "minimize",
+      "maximize",
+      "minimize"
+    ],
+    "random_seed": 20260806
+  },
+  "verification": {
+    "rank_exact_match": true,
+    "crowding_absolute_tolerance": 1e-12,
+    "crowding_match": true
+  },
+  "timing_s": {
+    "mex": 0.00174363715,
+    "matlab_reference": 0.0157721372,
+    "speedup": 9.046
+  },
+  "scope": "Informational single-host kernel benchmark, not a CI performance gate.",
+  "claim_boundary": "The speedup applies only to Pareto rank/crowding for this population and does not imply a 9x CAE solve or end-to-end optimization speedup."
+}

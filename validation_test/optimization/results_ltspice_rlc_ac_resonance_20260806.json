@@ -1,0 +1,126 @@
+{
+  "radia_version": "4.95.43",
+  "schema": "cae-ai-lab.solver-run.v1",
+  "created_at_utc": "2026-08-06T07:23:55.517Z",
+  "case": "series RLC capacitance optimization at 1 kHz",
+  "solver": "matlab",
+  "solver_backend": "ltspice-ac",
+  "source_artifact": "S:\\Radia\\01_GitHub\\matlab\\samples\\ltspice_rlc_resonance_ac.cir",
+  "pass": true,
+  "run": {
+    "command": "radia.ltspice.run(..., RawFormat='binary')",
+    "workdir": "C:\\temp\\radia_ltspice_rlc_validation",
+    "exit_code": 0,
+    "duration_s": 123.2493415,
+    "stdout_log": "C:\\temp\\radia_ltspice_rlc_validation\\best_ac_replay\\ltspice_rlc_resonance_ac.log"
+  },
+  "result_files": [
+    "S:\\Radia\\01_GitHub\\validation_test\\optimization\\results_ltspice_rlc_ac_resonance_20260806.json",
+    "S:\\Radia\\01_GitHub\\validation_test\\optimization\\ltspice_rlc_ac_resonance_20260806.png",
+    "S:\\Radia\\01_GitHub\\matlab\\samples\\ltspice_rlc_resonance_ac.cir"
+  ],
+  "checks": {
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "validation_passed": true
+  },
+  "tolerances": {
+    "target_relative": 0.02,
+    "ac_theory_relative": 0.0005,
+    "time_crosscheck_relative": 0.001
+  },
+  "errors": {
+    "target_relative": 0.0015796050771760975,
+    "ac_theory_relative": 6.7601621733170107E-9,
+    "capacitance_relative": 0.0031517269543911187
+  },
+  "tool_versions": {
+    "radia": "4.95.43",
+    "matlab": "26.1.0.3312084 (R2026a) Update 4",
+    "simulink": "26.1",
+    "ltspice": "26.0.2.1"
+  },
+  "target_frequency_Hz": 1000,
+  "fixed_components": {
+    "resistance_Ohm": 2,
+    "inductance_H": 0.01
+  },
+  "search": {
+    "parameter": "capacitance_F",
+    "bounds_F": [
+      1E-6,
+      6E-6
+    ],
+    "sampler": "TPE",
+    "seed": 42,
+    "requested_trials": 36,
+    "completed_trials": 36,
+    "failed_trials": 0
+  },
+  "best": {
+    "trial_number": 35,
+    "objective": 2.4912165435431361E-6,
+    "capacitance_F": 2.5250461734200352E-6,
+    "measured_ac_resonance_frequency_Hz": 1001.5796050771761,
+    "analytic_ac_resonance_frequency_Hz": 1001.5795983063356,
+    "target_relative_error": 0.0015796050771760975,
+    "measurement_vs_theory_relative_error": 6.7601621733170107E-9,
+    "measurement": {
+      "analysis": "ac",
+      "method": "linear interpolation of input-reactance zero",
+      "point_count": 6001,
+      "bracket_frequency_Hz": [
+        1001.5,
+        1001.75
+      ],
+      "bracket_reactance_Ohm": [
+        -0.010003015676367966,
+        0.021411487114185942
+      ],
+      "input_resistance_at_resonance_Ohm": 2,
+      "current_peak_frequency_Hz": 1001.5796141792139,
+      "zero_vs_peak_relative_difference": 9.0876828295474985E-9,
+      "peak_current_A": 0.49999374634716265,
+      "voltage_trace": "V(in)",
+      "current_trace": "I(Vdrive)"
+    }
+  },
+  "analytic_optimum": {
+    "capacitance_F": 2.5330295910584444E-6,
+    "best_capacitance_relative_error": 0.0031517269543911187
+  },
+  "simulink_time_domain_crosscheck": {
+    "available": true,
+    "passed": true,
+    "model_file": "S:\\Radia\\01_GitHub\\matlab\\radia_rlc_resonance_plant.slx",
+    "measured_ringdown_frequency_Hz": 1001.4525125853172,
+    "analytic_ringdown_frequency_Hz": 1001.4531385863119,
+    "measurement_relative_error": 6.2509264840983664E-7,
+    "ac_minus_ringdown_frequency_Hz": 0.12709249185888893,
+    "measurement": {
+      "crossing_count": 40,
+      "median_half_period_s": 0.00049927479707371873,
+      "relative_half_period_mad": 1.39333285960805E-6,
+      "first_crossing_s": 0.0002521629974379725,
+      "last_crossing_s": 0.019723871765155738
+    }
+  },
+  "gates": {
+    "all_trials_completed": true,
+    "target_within_2_percent": true,
+    "ac_measurement_within_0_05_percent": true,
+    "impedance_zero_matches_current_peak": true,
+    "capacitance_within_3_percent": true,
+    "time_domain_crosscheck": true
+  },
+  "timing_breakdown_s": {
+    "optimization": 109.0384044,
+    "best_ac_solve": 2.7757405,
+    "time_domain_crosscheck": 4.4204626,
+    "visualization": 6.3196159
+  },
+  "verification": {
+    "method": "LTspice Im(Zin)=0 and |I| peak versus analytic series-RLC identity",
+    "command": "validate_ltspice_rlc_resonance_ac"
+  }
+}

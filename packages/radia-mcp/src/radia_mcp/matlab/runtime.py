@@ -470,6 +470,10 @@ def matlab_radia_mex_contract(topic="all"):
             "axifem_python_mex_parity_gate": "runtests('tests/matlab/test_axifem_mex.m')",
             "hcurl_topology_python_mex_parity_gate": "runtests('tests/matlab/test_hcurl_topology_optimization.m')",
             "topology_two_level_gate": "runtests('tests/matlab/test_topology_optimization.m')",
+            "optuna_native_kernel_gate": "runtests('tests/matlab/test_radia_mex.m', Name={'test_radia_mex/testOptunaParetoRankCrowding','test_radia_mex/testOptunaParzenLogPdfKernels'})",
+            "optuna_table_gate": "runtests('tests/matlab/test_optuna_table.m')",
+            "optuna_simulink_block_gate": "runtests('tests/matlab/test_optuna_simulink_block.m')",
+            "optuna_native_kernel_benchmark": "validation_test/optimization/results_matlab_optuna_mex_benchmark_20260806.json",
             "runtime_probe": "radia.quickCheck()",
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
             "native_motor_family_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
@@ -488,8 +492,8 @@ def matlab_radia_mex_contract(topic="all"):
     sections = {
         "mex": {"command_count": len(commands), "command_groups": dict(sorted(groups.items())), "command_names": commands, "pybind_missing": pybind_missing, "pybind_internal_missing": internal_missing, "pybind_class_missing_commands": class_missing, "pybind_class_unmapped": class_unmapped},
         "ngsolve": {"owner": "NGSolve", "matlab_boundary": "ngsolve.space_info, ngsolve.matrix_dump, persistent Mesh/FESpace/BilinearForm/Matrix/LinearForm handles, native CoefficientFunction/GridFunction handles, native HCurl response projection, and numeric HDiv field evaluators", "policy": "Use NGSolve for FE plumbing; exchange typed native handles, numeric matrices, vectors, fields, and metadata. Persistent forms expose built-in real/complex volume integrators, scalar CoefficientFunction-weighted volume and trace matrices, native CoefficientFunction volume and boundary RHS assembly in real/complex H1/HCurl/HDiv, and native sparse matvec/inverse operations; arbitrary callbacks and tensor-valued forms remain explicit gaps."},
-        "optimization": {"package": "radia.optuna", "classes": optuna_classes, "factory_functions": optuna_functions, "storage": "MAT-file containing MATLAB tables", "mcp_tool": "matlab_optuna_simulink_contract"},
-        "simulink": {"class": "radia.optuna.SimulinkRunner", "workflow": "SimulationInput -> sim -> score -> Study.tell", "blocks": ["Radia/Applications/Induction Heating: readable Level-2 MATLAB Eddy and Thermal S-Functions backed by radia_mex handles", "radia.simulink.buildTeam28CLNModel", "radia.simulink.buildHCurlEddyCLNModel Block=radia-mex", "radia.simulink.buildMotorAngleFamilyModel"], "native_state_space_commands": ["simulink.state_space.create", "simulink.state_space.info", "simulink.state_space.output", "simulink.state_space.update", "simulink.state_space.step", "simulink.state_space.snapshot", "simulink.state_space.restore", "simulink.state_space.reset", "simulink.state_space.destroy"], "native_state_space_overloads": {"static": "create(A,B,C,D,x0); output(handle,u); update(handle,u)", "periodic_motor_family": "create(grid,period,A,B,C,D,Q,R,S,x0); output(handle,mechanical_angle,u) -> [linear_outputs; torque]; update(handle,mechanical_angle,u)", "standalone_debug": "step is the atomic output-plus-update probe", "sim_state": "snapshot/restore preserve native state for Simulink CustomSimState"}, "mcp_tool": "matlab_optuna_simulink_contract"},
+        "optimization": {"package": "radia.optuna", "classes": optuna_classes, "factory_functions": optuna_functions, "storage": "MAT-file containing readable MATLAB tables and CAE trial/failure artifacts", "native_kernels": ["optuna.pareto.rank_crowding", "optuna.parzen.log_pdf_numerical", "optuna.parzen.log_pdf_categorical"], "mcp_tool": "matlab_optuna_simulink_contract"},
+        "simulink": {"class": "radia.optuna.SimulinkRunner", "workflow": "SimulationInput -> sim/parsim -> score/constraints/validation/artifacts -> Study.tell or typed failure", "blocks": ["Radia/Applications/Induction Heating: readable Level-2 MATLAB Eddy and Thermal S-Functions backed by radia_mex handles", "radia.simulink.buildTeam28CLNModel", "radia.simulink.buildHCurlEddyCLNModel Block=radia-mex", "radia.simulink.buildMotorAngleFamilyModel", "Optimization/Optuna Optimization: start/cancel, failure telemetry, and automatic optimizer MEX kernels"], "native_state_space_commands": ["simulink.state_space.create", "simulink.state_space.info", "simulink.state_space.output", "simulink.state_space.update", "simulink.state_space.step", "simulink.state_space.snapshot", "simulink.state_space.restore", "simulink.state_space.reset", "simulink.state_space.destroy"], "native_state_space_overloads": {"static": "create(A,B,C,D,x0); output(handle,u); update(handle,u)", "periodic_motor_family": "create(grid,period,A,B,C,D,Q,R,S,x0); output(handle,mechanical_angle,u) -> [linear_outputs; torque]; update(handle,mechanical_angle,u)", "standalone_debug": "step is the atomic output-plus-update probe", "sim_state": "snapshot/restore preserve native state for Simulink CustomSimState"}, "mcp_tool": "matlab_optuna_simulink_contract"},
         "reinforcement_learning": {"package": "radia.rl", "workflow": "reset -> MEX/Radia step -> reward -> next observation", "adapter": "rlFunctionEnv when Reinforcement Learning Toolbox is installed"},
         "limitations": {"items": base["limitations"]},
     }
@@ -501,7 +505,7 @@ def matlab_radia_mex_contract(topic="all"):
 def matlab_optuna_simulink_contract():
     """Return the MATLAB-native Optuna-like and Simulink contract."""
     return {
-        "schema": "radia-mcp.matlab-optuna-simulink/v1",
+        "schema": "radia-mcp.matlab-optuna-simulink/v2",
         "status": "ready",
         "package": "radia.optuna",
         "classes": {
@@ -514,7 +518,7 @@ def matlab_optuna_simulink_contract():
             "NSGAIISampler": "elitist non-dominated sorting, crowding distance, tournament selection, crossover, and mutation",
             "MedianPruner": "startup, warmup, interval, and completed-trial median pruning",
             "LiveMonitor": "trial progress, objective history, duration, parameter history, and live two-objective Pareto display",
-            "SimulinkRunner": "SimulationInput configuration, sim/parsim execution, scalar or vector scoring, and result extraction",
+            "SimulinkRunner": "CAE-aware SimulationInput configuration, adaptive-batch sim/parsim, c <= 0 constraints, validation, typed failures, artifact manifests, model SHA-256, and four-part timing",
             "LTspiceRunner": "serial or parfeval LTspice trials with isolated output directories, complex RAW, and client-owned Study updates",
             "SheetMetalRunner": "Optuna outer trials over the native HEX-sheet or HCurl sheet-metal two-level drivers, with isolated NGSolve/Cubit work directories and result.json provenance",
         },
@@ -526,7 +530,7 @@ def matlab_optuna_simulink_contract():
             "ExportHCurlEddyCLNJSON plus loadHCurlEddyCLNModel maps numeric R/L/P reduced HCurl-VIM data into a passive discrete state-space block; solveHCurlEddyCLNHarmonic uses hybrid_vim.solve. radia.ngsolve.hcurl_eddy_cln_model additionally assembles a Python-free local HCurl diffusion projection directly from a VOL mesh.",
             "buildHCurlEddyCLNModel(..., Block=\"radia-mex\") uses the Python-free native state-space handle for fixed reduced HCurl models; makeMotorAngleFamily plus buildMotorAngleFamilyModel use the same persistent MEX handle for periodic angle interpolation and quadratic torque output.",
             "ExportHCurlEddyCLNFamilyJSON plus loadHCurlEddyCLNFamily/interpolateHCurlEddyCLNFamily provides a common-basis height-indexed family; buildHCurlEddyCLNFamilyModel exposes height, derivative-current, and coil-current ports.",
-            "Optimization/Optuna Optimization advances one trial per block sample and exports best-update plus fixed-size Pareto telemetry to the browser-free Optuna Monitor.",
+            "Optimization/Optuna Optimization advances one trial per block sample, accepts independent start/cancel signals, continues after recorded CAE failures, exports attempted/failed/failure-code telemetry, and uses optional native optimizer kernels without Python per trial.",
             "Optimization/Sheet Metal Optimization evaluates a radia.optuna.SheetMetalRunner and uses the same best-update and Pareto monitor contract.",
         ],
         "team28": {
@@ -555,7 +559,26 @@ def matlab_optuna_simulink_contract():
             },
             "sibc": "SIBC termination must be rationalized before state-space export; the current numeric bridge records this boundary explicitly.",
         },
-        "tables": ["TrialTable", "ObjectiveTable", "ParamTable", "IntermediateTable", "UserAttrTable"],
+        "tables": ["TrialTable", "ObjectiveTable", "ParamTable", "IntermediateTable", "UserAttrTable", "ConstraintTable", "SamplerStateTable"],
+        "native_acceleration": {
+            "status_api": "radia.optuna.nativeStatus",
+            "commands": [
+                "optuna.pareto.rank_crowding",
+                "optuna.parzen.log_pdf_numerical",
+                "optuna.parzen.log_pdf_categorical",
+            ],
+            "policy": "Use MEX for dense optimizer kernels when available; preserve MATLAB Study/Trial, sampler random streams, persistence, and a checked MATLAB fallback.",
+            "full_optimizer_in_cpp": False,
+            "python_per_trial": False,
+        },
+        "cae_trial_contract": {
+            "success_schema": "radia.optuna.cae-trial.v1",
+            "failure_schema": "radia.optuna.cae-failure.v1",
+            "identity": ["model path", "model SHA-256", "MATLAB version", "Simulink version", "geometry/mesh/material/excitation context"],
+            "constraints": "c <= 0",
+            "timing": ["configuration", "simulation", "postprocess", "total"],
+            "failure_policy": "Classify mesh, convergence, license/resource, timeout, configuration, and observable failures; preserve the failed trial and continue when requested.",
+        },
         "multi_objective": {
             "directions": "one minimize/maximize entry per returned objective",
             "storage": "ObjectiveTable has one row per trial and objective index; TrialTable.Value retains objective 1 for compatibility",
@@ -573,7 +596,7 @@ def matlab_optuna_simulink_contract():
             "simulink_auto": "CmaEsSampler for one objective and NSGAIISampler for multiple objectives; the mask also exposes every sampler explicitly",
         },
         "parallel_trials": {
-            "simulink": "SimulinkRunner.optimizeParallel prepares trials on the client and evaluates SimulationInput arrays with parsim",
+            "simulink": "SimulinkRunner.optimizeParallel asks adaptive client-side batches and evaluates each SimulationInput batch with parsim so completed trials influence later proposals",
             "ltspice": "LTspiceRunner.optimizeParallel suggests parameters on the client and runs isolated LTspice jobs with parfeval",
             "state_safety": "Study, sampler, and table mutations stay on the client; workers return numerical results only",
             "requirement": "Parallel Computing Toolbox; absence is an explicit error, never a silent serial fallback",
@@ -660,12 +683,12 @@ def matlab_optuna_simulink_contract():
                 },
             },
         },
-        "persistence": "MAT-file via Study.save or AutoSave; tables remain inspectable in MATLAB, and bestSolution derives a reloadable best snapshot from those tables.",
+        "persistence": "MAT-file via Study.save or AutoSave; tables remain inspectable in MATLAB, while SimulinkRunner records versioned CAE trial/failure structs and artifact manifests. bestSolution derives a reloadable best snapshot from the tables.",
         "simulink_workflow": [
             "Create a radia.optuna.Study.",
             "Configure each Trial into Simulink.SimulationInput.",
-            "Run sim/parsim and return one finite objective per Study direction through ScoreFcn.",
-            "Record COMPLETE, PRUNED, or FAIL state and persist the tables.",
+            "Run sim/parsim and return finite objectives, c <= 0 constraints, validation, artifacts, and timing through the configured callbacks.",
+            "Record COMPLETE, PRUNED, or typed FAIL state and persist both readable tables and versioned CAE evidence.",
         ],
         "reinforcement_learning_workflow": [
             "Create radia.rl.Environment for a native numerical step contract, or place a Simulink RL Agent around a production application block.",
@@ -673,7 +696,7 @@ def matlab_optuna_simulink_contract():
             "Optionally adapt the environment to rlFunctionEnv.",
             "For IH, train against the native distributed Eddy/Thermal block; do not substitute a LUT or lumped thermal environment.",
         ],
-        "python_relation": "MATLAB orchestration is compatible at the table/parameter/result contract; it does not embed Python Optuna objects.",
+        "python_relation": "The official Optuna MCP remains the external owner for generic Python Optuna. The normal Simulink route is MATLAB-native and never performs a Python-to-MATLAB-Engine call per trial.",
         "mcp_route": "matlab_optuna_simulink_contract",
     }
 

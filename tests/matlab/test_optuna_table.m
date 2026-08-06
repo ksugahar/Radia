@@ -351,6 +351,89 @@ clear cleanup
 closeIfLoaded(modelName);
 end
 
+function testSimulinkRunnerRecordsCAETrialContract(testCase)
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
+    return
+end
+modelName = "radia_optuna_cae_contract";
+modelFile = "C:\temp\radia_optuna_cae_contract.slx";
+cleanup = onCleanup(@() closeAndDelete(modelName, modelFile));
+buildRunnerFixture(modelName, 0.2);
+save_system(modelName, modelFile);
+close_system(modelName, 0);
+time_s = reshape(0:0.1:0.2, [], 1);
+inputData = [time_s, 10 * ones(size(time_s))];
+runner = radia.optuna.SimulinkRunner(modelFile, ...
+    ConfigureFcn=@(simInput, trial) configureRunnerInput( ...
+        simInput, trial, inputData), ...
+    ScoreFcn=@runnerScore, ...
+    ConstraintFcn=@runnerConstraint, ...
+    ValidationFcn=@runnerValidation, ...
+    ResultFcn=@runnerArtifacts, ...
+    Context=struct( ...
+        "geometry_id", "fixture-v1", ...
+        "mesh_id", "analytic-no-mesh", ...
+        "material_id", "unit-gain", ...
+        "excitation_id", "constant-10"));
+study = radia.optuna.createStudy(AutoSave=false, ...
+    sampler=radia.optuna.RandomSampler(71));
+result = runner.optimize(study, 2);
+
+verifyEqual(testCase, result.State, ["COMPLETE";"COMPLETE"]);
+verifyEqual(testCase, height(study.ConstraintTable), 2);
+verifyTrue(testCase, all(isfinite(study.ConstraintTable.Value)));
+verifyTrue(testCase, any(study.UserAttrTable.Name == "cae_execution"));
+verifyTrue(testCase, any(study.UserAttrTable.Name == "cae_validation"));
+verifyTrue(testCase, any(study.UserAttrTable.Name == "cae_artifacts"));
+row = find(study.UserAttrTable.Name == "cae_execution", 1);
+record = jsondecode(study.UserAttrTable.ValueJSON(row));
+verifyEqual(testCase, string(record.schema), "radia.optuna.cae-trial.v1");
+verifyEqual(testCase, string(record.status), "complete");
+verifyEqual(testCase, string(record.context.geometry_id), "fixture-v1");
+verifyEqual(testCase, strlength(string(record.model.sha256)), 64);
+verifyGreaterThanOrEqual(testCase, record.timing_s.configuration, 0);
+verifyGreaterThanOrEqual(testCase, record.timing_s.simulation, 0);
+verifyGreaterThanOrEqual(testCase, record.timing_s.postprocess, 0);
+verifyGreaterThanOrEqual(testCase, record.timing_s.total, ...
+    record.timing_s.simulation);
+clear cleanup
+closeAndDelete(modelName, modelFile);
+end
+
+function testSimulinkRunnerClassifiesCAEFailureAndContinues(testCase)
+hasSimulink = exist("new_system", "file") == 2 || ...
+    exist("new_system", "builtin") == 5;
+if ~hasSimulink
+    testCase.assumeFail("Simulink is not installed on this MATLAB runtime.");
+    return
+end
+modelName = "radia_optuna_cae_failure";
+cleanup = onCleanup(@() closeIfLoaded(modelName));
+buildRunnerFixture(modelName, 0.1);
+time_s = reshape(0:0.1:0.1, [], 1);
+inputData = [time_s, 10 * ones(size(time_s))];
+runner = radia.optuna.SimulinkRunner(modelName, ...
+    ConfigureFcn=@(simInput, trial) configureRunnerInput( ...
+        simInput, trial, inputData), ...
+    ScoreFcn=@runnerMeshFailure);
+study = radia.optuna.createStudy(AutoSave=false);
+result = runner.optimize(study, 2, ContinueOnError=true);
+
+verifyEqual(testCase, result.State, ["FAIL";"FAIL"]);
+rows = study.UserAttrTable.Name == "cae_failure";
+verifyEqual(testCase, sum(rows), 2);
+failure = jsondecode(study.UserAttrTable.ValueJSON(find(rows, 1)));
+verifyEqual(testCase, string(failure.class), "mesh_invalid");
+verifyEqual(testCase, string(failure.stage), "postprocess");
+verifyFalse(testCase, failure.retryable);
+verifyEqual(testCase, string(failure.identifier), "radia:test:MeshQuality");
+clear cleanup
+closeIfLoaded(modelName);
+end
+
 function testTPEAndCmaEsSamplers(testCase)
 tpe = radia.optuna.create_study( ...
     study_name="tpe-study", direction="minimize", ...
@@ -601,8 +684,11 @@ values=[0 3;1 2;2 1;3 3;2 4];
 [rank,crowding]=radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
     values,["minimize","minimize"]);
 verifyEqual(testCase,rank(1:3),ones(3,1));
-verifyGreaterThan(testCase,rank(4),1);
-verifyTrue(testCase,isinf(crowding(1)));
+verifyEqual(testCase,rank,[1;1;1;2;2]);
+verifyEqual(testCase,crowding,[Inf;2;Inf;Inf;Inf]);
+native=radia.optuna.nativeStatus();
+verifyEqual(testCase,native.backend,"native-mex");
+verifyEmpty(testCase,native.missing_commands);
 end
 
 function value = localObjective(trial)
@@ -658,6 +744,30 @@ function simInput=configureRunnerInput(simInput,trial,inputData)
 gain=trial.suggestFloat("gain",0.5,1.5);
 simInput=simInput.setVariable("runner_gain",gain);
 simInput=simInput.setExternalInput(inputData);
+end
+
+function value=runnerScore(simOut,trial) %#ok<INUSD>
+value=simOut.get("yout").getElement(1).Values.Data(end);
+end
+
+function values=runnerConstraint(simOut,trial) %#ok<INUSD>
+values=trial.Params.gain-1.1;
+end
+
+function result=runnerValidation(simOut,trial) %#ok<INUSD>
+result=struct("reference","analytic-gain", ...
+    "relative_error",0,"passed",true);
+end
+
+function result=runnerArtifacts(simOut,trial) %#ok<INUSD>
+result=struct("role","simulation-output", ...
+    "trial_number",trial.Number,"embedded",true);
+end
+
+function value=runnerMeshFailure(simOut,trial) %#ok<INUSD>
+error("radia:test:MeshQuality", ...
+    "Mesh element quality is invalid for this CAE trial.");
+value=NaN;
 end
 
 function closeIfLoaded(modelName)

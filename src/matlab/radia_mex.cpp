@@ -57,6 +57,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 // The legacy C API header defines short macros (EXP, CALL, OK), so include it
@@ -1416,6 +1417,9 @@ mxArray* Commands() {
         "simulink.state_space.restore",
         "simulink.state_space.reset",
         "simulink.state_space.destroy",
+        "optuna.pareto.rank_crowding",
+        "optuna.parzen.log_pdf_numerical",
+        "optuna.parzen.log_pdf_categorical",
         "ih.eddy.create",
         "ih.eddy.output",
         "ih.eddy.destroy",
@@ -1573,6 +1577,259 @@ mxArray* Commands() {
     for (std::size_t i = 0; i < count; ++i)
         mxSetCell(result, i, mxCreateString(names[i]));
     return result;
+}
+
+void OptunaParetoRankCrowding(int nlhs, mxArray* plhs[], int nrhs,
+                              const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 2,
+        "[rank, crowding] = radia_mex('optuna.pareto.rank_crowding', values, signs)");
+
+    std::size_t count = 0, objective_count = 0;
+    const auto values = RealMatrix(prhs[1], count, objective_count, "values");
+    const auto signs = RealVector(prhs[2], "signs");
+    if (objective_count == 0 || signs.size() != objective_count)
+        BadArgument("signs must contain one entry per objective");
+    for (double sign : signs)
+        if (!std::isfinite(sign) || (sign != 1.0 && sign != -1.0))
+            BadArgument("signs entries must be +1 (minimize) or -1 (maximize)");
+
+    std::vector<double> normalized(values.size());
+    for (std::size_t i = 0; i < count; ++i)
+        for (std::size_t j = 0; j < objective_count; ++j) {
+            const double value = values[i * objective_count + j];
+            if (!std::isfinite(value))
+                BadArgument("values must contain finite entries");
+            normalized[i * objective_count + j] = value * signs[j];
+        }
+
+    auto dominates = [&](std::size_t left, std::size_t right) {
+        bool strictly_better = false;
+        for (std::size_t objective = 0; objective < objective_count; ++objective) {
+            const double lhs = normalized[left * objective_count + objective];
+            const double rhs = normalized[right * objective_count + objective];
+            if (lhs > rhs)
+                return false;
+            strictly_better = strictly_better || lhs < rhs;
+        }
+        return strictly_better;
+    };
+
+    std::vector<std::vector<std::size_t>> dominated(count);
+    std::vector<std::size_t> domination_count(count, 0);
+    for (std::size_t left = 0; left < count; ++left)
+        for (std::size_t right = left + 1; right < count; ++right) {
+            if (dominates(left, right)) {
+                dominated[left].push_back(right);
+                ++domination_count[right];
+            } else if (dominates(right, left)) {
+                dominated[right].push_back(left);
+                ++domination_count[left];
+            }
+        }
+
+    std::vector<double> rank(count, 0.0);
+    std::vector<std::vector<std::size_t>> fronts;
+    fronts.emplace_back();
+    for (std::size_t i = 0; i < count; ++i)
+        if (domination_count[i] == 0) {
+            rank[i] = 1.0;
+            fronts.front().push_back(i);
+        }
+    for (std::size_t level = 0; level < fronts.size(); ++level) {
+        std::vector<std::size_t> next;
+        for (std::size_t left : fronts[level])
+            for (std::size_t right : dominated[left]) {
+                if (--domination_count[right] == 0) {
+                    rank[right] = static_cast<double>(level + 2);
+                    next.push_back(right);
+                }
+            }
+        if (!next.empty()) {
+            std::sort(next.begin(), next.end());
+            fronts.push_back(std::move(next));
+        }
+    }
+
+    std::vector<double> crowding(count, 0.0);
+    const double infinity = std::numeric_limits<double>::infinity();
+    for (const auto& front : fronts) {
+        if (front.empty())
+            continue;
+        if (front.size() <= 2) {
+            for (std::size_t index : front)
+                crowding[index] = infinity;
+            continue;
+        }
+        for (std::size_t objective = 0; objective < objective_count; ++objective) {
+            auto order = front;
+            std::stable_sort(order.begin(), order.end(),
+                [&](std::size_t left, std::size_t right) {
+                    return normalized[left * objective_count + objective] <
+                           normalized[right * objective_count + objective];
+                });
+            crowding[order.front()] = infinity;
+            crowding[order.back()] = infinity;
+            const double minimum = normalized[order.front() * objective_count + objective];
+            const double maximum = normalized[order.back() * objective_count + objective];
+            const double span = maximum - minimum;
+            if (span <= 0.0)
+                continue;
+            for (std::size_t position = 1; position + 1 < order.size(); ++position) {
+                const std::size_t index = order[position];
+                if (!std::isfinite(crowding[index]))
+                    continue;
+                const double previous = normalized[
+                    order[position - 1] * objective_count + objective];
+                const double next = normalized[
+                    order[position + 1] * objective_count + objective];
+                crowding[index] += (next - previous) / span;
+            }
+        }
+    }
+
+    plhs[0] = RealColumn(rank);
+    plhs[1] = RealColumn(crowding);
+}
+
+double OptunaLogNormalMass(double lower, double upper) {
+    constexpr double inverse_sqrt_two = 0.70710678118654752440;
+    double mass = 0.0;
+    if (upper <= 0.0) {
+        mass = 0.5 * (std::erfc(-upper * inverse_sqrt_two) -
+                      std::erfc(-lower * inverse_sqrt_two));
+    } else if (lower >= 0.0) {
+        mass = 0.5 * (std::erfc(lower * inverse_sqrt_two) -
+                      std::erfc(upper * inverse_sqrt_two));
+    } else {
+        mass = 0.5 * (std::erf(upper * inverse_sqrt_two) -
+                      std::erf(lower * inverse_sqrt_two));
+    }
+    return std::log(std::max(mass, std::numeric_limits<double>::min()));
+}
+
+double OptunaLogSumExp(const std::vector<double>& values) {
+    const double maximum = *std::max_element(values.begin(), values.end());
+    double total = 0.0;
+    for (double value : values)
+        total += std::exp(value - maximum);
+    return maximum + std::log(total);
+}
+
+void OptunaParzenLogPdfNumerical(int nlhs, mxArray* plhs[], int nrhs,
+                                 const mxArray* prhs[]) {
+    CheckArity(nrhs, 9, nlhs, 1,
+        "value = radia_mex('optuna.parzen.log_pdf_numerical', samples, weights, mu, sigma, internal_low, internal_high, log_scale, step)");
+    const auto samples = RealVector(prhs[1], "samples");
+    const auto weights = RealVector(prhs[2], "weights");
+    const auto mu = RealVector(prhs[3], "mu");
+    const auto sigma = RealVector(prhs[4], "sigma");
+    const double internal_low = Scalar(prhs[5], "internal_low");
+    const double internal_high = Scalar(prhs[6], "internal_high");
+    const bool log_scale = Boolean(prhs[7], "log_scale");
+    const auto step_values = RealVector(prhs[8], "step");
+    if (step_values.size() != 1)
+        BadArgument("step must be a real scalar or NaN");
+    const double step = step_values.front();
+    const bool discrete = std::isfinite(step);
+    if (!(internal_low < internal_high) || weights.empty() ||
+        weights.size() != mu.size() || weights.size() != sigma.size())
+        BadArgument("weights, mu, and sigma must be nonempty equal-length vectors");
+    if (discrete && step <= 0.0)
+        BadArgument("finite step must be positive");
+    if (!discrete && !std::isnan(step))
+        BadArgument("step must be positive and finite, or NaN for continuous density");
+    double weight_sum = 0.0;
+    for (std::size_t kernel = 0; kernel < weights.size(); ++kernel) {
+        if (!std::isfinite(weights[kernel]) || weights[kernel] < 0.0 ||
+            !std::isfinite(mu[kernel]) || !std::isfinite(sigma[kernel]) ||
+            sigma[kernel] <= 0.0)
+            BadArgument("Parzen weights/mu/sigma contain invalid entries");
+        weight_sum += weights[kernel];
+    }
+    if (!(weight_sum > 0.0))
+        BadArgument("Parzen weights must contain positive mass");
+
+    std::vector<double> denominator(weights.size());
+    for (std::size_t kernel = 0; kernel < weights.size(); ++kernel)
+        denominator[kernel] = OptunaLogNormalMass(
+            (internal_low - mu[kernel]) / sigma[kernel],
+            (internal_high - mu[kernel]) / sigma[kernel]);
+
+    std::vector<double> result(samples.size());
+    std::vector<double> components(weights.size());
+    constexpr double half_log_two_pi = 0.91893853320467274178;
+    for (std::size_t sample_index = 0; sample_index < samples.size(); ++sample_index) {
+        const double sample = samples[sample_index];
+        if (!std::isfinite(sample) || (log_scale && sample <= 0.0))
+            BadArgument("samples contain values outside the numerical density domain");
+        for (std::size_t kernel = 0; kernel < weights.size(); ++kernel) {
+            double component = 0.0;
+            if (discrete) {
+                double sample_low = sample - 0.5 * step;
+                double sample_high = sample + 0.5 * step;
+                if (log_scale) {
+                    if (!(sample_low > 0.0 && sample_high > 0.0))
+                        BadArgument("log-discrete sample interval must be positive");
+                    sample_low = std::log(sample_low);
+                    sample_high = std::log(sample_high);
+                }
+                component = OptunaLogNormalMass(
+                    (sample_low - mu[kernel]) / sigma[kernel],
+                    (sample_high - mu[kernel]) / sigma[kernel]) -
+                    denominator[kernel];
+            } else {
+                const double internal_sample = log_scale ? std::log(sample) : sample;
+                const double z = (internal_sample - mu[kernel]) / sigma[kernel];
+                component = -0.5 * z * z - half_log_two_pi -
+                    std::log(sigma[kernel]) - denominator[kernel];
+            }
+            components[kernel] = component + std::log(weights[kernel]);
+        }
+        result[sample_index] = OptunaLogSumExp(components);
+    }
+    plhs[0] = RealColumn(result);
+}
+
+void OptunaParzenLogPdfCategorical(int nlhs, mxArray* plhs[], int nrhs,
+                                   const mxArray* prhs[]) {
+    CheckArity(nrhs, 4, nlhs, 1,
+        "value = radia_mex('optuna.parzen.log_pdf_categorical', samples, weights, probabilities)");
+    const auto samples = RealVector(prhs[1], "samples");
+    const auto weights = RealVector(prhs[2], "weights");
+    std::size_t kernel_count = 0, choice_count = 0;
+    const auto probabilities = RealMatrix(
+        prhs[3], kernel_count, choice_count, "probabilities");
+    if (kernel_count == 0 || choice_count == 0 || weights.size() != kernel_count)
+        BadArgument("probabilities must have one row per mixture weight");
+    double weight_sum = 0.0;
+    for (double weight : weights) {
+        if (!std::isfinite(weight) || weight < 0.0)
+            BadArgument("categorical weights must be finite and nonnegative");
+        weight_sum += weight;
+    }
+    if (!(weight_sum > 0.0))
+        BadArgument("categorical weights must contain positive mass");
+    for (double probability : probabilities)
+        if (!std::isfinite(probability) || probability < 0.0)
+            BadArgument("categorical probabilities must be finite and nonnegative");
+
+    std::vector<double> result(samples.size());
+    std::vector<double> components(kernel_count);
+    for (std::size_t sample_index = 0; sample_index < samples.size(); ++sample_index) {
+        const double raw_choice = samples[sample_index];
+        if (!std::isfinite(raw_choice) || raw_choice != std::floor(raw_choice) ||
+            raw_choice < 1.0 || raw_choice > static_cast<double>(choice_count))
+            BadArgument("categorical samples must be one-based integer choice indices");
+        const std::size_t choice = static_cast<std::size_t>(raw_choice) - 1;
+        for (std::size_t kernel = 0; kernel < kernel_count; ++kernel) {
+            const double probability = std::max(
+                probabilities[kernel * choice_count + choice],
+                std::numeric_limits<double>::min());
+            components[kernel] = std::log(probability) + std::log(weights[kernel]);
+        }
+        result[sample_index] = OptunaLogSumExp(components);
+    }
+    plhs[0] = RealColumn(result);
 }
 
 void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
@@ -10077,6 +10334,18 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         CheckArity(nrhs, 2, nlhs, 0,
                    "radia_mex('simulink.state_space.destroy', handle)");
         DestroyStateSpace(Handle(prhs[1]));
+        return;
+    }
+    if (command == "optuna.pareto.rank_crowding") {
+        OptunaParetoRankCrowding(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.parzen.log_pdf_numerical") {
+        OptunaParzenLogPdfNumerical(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.parzen.log_pdf_categorical") {
+        OptunaParzenLogPdfCategorical(nlhs, plhs, nrhs, prhs);
         return;
     }
     // New parity commands use flat early-return dispatch.  Keep additions out

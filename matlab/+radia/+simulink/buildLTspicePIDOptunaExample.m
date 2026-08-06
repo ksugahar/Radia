@@ -71,6 +71,8 @@ function buildHarness(model,outputDirectory,plantFile,numTrials)
 new_system(model); cleanup = onCleanup(@() closeIfLoaded(model));
 add_block("simulink/Sources/Step",model+"/Start optimization", ...
     Time="0",Before="0",After="1",SampleTime="0.1");
+add_block("simulink/Sources/Constant",model+"/Cancel optimization", ...
+    Value="0",SampleTime="0.1");
 objective="@(trial)radia.simulink.ltspicePIDObjective(trial," + ...
     quoteString(plantFile) + ")";
 radia.simulink.buildOptunaBlock(model, ...
@@ -80,12 +82,13 @@ add_block("simulink/Sinks/Display",model+"/Best objective");
 add_block("simulink/Sinks/Display",model+"/Completed trials");
 add_block("simulink/Sinks/Display",model+"/Status");
 add_block("simulink/Sinks/Scope",model+"/Optimization history");
-unusedPorts = [2,6,7,8,9,10,11];
+unusedPorts = [2,6,7,8,9,10,11,12,13,14];
 for index = 1:numel(unusedPorts)
     add_block("simulink/Sinks/Terminator", ...
         model+"/Unused output "+unusedPorts(index));
 end
 add_line(model,"Start optimization/1","Optuna Optimization/1");
+add_line(model,"Cancel optimization/1","Optuna Optimization/2");
 add_line(model,"Optuna Optimization/1","Best objective/1");
 add_line(model,"Optuna Optimization/3","Status/1");
 add_line(model,"Optuna Optimization/4","Completed trials/1");

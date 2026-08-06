@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 334
+    assert contract["command_count"] == 337
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -29,6 +29,11 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "simulink.state_space.update" in contract["command_names"]
     assert "simulink.state_space.snapshot" in contract["command_names"]
     assert "simulink.state_space.restore" in contract["command_names"]
+    assert {
+        "optuna.pareto.rank_crowding",
+        "optuna.parzen.log_pdf_numerical",
+        "optuna.parzen.log_pdf_categorical",
+    }.issubset(contract["command_names"])
     assert {
         "ih.eddy.create",
         "ih.eddy.output",
@@ -83,6 +88,12 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["topology_two_level_gate"] == (
         "runtests('tests/matlab/test_topology_optimization.m')"
     )
+    assert "testOptunaParzenLogPdfKernels" in contract["verified_contract"][
+        "optuna_native_kernel_gate"
+    ]
+    assert contract["verified_contract"]["optuna_native_kernel_benchmark"].endswith(
+        "results_matlab_optuna_mex_benchmark_20260806.json"
+    )
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
@@ -104,6 +115,16 @@ def test_optuna_simulink_contract_is_table_backed():
     assert contract["package"] == "radia.optuna"
     assert "TrialTable" in contract["tables"]
     assert "ObjectiveTable" in contract["tables"]
+    assert "ConstraintTable" in contract["tables"]
+    assert "SamplerStateTable" in contract["tables"]
+    assert contract["native_acceleration"]["python_per_trial"] is False
+    assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
+    assert contract["cae_trial_contract"]["success_schema"] == (
+        "radia.optuna.cae-trial.v1"
+    )
+    assert contract["cae_trial_contract"]["failure_schema"] == (
+        "radia.optuna.cae-failure.v1"
+    )
     assert "SimulinkRunner" in contract["classes"]
     assert "SheetMetalRunner" in contract["classes"]
     assert contract["multi_objective"]["selection"].startswith("bestTrial")
@@ -169,13 +190,13 @@ def test_root_readme_publishes_native_topology_mex_parity():
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
     assert "121 stateful class members" in matlab_readme
-    assert "All 242 entries are covered by the current 334-command gateway" in matlab_readme
+    assert "All 242 entries are covered by the current 337-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
     assert "| Stateful pybind11 class surface | 121 / 121 covered |" in parity_doc
-    assert "| MEX gateway commands | 334 |" in parity_doc
+    assert "| MEX gateway commands | 337 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():
@@ -215,6 +236,42 @@ def test_optimize_server_builds_multiobjective_ltspice_code():
 
     resume = matlab_optimize_resume(r"C:\temp\loss-ripple.mat", 10, parallel=True)
     assert "runner.optimizeParallel(study,10)" in resume["matlab_code"]
+
+
+def test_optimize_server_builds_cae_aware_native_simulink_code():
+    payload = matlab_optimize_build({
+        "name": "thermal-design",
+        "directions": ["minimize"],
+        "n_trials": 16,
+        "parallel": True,
+        "runner": {
+            "kind": "simulink",
+            "model": "radia_ih_design",
+            "configure_fcn": "configureIHTrial",
+            "score_fcn": "scoreIHTrial",
+            "constraint_fcn": "constrainIHTrial",
+            "validation_fcn": "validateIHTrial",
+            "result_fcn": "collectIHArtifacts",
+            "failure_classifier_fcn": "classifyIHFailure",
+            "use_fast_restart": True,
+            "continue_on_error": True,
+            "batch_size": 3,
+            "context": {"geometry": "workpiece", "mesh": "team36.vol"},
+        },
+    })
+    code = payload["matlab_code"]
+    assert payload["schema"].endswith("/v2")
+    assert "radia.optuna.SimulinkRunner" in code
+    assert "ConstraintFcn=@constrainIHTrial" in code
+    assert "ValidationFcn=@validateIHTrial" in code
+    assert "ResultFcn=@collectIHArtifacts" in code
+    assert "FailureClassifierFcn=@classifyIHFailure" in code
+    assert "UseFastRestart=true" in code
+    assert "BatchSize=3,ContinueOnError=true" in code
+    assert "Context=jsondecode" in code
+    assert payload["result_contract"]["cae_success"] == (
+        "radia.optuna.cae-trial.v1 in trial user attributes"
+    )
 
 
 def test_optimize_server_builds_cubit_vim_lp_code():
