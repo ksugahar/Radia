@@ -21,6 +21,7 @@ Empirically verified semantics (gmsh 4.15.2, locked by tests):
 from __future__ import annotations
 
 import json
+import math
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -1714,7 +1715,7 @@ def curve_profile(path: str | Path, x_expr: str, y_expr: str, z_expr: str,
     if plot_png is not None:
         series = _series_from_samples(us, result["values"])
         plot = _plot_series(series, str(plot_png), xlabel="u",
-                            ylabel="value", title="curve profile")
+                            ylabel="value")
         result["plot_png"] = plot.get("png")
         if not plot.get("ok"):
             result["plot_error"] = plot.get("error")
@@ -1833,8 +1834,6 @@ try:
             ax.legend(fontsize=8)
     ax.set_xlabel(cfg.get("xlabel", ""))
     ax.set_ylabel(cfg.get("ylabel", ""))
-    if cfg.get("title"):
-        ax.set_title(cfg["title"], fontsize=10)
     ax.grid(True, alpha=0.4)
     fig.tight_layout()
     fig.savefig(cfg["png"], dpi=130)
@@ -1847,12 +1846,12 @@ with open(out_path, "w", encoding="utf-8") as f:
 
 
 def _plot_series(series: list[dict[str, Any]], png: str, *,
-                 xlabel: str = "", ylabel: str = "", title: str = "",
+                 xlabel: str = "", ylabel: str = "",
                  timeout_s: float = 120.0) -> dict[str, Any]:
     out = Path(png)
     out.parent.mkdir(parents=True, exist_ok=True)
     cfg = {"kind": "line", "series": series, "xlabel": xlabel,
-           "ylabel": ylabel, "title": title, "png": str(out)}
+           "ylabel": ylabel, "png": str(out)}
     with tempfile.TemporaryDirectory(prefix="radia_mcp_gmsh_plot_") as work:
         cfg_path = Path(work) / "plot.json"
         cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
@@ -1986,7 +1985,7 @@ def field_histogram(path: str | Path, *, view: str | None = None,
                     samples.append(chunk[0])
                 else:
                     samples.append(sum(c * c for c in chunk) ** 0.5)
-    finite = [s for s in samples if s == s and abs(s) != float("inf")]
+    finite = [s for s in samples if math.isfinite(s)]
     if not finite:
         return {"ok": False, "error": "view contains no finite samples"}
     lo, hi = ((float(value_range[0]), float(value_range[1]))
@@ -2018,8 +2017,7 @@ def field_histogram(path: str | Path, *, view: str | None = None,
         cfg = {"kind": "bar",
                "centers": [lo + (k + 0.5) * width for k in range(bins)],
                "counts": counts, "width": width,
-               "xlabel": name, "ylabel": "count",
-               "title": f"histogram of {name}", "png": str(out)}
+               "xlabel": name, "ylabel": "count", "png": str(out)}
         with tempfile.TemporaryDirectory(
                 prefix="radia_mcp_gmsh_plot_") as work:
             cfg_path = Path(work) / "plot.json"
@@ -2085,7 +2083,7 @@ def point_history(path: str | Path, point: list[float], *,
                            "label": "|v|"})
         plot = _plot_series(series, str(plot_png),
                             xlabel="time" if times is not None else "step",
-                            ylabel=out["view"], title="point history")
+                            ylabel=out["view"])
         out["plot_png"] = plot.get("png")
         if not plot.get("ok"):
             out["plot_error"] = plot.get("error")
