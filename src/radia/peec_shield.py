@@ -24,9 +24,9 @@ Physics:
     coupling through the full mutual inductance matrix.
 
 Usage:
-    from peec_matrices import PEECBuilder
-    from peec_shield import add_shield_mesh, add_coil_from_segments
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_matrices import PEECBuilder
+    from radia.peec_shield import add_shield_mesh, add_coil_from_segments
+    from radia.peec_topology import PEECCircuitSolver
 
     builder = PEECBuilder()
 

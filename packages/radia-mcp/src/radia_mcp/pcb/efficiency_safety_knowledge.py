@@ -105,7 +105,7 @@ where M = mutual inductance, L_i = self inductance.
 | FEM (volume mesh) | NGSolve | benchmark | accuracy check |
 | BEM (surface) | `ngsolve.bem` | open boundary | research |
 
-Lab production = PEEC: `from radia.peec_matrices import PyPEECBuilder`
+Lab production = PEEC: `from radia.peec_matrices import PEECBuilder`
 
 ## k as function of geometry
 

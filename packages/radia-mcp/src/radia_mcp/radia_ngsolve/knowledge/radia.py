@@ -1027,8 +1027,8 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 ## Topology API (Node-Segment)
 
 ```python
-from peec_matrices import PEECBuilder
-from peec_topology import PEECCircuitSolver
+from radia.peec_matrices import PEECBuilder
+from radia.peec_topology import PEECCircuitSolver
 
 builder = PEECBuilder()
 n1 = builder.add_node_at(0, 0, 0)
