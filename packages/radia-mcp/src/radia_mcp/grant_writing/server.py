@@ -6,6 +6,19 @@ KAKENHI AI-era OSS research-platform axes, domain focus checks, budget
 alignment checks, internal-evidence-to-external-scale checks, and integrated
 health reports. Collaborative-integration checks cover lifecycle cost,
 ecosystem boundaries, scope, negative results, ethics, and asset provenance.
+Tool-to-domain checks require infrastructure proposals to end in a measurable
+field outcome and falsifiable knowledge product. Derived-metric checks require
+separate calibration and held-out validation. Cross-organization pilot checks
+distinguish scientific re-execution from internal use, links, and user counts.
+Literature-gap checks prevent non-detection in a bounded corpus from being
+promoted into field-wide adoption claims or the proposal's academic gap.
+Abstraction checks keep named software out of the research concept while
+retaining names where implementation or feasibility must be reproducible.
+Reviewer-vocabulary checks explain OSS/AI terms, prefer readable field terms,
+and keep named benchmarks in a verification rather than significance role.
+Persuasion-quality checks catch self-negating evidence, abrupt equations,
+undefined symbols, defensive paragraphs, optional branches, acronym piles, and
+internal memo shorthand.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / figure / grant-writing / presentation.
@@ -36,7 +49,12 @@ register_status_tool(
         "section coverage, KDDI Digital Innovation social-implementation "
         "axes, KAKENHI AI-era OSS platform axes, domain focus, budget "
         "alignment, internal-to-external scale, collaborative-integration "
-        "risks, and integrated health reports."
+        "risks, tool-to-domain outcomes, derived-metric validation, "
+        "cross-organization pilots, literature-gap evidence scope, "
+        "named-software abstraction, "
+        "reviewer vocabulary and benchmark role, "
+        "persuasion hierarchy and equation introductions, "
+        "and integrated health reports."
     ),
     subpackage="radia_mcp.grant_writing",
     related_servers=["paper-writing", "figure", "presentation", "document-meta"],
@@ -56,7 +74,8 @@ def main():
             "成果はOSSレポジトリ、技術プレゼン、"
             "予算内訳、年度スケジュールとして公開する。"
             "予算は助成上限額に近い申請額とし、単価、数量、月数、年度配分、"
-            "見積根拠を積算して検証ループに対応づける。"
+            "見積根拠を積算して検証ループに対応づける。公式料金表、料金年度、"
+            "参照日、税込区分、最低購入単位、有効期限、為替、端数処理を記録する。"
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
         assert report["overall_score"] >= 1.0

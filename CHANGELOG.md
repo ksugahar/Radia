@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Clarified grant-writing guidance for OSS/AI proposals: Git/GitHub provides
+  versioned review and provenance, while an AI-facing execution layer such as
+  MCP must expose domain semantics and validated execution without forcing a
+  common solver or disclosure of institution-owned code.
+- Added a grant-writing persuasion check that rejects self-negating evidence,
+  abrupt displayed equations, undefined symbols, defensive core paragraphs,
+  optional side branches, acronym piles, and internal memo shorthand; benchmark
+  evidence now passes by connecting positive initial validation to a
+  constrained real-design test.
+
 ## 4.95.48 - Gmsh mesh-origin parity and PEEC overlays
 
 Released 2026-08-06.
