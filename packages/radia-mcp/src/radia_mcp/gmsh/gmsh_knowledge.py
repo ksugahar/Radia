@@ -1793,6 +1793,7 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Temporal shift/harmonics | gmsh_harmonic_to_time / gmsh_modulus_phase | AC phasor -> rotating field / amplitude+phase |
 | Comparative views | gmsh_render_montage | labeled PNG grid |
 | Camera orbit / fly-around | gmsh_export_animation(orbit_axis=...) | camera sweeps, data fixed at time_step |
+| CAD + data overlay (Merge) | gmsh_render(merge_files=[...]) | coil STEP + filament .msh + field .msh in ONE scene; CAD merge auto-enables shaded faces |
 | Warp-like displacement display | View.DisplacementFactor | vector view drawn as displaced (display only) |
 | Color map controls | gmsh_render options | View.RangeType, View.CustomMin/CustomMax, View.SaturateValues, View.IntervalsType, View.NbIso |
 
@@ -1863,6 +1864,41 @@ Direct display alternative (no extraction): rendering the volume
 scalar with ``View[0].IntervalsType = 1`` + ``View[0].NbIso`` draws
 isosurfaces on the fly (RangeType=2 + CustomMin/CustomMax pin the
 levels) -- same crack caveat, handy for quick looks.
+
+## STEP overlay + PEEC filament post (the Merge workflow, headless)
+
+The lab's classic GUI recipe (Merge coil.step + filaments.msh +
+field.msh) is one headless call:
+
+    gmsh_render("field.msh",
+                merge_files=["coil.step", "filaments.msh"])
+
+- A merged CAD file (.step/.brep) auto-enables shaded solid faces
+  (Geometry.Surfaces=1, SurfaceType=2, vertex dots off); override
+  with geometry_display=False or Geometry.* options.
+- UNITS (measured): radia/netgen ``WriteStep`` writes METER
+  coordinates, so the STEP overlays radia field data 1:1 with no
+  conversion.  External CAD STEP files are commonly in mm -- check
+  the overlay bbox before trusting a composite figure.
+
+PEEC filaments are first-class data via
+``radia.gmsh_post_export.export_filaments_msh`` (per-filament
+physical groups, element tags offset so sibling merges never drop
+lines):
+
+- ``currents=I`` writes ``|I| [A]`` per line element (color).
+- ``direction_view=True`` adds ``I direction [A]``: unit tangent x
+  |I| arrows -- the winding's current flow direction.
+- ``complex_steps=True`` (AC) adds ``I_complex [A]`` with step 0 =
+  Re I, step 1 = Im I: feed it to gmsh_harmonic_to_time +
+  gmsh_export_animation for the rotating-phasor current animation
+  (outer-filament phase lead = visible skin effect), or to
+  gmsh_modulus_phase for amplitude/phase maps.
+
+CoilBuilder closes the loop end-to-end: ``write_step()`` for the CAD
+solid, ``to_filaments(nw, nh, frequency=...)`` for the Tier-A current
+distribution, ``to_radia()`` for the Biot-Savart field -- the three
+layers of one overlay figure come from one builder.
 
 Executable showcase: ``docs/gmsh_post/em_fieldlines.ipynb`` runs the
 whole battery on two analytic-field cases (circular coil with exact

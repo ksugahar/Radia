@@ -877,6 +877,31 @@ def test_render_png_with_structured_cut_plane(tmp_path):
 
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
+def test_render_png_merges_step_overlay(tmp_path):
+    # the lab Merge workflow headless: field .msh + CAD STEP overlay
+    from radia_mcp.gmsh.render import render_png
+
+    fixture = (Path(__file__).parent / "mcp_server" / "fixtures"
+               / "overlay_box.step")
+    assert fixture.is_file(), "committed STEP fixture missing"
+    msh = _write(tmp_path, _BASE_MSH)
+    out = tmp_path / "overlay.png"
+    result = render_png(msh, out, width=420, height=360,
+                        merge_files=[fixture])
+    _skip_if_no_graphics(result)
+    assert result["ok"] is True, result
+    assert out.is_file()
+    blank = result.get("blank_check", {})
+    if blank.get("ran"):
+        assert blank["looks_blank"] is False, result
+
+    missing = render_png(msh, tmp_path / "x.png",
+                         merge_files=[tmp_path / "nope.step"])
+    assert missing["ok"] is False
+    assert "merge file not found" in missing["error"]
+
+
+@pytest.mark.skipif(not _GMSH_AVAILABLE, reason="gmsh package not installed")
 def test_render_png_flags_axis_equal_override(tmp_path):
     # Policy: spatial figures (contours, streamlines, sections) must be
     # axis equal; a General.Scale* override away from 1.0 is flagged.
