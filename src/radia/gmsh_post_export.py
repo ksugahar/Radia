@@ -2448,7 +2448,7 @@ def export_filaments_msh(filament_paths, output_msh, *,
 
     Each filament is a polyline of ((x1,y1,z1),(x2,y2,z2)) segments.
     Writes 2-node line elements (GMSH type 1) grouped per filament
-    as separate physical groups.  Optionally writes |I| as NodeData
+    as separate physical groups.  Optionally writes |I| as ElementData
     for current magnitude visualization.
 
     Usage:
@@ -2468,7 +2468,7 @@ def export_filaments_msh(filament_paths, output_msh, *,
             of ((x1,y1,z1), (x2,y2,z2)) segment endpoint pairs.
         output_msh: Output .msh file path.
         currents: optional complex ndarray (N,) of per-filament currents.
-            Written as |I| NodeData.
+            Written as |I| ElementData.
         direction_view: if True (and currents given), additionally
             write an "I direction" vector ElementData view: the unit
             tangent of every line element scaled by |I| of its
@@ -2500,6 +2500,78 @@ def export_filaments_msh(filament_paths, output_msh, *,
     """
     import numpy as np
 
+    try:
+        filament_paths = [list(path) for path in filament_paths]
+    except TypeError as exc:
+        raise ValueError("filament_paths must be an iterable of paths") from exc
+    if not filament_paths:
+        raise ValueError("filament_paths must contain at least one filament")
+
+    normalized_paths = []
+    for fil_idx, path in enumerate(filament_paths):
+        if not path:
+            raise ValueError(f"filament {fil_idx} has no segments")
+        normalized = []
+        for seg_idx, segment in enumerate(path):
+            try:
+                if len(segment) != 2:
+                    raise ValueError
+                p0 = np.asarray(segment[0], dtype=np.float64)
+                p1 = np.asarray(segment[1], dtype=np.float64)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"filament {fil_idx} segment {seg_idx} must contain "
+                    "two numeric 3D endpoints") from exc
+            if p0.shape != (3,) or p1.shape != (3,):
+                raise ValueError(
+                    f"filament {fil_idx} segment {seg_idx} endpoints "
+                    "must each have exactly three coordinates")
+            if not np.all(np.isfinite(p0)) or not np.all(np.isfinite(p1)):
+                raise ValueError(
+                    f"filament {fil_idx} segment {seg_idx} contains "
+                    "non-finite coordinates")
+            if float(np.linalg.norm(p1 - p0)) <= 0.0:
+                raise ValueError(
+                    f"filament {fil_idx} segment {seg_idx} has zero length")
+            normalized.append((tuple(p0), tuple(p1)))
+        normalized_paths.append(normalized)
+    filament_paths = normalized_paths
+
+    try:
+        viz_subdivide_threshold = float(viz_subdivide_threshold)
+        viz_subdivide_n_int = int(viz_subdivide_n)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid visualization subdivision controls") from exc
+    if (not np.isfinite(viz_subdivide_threshold)
+            or viz_subdivide_threshold <= 0.0):
+        raise ValueError("viz_subdivide_threshold must be finite and positive")
+    if (viz_subdivide_n_int < 1
+            or float(viz_subdivide_n) != float(viz_subdivide_n_int)):
+        raise ValueError("viz_subdivide_n must be a positive integer")
+    viz_subdivide_n = viz_subdivide_n_int
+
+    n_fil = len(filament_paths)
+    I_arr = None
+    if currents is not None:
+        try:
+            I_arr = np.asarray(currents)
+            dtype = np.complex128 if np.iscomplexobj(I_arr) else np.float64
+            I_arr = I_arr.astype(dtype, copy=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("currents must be a numeric 1D array") from exc
+        if I_arr.ndim != 1 or len(I_arr) != n_fil:
+            raise ValueError(
+                f"currents must have shape ({n_fil},), got {I_arr.shape}")
+        if not np.all(np.isfinite(I_arr)):
+            raise ValueError("currents contains non-finite values")
+    elif direction_view or complex_steps:
+        raise ValueError(
+            "currents is required when direction_view or complex_steps is set")
+
+    if not isinstance(label, str) or not label or any(
+            c in label for c in ('"', '\n', '\r')):
+        raise ValueError("label must be a non-empty single-line string without quotes")
+
     if viz_subdivide_long:
         filament_paths_viz = []
         for path in filament_paths:
@@ -2522,7 +2594,7 @@ def export_filaments_msh(filament_paths, output_msh, *,
                 p1 = np.asarray(s[1], dtype=np.float64)
                 d = float(np.linalg.norm(p1 - p0))
                 if d > thresh:
-                    n = int(viz_subdivide_n)
+                    n = viz_subdivide_n
                     for k in range(n):
                         a = p0 + (p1 - p0) * (k / n)
                         b = p0 + (p1 - p0) * ((k + 1) / n)
@@ -2560,11 +2632,9 @@ def export_filaments_msh(filament_paths, output_msh, *,
     # geometry faces are enabled (Geometry.Surfaces=1 +
     # Geometry.SurfaceType>0).  Measured gmsh 4.15.2; the tag offset
     # resolves it.
-    n_fil = len(filament_paths)
     ELEM_TAG_OFFSET = 10_000_000
     ENT_TAG_OFFSET = 10_000_000
     elem_tag = ELEM_TAG_OFFSET
-    fil_of_node = {}  # node_id -> filament index (for current assignment)
 
     for k, path in enumerate(filament_paths):
         phys = k + 1  # 1-based physical group
@@ -2573,8 +2643,6 @@ def export_filaments_msh(filament_paths, output_msh, *,
             n2 = _get_node(p2)
             elem_tag += 1
             elements.append((elem_tag, phys, n1, n2))
-            fil_of_node.setdefault(n1, k)
-            fil_of_node.setdefault(n2, k)
 
     n_nodes = len(nodes)
     n_elems = len(elements)
@@ -2637,8 +2705,7 @@ def export_filaments_msh(filament_paths, output_msh, *,
         f.write("$EndElements\n")
 
         # ElementData: |I| per line element (no node-sharing ambiguity)
-        if currents is not None:
-            I_arr = np.asarray(currents)
+        if I_arr is not None:
             I_abs = np.abs(I_arr)
             f.write("$ElementData\n")
             f.write('1\n"|I| [A]"\n')  # 1 string tag
@@ -2668,7 +2735,7 @@ def export_filaments_msh(filament_paths, output_msh, *,
                     f.write(f"{tag} {vx:.6e} {vy:.6e} {vz:.6e}\n")
                 f.write("$EndElementData\n")
 
-            if complex_steps and np.iscomplexobj(I_arr):
+            if complex_steps:
                 # two-step re/im view: feeds gmsh harmonic-to-time /
                 # modulus-phase post (AC current animation)
                 for step, part in ((0, I_arr.real), (1, I_arr.imag)):
@@ -2683,6 +2750,6 @@ def export_filaments_msh(filament_paths, output_msh, *,
 
     print(f"export_filaments_msh: {output_msh}")
     print(f"  {n_fil} filaments, {n_elems} line elements, {n_nodes} nodes")
-    if currents is not None:
-        print(f"  |I| range: [{float(np.min(np.abs(currents))):.3e}, "
-              f"{float(np.max(np.abs(currents))):.3e}] A")
+    if I_arr is not None:
+        print(f"  |I| range: [{float(np.min(np.abs(I_arr))):.3e}, "
+              f"{float(np.max(np.abs(I_arr))):.3e}] A")

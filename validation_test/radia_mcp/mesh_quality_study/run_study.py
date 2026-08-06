@@ -1,7 +1,7 @@
 """Mesh-quality study: netgen vs cubit, equal-h AND equal-budget.
 
-Promoted from C:/temp/mesh_quality_study (2026-08-06) with its
-committed results JSON (Data Persistence Policy). Re-run with
+Promoted into the validation lane on 2026-08-06 with its committed
+results JSON (Data Persistence Policy). Re-run with
 `python run_study.py` (requires Cubit + netgen + gmsh + build123d;
 scratch meshes land in artifacts/, gitignored).
 Per-route meshes are produced through the SAME machinery as
@@ -14,15 +14,19 @@ referee; this script adds:
     budget, which mesher is better?" (equal-h flattered netgen's
     economy: ~2x fewer elements at the same h).
 
-Quality-class run (correctness, not timing) -- LAB execution allowed.
+This is a solver-heavy validation run. Execute it on an idle compute
+host with the required Cubit stack; local runs are smoke checks only.
 """
 import json
 import os
 import platform
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
-sys.path.insert(0, r"S:\Radia\01_GitHub\packages\radia-mcp\src")
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_REPO_ROOT / "packages" / "radia-mcp" / "src"))
 
 from build123d import (Box, Compound, Cylinder, Pos, Sphere,
                        export_step)
@@ -102,7 +106,6 @@ def _summarize(q):
 
 def run_netgen(step, maxh, tag):
     msh = os.path.join(OUT, f"{tag}_netgen.msh")
-    from pathlib import Path
     _netgen_mesh_to_msh(Path(step), maxh, Path(msh))
     return _summarize(mesh_quality(msh))
 

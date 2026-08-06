@@ -48,6 +48,25 @@ def _sections(path, kind="ElementData"):
     return out
 
 
+@pytest.mark.parametrize(
+    ("paths", "currents", "kwargs", "message"),
+    [
+        ([], None, {}, "at least one filament"),
+        ([[]], None, {}, "has no segments"),
+        (_PATHS, [1.0], {}, "shape"),
+        (_PATHS, [1.0, np.nan], {}, "non-finite"),
+        (_PATHS, None, {"direction_view": True}, "currents is required"),
+        (_PATHS, _CURRENTS, {"viz_subdivide_n": 0}, "positive integer"),
+    ],
+)
+def test_invalid_input_fails_before_writing(
+        tmp_path, paths, currents, kwargs, message):
+    out = tmp_path / "invalid.msh"
+    with pytest.raises(ValueError, match=message):
+        export_filaments_msh(paths, str(out), currents=currents, **kwargs)
+    assert not out.exists()
+
+
 def test_base_current_magnitude_elementdata(tmp_path):
     out = tmp_path / "fil.msh"
     export_filaments_msh(_PATHS, str(out), currents=_CURRENTS)
@@ -91,6 +110,16 @@ def test_complex_steps_write_re_im_pair(tmp_path):
     im_vals = sorted({float(r[1]) for r in im_sec["rows"]})
     assert re_vals == [pytest.approx(1.0), pytest.approx(3.0)]
     assert im_vals == [pytest.approx(-1.0), pytest.approx(4.0)]
+
+
+def test_complex_steps_accept_real_currents_with_zero_imaginary_step(tmp_path):
+    out = tmp_path / "fil_real.msh"
+    export_filaments_msh(_PATHS, str(out), currents=[2.0, 3.0],
+                         complex_steps=True)
+    secs = [s for s in _sections(out) if s["name"] == "I_complex [A]"]
+    assert [s["step"] for s in secs] == [0, 1]
+    assert {float(row[1]) for row in secs[0]["rows"]} == {2.0, 3.0}
+    assert {float(row[1]) for row in secs[1]["rows"]} == {0.0}
 
 
 @pytest.mark.skipif(not _GMSH_AVAILABLE
