@@ -528,14 +528,15 @@ def _deploy_editable_remote(ssh_host, label, repo):
     """
     step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
     expected_sha = _release_head()
+    safe_repo = repo.replace("\\", "/")
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
-$sourceHead = (& git -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
+$sourceHead = (& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $sourceHead -ne "{expected_sha}") {{
   Write-Error "Release source SHA mismatch: expected {expected_sha}, got $sourceHead"
   exit 41
 }}
-$sourceDirty = (& git -C "{repo}" status --porcelain --untracked-files=no) -join "`n"
+$sourceDirty = (& git -c "safe.directory={safe_repo}" -C "{repo}" status --porcelain --untracked-files=no) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
   Write-Error "Release source has tracked changes: $sourceDirty"
   exit 42
@@ -948,8 +949,10 @@ def _verify_local_release_source(repo, expected_sha):
     if not path.is_dir():
         fail(f"LAB editable release source does not exist: {repo}")
         return 2
+    safe_repo = repo.replace("\\", "/")
     head = run(
-        ["git", "-C", repo, "rev-parse", "HEAD"],
+        ["git", "-c", f"safe.directory={safe_repo}",
+         "-C", repo, "rev-parse", "HEAD"],
         capture=True, check=False,
     )
     got_sha = (head.stdout or "").strip().lower()
@@ -960,7 +963,8 @@ def _verify_local_release_source(repo, expected_sha):
         )
         return 4
     dirty = run(
-        ["git", "-C", repo, "status", "--porcelain", "--untracked-files=no"],
+        ["git", "-c", f"safe.directory={safe_repo}",
+         "-C", repo, "status", "--porcelain", "--untracked-files=no"],
         capture=True, check=False,
     )
     tracked_changes = (dirty.stdout or "").strip()

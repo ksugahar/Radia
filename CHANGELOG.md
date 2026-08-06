@@ -5,6 +5,14 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.47 - NAS-safe exact-source QUD
+
+Released 2026-08-06.
+
+- Scoped Git's safe-directory allowance to the configured LAB and 100-machine
+  release worktree during exact-SHA checks, without changing global Git
+  configuration.
+
 ## 4.95.46 - Exact-source QUD deployment
 
 Released 2026-08-06.
