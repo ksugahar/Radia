@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.33] - 2026-08-06
+
+- Added a headless Netgen/Cubit mesh-quality comparison using one Gmsh minSICN
+  referee, with bounded inputs and per-route failure isolation.
+- Added STEP/BREP and post-data overlays to Gmsh PNG/GIF tools, including
+  shaded CAD controls and robust line-view rendering.
+- Added executable mesh-quality studies and contracts for output orientation,
+  high-order connectivity, PEEC current views, and Cubit session cleanup.
+- Regenerated the tool inventory from the integrated MCP source so unrelated
+  editable-install work does not leak into the published catalog.
+
 ## [1.4.32] - 2026-08-06
 
 - Added the executed electromagnetic field-line and adaptive-isosurface
