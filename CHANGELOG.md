@@ -5,7 +5,7 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
-## 4.95.44 - Cubit GUI session lifecycle hardening
+## 4.95.44 - Gmsh post-processing and Cubit MCP hardening
 
 Released 2026-08-06.
 
@@ -15,8 +15,18 @@ Released 2026-08-06.
   so client termination cannot leave license-holding Cubit processes behind.
 - Made snapshots verify fresh non-empty output and atomically replace the
   destination, preventing stale PNGs from being reported as new captures.
-- Added lifecycle, annotation, call-log rotation, probe compatibility, and
-  real Cubit GUI regressions covering startup through private-directory cleanup.
+- Added ParaView-parity Gmsh post tools for derived fields, thresholding,
+  symmetry expansion, affine transforms, skin extraction, resampling,
+  CSV export, histograms, point histories, montages, and camera orbits.
+- Made the dependency-free MSH data reader reject inconsistent counts, tag
+  ranges, duplicate or missing tags, malformed row widths, and invalid
+  ElementNodeData connectivity before downstream tools consume the file.
+- Completed structured MCP error-kind coverage and corrected Cubit label probes
+  to count the union of direct and geometry-based block membership without
+  double-counting elements.
+- Added lifecycle, concurrency, annotation, call-log rotation, parser, probe,
+  and live GUI plus headless Cubit regressions, including deterministic stream
+  and private-directory cleanup.
 
 ## 4.95.43 - Gmsh post-processing and session hardening
 

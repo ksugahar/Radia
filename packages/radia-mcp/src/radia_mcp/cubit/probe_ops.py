@@ -114,12 +114,12 @@ def _probe_labels(cubit_mod):
     (phantom).  The primary value of this probe is therefore verifying
     ACTUAL block membership after every block/sideset command -- an
     intended-but-absent element set shows up here as missing counts."""
-    def _count_in(kind: str, scope: str, eid: int) -> int:
+    def _ids_in(kind: str, scope: str, eid: int) -> set[int]:
         try:
-            return len(cubit_mod.parse_cubit_list(
-                kind, f"in {scope} {eid}"))
+            return {int(item) for item in cubit_mod.parse_cubit_list(
+                kind, f"in {scope} {eid}")}
         except Exception:
-            return 0
+            return set()
 
     blocks = []
     for bid in cubit_mod.get_block_id_list():
@@ -131,28 +131,36 @@ def _probe_labels(cubit_mod):
         # `block N add face in surface S`) and GEOMETRY membership
         # (`block N add volume V` -- get_block_hexes returns 0 there
         # even for a fully meshed volume, VERIFIED Cubit 2025.12
-        # 2026-08-05: 125-hex brick in a volume block reported 0).  Sum
-        # both so `volume_elems`/`surface_elems` mean "elements this
-        # block will actually export".
-        vol_elems = (len(cubit_mod.get_block_hexes(bid))
-                     + len(cubit_mod.get_block_tets(bid))
-                     + len(cubit_mod.get_block_wedges(bid))
-                     + len(cubit_mod.get_block_pyramids(bid)))
+        # 2026-08-05: 125-hex brick in a volume block reported 0).  Take
+        # the UNION so a block that has both forms of membership does not
+        # double-count an element.
+        vol_ids = {
+            int(item)
+            for getter in (cubit_mod.get_block_hexes,
+                           cubit_mod.get_block_tets,
+                           cubit_mod.get_block_wedges,
+                           cubit_mod.get_block_pyramids)
+            for item in getter(bid)
+        }
         for vid in volumes:
-            vol_elems += sum(_count_in(k, "volume", vid)
-                             for k in ("hex", "tet", "wedge", "pyramid"))
-        surf_elems = (len(cubit_mod.get_block_tris(bid))
-                      + len(cubit_mod.get_block_faces(bid)))
+            for kind in ("hex", "tet", "wedge", "pyramid"):
+                vol_ids.update(_ids_in(kind, "volume", vid))
+        surf_ids = {
+            int(item)
+            for getter in (cubit_mod.get_block_tris,
+                           cubit_mod.get_block_faces)
+            for item in getter(bid)
+        }
         for sid in surfaces:
-            surf_elems += sum(_count_in(k, "surface", sid)
-                              for k in ("face", "tri"))
+            for kind in ("face", "tri"):
+                surf_ids.update(_ids_in(kind, "surface", sid))
         blocks.append({
             "id": bid,
             "name": str(cubit_mod.get_exodus_entity_name("block", bid)),
             "volumes": volumes,
             "surfaces": surfaces,
-            "volume_elems": int(vol_elems),
-            "surface_elems": int(surf_elems),
+            "volume_elems": len(vol_ids),
+            "surface_elems": len(surf_ids),
         })
     sidesets = []
     for sid in cubit_mod.get_sideset_id_list():

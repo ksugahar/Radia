@@ -20,12 +20,10 @@ in a finally block).  Skipped wholesale when Cubit is absent.
 
 import json
 import os
-import subprocess
 import threading
 import time
 
 import pytest
-
 from radia_mcp.cubit import session as cs
 
 pytestmark = pytest.mark.skipif(
@@ -129,8 +127,10 @@ def test_gui_two_client_concurrency(gui_session):
                for nm, s in (("A", a), ("B", b)) for i in range(3)]
     for t in threads:
         t.start()
+    deadline = time.monotonic() + 120.0
     for t in threads:
-        t.join(timeout=120)
+        t.join(timeout=max(0.0, deadline - time.monotonic()))
+    assert not [t.name for t in threads if t.is_alive()]
     assert not errors, errors[:5]
     assert len(results) == 60
 
@@ -143,70 +143,38 @@ def test_batch_probe_stack():
     """Batch stdio daemon: entities/labels probes + label audit +
     silent block no-op detection (the Cubit 2025.12 phantom-block
     hazard)."""
-    bin_dir = cs.find_cubit_install()
-    daemon = os.path.join(os.path.dirname(cs.__file__), "daemon.py")
-    cubit_py = None
-    for cand in ("python3/python.exe", "python3.10/python.exe"):
-        p = os.path.join(str(bin_dir), cand)
-        if os.path.isfile(p):
-            cubit_py = p
-            break
-    if cubit_py is None:
-        pytest.skip("Cubit bundled python not found")
-
-    env = os.environ.copy()
-    env["CUBIT_DAEMON_MODE"] = "batch"
-    proc = subprocess.Popen([cubit_py, daemon], stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, env=env, bufsize=0)
+    sess = cs.CubitSession(mode="batch")
     try:
-        def call(rid, op, args):
-            proc.stdin.write((json.dumps(
-                {"id": rid, "op": op, "args": args}) + "\n").encode())
-            proc.stdin.flush()
-            return json.loads(proc.stdout.readline().decode())
-
-        ready = json.loads(proc.stdout.readline().decode())
+        ready = sess.ensure_started()
         assert ready.get("ready"), ready
 
-        r = call(1, "cmd", ["reset", "create brick x 10",
-                            "volume all size 2", "mesh volume all",
-                            'block 1 add volume 1', 'block 1 name "iron"'])
+        r = sess.call("cmd", ["reset", "create brick x 10",
+                              "volume all size 2", "mesh volume all",
+                              'block 1 add volume 1', 'block 1 name "iron"'])
         assert r["ok"], r
 
-        ent = call(2, "probe", ["entities"])["result"]
+        ent = sess.call("probe", ["entities"])["result"]
         assert ent["volume_count"] == 1
         v = ent["volumes"][0]
         assert v["extent"] == [10.0, 10.0, 10.0]
 
-        lab = call(3, "probe", ["labels"])["result"]
+        lab = sess.call("probe", ["labels"])["result"]
         assert lab["blocks"][0]["name"] == "iron"
         assert lab["blocks"][0]["volume_elems"] > 0
         assert lab["audit"]["passed"] is True
 
         # Phantom-block hazard: wrong-kind add silently no-ops
-        call(4, "cmd", ['block 2 add tri in surface 1'])
-        lab2 = call(5, "probe", ["labels"])["result"]
+        sess.call("cmd", ['block 2 add tri in surface 1'])
+        lab2 = sess.call("probe", ["labels"])["result"]
         ids = [b["id"] for b in lab2["blocks"]]
         if 2 in ids:
             b2 = next(b for b in lab2["blocks"] if b["id"] == 2)
             assert b2["surface_elems"] == 0      # membership absent
     finally:
-        try:
-            proc.stdin.write(b'{"id": 99, "op": "shutdown", "args": []}\n')
-            proc.stdin.flush()
-            proc.wait(timeout=30)
-        except Exception:
-            proc.kill()
-            proc.wait(timeout=10)
-        for stream in (proc.stdin, proc.stdout):
-            try:
-                stream.close()
-            except Exception:
-                pass
+        sess.shutdown()
 
 
-def test_cad_mesh_probe_contract(tmp_path, monkeypatch):
+def test_cad_mesh_probe_contract(tmp_path):
     """The cross-server probe contract on one geometry: a labeled
     build123d assembly, probed on the CAD side and meshed+probed in the
     Cubit batch daemon, must agree per body in the SAME vocabulary."""
@@ -225,8 +193,7 @@ def test_cad_mesh_probe_contract(tmp_path, monkeypatch):
     cad = json.loads(build123d_probe(str(step), query="entities"))
     assert cad["status"] == "ok" and cad["solid_count"] == 2
 
-    monkeypatch.setenv("RADIA_CUBIT_SESSION_MODE", "new")
-    sess = cs.CubitSession(mode="gui")
+    sess = cs.CubitSession(mode="batch")
     try:
         sess.ensure_started()
         fwd = str(step).replace("\\", "/")

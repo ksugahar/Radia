@@ -227,6 +227,18 @@ def _remove_tree_with_retry(path: Path, timeout_s: float = 2.0) -> bool:
         time.sleep(0.05)
 
 
+def _close_process_streams(proc: subprocess.Popen) -> None:
+    """Close Popen pipes after the child has been reaped."""
+    for name in ("stdin", "stdout", "stderr"):
+        stream = getattr(proc, name, None)
+        if stream is None:
+            continue
+        try:
+            stream.close()
+        except OSError:
+            pass
+
+
 def _try_attach_existing_daemon(drop_dir: Path) -> dict | None:
     """Return the daemon's ready_info if a live daemon is found, else None.
 
@@ -565,6 +577,8 @@ class CubitSession:
                 if not _remove_tree_with_retry(self._drop_dir):
                     report["cleanup_warning"] = (
                         f"private drop directory remains: {self._drop_dir}")
+        if self._proc is not None:
+            _close_process_streams(self._proc)
         self._drop_dir = None
         self._outbox = None
         self._proc = None
