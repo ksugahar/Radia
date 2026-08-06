@@ -74,6 +74,13 @@ try:
                 gmsh.option.setNumber(f"View[{i}].MaxRecursionLevel", 2)
                 gmsh.option.setNumber(f"View[{i}].TargetError", 1e-4)
 
+        if cfg.get("smooth_normals", True):
+            # gmsh default is OFF, which leaves isosurfaces and skins
+            # visibly faceted; per-vertex normal averaging is the
+            # single biggest surface-quality lever.
+            for i in range(n_views):
+                gmsh.option.setNumber(f"View[{i}].SmoothNormals", 1)
+
         if cfg.get("clip_views"):
             for i in range(n_views):
                 gmsh.option.setNumber(f"View[{i}].Clip", 1)
@@ -283,6 +290,7 @@ def render_png(path: str | Path,
                string_options: dict[str, str] | None = None,
                auto_mesh_display: bool = True,
                adapt_views: bool = True,
+               smooth_normals: bool = True,
                timeout_s: float = 300.0) -> dict[str, Any]:
     """Render a .msh/.geo file to PNG in a gmsh subprocess.
 
@@ -290,6 +298,8 @@ def render_png(path: str | Path,
     launch artifact renders exactly as a user double-click would show it.
     ``cut_plane`` takes the same structured dict as the post-display
     contract ({enabled, normal, offset, ...}); views get Clip=1.
+    ``smooth_normals`` (default on) averages surface normals per vertex
+    -- the gmsh default leaves isosurfaces visibly faceted.
     """
     src = Path(path)
     if not src.is_file():
@@ -311,6 +321,7 @@ def render_png(path: str | Path,
         "string_options": string_options or {},
         "auto_mesh_display": bool(auto_mesh_display),
         "adapt_views": bool(adapt_views),
+        "smooth_normals": bool(smooth_normals),
         "clip_views": clip_views,
     }
     result = _run_render(cfg, timeout_s)
@@ -353,6 +364,7 @@ def export_animation(path: str | Path,
                      options: dict[str, float] | None = None,
                      string_options: dict[str, str] | None = None,
                      adapt_views: bool = True,
+                     smooth_normals: bool = True,
                      link_views: bool = True,
                      orbit_axis: str | None = None,
                      orbit_degrees: float = 360.0,
@@ -405,6 +417,7 @@ def export_animation(path: str | Path,
         "string_options": string_options or {},
         "auto_mesh_display": orbit_axis is not None,
         "adapt_views": bool(adapt_views),
+        "smooth_normals": bool(smooth_normals),
         "link_views": bool(link_views),
         "clip_views": clip_views,
         "orbit": ({"axis": orbit_axis, "degrees": float(orbit_degrees),
