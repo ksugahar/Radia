@@ -1769,7 +1769,7 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Calculator | gmsh_math_eval | NODAL application: result interpolates f(node values) |
 | Gradient / Curl / Divergence | gmsh_derived_field | exact derivative of the P1 interpolant, element-wise constant |
 | Eigenvalues (tensor) | gmsh_derived_field(operation="eigenvalues") | writes Min/Mid/Max as 3 views in one file |
-| Contour (isosurface) | gmsh_isosurface | |
+| Contour (isosurface) | gmsh_isosurface | recur_level > 0 = adaptive extraction on order-2 data (0.21 -> 0.008 measured) |
 | Slice | gmsh_cut_plane_extract | plane A x + B y + C z + D = 0 |
 | Clip (visual) | gmsh_render(cut_plane=...) | display-side clipping, data untouched |
 | Threshold | gmsh_threshold | selects on the ELEMENT MEAN of the scalar |
@@ -1821,6 +1821,47 @@ decreasing exactness -- always prefer the highest one that applies:
    reports "stagnation" INSIDE the domain marks a field zero (or a
    numerically incoherent region) -- a real diagnostic, not a
    rendering artifact.
+
+## Beautiful isosurfaces: the four levers (all measured)
+
+A raw Plugin(Isosurface) render looks faceted and flat.  Four levers
+turn it into the publication picture; the radia-mcp tools apply the
+first two for you:
+
+1. **Adaptive extraction on high-order data**:
+   ``gmsh_isosurface(recur_level=3..4)`` / ``gmsh_flux_lines(...)``.
+   Plugin(Isosurface) honors RecurLevel ONLY when the source view has
+   adaptive visualization data -- the tools enable
+   ``View.AdaptVisualizationGrid`` + ``View.MaxRecursionLevel`` on
+   the source view before running the plugin (without that the
+   option is SILENTLY ignored).  Measured on a TET10 quadratic
+   field: radial error 0.21 -> 0.008, 1 -> 143 triangles at level 4.
+   Order-2 GmshPostExport output is exactly what this feeds on.
+2. **Smooth shading**: ``View.SmoothNormals = 1`` (gmsh default is
+   OFF -- the main cause of the faceted look).  gmsh_render /
+   gmsh_export_animation set it on every view by default
+   (``smooth_normals=False`` opts out); ``View.AngleSmoothNormals``
+   (default 30 deg) keeps genuine creases sharp.
+3. **Nesting, preferred: CLIP + opaque** (measured best): extract a
+   level stack with gmsh_flux_lines (one merged view), render with
+   ``cut_plane={"enabled": True, "normal": [0,-1,0], "offset": 0}``.
+   Opaque clipped surfaces keep full colormap saturation and hide
+   the adaptive micro-cracks completely.
+4. **Nesting, alternative: transparency** when the full closed
+   surfaces must stay visible:
+   ``options={"View[0].ColormapAlpha": 0.3..0.5}``
+   (``View.LightTwoSide`` already defaults to 1).  Trade-off,
+   measured: gmsh's adaptive extraction AND its direct Iso display
+   subdivide each element independently, so hairline T-junction
+   cracks exist at element boundaries -- invisible when opaque, but
+   visible as thin bright lines under transparency.  Deeper
+   recur_level with tighter target_error makes them finer; they do
+   not disappear (implementation property, not a data error).
+
+Direct display alternative (no extraction): rendering the volume
+scalar with ``View[0].IntervalsType = 1`` + ``View[0].NbIso`` draws
+isosurfaces on the fly (RangeType=2 + CustomMin/CustomMax pin the
+levels) -- same crack caveat, handy for quick looks.
 
 ## Honest gaps (do not fake these)
 

@@ -254,3 +254,71 @@ def test_flux_lines_explicit_levels_3d_isosurfaces(tmp_path):
     assert result["ok"] is True, result.get("error")
     assert result["levels"] == pytest.approx([0.5, 1.0, 1.5])
     assert result["pieces"].get("ST", 0) >= 3
+
+
+# ----------------------------------------------------------------------
+# adaptive isosurface extraction on high-order (TET10) data
+# ----------------------------------------------------------------------
+
+def _tet10_r2_msh():
+    """Unit TET10 carrying the EXACT quadratic T = x^2 + y^2 + z^2."""
+    corners = {1: (0, 0, 0), 2: (1, 0, 0), 3: (0, 1, 0), 4: (0, 0, 1)}
+    edges = {5: (1, 2), 6: (2, 3), 7: (1, 3), 8: (1, 4), 9: (3, 4),
+             10: (2, 4)}
+    coords = dict(corners)
+    for nid, (a, b) in edges.items():
+        pa, pb = corners[a], corners[b]
+        coords[nid] = tuple((pa[k] + pb[k]) / 2 for k in range(3))
+    lines = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat", "$Nodes",
+             "1 10 1 10", "3 1 0 10"]
+    lines += [str(i) for i in range(1, 11)]
+    lines += [f"{coords[i][0]} {coords[i][1]} {coords[i][2]}"
+              for i in range(1, 11)]
+    lines += ["$EndNodes", "$Elements", "1 1 1 1", "3 1 11 1",
+              "1 " + " ".join(str(i) for i in range(1, 11)),
+              "$EndElements"]
+    rows = [(i, [sum(c * c for c in coords[i])]) for i in range(1, 11)]
+    return "\n".join(lines) + "\n" + _nodedata("T", 1, rows)
+
+
+def _st_radial_errors(pos_path, r0):
+    import re
+    errs = []
+    text = pos_path.read_text(encoding="utf-8", errors="replace")
+    for m in re.finditer(r"ST\(([^)]*)\)", text):
+        nums = [float(t) for t in m.group(1).split(",")]
+        for k in range(3):
+            r = (nums[3 * k] ** 2 + nums[3 * k + 1] ** 2
+                 + nums[3 * k + 2] ** 2) ** 0.5
+            errs.append(abs(r - r0))
+    return errs
+
+
+def test_isosurface_adaptive_follows_quadratic_field(tmp_path):
+    from radia_mcp.gmsh.post_process import isosurface
+
+    msh = _write(tmp_path, _tet10_r2_msh(), "tet10.msh")
+    # plain P1 cut: one flat triangle, chord error ~0.21 on r = 0.3
+    flat_out = tmp_path / "flat.pos"
+    flat = isosurface(msh, 0.09, out_file=flat_out)
+    assert flat["ok"] is True, flat.get("error")
+    assert flat["pieces"].get("ST") == 1
+    flat_errs = _st_radial_errors(flat_out, 0.3)
+    assert max(flat_errs) > 0.15
+
+    # adaptive: the extraction follows the quadratic interpolant
+    fine_out = tmp_path / "fine.pos"
+    fine = isosurface(msh, 0.09, recur_level=4, target_error=1e-6,
+                      out_file=fine_out)
+    assert fine["ok"] is True, fine.get("error")
+    assert fine["pieces"].get("ST", 0) > 50
+    fine_errs = _st_radial_errors(fine_out, 0.3)
+    assert max(fine_errs) < 0.01
+
+
+def test_flux_lines_pass_recur_level_through(tmp_path):
+    msh = _write(tmp_path, _tet10_r2_msh(), "tet10b.msh")
+    out = tmp_path / "adaptive_stack.pos"
+    result = flux_lines(msh, levels=[0.09], recur_level=3, out_file=out)
+    assert result["ok"] is True, result.get("error")
+    assert result["pieces"].get("ST", 0) > 10  # 1 without adaptivity
