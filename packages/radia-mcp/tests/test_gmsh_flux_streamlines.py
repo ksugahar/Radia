@@ -9,9 +9,9 @@ reasons all have exact expected answers.
 
 import importlib.util
 import math
+from itertools import pairwise
 
 import pytest
-
 from radia_mcp.gmsh.post_process import (
     flux_lines,
     probe_field,
@@ -216,9 +216,20 @@ def test_streamlines_2d_uniform_field_even_spacing(tmp_path):
             assert p[1] == pytest.approx(y0, abs=1e-6)  # straight
         ys.append(y0)
     ys.sort()
-    gaps = [b - a for a, b in zip(ys, ys[1:])]
+    gaps = [b - a for a, b in pairwise(ys)]
     # Jobard-Lefer spacing: every gap within [0.5, 1.6] * d_sep
     assert all(0.06 <= g <= 0.20 for g in gaps), gaps
+
+
+def test_streamlines_2d_honors_total_step_budget(tmp_path):
+    msh = _write(tmp_path, _UNI, "budget.msh")
+    result = streamlines_2d(
+        msh, [-0.45, -0.45, 0.0], [0.45, -0.45, 0.0],
+        [-0.45, 0.45, 0.0], d_sep=0.12, max_steps=100,
+        max_total_steps=3, out_file=tmp_path / "budget.pos")
+    assert result["ok"] is True, result.get("error")
+    assert result["budget_exceeded"] is True
+    assert result["steps_used"] == 3
 
 
 # ----------------------------------------------------------------------

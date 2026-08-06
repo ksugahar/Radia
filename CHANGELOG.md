@@ -18,6 +18,13 @@ Released 2026-08-06.
 - Added ParaView-parity Gmsh post tools for derived fields, thresholding,
   symmetry expansion, affine transforms, skin extraction, resampling,
   CSV export, histograms, point histories, montages, and camera orbits.
+- Added adaptive RK4 field tracing with closed-loop detection, exact equal-flux
+  contours from planar or axisymmetric potentials, and Jobard-Lefer evenly
+  spaced streamlines on arbitrary plane patches.
+- Made field-line controls fail fast on non-physical values, preserve the
+  spacing contract, and stop exactly at the configured total-step budget.
+- Standardized spatial Gmsh renders on a physical 1:1:1 axis scale and report
+  deliberate scale exaggeration explicitly.
 - Made the dependency-free MSH data reader reject inconsistent counts, tag
   ranges, duplicate or missing tags, malformed row widths, and invalid
   ElementNodeData connectivity before downstream tools consume the file.

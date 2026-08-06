@@ -900,6 +900,7 @@ try:
                 return False
 
             steps_used = [0]  # list: the op body runs at module level
+            budget_reached = [False]
 
             def _trace2(seed):
                 t0, n0 = _sample2(seed[0], seed[1])
@@ -919,6 +920,9 @@ try:
                         return (sgn * t[0], sgn * t[1])
 
                     for _ in range(max_steps):
+                        if steps_used[0] >= budget:
+                            budget_reached[0] = True
+                            break
                         steps_used[0] += 1
                         k1 = _f(a, b)
                         if k1 is None:
@@ -958,6 +962,11 @@ try:
                                 closed = True
                                 break
                     halves.append(pth)
+                    if budget_reached[0]:
+                        if len(halves) == 1:
+                            return halves[0], False
+                        merged = list(reversed(halves[1]))[:-1] + halves[0]
+                        return merged, False
                     if closed:
                         return halves[0], True
                 merged = list(reversed(halves[1]))[:-1] + halves[0]
@@ -982,7 +991,7 @@ try:
             lines = []
             budget_hit = False
             while queue and len(lines) < max_lines:
-                if steps_used[0] > budget:
+                if steps_used[0] >= budget:
                     budget_hit = True
                     break
                 cand = queue.popleft()
@@ -992,6 +1001,8 @@ try:
                 if _too_close(cand[0], cand[1], 0.95 * d_sep):
                     continue
                 pts, closed = _trace2(cand)
+                if budget_reached[0]:
+                    budget_hit = True
                 if pts is None:
                     continue
                 arc = ds * (len(pts) - 1)
@@ -1014,6 +1025,8 @@ try:
                     for s in (1.0, -1.0):
                         queue.append((a + s * na * d_sep,
                                       b + s * nb * d_sep))
+                if budget_hit:
+                    break
 
             sl_data = []
             n_segments = 0
@@ -1130,6 +1143,26 @@ def _check_input(path: str | Path) -> dict[str, Any] | None:
     if not p.is_file():
         return {"ok": False, "error": f"file not found: {p}"}
     return None
+
+
+def _finite_float(value: Any, name: str) -> float:
+    try:
+        clean = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not math.isfinite(clean):
+        raise ValueError(f"{name} must be a finite number")
+    return clean
+
+
+def _finite_vector(value: Any, name: str, size: int) -> list[float]:
+    try:
+        clean = [_finite_float(component, name) for component in value]
+    except TypeError as exc:
+        raise ValueError(f"{name} needs exactly {size} coordinates") from exc
+    if len(clean) != size:
+        raise ValueError(f"{name} needs exactly {size} coordinates")
+    return clean
 
 
 def _default_out(path: str | Path, out_file: str | Path | None,
@@ -1324,20 +1357,37 @@ def streamlines(path: str | Path, seed_start: list[float],
     err = _check_input(path)
     if err:
         return err
-    s0 = [float(c) for c in seed_start]
-    s1 = [float(c) for c in seed_end]
-    if len(s0) != 3 or len(s1) != 3:
-        return {"ok": False, "error": "seed_start/seed_end need 3 coords"}
+    try:
+        s0 = _finite_vector(seed_start, "seed_start", 3)
+        s1 = _finite_vector(seed_end, "seed_end", 3)
+        clean_step = (None if step_size is None else
+                      _finite_float(step_size, "step_size"))
+        clean_turn = _finite_float(max_turn_deg, "max_turn_deg")
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    if clean_step is not None and clean_step <= 0.0:
+        return {"ok": False, "error": "step_size must be positive"}
+    if int(n_seeds) < 1:
+        return {"ok": False, "error": "n_seeds must be positive"}
+    if int(max_steps) < 1:
+        return {"ok": False, "error": "max_steps must be positive"}
+    if not 0.0 < clean_turn <= 180.0:
+        return {"ok": False,
+                "error": "max_turn_deg must be in (0, 180]"}
+    if int(arrows_every) < 0:
+        return {"ok": False, "error": "arrows_every must be non-negative"}
+    if int(time_step) < 0:
+        return {"ok": False, "error": "time_step must be non-negative"}
     return _run_post({"op": "streamlines", "path": str(path), "view": view,
                       "seed_start": s0, "seed_end": s1,
                       "n_seeds": int(n_seeds),
-                      "step_size": step_size,
+                      "step_size": clean_step,
                       "max_steps": int(max_steps),
                       "both_directions": bool(both_directions),
                       "time_step": int(time_step),
                       "adaptive": bool(adaptive),
                       "closure": bool(closure),
-                      "max_turn_deg": float(max_turn_deg),
+                      "max_turn_deg": clean_turn,
                       "arrows_every": int(arrows_every),
                       "return_points": bool(return_points),
                       "out_file": _default_out(path, out_file, "stream")},
@@ -1366,9 +1416,18 @@ def flux_lines(path: str | Path, *, n_levels: int = 20,
     if err:
         return err
     if levels is not None:
-        levels = [float(lv) for lv in levels]
+        try:
+            levels = [_finite_float(lv, "levels") for lv in levels]
+        except (TypeError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
         if not levels:
             return {"ok": False, "error": "levels must not be empty"}
+        if len(set(levels)) != len(levels):
+            return {"ok": False, "error": "levels must be unique"}
+    elif int(n_levels) < 1:
+        return {"ok": False, "error": "n_levels must be positive"}
+    if not str(result_name).strip():
+        return {"ok": False, "error": "result_name must not be empty"}
     return _run_post({"op": "flux_lines", "path": str(path), "view": view,
                       "n_levels": int(n_levels), "levels": levels,
                       "recur_level": int(recur_level),
@@ -1409,21 +1468,69 @@ def streamlines_2d(path: str | Path, origin: list[float],
         return err
     pts = {"origin": origin, "u_point": u_point, "v_point": v_point}
     clean: dict[str, list[float]] = {}
-    for key, val in pts.items():
-        v = [float(c) for c in val]
-        if len(v) != 3:
-            return {"ok": False, "error": f"{key} needs exactly 3 coords"}
-        clean[key] = v
-    if first_seed is not None:
-        first_seed = [float(c) for c in first_seed]
-        if len(first_seed) != 2:
-            return {"ok": False,
-                    "error": "first_seed is [u, v] IN-PLANE lengths "
-                             "(2 values)"}
+    try:
+        for key, val in pts.items():
+            clean[key] = _finite_vector(val, key, 3)
+        clean_sep = (None if d_sep is None else
+                     _finite_float(d_sep, "d_sep"))
+        clean_test = (None if d_test is None else
+                      _finite_float(d_test, "d_test"))
+        clean_step = (None if step_size is None else
+                      _finite_float(step_size, "step_size"))
+        if first_seed is not None:
+            first_seed = _finite_vector(first_seed, "first_seed", 2)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+
+    u_vec = [clean["u_point"][k] - clean["origin"][k] for k in range(3)]
+    v_raw = [clean["v_point"][k] - clean["origin"][k] for k in range(3)]
+    lu = math.sqrt(sum(component * component for component in u_vec))
+    if lu < 1e-30:
+        return {"ok": False, "error": "u_point must differ from origin"}
+    u_hat = [component / lu for component in u_vec]
+    dot_uv = sum(a * b for a, b in zip(v_raw, u_hat))
+    v_ortho = [v_raw[k] - dot_uv * u_hat[k] for k in range(3)]
+    lv = math.sqrt(sum(component * component for component in v_ortho))
+    if lv < 1e-30:
+        return {"ok": False,
+                "error": "v_point must not be collinear with the U edge"}
+    diag = math.hypot(lu, lv)
+    effective_sep = clean_sep if clean_sep is not None else diag / 30.0
+    effective_test = (clean_test if clean_test is not None else
+                      0.5 * effective_sep)
+    effective_step = (clean_step if clean_step is not None else
+                      max(effective_sep / 4.0, diag / 800.0))
+    for name, value in (("d_sep", effective_sep),
+                        ("d_test", effective_test),
+                        ("step_size", effective_step)):
+        if value <= 0.0:
+            return {"ok": False, "error": f"{name} must be positive"}
+    if effective_test > effective_sep:
+        return {"ok": False, "error": "d_test must not exceed d_sep"}
+    if effective_step > effective_test:
+        return {"ok": False,
+                "error": "step_size must not exceed d_test"}
+    if int(max_lines) < 1:
+        return {"ok": False, "error": "max_lines must be positive"}
+    if int(max_steps) < 1:
+        return {"ok": False, "error": "max_steps must be positive"}
+    if int(max_total_steps) < 1:
+        return {"ok": False, "error": "max_total_steps must be positive"}
+    if int(arrows_every) < 0:
+        return {"ok": False, "error": "arrows_every must be non-negative"}
+    if int(time_step) < 0:
+        return {"ok": False, "error": "time_step must be non-negative"}
+    if not str(result_name).strip():
+        return {"ok": False, "error": "result_name must not be empty"}
+    if first_seed is not None and not (
+            0.0 <= first_seed[0] <= lu and 0.0 <= first_seed[1] <= lv):
+        return {"ok": False,
+                "error": "first_seed must lie inside the [0, Lu] x "
+                         "[0, Lv] plane patch"}
     return _run_post({"op": "streamlines_2d", "path": str(path),
                       "view": view, **clean,
-                      "d_sep": d_sep, "d_test": d_test,
-                      "step_size": step_size,
+                      "d_sep": effective_sep, "d_test": effective_test,
+                      "step_size": effective_step,
                       "first_seed": first_seed,
                       "max_lines": int(max_lines),
                       "max_steps": int(max_steps),
