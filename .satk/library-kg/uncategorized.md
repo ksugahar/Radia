@@ -101,8 +101,8 @@ Use these blocks for uncategorized blocks.
 - Block: [[blocks/Optuna_Optimization]]
 - Library: radia_simulink_library
 - ReferenceBlock: radia_simulink_library/Optimization/Optuna Optimization
-- Description: Incremental MATLAB Optuna study with Simulink-native telemetry.
-- Use when: user needs incremental matlab optuna study with simulink-native telemetry..
+- Description: Native MATLAB CAE study with cancel, failure telemetry, and automatic MEX acceleration.
+- Use when: user needs native matlab cae study with cancel, failure telemetry, and automatic mex acceleration..
 - Metadata quality: medium
 
 ### Sheet Metal Optimization
