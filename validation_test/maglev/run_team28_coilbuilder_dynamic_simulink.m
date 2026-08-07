@@ -118,25 +118,36 @@ heightAxes = nexttile(layout, 1);
 plot(heightAxes, time_s, 1e3 * absoluteBottom, ...
     "LineWidth", 1.5, "DisplayName", "Disk bottom");
 hold(heightAxes, "on");
-yline(heightAxes, 1e3 * plant.equilibrium_absolute_bottom_m, "--", ...
-    "Force = weight", "LineWidth", 1.1);
+heightReference = yline(heightAxes, ...
+    1e3 * plant.equilibrium_absolute_bottom_m, "--", ...
+    "Force = weight", "LineWidth", 1.1, "HandleVisibility", "off", ...
+    "Color", [0.30, 0.30, 0.30]);
 hold(heightAxes, "off");
 xlabel(heightAxes, "Time (s)");
 ylabel(heightAxes, "Absolute height (mm)");
-title(heightAxes, "TEAM 28 moving disk: CoilBuilder + HCurl eddy-bubble");
+heightTitle = title(heightAxes, ...
+    "TEAM 28 moving disk: CoilBuilder + HCurl eddy-bubble");
 grid(heightAxes, "on");
-legend(heightAxes, "Location", "best");
+heightLegend = legend(heightAxes, "Location", "best");
 forceAxes = nexttile(layout, 2);
 plot(forceAxes, time_s, lift, "LineWidth", 1.4, ...
     "DisplayName", "Cycle-averaged lift");
 hold(forceAxes, "on");
-yline(forceAxes, plant.disk_weight_N, "--", "Disk weight", ...
-    "LineWidth", 1.1);
+weightReference = yline(forceAxes, plant.disk_weight_N, "--", ...
+    "Disk weight", "LineWidth", 1.1, "HandleVisibility", "off", ...
+    "Color", [0.30, 0.30, 0.30]);
 hold(forceAxes, "off");
 xlabel(forceAxes, "Time (s)");
 ylabel(forceAxes, "Force (N)");
 grid(forceAxes, "on");
-legend(forceAxes, "Location", "best");
+forceLegend = legend(forceAxes, "Location", "best");
+set([heightAxes, forceAxes], "Color", "w", "XColor", "k", ...
+    "YColor", "k", "GridColor", [0.75, 0.75, 0.75], ...
+    "MinorGridColor", [0.85, 0.85, 0.85]);
+set([heightLegend, forceLegend], "Color", "w", "TextColor", "k", ...
+    "EdgeColor", [0.4, 0.4, 0.4]);
+set(heightTitle, "Color", "k");
+set([heightReference, weightReference], "LabelHorizontalAlignment", "right");
 exportgraphics(layout, options.PlotFile, "Resolution", 160);
 visualization_s = toc(visualizationTimer);
 if ~options.ShowFigure

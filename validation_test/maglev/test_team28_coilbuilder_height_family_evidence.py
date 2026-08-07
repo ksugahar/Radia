@@ -32,7 +32,7 @@ def test_family_exchange_declares_common_coilbuilder_basis():
 
     assert payload["schema"] == "radia.hcurl.eddy_cln.family.v1"
     assert payload["shared_state_basis"] is True
-    assert payload["snapshot_count"] == 25
+    assert len(payload["snapshots"]) == 25
     assert payload["state_order"] == 3
     assert payload["metadata"]["coil_source"] == "radia.coil_builder.CoilBuilder"
     heights = [snapshot["height_m"] for snapshot in payload["snapshots"]]
