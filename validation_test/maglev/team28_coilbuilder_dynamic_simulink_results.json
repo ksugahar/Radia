@@ -1,0 +1,94 @@
+{
+  "radia_version": "4.95.48",
+  "schema": "cae-ai-lab.solver-run.v1",
+  "created_at_utc": "2026-08-06T23:01:53.524Z",
+  "case": "TEAM 28 dynamic CoilBuilder HCurl eddy-bubble levitation",
+  "solver": "simulink",
+  "solver_backend": "fixed-50Hz-cycle-average-lut-plus-mechanical-plant",
+  "source_artifact": "matlab/radia_team28_coilbuilder_dynamic.slx",
+  "pass": true,
+  "run": {
+    "command": "run_team28_coilbuilder_dynamic_simulink",
+    "workdir": ".",
+    "exit_code": 0,
+    "duration_s": 10.8493474
+  },
+  "result_files": [
+    "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",
+    "validation_test/maglev/team28_coilbuilder_dynamic_simulink.png",
+    "matlab/radia_team28_coilbuilder_dynamic.slx",
+    "validation_test/maglev/team28_coilbuilder_height_family_results.json"
+  ],
+  "checks": {
+    "ran_to_completion": true,
+    "result_files_exist": true,
+    "validation_passed": true,
+    "details": {
+      "all_outputs_are_finite": true,
+      "initial_height_is_preserved": true,
+      "trajectory_stays_inside_validated_height_family": true,
+      "terminal_height_within_0p1_mm_of_equilibrium": true,
+      "terminal_force_balance_below_0p02_N": true,
+      "terminal_speed_below_1_mm_per_s": true,
+      "coilbuilder_source_validation_is_retained": true,
+      "common_rank_three_eddy_basis_is_retained": true
+    }
+  },
+  "tolerances": {
+    "terminal_height_abs_m": 0.0001,
+    "terminal_force_balance_abs_N": 0.02,
+    "terminal_speed_abs_m_per_s": 0.001
+  },
+  "errors": {
+    "terminal_height_abs_m": 6.7685115325011314E-15,
+    "terminal_force_balance_abs_N": 2.0013144657379919E-12,
+    "terminal_speed_abs_m_per_s": 2.44666190475241E-13
+  },
+  "tool_versions": {
+    "radia": "4.95.48",
+    "matlab": "26.1.0.3312084 (R2026a) Update 4",
+    "matlab_release": "2026a",
+    "simulink": "26.1"
+  },
+  "timing_breakdown_s": {
+    "load_and_configure": 0.1188438,
+    "simulink_execution": 1.3951396,
+    "verification": 0.0025054,
+    "visualization_and_write": 9.1392513
+  },
+  "verification": {
+    "method": "validated force-height replay, force-weight equilibrium, bounded damped trajectory, and terminal balance",
+    "command": "run_team28_coilbuilder_dynamic_simulink"
+  },
+  "model_contract": {
+    "schema": "radia.team28.coilbuilder_mechanical.v1",
+    "disk_mass_kg": 0.1075433231396534,
+    "disk_weight_N": 1.055,
+    "gravity_m_per_s2": 9.81,
+    "reference_disk_bottom_m": 0.0108,
+    "equilibrium_height_offset_m": 0.0002555366063324872,
+    "equilibrium_absolute_bottom_m": 0.011055536606332487,
+    "linearized_restoring_stiffness_N_per_m": 181.3312492375523,
+    "undamped_natural_frequency_Hz": 6.5352880189080009,
+    "damping_ratio": 0.35,
+    "viscous_damping_Ns_per_m": 3.0911927980497826,
+    "initial_height_offset_m": -0.007,
+    "sample_time_s": 0.001,
+    "stop_time_s": 2,
+    "height_limits_m": [
+      -0.007,
+      0.017
+    ],
+    "electromagnetic_assumption": "50 Hz cycle-averaged force with quasi-steady height interpolation",
+    "damping_provenance": "explicit control-oriented demonstration parameter; not identified data"
+  },
+  "observables": {
+    "sample_count": 2001,
+    "initial_absolute_bottom_mm": 3.8000000000000003,
+    "terminal_absolute_bottom_mm": 11.055536606339256,
+    "predicted_equilibrium_absolute_bottom_mm": 11.055536606332486,
+    "peak_upward_lift_N": 3.3161608234685076,
+    "terminal_upward_lift_N": 1.0549999999987549,
+    "peak_speed_m_per_s": 0.25670871716736371
+  }
+}
