@@ -6,7 +6,7 @@ This project has declared reusable Simulink libraries. Prefer these blocks when 
 
 The active policy mode is defined in `.satk/block-policy.json`.
 
-- Always use customer library blocks when available.
+- Always use customer library blocks when available. 
 - Do NOT make domain-level judgments about library relevance.
 - Never fall back to built-in primitives if the same block exists in a declared library.
 - Only use built-in blocks when NO equivalent exists in any declared customer library after your search.
