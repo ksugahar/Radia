@@ -87,6 +87,8 @@ table is the AI-readable summary.
 
 | Phase | Action | Mandatory? | Notes |
 |------:|--------|-----------|-------|
+| Pre | `sync-main`: fetch -> twin-aware rebase (`--empty=drop` skips commits whose patches landed on origin as rebased twins) -> `ci_preflight --fix` -> push | when NAS main diverged from origin/main | added 2026-08-07 after the recurring 40-min manual rebase-archaeology sessions; refuses on a dirty tree, leaves genuine conflicts in place with instructions |
+| Pre | `evidence-motor [--check|--force]`: rebuild the MEX, ship the snapshot closure to HIBINO over scp, run the MATLAB generator SYNCHRONOUSLY over ssh, fetch the artifact, verify SHA pins, align the pytest test-count | whenever `src/matlab/radia_mex.cpp` / `matlab/+radia/setup.m` / the generator changed | Windows OpenSSH reaps detached children on session exit — the run MUST stay synchronous; snapshot closure = matlab/, src/matlab/, tests/matlab/, validation_test/{radia_mcp,maglev}/, docs/maglev/demos/team28/, pyproject.toml |
 | 0 | Clean rebuild of Cubit plugin (.ccm/.pyd) | If `src/cubit_plugin/` changed | ~2-5 min targeted, ~10 min full |
 | 1 | Decide minor vs patch per package | always | git log per package since last tag |
 | 2 | Bump 4 version files (radia: pyproject + __init__; radia-mcp: pyproject + __init__; cubit-mesh-export: pyproject) | always | strictly lock-step; mismatch = wheel install bug |
@@ -99,7 +101,7 @@ table is the AI-readable summary.
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine consistency probe (LAB / 100号機 / mdx / hibino hashes) | always | mdx reports radia-mcp as N/A |
-| DoD | Re-run preflight/editable/Phase 9 and bind the exact ZIP hash to the same HEAD | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication |
+| DoD | Re-run preflight/editable/Phase 9 and bind the exact ZIP hash to the same HEAD | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. Since 2026-08-07 `done` ALSO refuses while NAS main != origin/main — leaving main behind after a clone-based release is the root cause of the next session's rebase conflicts |
 
 ## ===
 ## simulink_candidate — exact MEX + SLX publication gate
