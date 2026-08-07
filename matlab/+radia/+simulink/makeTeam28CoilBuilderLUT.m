@@ -26,13 +26,16 @@ else
             mfilename("fullpath")))));
         source = fullfile(repoRoot, "validation_test", "maglev", ...
             "team28_coilbuilder_height_family_results.json");
+        sourceFile = fullfile("validation_test", "maglev", ...
+            "team28_coilbuilder_height_family_results.json");
+    else
+        sourceFile = source;
     end
     if ~isfile(source)
         error("radia:simulink:Team28CoilBuilderSource", ...
             "TEAM 28 CoilBuilder family result does not exist: %s", source);
     end
     data = jsondecode(fileread(source));
-    sourceFile = source;
 end
 
 validateSource(data);
