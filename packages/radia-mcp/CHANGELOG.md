@@ -7,6 +7,8 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.34] - 2026-08-07
+
 - Strengthened grant-writing budget review so external costs must be traceable
   to dated official prices or quotations, including tax, purchase-unit,
   expiry, currency, rounding, direct-cost ceiling, and future-travel status.
