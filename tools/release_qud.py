@@ -427,6 +427,8 @@ def cmd_preflight(args):
     else:
         ok("bundled plugin .ccm >= src/cubit_plugin/ mtime")
 
+    _check_main_synced(hard=False)
+
     return 0
 
 
@@ -1465,6 +1467,13 @@ def cmd_done(args):
              "`release_qud done`.")
         return rc
 
+    rc = _check_main_synced(hard=True)
+    if rc != 0:
+        fail("NAS main diverged from origin/main — sync before calling the "
+             "release done (this is the root cause of the recurring "
+             "rebase-conflict sessions).")
+        return rc
+
     if getattr(args, "simulink_package", None):
         rc = _verify_simulink_candidate_state(args.simulink_package)
         if rc != 0:
@@ -1477,6 +1486,271 @@ def cmd_done(args):
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
        "mdx / hibino, the editable tier is intact, and the retired standalone "
        "PySide panel surface is absent." + suffix)
+    return 0
+
+
+# ============================================================
+# main-sync gate + sync-main + evidence-motor (2026-08-07)
+# ============================================================
+
+def _git(*argv, capture=True, check=True):
+    return subprocess.run(["git", "-C", str(REPO), *argv],
+                          capture_output=capture, text=True, check=check)
+
+
+def _main_ahead_behind(fetch=True):
+    """Return (ahead, behind) of local main vs origin/main."""
+    if fetch:
+        _git("fetch", "origin", "--quiet", check=False)
+    ahead = int(_git("rev-list", "--count", "origin/main..main").stdout.strip())
+    behind = int(_git("rev-list", "--count", "main..origin/main").stdout.strip())
+    return ahead, behind
+
+
+def _check_main_synced(*, hard: bool) -> int:
+    """NAS main must equal origin/main.
+
+    History divergence is the root cause of the recurring 40-minute
+    merge/rebase archaeology (2026-08-07 analysis): releases cut from
+    clones push rebased twins while NAS main is left behind.  `done`
+    now refuses until main is fast-forward-identical to origin/main.
+    """
+    ahead, behind = _main_ahead_behind()
+    if ahead == 0 and behind == 0:
+        ok("NAS main == origin/main (no divergence)")
+        return 0
+    msg = f"NAS main is ahead {ahead} / behind {behind} of origin/main"
+    if not hard:
+        warn(msg + " (informational at preflight; `done` enforces it)")
+        return 0
+    fail(msg + " — the next session will pay for this in rebase conflicts.")
+    if ahead == 0:
+        info("recovery: git -C " + str(REPO) + " merge --ff-only origin/main")
+    else:
+        info("recovery: python tools/release_qud.py sync-main")
+    return 4
+
+
+def cmd_sync_main(args):
+    """Deterministic fetch -> twin-aware rebase -> preflight --fix -> push.
+
+    Automates the 2026-08-07 manual dance: git rebase drops commits whose
+    patches already landed on origin as rebased twins; --empty=drop removes
+    ones that become empty.  Genuine conflicts stop the rebase IN PLACE
+    with instructions (this tool never resolves content on its own).
+    """
+    step("sync-main: fetch -> rebase (twin-aware) -> preflight --fix -> push")
+
+    if (REPO / ".git/rebase-merge").exists() or (REPO / ".git/rebase-apply").exists():
+        fail("a rebase is already in progress — finish it first "
+             "(git rebase --continue / --abort), then re-run sync-main.")
+        return 2
+    dirty = _git("status", "--porcelain").stdout.strip()
+    if dirty:
+        fail("working tree not clean — commit this-session files by name "
+             "(or stash) before sync-main:")
+        for line in dirty.splitlines()[:12]:
+            info("  " + line)
+        return 2
+
+    ahead, behind = _main_ahead_behind()
+    info(f"main vs origin/main: ahead {ahead} / behind {behind}")
+
+    if behind > 0:
+        p = subprocess.run(
+            ["git", "-C", str(REPO), "rebase", "origin/main", "--empty=drop"],
+            capture_output=True, text=True)
+        print((p.stdout or "").strip())
+        if p.returncode != 0:
+            print((p.stderr or "").strip()[-1500:])
+            conflicts = _git("diff", "--name-only", "--diff-filter=U",
+                             check=False).stdout.strip()
+            fail("rebase stopped on conflicts — resolve, `git rebase "
+                 "--continue`, then re-run sync-main for the push leg:")
+            for c in conflicts.splitlines():
+                info("  UU " + c)
+            return 3
+        ok("rebased onto origin/main (patch-identical twins dropped)")
+
+    if getattr(args, "no_push", False):
+        ok("sync-main --no-push: stopping before preflight/push as requested")
+        return 0
+
+    ahead, _behind = _main_ahead_behind(fetch=False)
+    if ahead == 0:
+        ok("nothing to push — main already equals origin/main")
+        return 0
+
+    p = run([sys.executable, str(REPO / "tools/ci_preflight.py"), "--fix"],
+            check=False)
+    if p.returncode != 0:
+        fail("ci_preflight is RED after --fix — fix the printed gate, "
+             "then re-run sync-main.")
+        return 3
+    tools_md = "packages/radia-mcp/docs/TOOLS.md"
+    if tools_md in _git("status", "--porcelain").stdout:
+        _git("add", tools_md)
+        _git("commit", "-m",
+             "docs(mcp): regenerate TOOLS.md (release_qud sync-main)")
+        ok("committed regenerated TOOLS.md")
+
+    p = run(["git", "-C", str(REPO), "push", "origin", "main"], check=False)
+    if p.returncode != 0:
+        fail("push failed (pre-push hook output above names the gate).")
+        return 3
+    ok("main pushed — origin/main == NAS main")
+    return 0
+
+
+# ---- evidence-motor -----------------------------------------------------
+
+_MOTOR_ARTIFACT = ("validation_test/radia_mcp/artifacts/"
+                   "annular_motor_dual_lane_v1/native_motor_angle_family.json")
+_MOTOR_PYTEST = ("packages/radia-mcp/tests/"
+                 "test_annular_motor_dual_lane_artifact.py")
+# Complete root-relative closure the HIBINO run needs (learned 2026-08-07:
+# missing pyproject.toml / maglev data / team28 docs each cost one round trip).
+_MOTOR_SNAPSHOT_ROOTS = (
+    "matlab",
+    "src/matlab",
+    "tests/matlab",
+    "validation_test/radia_mcp",
+    "validation_test/maglev",
+    "docs/maglev/demos/team28",
+)
+_MOTOR_SNAPSHOT_FILES = ("pyproject.toml",)
+_HIBINO_DEST = r"C:\temp\radia_motor_evidence_qud"
+
+
+def _motor_text_sha(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _motor_pin_status():
+    art = json.loads((REPO / _MOTOR_ARTIFACT).read_text(encoding="utf-8"))
+    drifted = []
+    for path_key, sha_key in (("source_relative_path", "source_sha256"),
+                              ("setup_relative_path", "setup_sha256"),
+                              ("generator_relative_path", "generator_sha256")):
+        rel = art[path_key]
+        if _motor_text_sha(REPO / rel) != art[sha_key]:
+            drifted.append(rel)
+    return art, drifted
+
+
+def cmd_evidence_motor(args):
+    """Regenerate the motor MEX evidence artifact on HIBINO.
+
+    Scripted form of the 2026-08-07 manual run: build the MEX on LAB,
+    ship the snapshot closure to hibino over scp, run the generator in
+    a SYNCHRONOUS ssh (Windows OpenSSH reaps detached children on
+    session exit — Start-Process launches died twice before this was
+    understood), fetch the artifact back, verify the SHA pins, and
+    align the pytest test-count expectation.
+    """
+    step("evidence-motor: HIBINO MATLAB evidence regeneration")
+
+    art, drifted = _motor_pin_status()
+    if not drifted and not getattr(args, "force", False):
+        ok(f"evidence already current (tests={art['test_count']}, "
+           f"host={art['execution_environment']['hostname']}) — use --force to regenerate")
+        return 0
+    if getattr(args, "check", False):
+        for rel in drifted:
+            fail("pin drift: " + rel)
+        return 4 if drifted else 0
+    for rel in drifted:
+        warn("pin drift: " + rel + " — regenerating")
+
+    # 1) fresh MEX from current source
+    p = run(["powershell.exe", "-ExecutionPolicy", "Bypass",
+             "-File", str(REPO / "Build.ps1"), "-MatlabMexOnly"], check=False)
+    if p.returncode != 0:
+        fail("Build.ps1 -MatlabMexOnly failed")
+        return 3
+
+    # 2) snapshot zip
+    zip_path = Path(r"C:\temp\radia_motor_evidence_qud.zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in _MOTOR_SNAPSHOT_FILES:
+            z.write(REPO / f, f)
+        for root in _MOTOR_SNAPSHOT_ROOTS:
+            for dirpath, dirnames, filenames in os.walk(REPO / root):
+                dirnames[:] = [d for d in dirnames
+                               if d not in ("__pycache__", ".pytest_cache")]
+                for fn in filenames:
+                    full = Path(dirpath) / fn
+                    z.write(full, full.relative_to(REPO).as_posix())
+    info(f"snapshot: {zip_path} ({zip_path.stat().st_size/1e6:.1f} MB)")
+
+    # 3) runner (ASCII only; synchronous MATLAB, refuses on busy host)
+    gen_rel = r"validation_test\radia_mcp\generate_motor_angle_family_mex_artifact.m"
+    runner = "\n".join([
+        "$ErrorActionPreference = 'Stop'",
+        "if (Get-Process -Name MATLAB -ErrorAction SilentlyContinue) {",
+        "    Write-Output 'BUSY: MATLAB already running on hibino'; exit 2 }",
+        f"$dest = '{_HIBINO_DEST}'",
+        "if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }",
+        "Expand-Archive -Path 'C:\\temp\\radia_motor_evidence_qud.zip' -DestinationPath $dest -Force",
+        "$env:RADIA_VALIDATION_HOST_ROLE = 'compute'",
+        f"$gen = Join-Path $dest '{gen_rel}'",
+        "$log = 'C:\\temp\\radia_motor_evidence_qud.log'",
+        "Remove-Item $log -Force -ErrorAction SilentlyContinue",
+        f"& '{MATLAB_EXE}' -wait -batch (\"run('\" + $gen + \"')\") -logfile $log",
+        "Write-Output ('MATLAB_EXIT=' + $LASTEXITCODE)",
+        "Get-Content $log -Tail 8 -ErrorAction SilentlyContinue",
+        "exit $LASTEXITCODE",
+    ]) + "\n"
+    runner_path = Path(r"C:\temp\radia_motor_evidence_qud_runner.ps1")
+    runner_path.write_text(runner, encoding="ascii")
+
+    for src, dst in ((zip_path, "C:/temp/radia_motor_evidence_qud.zip"),
+                     (runner_path, "C:/temp/radia_motor_evidence_qud_runner.ps1")):
+        p = run(["scp", "-o", "ConnectTimeout=20", str(src),
+                 f"{SSH_HIBINO}:{dst}"], check=False)
+        if p.returncode != 0:
+            fail(f"scp to hibino failed: {src}")
+            return 3
+
+    # 4) synchronous run (previous artifact: 79 tests in ~2 min + startup)
+    p = run(["ssh", SSH_HIBINO, "pwsh -NoProfile -ExecutionPolicy Bypass "
+             "-File C:\\temp\\radia_motor_evidence_qud_runner.ps1"],
+            check=False, timeout=1800)
+    if p.returncode != 0:
+        fail(f"hibino generator failed (exit {p.returncode}) — see log above")
+        return 3
+
+    # 5) fetch artifact back + verify pins
+    art_remote = (_HIBINO_DEST.replace("\\", "/") + "/" +
+                  _MOTOR_ARTIFACT.replace("\\", "/"))
+    p = run(["scp", "-o", "ConnectTimeout=20",
+             f"{SSH_HIBINO}:{art_remote}", str(REPO / _MOTOR_ARTIFACT)],
+            check=False)
+    if p.returncode != 0:
+        fail("scp of the regenerated artifact failed")
+        return 3
+    art, drifted = _motor_pin_status()
+    if drifted:
+        for rel in drifted:
+            fail("pin STILL drifted after regeneration: " + rel)
+        return 4
+    ok(f"artifact regenerated: {art['status']}, "
+       f"{art['passed_count']}/{art['test_count']} on "
+       f"{art['execution_environment']['hostname']} ({art['matlab_release']})")
+
+    # 6) align the pytest expectation with the measured suite size
+    import re
+    pytest_path = REPO / _MOTOR_PYTEST
+    text = pytest_path.read_text(encoding="utf-8")
+    new_text, n = re.subn(
+        r'(assert native\["test_count"\] == native\["passed_count"\] == )\d+',
+        rf"\g<1>{art['test_count']}", text)
+    if n == 1 and new_text != text:
+        pytest_path.write_text(new_text, encoding="utf-8", newline="\n")
+        ok(f"pytest expectation aligned to {art['test_count']}")
+    info("stage & commit:  git add " + _MOTOR_ARTIFACT + " " + _MOTOR_PYTEST)
     return 0
 
 
@@ -1514,6 +1788,16 @@ def main():
                     help="LAB/100号機 editable-install pointers check (read-only)")
     sub.add_parser("ci-verify",
                     help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
+    sm = sub.add_parser("sync-main",
+                        help="fetch -> twin-aware rebase -> preflight --fix -> push")
+    sm.add_argument("--no-push", action="store_true",
+                    help="stop after the rebase (prep-only)")
+    em = sub.add_parser("evidence-motor",
+                        help="regenerate the motor MEX evidence artifact on HIBINO")
+    em.add_argument("--check", action="store_true",
+                    help="verify the SHA pins only (fast, no MATLAB)")
+    em.add_argument("--force", action="store_true",
+                    help="regenerate even when the pins are current")
     done = sub.add_parser(
         "done",
         help="definition-of-done: preflight + editable-tier + phase9 + guards")
@@ -1532,6 +1816,8 @@ def main():
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
         "ci-verify":        cmd_ci_verify,
+        "sync-main":        cmd_sync_main,
+        "evidence-motor":   cmd_evidence_motor,
         "done":             cmd_done,
     }[args.cmd]
     raise SystemExit(handler(args))
