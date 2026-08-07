@@ -5,6 +5,26 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.49 - MATLAB Optuna native kernels, RLC resonance, VIM Hodge, PEEC views
+
+Released 2026-08-07.
+
+- MATLAB Optuna layer gains native MEX kernels (pareto rank/crowding, parzen
+  log-pdf) with a benchmark lane; LTspice/Simulink RLC resonance optimization
+  demos with PEEC coil AC/RLC plant models and golden-locked validation.
+- radia.vim gains the H1 Hodge disk operator, hardened HCurl eddy hybrid,
+  SIBC frequency routing, and nonlinear-iron x ESIM coupling with
+  evidence-backed validation lanes.
+- Solved PEEC topology exports first-class GMSH views (|I|, |J|, P, signed
+  Re(I) arrows); reverse-strand detection in the inductance-limited regime.
+- TEAM 28 CoilBuilder eddy-bubble and height-family validation lanes plus the
+  dynamic Simulink lane (LUT + plant + driver).
+- Fixed OCC/STEP coil pose applying the two Z Euler angles in swapped order.
+- Mesh-quality studies: error-vs-dof ranking (hex wins conditioning + H1,
+  not L2); min-quality shown chaotic in the size target.
+- Motor MEX evidence regenerated on HIBINO (79/79, R2026a) for the new
+  optuna kernels.
+
 - Clarified grant-writing guidance for OSS/AI proposals: Git/GitHub provides
   versioned review and provenance, while an AI-facing execution layer such as
   MCP must expose domain semantics and validated execution without forcing a
