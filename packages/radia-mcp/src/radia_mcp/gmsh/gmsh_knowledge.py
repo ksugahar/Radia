@@ -2041,13 +2041,21 @@ without waiting for a wrapper.
 
 ## Honest gaps (do not fake these)
 
-- VOLUME RENDERING: gmsh has no ray-caster.  gmsh_volume_render
-  composites a slice stack with a value-dependent opacity -- a
-  substitute, not the real thing (per-slice, not per-ray).
-- Surface LIC (line integral convolution): not available.
-  gmsh_flow_texture packs evenly spaced streamlines densely instead --
-  quantitative (each curve is a trajectory) but it does not fill every
-  pixel.
+- VOLUME RENDERING: gmsh itself has no ray-caster, and that has not
+  changed -- but the lane now carries a REAL one: gmsh_volume_raycast
+  resamples the field by probing gmsh, then marches orthographic rays
+  front-to-back (emission-absorption, per-ray occlusion; for a uniform
+  medium the returned transmittance_min equals (1-alpha)^n exactly --
+  tested).  It is the same resample-to-image approach ParaView's GPU
+  volume mode uses.  Trade-off: standalone labelled PNG, no CAD
+  overlay -- keep gmsh_volume_render (slice stack) when the figure
+  must stay inside gmsh's scene.
+- Surface LIC: gmsh still has none, but gmsh_lic is real line integral
+  convolution (RK2 advection, box kernel, |v|-modulated colour) over a
+  gmsh-probed plane -- every pixel carries flow direction, and the
+  smear axis provably rotates with the field (tested).  Trade-off:
+  direction texture, not trajectories -- gmsh_flow_texture keeps the
+  probe-able-curve property; same standalone-PNG limitation.
 - Plugin(CutSphere): returns an EMPTY view on this build -- not
   exposed.  Use gmsh_cut_plane_extract / gmsh_threshold instead.
 - Plugin(Summation): absent from this build ("Unknown plugin"); a

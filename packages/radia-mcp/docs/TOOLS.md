@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **961 tools** across 48 MCP servers.
+Total: **965 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 86 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 87 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 60 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 62 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -37,7 +37,7 @@ Total: **961 tools** across 48 MCP servers.
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 4 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
-| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
+| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 5 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 15 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
@@ -131,6 +131,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
 | `cubit_source_journal_replay_gate` | Gate synchronous, headless replay and expected mesh disposition. |
 | `cubit_status` | (no description) |
+| `cubit_stl_to_vol` | Mesh a watertight STL into a solver-ready Netgen `.vol` (all-hex via |
 | `cubit_structured_hex_lattice_gate` | Gate structured all-hex counts, quality, and Gmsh volume closure. |
 | `cubit_structured_hex_source_replay_gate` | Gate source commands, license diagnostics, and headless exit semantics. |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
@@ -265,6 +266,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
 | `gmsh_integrate` | Integrate a view over its elements (per time step). |
 | `gmsh_isosurface` | Extract the isosurface of a scalar view (e.g. the saturation front). |
+| `gmsh_lic` | TRUE line integral convolution on a section plane. |
 | `gmsh_line_profile` | Sample a view along a straight line; optionally plot a PNG graph. |
 | `gmsh_math_eval` | Create a derived view with Plugin(MathEval) and save it. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
@@ -298,6 +300,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_validate_msh` | Validate MSH v4.1 structural consistency; optional Jacobian check. |
 | `gmsh_verify` | Run ALL applicable gates on an artifact (run_matlab_test_file twin). |
 | `gmsh_view_min_max` | Locate the min and max of a scalar view WITH their coordinates. |
+| `gmsh_volume_raycast` | TRUE ray-cast volume rendering (emission-absorption, front-to-back). |
 | `gmsh_volume_render` | Pseudo-volume rendering by compositing semi-transparent slices. |
 | `gmsh_warp` | Displace a vector view's geometry by factor * its own vectors. |
 | `gmsh_write_post_launch_artifact` | Write the shared .geo/.geo.opt/.msh.opt post-display launch artifact. |
@@ -911,8 +914,9 @@ Module: `radia_mcp.maglev.server`
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
 | `maglev_status` | (no description) |
-| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 19 topics. |
+| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
 | `rotating_conductor_periodic_settling_gate` | Gate full-turn convergence of a rotating-conductor eddy response. |
+| `team28_cycle_averaged_motion_gate` | Gate TEAM 28 cycle-averaged motion evidence and reject transient overclaims. |
 
 ## `mcp-server-team-benchmark`
 
