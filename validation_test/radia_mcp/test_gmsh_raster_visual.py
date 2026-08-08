@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from radia_mcp.gmsh.raster import lic, volume_raycast
 
 pytest.importorskip("gmsh", reason="gmsh not installed")
@@ -54,12 +53,13 @@ def _box_msh(path, value_at, *, ncomp=1, n=6, lo=-1.0, hi=1.0):
     rows = {t: value_at(p) for t, p in nodes.items()}
     out = ["$MeshFormat", "4.1 0 8", "$EndMeshFormat",
            "$Entities", "0 0 0 1",
-           "1 %g %g %g %g %g %g 0 0" % (lo, lo, lo, hi, hi, hi),
+           f"1 {lo:g} {lo:g} {lo:g} {hi:g} {hi:g} {hi:g} 0 0",
            "$EndEntities",
            "$Nodes", f"1 {len(nodes)} 1 {len(nodes)}",
            f"3 1 0 {len(nodes)}"]
     out += [str(t) for t in nodes]
-    out += ["%.15e %.15e %.15e" % tuple(p) for p in nodes.values()]
+    out += [" ".join(f"{value:.15e}" for value in p)
+            for p in nodes.values()]
     out += ["$EndNodes", "$Elements",
             f"1 {len(elements)} 1 {len(elements)}",
             f"3 1 4 {len(elements)}"]
@@ -67,7 +67,7 @@ def _box_msh(path, value_at, *, ncomp=1, n=6, lo=-1.0, hi=1.0):
             for t, ns in elements.items()]
     out += ["$EndElements", "$NodeData", "1", '"f"', "1", "0",
             "3", "0", str(ncomp), str(len(rows))]
-    out += [f"{t} " + " ".join("%.9e" % v for v in vals)
+    out += [f"{t} " + " ".join(f"{v:.9e}" for v in vals)
             for t, vals in rows.items()]
     out += ["$EndNodeData"]
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
@@ -108,9 +108,9 @@ def test_raycast_occlusion_depends_on_the_viewing_side(tmp_path):
     per-slice composite shows the same mix from both sides."""
     f = _box_msh(tmp_path / "g.msh",
                  lambda p: [max(0.0, min(1.0, 0.5 * (p[0] + 1.0)))])
-    kw = dict(view="f", grid=14, image_size=96, n_steps=28,
-              value_range=[0.0, 1.0], alpha=0.9, alpha_power=1.0,
-              colorbar=False)
+    kw = {"view": "f", "grid": 14, "image_size": 96, "n_steps": 28,
+          "value_range": [0.0, 1.0], "alpha": 0.9, "alpha_power": 1.0,
+          "colorbar": False}
     hi = volume_raycast(f, tmp_path / "px.png", view_dir="+x", **kw)
     lo = volume_raycast(f, tmp_path / "mx.png", view_dir="-x", **kw)
     assert hi["ok"] and lo["ok"], (hi, lo)
@@ -133,6 +133,8 @@ def test_raycast_outside_is_transparent(tmp_path):
                          view_dir="iso", image_size=96, n_steps=24,
                          alpha=0.4, colorbar=False)
     assert res["ok"], res
+    assert res["constant_auto_range"] is True
+    assert res["transmittance_min"] < 1.0
     # an oblique view leaves image corners outside the cube: white
     img = _rgb(tmp_path / "iso.png")
     assert res["found_fraction"] == pytest.approx(1.0)
@@ -234,9 +236,10 @@ def test_raycast_step_depth_ordering(tmp_path):
     far = tmp_path / "far.step"
     occ.Box(occ.Pnt(-2, -2, 1.2), occ.Pnt(2, 2, 1.4)).WriteStep(str(near))
     occ.Box(occ.Pnt(-2, -2, -1.4), occ.Pnt(2, 2, -1.2)).WriteStep(str(far))
-    kw = dict(view="f", grid=12, view_dir="+z", image_size=96, n_steps=24,
-              value_range=[0.0, 1.0], alpha=0.9, alpha_power=0.0,
-              colorbar=False, step_color=(0.6, 0.6, 0.6))
+    kw = {"view": "f", "grid": 12, "view_dir": "+z", "image_size": 96,
+          "n_steps": 24, "value_range": [0.0, 1.0], "alpha": 0.9,
+          "alpha_power": 0.0, "colorbar": False,
+          "step_color": (0.6, 0.6, 0.6)}
 
     a = volume_raycast(f, tmp_path / "near.png", step_files=[near], **kw)
     b = volume_raycast(f, tmp_path / "far.png", step_files=[far], **kw)

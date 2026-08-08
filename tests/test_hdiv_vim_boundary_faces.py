@@ -1,14 +1,11 @@
 """ChargeGram fail-loud gate: a 3D mesh with no boundary faces must raise.
 
 A bounded 3D body always has a mesh skin; a ``.vol`` whose
-``surfaceelements`` section is empty is a broken export (measured
-2026-08-08: a Cubit Sculpt free mesh exported without mesh-based
-geometry).  Without BND faces the surface charge ``sigma = M.n`` cannot
-be represented, so the demag operator silently acts volume-charge-only
-and uniform magnetization sees ``N = 0`` -- the solve returns the
-demag-free field (51x off on the shape-regeneration sector body) with
-state CG "converging" in one iteration.  ``build_charge_gram`` now
-raises instead; this test locks the gate and its positive control.
+``surfaceelements`` section is empty is a broken export.  Without BND
+faces the surface charge ``sigma = M.n`` cannot be represented, so the
+demag operator silently acts volume-charge-only and uniform magnetization
+sees ``N = 0``.  ``build_charge_gram`` now raises instead; this test locks
+the gate and its positive control.
 """
 
 import pytest
@@ -16,9 +13,9 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
+from netgen.occ import Box, OCCGeometry, Pnt
 
-import radia.vim as vim  # noqa: E402
+from radia import vim
 
 _SURFACE_TOKENS = ("surfaceelements", "surfaceelementsgi",
                    "surfaceelementsuv")

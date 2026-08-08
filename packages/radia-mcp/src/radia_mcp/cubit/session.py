@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import glob
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -407,6 +408,12 @@ def run_headless_journal(commands: list[str], *, timeout_s: float = 300.0,
     if any(not isinstance(line, str) or not line.strip() or "\n" in line
            or "\r" in line for line in commands):
         raise ValueError("commands must be nonempty single-line strings")
+    try:
+        timeout_s = float(timeout_s)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("timeout_s must be a finite positive number") from exc
+    if not math.isfinite(timeout_s) or timeout_s <= 0.0:
+        raise ValueError("timeout_s must be a finite positive number")
 
     bin_dir = get_cubit_bin_dir()
     if bin_dir is None:

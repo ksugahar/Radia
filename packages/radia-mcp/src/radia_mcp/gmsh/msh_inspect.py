@@ -1501,15 +1501,22 @@ try:
             _jac, det, _pts = gmsh.model.mesh.getJacobians(int(et), local)
             det = np.asarray(det, dtype=float).reshape(len(etags),
                                                        len(weights))
-            total += float((det * np.asarray(weights)).sum())
+            weights = np.asarray(weights, dtype=float)
+            if not np.isfinite(det).all() or not np.isfinite(weights).all():
+                raise RuntimeError("non-finite Jacobian or quadrature weight")
+            total += float((det * weights).sum())
             n_elem += int(len(etags))
             m = float(det.min())
             min_det = m if min_det is None else min(min_det, m)
-        result.update({"ran": True, "ok": n_elem > 0,
+        valid = (n_elem > 0 and np.isfinite(total)
+                 and min_det is not None and np.isfinite(min_det))
+        result.update({"ran": True, "ok": bool(valid),
                        "total_volume": total, "n_elements_3d": n_elem,
                        "min_jacobian_det": min_det})
         if n_elem == 0:
             result["error"] = "no 3D elements"
+        elif not valid:
+            result["error"] = "non-finite integrated volume or Jacobian"
     finally:
         gmsh.finalize()
 except Exception as exc:
@@ -1526,14 +1533,21 @@ def mesh_total_volume(msh_path: str | Path,
 
     The closure referee for shape-regeneration pipelines: comparing this
     against the source STL's watertight volume bounds the geometric loss of
-    an ``import stl`` -> mesh -> export round trip (measured 2026-08-08:
-    0.28 % for Sculpt all-hex, ~1 % for Cubit tetmesh on a marching-cubes
-    body).  Also reports ``min_jacobian_det`` as the inversion guard.
+    an ``import stl`` -> mesh -> export round trip.  Also reports
+    ``min_jacobian_det`` as the inversion guard.
     """
     path = Path(msh_path)
     if not path.is_file():
         return {"ok": False, "ran": False, "path": str(path),
                 "error": f"file not found: {path}"}
+    if not isinstance(quadrature, str) or not quadrature.strip():
+        raise ValueError("quadrature must be a nonempty string")
+    try:
+        timeout_s = float(timeout_s)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("timeout_s must be a finite positive number") from exc
+    if not math.isfinite(timeout_s) or timeout_s <= 0.0:
+        raise ValueError("timeout_s must be a finite positive number")
     result = run_gmsh_json_subprocess(
         _MESH_VOLUME_SCRIPT, [str(path), quadrature],
         timeout_s=timeout_s, prefix="radia_mcp_gmsh_volume_")

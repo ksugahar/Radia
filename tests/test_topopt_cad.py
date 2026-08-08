@@ -10,11 +10,14 @@ import pytest
 
 ng = pytest.importorskip("ngsolve")
 
-from netgen.occ import OCCGeometry, Pnt, Sphere  # noqa: E402
-from ngsolve import Integrate, Mesh, TaskManager  # noqa: E402
+from netgen.occ import OCCGeometry, Pnt, Sphere
+from ngsolve import Integrate, Mesh, TaskManager
 
-from radia.topopt_cad import (  # noqa: E402
-    iso_stl_from_grid, nodal_from_element_density, write_levelset_exodus)
+from radia.topopt_cad import (
+    iso_stl_from_grid,
+    nodal_from_element_density,
+    write_levelset_exodus,
+)
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +55,7 @@ def test_levelset_exodus_roundtrip(ball, tmp_path):
     from netCDF4 import Dataset
 
     nodal = nodal_from_element_density(ball, np.full(ball.ne, 0.8))
-    out = tmp_path / "lsd.exo"
+    out = tmp_path / "nested" / "lsd.exo"
     info = write_levelset_exodus(ball, nodal, out, level=0.5)
     assert info["n_tets"] == ball.ne and info["n_nodes"] == ball.nv
 
@@ -76,14 +79,27 @@ def test_levelset_exodus_roundtrip(ball, tmp_path):
         ds.close()
 
 
+def test_levelset_exodus_rejects_nonfinite_and_invalid_name(ball, tmp_path):
+    nodal = np.ones(ball.nv)
+    bad = nodal.copy()
+    bad[0] = np.nan
+    with pytest.raises(ValueError, match="non-finite"):
+        write_levelset_exodus(ball, bad, tmp_path / "bad.exo")
+    with pytest.raises(ValueError, match="level"):
+        write_levelset_exodus(
+            ball, nodal, tmp_path / "bad.exo", level=float("inf"))
+    with pytest.raises(ValueError, match="varname"):
+        write_levelset_exodus(ball, nodal, tmp_path / "bad.exo",
+                              varname="x" * 33)
+
+
 def test_grid_iso_stl_recovers_a_known_sphere(tmp_path):
     pytest.importorskip("skimage")
     pytest.importorskip("trimesh")
     pytest.importorskip("scipy")
-    # NOTE the coarse module fixture (maxh 0.35, 124 vertices, only 3
-    # interior ones) CANNOT represent an r=0.6 body in its nodal field --
-    # measured: nodal max 0.656, recovered volume 4 % of exact.  A finer
-    # mesh is required; this is a property of P0->P1 averaging, not a bug.
+    # The coarse module fixture cannot represent an r=0.6 body in its nodal
+    # field.  A finer mesh is required; this is a property of P0->P1
+    # averaging, not a bug.
     import ngsolve as ngs
     with TaskManager():
         fine = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
@@ -104,8 +120,7 @@ def test_grid_iso_stl_recovers_a_known_sphere(tmp_path):
     info = iso_stl_from_grid(fine, nodal, out, level=0.5, resolution=64)
     assert info["watertight"] is True
     v_exact = 4.0 / 3.0 * np.pi * 0.6 ** 3
-    # measured 2026-08-08 at maxh 0.15: -14.3 % (the one-layer inward
-    # bias of averaging a P0 step to P1) -- gate at 25 %
+    # Allow the expected one-layer inward bias of averaging a P0 step to P1.
     assert abs(info["volume"] - v_exact) / v_exact < 0.25, info["volume"]
 
 
@@ -128,3 +143,28 @@ def test_smoothing_iteration_cap(ball, tmp_path):
     with pytest.raises(ValueError, match="smooth_iterations"):
         iso_stl_from_grid(ball, nodal, tmp_path / "x.stl",
                           smooth_iterations=10)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"resolution": 15}, "resolution"),
+        ({"resolution": 129}, "resolution"),
+        ({"resolution": 64.0}, "integer"),
+        ({"cutoff_factor": 0.0}, "cutoff_factor"),
+        ({"level": float("nan")}, "level"),
+        ({"target_faces": 50}, "target_faces"),
+    ],
+)
+def test_grid_iso_stl_rejects_unsafe_arguments(ball, tmp_path, kwargs,
+                                                message):
+    nodal = np.ones(ball.nv)
+    with pytest.raises(ValueError, match=message):
+        iso_stl_from_grid(ball, nodal, tmp_path / "x.stl", **kwargs)
+
+
+def test_grid_iso_stl_rejects_nonfinite_nodal_field(ball, tmp_path):
+    nodal = np.ones(ball.nv)
+    nodal[0] = np.nan
+    with pytest.raises(ValueError, match="non-finite"):
+        iso_stl_from_grid(ball, nodal, tmp_path / "x.stl")

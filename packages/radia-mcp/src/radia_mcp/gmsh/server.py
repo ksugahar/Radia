@@ -2368,7 +2368,7 @@ def gmsh_volume_raycast(path: str, png_out: str | None = None,
     approach ParaView's GPU volume mode uses.
 
     Honest limits: fidelity lives on the resample grid (one probe per
-    grid point: 64^3 = 262k probes, tens of seconds); opacity is per
+    grid point: 64^3 = 262k probes); opacity is per
     depth SAMPLE, so the look depends on n_steps (the returned
     transmittance_min equals (1-alpha)^n exactly for a uniform field
     -- tested); output is a standalone labelled PNG (axis-equal), no
@@ -2384,11 +2384,11 @@ def gmsh_volume_raycast(path: str, png_out: str | None = None,
         path: .msh/.pos holding the field.
         png_out: output PNG (default: alongside the input).
         view: view name or index (default: the first view).
-        grid: resample resolution per axis (>= 8).
+        grid: resample resolution per axis (8..128).
         view_dir: "+x".."-z" | "iso" | world 3-vector pointing from
                   the scene TOWARD the camera.
-        image_size: image width in pixels (>= 64).
-        n_steps: depth samples per ray (default 1.5 * grid).
+        image_size: image width in pixels (64..2048).
+        n_steps: depth samples per ray (2..2048; default 1.5 * grid).
         value_range: [lo, hi] normalization; pass explicitly to make
                      figures comparable (see gmsh_field_range).
         alpha: opacity per depth sample at the top of the range.
@@ -2451,8 +2451,8 @@ def gmsh_lic(path: str, png_out: str | None = None,
         plane: "xy" | "yz" | "xz" section plane.
         offset: signed plane offset from the bbox centre; a plane
                 outside the mesh is refused, not rendered empty.
-        resolution: pixels across the larger in-plane span (>= 64).
-        kernel: convolution half-length in pixels (>= 2).
+        resolution: pixels across the larger in-plane span (64..2048).
+        kernel: convolution half-length in pixels (2..256).
         cmap: colormap for the |v| modulation.
         color_by_magnitude: False gives the plain grey LIC texture.
         seed: noise seed (output is deterministic per seed -- tested).

@@ -218,11 +218,10 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-08-08",
         "last_seen": "2026-08-08",
-        "what": "Topopt shape-regeneration hex re-evaluation returned "
-                "J=+37.137 instead of ~+0.73 (51x off) with state CG "
-                "'converging' in 1 iteration and DemagFactor(z) exactly "
-                "0.0.  J matched the mass-only (demag-free) J0 to 7 "
-                "digits.",
+        "what": "Topopt shape-regeneration re-evaluation returned a "
+                "materially wrong demag-free result while the state solve "
+                "reported convergence.  The response matched the "
+                "mass-only result.",
         "root_cause": "`sculpt volume all` makes a FREE mesh not owned "
                       "by geometric surfaces; `export netgen` collects "
                       "boundary faces from geometry-owned surfaces, so "
@@ -232,8 +231,8 @@ PATTERNS: list[dict] = [
                       "basis is volume-charge-only: uniform M has "
                       "-div(M)=0, so N(uniform)=0 and the solve returns "
                       "the demag-free field.",
-        "detection": "1-iteration state CG + DemagFactor==0 + J equal "
-                     "to mass-only J0; counting `surfaceelements` in "
+        "detection": "DemagFactor==0 plus an objective equal to the "
+                     "mass-only response; count `surfaceelements` in "
                      "the .vol text.  Locked by "
                      "tests/test_hdiv_vim_boundary_faces.py, the "
                      "cubit_stl_to_vol `boundary_faces_ok` gate, and "
