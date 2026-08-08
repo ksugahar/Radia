@@ -2353,7 +2353,10 @@ def gmsh_volume_raycast(path: str, png_out: str | None = None,
                         alpha: float = 0.05,
                         alpha_power: float = 2.0,
                         cmap: str = "jet",
-                        colorbar: bool = True) -> dict:
+                        colorbar: bool = True,
+                        step_files: list | None = None,
+                        step_color: list | None = None,
+                        step_rel_size: float = 0.04) -> dict:
     """
     TRUE ray-cast volume rendering (emission-absorption, front-to-back).
 
@@ -2369,8 +2372,13 @@ def gmsh_volume_raycast(path: str, png_out: str | None = None,
     depth SAMPLE, so the look depends on n_steps (the returned
     transmittance_min equals (1-alpha)^n exactly for a uniform field
     -- tested); output is a standalone labelled PNG (axis-equal), no
-    CAD overlay, no gmsh interactivity. For an in-gmsh figure that can
-    overlay CAD, use gmsh_volume_render (slice stack) instead.
+    gmsh interactivity. step_files DOES give a CAD overlay: the
+    STEP/BREP solids are depth-composited as opaque Lambert-shaded
+    surfaces INSIDE the march -- each ray stops at the CAD, so the
+    geometry occludes the field behind it and the field in front glows
+    over it (tested both ways: a near plate hides the volume, a far
+    plate is hidden by it). For an interactive in-gmsh figure use
+    gmsh_volume_render (slice stack) instead.
 
     Args:
         path: .msh/.pos holding the field.
@@ -2387,14 +2395,24 @@ def gmsh_volume_raycast(path: str, png_out: str | None = None,
         alpha_power: opacity exponent (2 fades low values out).
         cmap: matplotlib colormap name.
         colorbar: draw the value colorbar.
+        step_files: STEP/BREP files depth-composited as opaque shaded
+                    surfaces (meters; external mm CAD is 1000x off).
+        step_color: CAD base RGB (default light gray).
+        step_rel_size: display-tessellation size vs the CAD diagonal.
     """
+    kwargs = {}
+    if step_files:
+        kwargs["step_files"] = [_abs_path(str(f)) for f in step_files]
+        kwargs["step_rel_size"] = step_rel_size
+        if step_color is not None:
+            kwargs["step_color"] = tuple(float(c) for c in step_color)
     return _volume_raycast(_abs_path(path),
                            _abs_path(png_out) if png_out else None,
                            view=view, grid=grid, view_dir=view_dir,
                            image_size=image_size, n_steps=n_steps,
                            value_range=value_range, alpha=alpha,
                            alpha_power=alpha_power, cmap=cmap,
-                           colorbar=colorbar)
+                           colorbar=colorbar, **kwargs)
 
 
 @mcp.tool()
@@ -2405,7 +2423,9 @@ def gmsh_lic(path: str, png_out: str | None = None,
              kernel: int = 18,
              cmap: str = "jet",
              color_by_magnitude: bool = True,
-             seed: int = 0) -> dict:
+             seed: int = 0,
+             step_files: list | None = None,
+             step_rel_size: float = 0.03) -> dict:
     """
     TRUE line integral convolution on a section plane.
 
@@ -2420,7 +2440,9 @@ def gmsh_lic(path: str, png_out: str | None = None,
     (individual curves cannot be probed -- gmsh_flow_texture keeps
     that property); it lives on a regular resample of the plane
     (resolution pixels, one probe each); standalone labelled PNG
-    (axis-equal), no CAD overlay.
+    (axis-equal). step_files draws the CAD SECTION OUTLINE (triangle-
+    plane intersection) in black over the texture -- the conductor
+    cross-section on a field-line figure.
 
     Args:
         path: .msh/.pos holding a VECTOR view.
@@ -2434,11 +2456,19 @@ def gmsh_lic(path: str, png_out: str | None = None,
         cmap: colormap for the |v| modulation.
         color_by_magnitude: False gives the plain grey LIC texture.
         seed: noise seed (output is deterministic per seed -- tested).
+        step_files: STEP/BREP files whose section outline is drawn in
+                    black (meters; external mm CAD is 1000x off).
+        step_rel_size: display-tessellation size vs the CAD diagonal.
     """
+    kwargs = {}
+    if step_files:
+        kwargs["step_files"] = [_abs_path(str(f)) for f in step_files]
+        kwargs["step_rel_size"] = step_rel_size
     return _lic(_abs_path(path), _abs_path(png_out) if png_out else None,
                 view=view, plane=plane, offset=offset,
                 resolution=resolution, kernel=kernel, cmap=cmap,
-                color_by_magnitude=color_by_magnitude, seed=seed)
+                color_by_magnitude=color_by_magnitude, seed=seed,
+                **kwargs)
 
 
 if __name__ == '__main__':
