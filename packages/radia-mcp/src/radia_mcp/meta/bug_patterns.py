@@ -249,6 +249,59 @@ PATTERNS: list[dict] = [
                     "validation_test/isochronous_topopt/"
                     "test_shape_regen_lane.py"],
     },
+    {
+        "id": "facet-tet-charge-gram-indefinite-cg-stall",
+        "title": "Charge Gram goes INDEFINITE on facet-conforming tet "
+                 "meshes with tiny-cell blobs; CG stalls at every "
+                 "tolerance and preconditioner.",
+        "topics": ["vim", "hdiv", "solver", "cubit", "topopt",
+                   "mesh-quality"],
+        "severity": "high",
+        "first_seen": "2026-08-08",
+        "last_seen": "2026-08-08",
+        "what": "16,102-tet mesh of a decimated marching-cubes STL "
+                "capped 20,000 CG iterations for every native flavor "
+                "(mass-Riesz tol 1e-10..1e-6, Jacobi, cluster-tree). "
+                "Residual signature: r/r0 ~ 1.4 at it 99, plateau to "
+                "~it 1000, late decay.  Easy to misread as a "
+                "conditioning/preconditioner problem.",
+        "root_cause": "N = B^T G B is NOT positive semidefinite there: "
+                      "measured mu_min = -2.674 of N v = mu M v (vs the "
+                      "physical spectrum [0,1]; mu_max only 3.07 so "
+                      "kappa is INNOCENT).  Preconditioned eigenvalue "
+                      "1 + chi*mu_min = -266 puts CG outside its "
+                      "applicability.  Bit-insensitive to ACA eps, "
+                      "far_quad/ho_far_factor, +10 m translation, "
+                      "orientation, AND genuine outer quad=5 "
+                      "(intorder=9, 6x build cost) -- every tunable "
+                      "layer is exonerated; the negative mode's charge "
+                      "localizes on a GOOD-quality micro-cell blob "
+                      "(edges 1/5-1/10 of the requested size), NOT on "
+                      "the worst slivers -- a deterministic analytic "
+                      "near-integration defect for large-size-ratio "
+                      "near pairs.  Graded: 300-face control tet "
+                      "mu_min=-0.34 ('converges' but polluted), "
+                      "staircase +0.0002 (PSD), Sculpt hex healthy.",
+        "detection": "CG maxiter cap at EVERY tolerance + the plateau "
+                     "residual curve; confirm with the shifted-power "
+                     "mu_min probe (P = sigma*I - M^-1 N, "
+                     "M-orthonormalized; ~100 matvecs).  NOTE two no-op "
+                     "knobs: intorder=7 (quad=4) routes to the same "
+                     "Keast-15 rule as quad=3, and inner_quad only "
+                     "acts when LOWER than quad.",
+        "prevention": "Route charge-Gram re-evaluation through the "
+                      "Sculpt all-hex mesh (cubit_stl_to_vol "
+                      "scheme=hex), not the facet-conforming tet of a "
+                      "decimated STL.  Do NOT chase this with "
+                      "preconditioners -- no preconditioner fixes an "
+                      "indefinite operator.  Treat tet meshes with "
+                      "micro-cell blobs (min edge << requested size) "
+                      "as suspect until the vim near-kernel defect is "
+                      "pinned.",
+        "related": ["src/radia/vim/_vim.py",
+                    "validation_test/isochronous_topopt/"
+                    "test_shape_regen_lane.py"],
+    },
 
     # =====================================================
     # CUBIT LICENSE BUGS
