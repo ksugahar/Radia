@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **960 tools** across 48 MCP servers.
+Total: **961 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 86 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 59 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 60 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -291,6 +291,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_streamlines` | Trace field lines of a vector view from seeds on a line segment. |
 | `gmsh_streamlines_2d` | Evenly spaced streamlines on a plane slice (Jobard-Lefer placement). |
 | `gmsh_threshold` | Keep only elements whose MEAN value lies in [min_val, max_val]. |
+| `gmsh_time_series` | Temporal statistics over a FILE SERIES (one .msh per step). |
 | `gmsh_transform_view` | Apply an affine transform x' = A x + t to a COPY of a view. |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `gmsh_validate_geo` | Validate a .geo launch/companion file BEFORE opening it in GMSH. |
