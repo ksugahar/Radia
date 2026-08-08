@@ -98,6 +98,7 @@ from .topology_replay_identity_v50 import (
 	validate_public_identity as _validate_cubit_v50_public_identity,
 	validate_source_identity as _validate_cubit_v50_source_identity,
 )
+from .stl_inspect import inspect_stl as _inspect_stl
 from .quality_parallel_identity_v51 import (
 	validate_public_identity as _validate_cubit_v51_public_identity,
 	validate_source_identity as _validate_cubit_v51_source_identity,
@@ -169,6 +170,25 @@ Operating rules (lab doctrine -- follow these):
    kind="internal" means a server bug -- do not retry with new inputs.
 Always inspect tool outputs before acting on them; on repeated failure ask
 the user rather than looping.
+
+Topology-optimization shape regeneration (the topopt<->CAD loop): a
+per-element density design becomes a watertight STL via the radia wheel
+(`radia.topopt_cad`: `nodal_from_element_density` -> `iso_stl_from_grid`,
+or `write_levelset_exodus` for the Cubit-native `create tri iso` route);
+`cubit_stl_to_vol` then meshes that STL into a gated solver `.vol`
+(scheme="hex" Sculpt all-hex, scheme="tet" tetmesh).  Sculpt is the tool
+for these bodies BECAUSE they have no sweepable topology.  Do NOT route
+such STL through netgen's STLGeometry (rejects marching-cubes facets as
+degenerate -- recorded negative).  Gate on closure + inverted elements +
+boundary faces (a Sculpt free mesh exported without mesh-based geometry
+carries ZERO `.vol` surface elements, and a charge-based solver then
+loses all surface charge SILENTLY -- 51x-off demag-free J, recorded
+incident); treat min-quality as a report, and rank meshes by
+`dof_estimate`, not element count.  Prefer scheme="hex" for downstream
+charge-Gram / VIM re-evaluation: the facet-conforming tet mesh of a
+decimated marching-cubes surface can carry slivers that stall CG at any
+tolerance, while the Sculpt hex mesh of the same surface solves in tens
+of iterations.
 """
 
 # Create MCP server
@@ -4210,6 +4230,210 @@ def cubit_netgen_quality_compare(step_path: str,
 	}, ensure_ascii=False, indent=2, default=str)
 
 
+def _vol_surface_element_count(vol_path: Path) -> int:
+	"""Count boundary surface elements recorded in a Netgen `.vol` file.
+
+	The section header is `surfaceelements` (`...gi` / `...uv` variants for
+	geometry-informed exports) followed by the element count on its own
+	line.  Returns -1 when no section is present (a malformed export).
+	"""
+	tokens = ("surfaceelements", "surfaceelementsgi", "surfaceelementsuv")
+	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
+		for line in f:
+			if line.strip() in tokens:
+				try:
+					return int(next(f).strip())
+				except (StopIteration, ValueError):
+					return -1
+	return -1
+
+
+@mcp.tool()
+def cubit_stl_to_vol(stl_path: str,
+                     scheme: str = "tet",
+                     size: float = 0.0,
+                     out_vol: str = "",
+                     out_msh: str = "",
+                     closure_tolerance: float = 0.03,
+                     timeout_s: int = 900) -> str:
+	"""
+	Mesh a watertight STL into a solver-ready Netgen `.vol` (all-hex via
+	Sculpt, or tet via tetmesh), with closure and quality gates.
+
+	This is the MESH-side half of the topology-optimization shape
+	regeneration loop.  The DESIGN-side half lives in the radia wheel
+	(`radia.topopt_cad`): a per-element density becomes a nodal level set
+	and then a watertight STL (grid marching-cubes route, or the Cubit
+	`create tri iso` route via `write_levelset_exodus`).  This tool closes
+	the loop: STL -> `import stl` -> mesh -> `export netgen` -> gates.
+
+	Routes (headless batch Cubit, per the driving policy):
+	  * scheme="hex" -- `sculpt volume all processors 1 size <s>
+	    gen_sidesets 2` followed
+	    by `create mesh geometry hex all feature_angle 135` and
+	    `delete volume with not is_meshed` (overlay-grid all-hex; works on
+	    faceted geometry with no sweepable topology, which is exactly what
+	    a topology-optimized body is).  The mesh-based-geometry step is
+	    REQUIRED, not cosmetic: a Sculpt free mesh is not associated with
+	    geometric surfaces, so a bare sculpt+export writes a `.vol` with
+	    ZERO boundary faces -- which a charge-based solver consumes
+	    silently as "no surface charge" (measured 2026-08-08: uniform-field
+	    demag J came out exactly demag-free, 51x off, with state CG
+	    "converging" in 1 iteration).  `gen_sidesets 2` is therefore part
+	    of the route, and the Netgen exporter must preserve its direct/free
+	    tri/quad faces in addition to geometry-owned surfaces.  Measured
+	    closure depends on Sculpt size and is reported by the gate.
+	  * scheme="tet" -- `volume all scheme tetmesh` + `size` (tets mesh the
+	    faceted STL surface directly, so boundary tris are exported
+	    naturally).  Measured closure: ~1-2 %.  NOTE netgen's own
+	    STLGeometry REJECTS marching-cubes STL ("STL Triangle degenerated",
+	    0 tets, even after weld + Taubin smoothing -- measured 2026-08-08);
+	    Cubit is the supported tet route for such surfaces, not netgen.
+
+	Gates (fail -> status="gate_failed", artifacts kept for inspection):
+	  * closure: |V_mesh - V_stl| / V_stl <= closure_tolerance, where
+	    V_mesh is the gmsh Jacobian-integrated volume of the exported
+	    `.msh` and V_stl the watertight STL volume (trimesh).
+	  * inversion: gmsh minSICN `negative == 0` and min Jacobian det > 0.
+	  * boundary faces: the exported `.vol` must carry the complete mesh
+	    skin as surface elements (count > 0 and equal to the `.msh`
+	    topological skin) -- guards the silent-no-surface-charge failure
+	    above.
+	  * min_quality is REPORTED, not gated (one number is one sample --
+	    see cubit_netgen_quality_compare's interpretation notes).
+
+	When `size` is 0 a size is derived as bbox_diagonal / 30.  `out_vol` /
+	`out_msh` default next to the STL.  The `.msh` is always produced (it
+	carries the referee's volume and quality numbers).
+
+	Args:
+	    stl_path: watertight STL (the tool re-checks watertightness).
+	    scheme: "hex" (Sculpt) or "tet" (tetmesh).
+	    size: element size (0 = derive from bbox).
+	    out_vol/out_msh: output paths (default: beside the STL).
+	    closure_tolerance: relative volume-closure gate (default 3 %,
+	        matching the levelset-sculpt validation gate).
+	"""
+	p = Path(stl_path)
+	if not p.is_absolute():
+		p = PROJECT_ROOT / p
+	if not p.is_file():
+		return json.dumps(_error_payload("input", f"STL not found: {p}"))
+	if scheme not in ("hex", "tet"):
+		return json.dumps(_error_payload(
+			"input", f"scheme must be 'hex' or 'tet', got {scheme!r}"))
+	inspection = _inspect_stl(p, timeout_s=min(float(timeout_s), 120.0))
+	if not inspection.get("ok"):
+		kind = str(inspection.get("kind") or "input")
+		stage = "environment" if kind in ("environment", "timeout") else "input"
+		return json.dumps(_error_payload(
+			stage, str(inspection.get("error") or "cannot inspect STL"),
+			kind=kind,
+			hint="pip install trimesh" if kind == "environment" else None))
+	if not inspection.get("watertight", False):
+		return json.dumps(_error_payload(
+			"input", "STL is not watertight; a closed surface is required "
+			"for a volume mesh (radia.topopt_cad.iso_stl_from_grid raises "
+			"on non-watertight output -- regenerate the surface)"))
+	if not inspection.get("winding_consistent", False):
+		return json.dumps(_error_payload(
+			"input", "STL winding is inconsistent; repair face orientation "
+			"before volume meshing"))
+	v_stl = float(inspection.get("volume") or 0.0)
+	if v_stl <= 0.0:
+		return json.dumps(_error_payload("input", "STL volume is zero"))
+
+	if not size or size <= 0.0:
+		bounds = inspection.get("bounds") or []
+		if len(bounds) != 2 or len(bounds[0]) != 3 or len(bounds[1]) != 3:
+			return json.dumps(_error_payload(
+				"input", "STL inspector did not return a 3D bounding box"))
+		ext = [float(hi) - float(lo)
+		       for lo, hi in zip(bounds[0], bounds[1])]
+		size = float(sum(value * value for value in ext) ** 0.5 / 30.0)
+
+	vol = Path(out_vol) if out_vol else p.with_suffix(f".{scheme}.vol")
+	msh = Path(out_msh) if out_msh else p.with_suffix(f".{scheme}.msh")
+	stl_fwd = str(p).replace("\\", "/")
+	cmds = [f'import stl "{stl_fwd}" feature_angle 135 merge']
+	if scheme == "tet":
+		cmds += ["volume all scheme tetmesh",
+		         f"volume all size {size}", "mesh volume all"]
+	else:
+		# The Sculpt free mesh must be bound to mesh-based geometry so the
+		# exporter sees geometry-owned skin faces (see docstring: without
+		# this the .vol has zero surface elements and charge-based solvers
+		# go silently demag-free).  The unmeshed import volume is then
+		# dropped by predicate, never by hardcoded id.
+		cmds += [f"sculpt volume all processors 1 size {size} gen_sidesets 2",
+		         "create mesh geometry hex all feature_angle 135",
+		         "delete volume with not is_meshed"]
+	cmds += ["block 1 add volume all", 'block 1 name "iron"',
+	         f'export netgen "{str(vol).replace(chr(92), "/")}" '
+	         f"order 1 overwrite",
+	         f'export gmsh "{str(msh).replace(chr(92), "/")}" '
+	         f"dimension 3 order 1 overwrite"]
+	for output in (vol, msh):
+		output.parent.mkdir(parents=True, exist_ok=True)
+		try:
+			output.unlink(missing_ok=True)
+		except OSError as exc:
+			return json.dumps(_error_payload(
+				"output", f"cannot replace stale output {output}: {exc}"))
+	r = _cs.run_headless_journal(
+		cmds, timeout_s=timeout_s, working_directory=vol.parent)
+	if r.get("status") == "error":
+		return json.dumps({**_error_payload("cubit", "batch meshing failed"),
+		                   "process": r,
+		                   "commands": cmds}, default=str)
+	if not vol.is_file() or not msh.is_file():
+		return json.dumps({**_error_payload(
+			"cubit", f"export did not produce {vol.name} / {msh.name} "
+			"(check process diagnostics)"),
+			"process": r}, default=str)
+
+	from ..gmsh.msh_inspect import mesh_quality, mesh_total_volume
+	vol_report = mesh_total_volume(msh)
+	quality = mesh_quality(msh)
+	v_mesh = float(vol_report.get("total_volume") or 0.0)
+	closure = abs(v_mesh - v_stl) / v_stl
+	negative = int(quality.get("total_negative") or 0)
+	min_det = vol_report.get("min_jacobian_det")
+	vol_boundary = _vol_surface_element_count(vol)
+	skin_faces = (quality.get("mesh_stats") or {}).get("n_boundary_faces")
+	gates = {
+		"closure_ok": bool(closure <= closure_tolerance),
+		"no_inverted_elements": negative == 0 and (min_det or 0.0) > 0.0,
+		"boundary_faces_ok": bool(
+			vol_boundary > 0 and skin_faces is not None
+			and vol_boundary == int(skin_faces)),
+	}
+	by_type = [
+		{"element": bt.get("name"), "n": bt.get("n_elements"),
+		 "min": bt.get("min_quality"), "mean": bt.get("mean_quality")}
+		for bt in quality.get("by_type", [])
+	]
+	return json.dumps({
+		"status": "ok" if all(gates.values()) else "gate_failed",
+		"gates": gates,
+		"scheme": scheme, "size": size,
+		"stl": str(p), "vol": str(vol), "msh": str(msh),
+		"stl_volume": v_stl, "mesh_volume": v_mesh,
+		"closure": closure, "closure_tolerance": closure_tolerance,
+		"total_negative": negative, "min_jacobian_det": min_det,
+		"vol_boundary_faces": vol_boundary,
+		"msh_skin_faces": skin_faces,
+		"by_type": by_type,
+		"dof_estimate": (quality.get("mesh_stats") or {}).get("dof_estimate"),
+		"process": {
+			"exit_code": r.get("exit_code"),
+			"console": r.get("console"),
+			"headless_flags": r.get("headless_flags"),
+			"persistent_gui_started": r.get("persistent_gui_started"),
+		},
+		"note": ("min quality is reported, not gated; gate on inverted "
+		         "elements and closure (mesh-quality study finding)"),
+	}, ensure_ascii=False, indent=2, default=str)
 @mcp.tool()
 def cubit_batch_try(commands: list, step_path: str = "",
                      timeout_s: int = 300) -> str:
@@ -6597,6 +6821,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
 	"cubit_session_journal", "cubit_netgen_quality_compare",
+	"cubit_stl_to_vol",
 }
 # Read-only tools that may reach the network.
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
