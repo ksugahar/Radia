@@ -54,6 +54,8 @@ from .post_process import (
     export_view_csv,
     extract_skin,
     field_histogram,
+    field_range,
+    flow_texture,
     flux_lines,
     harmonic_to_time,
     integrate_view,
@@ -65,6 +67,7 @@ from .post_process import (
     point_history,
     probe_field,
     resample_grid,
+    select,
     smooth_to_nodes,
     streamlines,
     streamlines_2d,
@@ -76,7 +79,9 @@ from .post_process import (
 from .render import (
     export_animation,
     render_montage,
+    render_panels,
     render_png,
+    volume_render,
 )
 from .rules import ALL_RULES
 from .session import (
@@ -2079,6 +2084,209 @@ def main():
             raise
     else:
         mcp.run(transport="stdio")
+
+
+@mcp.tool()
+def gmsh_field_range(paths: list, view: str | int | None = None,
+                     component: int | None = None,
+                     time_step: int | None = None) -> dict:
+    """
+    Union colour range across several .msh files -- the prerequisite for
+    a comparable multi-figure set.
+
+    gmsh autoscales EVERY view to its own extrema, so two renders of the
+    same quantity encode different scales until they are pinned to one
+    range. Feed the returned range to
+    gmsh_render(color={"range": [...]}) for each panel, or let
+    gmsh_render_panels do it. Pure-Python reader: no gmsh launch.
+
+    Args:
+        paths: .msh files to combine.
+        view: view name or index to restrict to (default: all views).
+        component: component index, or None for the magnitude.
+        time_step: restrict to one step (default: all steps).
+    """
+    return field_range([_abs_path(str(p)) for p in paths], view=view,
+                       component=component, time_step=time_step)
+
+
+@mcp.tool()
+def gmsh_render_panels(items: list, out_png: str,
+                       cols: int | None = None,
+                       camera_preset: str | None = "iso",
+                       view: str | int | None = None,
+                       share_camera: bool = True,
+                       share_color: bool = True,
+                       color: dict | None = None,
+                       width: int = 620, height: int = 560,
+                       merge_files: list | None = None) -> dict:
+    """
+    Multi-panel figure with ONE camera, ONE zoom and ONE colour scale.
+
+    gmsh_render_montage pastes independently rendered images together:
+    each panel auto-fits its own scene and autoscales its own colour
+    bar, so the panels LOOK comparable while encoding different scales.
+    This renders them as a set:
+
+    - share_camera also shares the ZOOM, by merging a hidden 8-point
+      frame spanning the union bounding box (gmsh refits on every draw
+      and ignores General.Min*/Max* and ZoomFactor -- measured -- so a
+      common bounding box is the only mechanism).
+    - share_color pins every panel to the union range from
+      gmsh_field_range.
+
+    Sharing a range across DIFFERENT quantities is refused (a colour bar
+    covering T and A/m^2 means nothing): pass view=<name>, an explicit
+    color={"range": [...]}, or share_color=False.
+
+    Args:
+        items: paths, or dicts {"path":, "label":, "merge_files":,
+               "color":, "options":} whose keys override the shared ones.
+        out_png: montage output path.
+        cols: montage columns (default: a single row).
+        camera_preset: shared view ("+x".."-z", "iso").
+        view: restrict the shared range to this view AND show only it.
+        share_camera / share_color: turn either sharing off.
+        color: extra colour options merged into the shared range.
+        merge_files: overlay files applied to every panel.
+    """
+    specs = []
+    for it in items:
+        spec = dict(it) if isinstance(it, dict) else {"path": str(it)}
+        spec["path"] = _abs_path(str(spec["path"]))
+        if spec.get("merge_files"):
+            spec["merge_files"] = [_abs_path(str(m))
+                                   for m in spec["merge_files"]]
+        specs.append(spec)
+    kwargs = {}
+    if merge_files:
+        kwargs["merge_files"] = [_abs_path(str(m)) for m in merge_files]
+    return render_panels(specs, _abs_path(out_png), cols=cols,
+                         camera_preset=camera_preset, view=view,
+                         share_camera=share_camera,
+                         share_color=share_color, color=color,
+                         width=width, height=height, **kwargs)
+
+
+@mcp.tool()
+def gmsh_select(path: str, expression: str,
+                out_file: str | None = None,
+                result_name: str = "selection",
+                extract: bool = True,
+                carry: str | int | None = 0) -> dict:
+    """
+    Select elements with a COMPOUND condition (ParaView "Find Data").
+
+    gmsh_threshold filters ONE view; a real query mixes fields with each
+    other and with position -- "where |B| exceeds 1.5 T on the upper
+    half". The expression is evaluated per element in Python so it can
+    reference every view at once.
+
+    Names in the expression:
+      x, y, z        element centroid coordinates
+      v0, v1, ...    per-view value (magnitude for vectors)
+      <view name>    lowercased, non-word characters as "_"
+                     (B -> b, "|J| [A/m^2]" -> j_a_m_2)
+      abs min max sqrt log log10 exp sin cos atan2 hypot pi e
+    Python boolean operators apply (and, or, not). Unknown names raise
+    with the available list.
+
+    carry names the view whose VALUES ride along into the extraction
+    (default: the first view), so the selected region still shows the
+    physics; extracting the bare 1/0 mask gives a flat blob whose
+    colour bar reads "1".
+
+    Args:
+        path: .msh file to query.
+        expression: boolean expression over the names above.
+        out_file: output .msh (default: <stem>_<result_name>.msh).
+        result_name: name of the written mask view.
+        extract: also run the extraction into a .pos.
+        carry: view name/index whose values ride along, or None.
+    """
+    return select(_abs_path(path), expression,
+                  out_file=_abs_path(out_file) if out_file else None,
+                  result_name=result_name, extract=extract, carry=carry)
+
+
+@mcp.tool()
+def gmsh_volume_render(path: str, png_out: str | None = None,
+                       view: str | int = 0,
+                       n_slices: int = 24,
+                       axis: str = "z",
+                       alpha: float = 0.35,
+                       alpha_power: float = 2.0,
+                       camera_preset: str | None = "iso",
+                       color: dict | None = None,
+                       width: int = 900, height: int = 800,
+                       keep_slices: bool = False) -> dict:
+    """
+    Pseudo-volume rendering by compositing semi-transparent slices.
+
+    gmsh has NO volume renderer -- no ray-caster, no 3D texture path.
+    This is the classical substitute and is named for what it does:
+    n_slices cut planes perpendicular to axis are extracted and drawn
+    semi-transparently so the eye integrates them, with a
+    value-dependent opacity (ColormapAlphaPower: alpha grows as
+    value**power) acting as the transfer function so low values fade
+    out instead of fogging the picture.
+
+    Honest limits vs a real volume renderer: compositing is per-slice,
+    not per-ray, so opacity depends on how many slices the eye line
+    crosses; slices seen strongly edge-on read as stripes (keep axis
+    roughly along the view direction); cost is one CutPlane pass per
+    slice.
+
+    Args:
+        path: .msh/.pos holding the field.
+        png_out: output PNG (default: alongside the input).
+        view: source view name or index.
+        n_slices: number of cut planes (24 default; >64 is slow).
+        axis: "x" | "y" | "z" stacking direction.
+        alpha: base opacity per slice.
+        alpha_power: opacity exponent (0 uniform, 2 fades low values).
+        camera_preset: named view.
+        keep_slices: also write the slice stack as .pos.
+    """
+    return volume_render(_abs_path(path),
+                         _abs_path(png_out) if png_out else None,
+                         view=view, n_slices=n_slices, axis=axis,
+                         alpha=alpha, alpha_power=alpha_power,
+                         camera_preset=camera_preset, color=color,
+                         width=width, height=height,
+                         keep_slices=keep_slices)
+
+
+@mcp.tool()
+def gmsh_flow_texture(path: str, view: str | int | None = None,
+                      plane: str = "xy", offset: float = 0.0,
+                      density: float = 60.0,
+                      out_file: str | None = None) -> dict:
+    """
+    Dense evenly-spaced streamline texture -- the LIC alternative.
+
+    gmsh has no line integral convolution: it cannot smear a noise
+    texture along a vector field. The classical substitute is this --
+    Jobard-Lefer evenly spaced streamlines packed densely enough that
+    the eye reads them as a flow texture rather than countable curves.
+    density is how many line spacings fit across the plane's diagonal
+    (60 reads as a texture; 15-20 stays countable).
+
+    NOT LIC, and better in one respect: every curve here is a real
+    trajectory, so it stays probe-able and quantitative, where LIC is a
+    purely visual convolution that fills every pixel.
+
+    Args:
+        path: .msh/.pos holding a vector view.
+        view: view name or index.
+        plane: "xy" | "yz" | "xz" section plane.
+        offset: signed offset of the plane from the bbox centre.
+        density: line spacings across the plane diagonal.
+        out_file: output .pos (default: alongside the input).
+    """
+    return flow_texture(_abs_path(path), view=view, plane=plane,
+                        offset=offset, density=density,
+                        out_file=_abs_path(out_file) if out_file else None)
 
 
 if __name__ == '__main__':

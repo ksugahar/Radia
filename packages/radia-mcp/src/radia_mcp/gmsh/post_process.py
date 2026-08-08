@@ -2220,3 +2220,319 @@ def point_history(path: str | Path, point: list[float], *,
         if not plot.get("ok"):
             out["plot_error"] = plot.get("error")
     return out
+
+
+# =====================================================================
+# Cross-file colour range, compound selection, flow texture
+# =====================================================================
+
+def _view_values(view: dict[str, Any], component: int | None,
+                 absolute: bool) -> dict[int, float]:
+    """Reduce a view's rows to one number per tag.
+
+    ``component=None`` takes the magnitude of a vector/tensor row (the
+    quantity a colour bar shows for a multi-component view) and the
+    value itself for a scalar.
+    """
+    out: dict[int, float] = {}
+    for tag, vals in view["rows"].items():
+        if component is not None:
+            if component >= len(vals):
+                raise IndexError(
+                    f"view {view['name']!r} has {len(vals)} components, "
+                    f"component {component} requested")
+            out[tag] = float(vals[component])
+        elif len(vals) == 1:
+            out[tag] = float(vals[0])
+        else:
+            out[tag] = math.sqrt(sum(float(v) * float(v) for v in vals))
+    return out
+
+
+def field_range(paths: list[str | Path], *,
+                view: str | int | None = None,
+                component: int | None = None,
+                time_step: int | None = None) -> dict[str, Any]:
+    """Union colour range across several .msh files (and their views).
+
+    gmsh autoscales EVERY view to its own extrema, so two renders of the
+    same quantity are not comparable until they are pinned to one range.
+    This computes that range without launching gmsh (pure-Python
+    reader), so the result feeds straight into
+    ``gmsh_render(color={"range": [...]})``.
+
+    Args:
+        paths: .msh files to combine.
+        view: view name or index to restrict to (default: every view).
+        component: component index, or None for the magnitude.
+        time_step: restrict to one step (default: every step).
+
+    Returns:
+        ``{"range": [lo, hi], "per_file": {...}, "views": [...]}``.
+    """
+    from .msh_inspect import read_msh_data
+
+    if not paths:
+        raise ValueError("field_range needs at least one path")
+    lo, hi = math.inf, -math.inf
+    per_file: dict[str, Any] = {}
+    seen_views: list[str] = []
+    for p in paths:
+        src = Path(p)
+        if not src.is_file():
+            return {"ok": False, "error": f"file not found: {src}"}
+        data = read_msh_data(src)
+        f_lo, f_hi, used = math.inf, -math.inf, []
+        for idx, v in enumerate(data["views"]):
+            if isinstance(view, bool):
+                raise TypeError("view must be a name or an index")
+            if isinstance(view, int) and idx != view:
+                continue
+            if isinstance(view, str) and v["name"] != view:
+                continue
+            if time_step is not None and v.get("step") != time_step:
+                continue
+            vals = list(_view_values(v, component, absolute=True).values())
+            if not vals:
+                continue
+            f_lo = min(f_lo, min(vals))
+            f_hi = max(f_hi, max(vals))
+            used.append(v["name"])
+            if v["name"] not in seen_views:
+                seen_views.append(v["name"])
+        if not used:
+            return {"ok": False,
+                    "error": f"no matching view in {src.name} "
+                             f"(views: {[v['name'] for v in data['views']]})"}
+        per_file[str(src)] = {"range": [f_lo, f_hi], "views": used}
+        lo, hi = min(lo, f_lo), max(hi, f_hi)
+    return {"ok": True, "range": [lo, hi], "per_file": per_file,
+            "views": seen_views, "component": component,
+            "n_files": len(paths)}
+
+
+_SELECT_ALLOWED = {
+    "abs": abs, "min": min, "max": max, "sqrt": math.sqrt,
+    "log": math.log, "log10": math.log10, "exp": math.exp,
+    "sin": math.sin, "cos": math.cos, "atan2": math.atan2,
+    "hypot": math.hypot, "pi": math.pi, "e": math.e,
+}
+
+
+def _select_ident(name: str) -> str:
+    out = "".join(c if c.isalnum() else "_" for c in name).strip("_")
+    if not out:
+        return "view"
+    return ("v_" + out).lower() if out[:1].isdigit() else out.lower()
+
+
+def select(path: str | Path, expression: str, *,
+           out_file: str | Path | None = None,
+           result_name: str = "selection",
+           extract: bool = True,
+           carry: str | int | None = 0,
+           timeout_s: float = 300.0) -> dict[str, Any]:
+    """Select elements with a compound condition (ParaView "Find Data").
+
+    ``threshold`` filters ONE view; a real query mixes fields with each
+    other and with position -- "where |B| exceeds 1.5 T on the upper
+    half".  The expression is evaluated per element in Python, so it can
+    reference every view at once, and the surviving elements are written
+    as a 1/0 mask view.  ``extract=True`` then runs the threshold
+    (Plugin(ExtractElements), MinVal 0.5) on that mask to materialise
+    the selection as its own view.
+
+    Names available in the expression:
+        ``x``, ``y``, ``z``  element centroid coordinates
+        ``v0``, ``v1``, ...  per-view value (magnitude for vectors)
+        the view's own name, lowercased with non-word characters turned
+        into ``_`` (``B`` -> ``b``, ``|J| [A/m^2]`` -> ``j_a_m_2``)
+        plus abs/min/max/sqrt/log/log10/exp/sin/cos/atan2/hypot/pi/e.
+
+    Python boolean operators apply (``and``, ``or``, ``not``).  An
+    unknown name raises with the available list rather than evaluating
+    to something silently wrong.
+    """
+    from .msh_inspect import read_msh_data
+
+    src = Path(path)
+    if not src.is_file():
+        return {"ok": False, "error": f"file not found: {src}"}
+    data = read_msh_data(src, include_elements=True)
+    if not data["elements"]:
+        return {"ok": False, "error": f"{src.name} holds no elements"}
+    nodes = data["nodes"]
+
+    names: list[str] = []
+    per_view: list[dict[int, float]] = []
+    for v in data["views"]:
+        vals = _view_values(v, None, absolute=True)
+        if v["section"] == "NodeData":
+            elem_vals: dict[int, float] = {}
+            for tag, el in data["elements"].items():
+                got = [vals[n] for n in el["nodes"] if n in vals]
+                if got:
+                    elem_vals[tag] = sum(got) / len(got)
+            per_view.append(elem_vals)
+        else:
+            per_view.append(vals)
+        names.append(v["name"])
+
+    idents = [_select_ident(n) for n in names]
+    available = (["x", "y", "z"] + [f"v{i}" for i in range(len(names))]
+                 + idents)
+    selected: list[int] = []
+    for tag, el in data["elements"].items():
+        pts = [nodes[n] for n in el["nodes"] if n in nodes]
+        if not pts:
+            continue
+        env = dict(_SELECT_ALLOWED)
+        env["x"] = sum(p[0] for p in pts) / len(pts)
+        env["y"] = sum(p[1] for p in pts) / len(pts)
+        env["z"] = sum(p[2] for p in pts) / len(pts)
+        for k, (ident, vals) in enumerate(zip(idents, per_view)):
+            val = vals.get(tag, 0.0)
+            env[f"v{k}"] = val
+            env[ident] = val
+        try:
+            keep = bool(eval(expression, {"__builtins__": {}}, env))
+        except Exception as exc:                        # noqa: BLE001
+            return {"ok": False,
+                    "error": f"expression failed on element {tag}: {exc}",
+                    "available_names": available,
+                    "view_names": names}
+        if keep:
+            selected.append(tag)
+
+    out = (Path(out_file) if out_file is not None
+           else src.with_name(f"{src.stem}_{result_name}.msh"))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    chosen = set(selected)
+    mask_rows = "".join(f"{tag} {1.0 if tag in chosen else 0.0:.1f}\n"
+                        for tag in data["elements"])
+    mask = ("$ElementData\n"
+            f'1\n"{result_name}"\n1\n0\n'
+            f"3\n0\n1\n{len(data['elements'])}\n"
+            f"{mask_rows}$EndElementData\n")
+    # A second view carries the CHOSEN FIELD on the selected elements and
+    # a far-below sentinel elsewhere, so extracting it by value yields a
+    # selection that still holds the physics (extracting the 1/0 mask
+    # alone gives a flat blob whose colour bar reads "1").
+    carry_idx = None
+    if carry is not None and names:
+        if isinstance(carry, int):
+            carry_idx = carry if 0 <= carry < len(names) else None
+        else:
+            carry_idx = names.index(carry) if carry in names else None
+        if carry_idx is None:
+            return {"ok": False,
+                    "error": f"unknown carry view {carry!r} "
+                             f"(views: {names})",
+                    "view_names": names}
+    carried = ""
+    carry_lo = carry_hi = None
+    if carry_idx is not None and selected:
+        vals = per_view[carry_idx]
+        picked = [vals.get(t, 0.0) for t in selected]
+        carry_lo, carry_hi = min(picked), max(picked)
+        sentinel = carry_lo - 1.0 - abs(carry_lo)
+        rows = "".join(
+            f"{tag} {(vals.get(tag, 0.0) if tag in chosen else sentinel):.9e}\n"
+            for tag in data["elements"])
+        carried = ("$ElementData\n"
+                   f'1\n"{result_name}_{_select_ident(names[carry_idx])}"\n'
+                   f"1\n0\n3\n0\n1\n{len(data['elements'])}\n"
+                   f"{rows}$EndElementData\n")
+    out.write_text(src.read_text(encoding="utf-8", errors="replace")
+                   + mask + carried, encoding="utf-8")
+
+    result: dict[str, Any] = {
+        "ok": True, "msh": str(out), "expression": expression,
+        "n_elements": len(data["elements"]),
+        "n_selected": len(selected),
+        "fraction": (len(selected) / len(data["elements"])
+                     if data["elements"] else 0.0),
+        "mask_view": result_name,
+        "available_names": available, "view_names": names}
+    if carried:
+        result["carried_view"] = names[carry_idx]
+        result["carried_range"] = [carry_lo, carry_hi]
+    if extract and selected:
+        if carried:
+            span = max(abs(carry_hi - carry_lo), 1e-30)
+            result["extract"] = threshold(
+                out, carry_lo - 1e-6 * span, carry_hi + 1e-6 * span,
+                view=f"{result_name}_{_select_ident(names[carry_idx])}",
+                out_file=str(out.with_name(out.stem + "_extract.pos")),
+                timeout_s=timeout_s)
+        else:
+            result["extract"] = threshold(
+                out, 0.5, 1.5, view=result_name,
+                out_file=str(out.with_name(out.stem + "_extract.pos")),
+                timeout_s=timeout_s)
+    return result
+
+
+def flow_texture(path: str | Path, *,
+                 view: str | int | None = None,
+                 plane: str = "xy", offset: float = 0.0,
+                 density: float = 60.0,
+                 out_file: str | Path | None = None,
+                 timeout_s: float = 900.0) -> dict[str, Any]:
+    """Dense evenly-spaced streamline texture -- the LIC alternative.
+
+    gmsh has no line integral convolution: it cannot smear a noise
+    texture along a vector field.  The classical substitute is this --
+    Jobard-Lefer evenly spaced streamlines packed densely enough that
+    the eye reads them as a flow texture rather than as countable
+    curves.  ``density`` is how many line spacings fit across the
+    domain diagonal (60 reads as a texture; 15-20 stays countable).
+
+    This is NOT LIC and does not claim to be.  It is strictly better in
+    one respect and worse in another: every curve here is a real
+    trajectory (quantitative, probe-able), whereas LIC is a purely
+    visual convolution that fills every pixel.
+    """
+    from .msh_inspect import read_msh_data
+
+    src = Path(path)
+    if not src.is_file():
+        return {"ok": False, "error": f"file not found: {src}"}
+    if density <= 0:
+        raise ValueError(f"density must be > 0, got {density}")
+    data = read_msh_data(src)
+    pts = list(data["nodes"].values())
+    if not pts:
+        return {"ok": False, "error": f"{src.name} holds no nodes"}
+    lo = [min(p[i] for p in pts) for i in range(3)]
+    hi = [max(p[i] for p in pts) for i in range(3)]
+    axes = {"xy": (0, 1, 2), "yz": (1, 2, 0), "xz": (0, 2, 1)}
+    if plane not in axes:
+        raise ValueError(
+            f"unknown plane {plane!r} (available: {', '.join(sorted(axes))})")
+    a0, a1, an = axes[plane]
+    span = [hi[i] - lo[i] for i in range(3)]
+    diag = math.sqrt(span[a0] ** 2 + span[a1] ** 2)
+    if diag <= 0.0:
+        return {"ok": False,
+                "error": f"{src.name} is degenerate in the {plane} plane"}
+    mid = 0.5 * (lo[an] + hi[an]) + float(offset)
+
+    def _pt(u, v):
+        p = [0.0, 0.0, 0.0]
+        p[a0], p[a1], p[an] = u, v, mid
+        return p
+
+    origin = _pt(lo[a0], lo[a1])
+    u_point = _pt(hi[a0], lo[a1])
+    v_point = _pt(lo[a0], hi[a1])
+    d_sep = diag / float(density)
+    res = streamlines_2d(src, origin, u_point, v_point, view=view,
+                         d_sep=d_sep, max_lines=int(4 * density),
+                         out_file=out_file, timeout_s=timeout_s)
+    if isinstance(res, dict):
+        res["d_sep"] = d_sep
+        res["density"] = float(density)
+        res["method"] = ("evenly spaced streamlines (Jobard-Lefer); "
+                         "NOT line integral convolution")
+    return res
