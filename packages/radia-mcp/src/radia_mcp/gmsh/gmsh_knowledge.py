@@ -1972,6 +1972,42 @@ Unknown names raise with the valid list; raw ``options={}`` still wins
 over the structured form, so an option gmsh gains later is reachable
 without waiting for a wrapper.
 
+## The five ParaView gaps, and what closes each
+
+- **Volume rendering**: gmsh has no ray-caster.  ``gmsh_volume_render``
+  composites N semi-transparent cut planes with a value-dependent
+  opacity (``ColormapAlphaPower``: alpha grows as value**power, so low
+  values fade instead of fogging).  Named for what it does.  Limits:
+  per-slice not per-ray compositing, slices seen edge-on read as
+  stripes (keep ``axis`` near the view direction), one CutPlane pass
+  per slice.
+- **Surface LIC**: not available.  ``gmsh_flow_texture`` packs
+  Jobard-Lefer evenly spaced streamlines densely enough to read as a
+  texture (``density`` = spacings across the plane diagonal; 60 is a
+  texture, 15-20 stays countable).  Better in one way -- every curve is
+  a real trajectory, so it stays probe-able -- worse in another: it
+  does not fill every pixel.
+- **Multi-view with a shared camera AND scale**: ``gmsh_render_panels``.
+  ``gmsh_render_montage`` pastes independent renders, so each panel
+  auto-fits its own scene and autoscales its own colour bar -- the
+  panels LOOK comparable while encoding different scales.  Panels share
+  the zoom via a hidden 8-point frame spanning the union bounding box
+  (gmsh refits on every draw and IGNORES ``General.Min*/Max*`` and
+  ``ZoomFactor`` -- measured -- so a common bounding box is the only
+  mechanism), and share the colour range from ``gmsh_field_range``.
+  Sharing a range across DIFFERENT quantities is REFUSED (T and A/m^2
+  on one bar means nothing): pass ``view=``, an explicit range, or
+  ``share_color=False``.
+- **Cross-file colour range**: ``gmsh_field_range`` unions min/max over
+  files/views with the pure-Python reader (no gmsh launch); feed it to
+  ``color={"range": [...]}``.
+- **Compound selection (Find Data)**: ``gmsh_select`` evaluates a
+  boolean expression per element over ``x, y, z``, ``v0, v1, ...`` and
+  the view names (``B`` -> ``b``), so a query can mix fields with each
+  other and with position.  ``carry`` rides the chosen view's VALUES
+  into the extraction -- extracting the bare 1/0 mask gives a flat blob
+  whose colour bar reads "1".  Unknown names raise with the list.
+
 ## Honest gaps (do not fake these)
 
 - VOLUME RENDERING: gmsh has none.  Use isosurfaces + cut planes +

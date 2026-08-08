@@ -208,7 +208,55 @@ try:
                 gmsh.fltk.update()
             return reverted
 
-        if cfg["mode"] == "png":
+        if cfg["mode"] == "volume":
+            # Pseudo-volume rendering: stack semi-transparent cut planes.
+            # gmsh has no ray-caster; CutPlane per offset + a
+            # value-dependent alpha (ColormapAlphaPower) is the
+            # classical substitute.
+            src_tag = (gmsh.view.getTags()[int(cfg["view"])]
+                       if isinstance(cfg["view"], int)
+                       else next(t for t in gmsh.view.getTags()
+                                 if gmsh.option.getString(
+                                     f"View[{gmsh.view.getIndex(t)}].Name")
+                                 == cfg["view"]))
+            a, b, c = cfg["normal"]
+            made = []
+            for off in cfg["offsets"]:
+                gmsh.plugin.setNumber("CutPlane", "A", a)
+                gmsh.plugin.setNumber("CutPlane", "B", b)
+                gmsh.plugin.setNumber("CutPlane", "C", c)
+                gmsh.plugin.setNumber("CutPlane", "D", -off)
+                gmsh.plugin.setNumber("CutPlane", "View",
+                                      gmsh.view.getIndex(src_tag))
+                made.append(gmsh.plugin.run("CutPlane"))
+            # hide every pre-existing view, not just the source: a
+            # second field view would keep drawing over the stack and
+            # add a meaningless second colour bar
+            for t in view_tags:
+                gmsh.option.setNumber(
+                    f"View[{gmsh.view.getIndex(t)}].Visible", 0)
+            for t in made:
+                i = gmsh.view.getIndex(t)
+                gmsh.option.setNumber(f"View[{i}].ColormapAlpha",
+                                      cfg["alpha"])
+                gmsh.option.setNumber(f"View[{i}].ColormapAlphaPower",
+                                      cfg["alpha_power"])
+                gmsh.option.setNumber(f"View[{i}].ShowScale", 0)
+                gmsh.option.setNumber(f"View[{i}].SmoothNormals", 1)
+            if made:
+                last = gmsh.view.getIndex(made[-1])
+                gmsh.option.setNumber(f"View[{last}].ShowScale", 1)
+            if cfg.get("slices_pos"):
+                for t in made:
+                    gmsh.view.write(t, cfg["slices_pos"], append=True)
+            gmsh.fltk.initialize()
+            gmsh.fltk.update()
+            gmsh.write(cfg["png_out"])
+            gmsh.fltk.finalize()
+            result.update({"ok": True, "ran": True, "png": cfg["png_out"],
+                           "n_slices": len(made),
+                           "slices_pos": cfg.get("slices_pos")})
+        elif cfg["mode"] == "png":
             ts = cfg.get("time_step")
             if ts is not None:
                 for i in range(n_views):
@@ -904,3 +952,292 @@ def render_montage(images: list[str | Path],
     return {"ok": True, "png": str(out),
             "grid": [n_rows, n_cols], "cell_size": [cell_w, cell_h],
             "n_images": n}
+
+
+def _union_bbox(paths: list[Path]) -> tuple[list[float], list[float]]:
+    """Union node bounding box across .msh inputs (pure-Python reader)."""
+    from .msh_inspect import read_msh_data
+
+    lo = [float("inf")] * 3
+    hi = [float("-inf")] * 3
+    for p in paths:
+        if p.suffix.lower() not in (".msh", ".pos"):
+            continue
+        for pt in read_msh_data(p)["nodes"].values():
+            for i in range(3):
+                lo[i] = min(lo[i], pt[i])
+                hi[i] = max(hi[i], pt[i])
+    if any(v == float("inf") for v in lo):
+        raise ValueError("no .msh input carried nodes for the shared frame")
+    return lo, hi
+
+
+def _write_frame_geo(lo, hi, path: Path, pad: float = 0.02) -> Path:
+    """8 corner points spanning the union box.
+
+    gmsh refits the scene on every draw and ignores General.Min*/Max*
+    and ZoomFactor (measured), so the ONLY way to give several renders
+    one common zoom is to give them one common bounding box.  The points
+    are hidden with Geometry.Points=0 and still count toward the fit.
+    """
+    span = [hi[i] - lo[i] for i in range(3)]
+    diag = max(sum(s * s for s in span) ** 0.5, 1e-12)
+    m = pad * diag
+    lines = []
+    n = 1
+    for x in (lo[0] - m, hi[0] + m):
+        for y in (lo[1] - m, hi[1] + m):
+            for z in (lo[2] - m, hi[2] + m):
+                lines.append(f"Point({n}) = {{{x:.9g}, {y:.9g}, {z:.9g}, 1}};")
+                n += 1
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def render_panels(items: list[dict[str, Any] | str | Path],
+                  out_png: str | Path, *,
+                  cols: int | None = None,
+                  camera_preset: str | None = "iso",
+                  rotation: list[float] | None = None,
+                  share_camera: bool = True,
+                  share_color: bool = True,
+                  view: str | int | None = None,
+                  color: dict[str, Any] | None = None,
+                  width: int = 620, height: int = 560,
+                  background: str = "white",
+                  keep_panels: bool = True,
+                  **render_kwargs) -> dict[str, Any]:
+    """Multi-panel figure with ONE camera, ONE zoom and ONE colour scale.
+
+    ``render_montage`` pastes independently rendered images together:
+    every panel gets its own auto-fit and its own autoscaled colour bar,
+    so the panels look comparable while encoding different scales.  This
+    renders the panels as a set:
+
+    * ``share_camera`` gives every panel the same view AND the same zoom,
+      by merging a hidden 8-point frame spanning the union bounding box
+      (gmsh refits on each draw and ignores General.Min*/Max* and
+      ZoomFactor -- measured -- so a common box is the mechanism).
+    * ``share_color`` pins every panel to the union colour range
+      (``field_range`` over the inputs), so one colour means one value
+      across the whole figure.
+
+    Args:
+        items: paths, or dicts ``{"path":, "label":, "merge_files":, ...}``
+            whose extra keys override the shared render arguments.
+        out_png: montage output path.
+        cols: montage columns (default: one row).
+        camera_preset / rotation: the shared view.
+        share_camera: merge the common frame so the zoom matches too.
+        share_color: compute and apply the union colour range.
+        color: extra colour options merged into the shared range.
+        keep_panels: keep the individual panel PNGs next to the montage.
+
+    Returns:
+        montage result plus ``shared_range``, ``panels`` and ``frame``.
+    """
+    specs: list[dict[str, Any]] = []
+    for it in items:
+        spec = dict(it) if isinstance(it, dict) else {"path": str(it)}
+        if "path" not in spec:
+            raise ValueError(f"panel item without a 'path': {spec}")
+        specs.append(spec)
+    if not specs:
+        raise ValueError("render_panels needs at least one item")
+    srcs = [Path(s["path"]) for s in specs]
+    missing = [str(p) for p in srcs if not p.is_file()]
+    if missing:
+        return {"ok": False, "error": f"file(s) not found: {missing}"}
+
+    out = Path(out_png)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    panel_dir = out.with_name(out.stem + "_panels")
+    panel_dir.mkdir(parents=True, exist_ok=True)
+
+    shared_color = dict(color or {})
+    range_info = None
+    if share_color and "range" not in shared_color:
+        from .msh_inspect import read_msh_data
+        from .post_process import field_range
+
+        msh = [p for p in srcs if p.suffix.lower() == ".msh"]
+        if msh:
+            if view is None and len(msh) > 1:
+                # Sharing a range across DIFFERENT quantities produces a
+                # colour bar that means nothing (T and A/m^2 on one
+                # scale).  Refuse rather than emit a plausible figure.
+                names = [{v["name"] for v in read_msh_data(p)["views"]}
+                         for p in msh]
+                common = set.intersection(*names) if names else set()
+                if not common:
+                    raise ValueError(
+                        "share_color=True but the panels have no view in "
+                        f"common ({[sorted(n) for n in names]}); pass "
+                        "view=<name>, an explicit color={'range': [...]}, "
+                        "or share_color=False for a mixed-quantity figure")
+            range_info = field_range(msh, view=view)
+            if range_info.get("ok"):
+                shared_color["range"] = range_info["range"]
+
+    frame = None
+    if share_camera:
+        try:
+            lo, hi = _union_bbox(srcs)
+        except ValueError:
+            lo = hi = None
+        if lo is not None:
+            frame = _write_frame_geo(lo, hi, panel_dir / "_shared_frame.geo")
+
+    pngs: list[str] = []
+    labels: list[str] = []
+    for k, spec in enumerate(specs):
+        kwargs = dict(render_kwargs)
+        label = spec.pop("label", Path(spec["path"]).stem)
+        merges = [str(m) for m in (spec.pop("merge_files", None) or [])]
+        panel_color = dict(shared_color)
+        panel_color.update(spec.pop("color", None) or {})
+        opts = dict(kwargs.pop("options", None) or {})
+        opts.update(spec.pop("options", None) or {})
+        if isinstance(view, str):
+            # one quantity per comparison figure: a second visible view
+            # would add a second colour bar that the shared range does
+            # not describe
+            from .msh_inspect import read_msh_data
+
+            if Path(spec["path"]).suffix.lower() == ".msh":
+                for i, v in enumerate(read_msh_data(spec["path"])["views"]):
+                    opts.setdefault(f"View[{i}].Visible",
+                                    1 if v["name"] == view else 0)
+        if frame is not None:
+            merges.append(str(frame))
+            opts.setdefault("Geometry.Points", 0)
+            opts.setdefault("Geometry.PointNumbers", 0)
+            opts.setdefault("Geometry.Curves", 0)
+        kwargs.update({k2: v for k2, v in spec.items() if k2 != "path"})
+        png = panel_dir / f"panel{k}_{Path(spec['path']).stem}.png"
+        res = render_png(spec["path"], png,
+                         width=width, height=height,
+                         camera_preset=camera_preset, rotation=rotation,
+                         color=panel_color or None,
+                         merge_files=merges or None,
+                         options=opts or None, **kwargs)
+        if not res.get("ok"):
+            return {"ok": False, "error": f"panel {k} failed: {res}",
+                    "panel": str(png)}
+        pngs.append(str(png))
+        labels.append(label)
+
+    montage = render_montage(pngs, out, cols=cols or len(pngs),
+                             labels=labels, background=background)
+    montage.update({
+        "panels": pngs if keep_panels else [],
+        "shared_range": shared_color.get("range"),
+        "range_info": range_info,
+        "frame": str(frame) if frame else None,
+        "shared_camera": bool(share_camera),
+    })
+    if not keep_panels:
+        for p in pngs:
+            Path(p).unlink(missing_ok=True)
+    return montage
+
+
+def volume_render(path: str | Path,
+                  png_out: str | Path | None = None, *,
+                  view: str | int = 0,
+                  n_slices: int = 24,
+                  axis: str = "z",
+                  alpha: float = 0.35,
+                  alpha_power: float = 2.0,
+                  camera_preset: str | None = "iso",
+                  rotation: list[float] | None = None,
+                  color: dict[str, Any] | None = None,
+                  width: int = 900, height: int = 800,
+                  keep_slices: bool = False,
+                  timeout_s: float = 900.0) -> dict[str, Any]:
+    """Pseudo-volume rendering by compositing semi-transparent slices.
+
+    gmsh has NO volume renderer -- there is no ray-caster and no 3D
+    texture path.  This is the classical substitute and is named for
+    what it does: ``n_slices`` cut planes perpendicular to ``axis`` are
+    extracted and drawn semi-transparently, so the eye integrates them
+    into a volume.  A value-dependent opacity
+    (``ColormapAlphaPower``: alpha grows as value**power) acts as the
+    transfer function, so low values fade out instead of fogging the
+    picture.
+
+    Honest limits vs a real volume renderer: the compositing is
+    per-slice, not per-ray, so opacity depends on how many slices the
+    eye line crosses; slices perpendicular to a strongly oblique view
+    read as stripes (keep the axis roughly along the view direction);
+    and it costs one CutPlane pass per slice.
+
+    Args:
+        path: .msh/.pos file holding the field.
+        png_out: output PNG (default: alongside the input).
+        view: source view name or index.
+        n_slices: number of cut planes (24 is a good default; >64 is slow).
+        axis: "x" | "y" | "z" -- the stacking direction.
+        alpha: base opacity of each slice.
+        alpha_power: opacity exponent (0 = uniform, 2 = low values fade).
+        keep_slices: also write the slice stack as a .pos file.
+    """
+    from .msh_inspect import read_msh_data
+
+    src = Path(path)
+    if not src.is_file():
+        return {"ok": False, "error": f"file not found: {src}"}
+    if axis not in ("x", "y", "z"):
+        raise ValueError(f"axis must be x|y|z, got {axis!r}")
+    if n_slices < 2:
+        raise ValueError(f"n_slices must be >= 2, got {n_slices}")
+    if not 0.0 < alpha <= 1.0:
+        raise ValueError(f"alpha must be in (0, 1], got {alpha}")
+
+    pts = list(read_msh_data(src)["nodes"].values())
+    if not pts:
+        return {"ok": False, "error": f"{src.name} holds no nodes"}
+    k = "xyz".index(axis)
+    lo = min(p[k] for p in pts)
+    hi = max(p[k] for p in pts)
+    if hi <= lo:
+        return {"ok": False,
+                "error": f"{src.name} is degenerate along {axis}"}
+    # interior offsets: the bounding faces carry no interior information
+    offsets = [lo + (hi - lo) * (i + 0.5) / n_slices for i in range(n_slices)]
+
+    out = (Path(png_out) if png_out is not None
+           else src.with_name(src.stem + f"_volume_{axis}.png"))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    slices_pos = (str(out.with_suffix(".pos")) if keep_slices else None)
+
+    cfg = {
+        "mode": "volume",
+        "path": str(src),
+        "png_out": str(out),
+        "view": view,
+        "normal": [1.0 if i == k else 0.0 for i in range(3)],
+        "offsets": offsets,
+        "alpha": float(alpha),
+        "alpha_power": float(alpha_power),
+        "slices_pos": slices_pos,
+        "width": int(width),
+        "height": int(height),
+        "numsubedges": 4,
+        "rotation": _resolve_rotation(camera_preset, rotation),
+        **_figure_cfg(color, None, None, None, None),
+        "options": {},
+        "string_options": {},
+        "auto_mesh_display": False,
+        "adapt_views": False,
+        "smooth_normals": True,
+        "geometry_display": False,
+        "merge_files": [],
+    }
+    result = _run_render(cfg, timeout_s)
+    result.setdefault("n_slices", n_slices)
+    result.setdefault("axis", axis)
+    result.setdefault("method",
+                      "slice-stack compositing; NOT ray-cast volume "
+                      "rendering (gmsh has no volume renderer)")
+    return result
