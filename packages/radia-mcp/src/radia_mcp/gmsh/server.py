@@ -69,10 +69,10 @@ from .post_process import (
     resample_grid,
     select,
     smooth_to_nodes,
-    time_series,
     streamlines,
     streamlines_2d,
     threshold,
+    time_series,
     transform_view,
     view_min_max,
     warp_view,
@@ -2137,11 +2137,12 @@ def gmsh_render_panels(items: list, out_png: str,
       gmsh_field_range.
 
     Sharing a range across DIFFERENT quantities is refused (a colour bar
-    covering T and A/m^2 means nothing): pass view=<name>, an explicit
-    color={"range": [...]}, or share_color=False.
+    covering T and A/m^2 means nothing). If several view names are common,
+    view=<name> is required so one quantity owns the colour bar. Otherwise
+    pass an explicit color={"range": [...]}, or share_color=False.
 
     Args:
-        items: paths, or dicts {"path":, "label":, "merge_files":,
+        items: at least two paths, or dicts {"path":, "label":, "merge_files":,
                "color":, "options":} whose keys override the shared ones.
         out_png: montage output path.
         cols: montage columns (default: a single row).
@@ -2239,7 +2240,7 @@ def gmsh_volume_render(path: str, png_out: str | None = None,
     slice.
 
     Args:
-        path: .msh/.pos holding the field.
+        path: ASCII MSH v4.x file holding a scalar field.
         png_out: output PNG (default: alongside the input).
         view: source view name or index.
         n_slices: number of cut planes (24 default; >64 is slow).
@@ -2278,7 +2279,7 @@ def gmsh_flow_texture(path: str, view: str | int | None = None,
     purely visual convolution that fills every pixel.
 
     Args:
-        path: .msh/.pos holding a vector view.
+        path: ASCII MSH v4.x file holding a 3-component vector view.
         view: view name or index.
         plane: "xy" | "yz" | "xz" section plane.
         offset: signed offset of the plane from the bbox centre.

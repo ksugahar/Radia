@@ -25,13 +25,14 @@ from radia_mcp.gmsh.post_process import isosurface, time_series
 pytest.importorskip("gmsh", reason="gmsh not installed")
 
 
-def _sphere_field(path, value_at, n=5):
+def _sphere_field(path, value_at, n=5, x_shift=0.0):
     """Unit box, 5-tet cells, one scalar node view ``f``."""
     nodes, idx, tag = {}, {}, 1
     for i in range(n):
         for j in range(n):
             for k in range(n):
-                nodes[tag] = [-1 + 2 * i / (n - 1), -1 + 2 * j / (n - 1),
+                nodes[tag] = [-1 + 2 * i / (n - 1) + x_shift,
+                              -1 + 2 * j / (n - 1),
                               -1 + 2 * k / (n - 1)]
                 idx[(i, j, k)] = tag
                 tag += 1
@@ -136,8 +137,12 @@ def test_time_series_guards(tmp_path):
         time_series(paths, view="f", times=[0.0])
     with pytest.raises(ValueError, match="unknown stat"):
         time_series(paths, view="f", stats=("median",))
+    with pytest.raises(ValueError, match="finite"):
+        time_series(paths, view="f", times=[0.0, 1.0, math.nan])
     missing = time_series(paths, view="nope")
     assert not missing["ok"] and "no view" in missing["error"]
+    bad_view = time_series(paths, view=True)
+    assert not bad_view["ok"] and "non-negative index" in bad_view["error"]
 
 
 def test_time_series_rejects_a_changed_mesh(tmp_path):
@@ -147,6 +152,37 @@ def test_time_series_rejects_a_changed_mesh(tmp_path):
     res = time_series([a, b], view="f")
     assert not res["ok"]
     assert "tag numbering" in res["error"]
+
+
+def test_time_series_rejects_changed_geometry_with_same_tags(tmp_path):
+    a = _sphere_field(tmp_path / "a.msh", lambda p: p[0], n=4)
+    b = _sphere_field(tmp_path / "b.msh", lambda p: p[0], n=4,
+                      x_shift=0.01)
+    res = time_series([a, b], view="f")
+    assert not res["ok"]
+    assert "node geometry" in res["error"]
+
+
+def test_time_series_rejects_element_node_data(tmp_path):
+    from radia_mcp.gmsh.msh_inspect import read_msh_data
+
+    paths = [_sphere_field(tmp_path / f"e{k}.msh", lambda p: p[0], n=3)
+             for k in range(2)]
+    for path in paths:
+        elements = read_msh_data(path, include_elements=True)["elements"]
+        rows = []
+        for tag, element in elements.items():
+            values = " ".join("1" for _ in element["nodes"])
+            rows.append(f"{tag} {len(element['nodes'])} {values}")
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "$ElementNodeData\n1\n\"local\"\n1\n0\n3\n0\n1\n"
+              f"{len(rows)}\n" + "\n".join(rows)
+            + "\n$EndElementNodeData\n",
+            encoding="utf-8")
+    res = time_series(paths, view="local")
+    assert not res["ok"]
+    assert "does not support ElementNodeData" in res["error"]
 
 
 # --------------------------------------------------------------------
@@ -162,6 +198,8 @@ def test_isosurface_reports_a_closed_shell(tmp_path):
     assert res["ok"], res
     assert res["n_vertices"] > 0
     assert res["boundary_vertices"] == 0
+    assert res["touches_outer_boundary"] is False
+    assert res["open_surface_check"] == "outer_bbox_contact_only"
     assert res["open_surface"] is False
     assert "note" not in res
 
@@ -175,6 +213,7 @@ def test_isosurface_flags_a_shell_cut_by_the_domain(tmp_path):
     assert res["ok"], res
     assert res["open_surface"] is True
     assert res["boundary_vertices"] > 0
+    assert res["touches_outer_boundary"] is True
     assert "CUT OPEN" in res["note"]
 
 

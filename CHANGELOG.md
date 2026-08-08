@@ -5,6 +5,26 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.50 - Gmsh comparative visualization and file-series analysis
+
+Released 2026-08-08.
+
+- Added named Gmsh figure controls for cameras, colour scales, glyphs,
+  clipping, axes, and annotations, plus shared-camera/shared-scale panel
+  rendering and checked pseudo-volume and dense-streamline views.
+- Added compound field selection, cross-file field ranges, and temporal
+  statistics over immutable MSH file series, including per-tag peak-time
+  views, aggregate histories, and optional field probes.
+- Hardened the new Gmsh APIs against unsafe expression evaluation, ambiguous
+  quantities, changed mesh geometry/connectivity, malformed ElementNodeData,
+  non-finite values, and display options that were not propagated to generated
+  slice views.
+- Clarified that isosurface openness is diagnosed by outer-model-boundary
+  contact; internal openings are not inferred from Gmsh's element-local view
+  polygons.
+- Regenerated the Simulink Agentic Toolkit library knowledge graph for the
+  current Radia library.
+
 ## 4.95.49 - MATLAB Optuna native kernels, RLC resonance, VIM Hodge, PEEC views
 
 Released 2026-08-07.

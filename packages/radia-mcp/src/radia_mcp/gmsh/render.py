@@ -22,6 +22,7 @@ Codifies the lab animation/display knowledge as executable tools:
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import tempfile
 from pathlib import Path
@@ -100,7 +101,11 @@ try:
         def _targets(spec):
             if spec is None:
                 return list(range(n_views))
-            return [int(i) for i in spec]
+            indices = [int(i) for i in spec]
+            if any(i < 0 or i >= n_views for i in indices):
+                raise IndexError(
+                    f"view index outside [0, {n_views}): {indices}")
+            return indices
 
         col = cfg.get("color")
         if col:
@@ -152,8 +157,12 @@ try:
                 gmsh.option.setNumber(f"General.Clip{k}{letter}", float(val))
             mask = 1 << k
             for target in pl["targets"]:
-                cur = gmsh.option.getNumber(target)
-                gmsh.option.setNumber(target, float(int(cur) | mask))
+                option_names = ([f"View[{i}].Clip" for i in range(n_views)]
+                                if target == "__all_views__" else [target])
+                for option_name in option_names:
+                    cur = gmsh.option.getNumber(option_name)
+                    gmsh.option.setNumber(option_name,
+                                          float(int(cur) | mask))
             if pl.get("whole_elements"):
                 gmsh.option.setNumber("General.ClipWholeElements", 1)
 
@@ -219,6 +228,7 @@ try:
                                  if gmsh.option.getString(
                                      f"View[{gmsh.view.getIndex(t)}].Name")
                                  == cfg["view"]))
+            src_idx = gmsh.view.getIndex(src_tag)
             a, b, c = cfg["normal"]
             made = []
             for off in cfg["offsets"]:
@@ -226,8 +236,7 @@ try:
                 gmsh.plugin.setNumber("CutPlane", "B", b)
                 gmsh.plugin.setNumber("CutPlane", "C", c)
                 gmsh.plugin.setNumber("CutPlane", "D", -off)
-                gmsh.plugin.setNumber("CutPlane", "View",
-                                      gmsh.view.getIndex(src_tag))
+                gmsh.plugin.setNumber("CutPlane", "View", src_idx)
                 made.append(gmsh.plugin.run("CutPlane"))
             # hide every pre-existing view, not just the source: a
             # second field view would keep drawing over the stack and
@@ -237,6 +246,19 @@ try:
                     f"View[{gmsh.view.getIndex(t)}].Visible", 0)
             for t in made:
                 i = gmsh.view.getIndex(t)
+                # Plugin-created views do not reliably inherit display
+                # options.  Copy the selected source's colour contract so
+                # every slice uses one transfer function and one range.
+                for opt in ("RangeType", "CustomMin", "CustomMax",
+                            "ScaleType", "NbIso", "IntervalsType",
+                            "ColormapNumber", "ColormapInvert",
+                            "SaturateValues"):
+                    gmsh.option.setNumber(
+                        f"View[{i}].{opt}",
+                        gmsh.option.getNumber(f"View[{src_idx}].{opt}"))
+                gmsh.option.setString(
+                    f"View[{i}].Format",
+                    gmsh.option.getString(f"View[{src_idx}].Format"))
                 gmsh.option.setNumber(f"View[{i}].ColormapAlpha",
                                       cfg["alpha"])
                 gmsh.option.setNumber(f"View[{i}].ColormapAlphaPower",
@@ -414,7 +436,7 @@ _SCALE_TYPES = {"linear": 1, "log": 2, "double_log": 3}
 _VECTOR_TYPES = {"segment": 1, "arrow": 2, "pyramid": 3, "arrow3d": 4,
                  "displacement": 5, "comet": 6}
 _GLYPH_LOCATIONS = {"cog": 1, "vertex": 2}
-_CLIP_TARGETS = {"views": "View[0].Clip", "mesh": "Mesh.Clip",
+_CLIP_TARGETS = {"views": "__all_views__", "mesh": "Mesh.Clip",
                  "geometry": "Geometry.Clip"}
 _AXES_MODES = {"none": 0, "box": 1, "frame": 2, "open": 3, "full": 4,
                "open_grid": 5}
@@ -449,8 +471,11 @@ def _build_color(color: dict[str, Any] | None) -> dict[str, Any] | None:
         if rng == "shared":
             out["range"] = "shared"
         else:
+            if not isinstance(rng, (list, tuple)) or len(rng) != 2:
+                raise ValueError("color range must be [min, max], 'shared', "
+                                 "or 'auto'")
             lo, hi = (float(v) for v in rng)
-            if not hi > lo:
+            if not math.isfinite(lo) or not math.isfinite(hi) or not hi > lo:
                 raise ValueError(f"color range must be increasing, got {rng}")
             out["range"] = [lo, hi]
     if color.get("log"):
@@ -458,13 +483,20 @@ def _build_color(color: dict[str, Any] | None) -> dict[str, Any] | None:
     if color.get("scale") is not None:
         out["scale_type"] = _pick(_SCALE_TYPES, color["scale"], "color scale")
     if color.get("intervals") is not None:
-        out["intervals"] = int(color["intervals"])
+        intervals = int(color["intervals"])
+        if intervals < 1:
+            raise ValueError("color intervals must be >= 1")
+        out["intervals"] = intervals
     if color.get("style") is not None:
         out["intervals_type"] = _pick(_INTERVAL_STYLES, color["style"],
                                       "color style")
-    for key in ("colormap", "alpha"):
-        if color.get(key) is not None:
-            out[key] = float(color[key])
+    if color.get("colormap") is not None:
+        out["colormap"] = float(color["colormap"])
+    if color.get("alpha") is not None:
+        alpha = float(color["alpha"])
+        if not math.isfinite(alpha) or not 0.0 <= alpha <= 1.0:
+            raise ValueError("color alpha must be in [0, 1]")
+        out["alpha"] = alpha
     for key in ("show_scale", "saturate", "invert"):
         if color.get(key) is not None:
             out[key] = 1.0 if color[key] else 0.0
@@ -516,11 +548,19 @@ def _build_clip(clip: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
             if len(plane) != 4:
                 raise ValueError("clip plane must be [a, b, c, d]")
         else:
+            if "normal" not in spec:
+                raise ValueError("clip needs a 'plane' or 'normal'")
             n = [float(v) for v in spec["normal"]]
             if len(n) != 3:
                 raise ValueError("clip normal must be [nx, ny, nz]")
             plane = n + [float(spec.get("offset", 0.0))]
+        if any(not math.isfinite(v) for v in plane):
+            raise ValueError("clip plane values must be finite")
+        if not any(plane[i] for i in range(3)):
+            raise ValueError("clip plane normal must be nonzero")
         names = spec.get("apply_to") or ["views", "mesh", "geometry"]
+        if isinstance(names, str):
+            names = [names]
         targets = []
         for name in names:
             if name not in _CLIP_TARGETS:
@@ -681,7 +721,7 @@ def render_png(path: str | Path,
     extrema, so two panels of the same quantity are not comparable
     until they share a range.  ``"shared"`` unifies the views of this
     render; pass an explicit ``[lo, hi]`` to unify across files (get it
-    from ``gmsh_field_stats``).
+    from ``gmsh_field_range``).
 
     ``glyphs`` -- ``{"type": "arrow3d", "sampling": n, "size_max": px,
     "center": bool, "location": "cog|vertex", "views": [i]}``.
@@ -1023,7 +1063,8 @@ def render_panels(items: list[dict[str, Any] | str | Path],
       across the whole figure.
 
     Args:
-        items: paths, or dicts ``{"path":, "label":, "merge_files":, ...}``
+        items: at least two paths, or dicts
+            ``{"path":, "label":, "merge_files":, ...}``
             whose extra keys override the shared render arguments.
         out_png: montage output path.
         cols: montage columns (default: one row).
@@ -1042,8 +1083,10 @@ def render_panels(items: list[dict[str, Any] | str | Path],
         if "path" not in spec:
             raise ValueError(f"panel item without a 'path': {spec}")
         specs.append(spec)
-    if not specs:
-        raise ValueError("render_panels needs at least one item")
+    if len(specs) < 2:
+        raise ValueError("render_panels needs at least two items")
+    if isinstance(view, bool):
+        raise TypeError("view must be a name or a non-negative index")
     srcs = [Path(s["path"]) for s in specs]
     missing = [str(p) for p in srcs if not p.is_file()]
     if missing:
@@ -1054,6 +1097,7 @@ def render_panels(items: list[dict[str, Any] | str | Path],
     panel_dir = out.with_name(out.stem + "_panels")
     panel_dir.mkdir(parents=True, exist_ok=True)
 
+    effective_view = view
     shared_color = dict(color or {})
     range_info = None
     if share_color and "range" not in shared_color:
@@ -1061,8 +1105,12 @@ def render_panels(items: list[dict[str, Any] | str | Path],
         from .post_process import field_range
 
         msh = [p for p in srcs if p.suffix.lower() == ".msh"]
+        if len(msh) != len(srcs):
+            raise ValueError(
+                "automatic share_color requires .msh inputs; pass an "
+                "explicit color={'range': [...]}, or share_color=False")
         if msh:
-            if view is None and len(msh) > 1:
+            if effective_view is None and len(msh) > 1:
                 # Sharing a range across DIFFERENT quantities produces a
                 # colour bar that means nothing (T and A/m^2 on one
                 # scale).  Refuse rather than emit a plausible figure.
@@ -1075,30 +1123,43 @@ def render_panels(items: list[dict[str, Any] | str | Path],
                         f"common ({[sorted(n) for n in names]}); pass "
                         "view=<name>, an explicit color={'range': [...]}, "
                         "or share_color=False for a mixed-quantity figure")
-            range_info = field_range(msh, view=view)
-            if range_info.get("ok"):
-                shared_color["range"] = range_info["range"]
+                if len(common) > 1:
+                    raise ValueError(
+                        "share_color=True but the panels have multiple views "
+                        f"in common ({sorted(common)}); pass view=<name> so "
+                        "one physical quantity owns the shared colour bar")
+                effective_view = next(iter(common))
+            range_info = field_range(msh, view=effective_view)
+            if not range_info.get("ok"):
+                raise ValueError(
+                    f"could not compute a shared colour range: "
+                    f"{range_info.get('error', range_info)}")
+            shared_color["range"] = range_info["range"]
 
     frame = None
     if share_camera:
         try:
             lo, hi = _union_bbox(srcs)
-        except ValueError:
-            lo = hi = None
-        if lo is not None:
-            frame = _write_frame_geo(lo, hi, panel_dir / "_shared_frame.geo")
+        except ValueError as exc:
+            raise ValueError(
+                "share_camera=True requires inputs with readable mesh nodes; "
+                "pass share_camera=False for unsupported formats") from exc
+        frame = _write_frame_geo(lo, hi, panel_dir / "_shared_frame.geo")
 
+    shared_merges = [str(m) for m in
+                     (render_kwargs.pop("merge_files", None) or [])]
+    shared_options = dict(render_kwargs.pop("options", None) or {})
     pngs: list[str] = []
     labels: list[str] = []
     for k, spec in enumerate(specs):
-        kwargs = dict(render_kwargs)
         label = spec.pop("label", Path(spec["path"]).stem)
-        merges = [str(m) for m in (spec.pop("merge_files", None) or [])]
+        merges = shared_merges + [
+            str(m) for m in (spec.pop("merge_files", None) or [])]
         panel_color = dict(shared_color)
         panel_color.update(spec.pop("color", None) or {})
-        opts = dict(kwargs.pop("options", None) or {})
+        opts = dict(shared_options)
         opts.update(spec.pop("options", None) or {})
-        if isinstance(view, str):
+        if isinstance(effective_view, (str, int)):
             # one quantity per comparison figure: a second visible view
             # would add a second colour bar that the shared range does
             # not describe
@@ -1106,21 +1167,27 @@ def render_panels(items: list[dict[str, Any] | str | Path],
 
             if Path(spec["path"]).suffix.lower() == ".msh":
                 for i, v in enumerate(read_msh_data(spec["path"])["views"]):
+                    visible = (v["name"] == effective_view
+                               if isinstance(effective_view, str)
+                               else i == effective_view)
                     opts.setdefault(f"View[{i}].Visible",
-                                    1 if v["name"] == view else 0)
+                                    1 if visible else 0)
         if frame is not None:
             merges.append(str(frame))
             opts.setdefault("Geometry.Points", 0)
             opts.setdefault("Geometry.PointNumbers", 0)
             opts.setdefault("Geometry.Curves", 0)
-        kwargs.update({k2: v for k2, v in spec.items() if k2 != "path"})
+        panel_args = {
+            "width": width, "height": height,
+            "camera_preset": camera_preset, "rotation": rotation,
+        }
+        panel_args.update(render_kwargs)
+        panel_args.update({k2: v for k2, v in spec.items() if k2 != "path"})
+        panel_args.update({"color": panel_color or None,
+                           "merge_files": merges or None,
+                           "options": opts or None})
         png = panel_dir / f"panel{k}_{Path(spec['path']).stem}.png"
-        res = render_png(spec["path"], png,
-                         width=width, height=height,
-                         camera_preset=camera_preset, rotation=rotation,
-                         color=panel_color or None,
-                         merge_files=merges or None,
-                         options=opts or None, **kwargs)
+        res = render_png(spec["path"], png, **panel_args)
         if not res.get("ok"):
             return {"ok": False, "error": f"panel {k} failed: {res}",
                     "panel": str(png)}
@@ -1134,7 +1201,8 @@ def render_panels(items: list[dict[str, Any] | str | Path],
         "shared_range": shared_color.get("range"),
         "range_info": range_info,
         "frame": str(frame) if frame else None,
-        "shared_camera": bool(share_camera),
+        "shared_camera": bool(frame),
+        "view": effective_view,
     })
     if not keep_panels:
         for p in pngs:
@@ -1173,7 +1241,7 @@ def volume_render(path: str | Path,
     and it costs one CutPlane pass per slice.
 
     Args:
-        path: .msh/.pos file holding the field.
+        path: ASCII MSH v4.x file holding a scalar field.
         png_out: output PNG (default: alongside the input).
         view: source view name or index.
         n_slices: number of cut planes (24 is a good default; >64 is slow).
@@ -1187,14 +1255,45 @@ def volume_render(path: str | Path,
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
+    if src.suffix.lower() != ".msh":
+        return {"ok": False,
+                "error": "volume_render requires an ASCII MSH v4.x file"}
     if axis not in ("x", "y", "z"):
         raise ValueError(f"axis must be x|y|z, got {axis!r}")
+    if isinstance(n_slices, bool) or int(n_slices) != n_slices:
+        raise ValueError(f"n_slices must be an integer, got {n_slices}")
+    n_slices = int(n_slices)
     if n_slices < 2:
         raise ValueError(f"n_slices must be >= 2, got {n_slices}")
+    alpha = float(alpha)
     if not 0.0 < alpha <= 1.0:
         raise ValueError(f"alpha must be in (0, 1], got {alpha}")
+    alpha_power = float(alpha_power)
+    if not math.isfinite(alpha_power) or alpha_power < 0.0:
+        raise ValueError(f"alpha_power must be finite and >= 0, got {alpha_power}")
 
-    pts = list(read_msh_data(src)["nodes"].values())
+    data = read_msh_data(src)
+    if not data["views"]:
+        return {"ok": False, "error": f"{src.name} carries no view"}
+    if isinstance(view, bool):
+        return {"ok": False, "error": "view must be a name or an index"}
+    if isinstance(view, int):
+        if view < 0 or view >= len(data["views"]):
+            return {"ok": False, "error": f"view index {view} out of range"}
+        chosen = data["views"][view]
+    else:
+        matches = [entry for entry in data["views"]
+                   if entry["name"] == view]
+        if len(matches) != 1:
+            return {"ok": False,
+                    "error": f"expected one view {view!r}, got {len(matches)}"}
+        chosen = matches[0]
+    if chosen["components"] != 1:
+        return {"ok": False,
+                "error": f"volume_render needs a scalar view; "
+                         f"{chosen['name']!r} has {chosen['components']} "
+                         "components"}
+    pts = list(data["nodes"].values())
     if not pts:
         return {"ok": False, "error": f"{src.name} holds no nodes"}
     k = "xyz".index(axis)

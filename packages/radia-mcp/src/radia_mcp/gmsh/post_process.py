@@ -20,7 +20,9 @@ Empirically verified semantics (gmsh 4.15.2, locked by tests):
 
 from __future__ import annotations
 
+import ast
 import json
+import keyword
 import math
 import tempfile
 from pathlib import Path
@@ -240,16 +242,15 @@ try:
             out_tag = gmsh.plugin.run("Isosurface")
             dtypes, nels, _data = gmsh.view.getListData(out_tag)
             gmsh.view.write(out_tag, cfg["out_file"])
-            # Is the shell CLOSED, or cut open by the domain boundary?
-            # An open shell is see-through by construction -- the single
-            # biggest cause of "my transparent isosurface has cracks".
-            # (Measured: closed shells show 0 background pixels inside
-            # the silhouette at every recursion level; a shell crossing
-            # the box faces shows ~20-30%, independent of recursion.)
+            # Detect the common open-shell case: the level set reaches the
+            # model's outer bounding box.  Gmsh's Isosurface plugin emits
+            # element-local polygons without shared topology, so this is
+            # deliberately reported as an outer-boundary contact check;
+            # internal openings cannot be classified from this view alone.
             bb = gmsh.model.getBoundingBox(-1, -1)
             span = max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2], 1e-30)
             tol = 1e-6 * span
-            on_boundary = 0
+            on_outer_boundary = 0
             n_vertices = 0
             for kind, nel, arr in zip(dtypes, nels, _data):
                 nv = {"SP": 1, "SL": 2, "ST": 3, "SQ": 4,
@@ -269,19 +270,22 @@ try:
                                 or abs(py - bb[4]) < tol
                                 or abs(pz - bb[2]) < tol
                                 or abs(pz - bb[5]) < tol):
-                            on_boundary += 1
+                            on_outer_boundary += 1
             result.update({"ok": True, "ran": True,
                            "out_file": cfg["out_file"],
                            "recur_level": int(cfg.get("recur_level", 0)),
                            "pieces": {str(t): int(n)
                                       for t, n in zip(dtypes, nels)},
                            "n_vertices": n_vertices,
-                           "boundary_vertices": on_boundary,
-                           "open_surface": bool(on_boundary)})
-            if on_boundary:
+                           "boundary_vertices": on_outer_boundary,
+                           "outer_boundary_vertices": on_outer_boundary,
+                           "touches_outer_boundary": bool(on_outer_boundary),
+                           "open_surface_check": "outer_bbox_contact_only",
+                           "open_surface": bool(on_outer_boundary)})
+            if on_outer_boundary:
                 result["note"] = (
-                    "the isosurface is CUT OPEN by the domain boundary "
-                    f"({on_boundary} of {n_vertices} vertices lie on it): "
+                    "the isosurface is CUT OPEN at the OUTER MODEL BOUNDARY "
+                    f"({on_outer_boundary} of {n_vertices} polygon vertices): "
                     "rendered semi-transparent you will see straight "
                     "through the opening. That is the geometry, not a "
                     "rendering artefact -- pick a level whose shell "
@@ -2267,26 +2271,41 @@ def point_history(path: str | Path, point: list[float], *,
 # Cross-file colour range, compound selection, flow texture
 # =====================================================================
 
-def _view_values(view: dict[str, Any], component: int | None,
-                 absolute: bool) -> dict[int, float]:
-    """Reduce a view's rows to one number per tag.
+def _row_samples(view: dict[str, Any], vals: list[float],
+                 component: int | None) -> list[float]:
+    """Return the scalar samples represented by one data row."""
+    ncomp = int(view["components"])
+    if component is not None:
+        if isinstance(component, bool) or component < 0 or component >= ncomp:
+            raise IndexError(
+                f"view {view['name']!r} has {ncomp} components, "
+                f"component {component} requested")
+        samples = [float(v) for v in vals[component::ncomp]]
+    elif ncomp == 1:
+        samples = [float(v) for v in vals]
+    else:
+        samples = [
+            math.sqrt(sum(float(v) * float(v)
+                          for v in vals[i:i + ncomp]))
+            for i in range(0, len(vals), ncomp)]
+    if any(not math.isfinite(value) for value in samples):
+        raise ValueError(f"view {view['name']!r} contains NaN or infinity")
+    return samples
 
-    ``component=None`` takes the magnitude of a vector/tensor row (the
-    quantity a colour bar shows for a multi-component view) and the
-    value itself for a scalar.
+
+def _view_values(view: dict[str, Any],
+                 component: int | None) -> dict[int, float]:
+    """Reduce a view to one representative value per node/element tag.
+
+    ``ElementNodeData`` has one sample per local element node.  Selection
+    and file-series statistics operate per element, so those local samples
+    are averaged instead of being mistaken for one large vector.
     """
     out: dict[int, float] = {}
     for tag, vals in view["rows"].items():
-        if component is not None:
-            if component >= len(vals):
-                raise IndexError(
-                    f"view {view['name']!r} has {len(vals)} components, "
-                    f"component {component} requested")
-            out[tag] = float(vals[component])
-        elif len(vals) == 1:
-            out[tag] = float(vals[0])
-        else:
-            out[tag] = math.sqrt(sum(float(v) * float(v) for v in vals))
+        samples = _row_samples(view, vals, component)
+        if samples:
+            out[tag] = sum(samples) / len(samples)
     return out
 
 
@@ -2333,7 +2352,8 @@ def field_range(paths: list[str | Path], *,
                 continue
             if time_step is not None and v.get("step") != time_step:
                 continue
-            vals = list(_view_values(v, component, absolute=True).values())
+            vals = [sample for row in v["rows"].values()
+                    for sample in _row_samples(v, row, component)]
             if not vals:
                 continue
             f_lo = min(f_lo, min(vals))
@@ -2360,11 +2380,178 @@ _SELECT_ALLOWED = {
 }
 
 
+class _SelectExpressionValidator(ast.NodeVisitor):
+    """Allow arithmetic/boolean expressions without Python object access."""
+
+    _binary = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
+               ast.Mod, ast.Pow)
+    _unary = (ast.UAdd, ast.USub, ast.Not)
+    _boolean = (ast.And, ast.Or)
+    _compare = (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)
+
+    def __init__(self, names: set[str]):
+        self.names = names
+
+    def generic_visit(self, node):
+        raise ValueError(
+            f"unsupported expression syntax: {type(node).__name__}")
+
+    def visit_Expression(self, node):
+        self.visit(node.body)
+
+    def visit_Constant(self, node):
+        if not isinstance(node.value, (bool, int, float)):
+            raise ValueError("only numeric and boolean constants are allowed")
+
+    def visit_Name(self, node):
+        if node.id not in self.names:
+            raise NameError(f"name {node.id!r} is not defined")
+
+    def visit_Call(self, node):
+        if not isinstance(node.func, ast.Name) \
+                or node.func.id not in _SELECT_ALLOWED \
+                or not callable(_SELECT_ALLOWED[node.func.id]):
+            raise ValueError("only documented math functions may be called")
+        if node.keywords:
+            raise ValueError("keyword arguments are not allowed")
+        for arg in node.args:
+            self.visit(arg)
+
+    def visit_BinOp(self, node):
+        if not isinstance(node.op, self._binary):
+            raise ValueError(
+                f"unsupported arithmetic operator: {type(node.op).__name__}")
+        self.visit(node.left)
+        self.visit(node.right)
+
+    def visit_UnaryOp(self, node):
+        if not isinstance(node.op, self._unary):
+            raise ValueError(
+                f"unsupported unary operator: {type(node.op).__name__}")
+        self.visit(node.operand)
+
+    def visit_BoolOp(self, node):
+        if not isinstance(node.op, self._boolean):
+            raise ValueError(
+                f"unsupported boolean operator: {type(node.op).__name__}")
+        for value in node.values:
+            self.visit(value)
+
+    def visit_Compare(self, node):
+        if any(not isinstance(op, self._compare) for op in node.ops):
+            raise ValueError("unsupported comparison operator")
+        self.visit(node.left)
+        for comparator in node.comparators:
+            self.visit(comparator)
+
+
+def _parse_select_expression(expression: str,
+                             available: list[str]) -> ast.expr:
+    try:
+        tree = ast.parse(expression, mode="eval")
+        _SelectExpressionValidator(
+            set(available) | set(_SELECT_ALLOWED) | {"True", "False"}
+        ).visit(tree)
+    except (SyntaxError, ValueError, NameError) as exc:
+        raise ValueError(str(exc)) from exc
+    return tree.body
+
+
+def _eval_select_expression(node: ast.expr,
+                            env: dict[str, Any]) -> Any:
+    """Evaluate an already validated selection AST without Python eval."""
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, bool) else float(node.value)
+    if isinstance(node, ast.Name):
+        return env[node.id]
+    if isinstance(node, ast.Call):
+        func = env[node.func.id]
+        return func(*[_eval_select_expression(arg, env) for arg in node.args])
+    if isinstance(node, ast.BinOp):
+        left = _eval_select_expression(node.left, env)
+        right = _eval_select_expression(node.right, env)
+        if isinstance(node.op, ast.Add):
+            return left + right
+        if isinstance(node.op, ast.Sub):
+            return left - right
+        if isinstance(node.op, ast.Mult):
+            return left * right
+        if isinstance(node.op, ast.Div):
+            return left / right
+        if isinstance(node.op, ast.FloorDiv):
+            return left // right
+        if isinstance(node.op, ast.Mod):
+            return left % right
+        if isinstance(node.op, ast.Pow):
+            return left ** right
+    if isinstance(node, ast.UnaryOp):
+        value = _eval_select_expression(node.operand, env)
+        if isinstance(node.op, ast.UAdd):
+            return +value
+        if isinstance(node.op, ast.USub):
+            return -value
+        if isinstance(node.op, ast.Not):
+            return not value
+    if isinstance(node, ast.BoolOp):
+        if isinstance(node.op, ast.And):
+            for value in node.values:
+                result = _eval_select_expression(value, env)
+                if not result:
+                    return result
+            return result
+        for value in node.values:
+            result = _eval_select_expression(value, env)
+            if result:
+                return result
+        return result
+    if isinstance(node, ast.Compare):
+        left = _eval_select_expression(node.left, env)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = _eval_select_expression(comparator, env)
+            if isinstance(op, ast.Eq):
+                ok = left == right
+            elif isinstance(op, ast.NotEq):
+                ok = left != right
+            elif isinstance(op, ast.Lt):
+                ok = left < right
+            elif isinstance(op, ast.LtE):
+                ok = left <= right
+            elif isinstance(op, ast.Gt):
+                ok = left > right
+            else:
+                ok = left >= right
+            if not ok:
+                return False
+            left = right
+        return True
+    raise ValueError(f"unsupported expression syntax: {type(node).__name__}")
+
+
 def _select_ident(name: str) -> str:
     out = "".join(c if c.isalnum() else "_" for c in name).strip("_")
     if not out:
         return "view"
-    return ("v_" + out).lower() if out[:1].isdigit() else out.lower()
+    out = out.lower()
+    return ("v_" + out if out[:1].isdigit() or not out.isidentifier()
+            or keyword.iskeyword(out) else out)
+
+
+def _select_idents(names: list[str]) -> list[str]:
+    reserved = set(_SELECT_ALLOWED) | {"x", "y", "z"}
+    reserved.update(f"v{i}" for i in range(len(names)))
+    used = set(reserved)
+    result = []
+    for name in names:
+        base = _select_ident(name)
+        candidate = base
+        suffix = 1
+        while candidate in used:
+            candidate = (f"{base}_view" if suffix == 1
+                         else f"{base}_view{suffix}")
+            suffix += 1
+        used.add(candidate)
+        result.append(candidate)
+    return result
 
 
 def select(path: str | Path, expression: str, *,
@@ -2407,7 +2594,7 @@ def select(path: str | Path, expression: str, *,
     names: list[str] = []
     per_view: list[dict[int, float]] = []
     for v in data["views"]:
-        vals = _view_values(v, None, absolute=True)
+        vals = _view_values(v, None)
         if v["section"] == "NodeData":
             elem_vals: dict[int, float] = {}
             for tag, el in data["elements"].items():
@@ -2419,9 +2606,14 @@ def select(path: str | Path, expression: str, *,
             per_view.append(vals)
         names.append(v["name"])
 
-    idents = [_select_ident(n) for n in names]
+    idents = _select_idents(names)
     available = (["x", "y", "z"] + [f"v{i}" for i in range(len(names))]
                  + idents)
+    try:
+        expression_tree = _parse_select_expression(expression, available)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc),
+                "available_names": available, "view_names": names}
     selected: list[int] = []
     for tag, el in data["elements"].items():
         pts = [nodes[n] for n in el["nodes"] if n in nodes]
@@ -2436,7 +2628,7 @@ def select(path: str | Path, expression: str, *,
             env[f"v{k}"] = val
             env[ident] = val
         try:
-            keep = bool(eval(expression, {"__builtins__": {}}, env))
+            keep = bool(_eval_select_expression(expression_tree, env))
         except Exception as exc:                        # noqa: BLE001
             return {"ok": False,
                     "error": f"expression failed on element {tag}: {exc}",
@@ -2539,25 +2731,53 @@ def flow_texture(path: str | Path, *,
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
-    if density <= 0:
+    if src.suffix.lower() != ".msh":
+        return {"ok": False,
+                "error": "flow_texture requires an ASCII MSH v4.x file"}
+    density = float(density)
+    if not math.isfinite(density) or density <= 0:
         raise ValueError(f"density must be > 0, got {density}")
+    axes = {"xy": (0, 1, 2), "yz": (1, 2, 0), "xz": (0, 2, 1)}
+    if plane not in axes:
+        raise ValueError(
+            f"unknown plane {plane!r} (available: {', '.join(sorted(axes))})")
     data = read_msh_data(src)
+    if not data["views"]:
+        return {"ok": False, "error": f"{src.name} carries no view"}
+    if view is None:
+        chosen = data["views"][0]
+    elif isinstance(view, bool):
+        return {"ok": False, "error": "view must be a name or an index"}
+    elif isinstance(view, int):
+        if view < 0 or view >= len(data["views"]):
+            return {"ok": False, "error": f"view index {view} out of range"}
+        chosen = data["views"][view]
+    else:
+        matches = [entry for entry in data["views"]
+                   if entry["name"] == view]
+        if len(matches) != 1:
+            return {"ok": False,
+                    "error": f"expected one view {view!r}, got {len(matches)}"}
+        chosen = matches[0]
+    if chosen["components"] != 3:
+        return {"ok": False,
+                "error": f"flow_texture needs a 3-component vector view; "
+                         f"{chosen['name']!r} has {chosen['components']}"}
     pts = list(data["nodes"].values())
     if not pts:
         return {"ok": False, "error": f"{src.name} holds no nodes"}
     lo = [min(p[i] for p in pts) for i in range(3)]
     hi = [max(p[i] for p in pts) for i in range(3)]
-    axes = {"xy": (0, 1, 2), "yz": (1, 2, 0), "xz": (0, 2, 1)}
-    if plane not in axes:
-        raise ValueError(
-            f"unknown plane {plane!r} (available: {', '.join(sorted(axes))})")
     a0, a1, an = axes[plane]
     span = [hi[i] - lo[i] for i in range(3)]
     diag = math.sqrt(span[a0] ** 2 + span[a1] ** 2)
     if diag <= 0.0:
         return {"ok": False,
                 "error": f"{src.name} is degenerate in the {plane} plane"}
-    mid = 0.5 * (lo[an] + hi[an]) + float(offset)
+    clean_offset = float(offset)
+    if not math.isfinite(clean_offset):
+        raise ValueError("offset must be finite")
+    mid = 0.5 * (lo[an] + hi[an]) + clean_offset
 
     def _pt(u, v):
         p = [0.0, 0.0, 0.0]
@@ -2569,7 +2789,7 @@ def flow_texture(path: str | Path, *,
     v_point = _pt(lo[a0], hi[a1])
     d_sep = diag / float(density)
     res = streamlines_2d(src, origin, u_point, v_point, view=view,
-                         d_sep=d_sep, max_lines=int(4 * density),
+                         d_sep=d_sep, max_lines=max(1, int(4 * density)),
                          out_file=out_file, timeout_s=timeout_s)
     if isinstance(res, dict):
         res["d_sep"] = d_sep
@@ -2646,19 +2866,25 @@ def time_series(paths: list[str | Path], *,
             f"times has {len(times)} entries for {len(srcs)} files")
     t = [float(v) for v in (times if times is not None
                             else range(len(srcs)))]
+    if any(not math.isfinite(value) for value in t):
+        raise ValueError("times must contain only finite values")
 
     series: list[dict[int, float]] = []
     view_name = None
     section = None
+    components = None
     for k, src in enumerate(srcs):
-        data = read_msh_data(src)
+        data = read_msh_data(src, include_elements=True)
         if not data["views"]:
             return {"ok": False, "error": f"{src.name} carries no view"}
         if k == 0:
             if view is None:
                 chosen = data["views"][0]
+            elif isinstance(view, bool):
+                return {"ok": False,
+                        "error": "view must be a name or a non-negative index"}
             elif isinstance(view, int):
-                if view >= len(data["views"]):
+                if view < 0 or view >= len(data["views"]):
                     return {"ok": False,
                             "error": f"view index {view} out of range "
                                      f"({len(data['views'])} views)"}
@@ -2670,9 +2896,14 @@ def time_series(paths: list[str | Path], *,
                             "error": f"no view {view!r} in {src.name} "
                                      f"(views: "
                                      f"{[v['name'] for v in data['views']]})"}
+                if len(match) > 1:
+                    return {"ok": False,
+                            "error": f"view {view!r} is ambiguous in "
+                                     f"{src.name} ({len(match)} matches)"}
                 chosen = match[0]
             view_name = chosen["name"]
             section = chosen["section"]
+            components = chosen["components"]
         else:
             match = [v for v in data["views"] if v["name"] == view_name]
             if not match:
@@ -2680,8 +2911,58 @@ def time_series(paths: list[str | Path], *,
                         "error": f"{src.name} has no view {view_name!r} "
                                  f"(views: "
                                  f"{[v['name'] for v in data['views']]})"}
+            if len(match) > 1:
+                return {"ok": False,
+                        "error": f"view {view_name!r} is ambiguous in "
+                                 f"{src.name} ({len(match)} matches)"}
             chosen = match[0]
-        vals = _view_values(chosen, component, absolute=True)
+        if chosen["section"] == "ElementNodeData":
+            return {"ok": False,
+                    "error": "time_series does not support ElementNodeData; "
+                             "convert it to NodeData or ElementData first"}
+        if k and chosen["section"] != section:
+            return {"ok": False,
+                    "error": f"{src.name} stores {view_name!r} as "
+                             f"{chosen['section']}, expected {section}"}
+        if k and chosen["components"] != components:
+            return {"ok": False,
+                    "error": f"{src.name} stores {view_name!r} with "
+                             f"{chosen['components']} components, expected "
+                             f"{components}"}
+        vals = _view_values(chosen, component)
+        if not vals:
+            return {"ok": False,
+                    "error": f"view {view_name!r} in {src.name} has no values"}
+        if k == 0:
+            mesh_nodes = data["nodes"]
+            mesh_elements = data["elements"]
+            if mesh_nodes:
+                mesh_span = max(
+                    max(point[axis] for point in mesh_nodes.values())
+                    - min(point[axis] for point in mesh_nodes.values())
+                    for axis in range(3))
+                coordinate_scale = max(
+                    abs(value) for point in mesh_nodes.values()
+                    for value in point)
+                mesh_tolerance = max(
+                    mesh_span * 1e-12,
+                    math.ulp(max(coordinate_scale, mesh_span, 1e-300)) * 16)
+            else:
+                mesh_tolerance = 0.0
+        elif set(data["nodes"]) != set(mesh_nodes) \
+                or data["elements"] != mesh_elements:
+            return {"ok": False,
+                    "error": f"{src.name} does not share the node/element "
+                             f"tag numbering and connectivity of "
+                             f"{srcs[0].name} -- a series whose mesh changed "
+                             "is not one time series"}
+        elif any(abs(coord - mesh_nodes[tag][axis]) > mesh_tolerance
+                 for tag, point in data["nodes"].items()
+                 for axis, coord in enumerate(point)):
+            return {"ok": False,
+                    "error": f"{src.name} does not share the node geometry "
+                             f"of {srcs[0].name} -- a series whose mesh "
+                             "changed is not one time series"}
         if series and set(vals) != set(series[0]):
             return {"ok": False,
                     "error": f"{src.name} does not share the tag numbering "
@@ -2719,7 +3000,10 @@ def time_series(paths: list[str | Path], *,
            else srcs[0].with_name(srcs[0].stem + "_timestats.msh"))
     out.parent.mkdir(parents=True, exist_ok=True)
     text = srcs[0].read_text(encoding="utf-8", errors="replace")
-    head = text.split("$NodeData")[0].split("$ElementData")[0]
+    starts = [pos for marker in ("$NodeData", "$ElementData",
+                                 "$ElementNodeData")
+              if (pos := text.find(marker)) >= 0]
+    head = text[:min(starts)] if starts else text
     blocks = []
     for s in stats:
         rows = "".join(f"{tag} {per_tag[s][tag]:.9e}\n" for tag in tags)
@@ -2783,7 +3067,7 @@ def _plot_time_series(result: dict[str, Any], png: Path) -> dict[str, Any]:
     if hist:
         ax2 = axes[1]
         for h in hist:
-            lbl = "(%.3g, %.3g, %.3g)" % tuple(h["point"])
+            lbl = "({:.3g}, {:.3g}, {:.3g})".format(*h["point"])
             xs = [x for x, y in zip(agg["time"], h["values"]) if y is not None]
             ys = [y for y in h["values"] if y is not None]
             ax2.plot(xs, ys, marker="o", ms=2.5, label=lbl)
