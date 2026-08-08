@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **964 tools** across 48 MCP servers.
+Total: **967 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 87 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 78 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 62 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
@@ -37,7 +37,7 @@ Total: **964 tools** across 48 MCP servers.
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 4 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
-| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
+| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 5 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 15 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
@@ -180,6 +180,8 @@ Module: `radia_mcp.build123d.server`
 | `build123d_examples_refresh` | Force-refresh all build123d sources from GitHub + YouTube. |
 | `build123d_external_cad_mass_topology_gate` | Crosscheck two CAD kernels without confusing entity centers with mass centroids. |
 | `build123d_external_cad_volume_evidence_package` | Bundle dual-source CAD volume evidence before reuse. |
+| `build123d_face_first_perforation_handoff_gate` | Gate dense face-first holes against native and external CAD topology. |
+| `build123d_face_first_perforation_source_replay_gate` | Gate immutable source replay and owned headless CAD process evidence. |
 | `build123d_faceted_edit_portability_gate` | Separate faceted CAD portability from downstream mesh readiness. |
 | `build123d_faceted_source_replay_gate` | Gate tagged source, dependent STL, viewer stub, and external replay. |
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
@@ -914,8 +916,9 @@ Module: `radia_mcp.maglev.server`
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
 | `maglev_status` | (no description) |
-| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 19 topics. |
+| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
 | `rotating_conductor_periodic_settling_gate` | Gate full-turn convergence of a rotating-conductor eddy response. |
+| `team28_cycle_averaged_motion_gate` | Gate TEAM 28 cycle-averaged motion evidence and reject transient overclaims. |
 
 ## `mcp-server-team-benchmark`
 
