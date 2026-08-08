@@ -15,6 +15,23 @@ from typing import Any
 
 
 CAMERA_PRESETS: dict[str, tuple[float, float, float]] = {
+    # Standard axis views: the named axis points AT the camera, so "+y"
+    # shows the x-z plane face-on.  Values verified by rendering an
+    # asymmetric marker scene (see tests/test_gmsh_camera_presets.py) --
+    # do not "fix" them from memory of another package's convention.
+    "+x": (-90.0, 0.0, -90.0),
+    "-x": (-90.0, 0.0, 90.0),
+    "+y": (-90.0, 0.0, 0.0),
+    "-y": (-90.0, 0.0, 180.0),
+    "+z": (0.0, 0.0, 0.0),
+    # (180, 0, 0) is NOT the -z view: it flips the image vertically while
+    # still looking from +z.  Seeing the scene from the other side is a
+    # HORIZONTAL mirror with up preserved, which is a 180-degree turn
+    # about the screen-vertical axis.
+    "-z": (0.0, 180.0, 0.0),
+    "iso": (-60.0, 0.0, -35.0),
+    "iso_back": (-60.0, 0.0, 145.0),
+    # legacy lab names (kept: existing artifacts and contracts use them)
     "z_up_xz_from_positive_y": (-68.0, 0.0, 0.0),
     "positive_y_oblique": (75.0, 0.0, -20.0),
     "front_xz": (-90.0, 0.0, 0.0),

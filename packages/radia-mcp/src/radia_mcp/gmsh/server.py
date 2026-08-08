@@ -784,7 +784,12 @@ def gmsh_render(path: str,
                 adapt_views: bool = True,
                 smooth_normals: bool = True,
                 merge_files: list | None = None,
-                geometry_display: bool | None = None) -> dict:
+                geometry_display: bool | None = None,
+                color: dict | None = None,
+                glyphs: dict | None = None,
+                clip: list | None = None,
+                axes: dict | bool | None = None,
+                annotations: list | None = None) -> dict:
     """
     Render a .msh or .geo file to PNG headlessly (gmsh subprocess).
 
@@ -810,8 +815,11 @@ def gmsh_render(path: str,
                the FLTK sidebar; the result reports the actual size).
         height: Window height in pixels.
         numsubedges: Subdivisions for curved high-order mesh display.
-        camera_preset: Optional preset (z_up_xz_from_positive_y,
-                       positive_y_oblique, front_xz).
+        camera_preset: Named view. "+x" "-x" "+y" "-y" "+z" "-z" "iso"
+                       point the named axis AT the camera ("+y" shows
+                       the x-z plane face-on) -- measured, not guessed.
+                       Legacy: z_up_xz_from_positive_y,
+                       positive_y_oblique, front_xz.
         time_step: Optional time step applied to all views before render.
         cut_plane: Optional structured cut plane ({enabled, normal:[3],
                    offset, whole_elements, only_volume}); views get
@@ -823,6 +831,29 @@ def gmsh_render(path: str,
         merge_files: Additional .step/.msh/.pos files to overlay.
         geometry_display: Force shaded CAD faces on/off (default: auto
                           when a CAD file is merged).
+        color: Colour-scale control, {"range": [lo, hi] | "shared",
+               "log": bool, "intervals": n, "style":
+               "continuous|iso|discrete|numeric", "format": "%.3g",
+               "colormap": n, "alpha": a, "show_scale": bool,
+               "saturate": bool, "views": [i]}. RANGE MATTERS: gmsh
+               autoscales every view to its own extrema, so two panels
+               of the same quantity are NOT comparable until they share
+               a range. "shared" unifies this render's views; pass an
+               explicit [lo, hi] (from gmsh_field_stats) across files.
+        glyphs: Vector-glyph control, {"type": "arrow3d|arrow|segment|
+                pyramid|displacement|comet", "sampling": n (draw every
+                n-th element), "size_max": px, "size_min": px,
+                "center": bool, "location": "cog|vertex",
+                "line_width": w, "views": [i]}.
+        clip: Up to 6 clipping planes, [{"normal": [nx, ny, nz],
+              "offset": d, "apply_to": ["views","mesh","geometry"],
+              "whole_elements": bool}]; keeps n . x + d >= 0.
+        axes: True, or {"mode": "box|frame|open|full|open_grid|none",
+              "labels": ["x [m]", "y [m]", "z [m]"], "format":
+              ["%.3g", ...], "tics": [5, 5, 5]}.
+        annotations: 2D text overlays, ["text"] or [{"text":, "x":,
+                     "y":, "align": "Left|Center|Right", "size": pt}];
+                     window pixels, negative counts from the far edge.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -841,7 +872,10 @@ def gmsh_render(path: str,
                       options=options, string_options=string_options,
                       adapt_views=adapt_views,
                       smooth_normals=smooth_normals,
-                      merge_files=merged, geometry_display=geometry_display)
+                      merge_files=merged,
+                      geometry_display=geometry_display,
+                      color=color, glyphs=glyphs, clip=clip,
+                      axes=axes, annotations=annotations)
 
 
 @mcp.tool()
@@ -863,7 +897,12 @@ def gmsh_export_animation(path: str,
                           smooth_normals: bool = True,
                           link_views: bool = True,
                           merge_files: list | None = None,
-                          geometry_display: bool | None = None) -> dict:
+                          geometry_display: bool | None = None,
+                          color: dict | None = None,
+                          glyphs: dict | None = None,
+                          clip: list | None = None,
+                          axes: dict | bool | None = None,
+                          annotations: list | None = None) -> dict:
     """
     Export a time-stepped post-view animation as GIF (gmsh subprocess).
 
@@ -901,6 +940,29 @@ def gmsh_export_animation(path: str,
                      enable shaded geometry faces automatically).
         geometry_display: Force shaded CAD faces on/off (default: auto
                           when a CAD file is merged).
+        color: Colour-scale control, {"range": [lo, hi] | "shared",
+               "log": bool, "intervals": n, "style":
+               "continuous|iso|discrete|numeric", "format": "%.3g",
+               "colormap": n, "alpha": a, "show_scale": bool,
+               "saturate": bool, "views": [i]}. RANGE MATTERS: gmsh
+               autoscales every view to its own extrema, so two panels
+               of the same quantity are NOT comparable until they share
+               a range. "shared" unifies this render's views; pass an
+               explicit [lo, hi] (from gmsh_field_stats) across files.
+        glyphs: Vector-glyph control, {"type": "arrow3d|arrow|segment|
+                pyramid|displacement|comet", "sampling": n (draw every
+                n-th element), "size_max": px, "size_min": px,
+                "center": bool, "location": "cog|vertex",
+                "line_width": w, "views": [i]}.
+        clip: Up to 6 clipping planes, [{"normal": [nx, ny, nz],
+              "offset": d, "apply_to": ["views","mesh","geometry"],
+              "whole_elements": bool}]; keeps n . x + d >= 0.
+        axes: True, or {"mode": "box|frame|open|full|open_grid|none",
+              "labels": ["x [m]", "y [m]", "z [m]"], "format":
+              ["%.3g", ...], "tics": [5, 5, 5]}.
+        annotations: 2D text overlays, ["text"] or [{"text":, "x":,
+                     "y":, "align": "Left|Center|Right", "size": pt}];
+                     window pixels, negative counts from the far edge.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -927,7 +989,9 @@ def gmsh_export_animation(path: str,
                             smooth_normals=smooth_normals,
                             link_views=link_views,
                             merge_files=merged,
-                            geometry_display=geometry_display)
+                            geometry_display=geometry_display,
+                            color=color, glyphs=glyphs, clip=clip,
+                            axes=axes, annotations=annotations)
 
 
 @mcp.tool()
