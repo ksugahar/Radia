@@ -1844,26 +1844,53 @@ first two for you:
    gmsh_export_animation set it on every view by default
    (``smooth_normals=False`` opts out); ``View.AngleSmoothNormals``
    (default 30 deg) keeps genuine creases sharp.
-3. **Nesting, preferred: CLIP + opaque** (measured best): extract a
-   level stack with gmsh_flux_lines (one merged view), render with
-   ``cut_plane={"enabled": True, "normal": [0,-1,0], "offset": 0}``.
-   Opaque clipped surfaces keep full colormap saturation and hide
-   the adaptive micro-cracks completely.
-4. **Nesting, alternative: transparency** when the full closed
-   surfaces must stay visible:
-   ``options={"View[0].ColormapAlpha": 0.3..0.5}``
-   (``View.LightTwoSide`` already defaults to 1).  Trade-off,
-   measured: gmsh's adaptive extraction AND its direct Iso display
-   subdivide each element independently, so hairline T-junction
-   cracks exist at element boundaries -- invisible when opaque, but
-   visible as thin bright lines under transparency.  Deeper
-   recur_level with tighter target_error makes them finer; they do
-   not disappear (implementation property, not a data error).
+3. **Nesting with transparency works** --
+   ``color={"alpha": 0.3..0.5}`` on a stack of levels
+   (``View.LightTwoSide`` already defaults to 1).  **CORRECTION
+   (2026-08-07, measured):** an earlier note here blamed "hairline
+   T-junction cracks from per-element adaptive subdivision".  That was
+   WRONG.  Counting background pixels enclosed by the surface
+   silhouette on a curved p2 field gives **0 crack pixels at every
+   recursion level 0..3 and at alpha 1.0 and 0.35** (235 -> 18653 iso
+   elements), for single and nested shells alike.  Adaptive
+   subdivision does not crack the surface.
+4. **What DOES look like cracks: an OPEN shell.**  Where the level set
+   crosses the domain boundary the surface is cut open, and a
+   semi-transparent open shell is see-through by construction.
+   Measured on the same field: a shell closing inside the domain gives
+   0%, one crossing the box faces gives 19-29% see-through, and the
+   figure is **independent of recursion level** (261 vs 5184 elements
+   -> same 22%) -- which is what rules the subdivision explanation out.
+   ``gmsh_isosurface`` now reports ``open_surface`` /
+   ``boundary_vertices`` and a note, so the artefact is a stated fact
+   rather than a mystery.  Fixes: choose a level whose shell closes
+   inside the domain, enlarge the domain, or clip the view.
+5. **Clip + opaque** stays the cleanest nesting recipe when the inner
+   levels matter: ``cut_plane={"enabled": True, "normal": [0,-1,0],
+   "offset": 0}``.  Opaque clipped surfaces keep full colormap
+   saturation.
 
 Direct display alternative (no extraction): rendering the volume
 scalar with ``View[0].IntervalsType = 1`` + ``View[0].NbIso`` draws
 isosurfaces on the fly (RangeType=2 + CustomMin/CustomMax pin the
-levels) -- same crack caveat, handy for quick looks.
+levels) -- handy for quick looks.
+
+## Time series across FILES (one .msh per step)
+
+gmsh's own time steps live inside one view; a transient solver writes
+one mesh per step.  ``gmsh_time_series`` treats an ordered file list as
+the time axis:
+
+- per-tag ``min``/``max``/``mean``/``std``/``rms``/``ptp`` **and
+  ``argmax_time``/``argmin_time``** written as views into one .msh --
+  "where is the peak, and WHEN" becomes a picture;
+- per-step global aggregates (min/max/mean/rms), i.e. the plot-over-
+  time series, plus optional interpolated point histories (a real gmsh
+  probe per file, not a nearest-node lookup) and a matplotlib PNG.
+
+The files must share one node/element numbering; a series whose mesh
+changed is not one time series, and that is checked rather than
+averaged over silently.
 
 ## STEP overlay + PEEC filament post (the Merge workflow, headless)
 
@@ -2010,11 +2037,13 @@ without waiting for a wrapper.
 
 ## Honest gaps (do not fake these)
 
-- VOLUME RENDERING: gmsh has none.  Use isosurfaces + cut planes +
-  clipping; for true volume rendering export to a tool that has it.
-- Surface LIC (line integral convolution): not available;
-  gmsh_streamlines_2d evenly spaced placement is the classical
-  vector-texture alternative.
+- VOLUME RENDERING: gmsh has no ray-caster.  gmsh_volume_render
+  composites a slice stack with a value-dependent opacity -- a
+  substitute, not the real thing (per-slice, not per-ray).
+- Surface LIC (line integral convolution): not available.
+  gmsh_flow_texture packs evenly spaced streamlines densely instead --
+  quantitative (each curve is a trajectory) but it does not fill every
+  pixel.
 - Plugin(CutSphere): returns an EMPTY view on this build -- not
   exposed.  Use gmsh_cut_plane_extract / gmsh_threshold instead.
 - Plugin(Summation): absent from this build ("Unknown plugin"); a
