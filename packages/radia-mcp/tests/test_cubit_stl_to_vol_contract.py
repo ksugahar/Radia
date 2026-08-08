@@ -243,6 +243,35 @@ def test_vol_surface_element_count_missing_section_is_negative(tmp_path):
     assert server._vol_surface_element_count(p) == -1
 
 
+def test_relative_out_paths_are_absolutized(tmp_path, monkeypatch):
+    """Relative out_vol/out_msh once resolved against themselves: the
+    journal embeds the path while Cubit runs with cwd=vol.parent, so the
+    .vol landed in a nested dir and the .msh writer failed with 'Cannot
+    open file' (measured 2026-08-09 from a notebook kernel)."""
+    p = tmp_path / "cube.stl"
+    _write_unit_cube_stl(p)
+    seen = {}
+
+    def fake_headless(commands, **kwargs):
+        seen["commands"] = list(commands)
+        seen["kwargs"] = kwargs
+        return {"status": "completed", "exit_code": 0}
+
+    monkeypatch.setattr(server._cs, "run_headless_journal", fake_headless)
+    monkeypatch.chdir(tmp_path)
+    _call(server.cubit_stl_to_vol, stl_path=str(p),
+          out_vol="work/cube.vol", out_msh="work/cube.msh")
+
+    export_lines = [line for line in seen["commands"]
+                    if line.startswith("export ")]
+    assert len(export_lines) == 2
+    root = server.PROJECT_ROOT.as_posix()
+    for line in export_lines:
+        quoted = line.split('"')[1]
+        assert quoted.startswith(root), (quoted, root)
+    assert Path(seen["kwargs"]["working_directory"]).is_absolute()
+
+
 def test_hex_route_preserves_free_sideset_and_binds_mesh_geometry(
         tmp_path, monkeypatch):
     """Keep the Sculpt skin as both a free sideset and mesh geometry.

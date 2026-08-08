@@ -4368,6 +4368,14 @@ def cubit_stl_to_vol(stl_path: str,
 
 	vol = Path(out_vol) if out_vol else p.with_suffix(f".{scheme}.vol")
 	msh = Path(out_msh) if out_msh else p.with_suffix(f".{scheme}.msh")
+	# absolutize like stl_path: the journal embeds these paths while the
+	# Cubit process runs with cwd=vol.parent, so a RELATIVE out path would
+	# resolve against itself (nested dir for .vol, "Cannot open file" for
+	# .msh -- measured 2026-08-09 from a notebook kernel)
+	if not vol.is_absolute():
+		vol = PROJECT_ROOT / vol
+	if not msh.is_absolute():
+		msh = PROJECT_ROOT / msh
 	stl_fwd = str(p).replace("\\", "/")
 	cmds = [f'import stl "{stl_fwd}" feature_angle 135 merge']
 	if scheme == "tet":

@@ -1,0 +1,15 @@
+{
+ "schema": "radia.isochronous-topopt-hex-native-design/v1",
+ "design_ne": 360,
+ "design_ndof": 9080,
+ "design_min_quality": 0.5396438438849817,
+ "iterates": 5,
+ "J_start": 0.04778873536761396,
+ "J_end": 0.049386106306312676,
+ "iron_ne": 170,
+ "ersatz_bands": [
+  0.027309873943113194,
+  -0.04699294684553107,
+  -0.1042280300817407
+ ]
+}
