@@ -2047,15 +2047,21 @@ without waiting for a wrapper.
   front-to-back (emission-absorption, per-ray occlusion; for a uniform
   medium the returned transmittance_min equals (1-alpha)^n exactly --
   tested).  It is the same resample-to-image approach ParaView's GPU
-  volume mode uses.  Trade-off: standalone labelled PNG, no CAD
-  overlay -- keep gmsh_volume_render (slice stack) when the figure
-  must stay inside gmsh's scene.
+  volume mode uses.  ``step_files`` depth-composites STEP solids as
+  opaque shaded surfaces INSIDE the march (a near plate hides the
+  volume, a far plate is hidden by it -- tested both ways), so the
+  coil sits IN the glowing field, not pasted on it.  Trade-off:
+  standalone labelled PNG, no gmsh interactivity -- keep
+  gmsh_volume_render (slice stack) when the figure must stay inside
+  gmsh's scene.
 - Surface LIC: gmsh still has none, but gmsh_lic is real line integral
   convolution (RK2 advection, box kernel, |v|-modulated colour) over a
   gmsh-probed plane -- every pixel carries flow direction, and the
   smear axis provably rotates with the field (tested).  Trade-off:
   direction texture, not trajectories -- gmsh_flow_texture keeps the
-  probe-able-curve property; same standalone-PNG limitation.
+  probe-able-curve property.  ``step_files`` overlays the CAD section
+  outline (triangle-plane intersection) in black -- the conductor
+  cross-section on the texture; same standalone-PNG limitation.
 - Plugin(CutSphere): returns an EMPTY view on this build -- not
   exposed.  Use gmsh_cut_plane_extract / gmsh_threshold instead.
 - Plugin(Summation): absent from this build ("Unknown plugin"); a
