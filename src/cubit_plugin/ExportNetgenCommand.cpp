@@ -67,6 +67,92 @@ static void ensure_netgen_dll_path()
 #endif
 }
 
+#ifdef HAVE_NETGEN
+static double triangle_area(const netgen::Point<3> &p0,
+                            const netgen::Point<3> &p1,
+                            const netgen::Point<3> &p2)
+{
+  double ux = p1(0) - p0(0), uy = p1(1) - p0(1), uz = p1(2) - p0(2);
+  double vx = p2(0) - p0(0), vy = p2(1) - p0(1), vz = p2(2) - p0(2);
+  double cx = uy * vz - uz * vy;
+  double cy = uz * vx - ux * vz;
+  double cz = ux * vy - uy * vx;
+  return 0.5 * std::sqrt(cx * cx + cy * cy + cz * cz);
+}
+
+static double bilinear_quad_area(const netgen::Point<3> &p0,
+                                 const netgen::Point<3> &p1,
+                                 const netgen::Point<3> &p2,
+                                 const netgen::Point<3> &p3)
+{
+  // Integrate the bilinear surface Jacobian with an 8x8 Gauss rule.  The
+  // Jacobian norm is not polynomial for a warped quad, so the usual 2x2 rule
+  // leaves a small but visible discrepancy against NGSolve's area integral.
+  const double q[8] = {
+      0.0198550717512319,
+      0.1016667612931866,
+      0.2372337950418355,
+      0.4082826787521751,
+      0.5917173212478249,
+      0.7627662049581645,
+      0.8983332387068134,
+      0.9801449282487681,
+  };
+  const double w[8] = {
+      0.0506142681451881,
+      0.1111905172266872,
+      0.1568533229389437,
+      0.1813418916891810,
+      0.1813418916891810,
+      0.1568533229389437,
+      0.1111905172266872,
+      0.0506142681451881,
+  };
+  double area = 0.0;
+  for (int iu = 0; iu < 8; iu++) {
+    for (int iv = 0; iv < 8; iv++) {
+      double u = q[iu];
+      double v = q[iv];
+      double du[3], dv[3];
+      for (int k = 0; k < 3; k++) {
+        du[k] = -(1.0 - v) * p0(k) + (1.0 - v) * p1(k)
+              + v * p2(k) - v * p3(k);
+        dv[k] = -(1.0 - u) * p0(k) - u * p1(k)
+              + u * p2(k) + (1.0 - u) * p3(k);
+      }
+      double cx = du[1] * dv[2] - du[2] * dv[1];
+      double cy = du[2] * dv[0] - du[0] * dv[2];
+      double cz = du[0] * dv[1] - du[1] * dv[0];
+      area += w[iu] * w[iv] * std::sqrt(cx * cx + cy * cy + cz * cz);
+    }
+  }
+  return area;
+}
+
+static double surface_descriptor_mesh_area(netgen::Mesh &mesh, int descriptor)
+{
+  double area = 0.0;
+  for (int sei = 1; sei <= mesh.GetNSE(); sei++) {
+    const auto &element = mesh.SurfaceElement(sei);
+    if (element.GetIndex() != descriptor)
+      continue;
+    int np = element.GetNP();
+    if (np != 3 && np != 4)
+      continue;
+    const auto p0 = mesh.Point(netgen::PointIndex(element[0]));
+    const auto p1 = mesh.Point(netgen::PointIndex(element[1]));
+    const auto p2 = mesh.Point(netgen::PointIndex(element[2]));
+    if (np == 3) {
+      area += triangle_area(p0, p1, p2);
+    } else {
+      const auto p3 = mesh.Point(netgen::PointIndex(element[3]));
+      area += bilinear_quad_area(p0, p1, p2, p3);
+    }
+  }
+  return area;
+}
+#endif
+
 ExportNetgenCommand::ExportNetgenCommand() {}
 ExportNetgenCommand::~ExportNetgenCommand() {}
 
@@ -412,7 +498,23 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     for (int fi = 1; fi <= nfd_fix; fi++) {
       // BCProperty still holds original Cubit surface ID at this point
       int cubit_sid = ng_mesh->GetFaceDescriptor(fi).BCProperty();
-      if (cubit_sid <= 0) continue;
+      if (cubit_sid < 0) {
+        // NetgenCurver recovered this direct/free face's owner from adjacent
+        // volume elements.  Validate that handoff instead of overwriting every
+        // synthetic descriptor with domain 1.
+        int domin = ng_mesh->GetFaceDescriptor(fi).DomainIn();
+        int domout = ng_mesh->GetFaceDescriptor(fi).DomainOut();
+        bool valid_domin = domin >= 1 && domin <= ndomains;
+        bool valid_domout = domout == 0 || (domout >= 1 && domout <= ndomains);
+        if (!valid_domin || !valid_domout || domin == domout) {
+          PRINT_ERROR("Free sideset descriptor %d has invalid domain ownership "
+                      "(%d -> %d) for a %d-domain mesh.\n",
+                      -cubit_sid, domin, domout, ndomains);
+          return false;
+        }
+        continue;
+      }
+      if (cubit_sid == 0) continue;
 
       // Get parent volumes of this surface
       std::vector<int> parent_vols =
@@ -441,6 +543,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Build surface_id -> sideset name map
   std::map<int, std::string> surf_to_ssname;
   for (auto &sg : md.sidesets) {
+    std::string ssname = sg.name.empty()
+        ? "sideset_" + std::to_string(sg.id) : sg.name;
+    surf_to_ssname[-sg.id] = ssname;
     std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
     for (int sid : ss_surfs) {
       if (!sg.name.empty())
@@ -852,6 +957,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     // Unicode filenames.  Build via u8_string_to_path so UTF-8 path survives.
     std::ofstream jf(u8_string_to_path(json_path));
     if (jf.is_open()) {
+      jf << std::setprecision(16);
       jf << "{\n";
 
       // Materials (per-block volume)
@@ -860,6 +966,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       // "No block with ID N was found" errors from parse_cubit_list.
       jf << "  \"materials\": {";
       bool first = true;
+      std::vector<std::string> mesh_only_materials;
       std::vector<int> cubit_block_ids = CubitInterface::parse_cubit_list("block", "all");
       std::set<int> cubit_block_set(cubit_block_ids.begin(), cubit_block_ids.end());
       for (int bid : md.block_ids) {
@@ -871,6 +978,10 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         double total_vol = 0.0;
         std::vector<int> vols_in_block = CubitInterface::parse_cubit_list(
             "volume", "in block " + std::to_string(bid));
+        if (vols_in_block.empty()) {
+          mesh_only_materials.push_back(bname);
+          continue;
+        }
         for (int vid : vols_in_block) {
           // 2026-05-25: Cubit 2025.12 removed GeometryQueryTool::instance().
           // Use CubitInterface::get_volume_volume() instead -- returns the
@@ -884,6 +995,16 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
       jf << "\n  },\n";
 
+      // Sculpt and imported Exodus meshes can have material blocks without
+      // owning CAD volumes.  Distinguish that state from a real zero-volume
+      // CAD body so downstream gates do not silently accept a false reference.
+      jf << "  \"mesh_only_materials\": [";
+      for (size_t i = 0; i < mesh_only_materials.size(); i++) {
+        if (i > 0) jf << ", ";
+        jf << "\"" << mesh_only_materials[i] << "\"";
+      }
+      jf << "],\n";
+
       // Boundaries: sum CAD area per unique bcname.  Multiple face
       // descriptors can share a bcname (e.g. sym_ht=0_y for both the
       // air's and the Kelvin's y=0 cut faces in 1/8 reduction); the
@@ -896,7 +1017,16 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         int cubit_surf_id = orig_surf_ids[fi - 1];
         std::string bname = ng_mesh->GetBCName(fi - 1);
         // 2026-05-25 Cubit 2025.12: GeometryQueryTool::instance() removed.
-        double cad_area = CubitInterface::get_surface_area(cubit_surf_id);
+        double cad_area = 0.0;
+        if (cubit_surf_id < 0) {
+          // A Skin-generated sideset can overlap an existing exterior
+          // sideset.  Surface connectivity is deduplicated during export, so
+          // the raw Cubit sideset area would count faces that are not present
+          // under this descriptor.  Measure the actual exported linear map.
+          cad_area = surface_descriptor_mesh_area(*ng_mesh, fi);
+        } else {
+          cad_area = CubitInterface::get_surface_area(cubit_surf_id);
+        }
         bname_to_area[bname] += cad_area;
       }
       first = true;
@@ -907,14 +1037,29 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
       jf << "\n  },\n";
 
-      // Edges (per-curve length, curves shared by 2+ surfaces)
+      // Edges (per-curve length, curves represented by Netgen segments).
+      // Imported STL/Sculpt geometry can retain CAD curves even when no mesh
+      // edge belongs to them.  Do not publish those curves as BBND reference
+      // data: the checker would otherwise compare a non-existent Netgen edge
+      // set against stale CAD topology.
       jf << "  \"edges\": {";
       first = true;
+      std::set<int> exported_surface_ids;
+      for (int surface_id : orig_surf_ids) {
+        if (surface_id > 0)
+          exported_surface_ids.insert(surface_id);
+      }
       std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
       for (int cid : curve_ids) {
         std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(
             "surface", "in curve " + std::to_string(cid));
         if (parent_surfs.size() < 2) continue;
+        if (exported_surface_ids.count(parent_surfs[0]) == 0 ||
+            exported_surface_ids.count(parent_surfs[1]) == 0)
+          continue;
+        std::vector<int> edge_ids = CubitInterface::parse_cubit_list(
+            "edge", "in curve " + std::to_string(cid));
+        if (edge_ids.empty()) continue;
         // 2026-05-25 Cubit 2025.12: GeometryQueryTool::instance() removed.
         double cad_len = CubitInterface::get_curve_length(cid);
         std::string ename = "curve_" + std::to_string(cid);

@@ -37,6 +37,7 @@ namespace ng = netgen;
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <set>
 
 NetgenCurver::NetgenCurver() {}
@@ -193,6 +194,13 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
   fflush(stdout);
   int fd_idx = 1;  // Netgen FD indices are 1-based
   for (int sid : surface_ids) {
+    std::string surface_query = "in surface " + std::to_string(sid);
+    std::vector<int> tri_ids =
+        CubitInterface::parse_cubit_list("tri", surface_query);
+    std::vector<int> quad_ids =
+        CubitInterface::parse_cubit_list("face", surface_query);
+    if (tri_ids.empty() && quad_ids.empty())
+      continue;
     ng::FaceDescriptor fd(fd_idx, 1, 0, fd_idx);
     fd.SetBCProperty(sid);
     ng_mesh_->AddFaceDescriptor(fd);
@@ -208,6 +216,73 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
   PRINT_INFO("  Phase1e: Add surface elements (parse_cubit_list)\n");
   fflush(stdout);
   {
+    auto canonical_face = [](const std::vector<int> &conn, int nv) {
+      std::vector<int> key(conn.begin(), conn.begin() + nv);
+      std::sort(key.begin(), key.end());
+      return key;
+    };
+    std::set<std::vector<int>> added_surface_faces;
+
+    // Recover domain ownership from volume-element adjacency.  Free Sculpt
+    // sidesets are not attached to CAD surfaces, so Cubit's surface-volume
+    // topology cannot tell the exporter which material owns a face.  One
+    // sideset can also span several blocks; grouping by the adjacent-domain
+    // pair prevents every free face from silently inheriting domain 1.
+    std::unordered_map<int, int> block_to_domain;
+    for (size_t i = 0; i < md.block_ids.size(); i++)
+      block_to_domain[md.block_ids[i]] = (int)i + 1;
+
+    std::map<std::vector<int>, std::set<int>> face_adjacent_domains;
+    auto add_volume_face = [&](const MeshElement &elem,
+                               std::initializer_list<int> local_nodes,
+                               int domain) {
+      std::vector<int> key;
+      key.reserve(local_nodes.size());
+      for (int local : local_nodes) {
+        if (local < 0 || local >= elem.nv || local >= (int)elem.conn.size())
+          return;
+        key.push_back(elem.conn[local]);
+      }
+      std::sort(key.begin(), key.end());
+      face_adjacent_domains[key].insert(domain);
+    };
+    for (const auto &elem : md.elements) {
+      auto domain_it = block_to_domain.find(elem.group_id);
+      if (domain_it == block_to_domain.end()) {
+        PRINT_ERROR("Volume element belongs to unknown block %d while recovering free sideset ownership.\n",
+                    elem.group_id);
+        return false;
+      }
+      int domain = domain_it->second;
+      if (elem.nv == 4 && (elem.type == ::TETRA4 || elem.type == ::TETRA)) {
+        add_volume_face(elem, {0, 1, 2}, domain);
+        add_volume_face(elem, {0, 1, 3}, domain);
+        add_volume_face(elem, {1, 2, 3}, domain);
+        add_volume_face(elem, {2, 0, 3}, domain);
+      } else if (elem.nv == 8 && (elem.type == ::HEX8 || elem.type == ::HEX)) {
+        add_volume_face(elem, {0, 1, 2, 3}, domain);
+        add_volume_face(elem, {4, 5, 6, 7}, domain);
+        add_volume_face(elem, {0, 1, 5, 4}, domain);
+        add_volume_face(elem, {1, 2, 6, 5}, domain);
+        add_volume_face(elem, {2, 3, 7, 6}, domain);
+        add_volume_face(elem, {3, 0, 4, 7}, domain);
+      } else if (elem.nv == 6 &&
+                 (elem.type == ::WEDGE6 || elem.type == ::WEDGE)) {
+        add_volume_face(elem, {0, 1, 2}, domain);
+        add_volume_face(elem, {3, 4, 5}, domain);
+        add_volume_face(elem, {0, 1, 4, 3}, domain);
+        add_volume_face(elem, {1, 2, 5, 4}, domain);
+        add_volume_face(elem, {2, 0, 3, 5}, domain);
+      } else if (elem.nv == 5 &&
+                 (elem.type == ::PYRAMID5 || elem.type == ::PYRAMID)) {
+        add_volume_face(elem, {0, 1, 2, 3}, domain);
+        add_volume_face(elem, {0, 1, 4}, domain);
+        add_volume_face(elem, {1, 2, 4}, domain);
+        add_volume_face(elem, {2, 3, 4}, domain);
+        add_volume_face(elem, {3, 0, 4}, domain);
+      }
+    }
+
     // Cache RefFace pointers per surface
     std::unordered_map<int, RefFace*> rf_cache;
     for (int sid : surface_ids)
@@ -327,7 +402,10 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     int nse_added = 0;
     long diag_shift_count = 0;
     for (int sid : surface_ids) {
-      int ng_fd = cubit_sid_to_ng_fd_[sid];
+      auto ng_fd_it = cubit_sid_to_ng_fd_.find(sid);
+      if (ng_fd_it == cubit_sid_to_ng_fd_.end())
+        continue;
+      int ng_fd = ng_fd_it->second;
       RefFace* rf = rf_cache[sid];
       double u_period = period_cache[sid][0];
       double v_period = period_cache[sid][1];
@@ -403,6 +481,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
           el.GeomInfo()[k] = gi;
         }
         ng_mesh_->AddSurfaceElement(el);
+        added_surface_faces.insert(canonical_face(conn, 3));
         nse_added++;
         skip_tri:;
       }
@@ -454,9 +533,83 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
           el.GeomInfo()[k] = gi;
         }
         ng_mesh_->AddSurfaceElement(el);
+        added_surface_faces.insert(canonical_face(conn, 4));
         nse_added++;
         skip_quad:;
       }
+    }
+
+    // Sculpt and imported Exodus meshes can carry boundary faces directly in
+    // a sideset without associating them with a geometric surface.  Add those
+    // free faces under one synthetic FaceDescriptor per sideset.  Negative
+    // BCProperty values are an internal handoff to ExportNetgenCommand, which
+    // restores the sideset name after all descriptors are made contiguous.
+    int free_face_count = 0;
+    int free_descriptor_count = 0;
+    for (const auto &sg : md.sidesets) {
+      std::map<std::pair<int, int>, std::vector<const MeshElement*>> pending;
+      for (const auto &face : sg.faces) {
+        if (face.nv != 3 && face.nv != 4) continue;
+        auto key = canonical_face(face.conn, face.nv);
+        if (added_surface_faces.count(key)) continue;
+
+        auto adjacent_it = face_adjacent_domains.find(key);
+        if (adjacent_it == face_adjacent_domains.end() ||
+            adjacent_it->second.empty()) {
+          PRINT_ERROR("Free sideset %d contains a face with no adjacent volume element.\n",
+                      sg.id);
+          return false;
+        }
+        if (adjacent_it->second.size() > 2) {
+          PRINT_ERROR("Free sideset %d contains a non-manifold face adjacent to %d domains.\n",
+                      sg.id, (int)adjacent_it->second.size());
+          return false;
+        }
+        auto domain_it = adjacent_it->second.begin();
+        int domain_in = *domain_it++;
+        int domain_out = domain_it == adjacent_it->second.end() ? 0 : *domain_it;
+        pending[{domain_in, domain_out}].push_back(&face);
+      }
+      if (pending.empty()) continue;
+
+      for (const auto &domain_faces : pending) {
+        int domain_in = domain_faces.first.first;
+        int domain_out = domain_faces.first.second;
+        int ng_fd = fd_idx++;
+        ng::FaceDescriptor fd(ng_fd, domain_in, domain_out, ng_fd);
+        fd.SetBCProperty(-sg.id);
+        ng_mesh_->AddFaceDescriptor(fd);
+        free_descriptor_count++;
+
+        for (const MeshElement *face : domain_faces.second) {
+          ng::ELEMENT_TYPE etype = face->nv == 3 ? ng::TRIG : ng::QUAD;
+          ng::Element2d el(etype);
+          el.SetIndex(ng_fd);
+          bool complete = true;
+          for (int k = 0; k < face->nv; k++) {
+            auto it = cubit_nid_to_ng_pi_.find(face->conn[k]);
+            if (it == cubit_nid_to_ng_pi_.end()) {
+              complete = false;
+              break;
+            }
+            el[k] = it->second;
+            ng::PointGeomInfo gi;
+            gi.trignum = ng_fd;
+            gi.u = 0.0;
+            gi.v = 0.0;
+            el.GeomInfo()[k] = gi;
+          }
+          if (!complete) continue;
+          ng_mesh_->AddSurfaceElement(el);
+          added_surface_faces.insert(canonical_face(face->conn, face->nv));
+          nse_added++;
+          free_face_count++;
+        }
+      }
+    }
+    if (free_face_count > 0) {
+      PRINT_INFO("  Phase1e: added %d free sideset faces under %d domain-aware synthetic descriptors\n",
+                 free_face_count, free_descriptor_count);
     }
     PRINT_INFO("  Phase1e: %d surface elements added (%ld seam-consistent UV shifts applied)\n",
                nse_added, diag_shift_count);
@@ -608,7 +761,9 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
 // ============================================================
 bool NetgenCurver::attach_callback_geometry()
 {
-  int num_surfaces = (int)cubit_sid_to_ng_fd_.size();
+  // Includes synthetic free-mesh descriptors. Their callbacks intentionally
+  // fall back to identity because they have no CAD RefFace.
+  int num_surfaces = ng_mesh_ ? ng_mesh_->GetNFD() : 0;
 
   // Reset diagnostic counters for this curving run
   diag_project_calls_ = 0;

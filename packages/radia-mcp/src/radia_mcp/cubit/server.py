@@ -178,14 +178,20 @@ or `write_levelset_exodus` for the Cubit-native `create tri iso` route);
 `cubit_stl_to_vol` then meshes that STL into a gated solver `.vol`
 (scheme="hex" Sculpt all-hex, scheme="tet" tetmesh).  Sculpt is the tool
 for these bodies BECAUSE they have no sweepable topology.  Do NOT route
-such STL through a separate STL mesher; the Cubit route owns the generated
-surface contract.  Gate on closure + inverted elements +
-boundary faces (a Sculpt free mesh exported without mesh-based geometry
-carries ZERO `.vol` surface elements, and a charge-based solver then
-loses all surface charge silently); treat min-quality as a report, and rank meshes by
+such STL through netgen's STLGeometry (rejects marching-cubes facets as
+degenerate -- recorded negative).  The hex route generates a direct/free
+sideset and also binds mesh geometry; the exporter preserves and deduplicates
+both boundary representations, recovers adjacent block domains, and splits a
+multi-material sideset into domain-aware descriptors.  Gate on closure +
+inverted elements +
+boundary faces (older exporters could write ZERO `.vol` surface elements,
+making a charge-based solve silently demag-free); treat min-quality as a
+report, and rank meshes by
 `dof_estimate`, not element count.  Prefer scheme="hex" for downstream
-charge-Gram / VIM re-evaluation; the tet route remains available as an
-independent mesh artifact and gate.
+charge-Gram / VIM re-evaluation: the facet-conforming tet mesh of a
+decimated marching-cubes surface can carry slivers that stall CG at any
+tolerance, while the Sculpt hex mesh of the same surface solves in tens
+of iterations.
 """
 
 # Create MCP server
@@ -813,7 +819,13 @@ def cubit_vol_inventory(path: str = "", text: str = "") -> str:
 		text: Optional inline `.vol` text. If supplied, this wins over path.
 
 	Returns:
-		JSON with element counts, material labels, and a routing hint.
+		JSON with element counts, material labels, routing hint, and raw
+		DomainIn/DomainOut ownership coverage. ``status=needs_attention`` means
+		at least one volume domain disappeared from the boundary/interface
+		descriptors, a descriptor references an invalid domain, or the same
+		surface connectivity was exported twice. Exterior and internal-interface
+		counts are reported separately; for a free Sculpt material interface use
+		`skin block <id> make sideset <id>` before export.
 	"""
 	try:
 		if text:
@@ -833,7 +845,9 @@ def cubit_vol_inventory(path: str = "", text: str = "") -> str:
 			"status": "error",
 			"error": f"{type(exc).__name__}: {exc}",
 		})
-	return json.dumps({"status": "ok", **result}, indent=2)
+	ownership = result.get("boundary_domain_ownership", {})
+	status = "ok" if ownership.get("passed") is True else "needs_attention"
+	return json.dumps({"status": status, **result}, indent=2)
 
 
 @mcp.tool()
@@ -850,8 +864,9 @@ def cubit_check_vol(vol_path: str,
 	Lab policy requires every solver-bound `.vol` to pass this gate after
 	mesh export and BEFORE solver or Simulink initialization.  This tool
 	delegates to `cubit_mesh_export.check.check_consistency` (the same
-	engine as the `check-vol` CLI): NGSolve structural load, label
-	inventory/contract, curved-map quality, and CAD-sidecar consistency
+	engine as the `check-vol` CLI): raw DomainIn/DomainOut ownership,
+	NGSolve structural load, label inventory/contract, curved-map quality,
+	and CAD-sidecar consistency
 	(`<vol>.json` auto-discovered when present).
 
 	Runs in the MCP server's Python 3.12 -- no Cubit session or license
@@ -4270,24 +4285,29 @@ def cubit_stl_to_vol(stl_path: str,
 	    by `create mesh geometry hex all feature_angle 135` and
 	    `delete volume with not is_meshed` (overlay-grid all-hex; works on
 	    faceted geometry with no sweepable topology, which is exactly what
-	    a topology-optimized body is).  The mesh-based-geometry step is
-	    REQUIRED, not cosmetic: a Sculpt free mesh is not associated with
-	    geometric surfaces, so a bare sculpt+export writes a `.vol` with
-	    ZERO boundary faces.  A charge-based solver can then omit the
-	    surface contribution while the linear solve still appears converged.
-	    `gen_sidesets 2` is therefore part
-	    of the route, and the Netgen exporter must preserve its direct/free
-	    tri/quad faces in addition to geometry-owned surfaces.  Closure
-	    depends on Sculpt size and is reported by the gate.
+	    a topology-optimized body is).  `gen_sidesets 2` is the boundary
+	    contract; mesh-based geometry supplies additional ownership metadata.
+	    The exporter preserves direct/free tri/quad faces and deduplicates any
+	    equal geometry-owned faces.  It derives DomainIn/DomainOut from adjacent
+	    block elements, so one sideset spanning disconnected materials is split
+	    into valid domain-aware descriptors.  Free-mesh block labels are reported
+	    as `mesh_only_materials` instead of false zero CAD-volume references, and
+	    imported CAD curves with no exported BBND segment do not contribute stale
+	    edge-length references.  Older exporters ignored the free faces
+	    and could write a `.vol` with ZERO boundary elements, which a
+	    charge-based solver consumed silently as "no surface charge".
+	    Measured closure depends on Sculpt size and is reported by the gate.
 	  * scheme="tet" -- `volume all scheme tetmesh` + `size` (tets mesh the
 	    faceted STL surface directly, so boundary tris are exported
-	    naturally).  Direct Netgen STL import is not the supported route for
-	    this generated-surface family; Cubit owns both mesh variants.
+	    naturally).  Measured closure: ~1-2 %.  NOTE netgen's own
+	    STLGeometry REJECTS marching-cubes STL ("STL Triangle degenerated",
+	    0 tets, even after weld + Taubin smoothing -- measured 2026-08-08);
+	    Cubit is the supported tet route for such surfaces, not netgen.
 
 	Gates (fail -> status="gate_failed", artifacts kept for inspection):
 	  * closure: |V_mesh - V_stl| / V_stl <= closure_tolerance, where
 	    V_mesh is the gmsh Jacobian-integrated volume of the exported
-	    `.msh` and V_stl the watertight STL surface-integral volume.
+	    `.msh` and V_stl the watertight STL volume (trimesh).
 	  * inversion: gmsh minSICN `negative == 0` and min Jacobian det > 0.
 	  * boundary faces: the exported `.vol` must carry the complete mesh
 	    skin as surface elements (count > 0 and equal to the `.msh`
@@ -4311,48 +4331,19 @@ def cubit_stl_to_vol(stl_path: str,
 	p = Path(stl_path)
 	if not p.is_absolute():
 		p = PROJECT_ROOT / p
-	p = p.resolve()
 	if not p.is_file():
 		return json.dumps(_error_payload("input", f"STL not found: {p}"))
 	if scheme not in ("hex", "tet"):
 		return json.dumps(_error_payload(
 			"input", f"scheme must be 'hex' or 'tet', got {scheme!r}"))
-	try:
-		size = float(size)
-		closure_tolerance = float(closure_tolerance)
-		timeout_s = float(timeout_s)
-	except (TypeError, ValueError) as exc:
-		return json.dumps(_error_payload(
-			"input", f"numeric argument is invalid: {exc}"))
-	if not _math.isfinite(size) or size < 0.0:
-		return json.dumps(_error_payload(
-			"input", f"size must be 0 (auto) or finite and positive, got {size}"))
-	if not _math.isfinite(closure_tolerance) or closure_tolerance < 0.0:
-		return json.dumps(_error_payload(
-			"input", "closure_tolerance must be finite and nonnegative"))
-	if not _math.isfinite(timeout_s) or timeout_s <= 0.0:
-		return json.dumps(_error_payload(
-			"input", "timeout_s must be finite and positive"))
-
-	def _output_path(raw: str, default: Path) -> Path:
-		candidate = Path(raw) if raw else default
-		if not candidate.is_absolute():
-			candidate = PROJECT_ROOT / candidate
-		return candidate.resolve()
-
-	vol = _output_path(out_vol, p.with_suffix(f".{scheme}.vol"))
-	msh = _output_path(out_msh, p.with_suffix(f".{scheme}.msh"))
-	path_keys = [os.path.normcase(str(path)) for path in (p, vol, msh)]
-	if len(set(path_keys)) != 3:
-		return json.dumps(_error_payload(
-			"input", "stl_path, out_vol, and out_msh must be distinct paths"))
 	inspection = _inspect_stl(p, timeout_s=min(float(timeout_s), 120.0))
 	if not inspection.get("ok"):
 		kind = str(inspection.get("kind") or "input")
 		stage = "environment" if kind in ("environment", "timeout") else "input"
 		return json.dumps(_error_payload(
 			stage, str(inspection.get("error") or "cannot inspect STL"),
-			kind=kind))
+			kind=kind,
+			hint="pip install trimesh" if kind == "environment" else None))
 	if not inspection.get("watertight", False):
 		return json.dumps(_error_payload(
 			"input", "STL is not watertight; a closed surface is required "
@@ -4363,11 +4354,10 @@ def cubit_stl_to_vol(stl_path: str,
 			"input", "STL winding is inconsistent; repair face orientation "
 			"before volume meshing"))
 	v_stl = float(inspection.get("volume") or 0.0)
-	if not _math.isfinite(v_stl) or v_stl <= 0.0:
-		return json.dumps(_error_payload(
-			"input", "STL volume is non-finite or zero"))
+	if v_stl <= 0.0:
+		return json.dumps(_error_payload("input", "STL volume is zero"))
 
-	if size == 0.0:
+	if not size or size <= 0.0:
 		bounds = inspection.get("bounds") or []
 		if len(bounds) != 2 or len(bounds[0]) != 3 or len(bounds[1]) != 3:
 			return json.dumps(_error_payload(
@@ -4375,21 +4365,19 @@ def cubit_stl_to_vol(stl_path: str,
 		ext = [float(hi) - float(lo)
 		       for lo, hi in zip(bounds[0], bounds[1])]
 		size = float(sum(value * value for value in ext) ** 0.5 / 30.0)
-		if not _math.isfinite(size) or size <= 0.0:
-			return json.dumps(_error_payload(
-				"input", "STL bounding box cannot define a positive mesh size"))
 
+	vol = Path(out_vol) if out_vol else p.with_suffix(f".{scheme}.vol")
+	msh = Path(out_msh) if out_msh else p.with_suffix(f".{scheme}.msh")
 	stl_fwd = str(p).replace("\\", "/")
 	cmds = [f'import stl "{stl_fwd}" feature_angle 135 merge']
 	if scheme == "tet":
 		cmds += ["volume all scheme tetmesh",
 		         f"volume all size {size}", "mesh volume all"]
 	else:
-		# The Sculpt free mesh must be bound to mesh-based geometry so the
-		# exporter sees geometry-owned skin faces (see docstring: without
-		# this the .vol has zero surface elements and charge-based solvers
-		# go silently demag-free).  The unmeshed import volume is then
-		# dropped by predicate, never by hardcoded id.
+		# Keep both representations: gen_sidesets is the explicit free-skin
+		# contract, while mesh geometry supplies ownership metadata.  The
+		# exporter deduplicates equal faces.  Drop the unmeshed import volume
+		# by predicate, never by a hardcoded id.
 		cmds += [f"sculpt volume all processors 1 size {size} gen_sidesets 2",
 		         "create mesh geometry hex all feature_angle 135",
 		         "delete volume with not is_meshed"]
@@ -4420,19 +4408,7 @@ def cubit_stl_to_vol(stl_path: str,
 	from ..gmsh.msh_inspect import mesh_quality, mesh_total_volume
 	vol_report = mesh_total_volume(msh)
 	quality = mesh_quality(msh)
-	if not vol_report.get("ran") or not vol_report.get("ok"):
-		return json.dumps({**_error_payload(
-			"verification", "gmsh volume integration failed"),
-			"volume_report": vol_report}, default=str)
-	if not quality.get("ran") or not quality.get("applicable"):
-		return json.dumps({**_error_payload(
-			"verification", "gmsh mesh-quality inspection failed"),
-			"quality_report": quality}, default=str)
 	v_mesh = float(vol_report.get("total_volume") or 0.0)
-	if not _math.isfinite(v_mesh) or v_mesh <= 0.0:
-		return json.dumps({**_error_payload(
-			"verification", "mesh volume is non-finite or non-positive"),
-			"volume_report": vol_report}, default=str)
 	closure = abs(v_mesh - v_stl) / v_stl
 	negative = int(quality.get("total_negative") or 0)
 	min_det = vol_report.get("min_jacobian_det")

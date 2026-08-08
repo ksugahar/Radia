@@ -393,8 +393,13 @@ def _cubit_gui_exe(bin_dir: Path) -> Path:
         f"coreform_cubit launcher not found under {bin_dir}.")
 
 
-def run_headless_journal(commands: list[str], *, timeout_s: float = 300.0,
-                         working_directory: str | Path | None = None) -> dict:
+def run_headless_journal(
+    commands: list[str],
+    *,
+    timeout_s: float = 300.0,
+    working_directory: str | Path | None = None,
+    command_plugin_directory: str | Path | None = None,
+) -> dict:
     """Run plugin-aware Cubit commands in a disposable headless process.
 
     The bundled-Python daemon is sufficient for native ``cubit.cmd`` calls,
@@ -402,6 +407,11 @@ def run_headless_journal(commands: list[str], *, timeout_s: float = 300.0,
     ``export netgen`` therefore need the real console launcher.  On Windows
     ``coreform_cubit.com`` is deliberately preferred over the GUI-stub
     ``.exe`` so callers can wait for completion and capture diagnostics.
+
+    ``command_plugin_directory`` selects a rebuilt plugin with Cubit's official
+    ``-commandplugindir`` switch.  This is the safe plugin-under-test route when
+    another user has the deployed plugin open: it does not replace or unload
+    the system binary, and it suppresses the user's Cubit init file.
     """
     if not commands:
         raise ValueError("commands must not be empty")
@@ -437,14 +447,24 @@ def run_headless_journal(commands: list[str], *, timeout_s: float = 300.0,
     temp_root.mkdir(parents=True, exist_ok=True)
     cwd = Path(working_directory) if working_directory else temp_root
     cwd.mkdir(parents=True, exist_ok=True)
+    plugin_dir = None
+    if command_plugin_directory is not None:
+        plugin_dir = Path(command_plugin_directory)
+        if not plugin_dir.is_dir():
+            return {
+                "status": "error", "stage": "preflight", "kind": "input",
+                "error": f"command plugin directory not found: {plugin_dir}",
+            }
 
     with tempfile.TemporaryDirectory(
             prefix="radia_cubit_headless_", dir=str(temp_root)) as scratch:
         driver = Path(scratch) / "driver.jou"
         driver.write_text("\n".join([*commands, "exit 0", ""]),
                           encoding="utf-8")
-        argv = [str(console), "-nographics", "-batch", "-nojournal",
-                str(driver)]
+        argv = [str(console), "-nographics", "-batch", "-nojournal"]
+        if plugin_dir is not None:
+            argv.extend(["-noinitfile", "-commandplugindir", str(plugin_dir)])
+        argv.append(str(driver))
         try:
             proc = subprocess.run(
                 argv, cwd=str(cwd), capture_output=True, text=True,
@@ -476,7 +496,12 @@ def run_headless_journal(commands: list[str], *, timeout_s: float = 300.0,
         "status": "completed",
         "exit_code": int(proc.returncode),
         "console": str(console),
-        "headless_flags": ["-nographics", "-batch", "-nojournal"],
+        "headless_flags": [
+            "-nographics", "-batch", "-nojournal",
+            *(["-noinitfile", "-commandplugindir"] if plugin_dir else []),
+        ],
+        "command_plugin_directory": str(plugin_dir) if plugin_dir else None,
+        "user_init_loaded": plugin_dir is None,
         "persistent_gui_started": False,
         "command_count": len(commands),
         "stdout_tail": (proc.stdout or "")[-8000:],
