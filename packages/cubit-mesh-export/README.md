@@ -21,6 +21,9 @@ that every domain-specific Radia notebook or headless workflow consumes.
   (BND / BBND / BBBND -- see table below)
 - **Companion JSON** beside every `.vol` with CAD reference values for
   Volume / Area / Length consistency checking
+- **Free-mesh sideset preservation**: direct tri/quad faces from Sculpt and
+  imported Exodus sidesets are exported even when they have no parent CAD
+  surface, with duplicate geometry-owned faces removed
 - **Standalone checker** that does NOT require Cubit (`check-vol` CLI)
 
 ## Install
@@ -72,6 +75,47 @@ mesh/data inspection.
 
 The `export netgen` command additionally accepts Kelvin / symmetry
 options (see below). The other formats do not consume Kelvin.
+
+### Free Sculpt meshes
+
+Sculpt places its hexes and boundary faces in free mesh groups.  Use
+`gen_sidesets 2` and put the hexes in a material block before export:
+
+```text
+sculpt volume all processors 1 size 0.01 gen_sidesets 2
+block 1 add hex all
+block 1 name "iron"
+export netgen "model.vol" order 1 overwrite
+```
+
+The Netgen exporter reads both geometry-owned surfaces and direct/free
+sideset tri/quads, deduplicates equal connectivity, and emits a synthetic
+boundary descriptor for the latter.  It recovers `DomainIn`/`DomainOut` from
+the adjacent block elements and splits one sideset into multiple descriptors
+when it spans more than one material pair.  This is essential for disconnected
+free bodies and mixed-material interfaces: assigning every free face to domain
+1 silently removes the other materials from boundary-based operators.
+`check-vol` audits that every volume domain appears in a valid boundary or
+interface descriptor.  Also verify that the `.vol` surface-element count equals
+an independent topological-skin count before a surface-charge formulation uses
+the mesh.  Sculpt material blocks can exist without an owning CAD volume.  The
+companion JSON records these under `mesh_only_materials`, rather than inventing
+a zero CAD volume in `materials`; `check-vol` then treats the label as valid but
+reports that no CAD-volume reference is available.
+
+For a free-mesh material interface created after Sculpt, materialize the skin
+of one block as a sideset:
+
+```text
+skin block 1 make sideset 3
+sideset 3 name "left_right_interface"
+```
+
+The exporter removes connectivity already owned by the exterior sideset,
+emits the remaining interface once with both nonzero domains, and computes the
+sidecar area from the faces actually exported under that label.  `check-vol`
+reports exterior and internal-interface counts separately and rejects duplicate
+surface connectivity.
 
 ## Workflow
 
@@ -165,11 +209,12 @@ work.
 
 Source: Cubit **named curves** + Cubit **sidesets-on-curves**.
 
-CD2 segment generation is planned (see TODO note); in the current
-release, BBND-style Dirichlet on a 3D curve should be expressed by
-putting the curve in a Cubit **nodeset** -- the C++ exporter expands
-the nodeset to its constituent vertices and writes them as BBBND
-points (next table).
+The exporter writes CD2 segments only for curves that own actual 1-D mesh edges
+and whose parent surfaces both have exported Netgen descriptors.  Imported STL
+or Sculpt geometry can retain CAD curves while producing no BBND mesh segment;
+those stale curves are intentionally omitted from the companion edge-length
+references.  For a point-only anchor, put the curve or vertices in a Cubit
+**nodeset**; the exporter expands the nodeset to BBBND points (next table).
 
 The BBND label-name convention to be respected once segment
 generation lands:
@@ -266,6 +311,10 @@ present. It is optional for a standalone `.vol`: mesh loading, label checks,
 and the curved NGSolve mapping gate still run without Cubit or CAD data. Passing
 `--json` makes that specific sidecar mandatory. Curved-map sampling is enabled
 by default; `--no-quality` is available only for a quick label/CAD inspection.
+`materials` contains only labels with a real CAD-volume reference;
+`mesh_only_materials` contains free-mesh block labels that cannot supply one.
+The checker rejects a label appearing in both sets, so a true CAD zero is not
+confused with the absence of CAD ownership.
 
 ```python
 from cubit_mesh_export.check import (

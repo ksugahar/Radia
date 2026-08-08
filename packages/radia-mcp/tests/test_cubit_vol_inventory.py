@@ -87,8 +87,8 @@ dimension
 
 surfaceelements
 2
-1 1 1 0 3 1 2 3
-2 2 1 0 4 1 2 3 4
+1 1 1 2 3 1 2 3
+2 2 2 3 4 1 2 3 4
 
 volumeelements
 3
@@ -203,8 +203,8 @@ dimension
 
 surfaceelementsuv
 2
-1 1 1 0 3 1 2 3 0 0 1 0 0 1
-2 2 1 0 4 1 2 3 4 0 0 1 0 1 1 0 1
+1 1 1 2 3 1 2 3 0 0 1 0 0 1
+2 2 2 3 4 1 2 3 4 0 0 1 0 1 1 0 1
 
 volumeelements
 3
@@ -243,7 +243,44 @@ def test_cubit_vol_inventory_classifies_hex_pyramid_tet_mixed_mesh():
     assert inv["is_tri_tet_only"] is False
     assert inv["routing_hint"] == "cubit_hex_or_mixed_path"
     assert inv["materials"][2] == "pyramid_transition"
+    assert inv["boundary_domain_ownership"]["passed"] is True
+    assert inv["boundary_domain_ownership"]["unreferenced_volume_domains"] == []
+    assert inv["boundary_domain_ownership"]["exterior_surface_element_count"] == 0
+    assert inv["boundary_domain_ownership"]["internal_interface_element_count"] == 2
+    assert inv["boundary_domain_ownership"][
+        "internal_interface_domain_pair_counts"
+    ] == {"1<->2": 1, "2<->3": 1}
     assert "Cubit/Coreform owns hex-led" in inv["policy"]
+
+
+def test_cubit_vol_inventory_rejects_duplicate_interface_connectivity():
+    duplicate = MIXED_VOL.replace("surfaceelements\n2", "surfaceelements\n3").replace(
+        "\nvolumeelements",
+        "\n3 3 2 1 3 1 2 3\n\nvolumeelements",
+    )
+
+    ownership = summarize_netgen_vol_inventory(duplicate)[
+        "boundary_domain_ownership"
+    ]
+
+    assert ownership["status"] == "needs_attention"
+    assert ownership["duplicate_surface_connectivity_rows"] == [3]
+    assert "surface connectivity is exported more than once" in ownership["issues"]
+
+
+def test_cubit_vol_inventory_reports_stale_multidomain_boundary_ownership():
+    stale = MIXED_VOL.replace("1 1 1 2 3", "1 1 1 0 3").replace(
+        "2 2 2 3 4", "2 2 1 0 4"
+    )
+
+    inv = summarize_netgen_vol_inventory(stale, source="stale_free_sideset.vol")
+    ownership = inv["boundary_domain_ownership"]
+
+    assert ownership["status"] == "needs_attention"
+    assert ownership["passed"] is False
+    assert ownership["surface_domain_pair_counts"] == {"1->0": 2}
+    assert ownership["unreferenced_volume_domains"] == [2, 3]
+    assert "volume domains are absent" in " ".join(ownership["issues"])
 
 
 def test_cubit_vol_inventory_keeps_tet_only_on_netgen_route():
@@ -451,6 +488,18 @@ def test_cubit_vol_inventory_mcp_tool_dispatches_json():
     assert payload["volume_kind_counts"]["hex"] == 1
     assert payload["volume_kind_counts"]["pyramid"] == 1
     assert payload["routing_hint"] == "cubit_hex_or_mixed_path"
+
+
+def test_cubit_vol_inventory_mcp_tool_surfaces_ownership_rejection():
+    stale = MIXED_VOL.replace("1 1 1 2 3", "1 1 1 0 3").replace(
+        "2 2 2 3 4", "2 2 1 0 4"
+    )
+
+    payload = json.loads(cubit_vol_inventory(text=stale))
+
+    assert payload["status"] == "needs_attention"
+    assert payload["boundary_domain_ownership"]["passed"] is False
+    assert payload["boundary_domain_ownership"]["unreferenced_volume_domains"] == [2, 3]
 
 
 def test_cubit_docs_route_tet_only_to_netgen_and_mixed_to_cubit():

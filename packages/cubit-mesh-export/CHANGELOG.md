@@ -6,6 +6,22 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Preserve direct/free triangle and quadrilateral faces from Sculpt or
+  imported-Exodus sidesets in Netgen exports.  Equal geometry-owned faces are
+  deduplicated, free boundaries recover adjacent material domains, and a
+  sideset spanning several domain pairs is split into domain-aware descriptors.
+  Sideset names/areas survive in `.vol` and companion metadata without area
+  double-counting.  `check-vol` now rejects missing or invalid boundary-domain
+  ownership before solver use.
+- Distinguish free-mesh block labels (`mesh_only_materials`) from materials with
+  a real CAD-volume reference, and omit stale CAD curve lengths when no BBND
+  mesh segment was exported.  This prevents false zero-volume and edge-length
+  comparisons for imported STL/Sculpt models.
+- Preserve Skin-generated free material interfaces as one non-duplicated
+  `DomainIn -> DomainOut` surface set.  Free-sideset sidecar areas now measure
+  only the faces actually exported under each descriptor, and the inventory
+  reports exterior/interface counts while rejecting duplicate connectivity.
+
 ## 0.14.8 - Reproducible plugin release build
 
 Released 2026-08-06.
