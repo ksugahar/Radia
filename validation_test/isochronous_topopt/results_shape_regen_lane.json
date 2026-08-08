@@ -1,0 +1,30 @@
+{
+ "schema": "radia.isochronous-topopt-shape-regen/v3",
+ "stl": {
+  "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\pytest-of-Administrator\\pytest-1884\\shape_regen0\\design.stl",
+  "n_faces": 1500,
+  "n_vertices": 752,
+  "volume": 0.0001278243893745155,
+  "volume_before_smoothing": 0.00012828598445248482,
+  "smoothing_volume_drift": -0.0017540807036023195,
+  "decimation_volume_drift": -0.001847331983197986,
+  "grid_resolution": 96,
+  "median_edge_length": 0.025882774660573954,
+  "cutoff": 0.031059329592688742,
+  "watertight": true
+ },
+ "reevaluation_mesh_family": "hex",
+ "ne_staircase": 72,
+ "ne_regen_hex": 1537,
+ "chi_eval": 100.0,
+ "demag_factor_z_hex": 0.47746562752677113,
+ "J_smooth": 0.7355027949198027,
+ "J_staircase": 0.719663907659373,
+ "delta": 0.02200872809078883,
+ "state_iterations": 21,
+ "adjoint_iterations": [
+  25
+ ],
+ "boundary_face_incident": "a bare-Sculpt export wrote surfaceelements=0 and the demag solve was silently demag-free (J=+37.137, DemagFactor 0); fixed by mesh-based geometry before export, gated by boundary_faces_ok + the vim.ChargeGram ZERO-boundary raise + the demag_factor_z_hex lock here",
+ "tet_solver_negative": "16,102-tet native CG at chi=100 capped 20,000 iterations for mass-Riesz (tol 1e-10/1e-8/1e-6), Jacobi, and cluster-tree; tet export remains a gated mesh product, but production re-evaluation routes through the 1,537-hex Sculpt mesh"
+}

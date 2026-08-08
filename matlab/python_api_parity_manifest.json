@@ -118,6 +118,18 @@
       "notes": "Density-adjoint HDiv-MMM topology optimization for isochronous magnets: NGSolve CG/adjoint composition above the native charge-Gram kernels; design-loop promotion decides any later native surface."
     },
     {
+      "id": "topopt-cad-bridge",
+      "patterns": [
+        "topopt_cad.py"
+      ],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": [
+        "matlab/+radia/+python/topoptCad.m"
+      ],
+      "notes": "Design-side shape-regeneration bridge: P0->P1 nodal level sets, Exodus II level-set hand-off (Cubit `create tri iso`), marching-cubes iso STL. File/array contracts only; the mesh-side half is the cubit MCP `cubit_stl_to_vol` tool, so no native surface is planned."
+    },
+    {
       "id": "particle-tracking",
       "patterns": ["particle_tracking.py"],
       "classification": "matlab-native",

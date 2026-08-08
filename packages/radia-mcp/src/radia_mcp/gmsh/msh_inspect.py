@@ -1478,6 +1478,69 @@ def mesh_quality(msh_path: str | Path,
     return result
 
 
+_MESH_VOLUME_SCRIPT = r"""
+import json
+import sys
+
+msh_path, quadrature, out_path = sys.argv[1:4]
+result = {"ok": False, "ran": False}
+try:
+    import numpy as np
+    import gmsh
+    gmsh.initialize(["-noconfig"])
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh_path)
+        total = 0.0
+        n_elem = 0
+        min_det = None
+        etypes, etags_all, _ = gmsh.model.mesh.getElements(3)
+        for et, etags in zip(etypes, etags_all):
+            local, weights = gmsh.model.mesh.getIntegrationPoints(
+                int(et), quadrature)
+            _jac, det, _pts = gmsh.model.mesh.getJacobians(int(et), local)
+            det = np.asarray(det, dtype=float).reshape(len(etags),
+                                                       len(weights))
+            total += float((det * np.asarray(weights)).sum())
+            n_elem += int(len(etags))
+            m = float(det.min())
+            min_det = m if min_det is None else min(min_det, m)
+        result.update({"ran": True, "ok": n_elem > 0,
+                       "total_volume": total, "n_elements_3d": n_elem,
+                       "min_jacobian_det": min_det})
+        if n_elem == 0:
+            result["error"] = "no 3D elements"
+    finally:
+        gmsh.finalize()
+except Exception as exc:
+    result["error"] = f"{type(exc).__name__}: {exc}"
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(result, f)
+"""
+
+
+def mesh_total_volume(msh_path: str | Path,
+                      quadrature: str = "Gauss4",
+                      timeout_s: float = 600.0) -> dict[str, Any]:
+    """Jacobian-integrated total 3D volume of a ``.msh`` file.
+
+    The closure referee for shape-regeneration pipelines: comparing this
+    against the source STL's watertight volume bounds the geometric loss of
+    an ``import stl`` -> mesh -> export round trip (measured 2026-08-08:
+    0.28 % for Sculpt all-hex, ~1 % for Cubit tetmesh on a marching-cubes
+    body).  Also reports ``min_jacobian_det`` as the inversion guard.
+    """
+    path = Path(msh_path)
+    if not path.is_file():
+        return {"ok": False, "ran": False, "path": str(path),
+                "error": f"file not found: {path}"}
+    result = run_gmsh_json_subprocess(
+        _MESH_VOLUME_SCRIPT, [str(path), quadrature],
+        timeout_s=timeout_s, prefix="radia_mcp_gmsh_volume_")
+    result["path"] = str(path)
+    return result
+
+
 # ======================================================================
 # Public API: dynamic option-name verification
 # ======================================================================

@@ -392,6 +392,91 @@ def _cubit_gui_exe(bin_dir: Path) -> Path:
         f"coreform_cubit launcher not found under {bin_dir}.")
 
 
+def run_headless_journal(commands: list[str], *, timeout_s: float = 300.0,
+                         working_directory: str | Path | None = None) -> dict:
+    """Run plugin-aware Cubit commands in a disposable headless process.
+
+    The bundled-Python daemon is sufficient for native ``cubit.cmd`` calls,
+    but it does not load Cubit's C++ command plugins.  Commands such as
+    ``export netgen`` therefore need the real console launcher.  On Windows
+    ``coreform_cubit.com`` is deliberately preferred over the GUI-stub
+    ``.exe`` so callers can wait for completion and capture diagnostics.
+    """
+    if not commands:
+        raise ValueError("commands must not be empty")
+    if any(not isinstance(line, str) or not line.strip() or "\n" in line
+           or "\r" in line for line in commands):
+        raise ValueError("commands must be nonempty single-line strings")
+
+    bin_dir = get_cubit_bin_dir()
+    if bin_dir is None:
+        return {
+            "status": "error", "stage": "start", "kind": "environment",
+            "error": "Could not locate Coreform Cubit install",
+        }
+    console = bin_dir / "coreform_cubit.com"
+    if not console.exists():
+        try:
+            console = _cubit_gui_exe(bin_dir)
+        except FileNotFoundError as exc:
+            return {
+                "status": "error", "stage": "start", "kind": "environment",
+                "error": str(exc),
+            }
+
+    temp_root = (Path(os.environ.get("RADIA_MCP_TEMP", "C:/temp"))
+                 if sys.platform == "win32"
+                 else Path(tempfile.gettempdir()))
+    temp_root.mkdir(parents=True, exist_ok=True)
+    cwd = Path(working_directory) if working_directory else temp_root
+    cwd.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(
+            prefix="radia_cubit_headless_", dir=str(temp_root)) as scratch:
+        driver = Path(scratch) / "driver.jou"
+        driver.write_text("\n".join([*commands, "exit 0", ""]),
+                          encoding="utf-8")
+        argv = [str(console), "-nographics", "-batch", "-nojournal",
+                str(driver)]
+        try:
+            proc = subprocess.run(
+                argv, cwd=str(cwd), capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=timeout_s,
+                # Cubit reads from an inherited console/stdin during startup.
+                # Under an MCP stdio server that handle is the JSON-RPC pipe,
+                # which leaves an otherwise headless batch launch waiting
+                # indefinitely.  Give the disposable process no input source.
+                stdin=subprocess.DEVNULL,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return {
+                "status": "error", "stage": "timeout", "kind": "timeout",
+                "error": f"Cubit headless journal exceeded {timeout_s}s",
+                "timeout_s": timeout_s,
+                "stdout_tail": (exc.stdout or "")[-4000:],
+                "stderr_tail": (exc.stderr or "")[-4000:],
+            }
+        except OSError as exc:
+            return {
+                "status": "error", "stage": "start", "kind": "environment",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+
+    return {
+        # Cubit 2025.12 can return nonzero after successful exports because
+        # of classified startup/teardown diagnostics.  Artifact freshness is
+        # the caller's completion gate; retain the exit code as evidence.
+        "status": "completed",
+        "exit_code": int(proc.returncode),
+        "console": str(console),
+        "headless_flags": ["-nographics", "-batch", "-nojournal"],
+        "persistent_gui_started": False,
+        "command_count": len(commands),
+        "stdout_tail": (proc.stdout or "")[-8000:],
+        "stderr_tail": (proc.stderr or "")[-8000:],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Session (singleton per mcp-server process)
 # ---------------------------------------------------------------------------
