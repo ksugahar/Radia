@@ -6,32 +6,24 @@ MCP tool (``cubit_stl_to_vol``) on the REAL sector surrogate design of
 the regenerated all-hex body.  Needs a Cubit license (batch, headless per
 the driving policy); the all-hex re-evaluation is the production lane.
 
-Measured 2026-08-08 (LAB, Cubit 2025.12), the golden anchors:
+The golden contracts are:
 
-* grid iso STL at resolution 96 / 3 Taubin iterations / 1500-face
-  decimation: watertight, smoothing drift -0.18 %, decimation drift
-  -0.18 %;
+* grid iso STL remains watertight and smoothing/decimation stay inside
+  explicit volume-drift bands;
 * Cubit ``create tri iso`` on the same nodal field: the two new TRI
   blocks (fixed design-boundary caps + free iso surface) UNION to a
   watertight solid -- the official ATO block semantics confirmed on a
   design whose iron touches the domain boundary;
-* ``cubit_stl_to_vol`` scheme=tet closure 0.4 %, scheme=hex (Sculpt +
-  mesh-based geometry) closure 2.2 % at the smoke's sizes (hex is gated
-  loosely: Sculpt respects its own cell size, not the facet density);
+* both ``cubit_stl_to_vol`` routes pass closure, inversion, and boundary
+  gates;
 * the boundary-face incident this lane now locks: a bare Sculpt export
   carried ZERO ``.vol`` surface elements, so the VIM charge Gram
-  silently lost all surface charge -- uniform-field J came out exactly
-  demag-free (51x off, state CG 1 iteration, DemagFactor 0.000000).
-  Fixed by binding mesh-based geometry before export; gated by
+  silently lost all surface charge.  Fixed by binding mesh-based geometry
+  before export; gated by
   ``boundary_faces_ok`` (tool), the ``vim.ChargeGram`` ZERO-boundary
   raise, and the DemagFactor lock below;
-* functional re-evaluation runs on the HEX body: the 16k-tet
-  facet-conforming mesh from the decimated marching-cubes STL stalls
-  every native CG flavor (mass-Riesz / Jacobi / cluster-tree hit the
-  20000-iteration cap even at tol=1e-6, chi=100), a recorded
-  preconditioner-lane data point -- the 1.5k-hex Sculpt mesh solves the
-  same functional in ~25 iterations (J_hex +0.7355 vs staircase +0.7197,
-  delta +2.2 %).
+* functional re-evaluation runs on the production HEX body while tet
+  solver scaling remains in the preconditioner validation lane.
 """
 import json
 import os
@@ -48,15 +40,26 @@ pytest.importorskip("trimesh")
 pytest.importorskip("skimage")
 pytest.importorskip("netCDF4")
 
-from netgen.occ import Cylinder, HalfSpace, OCCGeometry, Pnt, Vec, Z  # noqa: E402
-from ngsolve import HDiv, Integrate, Mesh, SetNumThreads, TaskManager  # noqa: E402
+from netgen.occ import Cylinder, HalfSpace, OCCGeometry, Pnt, Vec, Z
+from ngsolve import HDiv, Mesh, SetNumThreads, TaskManager
 
-from radia.isochronous_topopt import (  # noqa: E402
-    MU0, DensityAdjointVIM, HelmholtzFilter, density_to_s,
-    field_functional_load, gradient_pair_points, optimize_density,
-    orbit_arc_points, uniform_field_load, verify_design_iron_only)
-from radia.topopt_cad import (  # noqa: E402
-    iso_stl_from_grid, nodal_from_element_density, write_levelset_exodus)
+from radia.isochronous_topopt import (
+    MU0,
+    DensityAdjointVIM,
+    HelmholtzFilter,
+    density_to_s,
+    field_functional_load,
+    gradient_pair_points,
+    optimize_density,
+    orbit_arc_points,
+    uniform_field_load,
+    verify_design_iron_only,
+)
+from radia.topopt_cad import (
+    iso_stl_from_grid,
+    nodal_from_element_density,
+    write_levelset_exodus,
+)
 
 RESULTS = Path(__file__).with_name("results_shape_regen_lane.json")
 
@@ -65,7 +68,7 @@ def _cubit_available():
     try:
         from radia_mcp.cubit import session as _cs  # noqa: F401
         return True
-    except Exception:
+    except ImportError:
         return False
 
 
@@ -129,15 +132,13 @@ def regen(tmp_path_factory):
         verification = verify_design_iron_only(
             prob, result.density, state_builder,
             [objective_builder] + con_builders, chi_iron=chi_iron,
-            density_filter=filt, gram_kwargs=dict(eps=1e-7))
+            density_filter=filt, gram_kwargs={"eps": 1e-7})
 
     rho_f = np.clip(filt.apply(result.density), 0.0, 1.0)
     nodal = nodal_from_element_density(mesh, rho_f)
 
-    # Cubit meshes STL geometry TO THE FACETS, so the facet count is
-    # the solver-mesh-size lever: decimate to ~1500 faces to keep the
-    # re-evaluation solve inside the lane budget (an undecimated
-    # resolution-96 surface forced 47k tets)
+    # Facet count controls the downstream solver mesh, so decimate before
+    # asking Cubit to regenerate the volume mesh.
     stl = out / "design.stl"
     stl_info = iso_stl_from_grid(mesh, nodal, stl, level=0.5,
                                  resolution=96, smooth_iterations=3,
@@ -152,7 +153,6 @@ def regen(tmp_path_factory):
 
 def test_grid_iso_stl_is_watertight_with_small_drift(regen):
     assert regen.stl_info["watertight"] is True
-    # measured -0.18 % at 3 Taubin iterations (resolution 96); gate 2 %
     assert abs(regen.stl_info["smoothing_volume_drift"]) < 0.02
     assert abs(regen.stl_info["decimation_volume_drift"]) < 0.02
 
@@ -168,8 +168,8 @@ def test_cubit_iso_blocks_union_watertight(regen):
     iso_e = str(regen.out / "design_iso.e").replace(os.sep, "/")
     r = _run_batch(None, [
         "set dev on",
-        f'import mesh "{str(exo).replace(os.sep, "/")}" nodal_var "LSD" '
-        "no_geom",
+        (f'import mesh "{str(exo).replace(os.sep, "/")}" nodal_var "LSD" '
+         "no_geom"),
         'create tri iso tet all nodal_var "LSD"',
         f'export mesh "{iso_e}" block all overwrite',
     ], timeout_s=900)
@@ -199,16 +199,29 @@ def test_cubit_iso_blocks_union_watertight(regen):
     assert abs(m.volume) > 0.0
 
 
-@pytest.mark.parametrize("scheme,closure_gate", [("tet", 0.03),
-                                                 ("hex", 0.08)])
-def test_stl_to_vol_gates(regen, scheme, closure_gate):
+_MESH_CONFIGS = {"tet": 0.03, "hex": 0.08}
+
+
+@pytest.fixture(scope="module")
+def regenerated_meshes(regen):
     from radia_mcp.cubit.server import cubit_stl_to_vol
 
-    r = json.loads(cubit_stl_to_vol(
-        stl_path=str(regen.stl), scheme=scheme,
-        closure_tolerance=closure_gate,
-        out_vol=str(regen.out / f"regen_{scheme}.vol"),
-        out_msh=str(regen.out / f"regen_{scheme}.msh")))
+    reports = {}
+    for scheme, closure_gate in _MESH_CONFIGS.items():
+        report = json.loads(cubit_stl_to_vol(
+            stl_path=str(regen.stl), scheme=scheme,
+            closure_tolerance=closure_gate,
+            out_vol=str(regen.out / f"regen_{scheme}.vol"),
+            out_msh=str(regen.out / f"regen_{scheme}.msh")))
+        if report.get("status") != "ok":
+            pytest.fail(f"{scheme} regeneration failed: {report}")
+        reports[scheme] = report
+    return reports
+
+
+@pytest.mark.parametrize("scheme", ["tet", "hex"])
+def test_stl_to_vol_gates(regenerated_meshes, scheme):
+    r = regenerated_meshes[scheme]
     assert r["status"] == "ok", r
     assert r["gates"]["no_inverted_elements"] is True
     assert r["gates"]["closure_ok"] is True
@@ -220,27 +233,22 @@ def test_stl_to_vol_gates(regen, scheme, closure_gate):
     assert Path(r["vol"]).is_file()
 
 
-def test_functional_reevaluation_on_regenerated_body(regen):
+def test_functional_reevaluation_on_regenerated_body(regen,
+                                                      regenerated_meshes):
     """The payoff: the smoothed manufacturing-shape functional.
 
     The comparison is GEOMETRY vs GEOMETRY (staircase iron-only extraction
     vs regenerated smooth body), so both sides are evaluated with the same
-    machinery at chi=100.  The Cubit all-hex route is intentional: the same
-    surface produced 16,102 tets whose facet-conforming slivers stall every
-    native CG flavor (mass-Riesz / Jacobi / cluster-tree all reached the
-    20,000-iteration fail-loud cap, even at tol=1e-6), while Sculpt
-    produced 1,537 hexes that solve in ~25 iterations.  Tet generation
-    remains a mesh gate; its solver scaling belongs to the preconditioner
-    lane.
+    machinery at chi=100.  The all-hex route is the production
+    re-evaluation path.  Tet generation remains an independent mesh gate;
+    its solver scaling belongs to the preconditioner lane.
 
-    The DemagFactor lock guards the 2026-08-08 boundary-face incident
-    end-to-end: a bare-Sculpt ``.vol`` with zero surface elements made the
-    charge Gram silently demag-free (DemagFactor 0.000000, J exactly the
-    mass-only response, 51x off).  A healthy flat-sector body must show an
-    order-1/2 demag factor.  Locked loosely: same sign, delta within
-    +/-50 %.
+    The DemagFactor lock guards the zero-boundary-face failure end-to-end.
+    A healthy flat-sector body must show a substantial demagnetizing
+    response.  The objective comparison is locked loosely: same sign and
+    delta within +/-50 %.
     """
-    vol = regen.out / "regen_hex.vol"
+    vol = Path(regenerated_meshes["hex"]["vol"])
     assert vol.is_file(), "hex regeneration must run first"
     chi_eval = 100.0
     with TaskManager():
@@ -265,30 +273,32 @@ def test_functional_reevaluation_on_regenerated_body(regen):
     J_smooth = float(lin2.values[0])
     J_stair = float(lin1.values[0])
     delta = (J_smooth - J_stair) / abs(J_stair)
-    record = dict(
-        schema="radia.isochronous-topopt-shape-regen/v3",
-        stl=regen.stl_info,
-        reevaluation_mesh_family="hex",
-        ne_staircase=int(m1.ne), ne_regen_hex=int(m2.ne),
-        chi_eval=chi_eval,
-        demag_factor_z_hex=demag_factor_z,
-        J_smooth=J_smooth, J_staircase=J_stair, delta=delta,
-        state_iterations=int(lin2.state_iterations),
-        adjoint_iterations=[int(v) for v in lin2.adjoint_iterations],
-        boundary_face_incident=(
-            "a bare-Sculpt export wrote surfaceelements=0 and the demag "
-            "solve was silently demag-free (J=+37.137, DemagFactor 0); "
-            "fixed by mesh-based geometry before export, gated by "
-            "boundary_faces_ok + the vim.ChargeGram ZERO-boundary raise + "
-            "the demag_factor_z_hex lock here"),
-        tet_solver_negative=(
-            "16,102-tet native CG at chi=100 capped 20,000 iterations for "
-            "mass-Riesz (tol 1e-10/1e-8/1e-6), Jacobi, and cluster-tree; "
-            "tet export remains a gated mesh product, but production "
-            "re-evaluation routes through the 1,537-hex Sculpt mesh"),
-    )
+    stl_record = {
+        **regen.stl_info,
+        "path": Path(regen.stl_info["path"]).name,
+    }
+    record = {
+        "schema": "radia.isochronous-topopt-shape-regen/v3",
+        "stl": stl_record,
+        "reevaluation_mesh_family": "hex",
+        "ne_staircase": int(m1.ne),
+        "ne_regen_hex": int(m2.ne),
+        "chi_eval": chi_eval,
+        "demag_factor_z_hex": demag_factor_z,
+        "J_smooth": J_smooth,
+        "J_staircase": J_stair,
+        "delta": delta,
+        "state_iterations": int(lin2.state_iterations),
+        "adjoint_iterations": [int(v) for v in lin2.adjoint_iterations],
+        "boundary_face_contract": (
+            "exported boundary faces must match the topological skin; "
+            "ChargeGram also rejects a zero-boundary 3D mesh"),
+        "tet_solver_scope": (
+            "tet export is a gated mesh artifact; production objective "
+            "re-evaluation uses the all-hex route"),
+    }
     RESULTS.write_text(json.dumps(record, indent=1), encoding="utf-8")
-    # broken-boundary exports read exactly 0 here; flat sector measured 0.477
+    # Broken-boundary exports read exactly zero here.
     assert demag_factor_z > 0.2, demag_factor_z
     assert np.sign(J_smooth) == np.sign(J_stair)
     assert abs(delta) < 0.5, delta

@@ -1733,15 +1733,14 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         # without sidesets).  Without boundary faces the surface charge
         # sigma = M.n cannot be represented, so the Gram would silently act
         # volume-charge-only: uniform magnetization sees N = 0 and the demag
-        # solve returns the demag-free field (measured 2026-08-08: J exactly
-        # 51x off with state CG "converging" in 1 iteration).  Fail loud.
+        # solve returns the wrong demag-free field.  Fail loud.
         raise ValueError(
             "vim.ChargeGram: the 3D mesh has ZERO boundary (BND) surface "
             "elements, so the surface charge sigma = M.n cannot be "
             "represented and the demag operator would be silently wrong. "
             "Re-export the .vol with its skin as boundary faces (Cubit "
-            "Sculpt needs `gen_sidesets`; the cubit MCP `cubit_stl_to_vol` "
-            "tool does this and gates on it).")
+            "Sculpt needs mesh-based geometry with a preserved skin; the "
+            "cubit MCP `cubit_stl_to_vol` tool does this and gates on it).")
     if internal_interfaces and not (
             mesh.dim == 3 and _vtypes in ({4}, {8})
             and mesh.GetCurveOrder() < 2):
