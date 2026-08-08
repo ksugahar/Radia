@@ -240,11 +240,52 @@ try:
             out_tag = gmsh.plugin.run("Isosurface")
             dtypes, nels, _data = gmsh.view.getListData(out_tag)
             gmsh.view.write(out_tag, cfg["out_file"])
+            # Is the shell CLOSED, or cut open by the domain boundary?
+            # An open shell is see-through by construction -- the single
+            # biggest cause of "my transparent isosurface has cracks".
+            # (Measured: closed shells show 0 background pixels inside
+            # the silhouette at every recursion level; a shell crossing
+            # the box faces shows ~20-30%, independent of recursion.)
+            bb = gmsh.model.getBoundingBox(-1, -1)
+            span = max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2], 1e-30)
+            tol = 1e-6 * span
+            on_boundary = 0
+            n_vertices = 0
+            for kind, nel, arr in zip(dtypes, nels, _data):
+                nv = {"SP": 1, "SL": 2, "ST": 3, "SQ": 4,
+                      "VP": 1, "VL": 2, "VT": 3, "VQ": 4}.get(str(kind))
+                if not nv or not nel:
+                    continue
+                stride = len(arr) // int(nel)
+                for e in range(int(nel)):
+                    base = e * stride
+                    for v in range(nv):
+                        px = arr[base + v]
+                        py = arr[base + nv + v]
+                        pz = arr[base + 2 * nv + v]
+                        n_vertices += 1
+                        if (abs(px - bb[0]) < tol or abs(px - bb[3]) < tol
+                                or abs(py - bb[1]) < tol
+                                or abs(py - bb[4]) < tol
+                                or abs(pz - bb[2]) < tol
+                                or abs(pz - bb[5]) < tol):
+                            on_boundary += 1
             result.update({"ok": True, "ran": True,
                            "out_file": cfg["out_file"],
                            "recur_level": int(cfg.get("recur_level", 0)),
                            "pieces": {str(t): int(n)
-                                      for t, n in zip(dtypes, nels)}})
+                                      for t, n in zip(dtypes, nels)},
+                           "n_vertices": n_vertices,
+                           "boundary_vertices": on_boundary,
+                           "open_surface": bool(on_boundary)})
+            if on_boundary:
+                result["note"] = (
+                    "the isosurface is CUT OPEN by the domain boundary "
+                    f"({on_boundary} of {n_vertices} vertices lie on it): "
+                    "rendered semi-transparent you will see straight "
+                    "through the opening. That is the geometry, not a "
+                    "rendering artefact -- pick a level whose shell "
+                    "closes inside the domain, or clip the view.")
 
         elif op == "cut_plane":
             tag = _view_tag_by_selector(tags, cfg.get("view"))
@@ -2536,3 +2577,222 @@ def flow_texture(path: str | Path, *,
         res["method"] = ("evenly spaced streamlines (Jobard-Lefer); "
                          "NOT line integral convolution")
     return res
+
+
+_TIME_STATS = ("min", "max", "mean", "std", "rms", "ptp", "argmax_time",
+               "argmin_time")
+
+
+def time_series(paths: list[str | Path], *,
+                view: str | int | None = None,
+                component: int | None = None,
+                times: list[float] | None = None,
+                stats: tuple[str, ...] | list[str] = _TIME_STATS,
+                out_file: str | Path | None = None,
+                points: list[list[float]] | None = None,
+                plot_png: str | Path | None = None,
+                timeout_s: float = 600.0) -> dict[str, Any]:
+    """Temporal statistics over a FILE SERIES (one .msh per step).
+
+    A transient solver writes one mesh per step, which gmsh has no verb
+    for: its own time steps live INSIDE a single view.  This treats an
+    ordered list of files as the time axis and reduces it two ways:
+
+    * per-tag statistics (``min``, ``max``, ``mean``, ``std``, ``rms``,
+      ``ptp``, ``argmin_time``, ``argmax_time``) written as views into
+      one output .msh, so "where does the peak occur, and when" is a
+      picture rather than a table;
+    * per-step global aggregates (min/max/mean/rms over the domain),
+      which is the "plot data over time" series -- returned as arrays
+      and, with ``plot_png``, drawn.
+
+    The files must share one node/element numbering: a series where the
+    mesh changed is not a time series of the same quantity, and mixing
+    them silently would average unrelated tags.  That is checked, not
+    assumed.
+
+    Args:
+        paths: ordered .msh files, one per step.
+        view: view name or index (default: the first view of file 0,
+            matched by NAME in the others).
+        component: component index, or None for the magnitude.
+        times: the time value of each file (default: 0, 1, 2, ...).
+        stats: which per-tag statistics to write.
+        out_file: output .msh (default: ``<first stem>_timestats.msh``).
+        points: optional [x, y, z] list probed in EVERY file, giving an
+            interpolated history per point (uses the gmsh probe, so it
+            is a real field evaluation, not a nearest-node lookup).
+        plot_png: draw the aggregate (and point) histories.
+
+    Returns:
+        ``{"msh":, "times":, "aggregate": {...}, "point_history": [...],
+        "stats_written": [...]}``.
+    """
+    from .msh_inspect import read_msh_data
+
+    srcs = [Path(p) for p in paths]
+    if len(srcs) < 2:
+        raise ValueError(
+            f"a time series needs at least 2 files, got {len(srcs)}")
+    missing = [str(p) for p in srcs if not p.is_file()]
+    if missing:
+        return {"ok": False, "error": f"file(s) not found: {missing}"}
+    bad = [s for s in stats if s not in _TIME_STATS]
+    if bad:
+        raise ValueError(
+            f"unknown stat(s) {bad} (available: {', '.join(_TIME_STATS)})")
+    if times is not None and len(times) != len(srcs):
+        raise ValueError(
+            f"times has {len(times)} entries for {len(srcs)} files")
+    t = [float(v) for v in (times if times is not None
+                            else range(len(srcs)))]
+
+    series: list[dict[int, float]] = []
+    view_name = None
+    section = None
+    for k, src in enumerate(srcs):
+        data = read_msh_data(src)
+        if not data["views"]:
+            return {"ok": False, "error": f"{src.name} carries no view"}
+        if k == 0:
+            if view is None:
+                chosen = data["views"][0]
+            elif isinstance(view, int):
+                if view >= len(data["views"]):
+                    return {"ok": False,
+                            "error": f"view index {view} out of range "
+                                     f"({len(data['views'])} views)"}
+                chosen = data["views"][view]
+            else:
+                match = [v for v in data["views"] if v["name"] == view]
+                if not match:
+                    return {"ok": False,
+                            "error": f"no view {view!r} in {src.name} "
+                                     f"(views: "
+                                     f"{[v['name'] for v in data['views']]})"}
+                chosen = match[0]
+            view_name = chosen["name"]
+            section = chosen["section"]
+        else:
+            match = [v for v in data["views"] if v["name"] == view_name]
+            if not match:
+                return {"ok": False,
+                        "error": f"{src.name} has no view {view_name!r} "
+                                 f"(views: "
+                                 f"{[v['name'] for v in data['views']]})"}
+            chosen = match[0]
+        vals = _view_values(chosen, component, absolute=True)
+        if series and set(vals) != set(series[0]):
+            return {"ok": False,
+                    "error": f"{src.name} does not share the tag numbering "
+                             f"of {srcs[0].name} ({len(vals)} vs "
+                             f"{len(series[0])} entries) -- a series whose "
+                             f"mesh changed is not one time series"}
+        series.append(vals)
+
+    tags = sorted(series[0])
+    n = len(series)
+    per_tag: dict[str, dict[int, float]] = {s: {} for s in stats}
+    for tag in tags:
+        v = [step[tag] for step in series]
+        mean = sum(v) / n
+        var = sum((x - mean) ** 2 for x in v) / n
+        hi_i = max(range(n), key=lambda i: v[i])
+        lo_i = min(range(n), key=lambda i: v[i])
+        computed = {"min": v[lo_i], "max": v[hi_i], "mean": mean,
+                    "std": math.sqrt(var),
+                    "rms": math.sqrt(sum(x * x for x in v) / n),
+                    "ptp": v[hi_i] - v[lo_i],
+                    "argmax_time": t[hi_i], "argmin_time": t[lo_i]}
+        for s in stats:
+            per_tag[s][tag] = computed[s]
+
+    aggregate = {"time": t, "min": [], "max": [], "mean": [], "rms": []}
+    for step in series:
+        v = list(step.values())
+        aggregate["min"].append(min(v))
+        aggregate["max"].append(max(v))
+        aggregate["mean"].append(sum(v) / len(v))
+        aggregate["rms"].append(math.sqrt(sum(x * x for x in v) / len(v)))
+
+    out = (Path(out_file) if out_file is not None
+           else srcs[0].with_name(srcs[0].stem + "_timestats.msh"))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    text = srcs[0].read_text(encoding="utf-8", errors="replace")
+    head = text.split("$NodeData")[0].split("$ElementData")[0]
+    blocks = []
+    for s in stats:
+        rows = "".join(f"{tag} {per_tag[s][tag]:.9e}\n" for tag in tags)
+        blocks.append(f"${section}\n"
+                      f'1\n"{view_name}_{s}"\n1\n0\n'
+                      f"3\n0\n1\n{len(tags)}\n{rows}$End{section}\n")
+    out.write_text(head + "".join(blocks), encoding="utf-8")
+
+    result: dict[str, Any] = {
+        "ok": True, "msh": str(out), "view": view_name,
+        "section": section, "n_steps": n, "times": t,
+        "stats_written": [f"{view_name}_{s}" for s in stats],
+        "aggregate": aggregate, "n_tags": len(tags),
+        "inputs": [str(p) for p in srcs]}
+
+    if points:
+        histories = []
+        for p in points:
+            histories.append({"point": [float(v) for v in p], "values": []})
+        for src in srcs:
+            pr = probe_field(src, [list(h["point"]) for h in histories],
+                             view=view_name, timeout_s=timeout_s)
+            if not pr.get("ok") or not pr.get("views"):
+                return {"ok": False,
+                        "error": f"probe failed on {src.name}: {pr}"}
+            for h, entry in zip(histories, pr["views"][0]["points"]):
+                vals = entry.get("values") or []
+                if not entry.get("found") or not vals:
+                    h["values"].append(None)
+                elif len(vals) == 1:
+                    h["values"].append(float(vals[0]))
+                else:
+                    h["values"].append(
+                        math.sqrt(sum(float(v) ** 2 for v in vals)))
+        result["point_history"] = histories
+
+    if plot_png:
+        result["plot"] = _plot_time_series(result, Path(plot_png))
+    return result
+
+
+def _plot_time_series(result: dict[str, Any], png: Path) -> dict[str, Any]:
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return {"ok": False, "error": "matplotlib not installed"}
+    agg = result["aggregate"]
+    hist = result.get("point_history") or []
+    fig, axes = plt.subplots(1, 2 if hist else 1,
+                             figsize=(9 if hist else 5, 3.4), dpi=150)
+    ax = axes[0] if hist else axes
+    for key, style in (("max", "-"), ("rms", "--"), ("mean", "-."),
+                       ("min", ":")):
+        ax.plot(agg["time"], agg[key], style, label=key)
+    ax.set_xlabel("time")
+    ax.set_ylabel(result["view"])
+    ax.legend(fontsize=7)
+    ax.grid(alpha=0.3)
+    if hist:
+        ax2 = axes[1]
+        for h in hist:
+            lbl = "(%.3g, %.3g, %.3g)" % tuple(h["point"])
+            xs = [x for x, y in zip(agg["time"], h["values"]) if y is not None]
+            ys = [y for y in h["values"] if y is not None]
+            ax2.plot(xs, ys, marker="o", ms=2.5, label=lbl)
+        ax2.set_xlabel("time")
+        ax2.set_ylabel(result["view"])
+        ax2.legend(fontsize=7)
+        ax2.grid(alpha=0.3)
+    png.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(png)
+    plt.close(fig)
+    return {"ok": True, "png": str(png)}

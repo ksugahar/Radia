@@ -69,6 +69,7 @@ from .post_process import (
     resample_grid,
     select,
     smooth_to_nodes,
+    time_series,
     streamlines,
     streamlines_2d,
     threshold,
@@ -2287,6 +2288,55 @@ def gmsh_flow_texture(path: str, view: str | int | None = None,
     return flow_texture(_abs_path(path), view=view, plane=plane,
                         offset=offset, density=density,
                         out_file=_abs_path(out_file) if out_file else None)
+
+
+@mcp.tool()
+def gmsh_time_series(paths: list, view: str | int | None = None,
+                     component: int | None = None,
+                     times: list | None = None,
+                     stats: list | None = None,
+                     out_file: str | None = None,
+                     points: list | None = None,
+                     plot_png: str | None = None) -> dict:
+    """
+    Temporal statistics over a FILE SERIES (one .msh per step).
+
+    A transient solver writes one mesh per step, which gmsh has no verb
+    for -- its own time steps live INSIDE a single view. This treats an
+    ordered list of files as the time axis and reduces it two ways:
+
+    - per-tag statistics (min, max, mean, std, rms, ptp, argmin_time,
+      argmax_time) written as views into one output .msh, so "where is
+      the peak, and WHEN" becomes a picture instead of a table;
+    - per-step global aggregates (min/max/mean/rms over the domain) --
+      the "plot data over time" series, returned as arrays and drawn
+      when plot_png is given.
+
+    The files must share one node/element numbering: a series whose mesh
+    changed is not a time series of the same quantity, and averaging
+    mismatched tags would be silently wrong. That is checked.
+
+    Args:
+        paths: ordered .msh files, one per step.
+        view: view name or index (default: first view of file 0, matched
+              by NAME in the others).
+        component: component index, or None for the magnitude.
+        times: time value per file (default 0, 1, 2, ...).
+        stats: subset of min/max/mean/std/rms/ptp/argmax_time/argmin_time.
+        out_file: output .msh (default <first stem>_timestats.msh).
+        points: [x, y, z] list probed in EVERY file -- a real
+                interpolated field evaluation, not a nearest-node lookup.
+        plot_png: draw the aggregate (and point) histories.
+    """
+    kwargs = {}
+    if stats is not None:
+        kwargs["stats"] = tuple(stats)
+    return time_series([_abs_path(str(p)) for p in paths], view=view,
+                       component=component, times=times,
+                       out_file=_abs_path(out_file) if out_file else None,
+                       points=points,
+                       plot_png=_abs_path(plot_png) if plot_png else None,
+                       **kwargs)
 
 
 if __name__ == '__main__':
