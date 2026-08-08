@@ -13,9 +13,9 @@ import pytest
 
 pytest.importorskip("gmsh")
 
-from radia_mcp.cubit import server  # noqa: E402
-from radia_mcp.cubit.stl_inspect import inspect_stl  # noqa: E402
-from radia_mcp.gmsh.msh_inspect import mesh_total_volume  # noqa: E402
+from radia_mcp.cubit import server
+from radia_mcp.cubit.stl_inspect import inspect_stl
+from radia_mcp.gmsh.msh_inspect import mesh_total_volume
 
 
 def _call(fn, **kw):
@@ -33,13 +33,22 @@ def _write_ascii_stl(path: Path, triangles) -> None:
     path.write_text("\n".join(rows) + "\n", encoding="ascii")
 
 
-def _write_unit_cube_stl(path: Path) -> None:
+def _unit_cube_triangles(*, origin=(0.0, 0.0, 0.0), size=1.0,
+                         reverse=False):
     v = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0),
          (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+    v = [(origin[0] + size * x, origin[1] + size * y,
+          origin[2] + size * z) for x, y, z in v]
     faces = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7),
              (0, 1, 5), (0, 5, 4), (3, 7, 6), (3, 6, 2),
              (0, 4, 7), (0, 7, 3), (1, 2, 6), (1, 6, 5)]
-    _write_ascii_stl(path, [[v[index] for index in face] for face in faces])
+    if reverse:
+        faces = [tuple(reversed(face)) for face in faces]
+    return [[v[index] for index in face] for face in faces]
+
+
+def _write_unit_cube_stl(path: Path) -> None:
+    _write_ascii_stl(path, _unit_cube_triangles())
 
 
 def test_missing_stl_is_input_error(tmp_path):
@@ -53,6 +62,44 @@ def test_bad_scheme_is_input_error(tmp_path):
     r = _call(server.cubit_stl_to_vol, stl_path=str(p), scheme="prism")
     assert r["status"] == "error" and r["kind"] == "input"
     assert "hex" in r["error"] and "tet" in r["error"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"size": -1.0}, "size"),
+        ({"size": float("nan")}, "size"),
+        ({"closure_tolerance": -0.1}, "closure_tolerance"),
+        ({"closure_tolerance": float("inf")}, "closure_tolerance"),
+        ({"timeout_s": 0}, "timeout_s"),
+        ({"timeout_s": float("nan")}, "timeout_s"),
+    ],
+)
+def test_numeric_contract_fails_before_stl_inspection(tmp_path, kwargs,
+                                                      message):
+    p = tmp_path / "placeholder.stl"
+    p.write_text("not inspected", encoding="ascii")
+    r = _call(server.cubit_stl_to_vol, stl_path=str(p), **kwargs)
+    assert r["status"] == "error" and r["kind"] == "input"
+    assert message in r["error"]
+
+
+def test_output_paths_must_not_alias_input_or_each_other(tmp_path):
+    p = tmp_path / "cube.stl"
+    _write_unit_cube_stl(p)
+
+    same_as_input = _call(
+        server.cubit_stl_to_vol, stl_path=str(p), out_vol=str(p))
+    assert same_as_input["status"] == "error"
+    assert "distinct paths" in same_as_input["error"]
+    assert p.is_file(), "collision validation must not delete the source STL"
+
+    shared = tmp_path / "shared.mesh"
+    same_outputs = _call(
+        server.cubit_stl_to_vol, stl_path=str(p),
+        out_vol=str(shared), out_msh=str(shared))
+    assert same_outputs["status"] == "error"
+    assert "distinct paths" in same_outputs["error"]
 
 
 def test_open_surface_is_input_error(tmp_path):
@@ -74,7 +121,43 @@ def test_stl_inspector_recovers_closed_unit_cube_volume(tmp_path):
     assert r["triangle_count"] == 12
     assert r["open_edge_count"] == 0
     assert r["nonmanifold_edge_count"] == 0
+    assert r["connected_components"] == 1
     assert abs(r["volume"] - 1.0) < 1e-12
+
+
+def test_stl_volume_sums_disconnected_components_with_opposite_winding(
+        tmp_path):
+    p = tmp_path / "two_cubes.stl"
+    triangles = [
+        *_unit_cube_triangles(),
+        *_unit_cube_triangles(origin=(2.0, 0.0, 0.0), reverse=True),
+    ]
+    _write_ascii_stl(p, triangles)
+
+    r = inspect_stl(p)
+
+    assert r["watertight"] is True
+    assert r["winding_consistent"] is True
+    assert r["connected_components"] == 2
+    assert r["component_nesting_depths"] == [0, 0]
+    assert r["volume"] == pytest.approx(2.0, rel=0.0, abs=1e-12)
+
+
+def test_stl_volume_subtracts_a_nested_cavity_independent_of_winding(
+        tmp_path):
+    p = tmp_path / "hollow_cube.stl"
+    triangles = [
+        *_unit_cube_triangles(size=3.0),
+        *_unit_cube_triangles(origin=(1.0, 1.0, 1.0), reverse=True),
+    ]
+    _write_ascii_stl(p, triangles)
+
+    r = inspect_stl(p)
+
+    assert r["watertight"] is True
+    assert r["connected_components"] == 2
+    assert r["component_nesting_depths"] == [0, 1]
+    assert r["volume"] == pytest.approx(26.0, rel=0.0, abs=1e-12)
 
 
 def test_stl_route_uses_plugin_aware_headless_process(tmp_path, monkeypatch):
@@ -128,6 +211,20 @@ def test_mesh_total_volume_unit_cube(tmp_path):
 def test_mesh_total_volume_missing_file(tmp_path):
     r = mesh_total_volume(tmp_path / "none.msh")
     assert r["ok"] is False and "not found" in r["error"]
+
+
+def test_mesh_total_volume_rejects_invalid_runtime_arguments(tmp_path):
+    p = tmp_path / "placeholder.msh"
+    p.write_text("placeholder", encoding="ascii")
+    with pytest.raises(ValueError, match="quadrature"):
+        mesh_total_volume(p, quadrature="")
+    with pytest.raises(ValueError, match="timeout_s"):
+        mesh_total_volume(p, timeout_s=float("inf"))
+
+
+def test_headless_journal_rejects_invalid_timeout_before_environment_probe():
+    with pytest.raises(ValueError, match="timeout_s"):
+        server._cs.run_headless_journal(["reset"], timeout_s=float("nan"))
 
 
 def test_vol_surface_element_count_reads_section(tmp_path):

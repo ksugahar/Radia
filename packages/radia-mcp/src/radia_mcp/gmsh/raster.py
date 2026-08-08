@@ -16,8 +16,9 @@ the real thing OUTSIDE gmsh's renderer:
   field with RK2 advection so every pixel carries flow direction.
 
 The trade is stated, not hidden: output is a standalone PNG with
-labelled axes (axis-equal per lab policy, no in-figure title) -- there
-is no CAD overlay and no gmsh interactivity in these two figures.
+labelled axes (axis-equal per lab policy, no in-figure title) and no
+gmsh interactivity.  Optional STEP/BREP inputs add depth-composited CAD
+to the ray-cast view or a section outline to the LIC view.
 """
 
 from __future__ import annotations
@@ -29,6 +30,46 @@ from pathlib import Path
 from typing import Any
 
 from ._gmsh_subprocess import run_gmsh_json_subprocess
+
+_MAX_GRID = 128
+_MAX_IMAGE_SIZE = 2048
+_MAX_DEPTH_STEPS = 2048
+_MAX_LIC_RESOLUTION = 2048
+_MAX_LIC_KERNEL = 256
+_MIN_STEP_REL_SIZE = 0.004
+_MAX_CAD_NODES = 500_000
+_MAX_CAD_TRIANGLES = 500_000
+
+
+def _bounded_int(name: str, value: Any, minimum: int, maximum: int) -> int:
+    """Return an exact integer inside a resource-safe public range."""
+    import operator
+
+    try:
+        parsed = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer, got {value!r}") from exc
+    if not minimum <= parsed <= maximum:
+        raise ValueError(
+            f"{name} must be in [{minimum}, {maximum}], got {parsed}")
+    return parsed
+
+
+def _finite_float(name: str, value: Any, *, positive: bool = False,
+                  nonnegative: bool = False) -> float:
+    """Convert a scalar and reject NaN/Inf before allocating or spawning."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number, got {value!r}") \
+            from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{name} must be finite, got {value!r}")
+    if positive and parsed <= 0.0:
+        raise ValueError(f"{name} must be positive, got {parsed}")
+    if nonnegative and parsed < 0.0:
+        raise ValueError(f"{name} must be nonnegative, got {parsed}")
+    return parsed
 
 _PROBE_GRID_SCRIPT = r"""
 import json
@@ -168,6 +209,12 @@ def _tessellate_step(step_files, *, rel_size: float = 0.04,
     """
     import numpy as np
 
+    rel_size = _finite_float("step_rel_size", rel_size, positive=True)
+    if not _MIN_STEP_REL_SIZE <= rel_size <= 1.0:
+        raise ValueError(
+            f"step_rel_size must be in [{_MIN_STEP_REL_SIZE}, 1], got "
+            f"{rel_size}")
+    timeout_s = _finite_float("timeout_s", timeout_s, positive=True)
     files = [str(Path(f)) for f in step_files]
     missing = [f for f in files if not Path(f).is_file()]
     if missing:
@@ -185,8 +232,23 @@ def _tessellate_step(step_files, *, rel_size: float = 0.04,
             timeout_s=timeout_s, prefix="radia_mcp_raster_")
         if not res.get("ok"):
             return None, None, res
-        nodes = np.load(w / "nodes.npy")
-        tris = np.load(w / "tris.npy")
+        nodes = np.load(w / "nodes.npy", allow_pickle=False)
+        tris = np.load(w / "tris.npy", allow_pickle=False)
+    if (nodes.ndim != 2 or nodes.shape[1] != 3
+            or not np.isfinite(nodes).all()):
+        return None, None, {"ok": False,
+                            "error": "STEP tessellation returned invalid nodes"}
+    if (tris.ndim != 2 or tris.shape[1] != 3
+            or not np.issubdtype(tris.dtype, np.integer)
+            or (tris.size and (tris.min() < 0 or tris.max() >= len(nodes)))):
+        return None, None, {"ok": False,
+                            "error": "STEP tessellation returned invalid triangles"}
+    if len(nodes) > _MAX_CAD_NODES or len(tris) > _MAX_CAD_TRIANGLES:
+        return None, None, {
+            "ok": False,
+            "error": "STEP display tessellation exceeds the raster safety "
+                     "limit; increase step_rel_size",
+        }
     return nodes, tris, res
 
 
@@ -262,7 +324,10 @@ def _probe_grid(path: Path, points, *, view, step: int = 0,
     """
     import numpy as np
 
+    timeout_s = _finite_float("timeout_s", timeout_s, positive=True)
     pts = np.ascontiguousarray(points, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[1] != 3 or not np.isfinite(pts).all():
+        raise ValueError("probe points must be a finite (N, 3) array")
     with tempfile.TemporaryDirectory(prefix="radia_mcp_probe_grid_") as work:
         w = Path(work)
         np.save(w / "pts.npy", pts)
@@ -276,8 +341,17 @@ def _probe_grid(path: Path, points, *, view, step: int = 0,
             timeout_s=timeout_s, prefix="radia_mcp_raster_")
         if not res.get("ok"):
             return None, None, res
-        vals = np.load(w / "vals.npy")
-        found = np.load(w / "found.npy")
+        vals = np.load(w / "vals.npy", allow_pickle=False)
+        found = np.load(w / "found.npy", allow_pickle=False)
+    if vals.ndim != 2 or vals.shape[0] != len(pts):
+        return None, None, {"ok": False,
+                            "error": "gmsh probe returned an invalid value array"}
+    if found.shape != (len(pts),) or found.dtype.kind != "b":
+        return None, None, {"ok": False,
+                            "error": "gmsh probe returned an invalid found mask"}
+    if not np.isfinite(vals[found]).all():
+        return None, None, {"ok": False,
+                            "error": "gmsh probe returned non-finite field values"}
     return vals, found, res
 
 
@@ -310,7 +384,12 @@ def _camera_frame(view_dir):
                 f"{', '.join(sorted(_AXIS_DIRS))}, or a 3-vector)")
         d = np.array(_AXIS_DIRS[view_dir], dtype=float)
     else:
-        d = np.asarray(view_dir, dtype=float).reshape(3)
+        try:
+            d = np.asarray(view_dir, dtype=float).reshape(3)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("view_dir must be a finite 3-vector") from exc
+    if not np.isfinite(d).all():
+        raise ValueError("view_dir must be a finite 3-vector")
     nd = float(np.linalg.norm(d))
     if nd < 1e-30:
         raise ValueError("view_dir must be a non-zero vector")
@@ -341,8 +420,13 @@ def _bbox_from_msh(path: Path):
     pts = list(read_msh_data(path)["nodes"].values())
     if not pts:
         raise ValueError(f"{path.name} holds no nodes")
+    if any(len(p) != 3 or not all(math.isfinite(float(v)) for v in p)
+           for p in pts):
+        raise ValueError(f"{path.name} holds non-finite or non-3D nodes")
     lo = [min(p[i] for p in pts) for i in range(3)]
     hi = [max(p[i] for p in pts) for i in range(3)]
+    if not any(hi[i] > lo[i] for i in range(3)):
+        raise ValueError(f"{path.name} has a degenerate bounding box")
     return lo, hi
 
 
@@ -381,18 +465,17 @@ def volume_raycast(path: str | Path,
     defined per depth SAMPLE so the look depends on ``n_steps`` (the
     returned ``transmittance_min`` makes that dependence checkable:
     for a uniform field it equals ``(1-alpha)^n_inside`` exactly), and
-    the output is a standalone labelled PNG -- no CAD overlay, no gmsh
-    interactivity.
+    the output is a standalone labelled PNG with no gmsh interactivity.
 
     Args:
         path: .msh/.pos holding the field.
         png_out: output PNG (default: alongside the input).
         view: view name or index (default: the first view).
-        grid: resample resolution per axis (64 -> 262k probes).
+        grid: resample resolution per axis (8..128; 64 -> 262k probes).
         view_dir: "+x".."-z", "iso", or a world-space 3-vector pointing
             from the scene TOWARD the camera.
-        image_size: image width in pixels (height follows the aspect).
-        n_steps: depth samples per ray (default: 1.5 * grid).
+        image_size: image width in pixels (64..2048; height follows aspect).
+        n_steps: depth samples per ray (2..2048; default: 1.5 * grid).
         value_range: [lo, hi] normalization (default: the probed
             min/max; pass it explicitly to compare figures).
         alpha: opacity per depth sample at t = 1.
@@ -413,17 +496,50 @@ def volume_raycast(path: str | Path,
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
-    if grid < 8:
-        raise ValueError(f"grid must be >= 8, got {grid}")
-    if not 0.0 < alpha <= 1.0:
-        raise ValueError(f"alpha must be in (0, 1], got {alpha}")
-    if image_size < 64:
-        raise ValueError(f"image_size must be >= 64, got {image_size}")
+    grid = _bounded_int("grid", grid, 8, _MAX_GRID)
+    image_size = _bounded_int(
+        "image_size", image_size, 64, _MAX_IMAGE_SIZE)
+    if n_steps is not None:
+        n_steps = _bounded_int(
+            "n_steps", n_steps, 2, _MAX_DEPTH_STEPS)
+    alpha = _finite_float("alpha", alpha, positive=True)
+    if alpha > 1.0:
+        raise ValueError(f"alpha must be <= 1, got {alpha}")
+    alpha_power = _finite_float(
+        "alpha_power", alpha_power, nonnegative=True)
+    timeout_s = _finite_float("timeout_s", timeout_s, positive=True)
+    step_rel_size = _finite_float(
+        "step_rel_size", step_rel_size, positive=True)
+    if not _MIN_STEP_REL_SIZE <= step_rel_size <= 1.0:
+        raise ValueError(
+            f"step_rel_size must be in [{_MIN_STEP_REL_SIZE}, 1], got "
+            f"{step_rel_size}")
+    try:
+        cad_rgb = np.asarray(step_color, dtype=float).reshape(3)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("step_color must contain three finite RGB values") \
+            from exc
+    if not np.isfinite(cad_rgb).all() or np.any((cad_rgb < 0.0)
+                                                | (cad_rgb > 1.0)):
+        raise ValueError("step_color values must be finite and in [0, 1]")
+    camera_frame = _camera_frame(view_dir)
+    explicit_range: tuple[float, float] | None = None
+    if value_range is not None:
+        if not isinstance(value_range, (list, tuple)) or len(value_range) != 2:
+            raise ValueError("value_range must contain exactly [lo, hi]")
+        explicit_range = (
+            _finite_float("value_range[0]", value_range[0]),
+            _finite_float("value_range[1]", value_range[1]),
+        )
+        if not explicit_range[1] > explicit_range[0]:
+            raise ValueError("value_range must satisfy finite lo < hi")
 
     lo, hi = _bbox_from_msh(src)
-    lo = np.asarray(lo)
-    hi = np.asarray(hi)
-    span = np.maximum(hi - lo, 1e-30)
+    lo = np.asarray(lo, dtype=float)
+    hi = np.asarray(hi, dtype=float)
+    span = hi - lo
+    if not np.all(span > 0.0):
+        raise ValueError(f"{src.name} must have a nondegenerate 3D bounding box")
 
     # --- resample the field onto the regular grid (cell centres) -----
     axes = [lo[i] + span[i] * (np.arange(grid) + 0.5) / grid
@@ -435,20 +551,33 @@ def volume_raycast(path: str | Path,
     if vals is None:
         return {"ok": False, "error": f"grid probe failed: {info}"}
     mag = _magnitude(vals, info["ncomp"])
+    if not np.isfinite(mag[found]).all():
+        return {"ok": False,
+                "error": "grid probe returned non-finite field magnitudes"}
     V = mag.reshape(grid, grid, grid)
     M = found.reshape(grid, grid, grid).astype(np.float64)
     if not found.any():
         return {"ok": False,
                 "error": "no grid point landed inside the mesh"}
 
-    if value_range is None:
+    constant_range = False
+    if explicit_range is None:
         v_lo = float(mag[found].min())
         v_hi = float(mag[found].max())
+        constant_range = bool(np.isclose(
+            v_hi, v_lo, rtol=1.0e-12, atol=1.0e-15))
     else:
-        v_lo, v_hi = (float(v) for v in value_range)
-    if not v_hi > v_lo:
-        v_hi = v_lo + 1.0
-    T_norm = np.clip((V - v_lo) / (v_hi - v_lo), 0.0, 1.0)
+        v_lo, v_hi = explicit_range
+    if constant_range:
+        # A uniform auto-scaled field is the strongest visible value, not
+        # an all-zero image.  The found mask still keeps the exterior clear.
+        T_norm = M.copy()
+        colour_span = max(abs(v_lo), 1.0)
+        colorbar_lo = v_lo - colour_span
+        colorbar_hi = v_hi
+    else:
+        T_norm = np.clip((V - v_lo) / (v_hi - v_lo), 0.0, 1.0)
+        colorbar_lo, colorbar_hi = v_lo, v_hi
 
     # --- optional CAD overlay ----------------------------------------
     cad_nodes = cad_tris = None
@@ -461,7 +590,7 @@ def volume_raycast(path: str | Path,
                     "error": f"STEP tessellation failed: {cad_info}"}
 
     # --- camera and image plane --------------------------------------
-    right, up, d = _camera_frame(view_dir)
+    right, up, d = camera_frame
     centre = 0.5 * (lo + hi)
     corners = np.array([[lo[0] if i & 1 else hi[0],
                          lo[1] if i & 2 else hi[1],
@@ -473,17 +602,19 @@ def volume_raycast(path: str | Path,
     margin = 0.02 * max(np.ptp(pr), np.ptp(pu))
     r0, r1 = pr.min() - margin, pr.max() + margin
     u0, u1 = pu.min() - margin, pu.max() + margin
-    W = int(image_size)
-    H = max(int(round(W * (u1 - u0) / (r1 - r0))), 16)
+    W = image_size
+    H = max(round(W * (u1 - u0) / (r1 - r0)), 16)
+    if H > _MAX_IMAGE_SIZE:
+        raise ValueError(
+            f"projected image height {H} exceeds {_MAX_IMAGE_SIZE}; "
+            "reduce image_size or choose another view_dir")
     xs = r0 + (r1 - r0) * (np.arange(W) + 0.5) / W
     ys = u0 + (u1 - u0) * (np.arange(H) + 0.5) / H
     SX, SY = np.meshgrid(xs, ys)                      # [iy, ix], y up
     base = (centre[None, None, :] + SX[..., None] * right[None, None, :]
             + SY[..., None] * up[None, None, :])
 
-    n_depth = int(n_steps) if n_steps is not None else int(1.5 * grid)
-    if n_depth < 2:
-        raise ValueError(f"n_steps must be >= 2, got {n_steps}")
+    n_depth = n_steps if n_steps is not None else int(1.5 * grid)
     ds = float(np.ptp(pd)) / n_depth
     s_near = pd.max() - 0.5 * ds                      # near-to-far
 
@@ -500,8 +631,6 @@ def volume_raycast(path: str | Path,
         cad_depth, cad_shade = _cad_depth_buffer(
             cad_nodes, cad_tris, centre, right, up, d,
             r0, r1, u0, u1, W, H)
-    cad_rgb = np.asarray(step_color, dtype=float).reshape(3)
-
     def _composite_cad(mask, C, T):
         if not mask.any():
             return
@@ -557,7 +686,8 @@ def volume_raycast(path: str | Path,
     ax.set_xlabel(_axis_label(right))
     ax.set_ylabel(_axis_label(up))
     if colorbar:
-        sm = ScalarMappable(norm=Normalize(v_lo, v_hi), cmap=cmap_f)
+        sm = ScalarMappable(norm=Normalize(colorbar_lo, colorbar_hi),
+                            cmap=cmap_f)
         fig.colorbar(sm, ax=ax, shrink=0.85)
     fig.tight_layout()
     fig.savefig(out)
@@ -566,6 +696,7 @@ def volume_raycast(path: str | Path,
     result = {"ok": True, "png": str(out), "grid": grid,
               "n_depth_samples": n_depth,
               "value_range": [v_lo, v_hi],
+              "constant_auto_range": constant_range,
               "n_probes": int(info["n_points"]),
               "found_fraction": float(found.mean()),
               "transmittance_min": float(T.min()),
@@ -611,7 +742,7 @@ def lic(path: str | Path,
     -- individual curves cannot be probed the way ``flow_texture``
     lines can -- and it lives on a regular resample of the plane
     (``resolution`` pixels across the larger side).  Standalone
-    labelled PNG, axis-equal; no CAD overlay.
+    labelled PNG, axis-equal, with an optional CAD section outline.
 
     Args:
         path: .msh/.pos holding a vector view.
@@ -620,8 +751,8 @@ def lic(path: str | Path,
         plane: "xy" | "yz" | "xz" section plane.
         offset: signed offset of the plane from the bbox centre along
             its normal.
-        resolution: pixels across the larger in-plane span (>= 64).
-        kernel: convolution half-length in pixels (>= 2).
+        resolution: pixels across the larger in-plane span (64..2048).
+        kernel: convolution half-length in pixels (2..256).
         cmap: colormap for the |v| modulation.
         color_by_magnitude: False gives the plain grey LIC texture.
         seed: noise seed (deterministic output).
@@ -639,10 +770,18 @@ def lic(path: str | Path,
     if plane not in _LIC_PLANES:
         raise ValueError(f"unknown plane {plane!r} "
                          f"(available: {', '.join(sorted(_LIC_PLANES))})")
-    if resolution < 64:
-        raise ValueError(f"resolution must be >= 64, got {resolution}")
-    if kernel < 2:
-        raise ValueError(f"kernel must be >= 2, got {kernel}")
+    resolution = _bounded_int(
+        "resolution", resolution, 64, _MAX_LIC_RESOLUTION)
+    kernel = _bounded_int("kernel", kernel, 2, _MAX_LIC_KERNEL)
+    seed = _bounded_int("seed", seed, 0, 2 ** 64 - 1)
+    offset = _finite_float("offset", offset)
+    timeout_s = _finite_float("timeout_s", timeout_s, positive=True)
+    step_rel_size = _finite_float(
+        "step_rel_size", step_rel_size, positive=True)
+    if not _MIN_STEP_REL_SIZE <= step_rel_size <= 1.0:
+        raise ValueError(
+            f"step_rel_size must be in [{_MIN_STEP_REL_SIZE}, 1], got "
+            f"{step_rel_size}")
 
     a0, a1, an = _LIC_PLANES[plane]
     lo, hi = _bbox_from_msh(src)
@@ -650,7 +789,7 @@ def lic(path: str | Path,
     if span[a0] <= 0 or span[a1] <= 0:
         return {"ok": False,
                 "error": f"{src.name} is degenerate in the {plane} plane"}
-    mid = 0.5 * (lo[an] + hi[an]) + float(offset)
+    mid = 0.5 * (lo[an] + hi[an]) + offset
     if not lo[an] - 1e-12 <= mid <= hi[an] + 1e-12:
         return {"ok": False,
                 "error": f"plane offset {offset} puts the section at "
@@ -659,8 +798,8 @@ def lic(path: str | Path,
 
     # square pixels (axis-equal at the data level)
     h = max(span[a0], span[a1]) / (resolution - 1)
-    W = max(int(round(span[a0] / h)) + 1, 8)
-    H = max(int(round(span[a1] / h)) + 1, 8)
+    W = max(round(span[a0] / h) + 1, 8)
+    H = max(round(span[a1] / h) + 1, 8)
     us = lo[a0] + h * np.arange(W)
     vs = lo[a1] + h * np.arange(H)
     UU, VV = np.meshgrid(us, vs)                      # [iy, ix]
@@ -683,6 +822,9 @@ def lic(path: str | Path,
     Vc = vals[:, a1].reshape(H, W)
     Min = found.reshape(H, W)
     mag = np.sqrt(U * U + Vc * Vc)
+    if not np.isfinite(mag[Min]).all():
+        return {"ok": False,
+                "error": "plane probe returned non-finite field magnitudes"}
     nz = mag > (mag[Min].max() * 1e-9 if Min.any() else 1e-30)
     du = np.where(nz, U / np.where(nz, mag, 1.0), 0.0)
     dv = np.where(nz, Vc / np.where(nz, mag, 1.0), 0.0)

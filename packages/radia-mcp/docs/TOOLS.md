@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **965 tools** across 48 MCP servers.
+Total: **964 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -37,7 +37,7 @@ Total: **965 tools** across 48 MCP servers.
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 4 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
-| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 5 |
+| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 4 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 15 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
@@ -914,9 +914,8 @@ Module: `radia_mcp.maglev.server`
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
 | `maglev_status` | (no description) |
-| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
+| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 19 topics. |
 | `rotating_conductor_periodic_settling_gate` | Gate full-turn convergence of a rotating-conductor eddy response. |
-| `team28_cycle_averaged_motion_gate` | Gate TEAM 28 cycle-averaged motion evidence and reject transient overclaims. |
 
 ## `mcp-server-team-benchmark`
 

@@ -1,7 +1,7 @@
 {
  "schema": "radia.isochronous-topopt-shape-regen/v3",
  "stl": {
-  "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\pytest-of-Administrator\\pytest-1884\\shape_regen0\\design.stl",
+  "path": "design.stl",
   "n_faces": 1500,
   "n_vertices": 752,
   "volume": 0.0001278243893745155,
@@ -25,6 +25,6 @@
  "adjoint_iterations": [
   25
  ],
- "boundary_face_incident": "a bare-Sculpt export wrote surfaceelements=0 and the demag solve was silently demag-free (J=+37.137, DemagFactor 0); fixed by mesh-based geometry before export, gated by boundary_faces_ok + the vim.ChargeGram ZERO-boundary raise + the demag_factor_z_hex lock here",
- "tet_solver_negative": "16,102-tet native CG at chi=100 capped 20,000 iterations for mass-Riesz (tol 1e-10/1e-8/1e-6), Jacobi, and cluster-tree; tet export remains a gated mesh product, but production re-evaluation routes through the 1,537-hex Sculpt mesh"
+ "boundary_face_contract": "exported boundary faces must match the topological skin; ChargeGram also rejects a zero-boundary 3D mesh",
+ "tet_solver_scope": "tet export is a gated mesh artifact; production objective re-evaluation uses the all-hex route"
 }
