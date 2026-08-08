@@ -16,6 +16,7 @@ Exit code: 0 = all checks pass, 1 = validation finding, 2 = input error.
 import argparse
 from collections.abc import Mapping
 from datetime import datetime, timezone
+import gzip
 import importlib.metadata
 import json
 import os
@@ -71,6 +72,214 @@ def _labels(value):
 def _mesh_label(value):
     """Normalize transport whitespace without changing label semantics."""
     return str(value).strip()
+
+
+def _read_vol_text(path):
+    path = Path(path)
+    if path.suffix.lower() == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8-sig") as stream:
+            return stream.read()
+    return path.read_text(encoding="utf-8-sig")
+
+
+def _vol_counted_rows(lines, names, *, required):
+    if isinstance(names, str):
+        names = (names,)
+    lookup = {str(name).lower() for name in names}
+    for section_index, line in enumerate(lines):
+        if line.strip().lower() not in lookup:
+            continue
+        count_index = section_index + 1
+        while count_index < len(lines):
+            count_line = lines[count_index].strip()
+            if count_line and not count_line.startswith("#"):
+                break
+            count_index += 1
+        if count_index >= len(lines):
+            raise ValueError(f".vol section {line.strip()!r} has no row count")
+        try:
+            count = int(lines[count_index].split()[0])
+        except (IndexError, ValueError) as exc:
+            raise ValueError(
+                f".vol section {line.strip()!r} has an invalid row count"
+            ) from exc
+        if count < 0:
+            raise ValueError(f".vol section {line.strip()!r} has a negative row count")
+        rows = []
+        row_index = count_index + 1
+        while row_index < len(lines) and len(rows) < count:
+            row = lines[row_index].strip()
+            if row and not row.startswith("#"):
+                rows.append(row)
+            row_index += 1
+        if len(rows) != count:
+            raise ValueError(
+                f".vol section {line.strip()!r} ended after {len(rows)} of {count} rows"
+            )
+        return rows
+    if required:
+        joined = " or ".join(repr(name) for name in names)
+        raise ValueError(f".vol section {joined} not found")
+    return []
+
+
+def _boundary_domain_ownership_from_text(text):
+    lines = str(text).splitlines()
+    volume_rows = _vol_counted_rows(lines, "volumeelements", required=True)
+    surface_rows = _vol_counted_rows(
+        lines, ("surfaceelements", "surfaceelementsuv"), required=True
+    )
+    material_rows = _vol_counted_rows(lines, "materials", required=False)
+
+    volume_domain_counts = {}
+    invalid_volume_rows = []
+    for row_number, row in enumerate(volume_rows, start=1):
+        fields = row.split()
+        try:
+            domain = int(fields[0])
+        except (IndexError, ValueError):
+            invalid_volume_rows.append(row_number)
+            continue
+        if domain <= 0:
+            invalid_volume_rows.append(row_number)
+            continue
+        volume_domain_counts[domain] = volume_domain_counts.get(domain, 0) + 1
+
+    material_ids = []
+    for row in material_rows:
+        fields = row.split()
+        try:
+            material_ids.append(int(fields[0]))
+        except (IndexError, ValueError):
+            continue
+
+    pair_counts = {}
+    domain_surface_counts = {}
+    exterior_domain_counts = {}
+    internal_pair_counts = {}
+    invalid_surface_rows = []
+    invalid_surface_connectivity_rows = []
+    duplicate_surface_connectivity_rows = []
+    seen_surface_connectivity = {}
+    zero_zero_rows = []
+    equal_domain_rows = []
+    referenced_domains = set()
+    for row_number, row in enumerate(surface_rows, start=1):
+        fields = row.split()
+        try:
+            domain_in = int(fields[2])
+            domain_out = int(fields[3])
+        except (IndexError, ValueError):
+            invalid_surface_rows.append(row_number)
+            continue
+        pair = f"{domain_in}->{domain_out}"
+        pair_counts[pair] = pair_counts.get(pair, 0) + 1
+        try:
+            node_count = int(fields[4])
+            if node_count not in (3, 4) or len(fields) < 5 + node_count:
+                raise ValueError
+            connectivity = (
+                node_count,
+                *sorted(int(value) for value in fields[5:5 + node_count]),
+            )
+        except (IndexError, ValueError):
+            invalid_surface_connectivity_rows.append(row_number)
+        else:
+            if connectivity in seen_surface_connectivity:
+                duplicate_surface_connectivity_rows.append(row_number)
+            else:
+                seen_surface_connectivity[connectivity] = row_number
+        if domain_in == 0 and domain_out == 0:
+            zero_zero_rows.append(row_number)
+        if domain_in != 0 and domain_in == domain_out:
+            equal_domain_rows.append(row_number)
+        if (domain_in == 0) != (domain_out == 0):
+            domain = domain_in or domain_out
+            exterior_domain_counts[domain] = exterior_domain_counts.get(domain, 0) + 1
+        elif domain_in != 0 and domain_out != 0 and domain_in != domain_out:
+            lo, hi = sorted((domain_in, domain_out))
+            interface = f"{lo}<->{hi}"
+            internal_pair_counts[interface] = internal_pair_counts.get(interface, 0) + 1
+        for domain in (domain_in, domain_out):
+            if domain != 0:
+                referenced_domains.add(domain)
+                domain_surface_counts[domain] = domain_surface_counts.get(domain, 0) + 1
+
+    volume_domains = set(volume_domain_counts)
+    unknown_surface_domains = sorted(referenced_domains - volume_domains)
+    unreferenced_volume_domains = sorted(volume_domains - referenced_domains)
+    missing_material_ids = sorted(volume_domains - set(material_ids)) if material_rows else []
+
+    issues = []
+    if invalid_volume_rows:
+        issues.append(
+            "invalid or non-positive volume domain rows: "
+            + ", ".join(map(str, invalid_volume_rows))
+        )
+    if invalid_surface_rows:
+        issues.append(
+            "surface rows without integer DomainIn/DomainOut: "
+            + ", ".join(map(str, invalid_surface_rows))
+        )
+    if invalid_surface_connectivity_rows:
+        issues.append(
+            "surface rows with invalid triangle/quad connectivity: "
+            + ", ".join(map(str, invalid_surface_connectivity_rows))
+        )
+    if duplicate_surface_connectivity_rows:
+        issues.append(
+            "surface connectivity exported more than once: "
+            + ", ".join(map(str, duplicate_surface_connectivity_rows))
+        )
+    if zero_zero_rows:
+        issues.append(
+            "surface rows with no owning domain (0->0): "
+            + ", ".join(map(str, zero_zero_rows))
+        )
+    if equal_domain_rows:
+        issues.append(
+            "surface rows use the same nonzero domain on both sides: "
+            + ", ".join(map(str, equal_domain_rows))
+        )
+    if unknown_surface_domains:
+        issues.append(
+            "surface rows reference unknown volume domains: "
+            + ", ".join(map(str, unknown_surface_domains))
+        )
+    if unreferenced_volume_domains:
+        issues.append(
+            "volume domains absent from all boundary/interface descriptors: "
+            + ", ".join(map(str, unreferenced_volume_domains))
+        )
+
+    return {
+        "passed": not issues,
+        "volume_element_count": len(volume_rows),
+        "surface_element_count": len(surface_rows),
+        "volume_domain_counts": dict(sorted(volume_domain_counts.items())),
+        "surface_domain_pair_counts": dict(sorted(pair_counts.items())),
+        "domain_surface_incidence_counts": dict(sorted(domain_surface_counts.items())),
+        "exterior_surface_element_count": sum(exterior_domain_counts.values()),
+        "exterior_surface_domain_counts": dict(sorted(exterior_domain_counts.items())),
+        "internal_interface_element_count": sum(internal_pair_counts.values()),
+        "internal_interface_domain_pair_counts": dict(sorted(internal_pair_counts.items())),
+        "material_ids": sorted(set(material_ids)),
+        "missing_material_ids": missing_material_ids,
+        "unknown_surface_domains": unknown_surface_domains,
+        "unreferenced_volume_domains": unreferenced_volume_domains,
+        "invalid_volume_rows": invalid_volume_rows,
+        "invalid_surface_rows": invalid_surface_rows,
+        "invalid_surface_connectivity_rows": invalid_surface_connectivity_rows,
+        "duplicate_surface_connectivity_rows": duplicate_surface_connectivity_rows,
+        "zero_zero_rows": zero_zero_rows,
+        "equal_domain_rows": equal_domain_rows,
+        "issues": issues,
+    }
+
+
+def check_vol_boundary_domain_ownership(vol_path):
+    """Audit raw ``.vol`` DomainIn/DomainOut coverage before solver use."""
+    return _boundary_domain_ownership_from_text(_read_vol_text(vol_path))
 
 
 def _load_label_contract(contract):
@@ -655,6 +864,22 @@ def _reference_values(cad_reference, name):
     return checked
 
 
+def _reference_labels(cad_reference, name):
+    values = cad_reference.get(name, [])
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        raise ValueError(f"CAD reference {name!r} entry must be an array")
+    checked = []
+    for index, value in enumerate(values):
+        label = str(value).strip()
+        if not label:
+            raise ValueError(f"CAD reference {name}[{index}] must be a non-empty label")
+        if label not in checked:
+            checked.append(label)
+    return checked
+
+
 def _unique_messages(messages):
     return list(dict.fromkeys(str(message) for message in messages if str(message)))
 
@@ -706,6 +931,7 @@ def check_consistency(
     cad_reference = (
         _load_json_object(cad_file, "CAD reference") if cad_available else {}
     )
+    boundary_domain_ownership = check_vol_boundary_domain_ownership(vol_file)
 
     label_contract = _load_label_contract(contract)
     contract_quality = label_contract.get("quality", {})
@@ -731,12 +957,20 @@ def check_consistency(
     )
 
     warnings = list(labels["warnings"])
+    warnings.extend(boundary_domain_ownership["issues"])
     if quality_result is not None:
         warnings.extend(quality_result["warnings"])
 
     cad_volumes = _reference_values(cad_reference, "materials")
     cad_areas = _reference_values(cad_reference, "boundaries")
     cad_lengths = _reference_values(cad_reference, "edges")
+    mesh_only_materials = _reference_labels(cad_reference, "mesh_only_materials")
+    overlap = sorted(set(cad_volumes) & set(mesh_only_materials))
+    if overlap:
+        raise ValueError(
+            "CAD reference materials and mesh_only_materials overlap: "
+            + ", ".join(overlap)
+        )
 
     materials = []
     boundaries = []
@@ -759,6 +993,8 @@ def check_consistency(
                             f'Volume "{material}": {error:+.2e}% '
                             f"(ng={ng_volume:.6e}, cad={cad_volume:.6e})"
                         )
+            elif material in mesh_only_materials:
+                entry["cad_reference_status"] = "mesh_only_no_cad_volume"
             materials.append(entry)
 
         for boundary in labels["boundaries"]:
@@ -766,6 +1002,7 @@ def check_consistency(
                 Integrate(
                     CF(1), mesh, BND,
                     definedon=mesh.Boundaries(boundary),
+                    order=16,
                 ),
                 f'area for boundary "{boundary}"',
             )
@@ -814,7 +1051,10 @@ def check_consistency(
         mesh_boundaries = set(labels["boundaries"])
         for label in sorted(set(cad_volumes) - mesh_materials):
             warnings.append(f'CAD material "{label}" is absent from the mesh')
-        for label in sorted(mesh_materials - set(cad_volumes)):
+        for label in sorted(set(mesh_only_materials) - mesh_materials):
+            warnings.append(f'Mesh-only material "{label}" is absent from the mesh')
+        referenced_materials = set(cad_volumes) | set(mesh_only_materials)
+        for label in sorted(mesh_materials - referenced_materials):
             warnings.append(f'Material "{label}" has no CAD volume reference')
         for label in sorted(set(cad_areas) - mesh_boundaries):
             warnings.append(f'CAD boundary "{label}" is absent from the mesh')
@@ -898,6 +1138,7 @@ def check_consistency(
             "available": cad_available,
             "file": str(cad_file) if cad_available else None,
             "auto_discovered": cad_available and not explicit_json,
+            "mesh_only_materials": mesh_only_materials,
             "metadata_checks": metadata_checks,
         },
         "mesh": mesh_summary,
@@ -906,6 +1147,7 @@ def check_consistency(
         "n_points": mesh_summary["n_points"],
         "labels": labels,
         "quality": quality_result,
+        "boundary_domain_ownership": boundary_domain_ownership,
         "materials": materials,
         "boundaries": boundaries,
         "edges": edges,

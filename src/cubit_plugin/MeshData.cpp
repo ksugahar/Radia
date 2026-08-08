@@ -217,6 +217,27 @@ void MeshData::extract_sidesets(MeshExportInterface *iface)
       continue;
     sg.name = iface->get_sideset_name(ssh);
 
+    // A sideset can own geometry surfaces, individual mesh faces, or both.
+    // Sculpt imports its generated hex mesh as free elements, so its
+    // gen_sidesets faces have no parent Cubit surface.  Keep one canonical
+    // connectivity set and collect both representations; otherwise the
+    // exported .vol silently loses the complete exterior skin.
+    std::set<std::vector<int>> seen_faces;
+    auto append_face = [&](ElementType type, std::vector<int> conn, int nv) {
+      if ((int)conn.size() < nv) return;
+      conn.resize(nv);
+      std::vector<int> key(conn);
+      std::sort(key.begin(), key.end());
+      if (!seen_faces.insert(key).second) return;
+
+      MeshElement face;
+      face.group_id = sg.id;
+      face.type = type;
+      face.nv = nv;
+      face.conn = std::move(conn);
+      sg.faces.push_back(std::move(face));
+    };
+
     // Get surfaces in this sideset
     std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
 
@@ -225,32 +246,24 @@ void MeshData::extract_sidesets(MeshExportInterface *iface)
       std::vector<int> tri_ids = CubitInterface::parse_cubit_list(
           "tri", "in surface " + std::to_string(sid));
       for (int tid : tri_ids) {
-        std::vector<int> conn = CubitInterface::get_connectivity("tri", tid);
-        if ((int)conn.size() < 3) continue;
-
-        MeshElement face;
-        face.group_id = sg.id;
-        face.type = TRI3;
-        face.nv = 3;
-        face.conn = {conn[0], conn[1], conn[2]};
-        sg.faces.push_back(std::move(face));
+        append_face(TRI3, CubitInterface::get_connectivity("tri", tid), 3);
       }
 
       // Quads on this surface (hex/wedge boundary faces)
       std::vector<int> face_ids = CubitInterface::parse_cubit_list(
           "face", "in surface " + std::to_string(sid));
       for (int fid : face_ids) {
-        std::vector<int> conn = CubitInterface::get_connectivity("face", fid);
-        if ((int)conn.size() < 4) continue;
-
-        MeshElement face;
-        face.group_id = sg.id;
-        face.type = QUAD4;
-        face.nv = 4;
-        face.conn = {conn[0], conn[1], conn[2], conn[3]};
-        sg.faces.push_back(std::move(face));
+        append_face(QUAD4, CubitInterface::get_connectivity("face", fid), 4);
       }
     }
+
+    // Direct mesh entities are essential for Sculpt/free-mesh output.  The
+    // Cubit API documents these separately from get_sideset_surfaces().
+    for (int tid : CubitInterface::get_sideset_tris(sg.id))
+      append_face(TRI3, CubitInterface::get_connectivity("tri", tid), 3);
+    for (int qid : CubitInterface::get_sideset_quads(sg.id))
+      append_face(QUAD4, CubitInterface::get_connectivity("face", qid), 4);
+
     sidesets.push_back(std::move(sg));
   }
 }

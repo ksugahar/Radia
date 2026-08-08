@@ -4236,6 +4236,124 @@ def cubit_submodel_boundary_handoff_mesh_package_gate(
     }
 
 
+def _summarize_vol_boundary_domain_ownership(
+    surface_rows: Iterable[str],
+    volume_rows: Iterable[str],
+    materials: dict[int, str],
+) -> dict[str, object]:
+    """Summarize raw ``DomainIn``/``DomainOut`` coverage in a ``.vol``."""
+
+    surface_rows = list(surface_rows)
+    volume_rows = list(volume_rows)
+    volume_domain_counts: Counter[int] = Counter()
+    invalid_volume_rows: list[int] = []
+    for row_number, row in enumerate(volume_rows, start=1):
+        fields = row.split()
+        try:
+            domain = int(fields[0])
+        except (IndexError, ValueError):
+            invalid_volume_rows.append(row_number)
+            continue
+        if domain <= 0:
+            invalid_volume_rows.append(row_number)
+            continue
+        volume_domain_counts[domain] += 1
+
+    pair_counts: Counter[str] = Counter()
+    incidence_counts: Counter[int] = Counter()
+    exterior_domain_counts: Counter[int] = Counter()
+    internal_pair_counts: Counter[str] = Counter()
+    referenced_domains: set[int] = set()
+    invalid_surface_rows: list[int] = []
+    invalid_surface_connectivity_rows: list[int] = []
+    duplicate_surface_connectivity_rows: list[int] = []
+    seen_surface_connectivity: dict[tuple[int, ...], int] = {}
+    zero_zero_rows: list[int] = []
+    equal_domain_rows: list[int] = []
+    for row_number, row in enumerate(surface_rows, start=1):
+        fields = row.split()
+        try:
+            domain_in = int(fields[2])
+            domain_out = int(fields[3])
+        except (IndexError, ValueError):
+            invalid_surface_rows.append(row_number)
+            continue
+        pair_counts[f"{domain_in}->{domain_out}"] += 1
+        try:
+            node_count = int(fields[4])
+            if node_count not in SURFACE_KIND_BY_NP or len(fields) < 5 + node_count:
+                raise ValueError
+            connectivity = (
+                node_count,
+                *sorted(int(value) for value in fields[5:5 + node_count]),
+            )
+        except (IndexError, ValueError):
+            invalid_surface_connectivity_rows.append(row_number)
+        else:
+            if connectivity in seen_surface_connectivity:
+                duplicate_surface_connectivity_rows.append(row_number)
+            else:
+                seen_surface_connectivity[connectivity] = row_number
+        if domain_in == 0 and domain_out == 0:
+            zero_zero_rows.append(row_number)
+        if domain_in != 0 and domain_in == domain_out:
+            equal_domain_rows.append(row_number)
+        if (domain_in == 0) != (domain_out == 0):
+            exterior_domain_counts[domain_in or domain_out] += 1
+        elif domain_in != 0 and domain_out != 0 and domain_in != domain_out:
+            lo, hi = sorted((domain_in, domain_out))
+            internal_pair_counts[f"{lo}<->{hi}"] += 1
+        for domain in (domain_in, domain_out):
+            if domain != 0:
+                referenced_domains.add(domain)
+                incidence_counts[domain] += 1
+
+    volume_domains = set(volume_domain_counts)
+    unknown_surface_domains = sorted(referenced_domains - volume_domains)
+    unreferenced_volume_domains = sorted(volume_domains - referenced_domains)
+    missing_material_ids = sorted(volume_domains - set(materials)) if materials else []
+    issues: list[str] = []
+    if invalid_volume_rows:
+        issues.append("invalid or non-positive volume-domain rows")
+    if invalid_surface_rows:
+        issues.append("surface rows without integer DomainIn/DomainOut")
+    if invalid_surface_connectivity_rows:
+        issues.append("surface rows with invalid triangle/quad connectivity")
+    if duplicate_surface_connectivity_rows:
+        issues.append("surface connectivity is exported more than once")
+    if zero_zero_rows:
+        issues.append("surface rows with no owning domain (0->0)")
+    if equal_domain_rows:
+        issues.append("surface rows with the same nonzero domain on both sides")
+    if unknown_surface_domains:
+        issues.append("surface rows reference unknown volume domains")
+    if unreferenced_volume_domains:
+        issues.append("volume domains are absent from all boundary/interface descriptors")
+
+    return {
+        "status": "ok" if not issues else "needs_attention",
+        "passed": not issues,
+        "volume_domain_counts": dict(sorted(volume_domain_counts.items())),
+        "surface_domain_pair_counts": dict(sorted(pair_counts.items())),
+        "domain_surface_incidence_counts": dict(sorted(incidence_counts.items())),
+        "exterior_surface_element_count": sum(exterior_domain_counts.values()),
+        "exterior_surface_domain_counts": dict(sorted(exterior_domain_counts.items())),
+        "internal_interface_element_count": sum(internal_pair_counts.values()),
+        "internal_interface_domain_pair_counts": dict(sorted(internal_pair_counts.items())),
+        "material_ids": sorted(materials),
+        "missing_material_ids": missing_material_ids,
+        "unknown_surface_domains": unknown_surface_domains,
+        "unreferenced_volume_domains": unreferenced_volume_domains,
+        "invalid_volume_rows": invalid_volume_rows,
+        "invalid_surface_rows": invalid_surface_rows,
+        "invalid_surface_connectivity_rows": invalid_surface_connectivity_rows,
+        "duplicate_surface_connectivity_rows": duplicate_surface_connectivity_rows,
+        "zero_zero_rows": zero_zero_rows,
+        "equal_domain_rows": equal_domain_rows,
+        "issues": issues,
+    }
+
+
 def summarize_netgen_vol_inventory(text: str, source: str | None = None) -> dict[str, object]:
     """Return mixed-element inventory for a Netgen ``.vol`` text.
 
@@ -4261,6 +4379,9 @@ def summarize_netgen_vol_inventory(text: str, source: str | None = None) -> dict
     volume_kind_counts = _count_by_np(volume_rows, 1, VOLUME_KIND_BY_NP)
     materials = _parse_materials(material_rows)
     boundary_names = _parse_named_rows(boundary_rows)
+    boundary_domain_ownership = _summarize_vol_boundary_domain_ownership(
+        surface_rows, volume_rows, materials
+    )
     is_tri_tet_only = (
         set(surface_kind_counts).issubset({"triangle"})
         and set(volume_kind_counts).issubset({"tet"})
@@ -4288,6 +4409,7 @@ def summarize_netgen_vol_inventory(text: str, source: str | None = None) -> dict
         "points": len(point_rows),
         "materials": materials,
         "boundary_names": boundary_names,
+        "boundary_domain_ownership": boundary_domain_ownership,
         "curvedelements_present": curvedelements_present,
         "is_tri_tet_only": is_tri_tet_only,
         "has_mixed_hex_transition": has_mixed_hex_transition,
