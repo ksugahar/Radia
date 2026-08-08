@@ -29,6 +29,11 @@ class _Mesh:
     def GetCurveOrder(self):
         return self._curve_order
 
+    def GetNE(self, _kind):
+        # the boundary-face fail-loud gate asks for BND elements; the mock
+        # stands in for a healthy mesh with a nonempty skin
+        return 1
+
 
 class _FES:
     globalorder = 1
