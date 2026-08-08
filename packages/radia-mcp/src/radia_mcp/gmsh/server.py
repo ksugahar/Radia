@@ -77,6 +77,8 @@ from .post_process import (
     view_min_max,
     warp_view,
 )
+from .raster import lic as _lic
+from .raster import volume_raycast as _volume_raycast
 from .render import (
     export_animation,
     render_montage,
@@ -2338,6 +2340,105 @@ def gmsh_time_series(paths: list, view: str | int | None = None,
                        points=points,
                        plot_png=_abs_path(plot_png) if plot_png else None,
                        **kwargs)
+
+
+@mcp.tool()
+def gmsh_volume_raycast(path: str, png_out: str | None = None,
+                        view: str | int | None = None,
+                        grid: int = 64,
+                        view_dir: str | list = "iso",
+                        image_size: int = 560,
+                        n_steps: int | None = None,
+                        value_range: list | None = None,
+                        alpha: float = 0.05,
+                        alpha_power: float = 2.0,
+                        cmap: str = "jet",
+                        colorbar: bool = True) -> dict:
+    """
+    TRUE ray-cast volume rendering (emission-absorption, front-to-back).
+
+    Closes the "per-slice, not per-ray" limit of gmsh_volume_render:
+    the field is resampled onto a grid^3 regular grid by PROBING gmsh
+    (real field evaluations on the mesh, outside = transparent), then
+    orthographic rays march near-to-far with physical occlusion --
+    C += T*a*colour(v); T *= (1-a) -- the same resample-to-image
+    approach ParaView's GPU volume mode uses.
+
+    Honest limits: fidelity lives on the resample grid (one probe per
+    grid point: 64^3 = 262k probes, tens of seconds); opacity is per
+    depth SAMPLE, so the look depends on n_steps (the returned
+    transmittance_min equals (1-alpha)^n exactly for a uniform field
+    -- tested); output is a standalone labelled PNG (axis-equal), no
+    CAD overlay, no gmsh interactivity. For an in-gmsh figure that can
+    overlay CAD, use gmsh_volume_render (slice stack) instead.
+
+    Args:
+        path: .msh/.pos holding the field.
+        png_out: output PNG (default: alongside the input).
+        view: view name or index (default: the first view).
+        grid: resample resolution per axis (>= 8).
+        view_dir: "+x".."-z" | "iso" | world 3-vector pointing from
+                  the scene TOWARD the camera.
+        image_size: image width in pixels (>= 64).
+        n_steps: depth samples per ray (default 1.5 * grid).
+        value_range: [lo, hi] normalization; pass explicitly to make
+                     figures comparable (see gmsh_field_range).
+        alpha: opacity per depth sample at the top of the range.
+        alpha_power: opacity exponent (2 fades low values out).
+        cmap: matplotlib colormap name.
+        colorbar: draw the value colorbar.
+    """
+    return _volume_raycast(_abs_path(path),
+                           _abs_path(png_out) if png_out else None,
+                           view=view, grid=grid, view_dir=view_dir,
+                           image_size=image_size, n_steps=n_steps,
+                           value_range=value_range, alpha=alpha,
+                           alpha_power=alpha_power, cmap=cmap,
+                           colorbar=colorbar)
+
+
+@mcp.tool()
+def gmsh_lic(path: str, png_out: str | None = None,
+             view: str | int | None = None,
+             plane: str = "xy", offset: float = 0.0,
+             resolution: int = 420,
+             kernel: int = 18,
+             cmap: str = "jet",
+             color_by_magnitude: bool = True,
+             seed: int = 0) -> dict:
+    """
+    TRUE line integral convolution on a section plane.
+
+    Closes the "does not fill every pixel" limit of gmsh_flow_texture:
+    white noise is convolved along the in-plane vector field (RK2
+    advection, box kernel of half-length `kernel` pixels, forward and
+    backward), so EVERY pixel carries the local flow direction;
+    color_by_magnitude modulates the streaks with |v| (the Surface LIC
+    look). Field samples are gmsh probes on the actual mesh.
+
+    Honest limits: the picture is direction texture, not trajectories
+    (individual curves cannot be probed -- gmsh_flow_texture keeps
+    that property); it lives on a regular resample of the plane
+    (resolution pixels, one probe each); standalone labelled PNG
+    (axis-equal), no CAD overlay.
+
+    Args:
+        path: .msh/.pos holding a VECTOR view.
+        png_out: output PNG (default: alongside the input).
+        view: view name or index (default: the first view).
+        plane: "xy" | "yz" | "xz" section plane.
+        offset: signed plane offset from the bbox centre; a plane
+                outside the mesh is refused, not rendered empty.
+        resolution: pixels across the larger in-plane span (>= 64).
+        kernel: convolution half-length in pixels (>= 2).
+        cmap: colormap for the |v| modulation.
+        color_by_magnitude: False gives the plain grey LIC texture.
+        seed: noise seed (output is deterministic per seed -- tested).
+    """
+    return _lic(_abs_path(path), _abs_path(png_out) if png_out else None,
+                view=view, plane=plane, offset=offset,
+                resolution=resolution, kernel=kernel, cmap=cmap,
+                color_by_magnitude=color_by_magnitude, seed=seed)
 
 
 if __name__ == '__main__':
