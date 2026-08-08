@@ -97,6 +97,162 @@ with open(out_path, "w", encoding="utf-8") as f:
 """
 
 
+_TESSELLATE_SCRIPT = r"""
+import json
+import sys
+
+import numpy as np
+
+nodes_path, tris_path, cfg_path, out_path = sys.argv[1:5]
+result = {"ok": False}
+try:
+    with open(cfg_path, encoding="utf-8") as f:
+        cfg = json.load(f)
+    import gmsh
+    gmsh.initialize(["-noconfig"])
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("cad")
+        for f in cfg["files"]:
+            gmsh.model.occ.importShapes(f)
+        gmsh.model.occ.synchronize()
+        bb = gmsh.model.getBoundingBox(-1, -1)
+        diag = max(((bb[3] - bb[0]) ** 2 + (bb[4] - bb[1]) ** 2
+                    + (bb[5] - bb[2]) ** 2) ** 0.5, 1e-30)
+        # display tessellation only -- never written as a mesh file and
+        # never a solver mesh (GMSH mesh generation stays banned for
+        # solving; this is what the GUI itself does to shade a face)
+        gmsh.option.setNumber("Mesh.MeshSizeMax",
+                              diag * float(cfg.get("rel_size", 0.04)))
+        gmsh.option.setNumber("Mesh.MeshSizeMin", diag * 0.004)
+        gmsh.model.mesh.generate(2)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        xyz = np.asarray(coords, dtype=np.float64).reshape(-1, 3)
+        remap = {int(t): i for i, t in enumerate(tags)}
+        tris = []
+        etypes, _etags, enodes = gmsh.model.mesh.getElements(2)
+        for et, conn in zip(etypes, enodes):
+            arr = np.asarray(conn, dtype=np.int64)
+            if int(et) == 2:                      # 3-node triangles
+                tris.append(arr.reshape(-1, 3))
+            elif int(et) == 3:                    # quads -> two tris
+                q = arr.reshape(-1, 4)
+                tris.append(np.concatenate([q[:, [0, 1, 2]],
+                                            q[:, [0, 2, 3]]]))
+        if not tris:
+            raise RuntimeError("tessellation produced no surface elements")
+        tri = np.concatenate(tris)
+        tri = np.vectorize(remap.__getitem__)(tri)
+        np.save(nodes_path, xyz)
+        np.save(tris_path, tri.astype(np.int64))
+        result = {"ok": True, "n_nodes": int(len(xyz)),
+                  "n_triangles": int(len(tri))}
+    finally:
+        gmsh.finalize()
+except Exception as exc:                                   # noqa: BLE001
+    result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(result, f)
+"""
+
+
+def _tessellate_step(step_files, *, rel_size: float = 0.04,
+                     timeout_s: float = 600.0):
+    """Display tessellation of STEP/BREP files -> (nodes, triangles).
+
+    Runs gmsh's OCC import + 2D mesh in a subprocess purely to obtain
+    shaded-display triangles (the same thing the gmsh GUI does when it
+    shades a geometry face).  Coordinates come through unchanged, so a
+    radia/netgen STEP (meters) lands 1:1 on the field data; an external
+    mm STEP will be 1000x off -- same caveat as gmsh_render.
+    """
+    import numpy as np
+
+    files = [str(Path(f)) for f in step_files]
+    missing = [f for f in files if not Path(f).is_file()]
+    if missing:
+        return None, None, {"ok": False,
+                            "error": f"STEP file(s) not found: {missing}"}
+    with tempfile.TemporaryDirectory(prefix="radia_mcp_tess_") as work:
+        w = Path(work)
+        (w / "cfg.json").write_text(
+            json.dumps({"files": files, "rel_size": rel_size}),
+            encoding="utf-8")
+        res = run_gmsh_json_subprocess(
+            _TESSELLATE_SCRIPT,
+            [str(w / "nodes.npy"), str(w / "tris.npy"),
+             str(w / "cfg.json")],
+            timeout_s=timeout_s, prefix="radia_mcp_raster_")
+        if not res.get("ok"):
+            return None, None, res
+        nodes = np.load(w / "nodes.npy")
+        tris = np.load(w / "tris.npy")
+    return nodes, tris, res
+
+
+def _cad_depth_buffer(nodes, tris, centre, right, up, d,
+                      r0, r1, u0, u1, W, H):
+    """Orthographic z-buffer of the CAD triangles in screen space.
+
+    Returns (depth, shade): per-pixel nearest surface depth in
+    d-projection units (-inf where no CAD) and the Lambert factor
+    |n . d| of that surface.  Pure numpy scanline over each triangle's
+    pixel bbox -- a few thousand display triangles rasterize in
+    seconds, and per-ray occlusion against the volume then follows
+    from comparing depths during the march.
+    """
+    import numpy as np
+
+    rel = nodes - centre[None, :]
+    sx = rel @ right
+    sy = rel @ up
+    sd = rel @ d
+    px = (sx - r0) / (r1 - r0) * W - 0.5
+    py = (sy - u0) / (u1 - u0) * H - 0.5
+
+    depth = np.full((H, W), -np.inf)
+    shade = np.zeros((H, W))
+    v0, v1, v2 = tris[:, 0], tris[:, 1], tris[:, 2]
+    e1 = nodes[v1] - nodes[v0]
+    e2 = nodes[v2] - nodes[v0]
+    n = np.cross(e1, e2)
+    nn = np.linalg.norm(n, axis=1)
+    ok = nn > 1e-30
+    lambert = np.zeros(len(tris))
+    lambert[ok] = np.abs((n[ok] / nn[ok, None]) @ d)
+
+    for t in range(len(tris)):
+        ia, ib, ic = tris[t]
+        xs = (px[ia], px[ib], px[ic])
+        ys = (py[ia], py[ib], py[ic])
+        x_lo = max(int(np.floor(min(xs))), 0)
+        x_hi = min(int(np.ceil(max(xs))), W - 1)
+        y_lo = max(int(np.floor(min(ys))), 0)
+        y_hi = min(int(np.ceil(max(ys))), H - 1)
+        if x_hi < x_lo or y_hi < y_lo:
+            continue
+        gx, gy = np.meshgrid(np.arange(x_lo, x_hi + 1),
+                             np.arange(y_lo, y_hi + 1))
+        det = ((ys[1] - ys[2]) * (xs[0] - xs[2])
+               + (xs[2] - xs[1]) * (ys[0] - ys[2]))
+        if abs(det) < 1e-12:
+            continue
+        w0 = ((ys[1] - ys[2]) * (gx - xs[2])
+              + (xs[2] - xs[1]) * (gy - ys[2])) / det
+        w1 = ((ys[2] - ys[0]) * (gx - xs[2])
+              + (xs[0] - xs[2]) * (gy - ys[2])) / det
+        w2 = 1.0 - w0 - w1
+        inside = (w0 >= -1e-9) & (w1 >= -1e-9) & (w2 >= -1e-9)
+        if not inside.any():
+            continue
+        z = w0 * sd[ia] + w1 * sd[ib] + w2 * sd[ic]
+        sub = depth[y_lo:y_hi + 1, x_lo:x_hi + 1]
+        upd = inside & (z > sub)
+        sub[upd] = z[upd]
+        shade[y_lo:y_hi + 1, x_lo:x_hi + 1][upd] = lambert[t]
+    return depth, shade
+
+
 def _probe_grid(path: Path, points, *, view, step: int = 0,
                 timeout_s: float = 900.0):
     """Probe a flat (N, 3) point array; returns (values, found, ncomp).
@@ -202,6 +358,10 @@ def volume_raycast(path: str | Path,
                    alpha_power: float = 2.0,
                    cmap: str = "jet",
                    colorbar: bool = True,
+                   step_files: list[str | Path] | None = None,
+                   step_color: tuple[float, float, float] = (0.55, 0.57,
+                                                             0.62),
+                   step_rel_size: float = 0.04,
                    timeout_s: float = 900.0) -> dict[str, Any]:
     """TRUE ray-cast volume rendering (emission-absorption, front-to-back).
 
@@ -238,6 +398,15 @@ def volume_raycast(path: str | Path,
         alpha: opacity per depth sample at t = 1.
         alpha_power: opacity exponent (2 fades low values out).
         cmap: matplotlib colormap name.
+        step_files: STEP/BREP files rendered as OPAQUE shaded surfaces
+            INSIDE the volume compositing -- each ray stops where it
+            meets the CAD, so the geometry occludes the field behind it
+            and the field in front glows over it (the mixed
+            geometry+volume scene ParaView builds with its depth
+            buffer).  Radia/netgen STEP is meters and lands 1:1;
+            external mm CAD is 1000x off (same caveat as gmsh_render).
+        step_color: CAD base colour (Lambert-shaded).
+        step_rel_size: display-tessellation size vs the CAD diagonal.
     """
     import numpy as np
 
@@ -281,13 +450,25 @@ def volume_raycast(path: str | Path,
         v_hi = v_lo + 1.0
     T_norm = np.clip((V - v_lo) / (v_hi - v_lo), 0.0, 1.0)
 
+    # --- optional CAD overlay ----------------------------------------
+    cad_nodes = cad_tris = None
+    cad_info: dict[str, Any] | None = None
+    if step_files:
+        cad_nodes, cad_tris, cad_info = _tessellate_step(
+            step_files, rel_size=step_rel_size, timeout_s=timeout_s)
+        if cad_nodes is None:
+            return {"ok": False,
+                    "error": f"STEP tessellation failed: {cad_info}"}
+
     # --- camera and image plane --------------------------------------
     right, up, d = _camera_frame(view_dir)
     centre = 0.5 * (lo + hi)
     corners = np.array([[lo[0] if i & 1 else hi[0],
                          lo[1] if i & 2 else hi[1],
                          lo[2] if i & 4 else hi[2]] for i in range(8)])
-    rel = corners - centre
+    proj_pts = (corners if cad_nodes is None
+                else np.vstack([corners, cad_nodes]))
+    rel = proj_pts - centre
     pr, pu, pd = rel @ right, rel @ up, rel @ d
     margin = 0.02 * max(np.ptp(pr), np.ptp(pu))
     r0, r1 = pr.min() - margin, pr.max() + margin
@@ -313,11 +494,34 @@ def volume_raycast(path: str | Path,
 
     from scipy.ndimage import map_coordinates
 
+    cad_depth = cad_shade = None
+    cad_hit = np.zeros((H, W), dtype=bool)
+    if cad_nodes is not None:
+        cad_depth, cad_shade = _cad_depth_buffer(
+            cad_nodes, cad_tris, centre, right, up, d,
+            r0, r1, u0, u1, W, H)
+    cad_rgb = np.asarray(step_color, dtype=float).reshape(3)
+
+    def _composite_cad(mask, C, T):
+        if not mask.any():
+            return
+        lam = 0.35 + 0.65 * cad_shade[mask]
+        C[mask] += T[mask, None] * cad_rgb[None, :] * lam[:, None]
+        T[mask] = 0.0
+
     C = np.zeros((H, W, 3))
     T = np.ones((H, W))
     inside_hits = np.zeros((H, W), dtype=np.int64)
     for k in range(n_depth):
-        P = base + (s_near - k * ds) * d[None, None, :]
+        s_k = s_near - k * ds
+        if cad_depth is not None:
+            # the ray has reached the CAD surface within this step:
+            # composite the opaque surface FIRST, then T = 0 blocks
+            # everything behind it (per-ray occlusion, not a paste-on)
+            hit_now = (~cad_hit) & (cad_depth >= s_k)
+            _composite_cad(hit_now, C, T)
+            cad_hit |= hit_now
+        P = base + s_k * d[None, None, :]
         idx = ((P - lo[None, None, :]) / span[None, None, :]) * grid - 0.5
         coords = np.stack([idx[..., 0], idx[..., 1], idx[..., 2]])
         t_s = map_coordinates(T_norm, coords, order=1, mode="constant",
@@ -330,6 +534,10 @@ def volume_raycast(path: str | Path,
         col = lut[np.clip((t_s * 255).astype(np.intp), 0, 255)]
         C += (T * a)[..., None] * col
         T *= (1.0 - a)
+    if cad_depth is not None:
+        # CAD beyond the far marching plane (outside the field bbox)
+        _composite_cad((~cad_hit) & (cad_depth > -np.inf), C, T)
+        cad_hit |= cad_depth > -np.inf
 
     img = C + T[..., None]                            # white background
 
@@ -355,19 +563,23 @@ def volume_raycast(path: str | Path,
     fig.savefig(out)
     plt.close(fig)
 
-    return {"ok": True, "png": str(out), "grid": grid,
-            "n_depth_samples": n_depth,
-            "value_range": [v_lo, v_hi],
-            "n_probes": int(info["n_points"]),
-            "found_fraction": float(found.mean()),
-            "transmittance_min": float(T.min()),
-            "max_inside_samples": int(inside_hits.max()),
-            "view_dir": (view_dir if isinstance(view_dir, str)
-                         else [float(v) for v in view_dir]),
-            "method": ("ray-cast volume rendering (emission-absorption, "
-                       "front-to-back, per-ray occlusion) on a regular "
-                       "resample grid probed from gmsh; standalone PNG, "
-                       "no CAD overlay")}
+    result = {"ok": True, "png": str(out), "grid": grid,
+              "n_depth_samples": n_depth,
+              "value_range": [v_lo, v_hi],
+              "n_probes": int(info["n_points"]),
+              "found_fraction": float(found.mean()),
+              "transmittance_min": float(T.min()),
+              "max_inside_samples": int(inside_hits.max()),
+              "view_dir": (view_dir if isinstance(view_dir, str)
+                           else [float(v) for v in view_dir]),
+              "method": ("ray-cast volume rendering (emission-absorption, "
+                         "front-to-back, per-ray occlusion) on a regular "
+                         "resample grid probed from gmsh; standalone PNG")}
+    if cad_info is not None:
+        result["step_files"] = [str(Path(f)) for f in step_files]
+        result["cad_triangles"] = cad_info["n_triangles"]
+        result["cad_covered_fraction"] = float(cad_hit.mean())
+    return result
 
 
 _LIC_PLANES = {"xy": (0, 1, 2), "yz": (1, 2, 0), "xz": (0, 2, 1)}
@@ -382,6 +594,8 @@ def lic(path: str | Path,
         cmap: str = "jet",
         color_by_magnitude: bool = True,
         seed: int = 0,
+        step_files: list[str | Path] | None = None,
+        step_rel_size: float = 0.03,
         timeout_s: float = 900.0) -> dict[str, Any]:
     """TRUE line integral convolution on a section plane.
 
@@ -411,6 +625,11 @@ def lic(path: str | Path,
         cmap: colormap for the |v| modulation.
         color_by_magnitude: False gives the plain grey LIC texture.
         seed: noise seed (deterministic output).
+        step_files: STEP/BREP files whose SECTION OUTLINE (triangle-
+            plane intersection of a display tessellation) is drawn in
+            black over the texture -- the conductor cross-section on a
+            field-line figure.  Meter coordinates, as everywhere.
+        step_rel_size: display-tessellation size vs the CAD diagonal.
     """
     import numpy as np
 
@@ -526,10 +745,40 @@ def lic(path: str | Path,
     from matplotlib.cm import ScalarMappable
     from matplotlib.colors import Normalize
 
+    # optional CAD section outline (triangle-plane intersection)
+    outline_segments: list = []
+    if step_files:
+        cad_nodes, cad_tris, cad_info = _tessellate_step(
+            step_files, rel_size=step_rel_size, timeout_s=timeout_s)
+        if cad_nodes is None:
+            return {"ok": False,
+                    "error": f"STEP tessellation failed: {cad_info}"}
+        sd = cad_nodes[:, an] - mid
+        sgn = np.sign(sd)
+        tri_s = sgn[cad_tris]
+        crossing = np.nonzero((tri_s.max(axis=1) > 0)
+                              & (tri_s.min(axis=1) < 0))[0]
+        for t in crossing:
+            pts_uv = []
+            for e0, e1 in ((0, 1), (1, 2), (2, 0)):
+                i0, i1 = cad_tris[t, e0], cad_tris[t, e1]
+                d0, d1 = sd[i0], sd[i1]
+                if d0 * d1 < 0.0:
+                    w = d0 / (d0 - d1)
+                    p = cad_nodes[i0] + w * (cad_nodes[i1] - cad_nodes[i0])
+                    pts_uv.append((p[a0], p[a1]))
+            if len(pts_uv) == 2:
+                outline_segments.append(pts_uv)
+
     fig, ax = plt.subplots(figsize=(6.4, 6.4 * H / W + 0.4), dpi=140)
     ax.imshow(img, origin="lower",
               extent=[us[0], us[-1], vs[0], vs[-1]], aspect="equal",
               interpolation="bilinear")
+    if outline_segments:
+        from matplotlib.collections import LineCollection
+
+        ax.add_collection(LineCollection(outline_segments, colors="black",
+                                         linewidths=1.1))
     ax.set_xlabel(f"{'xyz'[a0]} [m]")
     ax.set_ylabel(f"{'xyz'[a1]} [m]")
     if color_by_magnitude:
@@ -540,12 +789,16 @@ def lic(path: str | Path,
     fig.savefig(out)
     plt.close(fig)
 
-    return {"ok": True, "png": str(out),
-            "size": [int(W), int(H)], "kernel": int(kernel),
-            "plane": plane, "offset": float(offset),
-            "found_fraction": float(found.mean()),
-            "magnitude_range": [m_lo, m_hi],
-            "method": ("line integral convolution (box kernel, RK2 "
-                       "advection) of white noise along the gmsh-probed "
-                       "vector field; every pixel filled; standalone "
-                       "PNG, no CAD overlay")}
+    result = {"ok": True, "png": str(out),
+              "size": [int(W), int(H)], "kernel": int(kernel),
+              "plane": plane, "offset": float(offset),
+              "found_fraction": float(found.mean()),
+              "magnitude_range": [m_lo, m_hi],
+              "method": ("line integral convolution (box kernel, RK2 "
+                         "advection) of white noise along the gmsh-probed "
+                         "vector field; every pixel filled; standalone "
+                         "PNG")}
+    if step_files:
+        result["step_files"] = [str(Path(f)) for f in step_files]
+        result["step_outline_segments"] = len(outline_segments)
+    return result

@@ -215,3 +215,78 @@ def test_lic_guards(tmp_path):
     res = lic(scal, tmp_path / "y.png", view="f", plane="xy",
               resolution=64)
     assert not res["ok"] and "vector view" in res["error"]
+
+
+# --------------------------------------------------------------------
+# STEP overlay: depth-composited CAD (raycast) + section outline (lic)
+# --------------------------------------------------------------------
+
+def test_raycast_step_depth_ordering(tmp_path):
+    """A CAD plate on the NEAR side hides the volume (achromatic gray
+    centre); the same plate on the FAR side is hidden BY a nearly
+    opaque volume (red-dominant centre).  Only genuine per-ray depth
+    compositing distinguishes the two -- pasting the CAD on top would
+    make both gray."""
+    occ = pytest.importorskip("netgen.occ", reason="netgen.occ not installed")
+
+    f = _box_msh(tmp_path / "u.msh", lambda p: [1.0])
+    near = tmp_path / "near.step"
+    far = tmp_path / "far.step"
+    occ.Box(occ.Pnt(-2, -2, 1.2), occ.Pnt(2, 2, 1.4)).WriteStep(str(near))
+    occ.Box(occ.Pnt(-2, -2, -1.4), occ.Pnt(2, 2, -1.2)).WriteStep(str(far))
+    kw = dict(view="f", grid=12, view_dir="+z", image_size=96, n_steps=24,
+              value_range=[0.0, 1.0], alpha=0.9, alpha_power=0.0,
+              colorbar=False, step_color=(0.6, 0.6, 0.6))
+
+    a = volume_raycast(f, tmp_path / "near.png", step_files=[near], **kw)
+    b = volume_raycast(f, tmp_path / "far.png", step_files=[far], **kw)
+    assert a["ok"] and b["ok"], (a, b)
+    assert a["cad_triangles"] > 0
+    assert a["cad_covered_fraction"] > 0.5
+
+    def centre(png):
+        img = _rgb(png)
+        h, w, _ = img.shape
+        return img[h // 3:2 * h // 3, w // 3:2 * w // 3]
+
+    c_near = centre(tmp_path / "near.png")
+    c_far = centre(tmp_path / "far.png")
+    # near plate: gray CAD (channels equal); far plate: red volume wins
+    assert abs(float(c_near[..., 0].mean() - c_near[..., 2].mean())) < 0.06
+    assert float(c_far[..., 0].mean() - c_far[..., 2].mean()) > 0.3
+
+
+def test_lic_step_outline_draws_on_the_texture(tmp_path):
+    occ = pytest.importorskip("netgen.occ", reason="netgen.occ not installed")
+
+    f = _box_msh(tmp_path / "vx.msh", lambda p: [1.0, 0.0, 0.0], ncomp=3)
+    step = tmp_path / "square.step"
+    occ.Box(occ.Pnt(-0.5, -0.5, -0.5), occ.Pnt(0.5, 0.5, 0.5)
+            ).WriteStep(str(step))
+    plain = lic(f, tmp_path / "plain.png", view="f", plane="xy",
+                resolution=96, kernel=8, seed=3)
+    lined = lic(f, tmp_path / "lined.png", view="f", plane="xy",
+                resolution=96, kernel=8, seed=3, step_files=[step])
+    assert plain["ok"] and lined["ok"], (plain, lined)
+    assert lined["step_outline_segments"] > 0
+
+    a = np.asarray(Image.open(tmp_path / "plain.png").convert("L"),
+                   dtype=float)
+    b = np.asarray(Image.open(tmp_path / "lined.png").convert("L"),
+                   dtype=float)
+    changed = np.abs(a - b) > 8
+    # the outline changes SOME pixels, darkens them, and stays thin
+    assert changed.any()
+    assert changed.mean() < 0.15
+    assert float(b[changed].mean()) < float(a[changed].mean())
+
+
+def test_raster_step_missing_file_fails_loudly(tmp_path):
+    f = _box_msh(tmp_path / "u.msh", lambda p: [1.0])
+    r = volume_raycast(f, tmp_path / "x.png", view="f", grid=8,
+                       image_size=64, step_files=[tmp_path / "no.step"])
+    assert not r["ok"] and "not found" in r["error"]
+    v = _box_msh(tmp_path / "v.msh", lambda p: [1.0, 0.0, 0.0], ncomp=3)
+    l2 = lic(v, tmp_path / "y.png", view="f", plane="xy", resolution=64,
+             step_files=[tmp_path / "no.step"])
+    assert not l2["ok"] and "not found" in l2["error"]
