@@ -94,6 +94,96 @@ try:
             for i in range(n_views):
                 gmsh.option.setNumber(f"View[{i}].Clip", 1)
 
+        # ---- structured figure controls -----------------------------
+        # Applied BEFORE the raw option passthrough, so an explicit
+        # options={} entry always wins over the structured form.
+        def _targets(spec):
+            if spec is None:
+                return list(range(n_views))
+            return [int(i) for i in spec]
+
+        col = cfg.get("color")
+        if col:
+            idxs = _targets(col.get("views"))
+            rng = col.get("range")
+            if rng == "shared" and idxs:
+                lo = min(gmsh.option.getNumber(f"View[{i}].Min") for i in idxs)
+                hi = max(gmsh.option.getNumber(f"View[{i}].Max") for i in idxs)
+                rng = [lo, hi]
+            if isinstance(rng, (list, tuple)):
+                result["color_range"] = [float(rng[0]), float(rng[1])]
+            for i in idxs:
+                if isinstance(rng, (list, tuple)):
+                    gmsh.option.setNumber(f"View[{i}].RangeType", 2)
+                    gmsh.option.setNumber(f"View[{i}].CustomMin", float(rng[0]))
+                    gmsh.option.setNumber(f"View[{i}].CustomMax", float(rng[1]))
+                for key, opt in (("scale_type", "ScaleType"),
+                                 ("intervals", "NbIso"),
+                                 ("intervals_type", "IntervalsType"),
+                                 ("colormap", "ColormapNumber"),
+                                 ("alpha", "ColormapAlpha"),
+                                 ("show_scale", "ShowScale"),
+                                 ("saturate", "SaturateValues"),
+                                 ("invert", "ColormapInvert")):
+                    if col.get(key) is not None:
+                        gmsh.option.setNumber(f"View[{i}].{opt}",
+                                              float(col[key]))
+                if col.get("format"):
+                    gmsh.option.setString(f"View[{i}].Format", col["format"])
+
+        gly = cfg.get("glyphs")
+        if gly:
+            for i in _targets(gly.get("views")):
+                for key, opt in (("vector_type", "VectorType"),
+                                 ("sampling", "Sampling"),
+                                 ("size_max", "ArrowSizeMax"),
+                                 ("size_min", "ArrowSizeMin"),
+                                 ("center", "CenterGlyphs"),
+                                 ("location", "GlyphLocation"),
+                                 ("line_width", "LineWidth"),
+                                 ("point_size", "PointSize")):
+                    if gly.get(key) is not None:
+                        gmsh.option.setNumber(f"View[{i}].{opt}",
+                                              float(gly[key]))
+
+        planes = cfg.get("clip_planes") or []
+        for k, pl in enumerate(planes):
+            for letter, val in zip("ABCD", pl["plane"]):
+                gmsh.option.setNumber(f"General.Clip{k}{letter}", float(val))
+            mask = 1 << k
+            for target in pl["targets"]:
+                cur = gmsh.option.getNumber(target)
+                gmsh.option.setNumber(target, float(int(cur) | mask))
+            if pl.get("whole_elements"):
+                gmsh.option.setNumber("General.ClipWholeElements", 1)
+
+        ax = cfg.get("axes")
+        if ax:
+            gmsh.option.setNumber("General.Axes", float(ax["mode"]))
+            for j, letter in enumerate("XYZ"):
+                if ax.get("labels"):
+                    gmsh.option.setString(f"General.AxesLabel{letter}",
+                                          ax["labels"][j])
+                if ax.get("format"):
+                    gmsh.option.setString(f"General.AxesFormat{letter}",
+                                          ax["format"][j])
+                if ax.get("tics"):
+                    gmsh.option.setNumber(f"General.AxesTics{letter}",
+                                          float(ax["tics"][j]))
+
+        annots = cfg.get("annotations") or []
+        if annots:
+            atag = gmsh.view.add("annotations")
+            for a in annots:
+                gmsh.view.addListDataString(
+                    atag, [a["x"], a["y"]], [a["text"]],
+                    ["Align", a.get("align", "Left"),
+                     "Font", a.get("font", "Helvetica"),
+                     "FontSize", str(int(a.get("size", 18)))])
+            aidx = gmsh.view.getIndex(atag)
+            gmsh.option.setNumber(f"View[{aidx}].ShowScale", 0)
+            result["annotation_view"] = aidx
+
         for name, val in (cfg.get("options") or {}).items():
             gmsh.option.setNumber(name, float(val))
         for name, val in (cfg.get("string_options") or {}).items():
@@ -271,6 +361,181 @@ def _resolve_rotation(camera_preset: str | None,
     return [float(x) for x in CAMERA_PRESETS[camera_preset]]
 
 
+_INTERVAL_STYLES = {"iso": 1, "continuous": 2, "discrete": 3, "numeric": 4}
+_SCALE_TYPES = {"linear": 1, "log": 2, "double_log": 3}
+_VECTOR_TYPES = {"segment": 1, "arrow": 2, "pyramid": 3, "arrow3d": 4,
+                 "displacement": 5, "comet": 6}
+_GLYPH_LOCATIONS = {"cog": 1, "vertex": 2}
+_CLIP_TARGETS = {"views": "View[0].Clip", "mesh": "Mesh.Clip",
+                 "geometry": "Geometry.Clip"}
+_AXES_MODES = {"none": 0, "box": 1, "frame": 2, "open": 3, "full": 4,
+               "open_grid": 5}
+
+
+def _pick(mapping: dict[str, int], value, what: str):
+    """Named choice -> gmsh code.  Ints pass through (escape hatch for a
+    value gmsh gained after this table was written); unknown names raise
+    with the valid list rather than silently defaulting."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    key = str(value).lower()
+    if key not in mapping:
+        raise ValueError(
+            f"unknown {what}: {value!r} (available: "
+            f"{', '.join(sorted(mapping))}, or a raw gmsh code)")
+    return float(mapping[key])
+
+
+def _build_color(color: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Colour-scale control.  ``range`` is the important one: an explicit
+    [min, max] (or "shared" across the views of THIS render) is what makes
+    two figures comparable -- gmsh otherwise autoscales each view to its
+    own extrema, so the same colour means different values per panel."""
+    if not color:
+        return None
+    out: dict[str, Any] = {}
+    rng = color.get("range")
+    if rng is not None and rng != "auto":
+        if rng == "shared":
+            out["range"] = "shared"
+        else:
+            lo, hi = (float(v) for v in rng)
+            if not hi > lo:
+                raise ValueError(f"color range must be increasing, got {rng}")
+            out["range"] = [lo, hi]
+    if color.get("log"):
+        out["scale_type"] = _SCALE_TYPES["log"]
+    if color.get("scale") is not None:
+        out["scale_type"] = _pick(_SCALE_TYPES, color["scale"], "color scale")
+    if color.get("intervals") is not None:
+        out["intervals"] = int(color["intervals"])
+    if color.get("style") is not None:
+        out["intervals_type"] = _pick(_INTERVAL_STYLES, color["style"],
+                                      "color style")
+    for key in ("colormap", "alpha"):
+        if color.get(key) is not None:
+            out[key] = float(color[key])
+    for key in ("show_scale", "saturate", "invert"):
+        if color.get(key) is not None:
+            out[key] = 1.0 if color[key] else 0.0
+    if color.get("format"):
+        out["format"] = str(color["format"])
+    if color.get("views") is not None:
+        out["views"] = [int(i) for i in color["views"]]
+    return out or None
+
+
+def _build_glyphs(glyphs: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Vector-glyph control.  ``sampling=N`` draws every Nth element --
+    the difference between a readable arrow field and a solid blue mat."""
+    if not glyphs:
+        return None
+    out: dict[str, Any] = {}
+    if glyphs.get("type") is not None:
+        out["vector_type"] = _pick(_VECTOR_TYPES, glyphs["type"],
+                                   "glyph type")
+    if glyphs.get("location") is not None:
+        out["location"] = _pick(_GLYPH_LOCATIONS, glyphs["location"],
+                                "glyph location")
+    if glyphs.get("sampling") is not None:
+        n = int(glyphs["sampling"])
+        if n < 1:
+            raise ValueError(f"glyph sampling must be >= 1, got {n}")
+        out["sampling"] = n
+    for key in ("size_max", "size_min", "line_width", "point_size"):
+        if glyphs.get(key) is not None:
+            out[key] = float(glyphs[key])
+    if glyphs.get("center") is not None:
+        out["center"] = 1.0 if glyphs["center"] else 0.0
+    if glyphs.get("views") is not None:
+        out["views"] = [int(i) for i in glyphs["views"]]
+    return out or None
+
+
+def _build_clip(clip: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Up to 6 clipping planes, given as an outward normal + offset:
+    the kept half-space is ``n . x + d >= 0``."""
+    if not clip:
+        return []
+    if len(clip) > 6:
+        raise ValueError(f"gmsh supports at most 6 clip planes, got {len(clip)}")
+    out = []
+    for k, spec in enumerate(clip):
+        if "plane" in spec:
+            plane = [float(v) for v in spec["plane"]]
+            if len(plane) != 4:
+                raise ValueError("clip plane must be [a, b, c, d]")
+        else:
+            n = [float(v) for v in spec["normal"]]
+            if len(n) != 3:
+                raise ValueError("clip normal must be [nx, ny, nz]")
+            plane = n + [float(spec.get("offset", 0.0))]
+        names = spec.get("apply_to") or ["views", "mesh", "geometry"]
+        targets = []
+        for name in names:
+            if name not in _CLIP_TARGETS:
+                raise ValueError(
+                    f"unknown clip target {name!r} "
+                    f"(available: {', '.join(sorted(_CLIP_TARGETS))})")
+            targets.append(_CLIP_TARGETS[name])
+        out.append({"plane": plane, "targets": targets,
+                    "whole_elements": bool(spec.get("whole_elements"))})
+    return out
+
+
+def _build_axes(axes: dict[str, Any] | bool | None) -> dict[str, Any] | None:
+    """Labelled axis box.  Publication figures need the axis LABELS to
+    carry units; gmsh keeps label and format per axis."""
+    if axes is None or axes is False:
+        return None
+    if axes is True:
+        axes = {"mode": "box"}
+    out: dict[str, Any] = {"mode": _pick(_AXES_MODES, axes.get("mode", "box"),
+                                         "axes mode")}
+    for key in ("labels", "format"):
+        if axes.get(key) is not None:
+            vals = list(axes[key])
+            if len(vals) != 3:
+                raise ValueError(f"axes {key} needs three entries (x, y, z)")
+            out[key] = [str(v) for v in vals]
+    if axes.get("tics") is not None:
+        tics = list(axes["tics"])
+        if len(tics) != 3:
+            raise ValueError("axes tics needs three entries (x, y, z)")
+        out["tics"] = [int(v) for v in tics]
+    return out
+
+
+def _build_annotations(annotations) -> list[dict[str, Any]]:
+    """2D text overlays (window pixel coordinates; negative counts from
+    the opposite edge, which is gmsh's own convention)."""
+    if not annotations:
+        return []
+    out = []
+    for a in annotations:
+        if isinstance(a, str):
+            a = {"text": a}
+        if not a.get("text"):
+            raise ValueError("annotation needs a 'text'")
+        out.append({"text": str(a["text"]),
+                    "x": float(a.get("x", 20.0)),
+                    "y": float(a.get("y", 30.0)),
+                    "align": str(a.get("align", "Left")),
+                    "font": str(a.get("font", "Helvetica")),
+                    "size": int(a.get("size", 18))})
+    return out
+
+
+def _figure_cfg(color, glyphs, clip, axes, annotations) -> dict[str, Any]:
+    return {"color": _build_color(color),
+            "glyphs": _build_glyphs(glyphs),
+            "clip_planes": _build_clip(clip),
+            "axes": _build_axes(axes),
+            "annotations": _build_annotations(annotations)}
+
+
 def _run_render(cfg: dict[str, Any], timeout_s: float) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="radia_mcp_gmsh_cfg_") as work:
         cfg_path = Path(work) / "render.json"
@@ -340,6 +605,11 @@ def render_png(path: str | Path,
                cut_plane: dict[str, Any] | None = None,
                merge_files: list[str | Path] | None = None,
                geometry_display: bool | None = None,
+               color: dict[str, Any] | None = None,
+               glyphs: dict[str, Any] | None = None,
+               clip: list[dict[str, Any]] | None = None,
+               axes: dict[str, Any] | bool | None = None,
+               annotations: list[Any] | None = None,
                options: dict[str, float] | None = None,
                string_options: dict[str, str] | None = None,
                auto_mesh_display: bool = True,
@@ -347,6 +617,39 @@ def render_png(path: str | Path,
                smooth_normals: bool = True,
                timeout_s: float = 300.0) -> dict[str, Any]:
     """Render a .msh/.geo file to PNG in a gmsh subprocess.
+
+    Figure controls (named values, no gmsh option strings needed):
+
+    ``camera_preset`` -- ``"+x" "-x" "+y" "-y" "+z" "-z" "iso"``: the
+    named axis points AT the camera, so ``"+y"`` shows the x-z plane
+    face-on.  (Guessing raw ``rotation`` angles is how a plane ends up
+    rendered edge-on as a single line.)
+
+    ``color`` -- ``{"range": [lo, hi] | "shared", "log": bool,
+    "intervals": n, "style": "continuous|iso|discrete|numeric",
+    "format": "%.3g", "colormap": n, "alpha": a, "show_scale": bool,
+    "saturate": bool, "views": [i]}``.  ``range`` is the one that
+    matters for publication: gmsh autoscales EVERY view to its own
+    extrema, so two panels of the same quantity are not comparable
+    until they share a range.  ``"shared"`` unifies the views of this
+    render; pass an explicit ``[lo, hi]`` to unify across files (get it
+    from ``gmsh_field_stats``).
+
+    ``glyphs`` -- ``{"type": "arrow3d", "sampling": n, "size_max": px,
+    "center": bool, "location": "cog|vertex", "views": [i]}``.
+    ``sampling`` draws every n-th element: the difference between a
+    readable arrow field and a solid mat of arrowheads.
+
+    ``clip`` -- up to 6 planes ``{"normal": [nx, ny, nz], "offset": d,
+    "apply_to": ["views", "mesh", "geometry"], "whole_elements": bool}``;
+    the kept half-space is ``n . x + d >= 0``.
+
+    ``axes`` -- ``True`` or ``{"mode": "box|frame|open|full|open_grid",
+    "labels": ["x [m]", ...], "format": ["%.3g", ...], "tics": [5,5,5]}``.
+
+    ``annotations`` -- ``["text"]`` or ``[{"text":, "x":, "y":, "align":,
+    "size":}]`` drawn in window pixels (negative counts from the far
+    edge).
 
     Opening a ``.geo`` auto-loads its exact ``.geo.opt`` sidecar, so the
     launch artifact renders exactly as a user double-click would show it.
@@ -386,6 +689,7 @@ def render_png(path: str | Path,
         "numsubedges": int(numsubedges),
         "rotation": _resolve_rotation(camera_preset, rotation),
         "time_step": time_step,
+        **_figure_cfg(color, glyphs, clip, axes, annotations),
         "options": merged_options,
         "string_options": string_options or {},
         "auto_mesh_display": bool(auto_mesh_display),
@@ -432,6 +736,11 @@ def export_animation(path: str | Path,
                      cut_plane: dict[str, Any] | None = None,
                      merge_files: list[str | Path] | None = None,
                      geometry_display: bool | None = None,
+                     color: dict[str, Any] | None = None,
+                     glyphs: dict[str, Any] | None = None,
+                     clip: list[dict[str, Any]] | None = None,
+                     axes: dict[str, Any] | bool | None = None,
+                     annotations: list[Any] | None = None,
                      options: dict[str, float] | None = None,
                      string_options: dict[str, str] | None = None,
                      adapt_views: bool = True,
@@ -492,6 +801,7 @@ def export_animation(path: str | Path,
         "view_indices": view_indices,
         "num_steps": num_steps,
         "delay_ms": int(delay_ms),
+        **_figure_cfg(color, glyphs, clip, axes, annotations),
         "options": merged_options,
         "string_options": string_options or {},
         "auto_mesh_display": orbit_axis is not None,
