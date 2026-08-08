@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **955 tools** across 48 MCP servers.
+Total: **960 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 86 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 76 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 54 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 59 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -257,7 +257,9 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_export_csv` | Dump view data to CSV (the ParaView spreadsheet / SaveData analog). |
 | `gmsh_extract_skin` | Extract the boundary skin of a volume view (surface + field). |
 | `gmsh_field_histogram` | Histogram of a view's values (the ParaView Histogram analog). |
+| `gmsh_field_range` | Union colour range across several .msh files -- the prerequisite for |
 | `gmsh_field_stats` | Per-view, per-time-step field statistics for an MSH v4.1 file. |
+| `gmsh_flow_texture` | Dense evenly-spaced streamline texture -- the LIC alternative. |
 | `gmsh_flux_lines` | Equally spaced isolines of a scalar view, merged into ONE view. |
 | `gmsh_harmonic_to_time` | Expand a complex (re/im) view into a time-domain animation view. |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
@@ -278,8 +280,10 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_render` | Render a .msh or .geo file to PNG headlessly (gmsh subprocess). |
 | `gmsh_render_montage` | Compose rendered PNGs into one comparison grid (side-by-side). |
+| `gmsh_render_panels` | Multi-panel figure with ONE camera, ONE zoom and ONE colour scale. |
 | `gmsh_resample_grid` | Resample a view on a regular grid spanned by three box edges. |
 | `gmsh_run_file` | Open/run a file in the persistent gmsh session (run_matlab_file twin). |
+| `gmsh_select` | Select elements with a COMPOUND condition (ParaView "Find Data"). |
 | `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
 | `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
 | `gmsh_smooth_to_nodes` | Average element-wise data to nodes (CellDataToPointData analog). |
@@ -293,6 +297,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_validate_msh` | Validate MSH v4.1 structural consistency; optional Jacobian check. |
 | `gmsh_verify` | Run ALL applicable gates on an artifact (run_matlab_test_file twin). |
 | `gmsh_view_min_max` | Locate the min and max of a scalar view WITH their coordinates. |
+| `gmsh_volume_render` | Pseudo-volume rendering by compositing semi-transparent slices. |
 | `gmsh_warp` | Displace a vector view's geometry by factor * its own vectors. |
 | `gmsh_write_post_launch_artifact` | Write the shared .geo/.geo.opt/.msh.opt post-display launch artifact. |
 | `lint_gmsh_directory` | Lint all Python scripts in a directory for GMSH policy violations. |
