@@ -1855,16 +1855,20 @@ first two for you:
    elements), for single and nested shells alike.  Adaptive
    subdivision does not crack the surface.
 4. **What DOES look like cracks: an OPEN shell.**  Where the level set
-   crosses the domain boundary the surface is cut open, and a
+   crosses the outer domain boundary the surface is cut open, and a
    semi-transparent open shell is see-through by construction.
    Measured on the same field: a shell closing inside the domain gives
    0%, one crossing the box faces gives 19-29% see-through, and the
    figure is **independent of recursion level** (261 vs 5184 elements
    -> same 22%) -- which is what rules the subdivision explanation out.
    ``gmsh_isosurface`` now reports ``open_surface`` /
-   ``boundary_vertices`` and a note, so the artefact is a stated fact
+   ``touches_outer_boundary`` / ``boundary_vertices`` and a note, so the
+   artefact is a stated fact
    rather than a mystery.  Fixes: choose a level whose shell closes
-   inside the domain, enlarge the domain, or clip the view.
+   inside the domain, enlarge the domain, or clip the view.  This is
+   explicitly an outer-bounding-box contact check; Gmsh emits
+   element-local isosurface polygons without shared topology, so internal
+   openings are not classified by this field.
 5. **Clip + opaque** stays the cleanest nesting recipe when the inner
    levels matter: ``cut_plane={"enabled": True, "normal": [0,-1,0],
    "offset": 0}``.  Opaque clipped surfaces keep full colormap

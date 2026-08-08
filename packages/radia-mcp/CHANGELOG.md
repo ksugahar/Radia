@@ -7,6 +7,24 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.35] - 2026-08-08
+
+- Added six Gmsh workflow tools for cross-file field ranges, comparable panel
+  rendering, compound element selection, slice-stack volume views,
+  dense-streamline flow textures, and file-series temporal statistics.
+- Added named camera, colour, glyph, clipping, axis, and annotation controls to
+  PNG and animation rendering, with shared transfer functions propagated to
+  generated slice views.
+- Replaced compound-selection `eval` with a bounded AST parser/evaluator and
+  protected coordinate/function names from field-name collisions.
+- Made file-series statistics verify node coordinates, connectivity, view
+  section/component contracts, finite values, and valid scalar output; unsafe
+  ElementNodeData reduction now fails with explicit conversion guidance.
+- Made multi-panel comparisons require one physical quantity and fail loudly
+  when an automatic shared range or shared zoom cannot be honored.
+- Documented the isosurface diagnostic as an outer-boundary contact check
+  rather than a general topology proof.
+
 ## [1.4.34] - 2026-08-07
 
 - Strengthened grant-writing budget review so external costs must be traceable
