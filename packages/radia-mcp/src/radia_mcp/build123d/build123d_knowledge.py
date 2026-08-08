@@ -1438,6 +1438,15 @@ and key primitives/operations.
 - Efficient approach: 2D Face construction with hole wires, then extrude in
   a single operation (vs 3D boolean subtraction).
 - Key: HexLocations, Face constructor with hole wires, perf optimization
+- Validation must bind the requested count to the generated location count,
+  generated hole-wire count, and final face-wire count.  A caller-supplied
+  hole count plus matching volume can otherwise hide a missing generated hole.
+- For a prism with `N` polygonal through-holes, `h` sides per hole, and `o`
+  outer sides, the boundary count is `2 + o + N*h`.  Check this topology after
+  STEP/BREP self-roundtrip and after both headless external-CAD heal modes.
+- Use `build123d_face_first_perforation_handoff_gate` for the geometry evidence
+  and `build123d_face_first_perforation_source_replay_gate` for immutable source,
+  repeated execution, headless process ownership, and cleanup evidence.
 
 ## 9. Handle — Multisection sweep
 - Drawer handle by sweeping through multiple profiles.

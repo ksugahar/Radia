@@ -41,6 +41,10 @@ except ImportError:
 from mcp.server.fastmcp import FastMCP
 
 from .build123d_knowledge import get_build123d_documentation
+from .face_first_perforation_gate import (
+    face_first_perforation_handoff_gate as _face_first_perforation_handoff_gate,
+    face_first_perforation_source_replay_gate as _face_first_perforation_source_replay_gate,
+)
 from .mass_topology_diagnosis_gate import cross_kernel_mass_topology_diagnosis_gate as _cross_kernel_mass_topology_diagnosis_gate, upstream_source_external_cad_contract_gate as _upstream_source_external_cad_contract_gate
 from .dual_api_prismatic_gate import dual_api_prismatic_pattern_gate as _dual_api_prismatic_pattern_gate, dual_api_source_replay_gate as _dual_api_source_replay_gate
 from .drafted_housing_gate import drafted_housing_cross_kernel_gate as _drafted_housing_cross_kernel_gate, drafted_housing_source_replay_gate as _drafted_housing_source_replay_gate
@@ -209,6 +213,42 @@ def build123d_faceted_source_replay_gate(summary_json: str) -> str:
     try: result=_build123d_faceted_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_faceted_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_face_first_perforation_handoff_gate(
+    summary_json: str, volume_rtol: float = 1.0e-9
+) -> str:
+    """Gate dense face-first holes against native and external CAD topology."""
+
+    try:
+        result = _face_first_perforation_handoff_gate(
+            json.loads(summary_json), volume_rtol=volume_rtol
+        )
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "build123d_face_first_perforation_handoff_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return _dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def build123d_face_first_perforation_source_replay_gate(
+    summary_json: str,
+) -> str:
+    """Gate immutable source replay and owned headless CAD process evidence."""
+
+    try:
+        result = _face_first_perforation_source_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "build123d_face_first_perforation_source_replay_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return _dumps(result, indent=2, sort_keys=True)
+
 
 @mcp.tool()
 def build123d_cross_kernel_mass_topology_diagnosis_gate(summary_json: str) -> str:
