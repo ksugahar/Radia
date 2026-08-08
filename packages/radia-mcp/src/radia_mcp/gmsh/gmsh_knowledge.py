@@ -1932,6 +1932,46 @@ psi contours + cross-check; opposed-PM gap with mid-plane
 streamlines, gap profile, nested adaptive isosurfaces), with the key
 numbers locked in its synchronized result JSON.
 
+## Figure controls: named values, no gmsh option strings
+
+gmsh HAS every display knob ParaView has (verified by probing this
+build: camera, orthographic, 6 clip planes, labelled axes, colorbar
+range/format/intervals/log, glyph decimation, 2D text).  What used to be
+missing was reaching them without knowing their option names, so
+gmsh_render / gmsh_export_animation take them as named values:
+
+- ``camera_preset="+x"|"-x"|"+y"|"-y"|"+z"|"-z"|"iso"`` -- the named
+  axis points AT the camera, so ``"+y"`` shows the x-z plane face-on.
+  MEASURED with a marker rig, not copied from another package: the
+  minus views are a HORIZONTAL mirror with up preserved.  ``(180,0,0)``
+  is NOT ``-z`` -- it flips vertically while still looking from +z.
+  Guessing raw ``rotation`` angles is how a plane gets rendered
+  edge-on as a single line.
+- ``color={"range": [lo, hi] | "shared", "log":, "intervals":,
+  "style": "continuous|iso|discrete|numeric", "format":, "colormap":,
+  "alpha":, "show_scale":, "saturate":, "views": [i]}``.
+  **The range is the publication-critical one**: gmsh autoscales EVERY
+  view to its own extrema, so two panels of the same quantity are NOT
+  comparable until they share a scale.  ``"shared"`` unifies the views
+  of one render; for a cross-FILE comparison read the union range from
+  gmsh_field_stats and pass it explicitly to each render.
+- ``glyphs={"type": "arrow3d", "sampling": n, "size_max":, "center":,
+  "location": "cog|vertex"}`` -- ``sampling`` draws every n-th element,
+  the difference between a readable arrow field and a solid mat.
+- ``clip=[{"normal": [nx,ny,nz], "offset": d, "apply_to":
+  ["views","mesh","geometry"], "whole_elements": bool}]`` (max 6);
+  keeps the ``n . x + d >= 0`` half-space.
+- ``axes=True`` or ``{"mode": "box|frame|open|full|open_grid",
+  "labels": ["x [m]", ...], "format":, "tics":}`` -- labels carry the
+  units for a publication figure.
+- ``annotations=["text"]`` or ``[{"text":, "x":, "y":, "align":,
+  "size":}]`` in window pixels (negative counts from the far edge --
+  keep clear of the colorbar strip at the bottom).
+
+Unknown names raise with the valid list; raw ``options={}`` still wins
+over the structured form, so an option gmsh gains later is reachable
+without waiting for a wrapper.
+
 ## Honest gaps (do not fake these)
 
 - VOLUME RENDERING: gmsh has none.  Use isosurfaces + cut planes +
