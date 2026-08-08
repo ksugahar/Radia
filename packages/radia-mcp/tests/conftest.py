@@ -121,37 +121,28 @@ def _project_import_has_absent_dependency(module_name: str, seen: set | None = N
         return False
     seen.add(module_name)
 
-    if _FORCE_MINIMAL:
-        path = _project_module_path(module_name)
-        if path is None:
-            _PROJECT_IMPORT_CACHE[module_name] = False
-            return False
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            _PROJECT_IMPORT_CACHE[module_name] = False
-            return False
-        for dep in _imported_modules(text):
-            if _module_absent(dep):
-                _PROJECT_IMPORT_CACHE[module_name] = True
-                return True
-            if dep.startswith("radia_mcp.") and _project_import_has_absent_dependency(dep, seen):
-                _PROJECT_IMPORT_CACHE[module_name] = True
-                return True
+    # Never import a server merely to decide whether its tests are collectable.
+    # FastMCP construction reads settings and may emit warnings or perform other
+    # import-time work; with the repository's warnings-as-errors policy that can
+    # abort collection before pytest reaches a single test.  Static traversal is
+    # sufficient here because this gate only answers whether a declared import
+    # is unavailable in the current (or FORCE_MINIMAL) environment.
+    path = _project_module_path(module_name)
+    if path is None:
         _PROJECT_IMPORT_CACHE[module_name] = False
         return False
-
     try:
-        importlib.import_module(module_name)
-    except ModuleNotFoundError as exc:
-        missing = exc.name or ""
-        # Skip only when the project module exists but one of its optional
-        # third-party dependencies is absent.  A typo in the project import
-        # itself must still surface as a real collection error.
-        if missing and not module_name.startswith(missing):
-            result = _module_absent(missing)
-            _PROJECT_IMPORT_CACHE[module_name] = result
-            return result
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        _PROJECT_IMPORT_CACHE[module_name] = False
+        return False
+    for dep in _imported_modules(text):
+        if _module_absent(dep):
+            _PROJECT_IMPORT_CACHE[module_name] = True
+            return True
+        if dep.startswith("radia_mcp.") and _project_import_has_absent_dependency(dep, seen):
+            _PROJECT_IMPORT_CACHE[module_name] = True
+            return True
     _PROJECT_IMPORT_CACHE[module_name] = False
     return False
 
