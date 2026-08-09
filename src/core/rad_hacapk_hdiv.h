@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 
 enum class ChargeDerivativeFamily { Hex, Tet, Wedge };
 class RadHACApKChargeGramDerivative;
@@ -935,6 +936,33 @@ private:
     mutable std::atomic<long long> m_hoSymBlockHits{0};
     mutable std::atomic<long long> m_hoSymBlockMisses{0};
     mutable std::atomic<long long> m_hoSymBlockClears{0};
+    // QuadBlockHex dispatch profile: block counts + wall nanoseconds per branch (affine near product /
+    // affine far product / distorted-pair far product / general graded path split by host proximity).
+    // Always accumulated -- a relaxed fetch_add per BLOCK is negligible against the block quadrature.
+    mutable std::atomic<long long> m_hexBlkAffineNear{0};
+    mutable std::atomic<long long> m_hexBlkAffineFar{0};
+    mutable std::atomic<long long> m_hexBlkDistortedFar{0};
+    mutable std::atomic<long long> m_hexBlkGeneralNear{0};
+    mutable std::atomic<long long> m_hexBlkGeneralFar{0};
+    mutable std::atomic<long long> m_hexNsAffineNear{0};
+    mutable std::atomic<long long> m_hexNsAffineFar{0};
+    mutable std::atomic<long long> m_hexNsDistortedFar{0};
+    mutable std::atomic<long long> m_hexNsGeneralNear{0};
+    mutable std::atomic<long long> m_hexNsGeneralFar{0};
+    // INSTANCE-shared cache for the expensive GENERAL-path blocks: the graded near/self machinery
+    // (~30 ms/block) plus the site-radial mid band up to the distorted-far switch (~0.5 ms/block).
+    // The per-thread block caches duplicate those across the fill workers (measured ~2x waste); the
+    // general set is the O(n_hosts) neighborhood ring (sep <= factor*(sizes)), so this map stays small
+    // and is never capacity-cleared.  Values are stable once inserted (unordered_map references survive
+    // rehash), so readers hold no lock after lookup.  Classification (HexPairTakesGeneralPath) picks
+    // the CACHE only, never the quadrature -- a borderline misclassification just caches a cheap block
+    // here (or a heavy one thread-locally), both harmless.
+    mutable std::shared_mutex m_hexGeneralSharedMutex;
+    mutable std::unordered_map<unsigned long long, std::vector<double>> m_hexGeneralSharedCache;
+    mutable std::atomic<long long> m_hexGeneralSharedLookups{0};
+    mutable std::atomic<long long> m_hexGeneralSharedHits{0};
+    mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
+    bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int mask) const;
     void ResetHexCacheStats();
     // mask (IMA): 0 = direct block; >0 = the mirror-image block (target host x the source host REFLECTED on
     // the 3-bit axis mask), for the reduced-symmetry (1/2,1/4,1/8) image method.  Default 0 keeps the direct
