@@ -18,5 +18,6 @@ The former linear-drive (LIM/LSM, end-effect) material was removed.
 """
 
 from .knowledge import get_knowledge
+from .team28_dynamic_gate import team28_cycle_averaged_motion_gate
 
-__all__ = ["get_knowledge"]
+__all__ = ["get_knowledge", "team28_cycle_averaged_motion_gate"]

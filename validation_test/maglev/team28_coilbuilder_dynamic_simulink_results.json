@@ -1,7 +1,7 @@
 {
-  "radia_version": "4.95.48",
+  "radia_version": "4.95.49",
   "schema": "cae-ai-lab.solver-run.v1",
-  "created_at_utc": "2026-08-06T23:01:53.524Z",
+  "created_at_utc": "2026-08-08T04:39:55.198Z",
   "case": "TEAM 28 dynamic CoilBuilder HCurl eddy-bubble levitation",
   "solver": "simulink",
   "solver_backend": "fixed-50Hz-cycle-average-lut-plus-mechanical-plant",
@@ -11,7 +11,7 @@
     "command": "run_team28_coilbuilder_dynamic_simulink",
     "workdir": ".",
     "exit_code": 0,
-    "duration_s": 10.8493474
+    "duration_s": 20.3841955
   },
   "result_files": [
     "validation_test/maglev/team28_coilbuilder_dynamic_simulink_results.json",
@@ -45,16 +45,16 @@
     "terminal_speed_abs_m_per_s": 2.44666190475241E-13
   },
   "tool_versions": {
-    "radia": "4.95.48",
+    "radia": "4.95.49",
     "matlab": "26.1.0.3312084 (R2026a) Update 4",
     "matlab_release": "2026a",
     "simulink": "26.1"
   },
   "timing_breakdown_s": {
-    "load_and_configure": 0.1188438,
-    "simulink_execution": 1.3951396,
-    "verification": 0.0025054,
-    "visualization_and_write": 9.1392513
+    "load_and_configure": 5.6940546,
+    "simulink_execution": 3.9890684,
+    "verification": 0.002286,
+    "visualization_and_write": 10.3335568
   },
   "verification": {
     "method": "validated force-height replay, force-weight equilibrium, bounded damped trajectory, and terminal balance",
@@ -79,6 +79,15 @@
       -0.007,
       0.017
     ],
+    "excitation_frequency_hz": 50,
+    "electromagnetic_model_class": "fixed_frequency_cycle_averaged_force_height_lut",
+    "height_coupling": "quasi_steady_interpolation",
+    "electromagnetic_state_transient_included": false,
+    "motional_emf_included": false,
+    "force_family_source": "validation_test\\maglev\\team28_coilbuilder_height_family_results.json",
+    "force_family_snapshot_count": 25,
+    "eddy_state_order": 3,
+    "damping_identified_from_measurement": false,
     "electromagnetic_assumption": "50 Hz cycle-averaged force with quasi-steady height interpolation",
     "damping_provenance": "explicit control-oriented demonstration parameter; not identified data"
   },

@@ -72,6 +72,7 @@ TOPICS: dict[str, str] = {
     # -- maglev systems + the lab's Radia/CLN research --
     "radia_iem_fem": "Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
     "cln_mor_control": "Cauer Ladder Network (CLN) model-order reduction for real-time control-coupled maglev: ~1/500 speedup, multiport matrix-CLN, 3D gauge A-phi/T-Omega/A-T, TEAM 28 (Yano master, lab research)",
+    "team28_dynamic_scope": "TEAM 28 Simulink scope: validated 50 Hz cycle-averaged force-height LUT plus slow mechanical motion; not a carrier-resolved electromagnetic transient, motion-EMF model, or identified damping law",
     "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
@@ -745,6 +746,36 @@ what makes the 3D multiport CLN accurate.
   (multiport matrix CLN); Tanimoto, Yano, Sugahara & Nagamine 2025 (3D
   CLN gauge comparison).  (See `radia_mcp.mor` mor_cln for the canonical
   CLN paper list.)
+"""
+
+
+TEAM28_DYNAMIC_SCOPE = r"""
+# TEAM 28 dynamic Simulink scope
+
+The reusable 50 Hz model separates two time scales.  A validated
+CoilBuilder + p=6 HCurl eddy-bubble/common-basis family supplies the
+**physical cycle-averaged lift as a function of height**.  Simulink then
+integrates the slower disk height and velocity against gravity and a stated
+viscous damping parameter.  This is a useful dynamic mechanical model: it
+checks bounded motion, force-weight equilibrium, terminal velocity, and that
+the complete trajectory stays inside the 25-position force-family domain.
+
+It is deliberately **not** a full electromagnetic transient.  The 50 Hz
+carrier waveform is not stepped, electromagnetic reduced states are not
+advanced during motion, and the motion-induced derivative terms of the
+position-dependent R/L/P family are absent.  The current damping ratio is an
+explicit control/demo parameter, not a coefficient identified from TEAM 28
+measurements.  Therefore do not use this artifact to claim carrier-resolved
+current, motion-induced EMF, transient Joule-energy closure, or measured
+damping agreement.
+
+Use `team28_cycle_averaged_motion_gate` before promoting the result.  The gate
+accepts only `cycle_averaged_mechanical_motion`; it rejects a
+`full_electromagnetic_transient` claim even when the mechanical trajectory
+settles perfectly.  To cross that boundary, advance position-dependent
+electromagnetic states and the mechanical state together, include the motion
+derivative terms, and independently validate current, force, energy, and
+motion histories.
 """
 
 
@@ -2101,6 +2132,7 @@ def get_knowledge(topic: str = "overview") -> str:
         overview                  - Magnetic levitation landscape + lab research (DEFAULT)
         radia_iem_fem             - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
         cln_mor_control           - Cauer Ladder Network MOR for control-coupled maglev (Yano)
+        team28_dynamic_scope      - Cycle-averaged mechanical motion vs full EM transient boundary
         physical_tensor_rom       - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS)
         pm_maglev_zero_power      - Passive PM levitation, Maxwell-Earnshaw
         eddy_current_maglev       - Eddy-current EDS, Kansai 2D model, Arago
@@ -2130,6 +2162,9 @@ def get_knowledge(topic: str = "overview") -> str:
     if topic in ("cln_mor_control", "cln", "cauer", "cauer_ladder", "mor",
                  "model_order_reduction", "multiport_cln", "control_coupled"):
         return CLN_MOR_CONTROL
+    if topic in ("team28_dynamic_scope", "team28_dynamic", "team28_simulink",
+                 "cycle_averaged_motion", "dynamic_scope"):
+        return TEAM28_DYNAMIC_SCOPE
     if topic in ("physical_tensor_rom", "tensor_rom", "polarizability_rom",
                  "alpha_rom", "rom_fit", "aaa_nnls", "foster_rom",
                  "stoll_rom", "physical_tensor"):
@@ -2180,6 +2215,7 @@ def get_knowledge(topic: str = "overview") -> str:
             OVERVIEW,
             RADIA_IEM_FEM,
             CLN_MOR_CONTROL,
+            TEAM28_DYNAMIC_SCOPE,
             PHYSICAL_TENSOR_ROM,
             PM_MAGLEV_ZERO_POWER,
             EDDY_CURRENT_MAGLEV,
