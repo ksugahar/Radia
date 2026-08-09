@@ -3007,3 +3007,154 @@ def export_peec_topology_msh(topology, output_msh, *,
         print(f"  P_total = {summary['P_total_W']:.6e} W "
               f"({conv} current convention)")
     return summary
+
+
+_TRACK_SCHEMA_PREFIX = "radia-time-domain-lorentz-track/"
+_JOULE_PER_EV = 1.602176634e-19
+
+
+def export_particle_tracks_msh(tracks, output_msh, *, label="track",
+                               stride=1):
+    """Export time-domain Lorentz particle tracks as GMSH line elements.
+
+    Bridges ``radia.particle_tracking.track_lorentz_ivp`` (and the
+    momentum-scan helpers, via their ``tracks`` lists) to the GMSH
+    post-processing lane: each track becomes one physical group of
+    2-node line elements carrying per-segment ElementData views
+
+        ``time [s]``             midpoint sample time,
+        ``speed [m/s]``          midpoint |v|,
+        ``kinetic energy [eV]``  midpoint kinetic energy,
+        ``v [m/s]``              velocity arrows (unit tangent scaled
+                                 by the midpoint speed).
+
+    Color by ``time [s]`` to read the direction of travel, by
+    ``kinetic energy [eV]`` to see electrostatic acceleration, and
+    overlay the source geometry with
+    ``gmsh_render(..., merge_files=["coil.step"])``.
+
+    Args:
+        tracks: one track dict, or a sequence of them.  A track is the
+            return value of ``track_lorentz_ivp`` (schema
+            ``radia-time-domain-lorentz-track/v1``); for the
+            five-momentum optics helpers pass ``result["tracks"]``.
+        output_msh: output .msh v4.1 path.
+        label: physical-group base name; track ``k`` becomes
+            ``{label}_{k}``.
+        stride: keep every ``stride``-th time sample (the final sample
+            is always kept).  The DOP853 ``t_eval`` grid is often much
+            denser than a rendering needs.
+
+    Returns:
+        dict with ``n_tracks`` / ``n_nodes`` / ``n_elements`` /
+        ``views`` / per-track segment counts / the count of skipped
+        zero-length segments (repeated positions never become
+        degenerate line elements).
+    """
+    import numpy as np
+
+    if isinstance(tracks, dict):
+        tracks = [tracks]
+    try:
+        tracks = list(tracks)
+    except TypeError as exc:
+        raise ValueError(
+            "tracks must be a track dict or a sequence of them") from exc
+    if not tracks:
+        raise ValueError("tracks must contain at least one track")
+    stride = int(stride)
+    if stride < 1:
+        raise ValueError(f"stride must be >= 1, got {stride}")
+    if not str(label).strip():
+        raise ValueError("label must not be empty")
+
+    segments = []
+    groups = []
+    names = []
+    t_mid_all = []
+    speed_mid_all = []
+    ke_mid_ev_all = []
+    tang_all = []
+    per_track_segments = []
+    n_degenerate = 0
+
+    for k, track in enumerate(tracks):
+        if not isinstance(track, dict):
+            raise ValueError(f"track {k} is not a dict")
+        schema = str(track.get("schema", ""))
+        if not schema.startswith(_TRACK_SCHEMA_PREFIX):
+            raise ValueError(
+                f"track {k} schema {schema!r} is not a "
+                f"{_TRACK_SCHEMA_PREFIX}* track (pass the "
+                "track_lorentz_ivp result dict)")
+        missing = [key for key in ("time_s", "position_m", "velocity_m_s",
+                                   "kinetic_energy_j") if key not in track]
+        if missing:
+            raise ValueError(f"track {k} is missing keys {missing}")
+        times = np.asarray(track["time_s"], dtype=np.float64).reshape(-1)
+        pos = np.asarray(track["position_m"], dtype=np.float64)
+        vel = np.asarray(track["velocity_m_s"], dtype=np.float64)
+        ke_j = np.asarray(track["kinetic_energy_j"],
+                          dtype=np.float64).reshape(-1)
+        n = times.shape[0]
+        if pos.shape != (n, 3) or vel.shape != (n, 3) or ke_j.shape != (n,):
+            raise ValueError(
+                f"track {k}: inconsistent sample counts "
+                f"(time {n}, position {pos.shape}, velocity {vel.shape}, "
+                f"kinetic energy {ke_j.shape})")
+        keep = list(range(0, n, stride))
+        if keep[-1] != n - 1:
+            keep.append(n - 1)
+        if len(keep) < 2:
+            raise ValueError(
+                f"track {k} has {n} samples; need at least 2 after "
+                f"stride {stride}")
+        times, pos, vel, ke_j = times[keep], pos[keep], vel[keep], ke_j[keep]
+
+        speed = np.linalg.norm(vel, axis=1)
+        chords = pos[1:] - pos[:-1]
+        lengths = np.linalg.norm(chords, axis=1)
+        ok = lengths >= 1e-30
+        n_degenerate += int((~ok).sum())
+        if not ok.any():
+            raise ValueError(
+                f"track {k}: every segment has zero length "
+                "(the particle never moved)")
+        names.append(f"{label}_{k}")
+        idx = np.flatnonzero(ok)
+        for i in idx:
+            segments.append((tuple(pos[i]), tuple(pos[i + 1])))
+            groups.append(k)
+        t_mid_all.append(0.5 * (times[idx] + times[idx + 1]))
+        speed_mid_all.append(0.5 * (speed[idx] + speed[idx + 1]))
+        ke_mid_ev_all.append(
+            0.5 * (ke_j[idx] + ke_j[idx + 1]) / _JOULE_PER_EV)
+        tang_all.append(chords[idx] / lengths[idx, None]
+                        * (0.5 * (speed[idx] + speed[idx + 1]))[:, None])
+        per_track_segments.append(int(idx.size))
+
+    views = [
+        {"name": "time [s]", "ncomp": 1, "step": 0, "time": 0.0,
+         "values": np.concatenate(t_mid_all)},
+        {"name": "speed [m/s]", "ncomp": 1, "step": 0, "time": 0.0,
+         "values": np.concatenate(speed_mid_all)},
+        {"name": "kinetic energy [eV]", "ncomp": 1, "step": 0, "time": 0.0,
+         "values": np.concatenate(ke_mid_ev_all)},
+        {"name": "v [m/s]", "ncomp": 3, "step": 0, "time": 0.0,
+         "values": np.concatenate(tang_all, axis=0)},
+    ]
+
+    info = _write_line_element_msh(output_msh, segments, groups, names,
+                                   views)
+    summary = {
+        "n_tracks": len(tracks),
+        "n_nodes": info["n_nodes"],
+        "n_elements": info["n_elements"],
+        "per_track_segments": per_track_segments,
+        "n_degenerate_skipped": n_degenerate,
+        "views": [v["name"] for v in views],
+    }
+    print(f"export_particle_tracks_msh: {output_msh}")
+    print(f"  {len(tracks)} tracks, {info['n_elements']} segments, "
+          f"{info['n_nodes']} nodes, views: {summary['views']}")
+    return summary

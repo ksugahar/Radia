@@ -1045,6 +1045,7 @@ python -m radia_mcp.gmsh.msh_inspect docs                   # directory audit
 | `gmsh_isosurface` / `gmsh_cut_plane_extract` | Extract iso surfaces / plane sections as DATA (.pos) for downstream probe/stats/render -- unlike the render-time clip which is visual only. |
 | `gmsh_harmonic_to_time` | re/im two-step view -> n-step time animation (AC phasor -> rotating-field GIF together with gmsh_export_animation). |
 | `gmsh_streamlines` | Field lines by probe-driven arc-length RK4 (both directions, field magnitude as line color, polyline coords returnable). This build's Plugin(StreamLines) only re-emits seeds -- do not use it. |
+| `gmsh_particle_trace` | Charged-particle ORBITS (relativistic Boris pusher on dp/dt = q(E + v x B)) through the probed B [T] (+ optional E [V/m]) views: species presets or charge_e/mass_amu, auto time step from the seed gyration period, termination reasons, and per-track diagnostics (gyroradius, speed_change_rel = integrator health in pure B). |
 | `gmsh_exec` | Stateful evaluate in a PERSISTENT headless gmsh worker (matlab-mcp-core-server style): open a model once, interrogate it across calls; `result` variable + stdout come back. |
 | `gmsh_session_status` / `gmsh_session_shutdown` | Session lifecycle (lazy start on first exec; crash/hang kills only the worker and fails loudly). |
 
@@ -1780,6 +1781,7 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Cell Data to Point Data | gmsh_smooth_to_nodes | node = mean of adjacent elements (10/20 -> 15) |
 | Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons (Plugin StreamLines is broken on this build) |
 | Evenly Spaced Streamlines 2D | gmsh_streamlines_2d | Jobard-Lefer on ANY plane slice of 3D data (ParaView: native-2D datasets only) |
+| Particle Tracer / ParticlePath | gmsh_particle_trace | BEYOND parity: ParaView advects massless tracers along a velocity field; this integrates the relativistic LORENTZ DYNAMICS dp/dt = q(E + v x B) (Boris pusher), which ParaView has no native filter for |
 | (FEMM-style 2D flux plot) | gmsh_flux_lines | contours of A_z / psi = EXACT equal-flux field lines, no integration |
 | Glyph (vector arrows) | gmsh_render options | View.VectorType=4 (3D arrow), View.GlyphLocation, View.ArrowSizeMax/ArrowSizeMin |
 | Plot Over Line | gmsh_line_profile | straight line + PNG graph |
@@ -1822,6 +1824,24 @@ decreasing exactness -- always prefer the highest one that applies:
    reports "stagnation" INSIDE the domain marks a field zero (or a
    numerically incoherent region) -- a real diagnostic, not a
    rendering artifact.
+4. **Particle ORBITS are NOT field lines -> gmsh_particle_trace.**
+   A charged particle GYRATES around a field line (gyroradius
+   r = gamma m v_perp / |q| B) instead of following it -- never
+   depict a beam with streamlines.  The relativistic Boris pusher
+   integrates dp/dt = q(E + v x B) with the time step defaulting to
+   1/64 of the LOCAL gyration period at each seed (B = 0 at a seed
+   demands an explicit dt_s -- fail-loud, no guessed time scale).
+   Color by time to read direction of travel, by energy when an
+   e_view_name accelerates the particle.  Physics self-checks built
+   in: in a pure magnetic field the Boris rotation conserves speed
+   EXACTLY, so the reported per-track speed_change_rel (~1e-15) is
+   an integrator health gate, and the seed gyroradius lets you check
+   the orbit scale against the mesh by hand.  For tracks computed on
+   the radia side (rad.Fld exact open-boundary fields via
+   radia.particle_tracking.track_lorentz_ivp), write them with
+   radia.gmsh_post_export.export_particle_tracks_msh and render the
+   .msh together with the coil STEP (merge_files) -- same views
+   (time / speed / kinetic energy / v arrows), solver-grade fields.
 
 ## Beautiful isosurfaces: the four levers (all measured)
 
