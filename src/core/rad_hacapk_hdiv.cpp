@@ -653,6 +653,23 @@ static double WedgeFarOneSidedThreshold()
     return threshold;
 }
 
+// DISTORTED-pair far switch (C-4 fill speedup, 2026-08-09): a well-separated host pair whose geometry is
+// NOT affine (Sculpt skin hexes, curved Q2 cells) still has a SMOOTH integrand, and the tensor-product
+// far rule is geometry-map exact (Q2 point placement; Piola reference charge measure -- no Jacobian
+// appears), so it applies verbatim.  Pairs farther than factor*(size_a+size_b) route to
+// QuadBlockHexAffineFarProduct instead of the 6x6-sub graded machinery.  Default matches the accepted
+// affine far gate (HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0); <= 0 disables the switch (diagnostic A/B /
+// regression-triage escape, same pattern as the one-sided thresholds above).
+static double HexDistortedFarFactor()
+{
+    static const double factor = []() -> double {
+        const char* v = std::getenv("RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR");
+        if (!v || v[0] == '\0') return 1.0;
+        return std::atof(v);
+    }();
+    return factor;
+}
+
 // 0/off: disable wedge translation cache, 1: conservative cell-cell subset, 2/all/default: all translated hosts.
 static int WedgeTransCacheScope()
 {
@@ -3489,6 +3506,19 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hoSymBlockHits.store(0, std::memory_order_relaxed);
     m_hoSymBlockMisses.store(0, std::memory_order_relaxed);
     m_hoSymBlockClears.store(0, std::memory_order_relaxed);
+    m_hexBlkAffineNear.store(0, std::memory_order_relaxed);
+    m_hexBlkAffineFar.store(0, std::memory_order_relaxed);
+    m_hexBlkDistortedFar.store(0, std::memory_order_relaxed);
+    m_hexBlkGeneralNear.store(0, std::memory_order_relaxed);
+    m_hexBlkGeneralFar.store(0, std::memory_order_relaxed);
+    m_hexNsAffineNear.store(0, std::memory_order_relaxed);
+    m_hexNsAffineFar.store(0, std::memory_order_relaxed);
+    m_hexNsDistortedFar.store(0, std::memory_order_relaxed);
+    m_hexNsGeneralNear.store(0, std::memory_order_relaxed);
+    m_hexNsGeneralFar.store(0, std::memory_order_relaxed);
+    m_hexGeneralSharedLookups.store(0, std::memory_order_relaxed);
+    m_hexGeneralSharedHits.store(0, std::memory_order_relaxed);
+    m_hexGeneralSharedMisses.store(0, std::memory_order_relaxed);
 }
 
 std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats() const
@@ -3498,6 +3528,22 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_cache_stats_enabled", m_hexCacheStatsEnabled ? 1.0 : 0.0);
     out.emplace_back("hex_far_one_sided_threshold", HexFarOneSidedThreshold());
     out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
+    out.emplace_back("hex_distorted_far_factor", HexDistortedFarFactor());
+    // QuadBlockHex dispatch profile: computed blocks + accumulated wall seconds per branch (thread-summed
+    // across the ParallelFor workers, so the seconds compare branch-to-branch, not to the build wall clock).
+    out.emplace_back("hex_blk_affine_near", ld(m_hexBlkAffineNear));
+    out.emplace_back("hex_blk_affine_far", ld(m_hexBlkAffineFar));
+    out.emplace_back("hex_blk_distorted_far", ld(m_hexBlkDistortedFar));
+    out.emplace_back("hex_blk_general_near", ld(m_hexBlkGeneralNear));
+    out.emplace_back("hex_blk_general_far", ld(m_hexBlkGeneralFar));
+    out.emplace_back("hex_s_affine_near", ld(m_hexNsAffineNear) * 1e-9);
+    out.emplace_back("hex_s_affine_far", ld(m_hexNsAffineFar) * 1e-9);
+    out.emplace_back("hex_s_distorted_far", ld(m_hexNsDistortedFar) * 1e-9);
+    out.emplace_back("hex_s_general_near", ld(m_hexNsGeneralNear) * 1e-9);
+    out.emplace_back("hex_s_general_far", ld(m_hexNsGeneralFar) * 1e-9);
+    out.emplace_back("hex_general_shared_lookups", ld(m_hexGeneralSharedLookups));
+    out.emplace_back("hex_general_shared_hits", ld(m_hexGeneralSharedHits));
+    out.emplace_back("hex_general_shared_misses", ld(m_hexGeneralSharedMisses));
     out.emplace_back("wedge_far_one_sided_threshold", WedgeFarOneSidedThreshold());
     out.emplace_back("wedge_trans_cache_scope", (double)WedgeTransCacheScope());
     out.emplace_back("wedge_trans_cache_enabled", WedgeTransCacheScope() > 0 ? 1.0 : 0.0);
@@ -3730,6 +3776,9 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
 // Integrate both complete reference hosts with the same tensor Gauss rule instead.  The cube/quad rule is
 // invariant under axis reflections (unlike a fixed sub-tet diagonal), and all local charge modes share the
 // kernel evaluation.  Near/self pairs stay on QuadBlockHexAffineProduct's analytic source potential.
+// NOT affine-only despite the name: points are placed by the full Q2 map (HexQ2MapX/QuadQ2MapX) and the
+// Piola reference charge measure makes the Jacobian drop out, so the same rule serves well-separated
+// DISTORTED/curved pairs too (the HexDistortedFarFactor dispatch in QuadBlockHex, C-4 fill speedup).
 std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
     int kindT, int hT, int kindS, int hS, int mask) const
 {
@@ -4536,23 +4585,46 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                        || kindT != 0 && face_affine(hT);
     const bool affineS = kindS == 0 && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]
                        || kindS != 0 && face_affine(hS);
+    // Host-pair separation on the mask-reflected source centroid: drives the affine near/far product
+    // switch, the distorted-pair far switch, and the general path's near_hosts grading below.
+    const int repA = tgtG[0], repB = srcG[0];
+    const double repBc[3] = {
+        (mask & 1) ? -m_cent[(size_t)3*repB]     : m_cent[(size_t)3*repB],
+        (mask & 2) ? -m_cent[(size_t)3*repB + 1] : m_cent[(size_t)3*repB + 1],
+        (mask & 4) ? -m_cent[(size_t)3*repB + 2] : m_cent[(size_t)3*repB + 2]};
+    const double sep = std::sqrt(
+        (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
+      + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
+      + (m_cent[(size_t)3*repA + 2] - repBc[2])*(m_cent[(size_t)3*repA + 2] - repBc[2]));
+    auto timed = [](std::atomic<long long>& blocks, std::atomic<long long>& ns_acc,
+                    auto&& fn) -> std::vector<double> {
+        const auto t0 = std::chrono::steady_clock::now();
+        std::vector<double> out = fn();
+        blocks.fetch_add(1, std::memory_order_relaxed);
+        ns_acc.fetch_add((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now() - t0).count(),
+                         std::memory_order_relaxed);
+        return out;
+    };
     if (affineT && affineS) {
-        const std::vector<int>& aG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
-        const std::vector<int>& bG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
-        const int a = aG[0], b = bG[0];
-        const double reflected[3] = {
-            (mask & 1) ? -m_cent[(size_t)3*b]     : m_cent[(size_t)3*b],
-            (mask & 2) ? -m_cent[(size_t)3*b + 1] : m_cent[(size_t)3*b + 1],
-            (mask & 4) ? -m_cent[(size_t)3*b + 2] : m_cent[(size_t)3*b + 2]};
-        const double dx = m_cent[(size_t)3*a] - reflected[0];
-        const double dy = m_cent[(size_t)3*a + 1] - reflected[1];
-        const double dz = m_cent[(size_t)3*a + 2] - reflected[2];
-        const bool exact_near = std::sqrt(dx*dx + dy*dy + dz*dz)
-            <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[a] + m_size[b]);
+        const bool exact_near = sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
         return exact_near
-            ? QuadBlockHexAffineProduct(kindT, hT, kindS, hS, mask)
-            : QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, mask);
+            ? timed(m_hexBlkAffineNear, m_hexNsAffineNear,
+                    [&]{ return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, mask); })
+            : timed(m_hexBlkAffineFar, m_hexNsAffineFar,
+                    [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, mask); });
     }
+    // DISTORTED-pair far switch (see HexDistortedFarFactor): the tensor far product is geometry-map
+    // exact (Q2 point placement, Piola reference charge measure), so a well-separated pair with a
+    // distorted/curved host needs no 6x6-sub graded machinery either.  Self pairs have sep == 0 and
+    // always stay on the graded/radial path.
+    {
+        const double fac = HexDistortedFarFactor();
+        if (fac > 0.0 && sep > fac*(m_size[repA] + m_size[repB]))
+            return timed(m_hexBlkDistortedFar, m_hexNsDistortedFar,
+                         [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, mask); });
+    }
+    const auto t_general0 = std::chrono::steady_clock::now();
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
     // IMA (mask>0): couple the TARGET host with the source host REFLECTED on the 3-bit axis mask.  By the
@@ -4563,12 +4635,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         o[0] = (mask & 1) ? -v[0] : v[0]; o[1] = (mask & 2) ? -v[1] : v[1]; o[2] = (mask & 4) ? -v[2] : v[2];
     };
     const int rt = tgtG[0], rs = srcG[0];      // representative charges (host-level cent/size)
-    double rsc[3]; reflpt(&m_cent[3*rs], rsc);
-    const double dxh = m_cent[3*rt]-rsc[0], dyh = m_cent[3*rt+1]-rsc[1],
-                 dzh = m_cent[3*rt+2]-rsc[2];
-    const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
     const bool near_hosts = (mask == 0 && kindT == kindS && hT == hS)
-                            || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
+                            || sep <= m_near_grade*(m_size[rt] + m_size[rs]);   // sep == reflected r_h above
     // SELF host pair: the inner takes the RADIAL decomposition with the EXACT anchor xiT (the outer
     // point's own ref coords -- no Newton).  The OUTER grading below is UNCHANGED -- it is required by the
     // Q1 charge degree regardless of how the inner is computed (exact inner + regular outer -> eig 1.088).
@@ -4647,6 +4715,12 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         }
     }
     for (double& v : blk) v *= RAD_INV_FOUR_PI;
+    (near_hosts ? m_hexBlkGeneralNear : m_hexBlkGeneralFar)
+        .fetch_add(1, std::memory_order_relaxed);
+    (near_hosts ? m_hexNsGeneralNear : m_hexNsGeneralFar)
+        .fetch_add((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                       std::chrono::steady_clock::now() - t_general0).count(),
+                   std::memory_order_relaxed);
     return blk;
 }
 
@@ -4927,12 +5001,69 @@ static thread_local std::unordered_map<HexTransBlockKey, std::vector<double>, He
 static thread_local long long s_ho_tet_sym_block_owner = -1;
 static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_ho_tet_sym_block_cache;
 
+// True when the pair would take QuadBlockHex's general path (graded near ~30 ms/block, site-radial
+// mid band ~0.5 ms/block): neither the affine-affine product nor the distorted-pair far product
+// applies.  Used ONLY to route the block into the instance-shared general cache -- a borderline
+// disagreement with QuadBlockHex's own dispatch merely caches a block in the other tier (see the
+// header member doc), so this test may use the cheap ctor-precomputed affinity flags
+// (m_hexAffineCell / m_quadAffineFace) instead of QuadBlockHex's per-call face_affine lattice
+// re-check.
+bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int mask) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    if (tgtG.empty() || srcG.empty()) return false;
+    const bool affT = (kindT == 0)
+        ? (hT >= 0 && hT < (int)m_hexAffineCell.size() && m_hexAffineCell[hT])
+        : (hT >= 0 && hT < (int)m_quadAffineFace.size() && m_quadAffineFace[hT]);
+    const bool affS = (kindS == 0)
+        ? (hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS])
+        : (hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]);
+    if (affT && affS) return false;
+    const double fac = HexDistortedFarFactor();
+    if (fac <= 0.0) return true;
+    const int repA = tgtG[0], repB = srcG[0];
+    const double repBc[3] = {
+        (mask & 1) ? -m_cent[(size_t)3*repB]     : m_cent[(size_t)3*repB],
+        (mask & 2) ? -m_cent[(size_t)3*repB + 1] : m_cent[(size_t)3*repB + 1],
+        (mask & 4) ? -m_cent[(size_t)3*repB + 2] : m_cent[(size_t)3*repB + 2]};
+    const double sep = std::sqrt(
+        (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
+      + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
+      + (m_cent[(size_t)3*repA + 2] - repBc[2])*(m_cent[(size_t)3*repA + 2] - repBc[2]));
+    return sep <= fac*(m_size[repA] + m_size[repB]);
+}
+
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int mask) const
 {
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
     const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
                                  !m_d2 && m_hexUniformTransHosts && mask == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
+    if (!use_trans_cache && !m_d2 && !m_wedgemode
+            && HexPairTakesGeneralPath(kindT, hT, kindS, hS, mask)) {
+        // Expensive general-path block (graded near or site-radial mid band): serve from the
+        // instance-shared cache so the fill workers do not each recompute it (the per-thread caches
+        // below duplicate ~2x).  Key packs (kinds, mask, hosts) into 64 bits; hosts < 2^28.
+        const unsigned long long key =
+            (unsigned long long)(kindT != 0) | ((unsigned long long)(kindS != 0) << 1)
+          | ((unsigned long long)(mask & 7) << 2)
+          | ((unsigned long long)(unsigned)hT << 5) | ((unsigned long long)(unsigned)hS << 33);
+        m_hexGeneralSharedLookups.fetch_add(1, std::memory_order_relaxed);
+        {
+            std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
+            auto it = m_hexGeneralSharedCache.find(key);
+            if (it != m_hexGeneralSharedCache.end()) {
+                m_hexGeneralSharedHits.fetch_add(1, std::memory_order_relaxed);
+                return it->second;
+            }
+        }
+        std::vector<double> blk = QuadBlockHex(kindT, hT, kindS, hS, mask);
+        m_hexGeneralSharedMisses.fetch_add(1, std::memory_order_relaxed);
+        std::unique_lock<std::shared_mutex> wl(m_hexGeneralSharedMutex);
+        auto it = m_hexGeneralSharedCache.emplace(key, std::move(blk)).first;   // racing first insert wins
+        return it->second;
+    }
     if (use_trans_cache) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockLookups);
         if (s_hex_trans_block_owner != m_build_id) {

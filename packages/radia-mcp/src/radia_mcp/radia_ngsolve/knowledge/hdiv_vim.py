@@ -469,6 +469,29 @@ Record these quantities in validation and benchmark artifacts:
 Small problems are allowed to be simply "interactive".  The scaling question
 matters at engineering size, where charge count and matrix build dominate.
 Timing claims should be taken on mdx when it is idle.
+
+## HEX fill profile and the distorted-far dispatch (2026-08-09)
+
+Sculpt / overlay-grid hex meshes have NO affine cells (the smoothing moves
+every node; measured median deviation ~25 % of the cell scale), so no pair
+takes the affine analytic product.  The fill dispatch for such meshes:
+
+- well-separated pairs (centroid separation > factor * (size_a + size_b),
+  default factor 1.0) use the geometry-map-exact tensor far product
+  (~30 us/block); `RADIA_HDIV_HEX_DISTORTED_FAR_FACTOR=0` restores the old
+  all-general path (regression-triage escape; entries move only at
+  quadrature-truncation level, measured max ~2e-5 of max |G|);
+- remaining general-path blocks (graded near ~30 ms, site-radial mid band
+  ~0.5 ms) are served from an instance-shared cache so the fill workers do
+  not recompute them per thread.
+
+Profile a build by setting `RADIA_HDIV_HEX_CACHE_STATS=1` and reading
+`gram.stats()`: `hex_blk_{affine_near,affine_far,distorted_far,general_near,
+general_far}` are computed-block counts, `hex_s_*` the matching thread-summed
+wall seconds, `hex_general_shared_{lookups,hits,misses}` the shared-cache
+behavior.  The dominant remaining term on distorted meshes is
+`general_near` (self + touching pairs); its glin=5 site-radial inner is
+spectrum-gated -- do not lower it to chase build time.
 """
 
 _VERIFICATION = r"""
