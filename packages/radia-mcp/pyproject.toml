@@ -39,6 +39,19 @@ cadquery = [
 gmsh = [
     "gmsh>=4.10",
 ]
+# Topology-optimization shape regeneration: Radia density/level-set output
+# -> watertight STL -> headless Cubit -> gated `.vol` / `.msh` artifacts.
+# `trimesh` is also the independent STL closure/volume referee used before
+# Cubit consumes the surface.
+shape-regeneration = [
+    "radia>=4.6.1",
+    "scipy>=1.10",
+    "gmsh>=4.10",
+    "scikit-image>=0.22",
+    "trimesh>=4.0",
+    "netCDF4>=1.6",
+    "fast-simplification>=0.1",
+]
 # YouTube transcript scraping for Cubit/build123d/gmsh tutorial
 # absorption (cubit_youtube / build123d_youtube / gmsh_youtube
 # sub-sources). stdlib-only otherwise.
@@ -84,7 +97,7 @@ document = [
 ]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[build123d,cadquery,gmsh,youtube,radia,rag,md2html,document]",
+    "radia-mcp[build123d,cadquery,gmsh,shape-regeneration,youtube,radia,rag,md2html,document]",
 ]
 
 [project.urls]
