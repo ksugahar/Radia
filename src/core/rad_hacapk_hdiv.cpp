@@ -5583,15 +5583,75 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     ResetHexCacheStats();
     m_derivativeAcaEps=params.aca_eps;
     m_derivativeMaxRank=params.max_rank;
+    // Charge-basis normalization (see the header doc at MatVecSym): the
+    // sigma pre-pass + the m_fillNormalized toggle live in OnBeforeBuild --
+    // the base build fixes m_n via ExtractCoordinates FIRST, then calls
+    // OnBeforeBuild, then fills; only the reset after the fill lives here.
     cHACApK_set_sym_fill(1);
     const bool ok = RadHACApKBase::BuildHMatrix(params);
     cHACApK_set_sym_fill(0);
+    m_fillNormalized = false;
     return ok;
+}
+
+void RadHACApKChargeGram::ComputeChargeSigma()
+{
+    m_chargeSigma.assign((size_t)m_n, 1.0);
+    m_chargeSigmaInv.assign((size_t)m_n, 1.0);
+    {
+        // C++ HACApK self-wrap policy: this pre-pass runs BEFORE the base
+        // build's own region, so it stands up its own.
+        ngcore::RegionTaskManager rtm(
+            std::max(1, (int)ngcore::TaskManager::GetMaxThreads()));
+        ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t p) {
+            const double d = GetInteractionMatrixElementRaw((int)p, (int)p);
+            if (d > 0.0 && std::isfinite(d)) {
+                const double s = std::sqrt(d);
+                m_chargeSigma[p] = s;
+                m_chargeSigmaInv[p] = 1.0 / s;
+            }
+        });
+    }
+    m_sigmaActive = true;
+}
+
+void RadHACApKChargeGram::MatVecSym(const std::vector<double>& x,
+                                    std::vector<double>& y)
+{
+    if (!m_sigmaActive) { RadHACApKBase::MatVecSym(x, y); return; }
+    // stored leaves hold Ghat = S^-1 G S^-1; the physical apply is
+    // G x = S (Ghat (S x)).
+    std::vector<double> xs((size_t)m_n);
+    for (int p = 0; p < m_n; ++p)
+        xs[(size_t)p] = x[(size_t)p] * m_chargeSigma[(size_t)p];
+    RadHACApKBase::MatVecSym(xs, y);
+    for (int p = 0; p < m_n; ++p)
+        y[(size_t)p] *= m_chargeSigma[(size_t)p];
+}
+
+void RadHACApKChargeGram::MatVecSymMany(const std::vector<double>& x,
+                                        int nrhs, std::vector<double>& y)
+{
+    if (!m_sigmaActive) { RadHACApKBase::MatVecSymMany(x, nrhs, y); return; }
+    std::vector<double> xs(x.size());
+    for (int r = 0; r < nrhs; ++r)
+        for (int p = 0; p < m_n; ++p)
+            xs[(size_t)r * m_n + p] =
+                x[(size_t)r * m_n + p] * m_chargeSigma[(size_t)p];
+    RadHACApKBase::MatVecSymMany(xs, nrhs, y);
+    for (int r = 0; r < nrhs; ++r)
+        for (int p = 0; p < m_n; ++p)
+            y[(size_t)r * m_n + p] *= m_chargeSigma[(size_t)p];
 }
 
 void RadHACApKChargeGram::OnBeforeBuild()
 {
     if (m_curved) PrecomputeCurvedTouchBlocks();
+    // Charge-basis normalization: runs after the base build's
+    // ExtractCoordinates (m_n is final here) and before the fill, so the
+    // fill's entry oracle serves Ghat = S^-1 G S^-1 with O(1) dynamic range.
+    ComputeChargeSigma();
+    m_fillNormalized = true;
 }
 
 // ============================================ WEDGE (PRISM) BDM1 compute (2026-07-04) ===================
@@ -6317,6 +6377,20 @@ double RadHACApKChargeGram::TetChargeGramDirectionalDerivativeElement(
 }
 
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
+{
+    // Physical entry, EXCEPT while the H-matrix fill is running: the fill's
+    // oracle serves the normalized Ghat = sigma_a^-1 sigma_b^-1 * raw so the
+    // stored leaves/ACA carry O(1) dynamic range (see the MatVecSym header
+    // doc for the roundoff-amplification incident this prevents).  Every
+    // caller outside the fill -- Jacobi-diagonal builders, diagnostics,
+    // reciprocity gates -- keeps the raw physical Gram.
+    const double raw = GetInteractionMatrixElementRaw(a, b);
+    if (m_fillNormalized)
+        return raw * (m_chargeSigmaInv[(size_t)a] * m_chargeSigmaInv[(size_t)b]);
+    return raw;
+}
+
+double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
 {
     // Fail-loud bounds guard (2026-07-03 flake hunt): a HACApK-side index bug (1-based lod handling /
     // buffer overrun) would otherwise read garbage hosts and produce plausible-but-wrong blocks.

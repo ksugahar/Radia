@@ -416,8 +416,31 @@ public:
     // Used by prescribed-magnetization field sources, which need the exact
     // charge geometry and B map but never apply the charge Gram matrix.
     void PrepareGeometryOnly() { ExtractCoordinates(); }
-    void MatVec(const std::vector<double>& x, std::vector<double>& y) { MatVecSym(x, y); }
-    void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y) { MatVecSym(x, y); }
+    void MatVec(const std::vector<double>& x, std::vector<double>& y) override { MatVecSym(x, y); }
+    void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y) override { MatVecSym(x, y); }
+
+    // ---- charge-basis normalization (2026-08-09 roundoff-amplification fix) --
+    // The H-matrix STORES the normalized Gram Ghat = S^-1 G S^-1 with
+    // S = diag(sigma), sigma_p = sqrt(raw G_pp): diag(Ghat) = 1 and every
+    // leaf/ACA entry carries O(1) dynamic range.  These overrides wrap the
+    // scaling back (G x = S (Ghat (S x))), so EVERY caller -- configured
+    // demag applies, solvers, pybind matvecs -- keeps the PHYSICAL Gram
+    // semantics unchanged.  Why: on meshes whose element sizes span decades
+    // (marching-cubes micro-facet blobs measured 3700x volume ratio), the
+    // unnormalized monomial charge basis puts charge-map rows at ~3e10 while
+    // G's diagonal spans 1.2e10 in magnitude, and the congruence N = B^T G B
+    // then amplifies G's ABSOLUTE rounding band (~eps*||G||) by ||B||^2 into
+    // O(1) NEGATIVE demag eigenvalues (measured mu_min = -2.67 against the
+    // physical [0,1] spectrum; CG stalls at any tolerance).  Storing Ghat
+    // keeps each entry relative-precision exact, which restores N PSD --
+    // proven on the 728-cell repro where clipping G's negative rounding band
+    // alone flipped 6 negative eigenvalues to 0.  See bug pattern
+    // facet-tet-charge-gram-indefinite-cg-stall.
+    void MatVecSym(const std::vector<double>& x, std::vector<double>& y) override;
+    void MatVecSymMany(const std::vector<double>& x, int nrhs,
+                       std::vector<double>& y) override;
+    // Diagnostic access: sigma_p = sqrt(raw G_pp) (empty before BuildHMatrix).
+    const std::vector<double>& ChargeSigma() const { return m_chargeSigma; }
 
     // M3 (the iterative-solve hot kernel in C++): solve the SPD HDiv-VIM linear material system
     //   ((1/chi) M_mass + B^T G B) m = rhs
@@ -640,6 +663,18 @@ protected:
 
 private:
     friend class RadHACApKChargeGramDerivative;
+    // The complete physical entry evaluation (every mode branch); the public
+    // virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw ONLY
+    // while the H-matrix fill is running (m_fillNormalized).
+    double GetInteractionMatrixElementRaw(int a, int b) const;
+    // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp) (1.0 on a nonpositive
+    // or nonfinite diagonal -- fail-soft here would hide nothing: the entry
+    // itself is served unscaled then).
+    void ComputeChargeSigma();
+    std::vector<double> m_chargeSigma;     // sigma_p (empty before build)
+    std::vector<double> m_chargeSigmaInv;  // 1/sigma_p
+    bool m_sigmaActive = false;            // leaves hold Ghat; applies wrap S
+    mutable bool m_fillNormalized = false; // fill-time oracle serves Ghat
     void ApplyConfiguredDemagImpl(
         const double* x, double* y, double scale, bool add, bool symmetric,
         bool respect_constraints = true);
