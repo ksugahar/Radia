@@ -1,52 +1,52 @@
 {
  "schema": "radia.isochronous-topopt-lane/v1",
- "generated_at_utc": "2026-08-08T21:34:53Z",
+ "generated_at_utc": "2026-08-09T15:35:29Z",
  "hostname": "lab",
- "radia_version": "4.95.49",
+ "radia_version": "4.95.50",
  "python_version": "3.12.10",
  "ne": 194,
  "ndof": 1419,
  "targets": [
-  0.01994153945726574,
-  0.01906849415572159
+  0.019937324260271116,
+  0.0190657317134907
  ],
- "J_first": 0.027589021223590197,
- "J_last": 0.029437879415394313,
- "gain": 0.06701427270001292,
- "viol_over_band_max": 0.9937939572318834,
- "t_iter_median_s": 0.17214520002016798,
- "solves": 14,
- "n_iron": 72,
+ "J_first": 0.027764579117470576,
+ "J_last": 0.03220379387712992,
+ "gain": 0.1598877022726417,
+ "viol_over_band_max": 1.061715848055775,
+ "t_iter_median_s": 0.41975230000025476,
+ "solves": 49,
+ "n_iron": 66,
  "values_embedded": [
-  0.7630749718124794,
-  -0.002211496380140548,
-  0.002559065994359421
+  0.7828810476013528,
+  -0.0024716904261170482,
+  0.0009236220552285742
  ],
  "values_iron_only": [
-  0.7294337720715376,
-  -0.0020151141519837647,
-  0.0035395243832021398
+  0.7775776097223178,
+  -0.002355316380900362,
+  0.001746564983338302
  ],
  "bands": [
-  0.04611960815222925,
-  -0.09745464194346312,
-  -0.27700286329309504
+  0.0068204611510469014,
+  -0.049409092621433746,
+  -0.47117796128993344
  ],
  "history": [
   {
    "iteration": 0,
-   "objective": 0.027589021223590197,
+   "objective": 0.027764579117470576,
    "constraints": [
-    0.019924362203342438,
-    0.019060253054651963
+    0.01992015886117555,
+    0.01905749537179192
    ],
    "violation": [
-    1.7177253923302688e-05,
-    8.241101069627471e-06
+    1.7165399095565165e-05,
+    8.236341698778654e-06
    ],
    "band": [
-    9.97076972863287e-05,
-    9.534247077860795e-05
+    9.968662130135559e-05,
+    9.532865856745349e-05
    ],
    "volume": 0.00015706116770568577,
    "design_volume": 0.0001570611677056858,
@@ -54,149 +54,974 @@
    "move": 0.1,
    "trials": 1,
    "band_mode": "band",
-   "t_iter_s": 0.16992230000323616,
-   "state_iterations": 157,
+   "t_iter_s": 0.17661280000174884,
+   "state_iterations": 156,
    "adjoint_iterations": [
-    157,
-    158,
-    168
+    156,
+    156,
+    167
    ],
-   "max_violation_over_band": 0.17227610696870366,
+   "max_violation_over_band": 0.17219360904683145,
    "intermediate_fraction": 1.0,
-   "binary_distance_mean": 0.43568457228118923,
-   "binary_distance_max": 0.49984008395398416
+   "binary_distance_mean": 0.4356845722811893,
+   "binary_distance_max": 0.49984008395398394
   },
   {
    "iteration": 1,
-   "objective": 0.028290393624459363,
+   "objective": 0.028465553000151158,
    "constraints": [
-    0.019898275782128903,
-    0.019047943539214542
+    0.019894261241664202,
+    0.019045209071803206
    ],
    "violation": [
-    4.326367513683704e-05,
-    2.0550616507047925e-05
+    4.3063018606914055e-05,
+    2.052264168749332e-05
    ],
    "band": [
-    9.97076972863287e-05,
-    9.534247077860795e-05
+    9.968662130135559e-05,
+    9.532865856745349e-05
    ],
-   "volume": 0.00015282367464626332,
-   "design_volume": 0.00015282367464626337,
+   "volume": 0.00015296110836451163,
+   "design_volume": 0.0001529611083645117,
    "max_density_change": 0.09999999999999998,
    "move": 0.1,
    "trials": 1,
    "band_mode": "band",
-   "t_iter_s": 0.16812129999743775,
+   "t_iter_s": 0.18412159999570576,
    "state_iterations": 176,
    "adjoint_iterations": [
-    167,
-    178,
+    166,
+    177,
     190
    ],
-   "max_violation_over_band": 0.4339050676558858,
+   "max_violation_over_band": 0.4319839316926319,
    "intermediate_fraction": 1.0,
-   "binary_distance_mean": 0.37034301495009486,
-   "binary_distance_max": 0.49616818372661536
+   "binary_distance_mean": 0.3709563539581179,
+   "binary_distance_max": 0.4961759027447508
   },
   {
    "iteration": 2,
-   "objective": 0.029263865942683126,
+   "objective": 0.029438304151043523,
    "constraints": [
-    0.019851764642168604,
-    0.01902710149833654
+    0.01984792257545315,
+    0.019024392745934433
    ],
    "violation": [
-    8.977481509713642e-05,
-    4.139265738505038e-05
+    8.940168481796559e-05,
+    4.133896755626615e-05
    ],
    "band": [
-    9.97076972863287e-05,
-    9.534247077860795e-05
+    9.968662130135559e-05,
+    9.532865856745349e-05
    ],
-   "volume": 0.0001447446254313261,
-   "design_volume": 0.00014474462543132612,
+   "volume": 0.00014488205914957444,
+   "design_volume": 0.00014488205914957444,
    "max_density_change": 0.1,
    "move": 0.1,
    "trials": 1,
    "band_mode": "band",
-   "t_iter_s": 0.17214520002016798,
-   "state_iterations": 197,
+   "t_iter_s": 0.22703280000132509,
+   "state_iterations": 194,
    "adjoint_iterations": [
     195,
-    206,
+    205,
     216
    ],
-   "max_violation_over_band": 0.9003799861040996,
+   "max_violation_over_band": 0.896827313945185,
    "intermediate_fraction": 1.0,
-   "binary_distance_mean": 0.3068252731634169,
-   "binary_distance_max": 0.49811503019335923
+   "binary_distance_mean": 0.30743927964115875,
+   "binary_distance_max": 0.49811384814310533
   },
   {
    "iteration": 3,
-   "objective": 0.029422401143407967,
+   "objective": 0.030652676401848114,
    "constraints": [
-    0.01984329756865101,
-    0.019023361110239098
+    0.019833475106582007,
+    0.01899492835627988
    ],
    "violation": [
-    9.824188861472932e-05,
-    4.513304548249206e-05
+    0.00010384915368910966,
+    7.080335721082118e-05
    ],
    "band": [
-    9.97076972863287e-05,
-    9.534247077860795e-05
+    9.968662130135559e-05,
+    9.532865856745349e-05
    ],
-   "volume": 0.00014332053127900078,
-   "design_volume": 0.0001433205312790008,
-   "max_density_change": 0.012500000000000011,
-   "move": 0.018750000000000003,
-   "trials": 4,
+   "volume": 0.0001433875739645426,
+   "design_volume": 0.00014338757396454264,
+   "max_density_change": 0.1,
+   "move": 0.1,
+   "trials": 1,
    "band_mode": "band",
-   "t_iter_s": 0.7183192999800667,
-   "state_iterations": 179,
+   "t_iter_s": 0.20922950000385754,
+   "state_iterations": 213,
    "adjoint_iterations": [
-    179,
-    180,
-    191
+    205,
+    215,
+    227
    ],
-   "max_violation_over_band": 0.9852989416916325,
+   "max_violation_over_band": 1.0417561788474163,
    "intermediate_fraction": 1.0,
-   "binary_distance_mean": 0.2992870132584354,
-   "binary_distance_max": 0.498910514634552
+   "binary_distance_mean": 0.28471743262460525,
+   "binary_distance_max": 0.4945137111885608
   },
   {
    "iteration": 4,
-   "objective": 0.029437879415394313,
+   "objective": 0.032046196429049476,
    "constraints": [
-    0.01984245055021308,
-    0.019022989841329285
+    0.019833410210070113,
+    0.018964573228816735
    ],
    "violation": [
-    9.908890705265933e-05,
-    4.550431439230562e-05
+    0.00010391405020100317,
+    0.00010115848467396465
    ],
    "band": [
-    9.97076972863287e-05,
-    9.534247077860795e-05
+    9.968662130135559e-05,
+    9.532865856745349e-05
    ],
-   "volume": 0.00014317873487296775,
-   "design_volume": 0.00014317873487296775,
-   "max_density_change": 0.0011718750000000444,
-   "move": 0.0017578125000000003,
-   "trials": 5,
-   "band_mode": "band",
-   "t_iter_s": 0.8590914999949746,
-   "state_iterations": 141,
+   "volume": 0.00014600351631242672,
+   "design_volume": 0.00014600351631242675,
+   "max_density_change": 0.1,
+   "move": 0.1,
+   "trials": 1,
+   "band_mode": "restore",
+   "t_iter_s": 0.22608179999951972,
+   "state_iterations": 229,
    "adjoint_iterations": [
-    141,
-    153,
-    163
+    230,
+    241,
+    238
    ],
-   "max_violation_over_band": 0.9937939572318834,
-   "intermediate_fraction": 1.0,
-   "binary_distance_mean": 0.2985693618899782,
-   "binary_distance_max": 0.4984523891204835
+   "max_violation_over_band": 1.061155020894226,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26972235351746704,
+   "binary_distance_max": 0.4985088172429526
+  },
+  {
+   "iteration": 5,
+   "objective": 0.032052774305081515,
+   "constraints": [
+    0.019833402403812924,
+    0.018964568999920953
+   ],
+   "violation": [
+    0.00010392185645819244,
+    0.00010116271356974682
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014578748299515638,
+   "design_volume": 0.00014578748299515638,
+   "max_density_change": 0.0062500000000000056,
+   "move": 0.009375000000000001,
+   "trials": 5,
+   "band_mode": "hold",
+   "t_iter_s": 1.088813599999412,
+   "state_iterations": 166,
+   "adjoint_iterations": [
+    189,
+    201,
+    178
+   ],
+   "max_violation_over_band": 1.0611993821161894,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.2693951702122256,
+   "binary_distance_max": 0.4993662693355302
+  },
+  {
+   "iteration": 6,
+   "objective": 0.03205772091005182,
+   "constraints": [
+    0.01983339797500067,
+    0.018964566593873307
+   ],
+   "violation": [
+    0.00010392628527044687,
+    0.00010116511961739266
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014562794091564122,
+   "design_volume": 0.00014562794091564128,
+   "max_density_change": 0.004687500000000011,
+   "move": 0.007031250000000001,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.4064217999984976,
+   "state_iterations": 165,
+   "adjoint_iterations": [
+    188,
+    200,
+    177
+   ],
+   "max_violation_over_band": 1.061224621615853,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26915936279820996,
+   "binary_distance_max": 0.499990986554612
+  },
+  {
+   "iteration": 7,
+   "objective": 0.03206527878063385,
+   "constraints": [
+    0.019833388029479676,
+    0.018964561158360437
+   ],
+   "violation": [
+    0.00010393623079144043,
+    0.00010117055513026232
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014539313048353634,
+   "design_volume": 0.00014539313048353637,
+   "max_density_change": 0.007031250000000044,
+   "move": 0.010546875,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.19664380000176607,
+   "state_iterations": 166,
+   "adjoint_iterations": [
+    190,
+    211,
+    188
+   ],
+   "max_violation_over_band": 1.0612816402810827,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.2688136362163866,
+   "binary_distance_max": 0.4990272051496564
+  },
+  {
+   "iteration": 8,
+   "objective": 0.03207096045311955,
+   "constraints": [
+    0.01983338255531409,
+    0.018964558242798753
+   ],
+   "violation": [
+    0.00010394170495702654,
+    0.00010117347069194677
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001452172153602051,
+   "design_volume": 0.0001452172153602051,
+   "max_density_change": 0.0052734375000000056,
+   "move": 0.007910156250000001,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.40422140000009676,
+   "state_iterations": 165,
+   "adjoint_iterations": [
+    187,
+    201,
+    177
+   ],
+   "max_violation_over_band": 1.061312224595687,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.268552851191321,
+   "binary_distance_max": 0.49913808896144407
+  },
+  {
+   "iteration": 9,
+   "objective": 0.03207523339647497,
+   "constraints": [
+    0.019833379508410062,
+    0.01896455663426436
+   ],
+   "violation": [
+    0.00010394475186105423,
+    0.00010117507922633925
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014508651895605353,
+   "design_volume": 0.0001450865189560536,
+   "max_density_change": 0.003955078125000011,
+   "move": 0.005932617187500001,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.43308280000201194,
+   "state_iterations": 155,
+   "adjoint_iterations": [
+    187,
+    199,
+    175
+   ],
+   "max_violation_over_band": 1.061329098161482,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26835962470999625,
+   "binary_distance_max": 0.49982169510019536
+  },
+  {
+   "iteration": 10,
+   "objective": 0.032081721231084055,
+   "constraints": [
+    0.019833373583882596,
+    0.0189645537521736
+   ],
+   "violation": [
+    0.00010395067638852007,
+    0.00010117796131709975
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014488743944704704,
+   "design_volume": 0.00014488743944704707,
+   "max_density_change": 0.005932617187500044,
+   "move": 0.00889892578125,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.37176399999589194,
+   "state_iterations": 165,
+   "adjoint_iterations": [
+    188,
+    200,
+    178
+   ],
+   "max_violation_over_band": 1.0613593313652614,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.2680069203250405,
+   "binary_distance_max": 0.4988702282751928
+  },
+  {
+   "iteration": 11,
+   "objective": 0.03208661605126939,
+   "constraints": [
+    0.019833370221421946,
+    0.018964552117861223
+   ],
+   "violation": [
+    0.00010395403884917026,
+    0.00010117959562947615
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001447399575044314,
+   "design_volume": 0.00014473995750443144,
+   "max_density_change": 0.0044494628906250056,
+   "move": 0.0066741943359375005,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.4399353999979212,
+   "state_iterations": 164,
+   "adjoint_iterations": [
+    187,
+    198,
+    176
+   ],
+   "max_violation_over_band": 1.061376475342749,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26773805235768444,
+   "binary_distance_max": 0.4991127595007568
+  },
+  {
+   "iteration": 12,
+   "objective": 0.032094087405321645,
+   "constraints": [
+    0.019833362596577624,
+    0.018964548421906834
+   ],
+   "violation": [
+    0.00010396166369349216,
+    0.00010118329158386591
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001445208084151274,
+   "design_volume": 0.00014452080841512746,
+   "max_density_change": 0.006674194335937522,
+   "move": 0.01001129150390625,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.32884300000296207,
+   "state_iterations": 165,
+   "adjoint_iterations": [
+    189,
+    210,
+    186
+   ],
+   "max_violation_over_band": 1.0614152459962471,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26734302067903154,
+   "binary_distance_max": 0.4994789901315945
+  },
+  {
+   "iteration": 13,
+   "objective": 0.032099717956111405,
+   "constraints": [
+    0.019833358726564977,
+    0.018964546725081632
+   ],
+   "violation": [
+    0.00010396553370613931,
+    0.00010118498840906709
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014435779557577641,
+   "design_volume": 0.00014435779557577644,
+   "max_density_change": 0.005005645751953169,
+   "move": 0.007508468627929688,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 1.5356959999990067,
+   "state_iterations": 164,
+   "adjoint_iterations": [
+    188,
+    199,
+    177
+   ],
+   "max_violation_over_band": 1.061433045734822,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26704849027361377,
+   "binary_distance_max": 0.49973506482415125
+  },
+  {
+   "iteration": 14,
+   "objective": 0.03210396872488965,
+   "constraints": [
+    0.01983335653329036,
+    0.01896454576646494
+   ],
+   "violation": [
+    0.00010396772698075679,
+    0.00010118594702576006
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014423675633531074,
+   "design_volume": 0.0001442367563353108,
+   "max_density_change": 0.0037542343139648493,
+   "move": 0.005631351470947266,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.705940500003635,
+   "state_iterations": 163,
+   "adjoint_iterations": [
+    185,
+    197,
+    175
+   ],
+   "max_violation_over_band": 1.06144310164778,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.2668325107367342,
+   "binary_distance_max": 0.49992829503776276
+  },
+  {
+   "iteration": 15,
+   "objective": 0.03211043791534917,
+   "constraints": [
+    0.01983335175552393,
+    0.01896454363829897
+   ],
+   "violation": [
+    0.0001039725047471858,
+    0.0001011880751917299
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014405998927985474,
+   "design_volume": 0.0001440599892798548,
+   "max_density_change": 0.005631351470947288,
+   "move": 0.008447027206420899,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.29191290000017034,
+   "state_iterations": 164,
+   "adjoint_iterations": [
+    188,
+    199,
+    176
+   ],
+   "max_violation_over_band": 1.061465426161749,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26652826166960925,
+   "binary_distance_max": 0.4997806023306032
+  },
+  {
+   "iteration": 16,
+   "objective": 0.032115329879154934,
+   "constraints": [
+    0.01983334903321338,
+    0.01896454241113942
+   ],
+   "violation": [
+    0.0001039752270577364,
+    0.00010118930235128096
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001439195357256093,
+   "design_volume": 0.00014391953572560933,
+   "max_density_change": 0.004223513603210494,
+   "move": 0.0063352704048156745,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 1.9934742999976152,
+   "state_iterations": 163,
+   "adjoint_iterations": [
+    186,
+    198,
+    175
+   ],
+   "max_violation_over_band": 1.0614782990959695,
+   "intermediate_fraction": 0.9639175257731959,
+   "binary_distance_mean": 0.26630497239561657,
+   "binary_distance_max": 0.4995588933046059
+  },
+  {
+   "iteration": 17,
+   "objective": 0.032122795947326616,
+   "constraints": [
+    0.019833342863733346,
+    0.0189645396403377
+   ],
+   "violation": [
+    0.00010398139653777089,
+    0.00010119207315300097
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014371056056775564,
+   "design_volume": 0.00014371056056775567,
+   "max_density_change": 0.006335270404815685,
+   "move": 0.009502905607223512,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.22419909999734955,
+   "state_iterations": 165,
+   "adjoint_iterations": [
+    188,
+    209,
+    186
+   ],
+   "max_violation_over_band": 1.0615073648749456,
+   "intermediate_fraction": 0.9587628865979382,
+   "binary_distance_mean": 0.26596896860682673,
+   "binary_distance_max": 0.4992245533733465
+  },
+  {
+   "iteration": 18,
+   "objective": 0.03212844905383251,
+   "constraints": [
+    0.01983333962981773,
+    0.018964538144716856
+   ],
+   "violation": [
+    0.00010398463045338535,
+    0.00010119356877384342
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014356671851754063,
+   "design_volume": 0.00014356671851754069,
+   "max_density_change": 0.004751452803611778,
+   "move": 0.007127179205417633,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 1.6210377999959746,
+   "state_iterations": 164,
+   "adjoint_iterations": [
+    186,
+    207,
+    175
+   ],
+   "max_violation_over_band": 1.0615230539747917,
+   "intermediate_fraction": 0.9587628865979382,
+   "binary_distance_mean": 0.2657400918065794,
+   "binary_distance_max": 0.499009892015299
+  },
+  {
+   "iteration": 19,
+   "objective": 0.03213710194235323,
+   "constraints": [
+    0.01983333239276956,
+    0.018964534805901403
+   ],
+   "violation": [
+    0.0001039918675015579,
+    0.0001011969075892967
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001433531996972509,
+   "design_volume": 0.00014335319969725096,
+   "max_density_change": 0.007127179205417639,
+   "move": 0.010690768808126451,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.553005599998869,
+   "state_iterations": 174,
+   "adjoint_iterations": [
+    199,
+    209,
+    187
+   ],
+   "max_violation_over_band": 1.0615580782319611,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26540438280290757,
+   "binary_distance_max": 0.4999352872267137
+  },
+  {
+   "iteration": 20,
+   "objective": 0.032143672953201294,
+   "constraints": [
+    0.01983332837123977,
+    0.018964532950637113
+   ],
+   "violation": [
+    0.00010399588903134763,
+    0.00010119876285358612
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001431955338725083,
+   "design_volume": 0.00014319553387250834,
+   "max_density_change": 0.005345384404063236,
+   "move": 0.008018076606094838,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.4446975000028033,
+   "state_iterations": 175,
+   "adjoint_iterations": [
+    188,
+    199,
+    185
+   ],
+   "max_violation_over_band": 1.0615775400005132,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26515431263606887,
+   "binary_distance_max": 0.49935546091836613
+  },
+  {
+   "iteration": 21,
+   "objective": 0.032148646323169446,
+   "constraints": [
+    0.019833326333434785,
+    0.018964531996502748
+   ],
+   "violation": [
+    0.00010399792683633141,
+    0.00010119971698795138
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014307749028381918,
+   "design_volume": 0.0001430774902838192,
+   "max_density_change": 0.004009038303047441,
+   "move": 0.006013557454571128,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.4642729999977746,
+   "state_iterations": 163,
+   "adjoint_iterations": [
+    186,
+    197,
+    174
+   ],
+   "max_violation_over_band": 1.061587548893742,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26496636975378907,
+   "binary_distance_max": 0.4988606907320139
+  },
+  {
+   "iteration": 22,
+   "objective": 0.032156172635227444,
+   "constraints": [
+    0.019833321959666285,
+    0.01896453001274278
+   ],
+   "violation": [
+    0.00010400230060483157,
+    0.00010120170074792018
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014289987937080004,
+   "design_volume": 0.00014289987937080007,
+   "max_density_change": 0.0060135574545711334,
+   "move": 0.009020336181856693,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.2346772000018973,
+   "state_iterations": 175,
+   "adjoint_iterations": [
+    188,
+    207,
+    185
+   ],
+   "max_violation_over_band": 1.0616083585851677,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26468443562223315,
+   "binary_distance_max": 0.49818733941794646
+  },
+  {
+   "iteration": 23,
+   "objective": 0.03216178786154197,
+   "constraints": [
+    0.019833319208848746,
+    0.018964528879887827
+   ],
+   "violation": [
+    0.0001040050514223706,
+    0.00010120283360287238
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014276001528908382,
+   "design_volume": 0.00014276001528908388,
+   "max_density_change": 0.004510168090928357,
+   "move": 0.00676525213639252,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.48468400000274414,
+   "state_iterations": 164,
+   "adjoint_iterations": [
+    186,
+    199,
+    184
+   ],
+   "max_violation_over_band": 1.0616202422618,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26447568201273863,
+   "binary_distance_max": 0.49811313701355664
+  },
+  {
+   "iteration": 24,
+   "objective": 0.03217036905460607,
+   "constraints": [
+    0.019833312953175614,
+    0.018964526329615334
+   ],
+   "violation": [
+    0.00010401130709550288,
+    0.00010120538387536557
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014255167890006454,
+   "design_volume": 0.00014255167890006457,
+   "max_density_change": 0.006765252136392563,
+   "move": 0.010147878204588779,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.2347765000013169,
+   "state_iterations": 175,
+   "adjoint_iterations": [
+    196,
+    208,
+    186
+   ],
+   "max_violation_over_band": 1.0616469946837002,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.2641684633084127,
+   "binary_distance_max": 0.49800093650028465
+  },
+  {
+   "iteration": 25,
+   "objective": 0.03217688260753164,
+   "constraints": [
+    0.019833309806451073,
+    0.018964525040758663
+   ],
+   "violation": [
+    0.00010401445382004354,
+    0.00010120667273203626
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014239736951796551,
+   "design_volume": 0.00014239736951796554,
+   "max_density_change": 0.005073939102294395,
+   "move": 0.007610908653441584,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 2.082216899994819,
+   "state_iterations": 163,
+   "adjoint_iterations": [
+    186,
+    207,
+    184
+   ],
+   "max_violation_over_band": 1.0616605148222404,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26394260674339254,
+   "binary_distance_max": 0.497918948981683
+  },
+  {
+   "iteration": 26,
+   "objective": 0.03218181647369864,
+   "constraints": [
+    0.019833308071672235,
+    0.0189645243506621
+   ],
+   "violation": [
+    0.00010401618859888148,
+    0.00010120736282859949
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014228114635539678,
+   "design_volume": 0.0001422811463553968,
+   "max_density_change": 0.003805454326720803,
+   "move": 0.005708181490081188,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 1.9484213000032469,
+   "state_iterations": 162,
+   "adjoint_iterations": [
+    186,
+    197,
+    175
+   ],
+   "max_violation_over_band": 1.0616677539523574,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.2637687074938586,
+   "binary_distance_max": 0.4982305850569091
+  },
+  {
+   "iteration": 27,
+   "objective": 0.032189340361658395,
+   "constraints": [
+    0.019833304076174355,
+    0.01896452274564828
+   ],
+   "violation": [
+    0.00010402018409676195,
+    0.00010120896784241926
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001420949291867283,
+   "design_volume": 0.00014209492918672837,
+   "max_density_change": 0.005708181490081232,
+   "move": 0.008562272235121782,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 0.3895066999975825,
+   "state_iterations": 172,
+   "adjoint_iterations": [
+    188,
+    207,
+    185
+   ],
+   "max_violation_over_band": 1.061684590587257,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.2635174587014295,
+   "binary_distance_max": 0.49892503007913835
+  },
+  {
+   "iteration": 28,
+   "objective": 0.03219505335249159,
+   "constraints": [
+    0.019833301835848013,
+    0.01896452184786659
+   ],
+   "violation": [
+    0.00010402242442310305,
+    0.00010120986562410852
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.00014195683074058566,
+   "design_volume": 0.0001419568307405857,
+   "max_density_change": 0.004281136117560896,
+   "move": 0.006421704176341337,
+   "trials": 2,
+   "band_mode": "hold",
+   "t_iter_s": 0.933172500001092,
+   "state_iterations": 162,
+   "adjoint_iterations": [
+    185,
+    196,
+    184
+   ],
+   "max_violation_over_band": 1.0616940083395128,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26333580818910324,
+   "binary_distance_max": 0.4994461190038295
+  },
+  {
+   "iteration": 29,
+   "objective": 0.03220379387712992,
+   "constraints": [
+    0.019833296914750637,
+    0.018964519765915736
+   ],
+   "violation": [
+    0.00010402734552047987,
+    0.0001012119475749633
+   ],
+   "band": [
+    9.968662130135559e-05,
+    9.532865856745349e-05
+   ],
+   "volume": 0.0001417372384389074,
+   "design_volume": 0.00014173723843890736,
+   "max_density_change": 0.0064217041763413585,
+   "move": 0.009632556264512005,
+   "trials": 1,
+   "band_mode": "hold",
+   "t_iter_s": 1.3512553999971715,
+   "state_iterations": 172,
+   "adjoint_iterations": [
+    196,
+    208,
+    187
+   ],
+   "max_violation_over_band": 1.061715848055775,
+   "intermediate_fraction": 0.9536082474226805,
+   "binary_distance_mean": 0.26307824683295095,
+   "binary_distance_max": 0.49975778888329137
   }
  ]
 }
