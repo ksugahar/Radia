@@ -64,6 +64,7 @@ from .post_process import (
     math_eval,
     mirror_expand,
     modulus_phase,
+    particle_trace,
     point_history,
     probe_field,
     resample_grid,
@@ -1376,6 +1377,72 @@ def _abs_path(path_str: str | None) -> Path | None:
         return None
     p = Path(path_str)
     return p if p.is_absolute() else PROJECT_ROOT / p
+
+
+@mcp.tool()
+def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
+                        kinetic_energy_ev: float,
+                        species: str = "electron",
+                        charge_e: float | None = None,
+                        mass_amu: float | None = None,
+                        view_name: str | None = None,
+                        e_view_name: str | None = None,
+                        dt_s: float | None = None,
+                        steps_per_gyration: int = 64,
+                        max_steps: int = 20000,
+                        max_time_s: float | None = None,
+                        color_by: str = "time",
+                        arrows_every: int = 0,
+                        return_points: bool = False,
+                        out_file: str | None = None) -> dict:
+    """
+    Trace charged-particle ORBITS through the B (and E) field views.
+
+    Relativistic Boris pusher on dp/dt = q(E + v x B) -- the particle
+    DYNAMICS companion to gmsh_streamlines (which draws the massless
+    tangent curves of the field itself; a real particle GYRATES around
+    those lines). B view in Tesla on a mesh in meters; the optional
+    e_view_name adds E in V/m from the same file. Each seed launches
+    one particle of the given species (electron | positron | proton |
+    antiproton | alpha, or a custom charge_e + mass_amu pair) with the
+    given kinetic energy along `direction`. The time step defaults to
+    1/steps_per_gyration of the LOCAL gyration period at the seed;
+    where B(seed) = 0 an explicit dt_s is required. Output: a
+    "particle_tracks" SL view colored by time | speed | energy,
+    optional velocity arrows, and per-track diagnostics (seed
+    gyroradius, termination reason, speed_change_rel -- exactly 0 in
+    pure B up to roundoff, so it measures integrator health).
+
+    Args:
+        msh_path: .msh with a vector B view [T] (mesh in meters).
+        seeds: Launch points [[x, y, z], ...] in meters.
+        direction: Shared launch direction [dx, dy, dz] (normalized
+            internally).
+        kinetic_energy_ev: Kinetic energy in eV (> 0).
+        species: Particle preset; ignored when charge_e/mass_amu given.
+        charge_e: Custom charge in elementary charges (with mass_amu).
+        mass_amu: Custom mass in atomic mass units (with charge_e).
+        view_name: B view (default: first view in the file).
+        e_view_name: Optional E view [V/m] for acceleration.
+        dt_s: Explicit time step (overrides steps_per_gyration).
+        steps_per_gyration: Auto time-step resolution (>= 4).
+        max_steps: Maximum steps per particle.
+        max_time_s: Stop after this physical flight time.
+        color_by: Track color: "time" | "speed" | "energy".
+        arrows_every: Velocity arrow every k-th sample (0 = off).
+        return_points: Include track coordinates in the result.
+        out_file: Output path (default: <stem>_tracks.pos).
+    """
+    return particle_trace(_abs_path(msh_path), seeds, direction,
+                          kinetic_energy_ev, species=species,
+                          charge_e=charge_e, mass_amu=mass_amu,
+                          view=view_name, e_view=e_view_name,
+                          dt_s=dt_s,
+                          steps_per_gyration=steps_per_gyration,
+                          max_steps=max_steps, max_time_s=max_time_s,
+                          color_by=color_by, arrows_every=arrows_every,
+                          return_points=return_points,
+                          out_file=_abs_path(out_file))
 
 
 @mcp.tool()

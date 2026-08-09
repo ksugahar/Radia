@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **967 tools** across 48 MCP servers.
+Total: **968 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 87 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 78 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 62 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 63 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -276,6 +276,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_mirror_expand` | Expand a half/quarter/eighth symmetric model view by mirroring. |
 | `gmsh_modulus_phase` | Convert a complex re/im two-step view to modulus and phase steps. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
+| `gmsh_particle_trace` | Trace charged-particle ORBITS through the B (and E) field views. |
 | `gmsh_point_history` | Value of a view at one point across ALL time steps. |
 | `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |

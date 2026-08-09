@@ -544,6 +544,205 @@ try:
                 ] if cfg.get("return_points") else None,
             })
 
+        elif op == "particle_trace":
+            # Relativistic Boris pusher over the probed field views:
+            # the charged-particle ORBIT verb (dp/dt = q(E + v x B)),
+            # distinct from "streamlines" (massless tangent curves of
+            # the field itself).  The magnetic rotation is an exact
+            # isometry of u = gamma*v, so in a pure-B trace the
+            # per-track speed_change_rel is an integrator health
+            # metric (~1e-15); kinetic energy changes only through E.
+            import math as _math
+            C_LIGHT = 299792458.0
+            J_PER_EV = 1.602176634e-19
+            b_tag = _view_tag_by_selector(tags, cfg.get("view"))
+            e_tag = (None if cfg.get("e_view") is None else
+                     _view_tag_by_selector(tags, cfg["e_view"]))
+            step = int(cfg.get("time_step", 0))
+            q = float(cfg["charge_c"])
+            m = float(cfg["mass_kg"])
+            ke0_j = float(cfg["kinetic_energy_ev"]) * J_PER_EV
+            gamma0 = 1.0 + ke0_j / (m * C_LIGHT * C_LIGHT)
+            u0_abs = C_LIGHT * _math.sqrt(gamma0 * gamma0 - 1.0)
+            d = cfg["direction"]
+            dn = _math.sqrt(sum(c * c for c in d))
+            dirn = [c / dn for c in d]
+            seeds = cfg["seeds"]
+            spg = int(cfg.get("steps_per_gyration", 64))
+            max_steps = int(cfg.get("max_steps", 20000))
+            max_time = cfg.get("max_time_s")
+            color_by = cfg.get("color_by", "time")
+            dt_fixed = cfg.get("dt_s")
+            arrows_every = int(cfg.get("arrows_every", 0))
+
+            def _probe_vec(tag_, p):
+                vals, dist = gmsh.view.probe(tag_, p[0], p[1], p[2],
+                                             step=step)
+                # dist > 0 = outside the data (list-based vector views
+                # report the nearest value at ANY distance).
+                if len(vals) < 3 or float(dist) > 0.0:
+                    return None
+                return [float(vals[0]), float(vals[1]), float(vals[2])]
+
+            def _cross(a, b):
+                return [a[1] * b[2] - a[2] * b[1],
+                        a[2] * b[0] - a[0] * b[2],
+                        a[0] * b[1] - a[1] * b[0]]
+
+            def _gamma_of(u):
+                return _math.sqrt(
+                    1.0 + (u[0] * u[0] + u[1] * u[1] + u[2] * u[2])
+                    / (C_LIGHT * C_LIGHT))
+
+            def _color(t, u):
+                g = _gamma_of(u)
+                if color_by == "speed":
+                    return _math.sqrt(sum(c * c for c in u)) / g
+                if color_by == "energy":
+                    return (g - 1.0) * m * C_LIGHT * C_LIGHT / J_PER_EV
+                return t
+
+            tracks_out = []
+            polylines = []
+            skipped_seeds = 0
+            for seed in seeds:
+                B0 = _probe_vec(b_tag, seed)
+                if B0 is None:
+                    skipped_seeds += 1
+                    tracks_out.append({"seed": list(seed), "n_steps": 0,
+                                       "reason": "seed_outside_data"})
+                    continue
+                b0_mag = _math.sqrt(sum(c * c for c in B0))
+                if dt_fixed is not None:
+                    dt = float(dt_fixed)
+                elif b0_mag > 0.0:
+                    dt = (2.0 * _math.pi * gamma0 * m
+                          / (abs(q) * b0_mag) / spg)
+                else:
+                    raise RuntimeError(
+                        f"|B| = 0 at seed {list(seed)}: no gyration "
+                        "period to derive the time step from -- pass "
+                        "dt_s explicitly")
+                # gyroradius from the momentum component perp to B(seed)
+                u_vec = [u0_abs * c for c in dirn]
+                if b0_mag > 0.0:
+                    bh = [c / b0_mag for c in B0]
+                    upar = sum(a * b for a, b in zip(u_vec, bh))
+                    uperp = _math.sqrt(max(u0_abs**2 - upar**2, 0.0))
+                    r_gyro = m * uperp / (abs(q) * b0_mag)
+                else:
+                    r_gyro = None
+                p = list(seed)
+                t_now = 0.0
+                path_len = 0.0
+                pts = [list(p)]
+                cols = [_color(t_now, u_vec)]
+                vels = [[c / gamma0 for c in u_vec]]
+                reason = "max_steps"
+                for _ in range(max_steps):
+                    if e_tag is not None:
+                        E = _probe_vec(e_tag, p)
+                        if E is None:
+                            reason = "left_data"
+                            break
+                    else:
+                        E = [0.0, 0.0, 0.0]
+                    B = _probe_vec(b_tag, p)
+                    if B is None:
+                        reason = "left_data"
+                        break
+                    qmdt2 = q * dt / (2.0 * m)
+                    um = [u_vec[k] + qmdt2 * E[k] for k in range(3)]
+                    g_minus = _gamma_of(um)
+                    f = q * dt / (2.0 * m * g_minus)
+                    tv = [f * B[k] for k in range(3)]
+                    t2 = sum(c * c for c in tv)
+                    upr = [um[k] + _cross(um, tv)[k] for k in range(3)]
+                    sv = [2.0 * c / (1.0 + t2) for c in tv]
+                    upl = [um[k] + _cross(upr, sv)[k] for k in range(3)]
+                    u_vec = [upl[k] + qmdt2 * E[k] for k in range(3)]
+                    g_new = _gamma_of(u_vec)
+                    v = [c / g_new for c in u_vec]
+                    p = [p[k] + v[k] * dt for k in range(3)]
+                    t_now += dt
+                    v_abs = _math.sqrt(sum(c * c for c in v))
+                    path_len += v_abs * dt
+                    pts.append(list(p))
+                    cols.append(_color(t_now, u_vec))
+                    vels.append(v)
+                    if max_time is not None and t_now >= float(max_time):
+                        reason = "max_time"
+                        break
+                g_end = _gamma_of(u_vec)
+                v0_abs = u0_abs / gamma0
+                v_end_abs = _math.sqrt(sum(c * c for c in u_vec)) / g_end
+                tracks_out.append({
+                    "seed": list(seed),
+                    "dt_s": dt,
+                    "n_steps": len(pts) - 1,
+                    "time_s": t_now,
+                    "path_length_m": path_len,
+                    "b_seed_t": b0_mag,
+                    "gyroradius_seed_m": r_gyro,
+                    "ke_start_ev": float(cfg["kinetic_energy_ev"]),
+                    "ke_end_ev": (g_end - 1.0) * m * C_LIGHT * C_LIGHT
+                    / J_PER_EV,
+                    "speed_change_rel": abs(v_end_abs - v0_abs)
+                    / max(v0_abs, 1e-300),
+                    "reason": reason,
+                })
+                if len(pts) > 1:
+                    polylines.append((pts, cols, vels))
+
+            sl_data = []
+            n_segments = 0
+            for pts, cols, _vels in polylines:
+                for i in range(len(pts) - 1):
+                    a, b = pts[i], pts[i + 1]
+                    sl_data += [a[0], b[0], a[1], b[1], a[2], b[2],
+                                cols[i], cols[i + 1]]
+                    n_segments += 1
+            out_tag = gmsh.view.add("particle_tracks")
+            if n_segments:
+                gmsh.view.addListData(out_tag, "SL", n_segments, sl_data)
+            gmsh.view.write(out_tag, cfg["out_file"])
+
+            n_arrows = 0
+            if arrows_every > 0:
+                vp_data = []
+                for pts, _cols, vels in polylines:
+                    for i in range(0, len(pts), arrows_every):
+                        vn = _math.sqrt(sum(c * c for c in vels[i]))
+                        if vn < 1e-30:
+                            continue
+                        vp_data += list(pts[i]) + list(vels[i])
+                        n_arrows += 1
+                arrow_tag = gmsh.view.add("particle_arrows")
+                if n_arrows:
+                    gmsh.view.addListData(arrow_tag, "VP", n_arrows,
+                                          vp_data)
+                gmsh.view.write(arrow_tag, cfg["out_file"], append=True)
+
+            reason_counts = {}
+            for tr in tracks_out:
+                reason_counts[tr["reason"]] = (
+                    reason_counts.get(tr["reason"], 0) + 1)
+            result.update({
+                "ok": True, "ran": True,
+                "out_file": cfg["out_file"],
+                "n_tracks": len(polylines),
+                "n_segments": n_segments,
+                "n_arrows": n_arrows,
+                "skipped_seeds": skipped_seeds,
+                "reasons": reason_counts,
+                "color_by": color_by,
+                "tracks": tracks_out,
+                "polylines": [
+                    {"points": pts, "colors": cols}
+                    for pts, cols, _v in polylines
+                ] if cfg.get("return_points") else None,
+            })
+
         elif op == "derived":
             tag = _view_tag_by_selector(tags, cfg.get("view"))
             plugin = cfg["plugin"]
@@ -1456,6 +1655,130 @@ def streamlines(path: str | Path, seed_start: list[float],
                       "arrows_every": int(arrows_every),
                       "return_points": bool(return_points),
                       "out_file": _default_out(path, out_file, "stream")},
+                     timeout_s)
+
+
+_PARTICLE_SPECIES = {
+    # name: (charge in elementary charges, mass in kg)
+    "electron": (-1.0, 9.1093837015e-31),
+    "positron": (1.0, 9.1093837015e-31),
+    "proton": (1.0, 1.67262192369e-27),
+    "antiproton": (-1.0, 1.67262192369e-27),
+    "alpha": (2.0, 6.6446573357e-27),
+}
+_ELEMENTARY_CHARGE_C = 1.602176634e-19
+_AMU_KG = 1.66053906660e-27
+
+
+def particle_trace(path: str | Path, seeds: list[list[float]],
+                   direction: list[float], kinetic_energy_ev: float, *,
+                   species: str = "electron",
+                   charge_e: float | None = None,
+                   mass_amu: float | None = None,
+                   view: str | int | None = None,
+                   e_view: str | int | None = None,
+                   time_step: int = 0,
+                   dt_s: float | None = None,
+                   steps_per_gyration: int = 64,
+                   max_steps: int = 20000,
+                   max_time_s: float | None = None,
+                   color_by: str = "time",
+                   arrows_every: int = 0,
+                   return_points: bool = False,
+                   out_file: str | Path | None = None,
+                   timeout_s: float = 600.0) -> dict[str, Any]:
+    """Trace charged-particle ORBITS through the probed B (and E) views.
+
+    Relativistic Boris pusher on ``dp/dt = q(E + v x B)`` -- the
+    particle-dynamics companion to ``streamlines`` (which draws the
+    massless tangent curves of the field itself; a particle GYRATES
+    around those lines instead of following them).  The B view is in
+    Tesla on a mesh in meters; the optional ``e_view`` adds an electric
+    field in V/m from the same file.
+
+    Each seed launches one particle of the given ``species`` (or a
+    custom ``charge_e``/``mass_amu`` pair) with the given kinetic
+    energy along ``direction``.  The time step defaults to 1 /
+    ``steps_per_gyration`` of the LOCAL gyration period at the seed;
+    where B vanishes at a seed an explicit ``dt_s`` is required.  A
+    trace ends on ``left_data`` (the orbit exits the field data),
+    ``max_steps``, or ``max_time``.
+
+    Output: a ``particle_tracks`` SL view colored by ``color_by``
+    (``time`` | ``speed`` | ``energy``), optional velocity arrows every
+    ``arrows_every``-th sample, and per-track diagnostics including the
+    seed gyroradius and ``speed_change_rel`` -- in a pure magnetic
+    field the Boris rotation conserves speed exactly, so a nonzero
+    value there measures integrator health, not physics.
+    """
+    err = _check_input(path)
+    if err:
+        return err
+    try:
+        clean_seeds = [_finite_vector(s, "seeds", 3) for s in seeds]
+        clean_dir = _finite_vector(direction, "direction", 3)
+        clean_ke = _finite_float(kinetic_energy_ev, "kinetic_energy_ev")
+        clean_dt = None if dt_s is None else _finite_float(dt_s, "dt_s")
+        clean_tmax = (None if max_time_s is None
+                      else _finite_float(max_time_s, "max_time_s"))
+    except (TypeError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}
+    if not clean_seeds:
+        return {"ok": False, "error": "seeds must contain at least one point"}
+    if not any(clean_dir):
+        return {"ok": False, "error": "direction must be nonzero"}
+    if clean_ke <= 0.0:
+        return {"ok": False, "error": "kinetic_energy_ev must be positive"}
+    if (charge_e is None) != (mass_amu is None):
+        return {"ok": False, "error":
+                "custom particles need BOTH charge_e and mass_amu"}
+    if charge_e is not None:
+        try:
+            q_c = _finite_float(charge_e, "charge_e") * _ELEMENTARY_CHARGE_C
+            m_kg = _finite_float(mass_amu, "mass_amu") * _AMU_KG
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        if q_c == 0.0:
+            return {"ok": False, "error": "charge_e must be nonzero"}
+        if m_kg <= 0.0:
+            return {"ok": False, "error": "mass_amu must be positive"}
+    else:
+        if species not in _PARTICLE_SPECIES:
+            return {"ok": False, "error":
+                    f"unknown species {species!r}; available: "
+                    f"{sorted(_PARTICLE_SPECIES)} (or give charge_e + "
+                    "mass_amu)"}
+        q_e, m_kg = _PARTICLE_SPECIES[species]
+        q_c = q_e * _ELEMENTARY_CHARGE_C
+    if clean_dt is not None and clean_dt <= 0.0:
+        return {"ok": False, "error": "dt_s must be positive"}
+    if clean_tmax is not None and clean_tmax <= 0.0:
+        return {"ok": False, "error": "max_time_s must be positive"}
+    if int(steps_per_gyration) < 4:
+        return {"ok": False, "error": "steps_per_gyration must be >= 4"}
+    if int(max_steps) < 1:
+        return {"ok": False, "error": "max_steps must be positive"}
+    if color_by not in ("time", "speed", "energy"):
+        return {"ok": False, "error":
+                "color_by must be one of: time, speed, energy"}
+    if int(arrows_every) < 0:
+        return {"ok": False, "error": "arrows_every must be non-negative"}
+    if int(time_step) < 0:
+        return {"ok": False, "error": "time_step must be non-negative"}
+    return _run_post({"op": "particle_trace", "path": str(path),
+                      "view": view, "e_view": e_view,
+                      "seeds": clean_seeds, "direction": clean_dir,
+                      "kinetic_energy_ev": clean_ke,
+                      "charge_c": q_c, "mass_kg": m_kg,
+                      "time_step": int(time_step),
+                      "dt_s": clean_dt,
+                      "steps_per_gyration": int(steps_per_gyration),
+                      "max_steps": int(max_steps),
+                      "max_time_s": clean_tmax,
+                      "color_by": color_by,
+                      "arrows_every": int(arrows_every),
+                      "return_points": bool(return_points),
+                      "out_file": _default_out(path, out_file, "tracks")},
                      timeout_s)
 
 
