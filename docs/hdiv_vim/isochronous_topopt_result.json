@@ -1,14 +1,14 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-29T00:37:25Z",
+  "generated_at_utc": "2026-08-09T16:24:40Z",
   "notebook": "isochronous_topopt.ipynb",
-  "notebook_sha256": "d7ad3632f92037942760dd3ecfc5a0215046d1cb6c13f912dfbed241b4465b9a",
+  "notebook_sha256": "6ddb79d07d2467f65e66c1a0d6e51051d6016574c12d7251bc186f91c63573f7",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.21",
-    "radia_version": "4.95.25"
+    "radia_mcp_version": "1.4.35",
+    "radia_version": "4.95.50"
   },
   "summary": {
     "path": "isochronous_topopt.ipynb",
@@ -51,8 +51,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 106,
-          "text_sha256": "0af9cb8b8bc2f834c00ad2f18130ee5c823ce521fed00992e7c2a123e9db0600",
-          "text_preview": "ne=270  ndof=1977\ndirectional adjoint vs FD : rel = 1.784e-07\nreciprocity vs C++ charges: rel = 1.099e-10\n",
+          "text_sha256": "e643da3070527abe841e8e5e4c16cd915247b269530c457d2abe45289ce50724",
+          "text_preview": "ne=270  ndof=1977\ndirectional adjoint vs FD : rel = 4.071e-07\nreciprocity vs C++ charges: rel = 1.099e-10\n",
           "text_truncated": false
         }
       ]
@@ -66,9 +66,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 170,
-          "text_sha256": "68f593cd18f084e2c16965a3a37208657f6aa252da835f03a5aa47cd399a5fdf",
-          "text_preview": "ne=194  iterations=30  solves=49  wall=3.8s\nJ: +2.758902e-02 -> +3.202970e-02  (+16.10%)  monotone=True\nmax violation / band = 1.062  (cap 1.25)   median t_iter = 115 ms\n",
+          "text_chars": 171,
+          "text_sha256": "ac0dacbc413769c98fd31c9dc9ea58c862a8b6f198ecd87f18ba4213cccbf33e",
+          "text_preview": "ne=194  iterations=30  solves=49  wall=14.7s\nJ: +2.776458e-02 -> +3.220379e-02  (+15.99%)  monotone=True\nmax violation / band = 1.062  (cap 1.25)   median t_iter = 422 ms\n",
           "text_truncated": false
         }
       ]
@@ -91,8 +91,8 @@
           "text_plain_truncated": false,
           "rich_output_hashes": {
             "image/png": {
-              "chars": 104520,
-              "sha256": "28ff3d1c3afaa8f78a2ebf2f3b5417839a5d964f3758bd869992b5cb00eb575c"
+              "chars": 104196,
+              "sha256": "d7c3e0abc676beda5730462f99517931c8c34081f8e542238126c76797f20cde"
             }
           }
         }
@@ -148,8 +148,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 282,
-          "text_sha256": "21c83844e1f813b067173445e77ec55fcc9842688dc4ad08feffaab681458fb1",
-          "text_preview": "iron elements after threshold: 66/194\nJ embedded 0/1      = +7.829799e-01\nJ iron-only exact   = +7.776454e-01\nERSATZ band         = +0.69%   (constraints: -4.91%, -47.09%)\ngray-design gap (continuous vs 0/1) = -95.9%  -> threshold-ready designs need penalty/projection continuation\n",
+          "text_sha256": "496df48436362537ffd2f74219a0ee1e7d0fc4e82caa6c125152e839e817d233",
+          "text_preview": "iron elements after threshold: 66/194\nJ embedded 0/1      = +7.828810e-01\nJ iron-only exact   = +7.775776e-01\nERSATZ band         = +0.68%   (constraints: -4.94%, -47.12%)\ngray-design gap (continuous vs 0/1) = -95.9%  -> threshold-ready designs need penalty/projection continuation\n",
           "text_truncated": false
         },
         {
@@ -157,9 +157,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 674,
-          "text_plain_sha256": "9097718db6d206487fa2ecb9707420e7faecce509b6d818de5c4f716dac967b5",
-          "text_plain_preview": "{'adjoint_gate': {'ne': 270,\n  'ndof': 1977,\n  'directional_fd_rel': 1.7836724836686516e-07,\n  'reciprocity_rel': 1.0987465601726383e-10},\n 'design_loop': {'ne': 194,\n  'iterations': 30,\n  'solves': 49,\n  'J_first': 0.02758902119229375,\n  'J_last': 0.03202970203227957,\n  'gain': 0.16095825977422518,\n  'viol_over_band_max': 1.0620757431165846,\n  't_iter_median_s': 0.11488845001440495,\n  't_loop_s': 3.7822066000080667},\n 'verification': {'n_iron': 66,\n  'J_embedded_bin': 0.7829798842374768,\n  'J_iron_only': 0.7776454036123537,\n  'ersatz_band': 0.006859785450210499,\n  'gray_gap': -0.9590925607706097,\n  'constraint_bands': [-0.049053660936887546, -0.47089787539375605]}}",
+          "text_plain_chars": 673,
+          "text_plain_sha256": "e9e43b036a07dba7ac817a1f1306efa3608c9c9e6866b7fb023a222cbbbf2e2e",
+          "text_plain_preview": "{'adjoint_gate': {'ne': 270,\n  'ndof': 1977,\n  'directional_fd_rel': 4.0711252654084547e-07,\n  'reciprocity_rel': 1.0986936573549902e-10},\n 'design_loop': {'ne': 194,\n  'iterations': 30,\n  'solves': 49,\n  'J_first': 0.027764579073270842,\n  'J_last': 0.03220379386189165,\n  'gain': 0.1598877035702828,\n  'viol_over_band_max': 1.061715854175544,\n  't_iter_median_s': 0.4224018500026432,\n  't_loop_s': 14.687646500002302},\n 'verification': {'n_iron': 66,\n  'J_embedded_bin': 0.7828810476013528,\n  'J_iron_only': 0.7775776097223178,\n  'ersatz_band': 0.0068204611510469014,\n  'gray_gap': -0.9588650230318387,\n  'constraint_bands': [-0.049409092621433746, -0.47117796128993344]}}",
           "text_plain_truncated": false
         }
       ]
