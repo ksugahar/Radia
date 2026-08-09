@@ -70,6 +70,14 @@ dependencies = [
 cubit = [
     "cubit-mesh-export",
 ]
+topopt-cad = [
+    # Density/level-set -> watertight STL -> Cubit mesh regeneration.
+    # Kept optional because these packages are not needed by the solver core.
+    "scikit-image>=0.22",
+    "trimesh>=4.0",
+    "netCDF4>=1.6",
+    "fast-simplification>=0.1",
+]
 spice = [
     "radia-spice-lab>=0.4.0",
 ]
