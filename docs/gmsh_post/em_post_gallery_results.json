@@ -1,0 +1,38 @@
+{
+ "generated_at_utc": "2026-08-09T06:14:53Z",
+ "radia_version": "4.95.50",
+ "python_version": "3.12.10",
+ "platform": "Windows-2022Server-10.0.20348-SP0",
+ "versions": {
+  "ngsolve": "6.2.2604"
+ },
+ "saddle": {
+  "radius": 0.04,
+  "length": 0.12,
+  "span_deg": 70.0,
+  "bend_radius": 0.006,
+  "width": 0.01,
+  "height": 0.008
+ },
+ "current_A": 5000.0,
+ "B0_air_T": 0.07451058060140127,
+ "B0_iron_T": 0.08343886022194553,
+ "iron_enhancement": 1.1198256616507476,
+ "solve_outer_iterations": 4,
+ "shared_colour_range_T": [
+  0.0007692458094549971,
+  0.2325602659738485
+ ],
+ "selection_fraction": 0.12788871438187122,
+ "raycast_cad_covered_fraction": 0.09162348877374785,
+ "lic_outline_segments": 64,
+ "sweep_domain_max_T": [
+  0.1963070681725796,
+  0.19694225320023237,
+  0.14205712471216486,
+  0.1835339817543724,
+  0.1838170981116232
+ ],
+ "notebook": "em_post_gallery.ipynb",
+ "notebook_sha256": "b86cdcbe5d4356ce06a35f56811d1d7e81967353282e0c150b85a613d214d80f"
+}
