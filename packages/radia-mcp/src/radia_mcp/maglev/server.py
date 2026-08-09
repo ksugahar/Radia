@@ -33,6 +33,9 @@ from .knowledge import get_knowledge, TOPICS
 from .periodic_settling_gate import (
     rotating_conductor_periodic_settling_gate as _rotating_conductor_periodic_settling_gate,
 )
+from .team28_dynamic_gate import (
+    team28_cycle_averaged_motion_gate as _team28_cycle_averaged_motion_gate,
+)
 
 mcp = FastMCP("mcp-server-maglev")
 
@@ -48,6 +51,7 @@ def maglev(topic: str = "overview") -> str:
             "overview"            - Unified maglev landscape (DEFAULT)
             "radia_iem_fem"       - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
             "cln_mor_control"     - Cauer Ladder Network MOR for control-coupled maglev (Yano)
+            "team28_dynamic_scope"- 50 Hz cycle-average mechanical motion vs full EM transient
             "physical_tensor_rom" - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS; Kameari+Kelvin breakdown)
             "pm_maglev_zero_power"- Passive PM levitation, Maxwell-Earnshaw
             "eddy_current_maglev" - Eddy-current EDS, Kansai 2D model, Arago
@@ -94,6 +98,29 @@ def rotating_conductor_periodic_settling_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "rotating_conductor_periodic_settling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def team28_cycle_averaged_motion_gate(
+    summary: dict,
+    claim_scope: str = "cycle_averaged_mechanical_motion",
+    expected_frequency_hz: float = 50.0,
+) -> str:
+    """Gate TEAM 28 cycle-averaged motion evidence and reject transient overclaims."""
+
+    try:
+        result = _team28_cycle_averaged_motion_gate(
+            summary,
+            claim_scope=claim_scope,
+            expected_frequency_hz=expected_frequency_hz,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "team28_cycle_averaged_motion_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
