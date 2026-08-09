@@ -1,7 +1,16 @@
 {
- "schema": "radia.isochronous-topopt-shape-regen/v3",
+ "schema": "radia.isochronous-topopt-shape-regen/v4",
+ "executed_at_utc": "2026-08-09T01:25:34.854802+00:00",
+ "radia_version": "4.95.49",
+ "ngsolve_version": "6.2.2604",
+ "cubit_runtime": "Coreform Cubit 2025.12 headless batch",
+ "timing_breakdown_s": {
+  "physics_hex_fine": 229.85022379999282,
+  "physics_hex_coarse": 20.530836999998428,
+  "physics_tet_reference": 7.446425000031013,
+  "density_design": 5.1167637999751605
+ },
  "stl": {
-  "path": "design.stl",
   "n_faces": 1500,
   "n_vertices": 752,
   "volume": 0.0001278243893745155,
@@ -13,18 +22,152 @@
   "cutoff": 0.031059329592688742,
   "watertight": true
  },
- "reevaluation_mesh_family": "hex",
+ "coarse_stl": {
+  "n_faces": 300,
+  "n_vertices": 152,
+  "volume": 0.00012674496157175454,
+  "watertight": true
+ },
+ "meshes": {
+  "tet_reference": {
+   "scheme": "tet",
+   "size": 0.01,
+   "stl_volume": 0.00012674495782460832,
+   "mesh_volume": 0.0001259553299765588,
+   "closure": 0.006230053341784366,
+   "closure_tolerance": 0.05,
+   "total_negative": 0,
+   "min_jacobian_det": 4.794710421275964e-09,
+   "vol_boundary_faces": 816,
+   "msh_skin_faces": 816,
+   "by_type": [
+    {
+     "element": "Tetrahedron 4",
+     "n": 2202,
+     "min": 0.07891528859074572,
+     "mean": 0.8517545473634195
+    }
+   ],
+   "dof_estimate": {
+    "h1_p1": 604,
+    "hcurl_lowest": 3213,
+    "hdiv_lowest": 4812,
+    "l2_p0": 2202
+   },
+   "gates": {
+    "closure_ok": true,
+    "no_inverted_elements": true,
+    "boundary_faces_ok": true
+   }
+  },
+  "hex_coarse": {
+   "scheme": "hex",
+   "size": 0.01,
+   "stl_volume": 0.00012674495782460832,
+   "mesh_volume": 0.00011319917436921519,
+   "closure": 0.10687433794516697,
+   "closure_tolerance": 0.12,
+   "total_negative": 0,
+   "min_jacobian_det": 4.825630758498705e-09,
+   "vol_boundary_faces": 166,
+   "msh_skin_faces": 166,
+   "by_type": [
+    {
+     "element": "Hexahedron 8",
+     "n": 251,
+     "min": 0.3675775600818474,
+     "mean": 0.7552958054073441
+    }
+   ],
+   "dof_estimate": {
+    "h1_p1": 359,
+    "hcurl_lowest": 943,
+    "hdiv_lowest": 836,
+    "l2_p0": 251
+   },
+   "gates": {
+    "closure_ok": true,
+    "no_inverted_elements": true,
+    "boundary_faces_ok": true
+   }
+  },
+  "hex_fine": {
+   "scheme": "hex",
+   "size": 0.005253653686933224,
+   "stl_volume": 0.00012782438855864358,
+   "mesh_volume": 0.00012507351321025583,
+   "closure": 0.021520739347215424,
+   "closure_tolerance": 0.03,
+   "total_negative": 0,
+   "min_jacobian_det": 5.133449168762827e-11,
+   "vol_boundary_faces": 738,
+   "msh_skin_faces": 738,
+   "by_type": [
+    {
+     "element": "Hexahedron 8",
+     "n": 1537,
+     "min": 0.1887762542174775,
+     "mean": 0.829048699549778
+    }
+   ],
+   "dof_estimate": {
+    "h1_p1": 1955,
+    "hcurl_lowest": 5397,
+    "hdiv_lowest": 4980,
+    "l2_p0": 1537
+   },
+   "gates": {
+    "closure_ok": true,
+    "no_inverted_elements": true,
+    "boundary_faces_ok": true
+   }
+  }
+ },
+ "evaluations": {
+  "tet_reference": {
+   "ne": 2202,
+   "ndof": 14436,
+   "native_iterations": 108,
+   "ngsolve_iterations": 113,
+   "J_native": 0.7531306819751906,
+   "J_ngsolve": 0.7531306822322723,
+   "J_direct_field": 0.7531306819759508,
+   "solver_parity_relative": 3.4135070491083836e-10,
+   "reciprocity_relative": 1.0093463500470144e-12,
+   "elapsed_s": 7.446425000031013
+  },
+  "hex_coarse": {
+   "ne": 251,
+   "ndof": 6356,
+   "native_iterations": 20,
+   "ngsolve_iterations": 21,
+   "J_native": 0.6761876147219503,
+   "J_ngsolve": 0.6761876147219504,
+   "J_direct_field": 0.6761876762661574,
+   "solver_parity_relative": 1.6418860689746325e-16,
+   "reciprocity_relative": 9.101645774407951e-08,
+   "elapsed_s": 20.530836999998428
+  },
+  "hex_fine": {
+   "ne": 1537,
+   "ndof": 38364,
+   "native_iterations": 20,
+   "ngsolve_iterations": 21,
+   "J_native": 0.7354967882626484,
+   "J_ngsolve": 0.7354967882626486,
+   "J_direct_field": 0.73549678817067,
+   "solver_parity_relative": 3.0189745008884847e-16,
+   "reciprocity_relative": 1.2505618835574314e-10,
+   "elapsed_s": 229.85022379999282
+  }
+ },
  "ne_staircase": 72,
- "ne_regen_hex": 1537,
  "chi_eval": 100.0,
- "demag_factor_z_hex": 0.47746562752677113,
- "J_smooth": 0.7355027949198027,
- "J_staircase": 0.719663907659373,
- "delta": 0.02200872809078883,
- "state_iterations": 21,
- "adjoint_iterations": [
-  25
- ],
- "boundary_face_contract": "exported boundary faces must match the topological skin; ChargeGram also rejects a zero-boundary 3D mesh",
- "tet_solver_scope": "tet export is a gated mesh artifact; production objective re-evaluation uses the all-hex route"
+ "demag_factor_z_fine_hex": 0.4774595170172119,
+ "J_staircase": 0.719663909679355,
+ "staircase_iterations": 32,
+ "fine_hex_vs_staircase_relative": 0.0220003787467232,
+ "fine_hex_vs_tet_relative": 0.023414122056871788,
+ "coarse_hex_vs_tet_relative": 0.10216429777027053,
+ "boundary_face_incident": "fixed: direct/free Sculpt sideset faces are exported to .vol; all three meshes now require vol_boundary_faces == msh_skin_faces"
 }

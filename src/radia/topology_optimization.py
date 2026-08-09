@@ -128,9 +128,16 @@ def sample_production_gettrafo_displacements(fes, displacement_modes, charge_bas
         elif "cell_nodes" in cb: family="hex"
         else: raise ValueError("cannot infer ChargeGram element family")
     family=str(family).lower()
+    reference_sampling=False
     if family=="tet":
-        cell_nodes=tuple(np.asarray(x,dtype=float) for x in cb["vV"])
-        face_nodes=tuple(np.asarray(x,dtype=float) for x in cb["bV"])
+        reference_cells=cb.get("reference_vV")
+        reference_faces=cb.get("reference_bV")
+        reference_sampling=(reference_cells is not None and
+                            reference_faces is not None)
+        cell_nodes=tuple(np.asarray(x,dtype=float) for x in
+                         (reference_cells if reference_sampling else cb["vV"]))
+        face_nodes=tuple(np.asarray(x,dtype=float) for x in
+                         (reference_faces if reference_sampling else cb["bV"]))
     elif family=="hex":
         ncell=len(cb.get("cell_charges", ())) or int(cb.get("n_el", 0))
         raw=np.asarray(cb["cell_nodes"],dtype=float).reshape(-1,27,3)
@@ -149,12 +156,23 @@ def sample_production_gettrafo_displacements(fes, displacement_modes, charge_bas
     def sample(hosts):
         result=[]
         for nodes in hosts:
+            mapped=[mesh(*point) for point in nodes]
             values=[]
             for field in modes:
-                values.append(np.array([field(mesh(*point)) for point in nodes],dtype=float))
+                values.append(np.array([field(point) for point in mapped],dtype=float))
             result.append(np.asarray(values,dtype=float).reshape(len(modes),len(nodes),3))
         return tuple(result)
-    return ProductionGetTrafoDisplacements(family,sample(cell_nodes),sample(face_nodes))
+    current_deformation=(getattr(mesh,"deformation",None)
+                         if reference_sampling else None)
+    if current_deformation is not None:
+        mesh.UnsetDeformation()
+    try:
+        cells=sample(cell_nodes)
+        faces=sample(face_nodes)
+    finally:
+        if current_deformation is not None:
+            mesh.SetDeformation(current_deformation)
+    return ProductionGetTrafoDisplacements(family,cells,faces)
 
 
 def _materialize_charge_gram(charge_gram):
@@ -578,6 +596,18 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
     if incident.shape!=(nout,) or dincident.shape!=(q,nout):
         raise ValueError("functional incident response derivatives mismatch")
 
+    # Geometry sampling is independent of the state/adjoint solutions.  Do it
+    # before the expensive multi-RHS solve so an invalid resumed GetTrafo
+    # mapping fails immediately instead of after a long Krylov run.
+    geometry=sample_production_gettrafo_displacements(
+        fes,modes,charge_basis,family=family)
+    cells=np.stack(geometry.cell,axis=1)
+    if geometry.family=="wedge":
+        faces=np.zeros((q,len(geometry.face),9,3))
+        for host,values in enumerate(geometry.face):
+            faces[:,host,:values.shape[1]]=values
+    else: faces=np.stack(geometry.face,axis=1)
+
     charge_gram.restore_geometry_mass_matrix()
     right_hand_sides=np.ascontiguousarray(np.vstack((b,C)),dtype=np.float64)
     solved=charge_gram.solve_configured_linear_material_auto_prec_many(
@@ -592,14 +622,6 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
     state=solutions[0];adjoints=solutions[1:]
     response=C@state+incident
 
-    geometry=sample_production_gettrafo_displacements(
-        fes,modes,charge_basis,family=family)
-    cells=np.stack(geometry.cell,axis=1)
-    if geometry.family=="wedge":
-        faces=np.zeros((q,len(geometry.face),9,3))
-        for host,values in enumerate(geometry.face):
-            faces[:,host,:values.shape[1]]=values
-    else: faces=np.stack(geometry.face,axis=1)
     bx=np.asarray(B@state).reshape(-1)
     Gbx=np.asarray(charge_gram.matvec_sym(bx)).reshape(-1)
     badjoints=[np.asarray(B@value).reshape(-1) for value in adjoints]
@@ -1033,6 +1055,10 @@ class TSVDElementCandidateSelection:
     signed_coefficients: np.ndarray
     relative_truncation_error: float
     status: str
+    linearized_reachability_residual: np.ndarray | None = None
+    linearized_reachability_max_band_ratio: float = float("inf")
+    linearized_reachability_relative_residual: float = float("inf")
+    linearized_reachable: bool = False
 
 
 @dataclass(frozen=True)
@@ -1066,6 +1092,10 @@ class HDivMMMGenerationIteration:
     candidate_coupling_relative_truncation_error: float = 0.0
     candidate_schur_max_iterations: int = 0
     response_adjoint_count: int = 0
+    linearized_reachability_residual: np.ndarray | None = None
+    linearized_reachability_max_band_ratio: float = float("inf")
+    linearized_reachability_relative_residual: float = float("inf")
+    linearized_reachable: bool = False
 
 
 @dataclass(frozen=True)
@@ -2014,17 +2044,32 @@ def select_tsvd_element_candidates(*, current_response, response_target,
     residual_scale=max(1.0,float(np.linalg.norm((current-target)/band)))
     if (singular.size==0 or not np.isfinite(singular[0]) or
             singular[0]<=relative_tolerance*residual_scale):
+        reachability_residual=current-target
+        reachability_ratio=float(np.max(np.abs(reachability_residual/band)))
+        reachability_relative=float(np.linalg.norm(reachability_residual/band)/
+            max(np.finfo(float).tiny,
+                float(np.linalg.norm((target-current)/band))))
         return TSVDElementCandidateSelection(
             np.empty(0,dtype=np.int64),np.empty(0,dtype=np.int8),
             np.empty(0,dtype=np.int64),np.empty(0,dtype=np.int8),current.copy(),
             float(np.max(np.abs((current-target)/band))),0.0,0,
             int(factor.k_aca),np.asarray(singular,dtype=float),
             np.zeros(elements.size),0.0,
-            "all normalized candidate responses are zero")
+            "all normalized candidate responses are zero",
+            reachability_residual,reachability_ratio,reachability_relative,
+            reachability_ratio<=1.0+float(ratio_tolerance))
     rank=max(1,int(np.count_nonzero(
         singular>=relative_tolerance*singular[0])))
     retained=(U[:,:rank]*singular[:rank])@V[:,:rank].T
     correction=(target-current)/band
+    projected_correction=U[:,:rank]@(U[:,:rank].T@correction)
+    normalized_reachability_residual=projected_correction-correction
+    reachability_residual=band*normalized_reachability_residual
+    reachability_ratio=float(np.max(np.abs(normalized_reachability_residual)))
+    reachability_relative=float(np.linalg.norm(
+        normalized_reachability_residual)/max(
+            np.finfo(float).tiny,float(np.linalg.norm(correction))))
+    linearized_reachable=reachability_ratio<=1.0+float(ratio_tolerance)
     coefficients=V[:,:rank]@((U[:,:rank].T@correction)/singular[:rank])
     truncated_delta=band[:,None]*retained
     discarded=float(np.linalg.norm(normalized-retained))
@@ -2051,7 +2096,9 @@ def select_tsvd_element_candidates(*, current_response, response_target,
             np.empty(0,dtype=np.int64),np.empty(0,dtype=np.int8),current.copy(),
             float(np.max(np.abs((current-target)/band))),0.0,rank,
             int(factor.k_aca),np.asarray(singular,dtype=float),coefficients,
-            relative_error,"TSVD magnetization signs admit no feasible boundary move")
+            relative_error,"TSVD magnetization signs admit no feasible boundary move",
+            reachability_residual,reachability_ratio,reachability_relative,
+            linearized_reachable)
     from scipy.linalg import qr
     feasible_v=V[feasible_columns,:rank]
     _,_,pivots=qr(feasible_v.T,mode="economic",pivoting=True)
@@ -2099,7 +2146,9 @@ def select_tsvd_element_candidates(*, current_response, response_target,
             representatives,representative_directions,current.copy(),current_ratio,0.0,
             rank,int(factor.k_aca),np.asarray(singular,dtype=float),coefficients,
             relative_error,
-            "TSVD global binary model found no improving insertion")
+            "TSVD global binary model found no improving insertion",
+            reachability_residual,reachability_ratio,reachability_relative,
+            linearized_reachable)
     capture_ratio=(current_ratio-improvement_capture*
                    (current_ratio-best.predicted_max_band_ratio))
     compact=solve_element_generation_lp(
@@ -2117,7 +2166,9 @@ def select_tsvd_element_candidates(*, current_response, response_target,
         compact.predicted_response,
         compact.predicted_max_band_ratio,compact.added_volume,rank,
         int(factor.k_aca),np.asarray(singular,dtype=float),coefficients,relative_error,
-        "all-candidate band-normalized TSVD plus binary LP")
+        "all-candidate band-normalized TSVD plus binary LP",
+        reachability_residual,reachability_ratio,reachability_relative,
+        linearized_reachable)
 
 
 def _interpolate_screened_response_correction(
@@ -2946,7 +2997,16 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 int(removal_tsvd.numerical_rank),int(removal_tsvd.aca_rank),
                 float(removal_tsvd.relative_truncation_error),
                 int(len(removal_tsvd.selected_elements)),removed_physical,0,
-                int(len(removal_candidates)))
+                int(len(removal_candidates)),
+                linearized_reachability_residual=(None if
+                    removal_tsvd.linearized_reachability_residual is None else
+                    np.asarray(removal_tsvd.linearized_reachability_residual,
+                               dtype=float)),
+                linearized_reachability_max_band_ratio=float(
+                    removal_tsvd.linearized_reachability_max_band_ratio),
+                linearized_reachability_relative_residual=float(
+                    removal_tsvd.linearized_reachability_relative_residual),
+                linearized_reachable=bool(removal_tsvd.linearized_reachable))
             history.append(row)
             if iteration_callback is not None: iteration_callback(row)
             converged=current_ratio<=1.0+ratio_tolerance
@@ -3649,7 +3709,12 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             int(lin.candidate_coupling_rank),
             float(lin.candidate_coupling_relative_truncation_error),
             int(max(lin.schur_iterations,default=0)),
-            int(len(lin.adjoint_iterations))))
+            int(len(lin.adjoint_iterations)),
+            (None if tsvd_proposal.linearized_reachability_residual is None else
+             np.asarray(tsvd_proposal.linearized_reachability_residual,dtype=float)),
+            float(tsvd_proposal.linearized_reachability_max_band_ratio),
+            float(tsvd_proposal.linearized_reachability_relative_residual),
+            bool(tsvd_proposal.linearized_reachable)))
         if iteration_callback is not None:
             iteration_callback(history[-1])
         converged=current_ratio<=1.0+ratio_tolerance

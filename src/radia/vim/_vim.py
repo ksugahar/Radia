@@ -544,16 +544,28 @@ def _charge_basis(fes, quad, *, materialize_mass=True,
     # deformation is installed.  The raw vertex path remains the cheap source
     # of truth for an undeformed affine mesh.
     live_deformation = mesh.deformation is not None
+    # Preserve the undeformed topological vertices as the parameter domain of
+    # any later GetTrafo continuation.  ``vV``/``bV`` below intentionally hold
+    # the current physical geometry used by ChargeGram, while deformation
+    # GridFunctions must be evaluated at fixed reference vertices X when the
+    # live map is x = X + u(X).  Reconstructing X from the physical vertices
+    # is both unnecessary and unreliable on a nonzero resumed deformation.
+    reference_vV = [
+        np.array([mesh[v].point for v in mesh[e].vertices]) for e in vels
+    ]
+    reference_bV = [
+        np.array([mesh[v].point for v in mesh[e].vertices]) for e in bels
+    ]
     vV = ([_trafo_lattice_nodes(mesh, e, _IR_TET_VERTICES)[
                _TET_REF_TO_ELEMENT_VERTEX_ORDER]
            for e in vels]
           if live_deformation else
-          [np.array([mesh[v].point for v in mesh[e].vertices]) for e in vels])
+          reference_vV)
     bV = ([_trafo_lattice_nodes(mesh, e, _IR_TRI_VERTICES)[
                _TRI_REF_TO_ELEMENT_VERTEX_ORDER]
            for e in bels]
           if live_deformation else
-          [np.array([mesh[v].point for v in mesh[e].vertices]) for e in bels])
+          reference_bV)
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
     bdof = [list(L2b.GetDofNrs(e)) for e in bels]
     mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
@@ -605,6 +617,8 @@ def _charge_basis(fes, quad, *, materialize_mass=True,
         B = sp.vstack(Brows).tocsr()                            # (n_charge, ndof)
     return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
                 host=host, kind=kind, expo=expo, vV=vV, bV=bV,
+                reference_vV=reference_vV,
+                reference_bV=reference_bV,
                 cell_verts=_f64_buffer(np.concatenate([V.ravel() for V in vV])),
                 face_verts=_f64_buffer(np.concatenate([V.ravel() for V in bV])),
                 mons_v=mons_v, mons_s=mons_s, n_el=len(vels))

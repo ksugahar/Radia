@@ -704,6 +704,22 @@ def test_all_candidate_aca_qr_tsvd_determines_binary_cardinality():
     np.testing.assert_array_equal(update.selected_elements,[20,21])
     assert update.predicted_max_band_ratio<0.11
     assert update.relative_truncation_error<1e-12
+    assert update.linearized_reachable
+    assert update.linearized_reachability_max_band_ratio<1e-12
+
+
+def test_all_candidate_tsvd_reports_unreachable_response_component():
+    update=select_tsvd_element_candidates(
+        current_response=[0.0,0.0],response_target=[1.0,1.0],
+        response_band=[.1,.1],candidate_elements=[20],
+        candidate_response_delta=[[1.0],[0.0]],candidate_volumes=[1.0],
+        volume_budget=1.0,relative_tolerance=1e-10,
+        improvement_capture=1.0)
+    assert update.numerical_rank==1
+    assert not update.linearized_reachable
+    assert update.linearized_reachability_max_band_ratio==pytest.approx(10.0)
+    np.testing.assert_allclose(
+        update.linearized_reachability_residual,[0.0,-1.0],atol=1e-12)
 
 
 def test_tsvd_magnetization_sign_selects_addition_or_removal():
@@ -1571,6 +1587,37 @@ def test_gettrafo_sampler_routes_tet_and_mixed_wedge_face_lattices():
         else:
             assert all(x.shape[1:]==(18,3) for x in sampled.cell)
             assert {x.shape[1] for x in sampled.face}=={6,9}
+
+
+def test_gettrafo_sampler_uses_reference_vertices_and_restores_live_deformation():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis
+    mesh=MakeStructured3DMesh(hexes=False,nx=1,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1);space=ng.VectorH1(mesh,order=1)
+    current=ng.GridFunction(space)
+    current.Set(ng.CF((.07*ng.x-.02*ng.y,.03*ng.y,.04*ng.z)))
+    mode=ng.GridFunction(space)
+    mode.Set(ng.CF((.11*ng.x+.01*ng.y,-.05*ng.y,.08*ng.z)))
+    with ng.TaskManager():
+        mesh.SetDeformation(current)
+        try:
+            cb=_charge_basis(fes,quad=4,materialize_mass=False)
+            sampled=sample_production_gettrafo_displacements(
+                fes,[mode],cb,family="tet")
+            assert mesh.deformation is not None
+            np.testing.assert_allclose(
+                mesh.deformation.vec.FV().NumPy(),
+                current.vec.FV().NumPy(),rtol=0.0,atol=0.0)
+        finally:
+            mesh.UnsetDeformation()
+    reference=np.asarray(cb["reference_vV"],dtype=float)
+    physical=np.asarray(cb["vV"],dtype=float)
+    assert np.max(np.abs(physical-reference))>1e-3
+    expected=np.stack((.11*reference[...,0]+.01*reference[...,1],
+                       -.05*reference[...,1],.08*reference[...,2]),axis=-1)
+    np.testing.assert_allclose(np.asarray(sampled.cell)[:,0],expected,
+                               rtol=2e-13,atol=2e-13)
 
 
 def test_production_wedge_self_block_python_boundaries_preserve_host_mode_order():
