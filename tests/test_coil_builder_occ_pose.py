@@ -124,45 +124,15 @@ def test_solids_match_centerline_for_a_rotated_start_frame():
 
 def _saddle(current, phi_center_deg, *, R=40 * MM, L=120 * MM,
             phi_half=35.0, r_fillet=6 * MM):
-    """Cylinder-wrapped saddle about the y (beam) axis.
+    """The tilt-search recipe validated here was promoted to
+    radia.coil_builder.saddle_coil (2026-08-09); the pose test now
+    exercises the shipped API instead of a private copy."""
+    from radia.coil_builder import saddle_coil
 
-    The tilt of each bend is SEARCHED, not assumed: which sign turns the
-    path into the axial direction depends on the accumulated frame.
-    """
-    import copy
-
-    def pick(coil, kind, add):
-        best, best_cost = None, None
-        for t in (0.0, 90.0, 180.0, -90.0):
-            trial = copy.deepcopy(coil)
-            add(trial, t)
-            seg = trial.segments[-1]
-            p = np.asarray(seg.end_pos)
-            r_end = math.hypot(p[0], p[2])
-            travel_y = abs(seg.end_orientation[1][1])
-            if kind == "wrap":
-                cost = abs(r_end - R)
-            elif kind == "axial":
-                cost = 1.0 - travel_y + 10 * abs(r_end - R)
-            else:
-                cost = travel_y + 10 * abs(r_end - R)
-            if best_cost is None or cost < best_cost:
-                best, best_cost = t, cost
-        add(coil, best)
-
-    a0 = math.radians(phi_center_deg - phi_half)
-    er = np.array([math.cos(a0), 0.0, math.sin(a0)])
-    et = np.array([-math.sin(a0), 0.0, math.cos(a0)])
-    coil = (CoilBuilder(current)
-            .set_start(R * er + (L / 2) * np.array([0.0, 1.0, 0.0]),
-                       np.array([er, et, np.cross(er, et)]))
-            .set_cross_section(W_CS, H_CS))
-    for _ in range(2):
-        pick(coil, "wrap", lambda k, t: k.add_arc(R, 2 * phi_half, tilt=t))
-        pick(coil, "axial", lambda k, t: k.add_arc(r_fillet, 90, tilt=t))
-        coil.add_straight(L - 2 * r_fillet)
-        pick(coil, "azimuthal", lambda k, t: k.add_arc(r_fillet, 90, tilt=t))
-    return coil
+    return saddle_coil(current, radius=R, length=L,
+                       span_deg=2 * phi_half, bend_radius=r_fillet,
+                       width=W_CS, height=H_CS, axis="y",
+                       phi_center_deg=phi_center_deg)
 
 
 def test_saddle_coil_step_is_on_the_cylinder():
