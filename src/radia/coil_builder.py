@@ -1665,6 +1665,141 @@ class CoilBuilder:
 		return Glue(shapes)
 
 
+_SADDLE_AXES = {
+	# (e1, e2) with e1 x e2 = -axis, matching the verified y-axis
+	# construction (er = cos(phi) e1 + sin(phi) e2, x_hat x z_hat = -y_hat).
+	"x": ((0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),
+	"y": ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+	"z": ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
+}
+
+_SADDLE_TILTS = (0.0, 90.0, 180.0, -90.0)
+
+
+def saddle_coil(current, *, radius, length, span_deg, bend_radius,
+                width, height, axis="y", phi_center_deg=0.0,
+                closure_tol=1e-9):
+	"""Closed saddle (racetrack-on-a-cylinder) coil around ``axis``.
+
+	The workhorse DC end-turn geometry of accelerator dipoles and MRI
+	gradient sets: two azimuthal arcs of ``span_deg`` wrapped ON the
+	cylinder ``r = radius`` at the two ends of an axial window of
+	``length``, joined by straight axial legs through four
+	``bend_radius`` fillets.  A dipole is two saddles at
+	``phi_center_deg`` 0 and 180 carrying opposite currents::
+
+	    up = saddle_coil(+I, radius=0.04, length=0.12, span_deg=70,
+	                     bend_radius=0.006, width=0.01, height=0.008)
+	    dn = saddle_coil(-I, radius=0.04, length=0.12, span_deg=70,
+	                     bend_radius=0.006, width=0.01, height=0.008,
+	                     phi_center_deg=180.0)
+
+	The bend tilts are SEARCHED, not assumed: which tilt keeps an arc on
+	the cylinder or turns the path axial depends on the accumulated
+	frame, and the sign flips between the two halves of the loop
+	(measured; hardcoding [0, 90, ...] silently builds a different
+	shape).  Each candidate tilt is tried on a copy and scored --
+	on-cylinder radius error for wrap arcs, axial alignment for the
+	entry fillets, azimuthal alignment for the exit fillets -- which is
+	the CoilBuilder version of the Cubit "probe, don't guess" rule.
+
+	The centerline stays exactly on the cylinder except over the
+	fillets, whose outward excursion is the geometric
+	``~ bend_radius^2 / (2 radius)`` of a round corner leaving a
+	cylinder (0.45 mm for the 40 mm / 6 mm reference saddle) -- the
+	same flare a physical winding has, not an error.
+
+	Args:
+		current: coil current in A (sign = circulation sense).
+		radius: cylinder radius of the wrapped arcs [m].
+		length: axial window length; the axial legs run
+			``length - 2 bend_radius`` [m].
+		span_deg: azimuthal span 2*phi0 of each wrapped arc (0, 180).
+		bend_radius: fillet radius joining wrap and leg [m].
+		width / height: rectangular conductor cross-section [m].
+		axis: cylinder axis, "x" | "y" | "z".
+		phi_center_deg: azimuthal centre of the saddle window.
+		closure_tol: maximum permitted start-to-end gap [m]; a
+			violation raises with the measured gap (fail loud).
+
+	Returns:
+		A closed CoilBuilder (8 segments: 2 wraps, 4 fillets, 2 legs).
+	"""
+	import copy as _copy
+	import math as _math
+
+	if axis not in _SADDLE_AXES:
+		raise ValueError(f"axis must be one of {sorted(_SADDLE_AXES)}, "
+		                 f"got {axis!r}")
+	if not 0.0 < span_deg < 180.0:
+		raise ValueError(f"span_deg must be in (0, 180), got {span_deg}")
+	if not 0.0 < bend_radius < radius:
+		raise ValueError(
+			f"bend_radius must be in (0, radius={radius}), "
+			f"got {bend_radius}")
+	if length <= 2.0 * bend_radius:
+		raise ValueError(
+			f"length must exceed 2*bend_radius = {2 * bend_radius}, "
+			f"got {length}")
+
+	e1 = np.array(_SADDLE_AXES[axis][0])
+	e2 = np.array(_SADDLE_AXES[axis][1])
+	u_ax = -np.cross(e1, e2)                      # e1 x e2 = -axis
+
+	def _radial(phi_deg):
+		a = _math.radians(phi_deg)
+		er = _math.cos(a) * e1 + _math.sin(a) * e2
+		et = -_math.sin(a) * e1 + _math.cos(a) * e2
+		return er, et
+
+	def _r_axis(p):
+		p = np.asarray(p, dtype=float)
+		return float(np.linalg.norm(p - (p @ u_ax) * u_ax))
+
+	def _best_tilt(coil, kind, add):
+		best, best_cost = None, None
+		for t in _SADDLE_TILTS:
+			trial = _copy.deepcopy(coil)
+			add(trial, t)
+			seg = trial.segments[-1]
+			r_end = _r_axis(seg.end_pos)
+			travel_ax = abs(float(seg.end_orientation[1] @ u_ax))
+			if kind == "wrap":
+				cost = abs(r_end - radius)
+			elif kind == "axial":
+				cost = 1.0 - travel_ax + 10.0 * abs(r_end - radius)
+			else:                                  # azimuthal
+				cost = travel_ax + 10.0 * abs(r_end - radius)
+			if best_cost is None or cost < best_cost:
+				best, best_cost = t, cost
+		add(coil, best)
+
+	er0, et0 = _radial(phi_center_deg - 0.5 * span_deg)
+	ori = np.array([er0, et0, np.cross(er0, et0)])
+	coil = (CoilBuilder(current)
+	        .set_start(radius * er0 + 0.5 * length * u_ax, ori)
+	        .set_cross_section(width, height))
+	for _ in range(2):
+		_best_tilt(coil, "wrap",
+		           lambda c, t: c.add_arc(radius, span_deg, tilt=t))
+		_best_tilt(coil, "axial",
+		           lambda c, t: c.add_arc(bend_radius, 90, tilt=t))
+		coil.add_straight(length - 2.0 * bend_radius)
+		_best_tilt(coil, "azimuthal",
+		           lambda c, t: c.add_arc(bend_radius, 90, tilt=t))
+
+	gap = float(np.linalg.norm(
+		np.asarray(coil.segments[-1].end_pos)
+		- np.asarray(coil.segments[0].start_pos)))
+	if gap > closure_tol:
+		raise ValueError(
+			f"saddle centerline failed to close (gap {gap:.3e} m > "
+			f"closure_tol {closure_tol:.1e}); the requested geometry "
+			f"(radius={radius}, length={length}, span_deg={span_deg}, "
+			f"bend_radius={bend_radius}) is not self-consistent")
+	return coil
+
+
 def _normalize_coil_builders(coils):
 	"""Return a validated tuple of CoilBuilder objects."""
 	if isinstance(coils,CoilBuilder):
