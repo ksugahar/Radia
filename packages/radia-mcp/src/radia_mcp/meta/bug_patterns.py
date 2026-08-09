@@ -312,6 +312,59 @@ PATTERNS: list[dict] = [
                     "src/core/rad_hacapk.h",
                     "tests/feec/test_hdiv_vim_charge_sigma.py"],
     },
+    {
+        "id": "slp-hard-band-cap-rejection-death",
+        "title": "SLP acceptance cap set EQUAL to the LP row target "
+                 "starves the band-edge headroom to zero -> rejection "
+                 "death misreported as convergence.  FIXED by a fixed "
+                 "acceptance zone above the band.",
+        "topics": ["topopt", "optimization", "slp", "trust-region"],
+        "severity": "high",
+        "first_seen": "2026-08-09",
+        "last_seen": "2026-08-10",
+        "what": "optimize_density stopped 'converged' at 5 iterates / "
+                "+6.7% on the 194-tet sector lane whose golden is 30 "
+                "iterates / +16.1% (peak 1.06 bands); the ersatz-band "
+                "gate failed downstream (4.6% > 3%) because the design "
+                "stayed gray.  History signature: violation/band walks "
+                "0.17 -> 0.43 -> 0.90 -> 0.98 -> 0.998, trials rise, "
+                "move collapses, then every trial rejects.",
+        "root_cause": "The ascent acceptance required the TRUE violation "
+                      "<= 1.0*band while the LP targets predicted "
+                      "violations <= band: as the iterate approaches an "
+                      "active edge the acceptance headroom (band - "
+                      "|viol|) -> 0, the quadratic part of the true "
+                      "response exceeds it at ANY move, and trial "
+                      "backtracking exhausts move_min -- structural, "
+                      "not a tolerance issue.  The hard cap had been "
+                      "introduced to stop accept-then-restore cycling "
+                      "seen with the older 1.25 cap + restore-at-band "
+                      "trigger.",
+        "detection": "History shows monotone approach to viol/band = 1 "
+                     "with rising trial counts and collapsing move, "
+                     "then 'converged' far below the golden gain.  Any "
+                     "SLP/SQP loop where acceptance threshold == LP "
+                     "constraint target has this failure mode built in.",
+        "prevention": "FIXED 2026-08-10 (e80018da6): fixed acceptance "
+                      "zone _BAND_ACCEPT_OVERSHOOT = 0.1 in "
+                      "radia.isochronous_topopt -- ascent may LAND in "
+                      "(band, 1.1*band] and stays in ascent mode (J "
+                      "monotone; the 0.9*|viol| rows pull the next "
+                      "prediction back), deep Chebyshev restoration "
+                      "starts only ABOVE the zone.  0.1 threads between "
+                      "the golden accepted peak (1.06 bands) and the "
+                      "40k stranding point (1.235 bands), preserving "
+                      "both prior lessons.  Do NOT regress to either "
+                      "extreme: cap == target (rejection death) or "
+                      "restore-at-band with a wide cap (cycling).  "
+                      "Locked by validation_test/isochronous_topopt/"
+                      "test_design_loop_lane.py (golden bands).",
+        "related": ["src/radia/isochronous_topopt.py",
+                    "validation_test/isochronous_topopt/"
+                    "test_design_loop_lane.py",
+                    "validation_test/isochronous_topopt/"
+                    "test_hex_native_design_lane.py"],
+    },
 
     # =====================================================
     # CUBIT LICENSE BUGS
