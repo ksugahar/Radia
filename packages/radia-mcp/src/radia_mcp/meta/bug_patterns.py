@@ -251,70 +251,66 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "facet-tet-charge-gram-indefinite-cg-stall",
-        "title": "Charge Gram goes INDEFINITE on facet-conforming tet "
-                 "meshes with tiny-cell blobs; CG stalls at every "
-                 "tolerance and preconditioner.",
+        "title": "Charge Gram went INDEFINITE on extreme-size-ratio tet "
+                 "meshes via roundoff amplification; CG stalled at every "
+                 "tolerance.  FIXED by sigma-normalized Gram storage.",
         "topics": ["vim", "hdiv", "solver", "cubit", "topopt",
-                   "mesh-quality"],
+                   "mesh-quality", "roundoff"],
         "severity": "high",
         "first_seen": "2026-08-08",
-        "last_seen": "2026-08-08",
-        "what": "16,102-tet mesh of a decimated marching-cubes STL "
+        "last_seen": "2026-08-09",
+        "what": "The 16,102-tet mesh of a decimated marching-cubes STL "
                 "capped 20,000 CG iterations for every native flavor "
-                "(mass-Riesz tol 1e-10..1e-6, Jacobi, cluster-tree). "
-                "Residual signature: r/r0 ~ 1.4 at it 99, plateau to "
-                "~it 1000, late decay.  Easy to misread as a "
-                "conditioning/preconditioner problem.",
+                "(mass-Riesz tol 1e-10..1e-6, Jacobi, cluster-tree); "
+                "residual plateaued ~1000 iterations then decayed late.  "
+                "Easy to misread as a conditioning/preconditioner "
+                "problem: measured mu_min of N v = mu M v was -2.674 "
+                "against the physical [0,1] spectrum while mu_max was "
+                "only 3.07 (kappa innocent).",
         "root_cause": "ROUNDOFF AMPLIFICATION in the congruence "
-                      "N = B^T G B, PROVEN on a 728-cell repro: the "
+                      "N = B^T G B, proven on a 728-cell repro: the "
                       "charge Gram G itself is PSD to machine zero "
-                      "(dense eigh: min -7.8e-18 vs max +1.4e-8), but "
-                      "the unnormalized monomial charge basis gives B "
-                      "entries up to 3e10 on tiny cells (G diag range "
-                      "1.2e10), so the congruence amplifies G's "
-                      "ABSOLUTE rounding band by ||B||^2 ~ 1e16 into "
-                      "O(1) spectrum pollution (measured mu_min -2.674 "
-                      "on 16k cells / -0.475 on the repro vs the "
-                      "physical [0,1]; mu_max 3.07 so kappa is "
-                      "innocent; preconditioned eigenvalue -266 puts "
-                      "CG outside its applicability).  Clipping G's "
-                      "negative rounding band restores N PSD (6->0 "
-                      "negatives) -- the analytic kernels, ACA eps, "
-                      "quadrature orders (genuine quad=5 tested), "
-                      "near/far split, translation, and the B^T G B "
-                      "wiring (matches numpy to 5e-16) are ALL "
-                      "exonerated; that bit-invariance is itself the "
-                      "signature of representation roundoff.  Graded "
-                      "with size ratio: 300-face control tet "
-                      "mu_min=-0.34, staircase +0.0002 (uniform sizes "
-                      "= PSD), Sculpt hex healthy (overlay grid = "
-                      "uniform).  Post-hoc diagonal normalization of "
-                      "a densified G does NOT help (roundoff is "
-                      "already baked into the entries).",
-        "detection": "CG maxiter cap at EVERY tolerance + the plateau "
+                      "(dense eigh min -7.8e-18 vs max +1.4e-8) and the "
+                      "applied N matches numpy B^T G B to 5e-16 -- "
+                      "kernels, quadrature (genuine quad=5 tested), ACA "
+                      "eps, near/far split, translation, and wiring all "
+                      "exonerated (that bit-invariance IS the signature "
+                      "of representation roundoff).  The unnormalized "
+                      "monomial charge basis put B entries at 3e10 on "
+                      "tiny cells (G diagonal range 1.2e10), so the "
+                      "congruence amplified G's ABSOLUTE rounding band "
+                      "by ||B||^2 ~ 1e16 into O(1) negative eigenvalues; "
+                      "clipping G's negative rounding band alone "
+                      "restored N PSD (6 -> 0 negatives).  Post-hoc "
+                      "diagonal normalization of the assembled G does "
+                      "NOT help -- roundoff is baked into the entries.",
+        "detection": "CG maxiter cap at EVERY tolerance + plateau "
                      "residual curve; confirm with the shifted-power "
                      "mu_min probe (P = sigma*I - M^-1 N, "
-                     "M-orthonormalized; ~100 matvecs).  NOTE two no-op "
+                     "M-orthonormalized, ~100 matvecs).  NOTE two no-op "
                      "knobs: intorder=7 (quad=4) routes to the same "
-                     "Keast-15 rule as quad=3, and inner_quad only "
-                     "acts when LOWER than quad.",
-        "prevention": "Route charge-Gram re-evaluation through the "
-                      "Sculpt all-hex mesh (cubit_stl_to_vol "
-                      "scheme=hex) or any near-uniform-size mesh; do "
-                      "NOT chase this with preconditioners -- no "
-                      "preconditioner fixes an indefinite operator.  "
-                      "The real fix is per-charge basis normalization "
-                      "APPLIED AT C++ GRAM-EVALUATION TIME (scale the "
-                      "monomial by s_p so entries carry O(1) dynamic "
-                      "range, with the matching 1/s_p on B's rows) -- "
-                      "post-hoc scaling of the assembled G cannot "
-                      "recover precision.  Until that lands, treat "
-                      "meshes whose element-size ratio spans >~100x "
-                      "as charge-Gram-suspect and verify with the "
-                      "shifted-power mu_min probe.",
-        "related": ["src/radia/vim/_vim.py",
-                    "validation_test/isochronous_topopt/"
-                    "test_shape_regen_lane.py"],
+                     "Keast-15 rule as quad=3, and inner_quad only acts "
+                     "when LOWER than quad.",
+        "prevention": "FIXED 2026-08-09: RadHACApKChargeGram stores the "
+                      "NORMALIZED Gram Ghat = S^-1 G S^-1 (sigma_p = "
+                      "sqrt(raw G_pp), OnBeforeBuild pre-pass; the fill "
+                      "oracle serves Ghat via m_fillNormalized) and "
+                      "wraps sigma back inside every public apply "
+                      "(virtualized MatVec family), so external "
+                      "semantics are unchanged while the congruence no "
+                      "longer amplifies absolute roundoff.  Verified: "
+                      "the 728-cell repro spectrum moved from "
+                      "[-0.475, +1.730] / 6 negatives to [0, +0.9985] / "
+                      "0; the 16k-tet chi=100 solve went from the "
+                      "20,000-iteration cap to 49 iterations / 8 s.  "
+                      "Locked by tests/feec/test_hdiv_vim_charge_sigma"
+                      ".py.  If a CG cap reappears on an "
+                      "extreme-size-ratio mesh, run the mu_min probe "
+                      "before touching preconditioners.",
+        "related": ["src/core/rad_hacapk_hdiv.cpp",
+                    "src/core/rad_hacapk_hdiv.h",
+                    "src/core/rad_hacapk.h",
+                    "tests/feec/test_hdiv_vim_charge_sigma.py"],
     },
 
     # =====================================================

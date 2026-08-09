@@ -3554,6 +3554,15 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "so CG/MINRES on B^T G_sym B use a machine-symmetric operator (the ACA-asymmetry failure mode is removed).")
         .def("entry", &RadHACApKChargeGram::GetInteractionMatrixElement, py::arg("i"), py::arg("j"),
              "Charge-Gram entry G[i,j] from the analytic / polytope / high-order kernel.")
+        .def("charge_sigma",
+             [](const RadHACApKChargeGram& s) {
+                 return to_numpy_1d(s.ChargeSigma());
+             },
+             "sigma_p = sqrt(raw G_pp) of the charge-basis normalization the "
+             "H-matrix stores internally (Ghat = S^-1 G S^-1; every public "
+             "apply wraps S back, so semantics stay the physical Gram).  "
+             "Empty before BuildHMatrix; diagnostic for the "
+             "roundoff-amplification regression tests.")
         .def("hex_volume_self_block_directional_derivative",
              [](RadHACApKChargeGram& s, int host, F64Array velocity_a) {
                  auto b=velocity_a.request();
