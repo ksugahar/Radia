@@ -24,6 +24,17 @@ def test_dynamic_simulink_result_is_validated_and_replayable():
     assert payload["model_contract"]["damping_provenance"].startswith(
         "explicit control-oriented"
     )
+    contract = payload["model_contract"]
+    assert contract["excitation_frequency_hz"] == 50.0
+    assert contract["electromagnetic_model_class"] == (
+        "fixed_frequency_cycle_averaged_force_height_lut"
+    )
+    assert contract["height_coupling"] == "quasi_steady_interpolation"
+    assert contract["electromagnetic_state_transient_included"] is False
+    assert contract["motional_emf_included"] is False
+    assert contract["damping_identified_from_measurement"] is False
+    assert contract["force_family_snapshot_count"] == 25
+    assert contract["eddy_state_order"] == 3
     for relative_path in payload["result_files"]:
         assert (REPO_ROOT / relative_path).is_file()
 
