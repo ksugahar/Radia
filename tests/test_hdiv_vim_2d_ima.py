@@ -40,8 +40,12 @@ def test_planar_quad_image_solve_and_field_match_full_to_roundoff(
     relative = np.linalg.norm(full_field - half_field) / np.linalg.norm(full_field)
     # BDM2 adds two local reference-basis transformations before the C++ solve;
     # its 12-20 eps full/reduced spread is still roundoff, not a discretization
-    # tolerance.  BDM1 keeps the original strict 10 eps gate.
-    roundoff_factor = 10.0 if order == 1 else 32.0
+    # tolerance.  BDM1 keeps the original strict 10 eps gate.  The BDM2 band
+    # widened 32 -> 64 eps with the charge-basis sigma normalization: the
+    # image-folded and full operators now carry slightly different sigma
+    # diagonals (the image term enters raw G_pp), so their rounding paths no
+    # longer cancel bit-for-bit (measured 41 eps; still pure roundoff).
+    roundoff_factor = 10.0 if order == 1 else 64.0
     assert relative < roundoff_factor * np.finfo(float).eps
     expected_constraints = 2*(order+1) if image == "+x" else 0
     assert half["body"].G.constraint_count == expected_constraints

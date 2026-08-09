@@ -112,15 +112,22 @@ public:
 
     /**
      * Matrix-vector product: y = A * x (O(N log N))
+     *
+     * VIRTUAL (2026-08-09): subclasses may store a diagonally NORMALIZED
+     * operator in the H-matrix leaves and wrap the scaling back here, so
+     * base-internal applications must dispatch (see
+     * RadHACApKChargeGram::MatVecSym -- the charge-basis normalization that
+     * fixes the roundoff-amplified indefiniteness on extreme-size-ratio
+     * meshes).  Implementations are unchanged for every other subclass.
      */
-    void MatVec(const std::vector<double>& x, std::vector<double>& y);
+    virtual void MatVec(const std::vector<double>& x, std::vector<double>& y);
     // y = A^T x (transpose H-matvec) and y = G_sym x (EXACTLY symmetric apply built from the
     // upper-triangular leaves -- valid for a symmetric cluster tree like the charge Gram).
-    void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y);
-    void MatVecSym(const std::vector<double>& x, std::vector<double>& y);
+    virtual void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y);
+    virtual void MatVecSym(const std::vector<double>& x, std::vector<double>& y);
     // Row-major [nrhs][ndof] BLAS-3 symmetric H-matrix application.
-    void MatVecSymMany(const std::vector<double>& x, int nrhs,
-                       std::vector<double>& y);
+    virtual void MatVecSymMany(const std::vector<double>& x, int nrhs,
+                               std::vector<double>& y);
 
     /**
      * Update diagonal blocks when 1/chi changes (nonlinear iteration)

@@ -43,7 +43,15 @@ def test_demag_operator_is_native_ngsolve_matrix_and_matches_configured_apply():
     assert isinstance(operator.mat, ng.BaseMatrix)
     assert type(operator.mat).__module__ == "radia._radia_pybind"
     assert operator.mat.height == fes.ndof == operator.mat.width
-    assert np.array_equal(result.FV().NumPy(), reference)
+    # Every Mult flavor must be wired to the SAME configured demag apply.
+    # Compared to near machine precision, not bit-for-bit: the charge-basis
+    # normalization wraps sigma around the stored Ghat, so symmetric and
+    # plain applies may differ in the last bits while remaining the same
+    # physical operator.
+    assert np.allclose(result.FV().NumPy(), reference,
+                       rtol=1e-12, atol=1e-15)
     assert np.allclose(mass_native, mass_reference.FV().NumPy(), rtol=2e-15, atol=1e-15)
-    assert np.array_equal(added.FV().NumPy(), 1.25 + 0.4 * reference)
-    assert np.array_equal(transposed.FV().NumPy(), -0.2 - 0.3 * reference)
+    assert np.allclose(added.FV().NumPy(), 1.25 + 0.4 * reference,
+                       rtol=1e-12, atol=1e-15)
+    assert np.allclose(transposed.FV().NumPy(), -0.2 - 0.3 * reference,
+                       rtol=1e-12, atol=1e-15)
