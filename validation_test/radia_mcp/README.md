@@ -4,6 +4,9 @@ This directory contains solver-backed numerical validation for the
 `radia_mcp.radia_ngsolve` APIs. These checks generate Netgen/NGSolve meshes,
 run FEM or BEM solves, compare formulations, or exercise convergence and
 frequency sweeps. They are intentionally outside the fast package test suite.
+Gmsh figure/raster checks that generate STEP geometry, probe volume fields, or
+render numerical images live here for the same reason; package tests retain
+only solver-free option and public-signature contracts.
 
 Run the fast API and MCP contract tests with:
 
