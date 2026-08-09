@@ -2035,6 +2035,22 @@ class DensityAdjointVIM:
 # --------------------------------------------------------------------------
 # constrained design loop (trust-region SLP)
 # --------------------------------------------------------------------------
+# Ascent ACCEPTANCE zone above the engineering band.  A hard cap at exactly
+# 1.0*band starves the acceptance headroom to zero as the iterate approaches
+# an active band edge: the LP targets <= band, the true (quadratic) response
+# overshoots by more than the vanishing headroom at ANY move, and the trial
+# backtracking exhausts move_min -- the 194-tet sector lane rejection-died at
+# 5 iterates / +6.7 % (2026-08-10) against its measured +16.1 % golden.  A
+# fixed overshoot zone keeps the headroom nonvanishing: ascent steps may LAND
+# in (band, (1+zeta)*band] and remain in ascent mode (J stays monotone; the
+# 0.9*|viol| rows already pull the next prediction back inside the band).
+# DEEP Chebyshev restoration starts only ABOVE the zone -- the 40k beta=8
+# stranding at 1.235 bands (see the deep trigger) is above 1.1 bands, so its
+# fix is preserved, while the golden lane's accepted peak (1.06 bands) is
+# inside.  0.1 deliberately threads between those two measured points.
+_BAND_ACCEPT_OVERSHOOT = 0.1
+
+
 @dataclass
 class DensityDesignResult:
     """Converged/terminal state of :func:`optimize_density`."""
@@ -2192,16 +2208,20 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     rows in its ``A_ub`` slot, normalized to O(1) -- Tesla-scale rows sit
     below HiGHS's absolute feasibility tolerance and read as noise).
 
-    Two-phase trust-region SLP.  While every violation is inside its band,
-    the LP maximizes J and acceptance keeps the ascent MONOTONE without
-    leaving the engineering bands.  While any violation sits OUTSIDE its
-    band (e.g. an infeasible profile start), the loop switches to
-    RESTORATION: the LP objective becomes the exact linearized minimax band
-    violation (J free), the rows hold a common epigraph cap, and acceptance
-    requires the worst normalized violation to decrease.
+    Two-phase trust-region SLP.  While every violation is inside the
+    acceptance zone (``(1 + _BAND_ACCEPT_OVERSHOOT) * band``), the LP
+    maximizes J with rows targeting the band itself and acceptance keeps
+    the ascent MONOTONE; accepted states may overshoot into the zone, from
+    which the ``0.9 * |viol|`` rows pull the next prediction back inside
+    the band.  While any violation sits ABOVE the zone (e.g. an infeasible
+    profile start), the loop switches to RESTORATION: the LP objective
+    becomes the exact linearized minimax band violation (J free), the rows
+    hold a common epigraph cap, and acceptance requires the worst
+    normalized violation to decrease.
     Rejected trials halve the step along the SAME analytic LP direction.
     When a constraint is active at the optimum the design rides its band
-    edge rather than cycling between objective ascent and restoration.
+    edge inside the zone rather than rejection-dying against a hard cap or
+    cycling between objective ascent and restoration.
 
     ``callback(entry)`` receives each accepted history dict.  The caller
     wraps the whole call in ``with TaskManager():``.  Informal per-iterate
@@ -2340,12 +2360,17 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         t_iter = time.perf_counter()
         J = float(lin.values[0])
         viol = lin.values[1:] - targets
-        # Lexicographic SLP.  RESTORATION remains active until every row is
-        # actually inside its engineering band; only then may the objective
-        # compete for material.  Switching to objective ascent in the former
-        # (band, 1.25*band] transition zone stranded the 40k beta=8 study at
-        # 1.235 bands even though the minimax direction was still productive.
-        deep = bool(targets.size) and bool(np.any(np.abs(viol) > band))
+        # Lexicographic SLP.  DEEP restoration owns everything ABOVE the
+        # acceptance zone; the objective competes for material inside it.
+        # Ascent in the former (band, 1.25*band] transition zone stranded the
+        # 40k beta=8 study at 1.235 bands even though the minimax direction
+        # was still productive -- 1.235 sits above the 1.1 zone, so that case
+        # still deep-restores.  States inside (band, 1.1*band] stay in ascent
+        # (monotone J) and the 0.9*|viol| rows below pull them back into the
+        # band; see _BAND_ACCEPT_OVERSHOOT for the band-edge rejection-death
+        # this zone prevents.
+        deep = bool(targets.size) and bool(np.any(
+            np.abs(viol) > (1.0 + _BAND_ACCEPT_OVERSHOOT) * band))
 
         def lp_rows(bands_eff):
             # rows normalized to O(1) for HiGHS's absolute tolerances
@@ -2478,10 +2503,15 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                     viol, viol_new, band, volume_ok)
             else:
                 ok_J = J_new >= J - objective_slack * abs(J)
-                # Objective ascent starts only from a feasible point and may
-                # not leave the engineering band.  Allowing a 1.25-band cap
-                # caused avoidable ascent/restoration cycling near activity.
-                ok_g = np.all(viol_new <= (1.0+1e-6)*band)
+                # Ascent may land inside the fixed acceptance zone above the
+                # band (see _BAND_ACCEPT_OVERSHOOT): a hard 1.0*band cap
+                # rejection-died at the active edge, while the former
+                # 1.25-band cap fed accepted states to restoration and
+                # cycled.  The zone is NOT a restoration trigger -- the
+                # 0.9*|viol| rows pull the next prediction back into the
+                # band from inside it.
+                ok_g = np.all(viol_new <= (
+                    1.0 + _BAND_ACCEPT_OVERSHOOT + 1e-6) * band)
                 ok = volume_ok and ok_J and bool(ok_g)
             if ok:
                 accepted = True
