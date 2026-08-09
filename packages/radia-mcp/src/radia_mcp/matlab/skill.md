@@ -31,6 +31,16 @@ the first p=6 case becomes a MATLAB-readable exchange file. This is a
 numeric reduced-model bridge, not a MATLAB reimplementation of NGSolve mesh
 assembly.
 
+The CoilBuilder moving-disk model is intentionally narrower than the numeric
+state bridge: `makeTeam28CoilBuilderPlant` and
+`radia_team28_coilbuilder_dynamic.slx` interpolate a validated 25-position,
+50 Hz cycle-averaged force family while advancing only the slow mechanical
+state. They do not resolve the carrier, advance electromagnetic states during
+motion, include motion-induced EMF, or identify damping from measurement. Use
+the maglev MCP `team28_cycle_averaged_motion_gate` before promoting this model;
+the accepted scope is `cycle_averaged_mechanical_motion`, not
+`full_electromagnetic_transient`.
+
 The first high-level Python-free assembly path is
 `radia.ngsolve.hcurl_eddy_cln_model`. It calls the MEX-native HCurl response
 reduction on a `.vol` mesh, returns `M_r = V' M V`, `K_r = V' K V`, and

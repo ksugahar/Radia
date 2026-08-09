@@ -138,6 +138,21 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "distributed-field kernels" in contract["simulink_blocks"][0]
     assert "LUT and lumped IH builders are removed" in contract["simulink_blocks"][2]
     assert contract["team28"]["frequency_hz"] == 50
+    team28 = contract["team28"]
+    assert team28["validated_dynamic_scope"] == (
+        "cycle_averaged_mechanical_motion"
+    )
+    assert team28["electromagnetic_model_class"] == (
+        "fixed_frequency_cycle_averaged_force_height_lut"
+    )
+    assert team28["height_coupling"] == "quasi_steady_interpolation"
+    assert team28["electromagnetic_state_transient_included"] is False
+    assert team28["motional_emf_included"] is False
+    assert team28["damping_identified_from_measurement"] is False
+    assert "full_electromagnetic_transient" in team28["unsupported_claims"]
+    assert team28["artifact_gate"].endswith(
+        "team28_cycle_averaged_motion_gate"
+    )
     assert contract["hcurl_eddy_cln"]["mex_kernel"] == "hybrid_vim.solve"
     assert contract["hcurl_eddy_cln"]["moving_family"].startswith("ExportHCurlEddyCLNFamilyJSON")
     native_family = contract["hcurl_eddy_cln"]["native_motor_angle_family"]
