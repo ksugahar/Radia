@@ -170,6 +170,10 @@ _PYBIND_CLASS_EXCLUSIONS = {
     "_PEECBuilderInternal.__binding__": "implementation holder",
     "_HACApKPEECManagerInternal.__binding__": "implementation holder",
     "_HACApKBEMManagerInternal.__binding__": "implementation holder",
+    "_ChargeGramHMatrix.charge_sigma": (
+        "sigma-normalization diagnostic for the roundoff-amplification "
+        "regression tests (empty before BuildHMatrix; every public apply "
+        "already wraps S back, so MATLAB sees the physical Gram)"),
 }
 
 

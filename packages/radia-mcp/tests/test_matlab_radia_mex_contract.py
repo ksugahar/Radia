@@ -61,7 +61,12 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["command_groups"]["axifem"] == 2
     assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
     assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
+    # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
+    # from the roundoff-amplification fix) is EXCLUDED with a reason, and
+    # exclusions leave the relevant surface -- so the count stays 121
     assert contract["pybind_class_surface_count"] == 121
+    assert ("_ChargeGramHMatrix.charge_sigma"
+            in contract["pybind_class_exclusions"])
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
     assert contract["pybind_class_missing_commands"] == []
     assert contract["pybind_class_unmapped"] == []
