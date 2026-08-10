@@ -99,6 +99,7 @@ used by `rad.Solve`.
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT
 open a TaskManager; the caller wraps the call in `with ng.TaskManager():`.
 """
+import math
 import os
 import time
 from math import pi as _PI
@@ -391,7 +392,8 @@ def _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit):
 
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      magnetization_sources=None, magnets=None,
-                     image=None, gram_eps=None, leaf=32, eta=2.0, far_quad=None, tol=1e-8,
+                     image=None, image_cyclic=None, image_cyclic_alternating=False,
+                     gram_eps=None, leaf=32, eta=2.0, far_quad=None, tol=1e-8,
                      maxit=4000, nl_maxit=300, nl_tol=1e-6,
                      nonlinear_solver="energy-newton",
                      preconditioner="auto",
@@ -594,7 +596,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               nonlinear_solver, preconditioner, newton_inner_tol, newton_warmstart,
                               newton_continuation, newton_reuse_tangent_steps, newton_cg_x0,
                               vertex_counts=_vtx, magnetization_sources=sources,
-                              operator_cache=_operator_cache)
+                              operator_cache=_operator_cache,
+                              image_cyclic=image_cyclic,
+                              image_cyclic_alternating=image_cyclic_alternating)
     if linear_recoil_pm:
         result["permanent_magnet_model"] = "linear-recoil"
         result["permanent_magnet_level"] = 2
@@ -610,7 +614,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       nonlinear_solver="energy-newton", preconditioner="auto",
                       newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
                       newton_reuse_tangent_steps=1, newton_cg_x0=False, vertex_counts=None,
-                      magnetization_sources=(), operator_cache=None):
+                      magnetization_sources=(), operator_cache=None,
+                      image_cyclic=None, image_cyclic_alternating=False):
     """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -658,6 +663,29 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         for axes, sign in _image.image_group(_planes):
             image_masks.append(int(sum(1 << a for a in axes)))
             image_signs.append(float(sign))
+    # CYCLIC (N-fold rotational) reduction: solve ONE sector and let the Gram fold in the other N-1 poles as
+    # rotated images about +z.  Unlike a mirror this is not an involution, so the C++ side maps eval points
+    # through the INVERSE rotation; and unlike an infinite translational array the finite rotational sum is
+    # unconditionally well posed (an infinite dipole lattice sum is only conditionally convergent -- that
+    # shape dependence is the demagnetizing-factor phenomenon).  Charges are SCALARS under a rotation that
+    # carries the magnetization with the geometry, so alternating N/S poles are just signs (-1)^k.
+    image_rot_angle = []
+    if image_cyclic is not None:
+        n_fold = int(image_cyclic)
+        if n_fold < 2:
+            raise ValueError("vim.Solve: image_cyclic must be an N-fold count >= 2; got %r" % (image_cyclic,))
+        if image_cyclic_alternating and n_fold % 2:
+            raise ValueError(
+                "vim.Solve: image_cyclic_alternating needs an EVEN pole count (the (-1)^k pattern must "
+                "close around the ring); got N=%d" % n_fold)
+        if image_masks:
+            raise NotImplementedError(
+                "vim.Solve: combining image= mirror planes with image_cyclic= is not wired yet; "
+                "pass one or the other")
+        for k in range(1, n_fold):
+            image_masks.append(0)                                  # pure rotation, no mirror
+            image_signs.append(-1.0 if (image_cyclic_alternating and k % 2) else 1.0)
+            image_rot_angle.append(2.0*math.pi*k/n_fold)
     # The flat nonlinear path uses the same high-order Gram as the curved path.  The symmetric energy-Newton
     # is Gram-agnostic and consumes only H.matvec plus the C++ mass-Riesz solve.
     if int(order) > 2:
@@ -714,6 +742,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             curve_order=(int(curve_order) if curve_order is not None else None),
             curve_gauss=int(curve_gauss), nonlinear=bh_table is not None,
             image_masks=image_masks, image_signs=image_signs,
+            image_rot_angle=image_rot_angle,
             _materialize_mass=False)
         t_after_charge_gram = time.perf_counter()
         charge_build_timings = dict(getattr(build_charge_gram, "last_timings", {}) or {})

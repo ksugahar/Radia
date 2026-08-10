@@ -62,6 +62,11 @@ public:
         std::vector<double> image_signs,
         const FieldEvaluatorOptions& options = {});
 
+    // Attach per-image rotation angles about +z (radians), one per image mask, matching the charge Gram's
+    // SetImageRotations.  Empty (the default) keeps the pure-mirror path byte-identical.  The image transform
+    // is T_i = M_i o R_{theta_i}; a field image contributes E_{T(sigma)}(x) = T E_sigma(T^-1 x).
+    void SetImageRotations(std::vector<double> angles);
+
     ~HDivFieldEvaluator();
     HDivFieldEvaluator(const HDivFieldEvaluator&) = delete;
     HDivFieldEvaluator& operator=(const HDivFieldEvaluator&) = delete;
