@@ -10,6 +10,13 @@ into all-hex / tet solver meshes with closure and quality gates):
         --> ``write_levelset_exodus``  (Cubit ``create tri iso`` route,
                                         mesh-native, no resampling)
         --> ``iso_stl_from_grid``      (standalone marching-cubes route)
+        --> ``write_vfrac_exodus``     (Sculpt-native volume-fraction route:
+                                        no STL at all -- Sculpt's interface
+                                        reconstruction places the boundary
+                                        sub-cell from the cell fractions;
+                                        measured volume fidelity ~3e-4 vs
+                                        the STL route's percent-level
+                                        closure)
 
 Both routes are deliberately gated: generated surfaces must remain watertight,
 smoothing is capped and reports volume drift, and the downstream Cubit bridge
@@ -30,6 +37,7 @@ __all__ = [
     "iso_stl_from_grid",
     "nodal_from_element_density",
     "write_levelset_exodus",
+    "write_vfrac_exodus",
 ]
 
 
@@ -418,3 +426,235 @@ def iso_stl_from_grid(mesh, nodal, out_stl, *, level=0.5, resolution=64,
             "grid_resolution": int(resolution),
             "median_edge_length": h_med, "cutoff": cutoff,
             "watertight": True}
+
+
+# ----------------------------------------------------------------------
+# Sculpt-native volume-fraction route: no surface extraction at all
+# ----------------------------------------------------------------------
+
+def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
+                       supersample=4, pad_cells=2, cutoff_factor=2.0):
+    """Cartesian volume-fraction Exodus of the body ``{nodal >= level}``
+    for Sculpt's ``--input_vfrac`` reader.
+
+    Sculpt is natively a volume-fraction mesher ("all-hex parallel mesh
+    generation from volume fractions"); the STL route is one of its front
+    ends.  Feeding the design occupancy DIRECTLY skips marching cubes,
+    STL welding, and watertightness entirely, and Sculpt's interface
+    reconstruction places the boundary sub-cell: measured on a voxel
+    sphere (24^3 grid), the meshed material volume tracks the input
+    fractions to ~1e-4 relative, against -8 % shrink for the equivalent
+    0/1 SPN input and the percent-level closure of the marching-cubes STL
+    route at comparable resolution.
+
+    The occupancy uses the SAME body definition as ``iso_stl_from_grid``
+    (linear interpolation of the P1 nodal field over the design mesh
+    vertices, void beyond ``cutoff_factor`` x median edge from any
+    vertex, body = field >= ``level``), sampled at ``supersample``^3
+    sub-cell centers per Cartesian cell, so the two routes regenerate the
+    same design and stay A/B comparable.
+
+    File layout (verified against Sculpt's own ``--volfrac_file`` dump,
+    Coreform Cubit 2025.12): NETCDF3 Exodus, one HEX8 block on the
+    Cartesian lattice in PHYSICAL coordinates, element fields ``VOID`` +
+    ``MAT_1`` summing to 1, and the 22 global variables (grid bounds,
+    intervals, material table, serial parallel bookkeeping) its reader
+    requires.  Sculpt resolves the file from ``<base>.e.1.0``; ``path``
+    may be either the base name or the full ``.e.1.0`` name.
+
+    Args:
+        mesh: straight (non-curved) 3D NGSolve design mesh.
+        nodal: P1 nodal field (``nodal_from_element_density`` output).
+        path: output base name or full ``.e.1.0`` path.
+        level: body threshold (the iso contract's 0.5 default).
+        cells: Cartesian cells along the LONGEST bbox axis (cells are
+            cubic; other axes scale by extent).
+        supersample: sub-samples per axis per cell for the occupancy.
+        pad_cells: empty guard cells added around the bbox on each side.
+        cutoff_factor: void beyond this multiple of the median mesh edge
+            from the nearest design vertex (matches ``iso_stl_from_grid``).
+
+    Returns:
+        Dict with the resolved ``path``, per-axis cell counts, cell size,
+        grid bounds, and the volume-fraction integral ``v_vfrac`` (the
+        closure reference for the downstream mesh gate).
+    """
+    nc = _require("netCDF4", "netCDF4")
+    import ngsolve as ng
+    from scipy.interpolate import LinearNDInterpolator
+    from scipy.spatial import cKDTree
+
+    if mesh.dim != 3:
+        raise ValueError("write_vfrac_exodus: 3D meshes only")
+    if mesh.GetCurveOrder() > 1:
+        raise ValueError("write_vfrac_exodus: curved meshes are not "
+                         "supported")
+    cells = _bounded_int("write_vfrac_exodus: cells", cells, 8, 512)
+    supersample = _bounded_int("write_vfrac_exodus: supersample",
+                               supersample, 1, 8)
+    pad_cells = _bounded_int("write_vfrac_exodus: pad_cells", pad_cells,
+                             0, 16)
+    cutoff_factor = _finite_float("write_vfrac_exodus: cutoff_factor",
+                                  cutoff_factor, positive=True)
+    level = _finite_float("write_vfrac_exodus: level", level)
+    nod = np.asarray(nodal, dtype=float).ravel()
+    if nod.size != mesh.nv:
+        raise ValueError(
+            f"write_vfrac_exodus: nodal field has {nod.size} entries, "
+            f"mesh has {mesh.nv} vertices")
+    if not np.isfinite(nod).all():
+        raise ValueError("write_vfrac_exodus: nodal field has non-finite "
+                         "entries")
+
+    pts = np.array([list(v.point) for v in mesh.vertices], dtype=float)
+    if pts.shape != (mesh.nv, 3) or not np.isfinite(pts).all():
+        raise ValueError("write_vfrac_exodus: mesh vertices must be "
+                         "finite 3D coordinates")
+    tree = cKDTree(pts)
+    edge_lengths = []
+    for el in mesh.Elements(ng.VOL):
+        vs = [pts[v.nr] for v in el.vertices]
+        for a in range(len(vs)):
+            for b in range(a + 1, len(vs)):
+                edge_lengths.append(np.linalg.norm(vs[a] - vs[b]))
+        if len(edge_lengths) > 6000:
+            break
+    if not edge_lengths:
+        raise ValueError("write_vfrac_exodus: mesh has no volume-element "
+                         "edges")
+    h_med = float(np.median(edge_lengths))
+    if not np.isfinite(h_med) or h_med <= 0.0:
+        raise ValueError("write_vfrac_exodus: mesh has no finite positive "
+                         "edge length")
+    cutoff = cutoff_factor * h_med
+
+    lo = pts.min(axis=0)
+    hi = pts.max(axis=0)
+    span = hi - lo
+    if not np.all(np.isfinite(span)) or not np.all(span > 0.0):
+        raise ValueError("write_vfrac_exodus: mesh bounding box is "
+                         "degenerate")
+    h_c = float(span.max()) / cells
+    nel = [int(np.ceil(span[i] / h_c)) + 2 * pad_cells for i in range(3)]
+    gmin = [float(lo[i]) - pad_cells * h_c for i in range(3)]
+    gmax = [gmin[i] + nel[i] * h_c for i in range(3)]
+
+    # occupancy at supersampled sub-cell centers (i fastest, matching the
+    # exodus lattice ordering below)
+    ss = supersample
+    frac = None
+    axes_fine = [gmin[i] + (np.arange(nel[i] * ss) + 0.5) * (h_c / ss)
+                 for i in range(3)]
+    Xf, Yf, Zf = np.meshgrid(*axes_fine, indexing="ij")
+    fine_pts = np.stack([Xf.ravel(), Yf.ravel(), Zf.ravel()], axis=1)
+    interp = LinearNDInterpolator(pts, nod)
+    vals = interp(fine_pts)
+    dist, _ = tree.query(fine_pts)
+    vals[~np.isfinite(vals)] = 0.0
+    vals[dist > cutoff] = 0.0
+    inside = (vals >= level).astype(float).reshape(
+        nel[0], ss, nel[1], ss, nel[2], ss)
+    frac = inside.mean(axis=(1, 3, 5))
+    v_vfrac = float(frac.sum()) * h_c ** 3
+    if v_vfrac <= 0.0:
+        raise ValueError(
+            "write_vfrac_exodus: the thresholded body has zero volume on "
+            "the sampling grid -- inspect the density/level")
+
+    out = Path(path)
+    if not out.name.endswith(".e.1.0"):
+        out = out.with_name(out.name + ".e.1.0")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.unlink(missing_ok=True)
+
+    nx, ny, nz = nel
+    nn = (nx + 1) * (ny + 1) * (nz + 1)
+    ne = nx * ny * nz
+    ds = nc.Dataset(str(out), "w", format="NETCDF3_64BIT_OFFSET")
+    try:
+        ds.setncatts({"api_version": np.float32(8.25),
+                      "version": np.float32(8.25),
+                      "floating_point_word_size": np.int32(8),
+                      "file_size": np.int32(1),
+                      "title": "radia.topopt_cad volume fractions"})
+        for name, size in (("len_name", 256), ("time_step", None),
+                           ("num_dim", 3), ("num_nodes", nn),
+                           ("num_elem", ne), ("num_el_blk", 1),
+                           ("num_el_in_blk1", ne), ("num_nod_per_el1", 8),
+                           ("num_elem_var", 2), ("num_glo_var", 22)):
+            ds.createDimension(name, size)
+
+        def chararr(var, strings, width=256):
+            arr = np.zeros((len(strings), width), dtype="S1")
+            for row, text in enumerate(strings):
+                for col, ch in enumerate(text):
+                    arr[row, col] = ch.encode()
+            var[:] = arr
+
+        axis = [gmin[i] + np.arange(nel[i] + 1) * h_c for i in range(3)]
+        Xn, Yn, Zn = np.meshgrid(*axis, indexing="ij")
+        flat = lambda A: A.ravel(order="F")   # noqa: E731  (i fastest)
+        for nm, arr in (("coordx", Xn), ("coordy", Yn), ("coordz", Zn)):
+            var = ds.createVariable(nm, "f8", ("num_nodes",))
+            var[:] = flat(arr)
+        node_id = np.arange(nn).reshape(nx + 1, ny + 1, nz + 1, order="F")
+        conn = np.empty((ne, 8), dtype=np.int32)
+        e = 0
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    conn[e] = (node_id[i, j, k], node_id[i + 1, j, k],
+                               node_id[i + 1, j + 1, k], node_id[i, j + 1, k],
+                               node_id[i, j, k + 1], node_id[i + 1, j, k + 1],
+                               node_id[i + 1, j + 1, k + 1],
+                               node_id[i, j + 1, k + 1])
+                    e += 1
+        var = ds.createVariable("connect1", "i4",
+                                ("num_el_in_blk1", "num_nod_per_el1"))
+        var.elem_type = "HEX8"
+        var[:] = conn + 1
+        var = ds.createVariable("eb_prop1", "i4", ("num_el_blk",))
+        var.setncattr("name", "ID")
+        var[:] = [1]
+        var = ds.createVariable("eb_status", "i4", ("num_el_blk",))
+        var[:] = [1]
+        chararr(ds.createVariable("eb_names", "S1",
+                                  ("num_el_blk", "len_name")), [""])
+        chararr(ds.createVariable("coor_names", "S1",
+                                  ("num_dim", "len_name")), ["x", "y", "z"])
+        var = ds.createVariable("time_whole", "f8", ("time_step",))
+        var[:] = [0.0]
+        chararr(ds.createVariable("name_glo_var", "S1",
+                                  ("num_glo_var", "len_name")),
+                ["num_procs", "rank",
+                 "neighbor_plus_i", "neighbor_negative_i",
+                 "neighbor_plus_j", "neighbor_negative_j",
+                 "neighbor_plus_k", "neighbor_negative_k",
+                 "xmin", "ymin", "zmin", "xmax", "ymax", "zmax",
+                 "xint", "yint", "zint", "gxint", "gyint", "gzint",
+                 "num_mats", "mat[00]"])
+        var = ds.createVariable("vals_glo_var", "f8",
+                                ("time_step", "num_glo_var"))
+        var[:] = [[1, 0, -1, -1, -1, -1, -1, -1,
+                   gmin[0], gmin[1], gmin[2], gmax[0], gmax[1], gmax[2],
+                   nx, ny, nz, nx, ny, nz, 1, 1]]
+        chararr(ds.createVariable("name_elem_var", "S1",
+                                  ("num_elem_var", "len_name")),
+                ["VOID", "MAT_1"])
+        var = ds.createVariable("elem_var_tab", "i4",
+                                ("num_el_blk", "num_elem_var"))
+        var[:] = [[1, 1]]
+        mat = flat(frac)
+        var = ds.createVariable("vals_elem_var1eb1", "f8",
+                                ("time_step", "num_el_in_blk1"))
+        var[:] = (1.0 - mat)[None, :]
+        var = ds.createVariable("vals_elem_var2eb1", "f8",
+                                ("time_step", "num_el_in_blk1"))
+        var[:] = mat[None, :]
+    finally:
+        ds.close()
+    return {"path": str(out), "nel": [nx, ny, nz], "cell_size": h_c,
+            "bounds_min": gmin, "bounds_max": gmax,
+            "v_vfrac": v_vfrac, "supersample": ss,
+            "median_edge_length": h_med, "cutoff": cutoff,
+            "occupied_cells": int((frac > 0).sum())}

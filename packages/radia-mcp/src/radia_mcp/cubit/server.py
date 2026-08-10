@@ -192,6 +192,23 @@ charge-Gram / VIM re-evaluation: the facet-conforming tet mesh of a
 decimated marching-cubes surface can carry slivers that stall CG at any
 tolerance, while the Sculpt hex mesh of the same surface solves in tens
 of iterations.
+
+PREFERRED regeneration route -- volume fractions, no STL at all: Sculpt
+is natively a volume-fraction mesher.  `radia.topopt_cad
+.write_vfrac_exodus` rasterizes the SAME thresholded body into per-cell
+volume fractions (Exodus), and `cubit_vfrac_to_vol` runs standalone
+`sculpt.exe --input_vfrac` on it: the interface reconstruction places
+the boundary sub-cell, so the meshed volume tracks the fraction
+integral to ~1e-3 where the STL route's marching-cubes body can lose
+percent-level (measured on a real sector design: STL route closure
+12.5 % = gate FAILED, vfrac route 0.2 % ok, faster, higher mean
+quality).  Both mesh tools accept the vetted Sculpt quality knobs
+(`gq_iters`/`gq_threshold` guaranteed-quality smoothing,
+`pillow_surfaces`, `defeature`/`min_vol_cells` debris removal).  The
+solver half of the combination lives on the radia-ngsolve server:
+`hdiv_vim_demag_eval` runs the air-mesh-free charge-Gram demag solve on
+the body-only `.vol` (sphere reads ~1/3; the vfrac-route lane locks the
+whole chain against that closed form).
 """
 
 # Create MCP server
@@ -4260,6 +4277,81 @@ def _vol_surface_element_count(vol_path: Path) -> int:
 	return -1
 
 
+def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
+                        closure_tolerance: float) -> tuple[dict, dict]:
+	"""Shared solver-mesh gates: closure vs a reference volume, inversion,
+	and the exported-skin match (guards the silent-no-surface-charge class).
+	Returns (verification_error_or_None, gates, metrics); min quality is
+	reported, never gated.  The verification guards (inspection actually
+	ran, mesh volume finite) are part of the bf8ab4c0b hardening."""
+	from ..gmsh.msh_inspect import mesh_quality, mesh_total_volume
+	vol_report = mesh_total_volume(msh)
+	quality = mesh_quality(msh)
+	if not vol_report.get("ran") or not vol_report.get("ok"):
+		return ({**_error_payload(
+			"verification", "gmsh volume integration failed"),
+			"volume_report": vol_report}, {}, {})
+	if not quality.get("ran") or not quality.get("applicable"):
+		return ({**_error_payload(
+			"verification", "gmsh mesh-quality inspection failed"),
+			"quality_report": quality}, {}, {})
+	v_mesh = float(vol_report.get("total_volume") or 0.0)
+	if not _math.isfinite(v_mesh) or v_mesh <= 0.0:
+		return ({**_error_payload(
+			"verification", "mesh volume is non-finite or non-positive"),
+			"volume_report": vol_report}, {}, {})
+	closure = abs(v_mesh - v_reference) / v_reference
+	negative = int(quality.get("total_negative") or 0)
+	min_det = vol_report.get("min_jacobian_det")
+	vol_boundary = _vol_surface_element_count(vol)
+	skin_faces = (quality.get("mesh_stats") or {}).get("n_boundary_faces")
+	gates = {
+		"closure_ok": bool(closure <= closure_tolerance),
+		"no_inverted_elements": negative == 0 and (min_det or 0.0) > 0.0,
+		"boundary_faces_ok": bool(
+			vol_boundary > 0 and skin_faces is not None
+			and vol_boundary == int(skin_faces)),
+	}
+	metrics = {
+		"mesh_volume": v_mesh, "closure": closure,
+		"closure_tolerance": closure_tolerance,
+		"total_negative": negative, "min_jacobian_det": min_det,
+		"vol_boundary_faces": vol_boundary, "msh_skin_faces": skin_faces,
+		"by_type": [
+			{"element": bt.get("name"), "n": bt.get("n_elements"),
+			 "min": bt.get("min_quality"), "mean": bt.get("mean_quality")}
+			for bt in quality.get("by_type", [])
+		],
+		"dof_estimate": (quality.get("mesh_stats") or {}).get(
+			"dof_estimate"),
+	}
+	return None, gates, metrics
+
+
+def _sculpt_quality_keywords(gq_iters: int, gq_threshold: float,
+                             pillow_surfaces: bool, defeature: int,
+                             min_vol_cells: int, *, cli: bool) -> list:
+	"""Vetted Sculpt quality knobs -> in-Cubit keywords or standalone CLI
+	args.  The names are IDENTICAL in both surfaces (verified against
+	`help sculpt parallel` and `sculpt.exe -h`, Coreform Cubit 2025.12);
+	only the spelling differs (keyword string vs --flag value)."""
+	out: list = []
+	if gq_iters:
+		out += (["--max_gq_iters", str(int(gq_iters)),
+		         "--gq_threshold", str(float(gq_threshold))] if cli else
+		        [f"max_gq_iters {int(gq_iters)}",
+		         f"gq_threshold {float(gq_threshold)}"])
+	if pillow_surfaces:
+		out += ["--pillow_surfaces"] if cli else ["pillow_surfaces"]
+	if defeature:
+		out += (["--defeature", str(int(defeature))] if cli else
+		        [f"defeature {int(defeature)}"])
+	if min_vol_cells:
+		out += (["--min_vol_cells", str(int(min_vol_cells))] if cli else
+		        [f"min_vol_cells {int(min_vol_cells)}"])
+	return out
+
+
 @mcp.tool()
 def cubit_stl_to_vol(stl_path: str,
                      scheme: str = "tet",
@@ -4267,6 +4359,11 @@ def cubit_stl_to_vol(stl_path: str,
                      out_vol: str = "",
                      out_msh: str = "",
                      closure_tolerance: float = 0.03,
+                     gq_iters: int = 0,
+                     gq_threshold: float = 0.2,
+                     pillow_surfaces: bool = False,
+                     defeature: int = 0,
+                     min_vol_cells: int = 0,
                      timeout_s: int = 900) -> str:
 	"""
 	Mesh a watertight STL into a solver-ready Netgen `.vol` (all-hex via
@@ -4327,6 +4424,12 @@ def cubit_stl_to_vol(stl_path: str,
 	    out_vol/out_msh: output paths (default: beside the STL).
 	    closure_tolerance: relative volume-closure gate (default 3 %,
 	        matching the levelset-sculpt validation gate).
+	    gq_iters/gq_threshold: Sculpt guaranteed-quality smoothing
+	        iterations / minimum scaled-Jacobian target (hex scheme only;
+	        0 iters = off).
+	    pillow_surfaces: Sculpt pillow layers at surfaces (hex only).
+	    defeature/min_vol_cells: Sculpt defeaturing stage / minimum cells
+	        per disconnected component (hex only; drops topopt debris).
 	"""
 	p = Path(stl_path)
 	if not p.is_absolute():
@@ -4336,6 +4439,25 @@ def cubit_stl_to_vol(stl_path: str,
 	if scheme not in ("hex", "tet"):
 		return json.dumps(_error_payload(
 			"input", f"scheme must be 'hex' or 'tet', got {scheme!r}"))
+	# Numeric contract BEFORE the (subprocess) STL inspection -- restored
+	# from the bf8ab4c0b hardening, which a rebase-rescue conflict
+	# resolution had clobbered (2026-08-10).
+	try:
+		size = float(size)
+		closure_tolerance = float(closure_tolerance)
+		timeout_s = float(timeout_s)
+	except (TypeError, ValueError) as exc:
+		return json.dumps(_error_payload(
+			"input", f"numeric argument is invalid: {exc}"))
+	if not _math.isfinite(size) or size < 0.0:
+		return json.dumps(_error_payload(
+			"input", f"size must be 0 (auto) or finite and positive, got {size}"))
+	if not _math.isfinite(closure_tolerance) or closure_tolerance < 0.0:
+		return json.dumps(_error_payload(
+			"input", "closure_tolerance must be finite and nonnegative"))
+	if not _math.isfinite(timeout_s) or timeout_s <= 0.0:
+		return json.dumps(_error_payload(
+			"input", "timeout_s must be finite and positive"))
 	inspection = _inspect_stl(p, timeout_s=min(float(timeout_s), 120.0))
 	if not inspection.get("ok"):
 		kind = str(inspection.get("kind") or "input")
@@ -4354,8 +4476,9 @@ def cubit_stl_to_vol(stl_path: str,
 			"input", "STL winding is inconsistent; repair face orientation "
 			"before volume meshing"))
 	v_stl = float(inspection.get("volume") or 0.0)
-	if v_stl <= 0.0:
-		return json.dumps(_error_payload("input", "STL volume is zero"))
+	if not _math.isfinite(v_stl) or v_stl <= 0.0:
+		return json.dumps(_error_payload(
+			"input", "STL volume is non-finite or zero"))
 
 	if not size or size <= 0.0:
 		bounds = inspection.get("bounds") or []
@@ -4365,17 +4488,29 @@ def cubit_stl_to_vol(stl_path: str,
 		ext = [float(hi) - float(lo)
 		       for lo, hi in zip(bounds[0], bounds[1])]
 		size = float(sum(value * value for value in ext) ** 0.5 / 30.0)
+		if not _math.isfinite(size) or size <= 0.0:
+			return json.dumps(_error_payload(
+				"input", "STL bounding box cannot define a positive mesh size"))
 
-	vol = Path(out_vol) if out_vol else p.with_suffix(f".{scheme}.vol")
-	msh = Path(out_msh) if out_msh else p.with_suffix(f".{scheme}.msh")
-	# absolutize like stl_path: the journal embeds these paths while the
-	# Cubit process runs with cwd=vol.parent, so a RELATIVE out path would
-	# resolve against itself (nested dir for .vol, "Cannot open file" for
-	# .msh -- measured 2026-08-09 from a notebook kernel)
-	if not vol.is_absolute():
-		vol = PROJECT_ROOT / vol
-	if not msh.is_absolute():
-		msh = PROJECT_ROOT / msh
+	# absolutize AND resolve like stl_path: the journal embeds these paths
+	# while the Cubit process runs with cwd=vol.parent, so a RELATIVE out
+	# path would resolve against itself (nested dir for .vol, "Cannot open
+	# file" for .msh -- measured 2026-08-09 from a notebook kernel)
+	def _output_path(raw: str, default: Path) -> Path:
+		candidate = Path(raw) if raw else default
+		if not candidate.is_absolute():
+			candidate = PROJECT_ROOT / candidate
+		# no .resolve(): on this NAS-mapped tree it rewrites S: into the
+		# UNC form, breaking the journal-embedded path contract (the
+		# 2026-08-09 relative-out-path fix owns the absolutize semantics)
+		return candidate
+
+	vol = _output_path(out_vol, p.with_suffix(f".{scheme}.vol"))
+	msh = _output_path(out_msh, p.with_suffix(f".{scheme}.msh"))
+	path_keys = [os.path.normcase(str(path)) for path in (p, vol, msh)]
+	if len(set(path_keys)) != 3:
+		return json.dumps(_error_payload(
+			"input", "stl_path, out_vol, and out_msh must be distinct paths"))
 	stl_fwd = str(p).replace("\\", "/")
 	cmds = [f'import stl "{stl_fwd}" feature_angle 135 merge']
 	if scheme == "tet":
@@ -4386,7 +4521,14 @@ def cubit_stl_to_vol(stl_path: str,
 		# contract, while mesh geometry supplies ownership metadata.  The
 		# exporter deduplicates equal faces.  Drop the unmeshed import volume
 		# by predicate, never by a hardcoded id.
-		cmds += [f"sculpt volume all processors 1 size {size} gen_sidesets 2",
+		extra = _sculpt_quality_keywords(gq_iters, gq_threshold,
+		                                 pillow_surfaces, defeature,
+		                                 min_vol_cells, cli=False)
+		sculpt_cmd = (f"sculpt volume all processors 1 size {size} "
+		              f"gen_sidesets 2")
+		if extra:
+			sculpt_cmd += " " + " ".join(extra)
+		cmds += [sculpt_cmd,
 		         "create mesh geometry hex all feature_angle 135",
 		         "delete volume with not is_meshed"]
 	cmds += ["block 1 add volume all", 'block 1 name "iron"',
@@ -4413,39 +4555,17 @@ def cubit_stl_to_vol(stl_path: str,
 			"(check process diagnostics)"),
 			"process": r}, default=str)
 
-	from ..gmsh.msh_inspect import mesh_quality, mesh_total_volume
-	vol_report = mesh_total_volume(msh)
-	quality = mesh_quality(msh)
-	v_mesh = float(vol_report.get("total_volume") or 0.0)
-	closure = abs(v_mesh - v_stl) / v_stl
-	negative = int(quality.get("total_negative") or 0)
-	min_det = vol_report.get("min_jacobian_det")
-	vol_boundary = _vol_surface_element_count(vol)
-	skin_faces = (quality.get("mesh_stats") or {}).get("n_boundary_faces")
-	gates = {
-		"closure_ok": bool(closure <= closure_tolerance),
-		"no_inverted_elements": negative == 0 and (min_det or 0.0) > 0.0,
-		"boundary_faces_ok": bool(
-			vol_boundary > 0 and skin_faces is not None
-			and vol_boundary == int(skin_faces)),
-	}
-	by_type = [
-		{"element": bt.get("name"), "n": bt.get("n_elements"),
-		 "min": bt.get("min_quality"), "mean": bt.get("mean_quality")}
-		for bt in quality.get("by_type", [])
-	]
+	verification_error, gates, metrics = _collect_mesh_gates(
+		msh, vol, v_stl, closure_tolerance)
+	if verification_error is not None:
+		return json.dumps(verification_error, default=str)
 	return json.dumps({
 		"status": "ok" if all(gates.values()) else "gate_failed",
 		"gates": gates,
 		"scheme": scheme, "size": size,
 		"stl": str(p), "vol": str(vol), "msh": str(msh),
-		"stl_volume": v_stl, "mesh_volume": v_mesh,
-		"closure": closure, "closure_tolerance": closure_tolerance,
-		"total_negative": negative, "min_jacobian_det": min_det,
-		"vol_boundary_faces": vol_boundary,
-		"msh_skin_faces": skin_faces,
-		"by_type": by_type,
-		"dof_estimate": (quality.get("mesh_stats") or {}).get("dof_estimate"),
+		"stl_volume": v_stl,
+		**metrics,
 		"process": {
 			"exit_code": r.get("exit_code"),
 			"console": r.get("console"),
@@ -4455,6 +4575,186 @@ def cubit_stl_to_vol(stl_path: str,
 		"note": ("min quality is reported, not gated; gate on inverted "
 		         "elements and closure (mesh-quality study finding)"),
 	}, ensure_ascii=False, indent=2, default=str)
+
+
+@mcp.tool()
+def cubit_vfrac_to_vol(vfrac_path: str,
+                       out_vol: str = "",
+                       out_msh: str = "",
+                       closure_tolerance: float = 0.01,
+                       smooth_method: int = 0,
+                       gq_iters: int = 0,
+                       gq_threshold: float = 0.2,
+                       pillow_surfaces: bool = False,
+                       defeature: int = 0,
+                       min_vol_cells: int = 0,
+                       timeout_s: int = 900) -> str:
+	"""Mesh a volume-fraction Exodus (``radia.topopt_cad.write_vfrac_exodus``)
+	into a solver-ready all-hex Netgen `.vol` via standalone Sculpt.
+
+	Sculpt is natively a volume-fraction mesher; this route feeds the
+	design occupancy DIRECTLY (``sculpt.exe --input_vfrac``), skipping
+	marching cubes and STL entirely.  Sculpt's interface reconstruction
+	places the boundary sub-cell from the fractions: measured on a voxel
+	sphere, the meshed material volume tracked the input fractions to
+	~1e-4 relative (0/1 SPN input of the same body: -8 % smoothing
+	shrink; marching-cubes STL route: percent-level closure).  The
+	default closure gate is therefore 1 %, tighter than the STL route's
+	3 %.
+
+	Pipeline: read + validate the vfrac Exodus (single MAT_1 + VOID
+	contract; the closure reference is the fraction integral) ->
+	``sculpt.exe -ivf`` (exodus in PHYSICAL coordinates; ``-SS 2``
+	sidesets; optional quality knobs) -> ``import mesh geometry`` into
+	headless Cubit -> block named ``iron`` -> ``export netgen`` +
+	``export gmsh`` -> the same gates as ``cubit_stl_to_vol`` (closure
+	vs the vfrac integral, inversion, exported-skin match).
+
+	Args:
+	    vfrac_path: the ``.e.1.0`` file or its base name.
+	    out_vol/out_msh: output paths (default: beside the input).
+	    closure_tolerance: relative volume gate vs the vfrac integral.
+	    smooth_method: Sculpt ``--smooth`` override (0 = Sculpt default;
+	        8 projects to the interpolated interface surface per the
+	        Coreform docs -- try it when boundary fidelity matters more
+	        than smoothness).
+	    gq_iters/gq_threshold: guaranteed-quality smoothing iterations /
+	        minimum scaled-Jacobian target (0 iters = off).
+	    pillow_surfaces: insert pillow layers at material surfaces.
+	    defeature/min_vol_cells: automatic defeaturing stage / minimum
+	        cells per disconnected component (drops topopt debris).
+	    timeout_s: per-stage subprocess timeout.
+	"""
+	import subprocess as sp
+
+	p = Path(vfrac_path)
+	if not p.is_absolute():
+		p = PROJECT_ROOT / p
+	if not p.name.endswith(".e.1.0"):
+		p = p.with_name(p.name + ".e.1.0")
+	if not p.is_file():
+		return json.dumps(_error_payload(
+			"input", f"vfrac Exodus not found: {p} (write it with "
+			"radia.topopt_cad.write_vfrac_exodus)"))
+	try:
+		import netCDF4 as nc
+	except ImportError:
+		return json.dumps(_error_payload(
+			"environment", "netCDF4 is required to validate the vfrac "
+			"Exodus; install it with `pip install netCDF4`"))
+	try:
+		ds = nc.Dataset(str(p))
+		try:
+			names = [str(s).strip() for s in
+			         nc.chartostring(ds.variables["name_elem_var"][:])]
+			if names != ["VOID", "MAT_1"]:
+				return json.dumps(_error_payload(
+					"input", f"vfrac Exodus element variables {names} != "
+					"['VOID', 'MAT_1'] -- this tool speaks the "
+					"single-material write_vfrac_exodus contract"))
+			gnames = [str(s).strip() for s in
+			          nc.chartostring(ds.variables["name_glo_var"][:])]
+			gvals = {k: float(v) for k, v in
+			         zip(gnames, ds.variables["vals_glo_var"][0])}
+			nx, ny, nz = (int(gvals["gxint"]), int(gvals["gyint"]),
+			              int(gvals["gzint"]))
+			hx = (gvals["xmax"] - gvals["xmin"]) / nx
+			hy = (gvals["ymax"] - gvals["ymin"]) / ny
+			hz = (gvals["zmax"] - gvals["zmin"]) / nz
+			frac = ds.variables["vals_elem_var2eb1"][0]
+			v_vfrac = float(frac.sum()) * hx * hy * hz
+		finally:
+			ds.close()
+	except (KeyError, OSError, ValueError) as exc:
+		return json.dumps(_error_payload(
+			"input", f"cannot validate vfrac Exodus {p.name}: {exc}"))
+	if v_vfrac <= 0.0:
+		return json.dumps(_error_payload(
+			"input", "vfrac Exodus carries zero material volume"))
+
+	from .session import get_cubit_bin_dir
+	bin_dir = get_cubit_bin_dir()
+	sculpt_exe = (Path(bin_dir) / "sculpt.exe") if bin_dir else None
+	if sculpt_exe is None or not sculpt_exe.is_file():
+		return json.dumps(_error_payload(
+			"environment", "sculpt.exe not found in the Cubit bin "
+			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
+			"2025.12+ on Windows"))
+
+	base = p.with_name(p.name[:-len(".e.1.0")])
+	vol = Path(out_vol) if out_vol else base.with_suffix(".hex.vol")
+	msh = Path(out_msh) if out_msh else base.with_suffix(".hex.msh")
+	if not vol.is_absolute():
+		vol = PROJECT_ROOT / vol
+	if not msh.is_absolute():
+		msh = PROJECT_ROOT / msh
+	sculpt_out = vol.with_suffix("").with_name(vol.stem + "_sculpt")
+	sculpt_exo = sculpt_out.with_name(sculpt_out.name + ".e.1.0")
+	for output in (vol, msh, sculpt_exo):
+		output.parent.mkdir(parents=True, exist_ok=True)
+		try:
+			output.unlink(missing_ok=True)
+		except OSError as exc:
+			return json.dumps(_error_payload(
+				"output", f"cannot replace stale output {output}: {exc}"))
+
+	cli = [str(sculpt_exe), "-ivf", str(base), "-e", str(sculpt_out),
+	       "-SS", "2", "-cv"]
+	if smooth_method:
+		cli += ["--smooth", str(int(smooth_method))]
+	cli += _sculpt_quality_keywords(gq_iters, gq_threshold,
+	                                pillow_surfaces, defeature,
+	                                min_vol_cells, cli=True)
+	try:
+		run = sp.run(cli, capture_output=True, text=True,
+		             timeout=timeout_s, cwd=str(vol.parent))
+	except sp.TimeoutExpired:
+		return json.dumps(_error_payload(
+			"cubit", f"sculpt.exe timed out after {timeout_s}s"))
+	sculpt_tail = "\n".join((run.stdout + run.stderr).splitlines()[-25:])
+	if run.returncode != 0 or not sculpt_exo.is_file():
+		return json.dumps({**_error_payload(
+			"cubit", "sculpt.exe failed or produced no Exodus mesh"),
+			"exit_code": run.returncode, "command": cli,
+			"console_tail": sculpt_tail}, default=str)
+
+	exo_fwd = str(sculpt_exo).replace("\\", "/")
+	cmds = [f'import mesh geometry "{exo_fwd}" feature_angle 135 merge',
+	        'block 1 name "iron"',
+	        f'export netgen "{str(vol).replace(chr(92), "/")}" '
+	        f"order 1 overwrite",
+	        f'export gmsh "{str(msh).replace(chr(92), "/")}" '
+	        f"dimension 3 order 1 overwrite"]
+	r = _cs.run_headless_journal(
+		cmds, timeout_s=timeout_s, working_directory=vol.parent)
+	if r.get("status") == "error":
+		return json.dumps({**_error_payload(
+			"cubit", "exodus import / export failed"),
+			"process": r, "commands": cmds}, default=str)
+	if not vol.is_file() or not msh.is_file():
+		return json.dumps({**_error_payload(
+			"cubit", f"export did not produce {vol.name} / {msh.name}"),
+			"process": r}, default=str)
+
+	verification_error, gates, metrics = _collect_mesh_gates(
+		msh, vol, v_vfrac, closure_tolerance)
+	if verification_error is not None:
+		return json.dumps(verification_error, default=str)
+	return json.dumps({
+		"status": "ok" if all(gates.values()) else "gate_failed",
+		"gates": gates,
+		"vfrac": str(p), "vol": str(vol), "msh": str(msh),
+		"sculpt_exodus": str(sculpt_exo),
+		"vfrac_volume": v_vfrac,
+		"grid": {"nel": [nx, ny, nz], "cell": [hx, hy, hz]},
+		**metrics,
+		"sculpt": {"exit_code": run.returncode, "command": cli,
+		           "console_tail": sculpt_tail},
+		"note": ("closure is gated against the volume-fraction integral; "
+		         "min quality is reported, not gated"),
+	}, ensure_ascii=False, indent=2, default=str)
+
+
 @mcp.tool()
 def cubit_batch_try(commands: list, step_path: str = "",
                      timeout_s: int = 300) -> str:

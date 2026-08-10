@@ -1284,6 +1284,93 @@ def hdiv_vim(topic: str = "overview") -> str:
 
 
 @mcp.tool()
+def hdiv_vim_demag_eval(vol_path: str, mu_r: float = 1000.0,
+                        h_ext: str = "0,0,1e5", order: int = 1,
+                        tol: float = 1e-9) -> str:
+    """Air-mesh-free HDiv-MMM demagnetization solve of a body-only `.vol`.
+
+    This is the SOLVER half of the Sculpt x HDiv-MMM combination: the
+    cubit server's `cubit_vfrac_to_vol` / `cubit_stl_to_vol` turn a
+    topology-optimization density (or any body) into a gated all-hex (or
+    tet) `.vol` of the MATERIAL REGION ONLY -- no air mesh, no Kelvin
+    shell, no PML -- and this tool solves the open-boundary
+    demagnetization problem on it with the charge-Gram H-matrix
+    (`radia.vim.Solve`).  Because the operator is an integral equation,
+    changing the body only re-meshes the body: the optimization loop
+    never pays for air remeshing or air DOFs.
+
+    Returns JSON with the demagnetizing factor along the excitation
+    (uniform-field contract: a sphere gives ~1/3, a flat sector ~0.5,
+    a broken export reads 0 -- the shape-regen lane's DemagFactor gate),
+    solver iterations, ne / ndof, per-material volumes, and wall time.
+    Set RADIA_HDIV_HEX_CACHE_STATS=1 before starting the server to also
+    get the hex fill branch profile via `radia.vim` gram stats.
+
+    Args:
+        vol_path: solver-ready `.vol` (run `cubit_check_vol` first per
+            the driving policy; the mesh should contain the body only).
+        mu_r: relative permeability of the (single) material region.
+        h_ext: uniform external field "Hx,Hy,Hz" in A/m.
+        order: HDiv order (1 = BDM1 production default).
+        tol: CG tolerance of the material solve.
+    """
+    import json as _json
+    import os
+    import time
+
+    if not os.path.exists(vol_path):
+        return _json.dumps({"status": "error", "kind": "input",
+                            "error": f"vol_path not found: {vol_path}"})
+    try:
+        h_vec = [float(part) for part in str(h_ext).split(",")]
+    except ValueError:
+        h_vec = []
+    if len(h_vec) != 3:
+        return _json.dumps({"status": "error", "kind": "input",
+                            "error": f"h_ext must be 'Hx,Hy,Hz', got "
+                                     f"{h_ext!r}"})
+    try:
+        import ngsolve as ng
+        from radia import vim
+    except ImportError as exc:
+        return _json.dumps({"status": "error", "kind": "environment",
+                            "error": f"cannot import ngsolve / radia: "
+                                     f"{exc}"})
+    t0 = time.perf_counter()
+    try:
+        with ng.TaskManager():
+            mesh = ng.Mesh(vol_path)
+            result = vim.Solve(mesh, mu_r=float(mu_r),
+                               H_ext=ng.CF(tuple(h_vec)),
+                               order=int(order), tol=float(tol))
+            volumes = {mat: float(ng.Integrate(
+                ng.CF(1.0), mesh, definedon=mesh.Materials(mat)))
+                for mat in set(mesh.GetMaterials())}
+    except (ValueError, RuntimeError) as exc:
+        return _json.dumps({"status": "error", "kind": "input",
+                            "error": str(exc)[:800]})
+    wall = time.perf_counter() - t0
+    payload = {
+        "status": "ok",
+        "vol": str(vol_path),
+        "ne": int(mesh.ne),
+        "materials": sorted(set(mesh.GetMaterials())),
+        "material_volumes": volumes,
+        "mu_r": float(mu_r),
+        "h_ext": h_vec,
+        "demag_factor": float(result.get("demag"))
+        if result.get("demag") is not None else None,
+        "iterations": result.get("iters"),
+        "order": result.get("order"),
+        "wall_s": wall,
+    }
+    for key in ("ndof", "n_charges", "timings"):
+        if key in result:
+            payload[key] = result[key]
+    return _json.dumps(payload, indent=2, default=str)
+
+
+@mcp.tool()
 def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
     """
     Add Kelvin Periodic Identifications to an existing NGSolve mesh
