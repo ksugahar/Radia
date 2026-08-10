@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <cmath>
 
 enum class ChargeDerivativeFamily { Hex, Tet, Wedge };
 class RadHACApKChargeGramDerivative;
@@ -681,9 +682,62 @@ private:
         bool respect_constraints = true);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
-    // IMA image term: (1/4pi) sum_p w_p PhiAt(src, R_mask(p)) -- tgt's outer points reflected on the mask
-    // axes.  Uses Phi_{R(b)}(x) = Phi_b(R(x)) (reflection isometry), so only the eval point is mirrored.
-    double QuadDotRefl(int tgt, int src, int mask) const;
+    // IMA image term: (1/4pi) sum_p w_p PhiAt(src, T^-1(p)) -- tgt's outer points mapped by the INVERSE image
+    // transform.  Uses Phi_{T(b)}(x) = Phi_b(T^-1(x)) (isometry), so only the eval point moves.
+    double QuadDotRefl(int tgt, int src, int img) const;
+
+public:
+    // Attach per-image rotation angles about +z (radians), one per entry of image_masks.  Empty (the default)
+    // means pure mirrors and leaves every code path byte-identical.  Must be called before the H-matrix build.
+    // Validates length and INVERSE-CLOSURE: the assembled Gram symmetrizes each image with its transpose, and
+    // 0.5*(G_T + G_{T^-1}) only sums to the intended Sum_i s_i G_{T_i} when the image set is closed under
+    // inversion with matching signs.  A cyclic group is closed automatically; a partial list is rejected.
+    void SetImageRotations(std::vector<double> angles);
+
+private:
+    // The image transform of image index img (0 = identity/direct, i>0 = image i-1):
+    //   T_i = M_i o R_{theta_i}   (rotate about +z by theta_i, THEN mirror on the 3-bit mask axes).
+    // ImageEvalPoint applies T^-1 (used on EVAL POINTS, via the isometry |x - T(y)| = |T^-1(x) - y|);
+    // ImageApplyVector applies T forward (used on FIELD VECTORS: E_{T(sigma)}(x) = T E_sigma(T^-1 x)).
+    // INVERSE-ROTATION TRAP: a mirror is its own inverse, so the historical mask code could not tell the two
+    // apart.  A rotation is not an involution -- using +theta where -theta belongs silently couples the wrong
+    // neighbouring pole (a sign error on alternating poles) without any crash.
+    void ImageEvalPoint(int img, const double* v, double* o) const
+    {
+        double t[3] = {v[0], v[1], v[2]};
+        if (img > 0) {
+            const size_t i = (size_t)img - 1;
+            const int mask = m_image_masks[i];
+            if (mask & 1) t[0] = -t[0];
+            if (mask & 2) t[1] = -t[1];
+            if (mask & 4) t[2] = -t[2];
+            if (i < m_image_rot_angle.size() && m_image_rot_angle[i] != 0.0) {
+                const double a = -m_image_rot_angle[i];          // INVERSE rotation
+                const double c = std::cos(a), s = std::sin(a);
+                const double x = t[0], y = t[1];
+                t[0] = c*x - s*y;  t[1] = s*x + c*y;
+            }
+        }
+        o[0] = t[0]; o[1] = t[1]; o[2] = t[2];
+    }
+    void ImageApplyVector(int img, const double* v, double* o) const
+    {
+        double t[3] = {v[0], v[1], v[2]};
+        if (img > 0) {
+            const size_t i = (size_t)img - 1;
+            if (i < m_image_rot_angle.size() && m_image_rot_angle[i] != 0.0) {
+                const double a = m_image_rot_angle[i];           // FORWARD rotation
+                const double c = std::cos(a), s = std::sin(a);
+                const double x = t[0], y = t[1];
+                t[0] = c*x - s*y;  t[1] = s*x + c*y;
+            }
+            const int mask = m_image_masks[i];
+            if (mask & 1) t[0] = -t[0];
+            if (mask & 2) t[1] = -t[1];
+            if (mask & 4) t[2] = -t[2];
+        }
+        o[0] = t[0]; o[1] = t[1]; o[2] = t[2];
+    }
     // FAR low-order double-quadrature (analytic mode, far_quad>0): (1/4pi) sum_i sum_j qwf[a][i] qwf[b][j] /
     // |qpf[a][i]-qpf[b][j]| over the degree-2 far rule -- symmetric in (a,b) by construction (1/r symmetric).
     double QuadDotFarLow(int a, int b) const;
@@ -716,6 +770,12 @@ private:
     // singular -> needs the exact PhiTet/TriPotential, not a monopole far).  Empty = no IMA.
     std::vector<int>    m_image_masks;                 // [n_img] 3-bit axis mask (bit0=x,1=y,2=z) of the subset
     std::vector<double> m_image_signs;                 // [n_img] product-sign of the subset
+    // CYCLIC images (optional; empty == pure mirrors, byte-identical to the historical path).  Per image, a
+    // rotation angle about +z.  The image transform is T_i = M_i o R_{theta_i}: rotate by theta_i, THEN
+    // mirror on the mask axes.  A cyclic (N-fold) machine sector reproduces the whole ring with
+    // theta_k = 2*pi*k/N; alternating N/S poles ride m_image_signs as (-1)^k, because the surface charge
+    // sigma = M.n is a SCALAR under a rotation that maps the magnetization along with the geometry.
+    std::vector<double> m_image_rot_angle;             // [n_img] rotation angle about +z (radians)
 
     // POLYTOPE analytic mode (hex/wedge): per-charge source triangulation (cell hull tris / face sub-tris).
     // PhiAt(src,.) is the divergence-theorem polytope potential (cell) / sum-of-sub-triangle (face) over
@@ -857,7 +917,7 @@ private:
     void PhiInnerHexAffineFaceVec(int hS, const double p[3],
                                   const std::vector<int>& srcG, double* inn) const;
     std::vector<double> QuadBlockHexAffineFarProduct(
-        int kindT, int hT, int kindS, int hS, int mask) const;
+        int kindT, int hT, int kindS, int hS, int img) const;
     // SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
     // anchor x0 = xiT, the outer point's OWN ref coords (the pulled-back kernel 1/|p-X(xi)| peaks there --
     // exact, no inverse), CLAMPED into the ref sub-simplex, then 4 signed radial sub-tets (3 signed
@@ -903,7 +963,7 @@ private:
     void BuildHexSiteTables();                           // ctor helper: fills the four members above
     void PhiInnerHexSiteVec(int kindS, int hS, int subB, const double p[3],
                             const std::vector<int>& srcG, double* inn) const;
-    std::vector<double> QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int mask) const;
+    std::vector<double> QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int img) const;
 public:
     // Heap-stomp canary (2026-07-03 flake hunt): checksum over every hex-mode member array a block
     // computation reads, stored at ctor end.  A later mismatch proves the instance data was OVERWRITTEN
@@ -962,7 +1022,7 @@ private:
     mutable std::atomic<long long> m_hexGeneralSharedLookups{0};
     mutable std::atomic<long long> m_hexGeneralSharedHits{0};
     mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
-    bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int mask) const;
+    bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const;
     // Per-host tensor rule of the far product (points, tensor weights, per-local-charge monomial
     // values).  The rule is PAIR-INDEPENDENT (mask reflections are applied to the target points at
     // kernel time), so QuadBlockHexAffineFarProduct fetches it from this instance-shared cache
@@ -979,12 +1039,12 @@ private:
     mutable std::shared_mutex m_hexFarRuleMutex;
     mutable std::unordered_map<unsigned long long, HexFarRule> m_hexFarRuleCache;
     void ResetHexCacheStats();
-    // mask (IMA): 0 = direct block; >0 = the mirror-image block (target host x the source host REFLECTED on
-    // the 3-bit axis mask), for the reduced-symmetry (1/2,1/4,1/8) image method.  Default 0 keeps the direct
-    // hex/wedge Gram byte-identical.
-    std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS, int mask = 0) const;  // directed [nT*nS] block, INV4PI folded
-    const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS, int mask = 0) const;  // thread_local block cache
-    const std::vector<double>& GetHexSymBlock(int kindA, int hA, int kindB, int hB, int mask = 0) const;  // cached 0.5*(AB+BA^T)
+    // img (IMA): 0 = direct block; i>0 = image block i-1 (target host x the source host mapped by the image
+    // transform T_{i-1}), for the reduced-symmetry image method -- mirrors (1/2,1/4,1/8 models) and cyclic
+    // N-fold rotations.  Default 0 keeps the direct hex/wedge Gram byte-identical.
+    std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS, int img = 0) const;  // directed [nT*nS] block, INV4PI folded
+    const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS, int img = 0) const;  // thread_local block cache
+    const std::vector<double>& GetHexSymBlock(int kindA, int hA, int kindB, int hB, int img = 0) const;  // cached 0.5*(AB+BA^T)
 
     // ---- 2D PLANAR mode (see the dim2 ctor doc) ----
     bool m_d2 = false;
@@ -1059,7 +1119,7 @@ private:
         const std::vector<double>& cell_vertex_velocity,
         const std::vector<double>& face_vertex_velocity,
         int selected_host_a,int selected_host_b) const;
-    std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int mask = 0) const;
+    std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int img = 0) const;
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;

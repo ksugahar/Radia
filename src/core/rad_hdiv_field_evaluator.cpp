@@ -102,6 +102,7 @@ struct SourceAtom {
 struct ImageTerm {
     int mask = 0;
     double sign = 1.0;
+    double angle = 0.0;                 // rotation about +z; 0 == pure mirror (the historical path)
 };
 
 struct TreeNode {
@@ -319,12 +320,59 @@ struct HDivFieldEvaluator::Impl {
             throw std::invalid_argument("HDivFieldEvaluator: image_masks and image_signs size mismatch");
         images.reserve(masks.size());
         for (std::size_t i = 0; i < masks.size(); ++i) {
-            if (masks[i] < 1 || masks[i] > 7)
-                throw std::invalid_argument("HDivFieldEvaluator: each image mask must be in [1,7]");
+            if (masks[i] < 0 || masks[i] > 7)
+                throw std::invalid_argument("HDivFieldEvaluator: each image mask must be in [0,7] "
+                                            "(0 = pure rotation, requires a non-zero rotation angle)");
             if (!std::isfinite(signs[i]))
                 throw std::invalid_argument("HDivFieldEvaluator: image signs must be finite");
-            images.push_back({masks[i], signs[i]});
+            images.push_back({masks[i], signs[i], 0.0});
         }
+    }
+
+    void SetImageRotations(std::vector<double> angles) {
+        if (angles.empty()) {
+            for (ImageTerm& image : images) image.angle = 0.0;
+        } else {
+            if (angles.size() != images.size())
+                throw std::invalid_argument(
+                    "HDivFieldEvaluator: image rotation angles must match the image count");
+            for (std::size_t i = 0; i < angles.size(); ++i) {
+                if (!std::isfinite(angles[i]))
+                    throw std::invalid_argument("HDivFieldEvaluator: image rotation angles must be finite");
+                images[i].angle = angles[i];
+            }
+        }
+        for (const ImageTerm& image : images)
+            if (image.mask == 0 && image.angle == 0.0)
+                throw std::invalid_argument(
+                    "HDivFieldEvaluator: an image with mask 0 and rotation angle 0 is the IDENTITY -- it "
+                    "would double the direct term; give it a mirror mask or a non-zero rotation angle");
+    }
+
+    // T^-1 on an eval point: mirror on the mask axes, then rotate by -angle (see the charge Gram's
+    // ImageEvalPoint -- a mirror is an involution so the historical code could not distinguish the two;
+    // a rotation is not, and using +angle here silently reads the wrong image).
+    static void ImageInversePoint(const ImageTerm& image, const double v[3], double o[3]) {
+        double t[3] = {v[0], v[1], v[2]};
+        for (int axis = 0; axis < 3; ++axis) if (image.mask & (1 << axis)) t[axis] = -t[axis];
+        if (image.angle != 0.0) {
+            const double a = -image.angle, c = std::cos(a), s = std::sin(a);
+            const double x = t[0], y = t[1];
+            t[0] = c*x - s*y;  t[1] = s*x + c*y;
+        }
+        o[0] = t[0]; o[1] = t[1]; o[2] = t[2];
+    }
+
+    // T forward on a field vector: rotate by +angle, then mirror.
+    static void ImageForwardVector(const ImageTerm& image, const double v[3], double o[3]) {
+        double t[3] = {v[0], v[1], v[2]};
+        if (image.angle != 0.0) {
+            const double c = std::cos(image.angle), s = std::sin(image.angle);
+            const double x = t[0], y = t[1];
+            t[0] = c*x - s*y;  t[1] = s*x + c*y;
+        }
+        for (int axis = 0; axis < 3; ++axis) if (image.mask & (1 << axis)) t[axis] = -t[axis];
+        o[0] = t[0]; o[1] = t[1]; o[2] = t[2];
     }
 
     int BuildNode(std::size_t begin, std::size_t end, int depth) {
@@ -590,14 +638,13 @@ struct HDivFieldEvaluator::Impl {
         CompensatedVec3 accumulated;
         accumulated.Add(base);
         for (const ImageTerm& image : images) {
-            double reflected[3] = {r[0], r[1], r[2]};
-            for (int axis = 0; axis < 3; ++axis) if (image.mask & (1 << axis)) reflected[axis] *= -1.0;
-            double value[3];
+            double reflected[3];
+            ImageInversePoint(image, r, reflected);
+            double value[3], mapped[3];
             EvaluateBase(reflected, value, algorithm);
-            for (int axis = 0; axis < 3; ++axis) {
-                if (image.mask & (1 << axis)) value[axis] *= -1.0;
-                accumulated.Add(axis, image.sign*value[axis]);
-            }
+            ImageForwardVector(image, value, mapped);
+            for (int axis = 0; axis < 3; ++axis)
+                accumulated.Add(axis, image.sign*mapped[axis]);
         }
         accumulated.Store(out);
     }
@@ -670,6 +717,11 @@ struct HDivFieldEvaluator::Impl {
 };
 
 HDivFieldEvaluator::HDivFieldEvaluator(std::unique_ptr<Impl> impl) : m_impl(std::move(impl)) {}
+void HDivFieldEvaluator::SetImageRotations(std::vector<double> angles)
+{
+    m_impl->SetImageRotations(std::move(angles));
+}
+
 HDivFieldEvaluator::~HDivFieldEvaluator() = default;
 
 std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromTet(
