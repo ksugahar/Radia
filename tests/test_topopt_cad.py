@@ -17,6 +17,7 @@ from radia.topopt_cad import (
     iso_stl_from_grid,
     nodal_from_element_density,
     write_levelset_exodus,
+    write_vfrac_exodus,
 )
 
 
@@ -168,3 +169,72 @@ def test_grid_iso_stl_rejects_nonfinite_nodal_field(ball, tmp_path):
     nodal[0] = np.nan
     with pytest.raises(ValueError, match="non-finite"):
         iso_stl_from_grid(ball, nodal, tmp_path / "x.stl")
+
+
+def test_vfrac_exodus_contract_and_sphere_volume(tmp_path):
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    from netCDF4 import Dataset, chartostring
+    import ngsolve as ngs
+
+    # Same body definition as test_grid_iso_stl_recovers_a_known_sphere:
+    # the coarse module fixture cannot represent an r=0.6 body in its
+    # nodal field (mostly surface vertices), so use the finer mesh --
+    # the two regeneration routes then share one A/B-comparable body.
+    with TaskManager():
+        fine = Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
+                    .GenerateMesh(maxh=0.15))
+    vols = np.asarray(Integrate(ngs.CoefficientFunction(1.0), fine, ngs.VOL,
+                                element_wise=True), float)
+    cx = np.asarray(Integrate(ngs.x, fine, ngs.VOL, element_wise=True),
+                    float) / vols
+    cy = np.asarray(Integrate(ngs.y, fine, ngs.VOL, element_wise=True),
+                    float) / vols
+    cz = np.asarray(Integrate(ngs.z, fine, ngs.VOL, element_wise=True),
+                    float) / vols
+    rho = (np.sqrt(cx ** 2 + cy ** 2 + cz ** 2) <= 0.6).astype(float)
+    nodal = nodal_from_element_density(fine, rho)
+
+    info = write_vfrac_exodus(fine, nodal, tmp_path / "vf", level=0.5,
+                              cells=32, supersample=3)
+    out = tmp_path / "vf.e.1.0"
+    assert info["path"] == str(out) and out.is_file()
+    v_exact = 4.0 / 3.0 * np.pi * 0.6 ** 3
+    # One-layer inward bias of averaging the P0 step to P1, same band as
+    # the STL sibling: the two routes regenerate the SAME blurred body.
+    assert abs(info["v_vfrac"] / v_exact - 1.0) < 0.25
+
+    ds = Dataset(str(out))
+    try:
+        names = [str(s).strip() for s in
+                 chartostring(ds.variables["name_elem_var"][:])]
+        assert names == ["VOID", "MAT_1"]
+        void = np.asarray(ds.variables["vals_elem_var1eb1"][0])
+        mat = np.asarray(ds.variables["vals_elem_var2eb1"][0])
+        np.testing.assert_allclose(void + mat, 1.0, rtol=0, atol=1e-15)
+        assert mat.min() >= 0.0 and mat.max() <= 1.0
+        gnames = [str(s).strip() for s in
+                  chartostring(ds.variables["name_glo_var"][:])]
+        gvals = dict(zip(gnames, np.asarray(ds.variables["vals_glo_var"][0])))
+        nx, ny, nz = (int(gvals["gxint"]), int(gvals["gyint"]),
+                      int(gvals["gzint"]))
+        assert [nx, ny, nz] == info["nel"]
+        h = [(gvals["xmax"] - gvals["xmin"]) / nx,
+             (gvals["ymax"] - gvals["ymin"]) / ny,
+             (gvals["zmax"] - gvals["zmin"]) / nz]
+        # cubic cells and the file-recomputed integral matches the report
+        np.testing.assert_allclose(h, info["cell_size"], rtol=1e-12)
+        np.testing.assert_allclose(mat.sum() * np.prod(h), info["v_vfrac"],
+                                   rtol=1e-12)
+    finally:
+        ds.close()
+
+
+def test_vfrac_exodus_rejects_bad_input(ball, tmp_path):
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    with pytest.raises(ValueError, match="entries"):
+        write_vfrac_exodus(ball, np.ones(3), tmp_path / "bad")
+    with pytest.raises(ValueError, match="zero volume"):
+        write_vfrac_exodus(ball, np.zeros(ball.nv), tmp_path / "empty",
+                           level=0.5)

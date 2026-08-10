@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **968 tools** across 48 MCP servers.
+Total: **970 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 87 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 88 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 78 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 63 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 142 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 143 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
@@ -139,6 +139,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_symmetric_swept_mixed_mesh_gate` | Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure. |
 | `cubit_symmetric_swept_source_replay_gate` | Gate source-journal headless replay and public mixed-mesh closure. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
+| `cubit_vfrac_to_vol` | Mesh a volume-fraction Exodus (``radia.topopt_cad.write_vfrac_exodus``) |
 | `cubit_vol_inventory` | Return semantic element inventory for a Netgen `.vol` export. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
 | `cubit_webcut_conformal_hex_gate` | Gate webcut volume drift, partition balance, interfaces, and hex quality. |
@@ -366,6 +367,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
 | `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
+| `hdiv_vim_demag_eval` | Air-mesh-free HDiv-MMM demagnetization solve of a body-only `.vol`. |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
 | `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
