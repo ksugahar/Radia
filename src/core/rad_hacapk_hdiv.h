@@ -963,6 +963,21 @@ private:
     mutable std::atomic<long long> m_hexGeneralSharedHits{0};
     mutable std::atomic<long long> m_hexGeneralSharedMisses{0};
     bool HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int mask) const;
+    // Per-host tensor rule of the far product (points, tensor weights, per-local-charge monomial
+    // values).  The rule is PAIR-INDEPENDENT (mask reflections are applied to the target points at
+    // kernel time), so QuadBlockHexAffineFarProduct fetches it from this instance-shared cache
+    // instead of re-running the Q2 map per block -- bit-identical values, same data, computed once.
+    // Same lifetime discipline as the general-block cache: never erased, references stable.
+    struct HexFarRule {
+        std::vector<double> x;        // [np*3] mapped physical points
+        std::vector<double> w;        // [np] tensor weights (reference measure, Piola)
+        std::vector<double> values;   // [np*n_local] monomial values at the reference points
+        int np = 0;
+        int n_local = 0;
+    };
+    const HexFarRule& GetHexFarRule(int kind, int host) const;
+    mutable std::shared_mutex m_hexFarRuleMutex;
+    mutable std::unordered_map<unsigned long long, HexFarRule> m_hexFarRuleCache;
     void ResetHexCacheStats();
     // mask (IMA): 0 = direct block; >0 = the mirror-image block (target host x the source host REFLECTED on
     // the 3-bit axis mask), for the reduced-symmetry (1/2,1/4,1/8) image method.  Default 0 keeps the direct
