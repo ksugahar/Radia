@@ -144,6 +144,10 @@ def forbid_subprocess(monkeypatch):
         ({"color_by": "phase"}, "color_by must be one of"),
         ({"arrows_every": -1}, "arrows_every must be non-negative"),
         ({"time_step": -1}, "time_step must be non-negative"),
+        ({"animation_frames": -1}, "animation_frames must be non-negative"),
+        ({"animation_mode": "warp"}, "animation_mode must be"),
+        ({"comet_window": 0.0}, "comet_window must be in"),
+        ({"comet_window": 1.5}, "comet_window must be in"),
     ],
 )
 def test_rejects_invalid_controls(input_file, forbid_subprocess, kwargs,
@@ -298,6 +302,100 @@ def test_zero_b_seed_without_dt_fails_loud(tmp_path):
                             out_file=tmp_path / "b0.pos")
     assert result["ok"] is False
     assert "dt_s" in result["error"]
+
+
+def _beam_steps(pos_path, anim):
+    """Per-step visible-element counts of the beam SL view.
+
+    The threshold sits HALFWAY between the colour-range maximum and the
+    sentinel: writing a .pos round-trips the value through ASCII and
+    drops the last digits (measured: sentinel 110009.99999999942 comes
+    back as 110009.9999999994), so an equality test on the sentinel
+    would count every hidden element as visible.
+    """
+    import gmsh
+
+    hi = anim["color_range"][1]
+    threshold = hi + 0.5 * (anim["sentinel"] - hi)
+
+    gmsh.initialize(["-noconfig"])
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(str(pos_path))
+        tag = None
+        for t in gmsh.view.getTags():
+            i = gmsh.view.getIndex(t)
+            if gmsh.option.getString(f"View[{i}].Name").startswith("beam"):
+                tag = t
+                n_steps = int(gmsh.option.getNumber(f"View[{i}].NbTimeStep"))
+        assert tag is not None, "no beam view in the file"
+        _dtypes, nels, data = gmsh.view.getListData(tag)
+        n_el = int(nels[0])
+        block = data[0]
+        width = 6 + 2 * n_steps                     # SL: xx yy zz + 2/step
+        counts = []
+        for s in range(n_steps):
+            counts.append(sum(
+                1 for e in range(n_el)
+                if float(block[e * width + 6 + 2 * s]) < threshold))
+        return counts, n_el
+    finally:
+        gmsh.finalize()
+
+
+@pytestmark_gmsh
+def test_beam_animation_trail_grows_and_hides_with_a_sentinel(tmp_path):
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    out = tmp_path / "beam.pos"
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, max_steps=48, animation_frames=8,
+                            out_file=out)
+    assert result["ok"] is True, result.get("error")
+    anim = result["animation"]
+    assert anim["n_steps"] == 8 and anim["mode"] == "trail"
+    lo, hi = anim["color_range"]
+    assert anim["sentinel"] > hi and math.isfinite(anim["sentinel"])
+    assert anim["render_hint"]["color"] == {"range": [lo, hi],
+                                            "saturate": False}
+    counts, n_el = _beam_steps(out, anim)
+    assert len(counts) == 8
+    assert counts == sorted(counts)          # monotone growth
+    assert counts[-1] == n_el                # ends fully drawn
+    assert counts[0] < counts[-1]
+
+
+@pytestmark_gmsh
+def test_beam_animation_comet_window_stays_bounded(tmp_path):
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    out = tmp_path / "comet.pos"
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, max_steps=64, animation_frames=10,
+                            animation_mode="comet", comet_window=0.25,
+                            out_file=out)
+    assert result["ok"] is True, result.get("error")
+    counts, n_el = _beam_steps(out, result["animation"])
+    assert max(counts) < n_el                # never the whole track
+    assert max(counts) <= 0.4 * n_el
+    assert min(counts[1:]) > 0
+
+
+@pytestmark_gmsh
+def test_beam_animation_sentinel_survives_a_constant_colour_quantity(
+        tmp_path):
+    """A monoenergetic beam coloured by energy has ~1e-13 spread; the
+    sentinel must still land far outside, or nothing would be hidden."""
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    out = tmp_path / "flat.pos"
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, max_steps=32, color_by="energy",
+                            animation_frames=4, out_file=out)
+    assert result["ok"] is True, result.get("error")
+    anim = result["animation"]
+    lo, hi = anim["color_range"]
+    assert hi > lo                              # widened, not degenerate
+    assert anim["sentinel"] > hi + 0.5 * (hi - lo)
+    counts, n_el = _beam_steps(out, anim)
+    assert counts[0] < n_el and counts[-1] == n_el
 
 
 @pytestmark_gmsh

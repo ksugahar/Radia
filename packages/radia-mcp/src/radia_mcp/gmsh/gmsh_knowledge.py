@@ -1843,6 +1843,34 @@ decreasing exactness -- always prefer the highest one that applies:
    .msh together with the coil STEP (merge_files) -- same views
    (time / speed / kinetic energy / v arrows), solver-grade fields.
 
+   **Flying beam (`animation_frames=N`, both sides).**  Step k of the
+   extra `beam` view carries the real quantity only where the particle
+   has already been and a far out-of-range SENTINEL everywhere else.
+   MEASURED mechanism: with a FIXED colour range and
+   `SaturateValues = 0` gmsh DOES NOT DRAW an element whose value falls
+   outside the range, so the trail grows while the colour scale stays
+   put -- strictly better than sweeping the range itself, which
+   rescales the colours every frame.  Two measured traps: the sentinel
+   must be FINITE (gmsh writes a NaN as the literal `nan` and its own
+   parser then rejects the file: "Unknown variable 'nan'"), and it must
+   sit far out on the scale of the VALUES, not of their spread -- a
+   monoenergetic beam coloured by energy has a spread of ~1e-13, so
+   "one spread above the maximum" would carry the beam's own colour.
+   Always render the beam view with the returned
+   `animation["render_hint"]["color"]`; an autoscaled colour bar folds
+   the sentinel back into the picture.  Within ONE file the camera does
+   NOT drift between frames (the bounding box comes from the mesh
+   nodes, not from the drawn subset), unlike the cross-file case that
+   `render_panels` has to fix with a hidden frame.
+
+   **A beamline is the axis-equal exception.**  A beam is millimetres
+   across and metres long, so a 1:1 render of a beamline is literally a
+   line (measured: a 0.85 m quadrupole track with a 12 mm aperture
+   renders as one stripe, magnet CAD included).  Write the `.msh` for
+   interactive 3D and PRINT an envelope plot with the transverse axis
+   magnified AND the magnification stated -- see
+   docs/gmsh_post/em_particle_orbits.ipynb.
+
 ## Beautiful isosurfaces: the four levers (all measured)
 
 A raw Plugin(Isosurface) render looks faceted and flat.  Four levers

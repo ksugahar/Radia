@@ -1393,6 +1393,9 @@ def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
                         max_time_s: float | None = None,
                         color_by: str = "time",
                         arrows_every: int = 0,
+                        animation_frames: int = 0,
+                        animation_mode: str = "trail",
+                        comet_window: float = 0.15,
                         return_points: bool = False,
                         out_file: str | None = None) -> dict:
     """
@@ -1430,6 +1433,15 @@ def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
         max_time_s: Stop after this physical flight time.
         color_by: Track color: "time" | "speed" | "energy".
         arrows_every: Velocity arrow every k-th sample (0 = off).
+        animation_frames: Write a multi-step "beam" view with this many
+            frames so the particles FLY (0 = off). Feed the file to
+            gmsh_export_animation WITH the returned
+            animation["render_hint"] colour range -- future segments
+            are hidden by an out-of-range sentinel, so an autoscaled
+            colour bar would fold them back into the picture.
+        animation_mode: "trail" (path accumulates) or "comet" (moving
+            window only).
+        comet_window: Comet window as a fraction of the flight time.
         return_points: Include track coordinates in the result.
         out_file: Output path (default: <stem>_tracks.pos).
     """
@@ -1441,6 +1453,9 @@ def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
                           steps_per_gyration=steps_per_gyration,
                           max_steps=max_steps, max_time_s=max_time_s,
                           color_by=color_by, arrows_every=arrows_every,
+                          animation_frames=animation_frames,
+                          animation_mode=animation_mode,
+                          comet_window=comet_window,
                           return_points=return_points,
                           out_file=_abs_path(out_file))
 
