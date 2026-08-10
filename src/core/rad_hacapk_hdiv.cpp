@@ -711,6 +711,57 @@ static void ValidateImageVectors(const std::vector<int>& image_masks,
     }
 }
 
+void RadHACApKChargeGram::SetImageRotations(std::vector<double> angles)
+{
+    if (angles.empty()) { m_image_rot_angle.clear(); return; }
+    if (angles.size() != m_image_masks.size())
+        throw std::invalid_argument(
+            "ChargeGram image rotation angles must have the same length as image_masks");
+    for (size_t i = 0; i < angles.size(); ++i) {
+        if (!std::isfinite(angles[i]))
+            throw std::invalid_argument("ChargeGram image rotation angles must be finite");
+        if (m_image_masks[i] == 0 && angles[i] == 0.0)
+            throw std::invalid_argument(
+                "ChargeGram: an image with mask 0 and rotation angle 0 is the IDENTITY -- it would "
+                "double the direct term; give it a mirror mask or a non-zero rotation angle");
+    }
+    // INVERSE CLOSURE.  The Gram symmetrizes each image with its transpose, i.e. it evaluates
+    // 0.5*(G_{T_i} + G_{T_i^-1}); the total only reproduces Sum_i s_i G_{T_i} when every image has its
+    // INVERSE in the list carrying the SAME sign.  A full cyclic group satisfies this automatically
+    // (theta_k pairs with theta_{N-k}, and the alternating pattern (-1)^k matches for even N).  A partial
+    // or one-sided rotation list would be silently symmetrized into different physics -- reject it.
+    const size_t n = angles.size();
+    auto matrix = [&](size_t i, double m[9]) {
+        const int mask = m_image_masks[i];
+        const double mx = (mask & 1) ? -1.0 : 1.0;
+        const double my = (mask & 2) ? -1.0 : 1.0;
+        const double mz = (mask & 4) ? -1.0 : 1.0;
+        const double c = std::cos(angles[i]), sn = std::sin(angles[i]);
+        m[0] = mx*c; m[1] = -mx*sn; m[2] = 0.0;
+        m[3] = my*sn; m[4] = my*c;  m[5] = 0.0;
+        m[6] = 0.0;   m[7] = 0.0;   m[8] = mz;
+    };
+    for (size_t i = 0; i < n; ++i) {
+        double a[9]; matrix(i, a);
+        bool found = false;
+        for (size_t j = 0; j < n && !found; ++j) {
+            if (m_image_signs[j] != m_image_signs[i]) continue;
+            double b[9]; matrix(j, b);
+            double err = 0.0;
+            for (int r = 0; r < 3; ++r)
+                for (int c2 = 0; c2 < 3; ++c2)
+                    err = std::max(err, std::fabs(b[3*c2 + r] - a[3*r + c2]));   // b == a^T ?
+            found = err < 1e-12;
+        }
+        if (!found)
+            throw std::invalid_argument(
+                "ChargeGram image rotations must be closed under inversion with matching signs "
+                "(image " + std::to_string(i) + " has no inverse partner in the list); pass the "
+                "COMPLETE cyclic group, e.g. theta_k = 2*pi*k/N for k = 1..N-1");
+    }
+    m_image_rot_angle = std::move(angles);
+}
+
 // HIGH-ORDER constructor: polynomial charges (monomial basis per host).  See the header for the contract.
 RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
@@ -1873,7 +1924,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         double G[4]={},dG[4]={};for(int i=0;i<2;++i)for(int j=0;j<2;++j)for(int k=0;k<3;++k){G[2*i+j]+=a[i][k]*a[j][k];dG[2*i+j]+=da[i][k]*a[j][k]+a[i][k]*da[j][k];}const double det=G[0]*G[3]-G[1]*G[2];double GI[4]={G[3]/det,-G[1]/det,-G[2]/det,G[0]/det},dGI[4];for(int i=0;i<2;++i)for(int j=0;j<2;++j){double z=0;for(int k=0;k<2;++k)for(int l=0;l<2;++l)z+=GI[2*i+k]*dG[2*k+l]*GI[2*l+j];dGI[2*i+j]=-z;}double form[2][4]={},dform[2][4]={};for(int c=0;c<2;++c)for(int k=0;k<3;++k){form[c][k+1]=GI[2*c]*a[0][k]+GI[2*c+1]*a[1][k];dform[c][k+1]=dGI[2*c]*a[0][k]+GI[2*c]*da[0][k]+dGI[2*c+1]*a[1][k]+GI[2*c+1]*da[1][k];form[c][0]-=form[c][k+1]*V[0][k];dform[c][0]-=dform[c][k+1]*V[0][k]+form[c][k+1]*dV[0][k];}
         double mv[10],dm[10];rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];if(e[0]+e[1]>2||e[2])throw std::logic_error("analytic TET face derivative supports charge degree <= 2");double poly[10]={1},dpoly[10]={};int degree=0;for(int z=0;z<e[0];++z)MulLinear3(poly,dpoly,degree,form[0],dform[0]);for(int z=0;z<e[1];++z)MulLinear3(poly,dpoly,degree,form[1],dform[1]);val[l]=der[l]=0;for(int total=0;total<=degree;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){const int id=MomentIndex3(ax,ay,total-ax-ay);val[l]+=poly[id]*mv[id];der[l]+=dpoly[id]*mv[id]+poly[id]*dm[id];}}
     };
-    auto directed=[&](int kt,int ht,int ks,int hs,int reflection_mask){
+    auto directed=[&](int kt,int ht,int ks,int hs,int img){
         const auto&gt=kt==0?m_hoCellCharges[ht]:m_hoFaceCharges[ht];
         const auto&gs=ks==0?m_hoCellCharges[hs]:m_hoFaceCharges[hs];
         std::vector<double>b((size_t)gt.size()*gs.size()),v,d;
@@ -1881,13 +1932,15 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
             const auto&pp=m_qp[gt[0]][q];
             double p[3]={pp[0],pp[1],pp[2]},dp[3],rate;
             target_kinematics(kt,ht,p,dp,rate);
-            // QuadDotRefl(tgt,src,mask) evaluates the ordinary source
-            // potential at R(x).  The mirror planes are fixed, so its exact
-            // directional derivative is obtained by reflecting both the
-            // moving outer point and its velocity; the measure rate is
-            // unchanged by the isometry.
-            for(int axis=0;axis<3;++axis)if(reflection_mask&(1<<axis)){
-                p[axis]=-p[axis];dp[axis]=-dp[axis];
+            // QuadDotRefl(tgt,src,img) evaluates the ordinary source
+            // potential at T^-1(x).  The image transform is a FIXED linear
+            // isometry, so the exact directional derivative is obtained by
+            // mapping both the moving outer point and its velocity through
+            // it; the measure rate is unchanged by the isometry.
+            if(img!=0){
+                double pm[3],dpm[3];
+                ImageEvalPoint(img,p,pm);ImageEvalPoint(img,dp,dpm);
+                for(int axis=0;axis<3;++axis){p[axis]=pm[axis];dp[axis]=dpm[axis];}
             }
             source_inner(ks,hs,p,dp,v,d);
             for(size_t i=0;i<gt.size();++i){
@@ -1925,8 +1978,8 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
         // ChargeGram.  Image self-hosts are ordinary reflected pairs, never
         // singular self-panel terms.
         for(size_t image=0;image<m_image_masks.size();++image){
-            const auto ab=directed(ka,ha,kb,hb,m_image_masks[image]);
-            const auto ba=directed(kb,hb,ka,ha,m_image_masks[image]);
+            const auto ab=directed(ka,ha,kb,hb,(int)image+1);
+            const auto ba=directed(kb,hb,ka,ha,(int)image+1);
             for(size_t i=0;i<A.size();++i)for(size_t j=0;j<B.size();++j)
                 block[i*B.size()+j]+=m_image_signs[image]*.5*
                     (ab[i*B.size()+j]+ba[j*A.size()+i]);
@@ -2197,22 +2250,20 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
     return s * RAD_INV_FOUR_PI;
 }
 
-double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int mask) const
+double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int img) const
 {
-    // IMA image entry G_img(tgt,src) = (1/4pi) INT_tgt Phi_{R(src)} = (1/4pi) INT_tgt Phi_src(R(x))
-    // (reflection isometry |x - R(y)| = |R(x) - y|), so we mirror tgt's outer points on the mask axes and
-    // evaluate the UNreflected source potential there.  Always the full analytic PhiAt (the image of a
+    // IMA image entry G_img(tgt,src) = (1/4pi) INT_tgt Phi_{T(src)} = (1/4pi) INT_tgt Phi_src(T^-1(x))
+    // (isometry |x - T(y)| = |T^-1(x) - y|), so we map tgt's outer points by the INVERSE image transform and
+    // evaluate the UNmapped source potential there.  Always the full analytic PhiAt (the image of a
     // charge straddling the mirror is singular at the plane -> needs the exact through-singularity potential).
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
     double s = 0.0;
     for (size_t k = 0; k < P.size(); ++k) {
-        double p[3] = {P[k][0], P[k][1], P[k][2]};
-        if (mask & 1) p[0] = -p[0];
-        if (mask & 2) p[1] = -p[1];
-        if (mask & 4) p[2] = -p[2];
+        const double p0[3] = {P[k][0], P[k][1], P[k][2]};
+        double p[3]; ImageEvalPoint(img, p0, p);
         // m_highorder: the monomial-charge inner potential (host-agnostic potential-at-p, PhiAtHO_*);
-        // m_analytic/polytope: the constant-charge PhiAt.  Mirror-image charge -> reflected eval point.
+        // m_analytic/polytope: the constant-charge PhiAt.  Image charge -> inverse-mapped eval point.
         s += W[k] * (m_highorder ? PhiInner(src, p) : PhiAt(src, p));
     }
     return s * RAD_INV_FOUR_PI;
@@ -3823,7 +3874,7 @@ const RadHACApKChargeGram::HexFarRule& RadHACApKChargeGram::GetHexFarRule(int ki
 }
 
 std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
-    int kindT, int hT, int kindS, int hS, int mask) const
+    int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -3836,10 +3887,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
     std::vector<double> inner((size_t)nS, 0.0);
     const int nqT = target.np, nqS = source.np;
     for (int qt = 0; qt < nqT; ++qt) {
-        const double reflected[3] = {
-            (mask & 1) ? -target.x[(size_t)3*qt]     : target.x[(size_t)3*qt],
-            (mask & 2) ? -target.x[(size_t)3*qt + 1] : target.x[(size_t)3*qt + 1],
-            (mask & 4) ? -target.x[(size_t)3*qt + 2] : target.x[(size_t)3*qt + 2]};
+        double reflected[3];
+        ImageEvalPoint(img, &target.x[(size_t)3*qt], reflected);
         std::fill(inner.begin(), inner.end(), 0.0);
         for (int qs = 0; qs < nqS; ++qs) {
             const double dx = reflected[0] - source.x[(size_t)3*qs];
@@ -3934,7 +3983,7 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
 // cube/quad with a symmetric tensor rule removes that artificial choice.  The source potential is summed
 // over all reference sub-tets/sub-triangles using the exact polynomial moment kernels above.  Smooth affine
 // far blocks use QuadBlockHexAffineFarProduct; curved hosts continue through QuadBlockHex's graded path.
-std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int mask) const
+std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -3942,11 +3991,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineProduct(int kindT, in
     std::vector<double> blk((size_t)nT*nS, 0.0);
     if (nT == 0 || nS == 0) return blk;
 
-    auto reflpt = [mask](const double* v, double* o) {
-        o[0] = (mask & 1) ? -v[0] : v[0];
-        o[1] = (mask & 2) ? -v[1] : v[1];
-        o[2] = (mask & 4) ? -v[2] : v[2];
-    };
+    auto reflpt = [this, img](const double* v, double* o) { ImageEvalPoint(img, v, o); };
     const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     std::vector<double> inn((size_t)nS, 0.0);
     std::vector<double> xi(3, 0.0);
@@ -4214,7 +4259,7 @@ void RadHACApKChargeGram::DPhiInnerHexSubVec(int kindS,int hS,int subB,
 std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
     int kindT,int hT,int kindS,int hS,const double* velocityT,const double* velocityS,int mask) const
 {
-    if(mask!=0)throw std::invalid_argument("shape derivative currently requires direct mask 0");
+    if(mask!=0)throw std::invalid_argument("shape derivative currently requires direct image 0");
     const auto& tg=kindT==0?m_cellCharges[hT]:m_faceCharges[hT];const auto& sg=kindS==0?m_cellCharges[hS]:m_faceCharges[hS];const int nt=(int)tg.size(),ns=(int)sg.size();std::vector<double> out((size_t)nt*ns,0),inn(ns);
     if(kindT==kindS&&hT==hS)return kindT==0?HexVolumeSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+81)):HexFaceSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+27));
     if(kindT==1&&kindS==1&&m_quadAffineFace[hT]&&m_quadAffineFace[hS]){
@@ -4564,7 +4609,7 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractionsMany(
 // across the block), so the per-entry value is served from ONE block computation -- the expensive kernel
 // work on each (outer pt, inner pt) is shared across all nT*nS monomial combos.  Returns [nT*nS]
 // row-major, INV4PI folded.
-std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kindS, int hS, int mask) const
+std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -4594,13 +4639,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                        || kindT != 0 && face_affine(hT);
     const bool affineS = kindS == 0 && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]
                        || kindS != 0 && face_affine(hS);
-    // Host-pair separation on the mask-reflected source centroid: drives the affine near/far product
+    // Host-pair separation on the image-mapped source centroid: drives the affine near/far product
     // switch, the distorted-pair far switch, and the general path's near_hosts grading below.
     const int repA = tgtG[0], repB = srcG[0];
-    const double repBc[3] = {
-        (mask & 1) ? -m_cent[(size_t)3*repB]     : m_cent[(size_t)3*repB],
-        (mask & 2) ? -m_cent[(size_t)3*repB + 1] : m_cent[(size_t)3*repB + 1],
-        (mask & 4) ? -m_cent[(size_t)3*repB + 2] : m_cent[(size_t)3*repB + 2]};
+    double repBc[3];
+    ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
     const double sep = std::sqrt(
         (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
       + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
@@ -4619,9 +4662,9 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         const bool exact_near = sep <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[repA] + m_size[repB]);
         return exact_near
             ? timed(m_hexBlkAffineNear, m_hexNsAffineNear,
-                    [&]{ return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, mask); })
+                    [&]{ return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, img); })
             : timed(m_hexBlkAffineFar, m_hexNsAffineFar,
-                    [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, mask); });
+                    [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, img); });
     }
     // DISTORTED-pair far switch (see HexDistortedFarFactor): the tensor far product is geometry-map
     // exact (Q2 point placement, Piola reference charge measure), so a well-separated pair with a
@@ -4631,37 +4674,36 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         const double fac = HexDistortedFarFactor();
         if (fac > 0.0 && sep > fac*(m_size[repA] + m_size[repB]))
             return timed(m_hexBlkDistortedFar, m_hexNsDistortedFar,
-                         [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, mask); });
+                         [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, img); });
     }
     const auto t_general0 = std::chrono::steady_clock::now();
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
-    // IMA (mask>0): couple the TARGET host with the source host REFLECTED on the 3-bit axis mask.  By the
-    // reflection isometry |R(x)-y| = |x-R(y)|, the image block = INT_target m_t(x) Phi_source(R(x)) dx:
-    // reflect the source-side geometry driving the near/far grading, reflect the outer eval point before the
-    // source-potential eval, and never treat the pair as SELF.  mask==0 => reflpt identity => byte-identical.
-    auto reflpt = [mask](const double* v, double* o){
-        o[0] = (mask & 1) ? -v[0] : v[0]; o[1] = (mask & 2) ? -v[1] : v[1]; o[2] = (mask & 4) ? -v[2] : v[2];
-    };
+    // IMA (img>0): couple the TARGET host with the source host mapped by the image transform T.  By the
+    // isometry |T(x)-y| = |x-T^-1(y)|, the image block = INT_target m_t(x) Phi_source(T^-1(x)) dx:
+    // map the source-side geometry driving the near/far grading, map the outer eval point before the
+    // source-potential eval, and never treat the pair as SELF.  img==0 => reflpt identity => byte-identical.
+    auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
     const int rt = tgtG[0], rs = srcG[0];      // representative charges (host-level cent/size)
-    const bool near_hosts = (mask == 0 && kindT == kindS && hT == hS)
+    const bool near_hosts = (img == 0 && kindT == kindS && hT == hS)
                             || sep <= m_near_grade*(m_size[rt] + m_size[rs]);   // sep == reflected r_h above
     // SELF host pair: the inner takes the RADIAL decomposition with the EXACT anchor xiT (the outer
     // point's own ref coords -- no Newton).  The OUTER grading below is UNCHANGED -- it is required by the
     // Q1 charge degree regardless of how the inner is computed (exact inner + regular outer -> eig 1.088).
     // self_pair: the (reflected) source host coincides with the target host -> use the EXACT self-radial.
-    // mask==0 is always self for hT==hS.  mask>0 is self ONLY when the host is INVARIANT under the reflection
-    // (lies ON the mirror plane, R(host)==host -- e.g. a z=0 cut FACE reflected across z=0 is itself).  Then
+    // img==0 is always self for hT==hS.  img>0 is self ONLY when the host is INVARIANT under the transform
+    // (lies ON the mirror plane, T(host)==host -- e.g. a z=0 cut FACE reflected across z=0 is itself; under a
+    // cyclic ROTATION only an on-axis host qualifies).  Then
     // the reflected self-term EXACTLY equals the direct self-term (same exact radial quadrature), so the LARGE
     // on-plane cut-face charge (sigma = M.n ~ |M| when M is perpendicular to the plane) CANCELS exactly for
     // sign -1, instead of leaving a quadrature-mismatch residual (the ~1.5% hex / ~29% wedge antisymmetric-
     // plane error, 2026-07-05: direct self used the exact radial, reflected self used the ~1e-3 site-radial).
     // An OFF-plane self host (a z>0 cell) reflects to a genuine image elsewhere -> NOT self.
     bool self_pair = (kindT == kindS && hT == hS);
-    if (self_pair && mask != 0) {
+    if (self_pair && img != 0) {
         double rc_[3]; reflpt(&m_cent[3*rt], rc_);
         const double d_ = std::abs(rc_[0]-m_cent[3*rt]) + std::abs(rc_[1]-m_cent[3*rt+1]) + std::abs(rc_[2]-m_cent[3*rt+2]);
-        self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // R(host)==host <=> host lies on the mirror plane
+        self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // T(host)==host <=> host is invariant
     }
     const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
     const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
@@ -4674,7 +4716,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
             const double* cB0 = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
-            double cB[3]; reflpt(cB0, cB);   // reflected source sub-centroid drives near/far + Duffy corner (mask>0)
+            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid drives near/far + Duffy corner (img>0)
             const double szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
             const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
@@ -4709,9 +4751,9 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
                 const double* xiT = &oc->xi[3*q];
                 for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
-                double peval[3]; reflpt(pq, peval);                                             // reflect for the (image) source eval
+                double peval[3]; reflpt(pq, peval);                                             // inverse-map for the (image) source eval
                 if (self_pair) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data());  // radial, exact anchor
-                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / radial (peval==pq if mask==0)
+                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / radial (peval==pq if img==0)
 
                 const double wg = oc->wgeo[q];
                 for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
@@ -4950,10 +4992,10 @@ struct HexBlockKey {
     int hT;
     int kindS;
     int hS;
-    int mask;                                          // IMA image mask (0 = direct block)
+    int img;                                           // IMA image index (0 = direct block)
     bool operator==(const HexBlockKey& o) const
     {
-        return kindT == o.kindT && hT == o.hT && kindS == o.kindS && hS == o.hS && mask == o.mask;
+        return kindT == o.kindT && hT == o.hT && kindS == o.kindS && hS == o.hS && img == o.img;
     }
 };
 
@@ -4965,7 +5007,7 @@ struct HexBlockKeyHash {
             h ^= static_cast<std::size_t>(static_cast<unsigned int>(v));
             h *= 1099511628211ull;
         };
-        mix(k.kindT); mix(k.hT); mix(k.kindS); mix(k.hS); mix(k.mask);
+        mix(k.kindT); mix(k.hT); mix(k.kindS); mix(k.hS); mix(k.img);
         return h;
     }
 };
@@ -5017,7 +5059,7 @@ static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBloc
 // header member doc), so this test may use the cheap ctor-precomputed affinity flags
 // (m_hexAffineCell / m_quadAffineFace) instead of QuadBlockHex's per-call face_affine lattice
 // re-check.
-bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int mask) const
+bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -5032,10 +5074,8 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
     const double fac = HexDistortedFarFactor();
     if (fac <= 0.0) return true;
     const int repA = tgtG[0], repB = srcG[0];
-    const double repBc[3] = {
-        (mask & 1) ? -m_cent[(size_t)3*repB]     : m_cent[(size_t)3*repB],
-        (mask & 2) ? -m_cent[(size_t)3*repB + 1] : m_cent[(size_t)3*repB + 1],
-        (mask & 4) ? -m_cent[(size_t)3*repB + 2] : m_cent[(size_t)3*repB + 2]};
+    double repBc[3];
+    ImageEvalPoint(img, &m_cent[(size_t)3*repB], repBc);
     const double sep = std::sqrt(
         (m_cent[(size_t)3*repA]     - repBc[0])*(m_cent[(size_t)3*repA]     - repBc[0])
       + (m_cent[(size_t)3*repA + 1] - repBc[1])*(m_cent[(size_t)3*repA + 1] - repBc[1])
@@ -5043,21 +5083,24 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
     return sep <= fac*(m_size[repA] + m_size[repB]);
 }
 
-const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int mask) const
+const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int img) const
 {
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
     const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
-                                 !m_d2 && m_hexUniformTransHosts && mask == 0 &&
+                                 !m_d2 && m_hexUniformTransHosts && img == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
     if (!use_trans_cache && !m_d2 && !m_wedgemode
-            && HexPairTakesGeneralPath(kindT, hT, kindS, hS, mask)) {
+            && HexPairTakesGeneralPath(kindT, hT, kindS, hS, img)) {
         // Expensive general-path block (graded near or site-radial mid band): serve from the
         // instance-shared cache so the fill workers do not each recompute it (the per-thread caches
-        // below duplicate ~2x).  Key packs (kinds, mask, hosts) into 64 bits; hosts < 2^28.
+        // below duplicate ~2x).  Key packs (kinds, image index, hosts) into 64 bits; hosts < 2^28 and
+        // the image index < 64 (a 63-fold cyclic group is far past any practical machine sector count).
+        if (img < 0 || img > 63)
+            throw std::invalid_argument("ChargeGram: image index out of range (max 63 images)");
         const unsigned long long key =
             (unsigned long long)(kindT != 0) | ((unsigned long long)(kindS != 0) << 1)
-          | ((unsigned long long)(mask & 7) << 2)
-          | ((unsigned long long)(unsigned)hT << 5) | ((unsigned long long)(unsigned)hS << 33);
+          | ((unsigned long long)(unsigned)img << 2)
+          | ((unsigned long long)(unsigned)hT << 8) | ((unsigned long long)(unsigned)hS << 36);
         m_hexGeneralSharedLookups.fetch_add(1, std::memory_order_relaxed);
         {
             std::shared_lock<std::shared_mutex> rl(m_hexGeneralSharedMutex);
@@ -5067,7 +5110,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
                 return it->second;
             }
         }
-        std::vector<double> blk = QuadBlockHex(kindT, hT, kindS, hS, mask);
+        std::vector<double> blk = QuadBlockHex(kindT, hT, kindS, hS, img);
         m_hexGeneralSharedMisses.fetch_add(1, std::memory_order_relaxed);
         std::unique_lock<std::shared_mutex> wl(m_hexGeneralSharedMutex);
         auto it = m_hexGeneralSharedCache.emplace(key, std::move(blk)).first;   // racing first insert wins
@@ -5095,8 +5138,8 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
                 HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockClears);
             }
             it = s_hex_trans_block_cache.emplace(tkey,
-                    m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, mask)
-                                : QuadBlockHex(kindT, hT, kindS, hS, mask)).first;
+                    m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, img)
+                                : QuadBlockHex(kindT, hT, kindS, hS, img)).first;
         } else HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockHits);
         return it->second;
     }
@@ -5106,7 +5149,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
         s_hex_block_owner = m_build_id;
         HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockClears);
     }
-    const HexBlockKey key{kindT, hT, kindS, hS, mask};
+    const HexBlockKey key{kindT, hT, kindS, hS, img};
     auto it = s_hex_block_cache.find(key);
     if (it == s_hex_block_cache.end()) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockMisses);
@@ -5115,14 +5158,19 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
             HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockClears);
         }
         it = s_hex_block_cache.emplace(key,
-                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS, mask)
-                 : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, mask)
-                 :               QuadBlockHex(kindT, hT, kindS, hS, mask)).first;
+                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS, img)
+                 : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, img)
+                 :               QuadBlockHex(kindT, hT, kindS, hS, img)).first;
     } else HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockHits);
     return it->second;
 }
 
-const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA, int kindB, int hB, int mask) const
+// GetHexSymBlock(A,B,img) = 0.5*(G_T(A,B) + G_T(B,A)^T) = 0.5*(G_T(A,B) + G_{T^-1}(A,B)), because the
+// directed BA block with transform T is the AB block with T^-1 (isometry).  For a MIRROR T == T^-1, so this is
+// a pure quadrature symmetrization.  For a cyclic ROTATION the two differ, and the total Sum_i s_i * symblock_i
+// equals the intended Sum_i s_i * G_{T_i} only when the image set is closed under inversion with matching
+// signs -- which SetImageRotations enforces (a full cyclic group is closed automatically).
+const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA, int kindB, int hB, int img) const
 {
     auto nlocal = [&](int kind, int host) {
         return (kind == 0) ? (int)m_cellCharges[host].size() : (int)m_faceCharges[host].size();
@@ -5130,8 +5178,8 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
     const int nA0 = nlocal(kindA, hA);
     const int nB0 = nlocal(kindB, hB);
     auto make_sym = [&]() {
-        std::vector<double> ab = GetHexBlock(kindA, hA, kindB, hB, mask);
-        std::vector<double> ba = GetHexBlock(kindB, hB, kindA, hA, mask);
+        std::vector<double> ab = GetHexBlock(kindA, hA, kindB, hB, img);
+        std::vector<double> ba = GetHexBlock(kindB, hB, kindA, hA, img);
         std::vector<double> sym((size_t)nA0 * (size_t)nB0);
         for (int la = 0; la < nA0; ++la)
             for (int lb = 0; lb < nB0; ++lb)
@@ -5145,7 +5193,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
         // orientation-dependent, so production averages both directions to preserve explicit-reflection
         // invariance.  A positive environment threshold is retained only for diagnostic timing experiments.
         const double threshold = m_wedgemode ? WedgeFarOneSidedThreshold() : HexFarOneSidedThreshold();
-        if (threshold <= 0.0 || mask != 0 || m_d2) return false;
+        if (threshold <= 0.0 || img != 0 || m_d2) return false;
         const std::vector<int>& aG = (kindA == 0) ? m_cellCharges[hA] : m_faceCharges[hA];
         const std::vector<int>& bG = (kindB == 0) ? m_cellCharges[hB] : m_faceCharges[hB];
         if (aG.empty() || bG.empty()) return false;
@@ -5156,12 +5204,12 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
         return std::sqrt(dx*dx + dy*dy + dz*dz) > threshold * (m_size[a] + m_size[b]);
     };
     auto make_one_sided = [&]() {
-        return GetHexBlock(kindA, hA, kindB, hB, mask);
+        return GetHexBlock(kindA, hA, kindB, hB, img);
     };
 
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
     const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
-                                 !m_d2 && m_hexUniformTransHosts && mask == 0 &&
+                                 !m_d2 && m_hexUniformTransHosts && img == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindA == 0 && kindB == 0));
     if (use_trans_cache) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockLookups);
@@ -5197,7 +5245,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
         s_hex_sym_block_owner = m_build_id;
         HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockClears);
     }
-    const HexBlockKey key{kindA, hA, kindB, hB, mask};
+    const HexBlockKey key{kindA, hA, kindB, hB, img};
     auto it = s_hex_sym_block_cache.find(key);
     if (it == s_hex_sym_block_cache.end()) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockMisses);
@@ -5636,21 +5684,22 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
 // outer everywhere (numpy-validated: the log kernel needs no graded outer); the SELF host pair passes the
 // outer point's own ref coords as the inner anchor.
 std::vector<double> RadHACApKChargeGram::QuadBlock2D(
-    int kindT, int hT, int kindS, int hS, int mask) const
+    int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     const int nT = (int)tgtG.size(), nS = (int)srcG.size();
     std::vector<double> blk((size_t)nT*nS, 0.0);
     if (nT == 0 || nS == 0) return blk;
-    const bool self_pair = (mask == 0 && kindT == kindS && hT == hS);
+    const bool self_pair = (img == 0 && kindT == kindS && hT == hS);
     const int nsubS = (kindS == 0) ? D2CellNSub(m_d2CellType[hS]) : 1;
     std::vector<double> inn(nS);
     auto accumulate = [&](const double xiA[2], double wg, const double Xp[2]) {
-        const double Peval[2] = {
-            (mask & 1) ? -Xp[0] : Xp[0],
-            (mask & 2) ? -Xp[1] : Xp[1]
-        };
+        // In-plane image transform: T^-1 applied to the eval point (the 2D rotation about +z is the
+        // in-plane rotation, so ImageEvalPoint's z component is simply unused here).
+        double Pin[3] = {Xp[0], Xp[1], 0.0}, Pout[3];
+        ImageEvalPoint(img, Pin, Pout);
+        const double Peval[2] = {Pout[0], Pout[1]};
         for (int sB = 0; sB < nsubS; ++sB) {
             for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
             PhiInner2DVec(kindS, hS, sB, Peval, self_pair ? xiA : nullptr, srcG, inn.data());
@@ -6225,7 +6274,7 @@ void RadHACApKChargeGram::DPhiInnerWedgeRadialVec(
 }
 
 // Directed host-pair block (mirror of QuadBlockHex) with mixed-face sub counts / node strides.
-std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int kindS, int hS, int mask) const
+std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int kindS, int hS, int img) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -6237,28 +6286,27 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
     const int ftS = cellS ? -1 : m_wFaceType[hS];
     const int nsubT = cellT ? 3 : (ftT == 0 ? 1 : 2);
     const int nsubS = cellS ? 3 : (ftS == 0 ? 1 : 2);
-    // IMA (mask>0): see QuadBlockHex -- couple the TARGET host with the REFLECTED source host (reflect the
-    // grading geometry + the outer eval point, never SELF).  mask==0 => identity => byte-identical direct block.
-    auto reflpt = [mask](const double* v, double* o){
-        o[0] = (mask & 1) ? -v[0] : v[0]; o[1] = (mask & 2) ? -v[1] : v[1]; o[2] = (mask & 4) ? -v[2] : v[2];
-    };
+    // IMA (img>0): see QuadBlockHex -- couple the TARGET host with the image-mapped source host (map the
+    // grading geometry + the outer eval point, never SELF).  img==0 => identity => byte-identical direct block.
+    auto reflpt = [this, img](const double* v, double* o){ ImageEvalPoint(img, v, o); };
     const int rt = tgtG[0], rs = srcG[0];
     double rsc[3]; reflpt(&m_cent[3*rs], rsc);
     const double dxh = m_cent[3*rt]-rsc[0], dyh = m_cent[3*rt+1]-rsc[1], dzh = m_cent[3*rt+2]-rsc[2];
     const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
     // self_pair: the (reflected) source host coincides with the target host -> use the EXACT self-radial.
-    // mask==0 is always self for hT==hS.  mask>0 is self ONLY when the host is INVARIANT under the reflection
-    // (lies ON the mirror plane, R(host)==host -- e.g. a z=0 cut FACE reflected across z=0 is itself).  Then
+    // img==0 is always self for hT==hS.  img>0 is self ONLY when the host is INVARIANT under the transform
+    // (lies ON the mirror plane, T(host)==host -- e.g. a z=0 cut FACE reflected across z=0 is itself; under a
+    // cyclic ROTATION only an on-axis host qualifies).  Then
     // the reflected self-term EXACTLY equals the direct self-term (same exact radial quadrature), so the LARGE
     // on-plane cut-face charge (sigma = M.n ~ |M| when M is perpendicular to the plane) CANCELS exactly for
     // sign -1, instead of leaving a quadrature-mismatch residual (the ~1.5% hex / ~29% wedge antisymmetric-
     // plane error, 2026-07-05: direct self used the exact radial, reflected self used the ~1e-3 site-radial).
     // An OFF-plane self host (a z>0 cell) reflects to a genuine image elsewhere -> NOT self.
     bool self_pair = (kindT == kindS && hT == hS);
-    if (self_pair && mask != 0) {
+    if (self_pair && img != 0) {
         double rc_[3]; reflpt(&m_cent[3*rt], rc_);
         const double d_ = std::abs(rc_[0]-m_cent[3*rt]) + std::abs(rc_[1]-m_cent[3*rt+1]) + std::abs(rc_[2]-m_cent[3*rt+2]);
-        self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // R(host)==host <=> host lies on the mirror plane
+        self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // T(host)==host <=> host is invariant
     }
     const bool near_hosts = self_pair || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
     const double* ndT = cellT ? &m_wCellNodes[(size_t)hT*54] : &m_wFaceNodes[(size_t)hT*27];
@@ -6272,7 +6320,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*3 + sB) : ((size_t)hS*2 + sB);
             const double* cB0 = cellS ? &m_wCellSubC[sidB*3] : &m_wFaceSubC[sidB*3];
-            double cB[3]; reflpt(cB0, cB);   // reflected source sub-centroid (mask>0)
+            double cB[3]; reflpt(cB0, cB);   // mapped source sub-centroid (img>0)
             const double szB = cellS ? m_wCellSubS[sidB] : m_wFaceSubS[sidB];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
             const bool near_sub = near_hosts && std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
@@ -6563,7 +6611,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
         double base = GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
         for (size_t i = 0; i < m_image_masks.size(); ++i)
             base += m_image_signs[i]
-                  * GetHexSymBlock(kA, hA, kB, hB, m_image_masks[i])[(size_t)la*nB + lb];
+                  * GetHexSymBlock(kA, hA, kB, hB, (int)i + 1)[(size_t)la*nB + lb];
         return base;
     }
     if (m_hexmode || m_wedgemode) {
@@ -6582,10 +6630,8 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
         // (1/2,1/4,1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
         // Read each block scalar into a double BEFORE the next GetHexBlock fetch (the memo's capacity clear would
         // otherwise dangle the returned reference -- the same use-after-free family as the direct vAB/vBA above).
-        for (size_t i = 0; i < m_image_masks.size(); ++i) {
-            const int msk = m_image_masks[i];
-            base += m_image_signs[i] * GetHexSymBlock(kA, hA, kB, hB, msk)[(size_t)la*nB + lb];
-        }
+        for (size_t i = 0; i < m_image_masks.size(); ++i)
+            base += m_image_signs[i] * GetHexSymBlock(kA, hA, kB, hB, (int)i + 1)[(size_t)la*nB + lb];
         return base;
     }
     if (m_highorder) {
@@ -6631,7 +6677,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
         // 0.5*(refl(a,b)+refl(b,a)).  Empty image => plain highorder.
         for (size_t i = 0; i < m_image_masks.size(); ++i)
             base += m_image_signs[i] * 0.5 *
-                    (QuadDotRefl(a, b, m_image_masks[i]) + QuadDotRefl(b, a, m_image_masks[i]));
+                    (QuadDotRefl(a, b, (int)i + 1) + QuadDotRefl(b, a, (int)i + 1));
         return base;
     }
     if (m_analytic) {
@@ -6662,7 +6708,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
         // (1/2,1/4,1/8) model reproduces the full model: G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
         for (size_t i = 0; i < m_image_masks.size(); ++i)
             base += m_image_signs[i] * 0.5 *
-                    (QuadDotRefl(a, b, m_image_masks[i]) + QuadDotRefl(b, a, m_image_masks[i]));
+                    (QuadDotRefl(a, b, (int)i + 1) + QuadDotRefl(b, a, (int)i + 1));
         return base;
     }
     if (a == b) return m_self[a];
@@ -9089,15 +9135,15 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 const double* target=&observations[static_cast<size_t>(observation)*3];
                 double total[20][3];evaluate_base(target,total);
                 for(size_t image=0;image<m_image_masks.size();++image){
-                    const int mask=m_image_masks[image];
-                    double reflected[3]={target[0],target[1],target[2]};
+                    // E_{T(sigma)}(x) = T E_sigma(T^-1 x): inverse-map the eval point, forward-map the vector.
+                    const int img=(int)image+1;
+                    double reflected[3];ImageEvalPoint(img,target,reflected);
                     double term[20][3];
-                    for(int k=0;k<3;++k)if(mask&(1<<k))reflected[k]=-reflected[k];
                     evaluate_base(reflected,term);
-                    for(int index=0;index<n_basis;++index)
-                        for(int k=0;k<3;++k){
-                        if(mask&(1<<k))term[index][k]=-term[index][k];
-                        total[index][k]+=m_image_signs[image]*term[index][k];
+                    for(int index=0;index<n_basis;++index){
+                        double mapped[3];ImageApplyVector(img,term[index],mapped);
+                        for(int k=0;k<3;++k)
+                            total[index][k]+=m_image_signs[image]*mapped[k];
                     }
                 }
                 for(const auto& weighted:
@@ -9274,6 +9320,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
         auto evaluator = rad_hdiv::HDivFieldEvaluator::FromTet(
             std::move(volume), std::move(surface),
             m_image_masks, m_image_signs);
+        evaluator->SetImageRotations(m_image_rot_angle);
         std::vector<double> field(observations.size());
         evaluator->EvaluateSerial(
             observations.data(), static_cast<size_t>(n_observations),
@@ -9489,14 +9536,14 @@ RadHACApKChargeGram::ConfiguredFieldFunctionalRowsDirectionalDerivative(
             const double* target=&observations[static_cast<size_t>(observation)*3];
             double total[3];evaluate(target,total);
             for(size_t image=0;image<m_image_masks.size();++image){
-                const int mask=m_image_masks[image];
-                double reflected[3]={target[0],target[1],target[2]},term[3];
-                for(int k=0;k<3;++k)if(mask&(1<<k))reflected[k]=-reflected[k];
+                // E_{T(sigma)}(x) = T E_sigma(T^-1 x): inverse-map the eval point, forward-map the vector.
+                const int img=(int)image+1;
+                double reflected[3],term[3],mapped[3];
+                ImageEvalPoint(img,target,reflected);
                 evaluate(reflected,term);
-                for(int k=0;k<3;++k){
-                    if(mask&(1<<k))term[k]=-term[k];
-                    total[k]+=m_image_signs[image]*term[k];
-                }
+                ImageApplyVector(img,term,mapped);
+                for(int k=0;k<3;++k)
+                    total[k]+=m_image_signs[image]*mapped[k];
             }
             for(int row=0;row<n_rows;++row){
                 const size_t offset=(static_cast<size_t>(row)*n_observations+observation)*3;
@@ -9654,8 +9701,10 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 }
             }
         }
-        return rad_hdiv::HDivFieldEvaluator::FromTet(
+        auto evaluator = rad_hdiv::HDivFieldEvaluator::FromTet(
             std::move(volume), std::move(surface), m_image_masks, m_image_signs, options);
+        evaluator->SetImageRotations(m_image_rot_angle);
+        return evaluator;
     }
 
     // Straight affine HEX BDM1: retain an exact near-field representation.
@@ -9780,13 +9829,18 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             }
         }
         if (analytic_hex) {
-            if (!volume.empty() || !surface.empty())
-                return rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
+            if (!volume.empty() || !surface.empty()) {
+                auto evaluator = rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
                     std::move(volume), std::move(surface),
                     m_image_masks, m_image_signs, options);
-            return rad_hdiv::HDivFieldEvaluator::FromCloud(
+                evaluator->SetImageRotations(m_image_rot_angle);
+                return evaluator;
+            }
+            auto empty_evaluator = rad_hdiv::HDivFieldEvaluator::FromCloud(
                 {0.0, 0.0, 0.0}, {0.0},
                 m_image_masks, m_image_signs, options);
+            empty_evaluator->SetImageRotations(m_image_rot_angle);
+            return empty_evaluator;
         }
     }
     if (configured_hex_rt0)
@@ -9923,8 +9977,10 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             xyz = {0.0, 0.0, 0.0};
             strength = {0.0};
         }
-        return rad_hdiv::HDivFieldEvaluator::FromCloud(
+        auto evaluator = rad_hdiv::HDivFieldEvaluator::FromCloud(
             std::move(xyz), std::move(strength), m_image_masks, m_image_signs, options);
+        evaluator->SetImageRotations(m_image_rot_angle);
+        return evaluator;
     }
 
     // Curved TET: retain P2 geometry and the combined BDM1/BDM2 reference
@@ -9968,9 +10024,11 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             surface[static_cast<size_t>(host)*24 + 18 + local] += coefficient;
         }
     }
-    return rad_hdiv::HDivFieldEvaluator::FromCurvedTet(
+    auto evaluator = rad_hdiv::HDivFieldEvaluator::FromCurvedTet(
         std::move(volume), std::move(surface), m_gl, m_gw,
         m_image_masks, m_image_signs, options);
+    evaluator->SetImageRotations(m_image_rot_angle);
+    return evaluator;
 }
 
 std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator>
@@ -10065,6 +10123,10 @@ RadHACApKChargeGram::CreateConfiguredPlanarFieldEvaluator(
         positions = {0.0, 0.0};
         strengths = {0.0};
     }
+    if (!m_image_rot_angle.empty())
+        throw std::invalid_argument(
+            "2D planar field evaluation does not implement cyclic image rotations yet "
+            "(the 2D charge Gram does); drop the rotations or evaluate the field in 3D");
     return std::make_shared<rad_planar_charges::PlanarFieldEvaluator>(
         std::move(positions), std::move(strengths), m_image_masks, m_image_signs);
 }

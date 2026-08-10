@@ -3007,6 +3007,30 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def_property_readonly("stats", [](const RadHACApKChargeGramDerivative& s){const auto&v=s.GetStats();py::dict d;d["n_lowrank"]=v.n_lowrank;d["n_dense"]=v.n_dense;d["max_rank"]=v.max_rank;d["n_leaves"]=v.n_leaves;d["n_dof"]=v.n_dof;d["compression"]=v.compression;d["build_time"]=v.build_time;d["memory_mb"]=v.memory_mb;return d;});
 
     py::class_<RadHACApKChargeGram, std::shared_ptr<RadHACApKChargeGram>>(m, "_ChargeGramHMatrix")
+        .def("set_image_rotations",
+             [](RadHACApKChargeGram& self, F64Array angles_a) {
+                 self.SetImageRotations(to_1d_vector<double>(angles_a, "image_rot_angle"));
+             },
+             py::arg("image_rot_angle"),
+             "Attach a rotation angle about +z (radians) to each image mask, turning the mirror image method "
+             "into a CYCLIC (N-fold) reduction: one machine sector reproduces the whole ring.  Empty clears "
+             "them.  Must be called before the H-matrix build.  The list must be closed under inversion with "
+             "matching signs (pass the complete cyclic group, theta_k = 2*pi*k/N for k = 1..N-1); alternating "
+             "N/S poles ride image_signs as (-1)^k.")
+        .def("build_hmatrix",
+             [](RadHACApKChargeGram& self, double eps, int leaf, double eta) {
+                 py::gil_scoped_release release;
+                 RadHACApKParams params;
+                 params.aca_eps = eps;
+                 params.leaf_size = leaf;
+                 params.eta = eta;
+                 params.print_level = 0;
+                 if (!self.BuildHMatrix(params))
+                     throw std::runtime_error("charge Gram H-matrix build failed");
+             },
+             py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0,
+             "Build the H-matrix of a gram constructed with build=False.  Used when the image rotations "
+             "must be attached between construction and fill.")
         .def(py::init([](F64Array centroids_a, F64Array measures_a,
                          F64Array self_energy_a, double eps, int leaf, double eta) {
                  auto centroids = to_1d_vector<double>(centroids_a, "centroids");
