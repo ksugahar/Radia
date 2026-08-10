@@ -498,6 +498,19 @@ design-mesh mu_max 1.020 -> 1.092 for only -16% build; glin=3 leaks to
 1.095.  The far tensor product's per-host point rule is cached on the
 instance (bit-identical; construction O(hosts) instead of O(pairs)), so at
 production sizes the far cost is the kernel double sum alone.
+
+## The Sculpt x HDiv-MMM combination (MCP surface)
+
+Body-only meshes are the native input of this solver: the demag operator
+is an integral equation, so no air mesh, Kelvin-transformation domain, or PML exists to
+re-mesh when the body changes.  The MCP chain: `radia.topopt_cad
+.write_vfrac_exodus` (density -> Sculpt-native volume fractions) -> the
+cubit server's `cubit_vfrac_to_vol` (standalone `sculpt.exe
+--input_vfrac`, gated all-hex `.vol`; `cubit_stl_to_vol` is the STL
+fallback) -> this server's `hdiv_vim_demag_eval` (uniform-field demag
+factor + iterations + timings on the body-only `.vol`).  The vfrac-route
+validation lane locks the whole chain against the sphere's closed-form
+demag factor 1/3.
 """
 
 _VERIFICATION = r"""
