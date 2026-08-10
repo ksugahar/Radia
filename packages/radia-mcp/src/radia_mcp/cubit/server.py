@@ -218,6 +218,19 @@ regions for per-region `hdiv_vim_demag_eval(mu_r="core=1000,shell=50")`.
 A multi-material `.vol` carries interface faces in ADDITION to the outer
 skin, so the boundary gate compares the OUTER faces against the
 topological skin rather than the raw total.
+
+PERIODIC cells: `cubit_vfrac_to_vol(periodic=True)` (with the writer's
+`bounds=` spanning exactly one period) builds an RVE whose node set is
+invariant under the period, so one cell TILES conformally.  The gate is
+the SEAM FILL RATE, not a raw match count -- a non-periodic mesh keeps a
+few untouched lattice corners that match by accident (measured fill rate
+1.000 periodic vs 0.061 plain on the same input).  On this Cartesian
+route the periodicity is translational in all three axes; rotational
+periodicity is Sculpt's unstructured `--input_mesh` route.  A periodic
+mesh is NOT what the HDiv-VIM image method (IMA) consumes -- IMA applies
+analytic MIRROR reflections and needs no node matching; periodic node
+pairs are for FEM periodic boundary conditions and for assembling an
+array without re-meshing.
 """
 
 # Create MCP server
@@ -4333,6 +4346,107 @@ def _vol_surface_element_stats(vol_path: Path) -> dict:
 	return fallback
 
 
+def _vol_points(vol_path: Path):
+	"""Read the `points` section of a Netgen `.vol` as an (n, 3) array."""
+	import numpy as np
+
+	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
+		for line in f:
+			if line.strip() != "points":
+				continue
+			try:
+				count = int(next(f).strip())
+			except (StopIteration, ValueError):
+				return None
+			rows = []
+			for _ in range(count):
+				try:
+					parts = next(f).split()
+				except StopIteration:
+					return None
+				if len(parts) < 3:
+					return None
+				try:
+					rows.append([float(parts[0]), float(parts[1]),
+					             float(parts[2])])
+				except ValueError:
+					return None
+			return np.asarray(rows, dtype=float)
+	return None
+
+
+def _periodic_node_match(vol_path: Path, period: list, cell: list) -> dict:
+	"""Measure whether a mesh's node set is invariant under the period.
+
+	The property that makes a periodic cell tile CONFORMALLY is not "the
+	boundary is flat" -- Sculpt deliberately leaves it ragged -- but that
+	the nodes on one period face are the nodes of the opposite face,
+	translated.  So for each axis, count the nodes whose image under
+	+period and under -period is again a node.  Those two counts are the
+	two sides of one bijection, so an exactly periodic mesh gives
+	`matched_plus == matched_minus`, and the matched set IS the seam that
+	two tiled copies share.
+
+	Returns ``ok=False`` with a reason when the measurement cannot run
+	(missing dependency / unreadable file) rather than guessing.
+	"""
+	try:
+		import numpy as np
+		from scipy.spatial import cKDTree
+	except ImportError as exc:
+		return {"ok": False, "reason": f"missing dependency: {exc}",
+		        "axes": []}
+	# Measure the SOLVER artifact (the exported `.vol`), not the Sculpt
+	# Exodus: the property has to survive the import/export round trip to
+	# be usable, and it does (verified 163/163 on both, 2026-08-10).
+	points = _vol_points(vol_path)
+	if points is None or points.size == 0:
+		return {"ok": False,
+		        "reason": f"cannot read points from {vol_path.name}",
+		        "axes": []}
+	# Tolerance RELATIVE TO THE PERIOD, so the measurement does not change
+	# meaning with the model's unit.  Measured 2026-08-10 on a 0.02 m RVE:
+	# the matched count is 163 on a plateau from 1e-9 to 1e-6 ABSOLUTE and
+	# collapses to 2 at 1e-11 -- the exodus -> Cubit -> `.vol` round trip
+	# perturbs coordinates by ~1e-10.  1e-6 of the period sits well inside
+	# that plateau and is still ~1e-4 of a cell, so it cannot fuse
+	# genuinely distinct nodes.
+	span = float(min(abs(float(length)) for length in period))
+	tol = 1e-6 * span if span > 0.0 else 1e-9
+	tree = cKDTree(points)
+	axes = []
+	consistent = True
+	for index, length in enumerate(period):
+		shift = np.zeros(3)
+		shift[index] = float(length)
+		plus, _ = tree.query(points + shift)
+		minus, _ = tree.query(points - shift)
+		matched = plus < tol
+		n_plus = int(matched.sum())
+		n_minus = int((minus < tol).sum())
+		# SEAM FILL RATE -- the discriminating statistic.  Equal +/- counts
+		# alone do not prove periodicity: a NON-periodic Sculpt mesh still
+		# has a few lattice corners that survive untouched on both faces
+		# (measured 9 of them).  What a periodic mesh has is a COMPLETE
+		# seam: essentially every node within half a cell of the period
+		# plane owns a partner (measured 125/125 = 1.000 periodic vs
+		# 9/147 = 0.061 plain, same input).
+		half = 0.5 * float(cell[index])
+		near = points[:, index] < points[:, index].min() + half
+		n_near = int(near.sum())
+		rate = float((near & matched).sum()) / n_near if n_near else 0.0
+		axes.append({"axis": "xyz"[index], "period": float(length),
+		             "matched_plus": n_plus, "matched_minus": n_minus,
+		             "seam_candidates": n_near, "seam_fill_rate": rate,
+		             "n_nodes": int(len(points))})
+		if n_plus != n_minus:
+			consistent = False
+	return {"ok": consistent, "tolerance": tol, "axes": axes,
+	        "reason": "" if consistent else
+	                  "matched node counts differ between +period and "
+	                  "-period: the seam is not a bijection"}
+
+
 def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
                         closure_tolerance: float) -> tuple[dict, dict]:
 	"""Shared solver-mesh gates: closure vs a reference volume, inversion,
@@ -4650,6 +4764,7 @@ def cubit_vfrac_to_vol(vfrac_path: str,
                        out_msh: str = "",
                        material_names: str = "",
                        closure_tolerance: float = 0.01,
+                       periodic: bool = False,
                        smooth_method: int = 0,
                        gq_iters: int = 0,
                        gq_threshold: float = 0.2,
@@ -4692,6 +4807,19 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	    material_names: comma-separated block labels in ``MAT_<id>`` order
 	        (default: "iron" for one material, ``mat_1..mat_N`` otherwise).
 	    closure_tolerance: relative volume gate vs the vfrac integral.
+	    periodic: build a PERIODIC RVE (`--periodic` plus the six RVE
+	        sideset/nodeset groups).  On the Cartesian route the period is
+	        the vfrac grid box itself -- `--periodic_axis` /
+	        `--periodic_nodesets` are for the unstructured `--input_mesh`
+	        route and are ignored here, so this is TRANSLATIONAL
+	        periodicity in all three directions.  The geometry must
+	        actually be periodic on that box (Sculpt's own
+	        `check_periodic` is ON by default and fails otherwise), and the
+	        writer must have been given `bounds=` so the grid spans exactly
+	        one period.  The mesh boundary comes out deliberately RAGGED --
+	        it is not projected onto the box planes, which is what lets
+	        opposite faces carry matching nodes.  The report then measures
+	        that matching (`periodic_node_match`).
 	    smooth_method: Sculpt ``--smooth`` override (0 = Sculpt default;
 	        8 projects to the interpolated interface surface per the
 	        Coreform docs -- try it when boundary fidelity matters more
@@ -4798,8 +4926,12 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 			return json.dumps(_error_payload(
 				"output", f"cannot replace stale output {output}: {exc}"))
 
+	# gen_sidesets: 2 = variable (contiguous groups) for the plain route,
+	# 5 = rve (the six period faces) when a periodic RVE was requested
 	cli = [str(sculpt_exe), "-ivf", str(base), "-e", str(sculpt_out),
-	       "-SS", "2", "-cv"]
+	       "-SS", "5" if periodic else "2", "-cv"]
+	if periodic:
+		cli += ["--periodic"]
 	for entry in per_material:
 		cli += ["-mn", str(entry["id"]), str(entry["name"])]
 	if smooth_method:
@@ -4846,6 +4978,23 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		msh, vol, v_vfrac, closure_tolerance)
 	if verification_error is not None:
 		return json.dumps(verification_error, default=str)
+	period_report = None
+	if periodic:
+		period = [(gvals["xmax"] - gvals["xmin"]),
+		          (gvals["ymax"] - gvals["ymin"]),
+		          (gvals["zmax"] - gvals["zmin"])]
+		period_report = _periodic_node_match(vol, period, [hx, hy, hz])
+		# A tileable cell is the one with a COMPLETE seam: the +period and
+		# -period matched counts agree (a bijection between the two period
+		# faces) AND essentially every node within half a cell of the
+		# period plane owns a partner.  Measured 2026-08-10 on an
+		# overlapping-sphere RVE, same input both ways: fill rate 1.000
+		# with --periodic, 0.061 without (equal counts alone do NOT
+		# discriminate -- a plain mesh keeps a few untouched corners).
+		gates["periodic_nodes_match"] = bool(
+			period_report.get("ok") and period_report["axes"] and all(
+				entry["seam_fill_rate"] >= 0.98
+				for entry in period_report["axes"]))
 	return json.dumps({
 		"status": "ok" if all(gates.values()) else "gate_failed",
 		"gates": gates,
@@ -4853,6 +5002,8 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		"sculpt_exodus": str(sculpt_exo),
 		"vfrac_volume": v_vfrac,
 		"materials": per_material,
+		"periodic": bool(periodic),
+		"periodic_node_match": period_report,
 		"grid": {"nel": [nx, ny, nz], "cell": [hx, hy, hz]},
 		**metrics,
 		"sculpt": {"exit_code": run.returncode, "command": cli,
